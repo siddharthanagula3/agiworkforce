@@ -93,7 +93,7 @@ export function DragDropOverlay({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className={cn(
-            'fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm',
+            'fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 backdrop-blur-sm',
             className,
           )}
         >
@@ -102,7 +102,7 @@ export function DragDropOverlay({
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.85, opacity: 0 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-            className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-2xl"
+            className="relative flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-primary bg-card/90 p-12 shadow-e4"
           >
             {/* Corner accents */}
             <div className="absolute left-4 top-4 h-8 w-8 rounded-tl-xl border-l-2 border-t-2 border-primary" />

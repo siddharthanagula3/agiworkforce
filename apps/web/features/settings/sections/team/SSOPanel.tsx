@@ -65,18 +65,18 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 13,
-  padding: '8px 11px',
+  padding: 'var(--space-2) var(--space-3)',
 } as const;
 
 const buttonStyle = {
   minHeight: 34,
   border: 0,
   borderRadius: 'var(--radius-md)',
-  background: 'var(--chat-accent-primary, #c8892a)',
+  background: 'var(--chat-accent-primary)',
   color: 'var(--chat-accent-on-primary)',
   fontSize: 13,
   fontWeight: 600,
-  padding: '7px 13px',
+  padding: 'var(--space-2) var(--space-3)',
   cursor: 'pointer',
 } as const;
 
@@ -144,7 +144,7 @@ async function readError(response: Response, fallback: string): Promise<SsoReque
 
 function CopyRow({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ display: 'grid', gap: 2, marginTop: 8 }}>
+    <div style={{ display: 'grid', gap: 'var(--space-1)', marginTop: 'var(--space-2)' }}>
       <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{label}</span>
       <code style={monoStyle}>{value}</code>
     </div>
@@ -239,7 +239,12 @@ export function SSOPanel({
 
     return (
       <section style={cardStyle} aria-labelledby="sso-panel-heading">
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+        <div
+          style={{
+            padding: 'var(--space-4) var(--space-5)',
+            borderBottom: '1px solid var(--settings-border)',
+          }}
+        >
           <div
             id="sso-panel-heading"
             style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}
@@ -247,7 +252,14 @@ export function SSOPanel({
             Single sign-on (SAML / OIDC)
           </div>
         </div>
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-3)',
+          }}
+        >
           <p role="alert" style={{ margin: 0, color: 'var(--text-3)', fontSize: 13 }}>
             Single sign-on settings could not be loaded. This is a problem reaching the server, not
             a change to your plan, any existing connections keep working.
@@ -294,21 +306,40 @@ export function SSOPanel({
     <>
       {confirmDialog}
       <section style={cardStyle} aria-labelledby="sso-panel-heading">
-        <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+        <div
+          style={{
+            padding: 'var(--space-4) var(--space-5)',
+            borderBottom: '1px solid var(--settings-border)',
+          }}
+        >
           <div
             id="sso-panel-heading"
             style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}
           >
             Single sign-on (SAML / OIDC)
           </div>
-          <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
+          <div
+            style={{
+              color: 'var(--text-3)',
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginTop: 'var(--space-1)',
+            }}
+          >
             Route sign-in for an email domain you control to Okta, Microsoft Entra ID, Google
             Workspace, or any SAML 2.0 / OIDC provider. Domain ownership must be proven by DNS
             before a connection can go live.
           </div>
         </div>
 
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-4)',
+          }}
+        >
           {error && errorField === null ? (
             <p
               role="alert"
@@ -337,14 +368,14 @@ export function SSOPanel({
                 style={{
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: 14,
+                  padding: 'var(--space-4)',
                 }}
               >
                 <div
                   style={{
                     display: 'flex',
                     flexWrap: 'wrap',
-                    gap: 8,
+                    gap: 'var(--space-2)',
                     alignItems: 'baseline',
                     justifyContent: 'space-between',
                   }}
@@ -362,7 +393,7 @@ export function SSOPanel({
 
                 <p
                   style={{
-                    margin: '8px 0 0',
+                    margin: 'var(--space-2) 0 0',
                     color: 'var(--text-3)',
                     fontSize: 12,
                     lineHeight: 1.5,
@@ -372,7 +403,7 @@ export function SSOPanel({
                 </p>
 
                 {connection.domainVerification ? (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: 'var(--space-3)' }}>
                     <CopyRow label="Record type" value={connection.domainVerification.recordType} />
                     <CopyRow label="Record name" value={connection.domainVerification.recordName} />
                     <CopyRow
@@ -380,7 +411,13 @@ export function SSOPanel({
                       value={connection.domainVerification.recordValue}
                     />
                     {connection.domainChallengeExpiresAt ? (
-                      <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+                      <p
+                        style={{
+                          margin: 'var(--space-2) 0 0',
+                          color: 'var(--text-3)',
+                          fontSize: 12,
+                        }}
+                      >
                         This challenge expires{' '}
                         {new Date(connection.domainChallengeExpiresAt).toLocaleString()}. Reissue it
                         to get a fresh record.
@@ -390,7 +427,7 @@ export function SSOPanel({
                 ) : !connection.domainVerifiedAt ? (
                   <p
                     role="status"
-                    style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12 }}
+                    style={{ margin: 'var(--space-3) 0 0', color: 'var(--text-3)', fontSize: 12 }}
                   >
                     The domain verification challenge has expired. Reissue it to get a new DNS TXT
                     record, publish that record, then verify.
@@ -398,7 +435,7 @@ export function SSOPanel({
                 ) : null}
 
                 {connection.serviceProvider.acsUrl ? (
-                  <div style={{ marginTop: 10 }}>
+                  <div style={{ marginTop: 'var(--space-3)' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
                       Paste these into your identity provider:
                     </div>
@@ -416,7 +453,14 @@ export function SSOPanel({
                 ) : null}
 
                 {isOwner ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 'var(--space-2)',
+                      marginTop: 'var(--space-3)',
+                    }}
+                  >
                     {!connection.domainVerifiedAt ? (
                       <>
                         <button
@@ -512,9 +556,16 @@ export function SSOPanel({
           {isOwner ? (
             <form
               onSubmit={handleCreate}
-              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
             >
-              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-1)',
+                  fontSize: 12,
+                  color: 'var(--text-3)',
+                }}
+              >
                 Email domain
                 <input
                   id="sso-domain"
@@ -534,7 +585,14 @@ export function SSOPanel({
                 ) : null}
               </label>
 
-              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-1)',
+                  fontSize: 12,
+                  color: 'var(--text-3)',
+                }}
+              >
                 Protocol
                 <select
                   aria-label="Protocol"
@@ -547,7 +605,14 @@ export function SSOPanel({
                 </select>
               </label>
 
-              <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-1)',
+                  fontSize: 12,
+                  color: 'var(--text-3)',
+                }}
+              >
                 Display name
                 <input
                   aria-label="Display name"
@@ -559,7 +624,14 @@ export function SSOPanel({
               </label>
 
               {providerType === 'saml' ? (
-                <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                <label
+                  style={{
+                    display: 'grid',
+                    gap: 'var(--space-1)',
+                    fontSize: 12,
+                    color: 'var(--text-3)',
+                  }}
+                >
                   IdP metadata URL
                   <input
                     id="sso-metadata-url"
@@ -582,7 +654,14 @@ export function SSOPanel({
                 </label>
               ) : (
                 <>
-                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                  <label
+                    style={{
+                      display: 'grid',
+                      gap: 'var(--space-1)',
+                      fontSize: 12,
+                      color: 'var(--text-3)',
+                    }}
+                  >
                     OIDC discovery URL
                     <input
                       id="sso-discovery-url"
@@ -603,7 +682,14 @@ export function SSOPanel({
                       </span>
                     ) : null}
                   </label>
-                  <label style={{ display: 'grid', gap: 4, fontSize: 12, color: 'var(--text-3)' }}>
+                  <label
+                    style={{
+                      display: 'grid',
+                      gap: 'var(--space-1)',
+                      fontSize: 12,
+                      color: 'var(--text-3)',
+                    }}
+                  >
                     OIDC client ID
                     <input
                       id="sso-client-id"

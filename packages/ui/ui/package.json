@@ -4,8 +4,16 @@
   "description": "Shared presentation primitives with no business logic.",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
+    "./agi-mark": "./src/AgiMark.tsx",
+    "./button": "./src/primitives/Button.tsx",
+    "./dialog": "./src/primitives/Dialog.tsx",
+    "./label": "./src/primitives/Label.tsx",
+    "./sheet": "./src/primitives/Sheet.tsx",
+    "./sonner": "./src/primitives/SonnerToaster.tsx",
+    "./switch": "./src/primitives/Switch.tsx",
     "./network-error": "./src/lib/network-error.ts"
   },
   "main": "./src/index.ts",

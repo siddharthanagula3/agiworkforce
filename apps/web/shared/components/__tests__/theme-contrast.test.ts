@@ -69,6 +69,10 @@ const WCAG_AA_LARGE = 3.0;
 const repoRoot = resolve(import.meta.dirname, '../../../../..');
 const globalsCss = readFileSync(resolve(repoRoot, 'apps/web/app/globals.css'), 'utf8');
 const chatCss = readFileSync(resolve(repoRoot, 'packages/ui/design-tokens/src/chat.css'), 'utf8');
+const tailwindCss = readFileSync(
+  resolve(repoRoot, 'packages/ui/design-tokens/src/tailwind.css'),
+  'utf8',
+);
 const foundationCss = readFileSync(
   resolve(repoRoot, 'packages/ui/design-tokens/src/foundation.css'),
   'utf8',
@@ -501,14 +505,14 @@ describe('WCAG 2.1 AA contrast ratios · large text and graphics (>= 3:1)', () =
     expect(ratio).toBeGreaterThan(1.0);
   });
 
-  it('focus ring (--ring) has >= 3:1 contrast with dark background', () => {
-    const focusRing = hslToHex(224.3, 76.3, 52);
+  it('the canonical focus ring has >= 3:1 contrast with dark background', () => {
+    const focusRing = colorToken(web.dark, '--focus-ring');
     const ratio = contrastRatio(DARK_BG, focusRing);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
 
-  it('focus ring (--ring) has >= 3:1 contrast with light background', () => {
-    const focusRingLight = hslToHex(221.2, 83.2, 53.3);
+  it('the canonical focus ring has >= 3:1 contrast with light background', () => {
+    const focusRingLight = colorToken(web.light, '--focus-ring');
     const ratio = contrastRatio(LIGHT_BG, focusRingLight);
     expect(ratio).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
@@ -949,7 +953,7 @@ describe('foundation layer', () => {
     );
   });
 
-  it('every surface that loads chat.css also loads foundation.css', () => {
+  it('every Tailwind surface that loads chat.css also loads the foundation and shared bridge', () => {
     // chat.css resolves its dark palette through the --neutral-* ramp above, so
     // a surface importing one without the other renders dark mode unstyled.
     for (const sheet of ['apps/web/app/globals.css', 'apps/desktop/src/styles/globals.css']) {
@@ -958,6 +962,31 @@ describe('foundation layer', () => {
       expect(css, `${sheet} imports chat.css without foundation.css`).toContain(
         'design-tokens/foundation.css',
       );
+      expect(css, `${sheet} imports chat.css without tailwind.css`).toContain(
+        'design-tokens/tailwind.css',
+      );
+    }
+  });
+
+  it('maps Tailwind roles to canonical foundation tokens without restating values', () => {
+    const mappings = {
+      '--text-caption': 'var(--type-caption-size)',
+      '--text-metadata': 'var(--type-metadata-size)',
+      '--container-reading': 'var(--measure-prose)',
+      '--container-content': 'var(--measure-content)',
+      '--container-wide': 'var(--measure-wide)',
+      '--spacing-space-3': 'var(--space-3)',
+      '--spacing-gutter-compact': 'var(--gutter-compact)',
+      '--spacing-gutter-regular': 'var(--gutter-regular)',
+      '--spacing-gutter-wide': 'var(--gutter-wide)',
+      '--shadow-e1': 'var(--elevation-1)',
+      '--shadow-e2': 'var(--elevation-2)',
+      '--shadow-e3': 'var(--elevation-3)',
+      '--shadow-e4': 'var(--elevation-4)',
+    } as const;
+
+    for (const [name, expected] of Object.entries(mappings)) {
+      expect(token(tailwindCss, name), `${name} forks its foundation owner`).toBe(expected);
     }
   });
 
@@ -999,19 +1028,19 @@ describe('foundation layer', () => {
 });
 
 describe('the chat focus ring is a visible control boundary (>= 3:1) in both themes', () => {
-  const RING_SOURCE = 'var(--chat-accent-primary-text)';
+  const RING_SOURCE = 'var(--focus-ring)';
 
   it('light', () => {
     expect(token(web.light, '--chat-focus-ring')).toBe(RING_SOURCE);
     expect(
-      contrastRatio(colorToken(web.light, '--chat-accent-primary-text'), CHAT_BG_LIGHT),
+      contrastRatio(colorToken(web.light, '--focus-ring'), CHAT_BG_LIGHT),
     ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
 
   it('dark', () => {
     expect(token(web.dark, '--chat-focus-ring')).toBe(RING_SOURCE);
     expect(
-      contrastRatio(colorToken(web.dark, '--chat-accent-primary-text'), CHAT_BG_DARK),
+      contrastRatio(colorToken(web.dark, '--focus-ring'), CHAT_BG_DARK),
     ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
 });

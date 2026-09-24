@@ -90,6 +90,7 @@ export interface OpenAIChatCompletionChunk {
     delta: {
       role?: 'assistant';
       content?: string | null;
+      reasoning?: string | null;
       reasoning_content?: string | null;
       tool_calls?: Array<{
         index: number;

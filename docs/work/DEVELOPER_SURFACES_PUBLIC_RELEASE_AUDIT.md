@@ -1,8 +1,15 @@
 # AGI Workforce Developer Surfaces Public Release Audit
 
-Status: ACTIVE, audit of the CLI and the VS Code extension as two surfaces of one product
+Status: Paused audit snapshot; current evidence through 2026-09-14
 Owner: CLI lead + VS Code extension lead
-Last updated: 2026-09-14
+Last updated: 2026-09-21
+
+Website is the active release surface. CLI and VS Code implementation resumes
+only in the founder's serial order after Mobile, Desktop, and Chrome. This audit
+remains evidence of the September 14 tree. On resume, both clients must consume
+the same Host Developer session/tool/permission/file/credential owners as
+Desktop Code; neither may create a private ecosystem or sync local authority
+into Account Cloud without an explicit handoff.
 
 Scope: `apps/cli` (Rust crate `agiworkforce-cli` 1.7.1, binary `agi`) and
 `apps/extension-vscode` (`agiworkforce.agi-workforce` 0.3.0), plus the shared

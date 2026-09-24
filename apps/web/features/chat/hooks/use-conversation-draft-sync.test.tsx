@@ -1,17 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 
-const { mockSaveConversationDraft, mockSession } = vi.hoisted(() => ({
-  mockSaveConversationDraft: vi.fn(async () => true),
+const { mockSaveConversationDraft, mockSession, mockToastError } = vi.hoisted(() => ({
+  mockSaveConversationDraft: vi.fn(async () => 'saved'),
   mockSession: { getToken: vi.fn(async () => 'token'), isLoaded: true, isSignedIn: true },
+  mockToastError: vi.fn(),
 }));
 
 vi.mock('@/lib/identity/client', () => ({ useSession: () => mockSession }));
+vi.mock('sonner', () => ({ toast: { error: mockToastError, dismiss: vi.fn() } }));
 vi.mock('../services/conversation-draft', () => ({
   saveConversationDraft: mockSaveConversationDraft,
+  clearObservedConversationDraftRevisions: vi.fn(),
 }));
 
 import { useChatStore } from '@shared/stores/web-chat-store';
+import {
+  hasPendingDraftClear,
+  markPendingDraftClear,
+  clearPendingDraftClear,
+} from '../lib/pending-draft-clear';
 import { useConversationDraftSync } from './use-conversation-draft-sync';
 
 const CONVERSATION = '11111111-1111-4111-8111-111111111111';
@@ -41,6 +49,7 @@ beforeEach(() => {
   mockSession.isLoaded = true;
   mockSession.isSignedIn = true;
   useChatStore.setState({ draftsByConversation: {}, conversations: [] as never });
+  clearPendingDraftClear(CONVERSATION);
 });
 
 describe('carrying a composer draft to the server', () => {
@@ -93,8 +102,54 @@ describe('carrying a composer draft to the server', () => {
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
   });
 
+  it('sends an empty draft when the user clears a previously saved conversation draft', async () => {
+    seedConversation();
+    render(<Harness />);
+
+    useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
+    await vi.runAllTimersAsync();
+    useChatStore.getState().clearDraftContent(CONVERSATION);
+    await vi.runAllTimersAsync();
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([CONVERSATION, '']);
+  });
+
+  it('serializes an in-flight text save before its later clear and acknowledges the clear', async () => {
+    let finishFirst!: (saved: string) => void;
+    mockSaveConversationDraft.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    seedConversation();
+    render(<Harness />);
+
+    await act(async () => {
+      useChatStore.getState().setDraftContent('a draft', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSaveConversationDraft.mock.calls[0]?.slice(0, 2)).toEqual([CONVERSATION, 'a draft']);
+
+    markPendingDraftClear(CONVERSATION);
+    await act(async () => {
+      useChatStore.getState().clearDraftContent(CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(true);
+
+    await act(async () => {
+      finishFirst('saved');
+      await Promise.resolve();
+    });
+    expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([CONVERSATION, '']);
+    expect(hasPendingDraftClear(CONVERSATION)).toBe(false);
+  });
+
   it('retries the next change when a save fails, rather than treating it as stored', async () => {
-    mockSaveConversationDraft.mockResolvedValueOnce(false);
+    mockSaveConversationDraft.mockResolvedValueOnce('failed');
     seedConversation();
     render(<Harness />);
 
@@ -104,6 +159,82 @@ describe('carrying a composer draft to the server', () => {
     await vi.runAllTimersAsync();
 
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries a failed save without requiring another keystroke', async () => {
+    mockSaveConversationDraft.mockResolvedValueOnce('failed');
+    seedConversation();
+    render(<Harness />);
+
+    await act(async () => {
+      useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(2);
+    expect(mockSaveConversationDraft.mock.calls[1]?.slice(0, 2)).toEqual([
+      CONVERSATION,
+      'half a thought',
+    ]);
+  });
+
+  it('stops automatic retries and warns when a draft still cannot sync', async () => {
+    mockSaveConversationDraft.mockResolvedValue('failed');
+    seedConversation();
+    render(<Harness />);
+
+    await act(async () => {
+      useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      await vi.runAllTimersAsync();
+    });
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(3);
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringContaining("couldn't sync"),
+      expect.objectContaining({ id: `draft-sync-${CONVERSATION}` }),
+    );
+  });
+
+  it('does not retry after the draft-sync component unmounts', async () => {
+    mockSaveConversationDraft.mockResolvedValueOnce('failed');
+    seedConversation();
+    const view = render(<Harness />);
+
+    await act(async () => {
+      useChatStore.getState().setDraftContent('half a thought', CONVERSATION);
+      await vi.runAllTimersAsync();
+    });
+    view.unmount();
+    await vi.runAllTimersAsync();
+
+    expect(mockSaveConversationDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a conflicting local draft and warns that it did not sync', async () => {
+    mockSaveConversationDraft.mockResolvedValueOnce('conflict');
+    seedConversation();
+    render(<Harness />);
+
+    useChatStore.getState().setDraftContent('my unsent text', CONVERSATION);
+    await vi.runAllTimersAsync();
+
+    expect(useChatStore.getState().getDraftContent(CONVERSATION)).toBe('my unsent text');
+    expect(mockToastError).toHaveBeenCalledWith(
+      expect.stringContaining('has not synced'),
+      expect.objectContaining({ id: `draft-conflict-${CONVERSATION}` }),
+    );
   });
 
   it('sends nothing while signed out', async () => {

@@ -223,7 +223,7 @@ export function LinkedDevicesPanel() {
 
   const secondaryButtonStyle = {
     flexShrink: 0,
-    padding: '6px 10px',
+    padding: 'var(--space-2) var(--space-3)',
     minHeight: 32,
     fontSize: 12,
     fontWeight: 500,
@@ -239,10 +239,17 @@ export function LinkedDevicesPanel() {
     <>
       {confirmDialog}
       <div>
-        <p style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+        <p
+          style={{
+            margin: '0 0 var(--space-1)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+          }}
+        >
           Linked devices
         </p>
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--text-3)' }}>
+        <p style={{ margin: '0 0 var(--space-2)', fontSize: 12, color: 'var(--text-3)' }}>
           {credentialStateKnown
             ? "Unlinking revokes the device's stored credential and removes it from this list. The app signs out the next time it reaches the server."
             : 'Sign-in state cannot be read on this deployment, so unlinking removes the device from this list without revoking its stored credential.'}
@@ -251,7 +258,7 @@ export function LinkedDevicesPanel() {
         {loading ? (
           <div aria-hidden="true" className="flex flex-col gap-2">
             {[0, 1].map((row) => (
-              <div key={row} className="h-10 w-full animate-pulse rounded bg-foreground/[0.07]" />
+              <div key={row} className="h-10 w-full animate-pulse rounded-compact bg-foreground/[0.07]" />
             ))}
           </div>
         ) : loadError ? (
@@ -259,7 +266,7 @@ export function LinkedDevicesPanel() {
             <p
               role="alert"
               style={{
-                margin: '0 0 12px',
+                margin: '0 0 var(--space-3)',
                 fontSize: 13,
                 color: 'var(--settings-destructive-text)',
               }}
@@ -272,8 +279,8 @@ export function LinkedDevicesPanel() {
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: 6,
-                padding: '7px 11px',
+                gap: 'var(--space-2)',
+                padding: 'var(--space-2) var(--space-3)',
                 fontSize: 12,
                 fontWeight: 500,
                 color: 'var(--text-1)',
@@ -299,8 +306,8 @@ export function LinkedDevicesPanel() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: 16,
-                padding: '14px 0',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-4) 0',
                 borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                 flexWrap: 'wrap',
               }}
@@ -312,7 +319,12 @@ export function LinkedDevicesPanel() {
                       event.preventDefault();
                       void handleRename(device);
                     }}
-                    style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}
+                    style={{
+                      display: 'flex',
+                      gap: 'var(--space-2)',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                    }}
                   >
                     <input
                       aria-label={`New name for ${describe(device)}`}
@@ -327,7 +339,7 @@ export function LinkedDevicesPanel() {
                         flex: '1 1 160px',
                         minWidth: 0,
                         minHeight: 32,
-                        padding: '6px 8px',
+                        padding: 'var(--space-2) var(--space-2)',
                         fontSize: 14,
                         color: 'var(--text-1)',
                         background: 'transparent',
@@ -350,19 +362,21 @@ export function LinkedDevicesPanel() {
                 ) : (
                   <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{describe(device)}</div>
                 )}
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                   {describeSystem(device)}
                 </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                   {describeState(device)}
                 </div>
                 {describeCapabilities(device) ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                  <div
+                    style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
+                  >
                     {describeCapabilities(device)}
                   </div>
                 ) : null}
               </div>
-              <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
                 {renamingId === device.id ? null : (
                   <button
                     type="button"
@@ -389,7 +403,7 @@ export function LinkedDevicesPanel() {
                   aria-label={`Unlink ${describe(device)}`}
                   style={{
                     flexShrink: 0,
-                    padding: '6px 10px',
+                    padding: 'var(--space-2) var(--space-3)',
                     fontSize: 12,
                     fontWeight: 500,
                     color: 'var(--settings-destructive-text)',
@@ -411,7 +425,11 @@ export function LinkedDevicesPanel() {
         {actionError ? (
           <p
             role="alert"
-            style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive-text)' }}
+            style={{
+              margin: 'var(--space-2) 0 0',
+              fontSize: 12,
+              color: 'var(--settings-destructive-text)',
+            }}
           >
             {actionError}
           </p>

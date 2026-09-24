@@ -11,7 +11,7 @@ import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MermaidDiagram } from './MermaidDiagram';
 import { HighlightedCode } from './HighlightedCode';
-import { REMARK_PLUGINS } from './remarkPlugins';
+import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import {
   CITATION_GROUP_HREF_PATTERN,
@@ -68,7 +68,7 @@ export const CodeBlock = ({
 
   if (!match) {
     return (
-      <code className="rounded-md bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 text-[13px] font-mono text-gray-800 dark:text-gray-200">
+      <code className="rounded-md bg-[var(--chat-surface-hover)] px-1.5 py-0.5 font-mono text-[13px] text-[var(--chat-text-primary)]">
         {children}
       </code>
     );
@@ -319,7 +319,7 @@ const MarkdownTaskCheckbox = ({ checked, disabled }: { checked?: boolean; disabl
   <span
     className={cn(
       'relative mr-2 inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center',
-      'translate-y-[0.15em] rounded-[3px] border border-[var(--chat-text-muted)] align-top',
+      'translate-y-[0.15em] rounded-compact border border-[var(--chat-text-muted)] align-top',
       checked
         ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)]'
         : 'bg-transparent',
@@ -385,14 +385,59 @@ const MarkdownListItem = ({
   );
 };
 
-const MarkdownTableCell = ({ children }: { children?: React.ReactNode }) => {
+type MarkdownTableAlignment = React.ComponentPropsWithoutRef<'td'>['align'];
+type MarkdownTableTextAlign = React.CSSProperties['textAlign'];
+
+function markdownTableAlignmentClass(
+  align: MarkdownTableAlignment,
+  textAlign: MarkdownTableTextAlign,
+): string {
+  const value = align ?? textAlign;
+  if (value === 'center') return 'text-center';
+  if (value === 'right') return 'text-right';
+  return 'text-left';
+}
+
+const MarkdownTableCell = ({
+  children,
+  align,
+  style,
+}: {
+  children?: React.ReactNode;
+  align?: MarkdownTableAlignment;
+  style?: React.CSSProperties;
+}) => {
   const citations = useMarkdownCitations();
   return (
-    <td className="border border-border px-3 py-2 align-top break-words">
+    <td
+      className={cn(
+        'border border-border px-3 py-2 align-top break-words',
+        markdownTableAlignmentClass(align, style?.textAlign),
+      )}
+    >
       {unwrapCitationParens(children, citations)}
     </td>
   );
 };
+
+const MarkdownTableHeader = ({
+  children,
+  align,
+  style,
+}: {
+  children?: React.ReactNode;
+  align?: React.ComponentPropsWithoutRef<'th'>['align'];
+  style?: React.CSSProperties;
+}) => (
+  <th
+    className={cn(
+      'border border-border bg-muted px-3 py-2 align-top font-semibold break-words',
+      markdownTableAlignmentClass(align, style?.textAlign),
+    )}
+  >
+    {children}
+  </th>
+);
 
 const markdownComponents: Components = {
   code: CodeBlock as Components['code'],
@@ -420,11 +465,7 @@ const markdownComponents: Components = {
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),
-  th: ({ children }) => (
-    <th className="border border-border bg-muted px-3 py-2 text-left align-top font-semibold break-words">
-      {children}
-    </th>
-  ),
+  th: MarkdownTableHeader as Components['th'],
   td: MarkdownTableCell as Components['td'],
   a: MarkdownLink as Components['a'],
 };
@@ -442,6 +483,8 @@ export interface MarkdownContentProps {
   isStreaming?: boolean;
   skipPreprocess?: boolean;
   citations?: readonly MarkdownCitation[];
+  linkifyNumericCitations?: boolean;
+  literalHtml?: boolean;
 }
 
 /**
@@ -476,19 +519,21 @@ function MarkdownContentImpl({
   isStreaming,
   skipPreprocess,
   citations,
+  linkifyNumericCitations = true,
+  literalHtml,
 }: MarkdownContentProps) {
   const processedContent = useMemo(() => {
     const base = skipPreprocess ? content : preprocessMath(content);
-    return citations && citations.length > 0
+    return !isStreaming && linkifyNumericCitations && citations && citations.length > 0
       ? linkifyCitationMarkers(base, citations.length)
       : base;
-  }, [content, skipPreprocess, citations]);
+  }, [content, isStreaming, skipPreprocess, citations, linkifyNumericCitations]);
   return (
     <StreamTailContext.Provider value={Boolean(isStreaming)}>
       <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
         <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
           <ReactMarkdown
-            remarkPlugins={REMARK_PLUGINS}
+            remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
             rehypePlugins={REHYPE_PLUGINS}
             components={markdownComponents}
           >

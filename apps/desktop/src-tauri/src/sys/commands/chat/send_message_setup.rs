@@ -444,7 +444,7 @@ pub(super) async fn prepare_send_message(
         );
     }
 
-    let (chat_tools, tool_choice, tool_registry) = build_tool_definitions(
+    let (chat_tools, tool_choice, tool_registry, deferred_tools_notice) = build_tool_definitions(
         request.enable_tools,
         request.tool_scope,
         mcp_state,
@@ -452,13 +452,14 @@ pub(super) async fn prepare_send_message(
         flags.is_web_focus,
         &model,
         skills_offered,
+        &request.content,
     );
 
     // The prompt and API tool list are one capability contract. A model must
     // never be told it can act when the exact filtered request advertises no
     // tools (or vice versa).
     llm_messages[0].content = if chat_tools.is_some() {
-        PromptEngineer::default_system_prompt()
+        PromptEngineer::default_system_prompt() + deferred_tools_notice.as_deref().unwrap_or("")
     } else {
         PromptEngineer::no_tools_system_prompt()
     };

@@ -83,16 +83,22 @@ export async function autonomousToolApprovalsAvailable(
 export async function loadTurnToolPermissions(
   db: DatabaseAdapter,
   userId: string,
-  options: { modelSupportsTools: boolean },
+  options: {
+    modelSupportsTools: boolean;
+    connectorPermissionsRequired?: boolean;
+    toolApprovalPolicyRequired?: boolean;
+  },
 ): Promise<{
   connectorPermissions: ConnectorToolPermissions;
   toolApprovalPolicy: ToolApprovalPolicy;
 }> {
   const [connectorPermissions, toolApprovalPolicy] = await Promise.all([
-    options.modelSupportsTools
+    options.modelSupportsTools && options.connectorPermissionsRequired !== false
       ? loadConnectorToolPermissions(db, userId)
       : Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS),
-    loadToolApprovalPolicy(db, userId),
+    options.toolApprovalPolicyRequired === false
+      ? Promise.resolve(DEFAULT_TOOL_APPROVAL_POLICY)
+      : loadToolApprovalPolicy(db, userId),
   ]);
   return { connectorPermissions, toolApprovalPolicy };
 }

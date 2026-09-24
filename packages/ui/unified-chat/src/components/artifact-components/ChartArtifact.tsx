@@ -159,7 +159,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
     >
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-primary/10 text-primary text-xs font-medium">
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-compact bg-primary/10 text-primary text-xs font-medium">
             <BarChart3 className="h-3.5 w-3.5" aria-hidden="true" />
             <span className="capitalize">{kind}</span>
           </div>
@@ -202,7 +202,7 @@ export function ChartArtifact({ artifact, className, isDark }: ChartArtifactProp
 
       {totalRows > rows.length && (
         <div
-          className="border-t bg-muted/20 px-3 py-1.5 text-[12px] text-muted-foreground"
+          className="border-t bg-muted/20 px-3 py-1.5 text-caption text-muted-foreground"
           data-testid="chart-truncation-note"
         >
           Plotting the first {CHART_ROW_CAP} of {totalRows} points. Download the JSON for the full

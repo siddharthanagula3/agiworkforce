@@ -16,7 +16,7 @@ import {
 } from './required-execution';
 
 const PAID_TIER = 'pro';
-const SANDBOXLESS_TIER = 'free';
+const SANDBOXLESS_TIER = 'local-only';
 
 const executeCodeTool = e2bExecutionToolDefs().find(
   (tool) => tool.function.name === EXECUTE_CODE_TOOL,
@@ -73,6 +73,15 @@ describe('resolveCodeExecutionRequirement', () => {
       }),
     ).toEqual({ required: false, source: null });
   });
+
+  it('does not require execution when the user explicitly says not to run code', () => {
+    expect(
+      resolveCodeExecutionRequirement({
+        codeExecutionEnabled: undefined,
+        userMessage: 'Do not search the web or run code.',
+      }),
+    ).toEqual({ required: false, source: null });
+  });
 });
 
 describe('classifyAttachedExecutionTool', () => {
@@ -93,6 +102,7 @@ describe('classifyAttachedExecutionTool', () => {
 describe('planAdmitsCodeExecution', () => {
   it('follows the sandbox allowance the plan catalog carries', () => {
     expect(planAdmitsCodeExecution(PAID_TIER)).toBe(true);
+    expect(planAdmitsCodeExecution('free')).toBe(true);
     expect(planAdmitsCodeExecution(SANDBOXLESS_TIER)).toBe(false);
   });
 });

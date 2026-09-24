@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './ChatComposerNew';
 import { useChatStore } from '@shared/stores/web-chat-store';
@@ -44,8 +44,46 @@ function submit(text: string) {
 }
 
 beforeEach(() => {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+  window.localStorage.clear();
+  window.sessionStorage.clear();
   resetSendPendingFlagForTests();
-  useChatStore.setState({ parkedSendsByFingerprint: {} });
+  useChatStore.getState().reset();
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    value: vi.fn(() => 'blob:failed-upload'),
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+});
+
+describe('composer offline recovery', () => {
+  it('keeps the draft, explains why Send is unavailable, and re-enables it on reconnect', () => {
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} emptyState conversationId={null} />);
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textarea, { target: { value: 'send this after reconnecting' } });
+
+    act(() => {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+      window.dispatchEvent(new Event('offline'));
+    });
+
+    expect(sendButton()).toBeDisabled();
+    expect(screen.getByTestId('composer-send-disabled-reason')).toHaveTextContent(
+      'You are offline. Your draft is saved here and can be sent after you reconnect.',
+    );
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+    expect(onSend).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue('send this after reconnecting');
+
+    act(() => {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(sendButton()).toBeEnabled();
+    expect(textarea).toHaveValue('send this after reconnecting');
+  });
 });
 
 describe('composer shows a sending indicator across the upload gap (files-2)', () => {
@@ -56,6 +94,31 @@ describe('composer shows a sending indicator across the upload gap (files-2)', (
     submit('summarize the attached file');
 
     expect(sendButton()).toHaveAttribute('aria-label', 'Sending message…');
+  });
+
+  it('keeps a failed attachment retryable after the original selection was cleared', async () => {
+    const onRetryAttachmentUpload = vi.fn();
+    const file = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId="conv-1"
+        prefillText="summarize these notes"
+        attachmentUploadAttempt={{
+          id: 'attempt-1',
+          content: 'summarize these notes',
+          files: [file],
+          statuses: [{ phase: 'failed', error: 'Storage unavailable' }],
+        }}
+        onRetryAttachmentUpload={onRetryAttachmentUpload}
+      />,
+    );
+
+    const retry = await screen.findByRole('button', { name: 'Retry upload for notes.txt' });
+    fireEvent.click(retry);
+
+    expect(onRetryAttachmentUpload).toHaveBeenCalledWith(0);
+    await waitFor(() => expect(sendButton()).toHaveAttribute('aria-label', 'Sending message…'));
   });
 
   it("does not clear a still-in-flight send's indicator when a blocked second send parks text the composer already shows (files-1)", () => {

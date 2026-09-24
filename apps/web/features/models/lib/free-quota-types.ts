@@ -12,6 +12,8 @@ export interface FreeQuotaModel {
   consumedApproximate: number | null;
   expiresOn: string | null;
   status: FreeQuotaStatus;
+  outputSize?: string;
+  durationSeconds?: number;
 }
 
 export interface FreeQuotaCatalogue {
@@ -24,7 +26,7 @@ export interface FreeQuotaCatalogue {
 }
 
 export const FREE_QUOTA_CATEGORIES: Readonly<Record<ProviderOfferingCategory, string>> = {
-  chat: 'Chat & vision',
+  chat: 'Text chat',
   image: 'Images',
   video: 'Video',
   audio: 'Audio & speech',

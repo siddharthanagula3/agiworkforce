@@ -8,12 +8,12 @@ import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/uti
 
 const MarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.MarkdownContent),
-  { loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" /> },
+  { loading: () => <div className="h-4 w-32 animate-pulse rounded-compact bg-muted" /> },
 );
 
 const StreamingMarkdownContent = dynamic(
   () => import('@agiworkforce/unified-chat').then((mod) => mod.StreamingMarkdownContent),
-  { loading: () => <div className="h-4 w-32 animate-pulse rounded bg-muted" /> },
+  { loading: () => <div className="h-4 w-32 animate-pulse rounded-compact bg-muted" /> },
 );
 
 const REASONING_BODY_CLASS =
@@ -143,7 +143,7 @@ export function ThinkingBlock({
         <ChevronRight
           className={cn(
             'w-3.5 h-3.5 shrink-0',
-            !reducedMotion && 'transition-transform duration-200',
+            !reducedMotion && 'transition-transform duration-quick',
             expanded && 'rotate-90',
           )}
           aria-hidden="true"
@@ -156,7 +156,7 @@ export function ThinkingBlock({
       <div
         role="region"
         aria-labelledby={headerId}
-        className={cn(!reducedMotion && 'transition-all ease-in-out')}
+        className={cn(!reducedMotion && 'transition-all ease-standard')}
         style={
           reducedMotion
             ? { display: expanded ? undefined : 'none' }
@@ -165,8 +165,8 @@ export function ThinkingBlock({
                 opacity: expanded ? 1 : 0,
                 overflow: 'hidden',
                 transitionProperty: 'max-height, opacity',
-                transitionDuration: '250ms',
-                transitionTimingFunction: 'ease-in-out',
+                transitionDuration: 'var(--duration-moved)',
+                transitionTimingFunction: 'var(--curve-standard)',
               }
         }
       >

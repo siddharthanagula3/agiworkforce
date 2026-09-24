@@ -181,6 +181,8 @@ describe('ComposerPlusMenu, chat mode', () => {
   it('lists connected connectors only once the Connectors row is expanded', () => {
     renderMenu({ connectorsSubmenuOpen: true });
 
+    expect(screen.getByRole('group', { name: 'Connectors' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Connectors' })).not.toBeInTheDocument();
     const row = screen.getByRole('menuitemcheckbox', { name: 'Gmail' });
     expect(row).toBeInTheDocument();
     // The same fragment the AGI Work bar popover asserts: one row component.
@@ -193,6 +195,8 @@ describe('ComposerPlusMenu, chat mode', () => {
     const { props } = renderMenu();
 
     fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    expect(screen.getByRole('group', { name: 'Skills' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Skills' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'ads' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('menuitem', { name: 'brand-voice' }));
 
@@ -249,6 +253,8 @@ describe('ComposerPlusMenu, chat mode', () => {
     const { props } = renderMenu();
 
     fireEvent.click(screen.getByRole('button', { name: 'Plugins' }));
+    expect(screen.getByRole('group', { name: 'Plugins' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Plugins' })).not.toBeInTheDocument();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Data Pack' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'sql-review' }));
 

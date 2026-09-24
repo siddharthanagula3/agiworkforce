@@ -78,7 +78,7 @@ async function readError(response: Response): Promise<string> {
 
 function Claim({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
-    <div className="rounded border border-border p-3">
+    <div className="rounded-compact border border-border p-3">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={warn ? 'mt-1 text-sm text-danger-text' : 'mt-1 text-sm text-foreground'}>
         {value}
@@ -132,7 +132,7 @@ export default function ReleaseDashboardPage() {
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="mt-4 rounded border border-input px-3 py-1 text-xs text-foreground disabled:opacity-50"
+            className="mt-4 rounded-compact border border-input px-3 py-1 text-xs text-foreground disabled:opacity-50"
           >
             Refresh
           </button>
@@ -227,7 +227,7 @@ export default function ReleaseDashboardPage() {
                   {data.ledger.map((entry) => (
                     <li
                       key={`${entry.surface}-${entry.commitSha}`}
-                      className="rounded border border-border p-3"
+                      className="rounded-compact border border-border p-3"
                     >
                       <p className="text-sm text-foreground">
                         {entry.surface} at {shortSha(entry.commitSha)}
@@ -254,7 +254,7 @@ export default function ReleaseDashboardPage() {
               ) : (
                 <ul className="mt-4 flex flex-col gap-3">
                   {data.events.map((event) => (
-                    <li key={event.id} className="rounded border border-border p-3">
+                    <li key={event.id} className="rounded-compact border border-border p-3">
                       <p className="text-sm text-foreground">
                         {EVENT_LABELS[event.event]} · {event.surface} · {event.environment}
                         {event.outcome === 'failed' ? (

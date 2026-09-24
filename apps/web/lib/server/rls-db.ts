@@ -44,6 +44,11 @@ export interface UserScopedDbOptions {
   resolveOrganization?: boolean;
 }
 
+export interface VerifiedBearerPrincipal {
+  userId: string;
+  token: string;
+}
+
 export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
 
 async function resolveRequestOrganizationId(
@@ -57,6 +62,40 @@ function isApiKeyToken(token: string): boolean {
   return token.startsWith('sk_live_') || token.startsWith('sk_test_');
 }
 
+async function scopeVerifiedBearer(
+  request: NextRequest,
+  principal: VerifiedBearerPrincipal,
+  resolveOrganization: boolean,
+): Promise<UserScopedDb> {
+  const organizationId = resolveOrganization
+    ? await resolveRequestOrganizationId(request, principal.userId)
+    : null;
+  setTenantScope({
+    userId: principal.userId,
+    organizationId: organizationId ?? undefined,
+  });
+  return {
+    db: isApiKeyToken(principal.token)
+      ? createClaimedUserScopedDb(getNeonDb(), {
+          userId: principal.userId,
+          organizationId,
+        })
+      : getRlsCapableDb().withUser(principal.token).withOrg(organizationId),
+    userId: principal.userId,
+    organizationId,
+  };
+}
+
+export async function getVerifiedBearerUserScopedDb(
+  request: NextRequest,
+  principal: VerifiedBearerPrincipal,
+  options: Pick<UserScopedDbOptions, 'resolveOrganization'> = {},
+): Promise<UserScopedDb> {
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${principal.token}`) throw createError.unauthorized();
+  return scopeVerifiedBearer(request, principal, options.resolveOrganization ?? true);
+}
+
 export async function getUserScopedDb(
   request: NextRequest,
   options: UserScopedDbOptions = {},
@@ -66,17 +105,7 @@ export async function getUserScopedDb(
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.substring(7);
     const { userId } = await getClerkAuthUser(request, options);
-    const organizationId = resolveOrganization
-      ? await resolveRequestOrganizationId(request, userId)
-      : null;
-    setTenantScope({ userId, organizationId: organizationId ?? undefined });
-    return {
-      db: isApiKeyToken(token)
-        ? createClaimedUserScopedDb(getNeonDb(), { userId, organizationId })
-        : getRlsCapableDb().withUser(token).withOrg(organizationId),
-      userId,
-      organizationId,
-    };
+    return scopeVerifiedBearer(request, { userId, token }, resolveOrganization);
   }
 
   const { subject: userId, getToken } = await getRequestIdentity();

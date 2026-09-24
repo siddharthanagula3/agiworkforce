@@ -56,7 +56,7 @@ export function BrandedGreeting({
               <button
                 type="button"
                 onClick={onSelectWorkspace}
-                className="rounded-sm underline decoration-[var(--chat-text-muted)] underline-offset-4 transition-colors hover:text-[var(--chat-accent-primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                className="rounded-sm underline decoration-[var(--chat-text-muted)] underline-offset-4 transition-colors hover:text-[var(--chat-accent-primary-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                 aria-label={`Change workspace from ${workspace}`}
               >
                 {workspace}

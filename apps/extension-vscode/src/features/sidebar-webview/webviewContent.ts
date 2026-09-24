@@ -4132,11 +4132,23 @@ export function getWebviewContent(
     var sessionsSource = 'local';
     var sessionsRows = [];
     var sessionsUnavailable = null;
+    var sessionsLoading = false;
     var accountSignedIn = false;
 
     function renderSessionsRows() {
       if (!sessionsSheetList) return;
       sessionsSheetList.replaceChildren();
+      sessionsSheetList.setAttribute('aria-busy', String(sessionsLoading));
+      if (sessionsLoading) {
+        var loading = document.createElement('div');
+        loading.className = 'sessions-sheet-empty';
+        loading.setAttribute('role', 'status');
+        loading.textContent = sessionsSource === 'local'
+          ? 'Loading developer sessions…'
+          : 'Loading cloud chats…';
+        sessionsSheetList.appendChild(loading);
+        return;
+      }
       var query = (sessionsSearch && !sessionsSearch.hidden ? sessionsSearch.value : '')
         .trim()
         .toLowerCase();
@@ -4211,6 +4223,8 @@ export function getWebviewContent(
       sessionsSource = source;
       sessionsRows = [];
       sessionsUnavailable = null;
+      sessionsLoading = true;
+      if (sessionsSearch) sessionsSearch.hidden = true;
       if (sessionsTabLocal) sessionsTabLocal.setAttribute('aria-selected', String(source === 'local'));
       if (sessionsTabCloud) sessionsTabCloud.setAttribute('aria-selected', String(source === 'cloud'));
       renderSessionsRows();
@@ -5216,6 +5230,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionsList') {
         if (msg.payload.source === sessionsSource) {
+          sessionsLoading = false;
           sessionsRows = msg.payload.rows || [];
           sessionsUnavailable = msg.payload.unavailable || null;
           if (sessionsSearch) sessionsSearch.hidden = sessionsRows.length <= 10;

@@ -318,6 +318,33 @@ describe('durable cloud agent operation executor', () => {
     });
   });
 
+  it('replays an adapter-carried category without reclassifying an opaque message', async () => {
+    const classification = {
+      category: 'server_overload',
+      code: 'provider_busy',
+      retryable: true,
+      fallbackable: true,
+    };
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'failed',
+      error: { name: 'Error', message: 'Request failed', classification },
+    });
+
+    const rejection = await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi.fn(),
+    }).catch((error: unknown) => error);
+
+    expect(rejection).toMatchObject({ classification });
+  });
+
   it('keeps the replay cap fatal even on a provider operation', async () => {
     receiptMocks.claim.mockResolvedValue({
       disposition: 'failed',
@@ -368,6 +395,41 @@ describe('durable cloud agent operation executor', () => {
     expect(receiptMocks.fail).toHaveBeenCalledWith(
       db,
       expect.objectContaining({ error: expect.objectContaining({ status: 503 }) }),
+    );
+  });
+
+  it('persists an adapter-carried category in a failed provider receipt', async () => {
+    receiptMocks.claim.mockResolvedValue({
+      disposition: 'acquired',
+      operationId: '0190a000-0000-7000-8000-000000000002',
+      leaseToken: '0190a000-0000-7000-8000-000000000003',
+      attempt: 1,
+    });
+    receiptMocks.fail.mockResolvedValue(undefined);
+    const classification = {
+      category: 'server_overload',
+      code: 'provider_busy',
+      retryable: true,
+      fallbackable: true,
+    };
+
+    await executeCloudAgentOperation(db, {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:1',
+      operationKind: 'provider',
+      retrySafety: 'unsafe',
+      payload: {},
+      resultSchema: ResultSchema,
+      execute: vi
+        .fn()
+        .mockRejectedValue(Object.assign(new Error('Request failed'), { classification })),
+    }).catch(() => undefined);
+
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ error: expect.objectContaining({ classification }) }),
     );
   });
 

@@ -7,8 +7,8 @@ import {
   type ToolCallGateRank,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import {
-  DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_POLICIES,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   toolApprovalPolicyOption,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
@@ -127,7 +127,7 @@ export function buildToolApprovalPolicyRows(
       policy,
       label: option.label,
       summary: option.hint,
-      isDefault: policy === DEFAULT_TOOL_APPROVAL_POLICY,
+      isDefault: policy === WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
       runsWithoutAsking: tools
         .filter((tool) => tool.runsWithoutAsking.includes(policy))
         .map((tool) => tool.label),

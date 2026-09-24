@@ -44,6 +44,9 @@ export const PERSISTED_METADATA_MAX_THINKING_CHARS = 8_000;
 export const PERSISTED_METADATA_MAX_THINKING_SEGMENTS = 8;
 /** A sandbox can print megabytes; this is the readable floor. */
 export const PERSISTED_METADATA_MAX_CODE_OUTPUT_CHARS = 10_000;
+const PERSISTED_ACTIVITY_MAX_SOURCES_PER_ENTRY = 6;
+const PERSISTED_ACTIVITY_MAX_FILES_PER_ENTRY = 8;
+const PERSISTED_ACTIVITY_STRING_CHARS = 256;
 
 /**
  * Keys that must survive every drop pass. All of them are scalars or short
@@ -53,6 +56,7 @@ export const PERSISTED_METADATA_MAX_CODE_OUTPUT_CHARS = 10_000;
 const ESSENTIAL_KEYS: ReadonlySet<string> = new Set([
   'model',
   'provider',
+  'routeLane',
   'tokensUsed',
   'inputTokens',
   'outputTokens',
@@ -250,6 +254,177 @@ function boundCodeExecutionResult(value: unknown): unknown {
   return out;
 }
 
+function boundActivityEntry(value: unknown): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const key of [
+    'kind',
+    'id',
+    'status',
+    'summary',
+    'progressId',
+    'toolCallId',
+    'name',
+    'category',
+    'startedAtMs',
+    'completedAtMs',
+    'elapsedMs',
+    'emittedAtMs',
+    'artifactId',
+    'mimeType',
+    'uri',
+    'sizeBytes',
+    'beforeTokens',
+    'afterTokens',
+    'code',
+    'retryable',
+    'retryAfterSeconds',
+    'unavailable',
+    'isRetry',
+    'query',
+    'command',
+    'commandCwd',
+    'error',
+    'message',
+  ]) {
+    const field = value[key];
+    if (typeof field === 'string') {
+      out[key] = clip(
+        field,
+        key === 'uri' ? PERSISTED_METADATA_MAX_URL_CHARS : PERSISTED_ACTIVITY_STRING_CHARS,
+      );
+    } else if (
+      typeof field === 'boolean' ||
+      (typeof field === 'number' && Number.isFinite(field))
+    ) {
+      out[key] = field;
+    }
+  }
+
+  if (Array.isArray(value['sources'])) {
+    out['sources'] = value['sources']
+      .slice(0, PERSISTED_ACTIVITY_MAX_SOURCES_PER_ENTRY)
+      .flatMap((source) => {
+        if (!isRecord(source)) return [];
+        const url = clip(source['url'], PERSISTED_ACTIVITY_STRING_CHARS);
+        const title = clip(source['title'], PERSISTED_ACTIVITY_STRING_CHARS);
+        return url && title ? [{ url, title }] : [];
+      });
+  }
+  if (Array.isArray(value['files'])) {
+    out['files'] = value['files']
+      .slice(0, PERSISTED_ACTIVITY_MAX_FILES_PER_ENTRY)
+      .flatMap((file) => {
+        if (!isRecord(file)) return [];
+        const path = clip(file['path'], PERSISTED_ACTIVITY_STRING_CHARS);
+        const change = clip(file['change'], ESSENTIAL_STRING_MAX_CHARS);
+        return path && change ? [{ path, change }] : [];
+      });
+  }
+  for (const key of ['approval', 'deviceStep', 'queue']) {
+    const field = fitToBudget(boundArgValue(value[key]), 500);
+    if (isRecord(field)) out[key] = field;
+  }
+  if (value['status'] === 'awaiting-approval' || value['status'] === 'awaiting-device') {
+    const input = fitToBudget(boundArgValue(value['input']), 500);
+    if (input !== undefined) out['input'] = input;
+  }
+  return out;
+}
+
+function boundAgentActivity(value: unknown): unknown {
+  if (!isRecord(value) || !Array.isArray(value['entries'])) return value;
+  const budget = KEY_BUDGET_CHARS['agentActivity'];
+  if (budget === undefined || serializedLength(value) <= budget) return value;
+
+  const activity: Record<string, unknown> = { entries: [] };
+  for (const key of [
+    'schemaVersion',
+    'sessionId',
+    'turnId',
+    'lastSequence',
+    'status',
+    'startedAtMs',
+    'updatedAtMs',
+    'completedAtMs',
+    'stopReason',
+    'taskId',
+    'taskState',
+  ]) {
+    const field = value[key];
+    if (typeof field === 'string') activity[key] = clip(field, ESSENTIAL_STRING_MAX_CHARS);
+    else if (typeof field === 'number' && Number.isFinite(field)) activity[key] = field;
+  }
+
+  const entries = value['entries'].map(boundActivityEntry);
+  let anchorIndex = -1;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (entries[index]?.['kind'] !== 'tool') continue;
+    anchorIndex = index;
+    break;
+  }
+  const requiredIndex = anchorIndex >= 0 ? anchorIndex : entries.length - 1;
+  const selected = new Set<number>();
+  if (requiredIndex >= 0 && entries[requiredIndex]) selected.add(requiredIndex);
+
+  const requiredEntry = entries[requiredIndex];
+  if (requiredEntry) {
+    while (serializedLength({ ...activity, entries: [requiredEntry] }) > budget) {
+      const files = requiredEntry['files'];
+      const sources = requiredEntry['sources'];
+      if (Array.isArray(files) && files.length > 0) {
+        files.pop();
+      } else if (Array.isArray(sources) && sources.length > 0) {
+        sources.pop();
+      } else if ('input' in requiredEntry) {
+        delete requiredEntry['input'];
+      } else {
+        break;
+      }
+    }
+  }
+
+  const selectedEntries = (): Record<string, unknown>[] =>
+    [...selected]
+      .sort((left, right) => left - right)
+      .flatMap((index) => (entries[index] ? [entries[index]] : []));
+  activity['entries'] = selectedEntries();
+
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    if (selected.has(index) || !entries[index]) continue;
+    selected.add(index);
+    const candidate = selectedEntries();
+    if (serializedLength({ ...activity, entries: candidate }) <= budget) {
+      activity['entries'] = candidate;
+    } else {
+      selected.delete(index);
+    }
+  }
+
+  if (serializedLength(activity) <= budget) return activity;
+  if (requiredEntry) {
+    activity['entries'] = [
+      Object.fromEntries(
+        [
+          'kind',
+          'id',
+          'toolCallId',
+          'name',
+          'category',
+          'summary',
+          'status',
+          'startedAtMs',
+          'approval',
+          'deviceStep',
+        ]
+          .filter((key) => requiredEntry[key] !== undefined)
+          .map((key) => [key, requiredEntry[key]]),
+      ),
+    ];
+  }
+  return serializedLength(activity) <= budget ? activity : fitToBudget(activity, budget);
+}
+
 function safeStringify(value: unknown): string | undefined {
   try {
     return JSON.stringify(value);
@@ -259,6 +434,7 @@ function safeStringify(value: unknown): string | undefined {
 }
 
 const KEY_BOUNDERS: Record<string, (value: unknown) => unknown> = {
+  agentActivity: boundAgentActivity,
   projectSources: (value) => parseProjectFileCitations(value),
   searchResults: boundSearchResults,
   citations: boundCitations,
@@ -374,6 +550,7 @@ export function projectPersistedMessageMetadata(
   if (!metadata) return metadata;
 
   const projected: Record<string, unknown> = {};
+  let activityTruncated = false;
   for (const [key, value] of Object.entries(metadata)) {
     if (value === undefined) continue;
     if (ESSENTIAL_KEYS.has(key)) {
@@ -384,10 +561,13 @@ export function projectPersistedMessageMetadata(
     const bounder = KEY_BOUNDERS[key];
     const bounded = bounder ? bounder(value) : value;
     if (bounded === undefined) continue;
+    if (key === 'agentActivity' && bounded !== value) activityTruncated = true;
     const budget = KEY_BUDGET_CHARS[key];
     projected[key] = budget === undefined ? bounded : fitToBudget(bounded, budget);
     if (projected[key] === undefined) delete projected[key];
   }
+
+  if (activityTruncated) projected[METADATA_TRUNCATED_KEY] = true;
 
   const essentialLength = managedCloudMetadataLength(
     Object.fromEntries(Object.entries(projected).filter(([key]) => ESSENTIAL_KEYS.has(key))),

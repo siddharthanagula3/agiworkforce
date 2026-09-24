@@ -82,7 +82,7 @@ interface UsageMeterRowProps {
 function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
   if (meter.source === 'unbounded') {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-[var(--chat-text-muted)]">
+      <div className="flex items-center gap-1.5 px-3 py-2 text-caption text-[var(--chat-text-muted)]">
         <Home size={11} className="shrink-0" />
         <span>Local model, no quota</span>
       </div>
@@ -91,7 +91,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
 
   if (meter.source === 'user-api-key') {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-[var(--chat-text-muted)]">
+      <div className="flex items-center gap-1.5 px-3 py-2 text-caption text-[var(--chat-text-muted)]">
         <Info size={11} className="shrink-0" />
         <span>Using your own API key</span>
       </div>
@@ -104,7 +104,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
     meter.limitTokens === undefined
   ) {
     return (
-      <div className="flex items-center gap-1.5 px-3 py-2 text-[12px] text-[var(--chat-text-muted)]">
+      <div className="flex items-center gap-1.5 px-3 py-2 text-caption text-[var(--chat-text-muted)]">
         <Info size={11} className="shrink-0" />
         <span>Managed usage unavailable</span>
       </div>
@@ -119,7 +119,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
 
   return (
     <div className="px-3 py-2 space-y-1">
-      <div className="flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
+      <div className="flex items-center justify-between text-caption text-[var(--chat-text-muted)]">
         <span>
           {used} / {total} tokens
           {resetLabel ? ` · resets ${resetLabel}` : ''}
@@ -128,7 +128,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
           <button
             type="button"
             onClick={onUpgradeClick}
-            className="flex items-center gap-0.5 text-[12px] font-medium text-blue-400 hover:text-blue-300 transition-colors"
+            className="flex items-center gap-0.5 text-caption font-medium text-blue-400 hover:text-blue-300 transition-colors"
           >
             Upgrade
             <ArrowUpRight size={10} />
@@ -192,7 +192,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
 
   const avatar = (
     <span
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white select-none"
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-caption font-semibold text-white select-none"
       style={{ backgroundColor: avatarColor }}
       aria-hidden="true"
     >
@@ -205,7 +205,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
       ref={triggerRef}
       onClick={() => setOpen((prev) => !prev)}
       className={cn(
-        'flex w-full items-center gap-2 rounded-[var(--chat-radius-md)] px-2 py-2 transition-colors',
+        'flex w-full items-center gap-2 rounded-md px-2 py-2 transition-colors',
         'text-left hover:bg-[var(--chat-surface-hover)]',
         open && 'bg-[var(--chat-surface-hover)]',
         collapsed && 'justify-center px-0',
@@ -219,7 +219,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
           <p className="truncate text-sm font-medium text-[var(--chat-text-primary)] leading-tight">
             {displayName}
           </p>
-          <p className="truncate text-[12px] text-[var(--chat-text-muted)] leading-tight">
+          <p className="truncate text-caption text-[var(--chat-text-muted)] leading-tight">
             {planLabel} plan
           </p>
         </div>
@@ -244,8 +244,8 @@ export function UserProfile({ collapsed }: UserProfileProps) {
           role="menu"
           aria-label="Account menu"
           className={cn(
-            'absolute bottom-full mb-1 left-0 z-50 w-64',
-            'rounded-[var(--chat-radius-lg)] bg-[var(--chat-surface-elevated)]',
+            'absolute bottom-full mb-1 left-0 z-[var(--z-dropdown)] w-64',
+            'rounded-lg bg-[var(--chat-surface-elevated)]',
             'border border-[var(--chat-border)] shadow-lg',
             'animate-in fade-in-0 zoom-in-95',
           )}
@@ -259,7 +259,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               {/* Plan badge */}
               <span
                 className={cn(
-                  'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[12px] font-semibold',
+                  'shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-caption font-semibold',
                   tier === 'local' || tier === 'byok'
                     ? 'bg-[var(--chat-border)] text-[var(--chat-text-muted)]'
                     : tier === 'basic'
@@ -271,7 +271,7 @@ export function UserProfile({ collapsed }: UserProfileProps) {
               </span>
             </div>
             {profile.email && (
-              <p className="text-[12px] text-[var(--chat-text-muted)] truncate mt-0.5">
+              <p className="text-caption text-[var(--chat-text-muted)] truncate mt-0.5">
                 {profile.email}
               </p>
             )}
@@ -402,7 +402,7 @@ function MenuButton({
       role="menuitem"
       onClick={onClick}
       className={cn(
-        'flex w-full items-center gap-2 rounded-[var(--chat-radius-sm)] px-2 py-1.5 transition-colors',
+        'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 transition-colors',
         'text-sm text-left outline-none',
         destructive
           ? 'text-[var(--chat-destructive-text)] hover:bg-[var(--chat-destructive)]/10'
@@ -418,7 +418,7 @@ function MenuButton({
         {icon}
       </span>
       <span className="flex-1">{label}</span>
-      {shortcut && <span className="text-[12px] text-[var(--chat-text-muted)]">{shortcut}</span>}
+      {shortcut && <span className="text-caption text-[var(--chat-text-muted)]">{shortcut}</span>}
       {suffix}
     </button>
   );

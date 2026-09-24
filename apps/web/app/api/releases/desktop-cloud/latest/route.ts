@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getOptionalEnv } from '@shared/utils/env';
@@ -8,11 +9,21 @@ import {
   DESKTOP_CLOUD_TAG_PREFIX,
   fetchLatestDesktopRelease,
 } from '@/lib/releases/github-desktop-releases';
+import { desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
+
+const UPDATES_HELD_MESSAGE = 'Updates for this version are paused while we look into a problem.';
 
 async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'release-latest');
   if (rateLimitResponse) {
     return rateLimitResponse;
+  }
+
+  if (await desktopUpdateHeld(request)) {
+    return NextResponse.json(
+      { error: { code: 'UPDATES_HELD', message: UPDATES_HELD_MESSAGE } },
+      { status: 503, headers: { 'Cache-Control': 'no-store' } },
+    );
   }
 
   const release = await fetchLatestDesktopRelease('stable', {
@@ -44,7 +55,12 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
       platforms: { mac: true },
       architectures: { arm64: Boolean(arm64Installer), x64: Boolean(x64Installer) },
     },
-    { headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' } },
+    {
+      headers: {
+        'Cache-Control': 'public, max-age=300, s-maxage=300',
+        Vary: CLIENT_VERSION_HEADER,
+      },
+    },
   );
 }
 

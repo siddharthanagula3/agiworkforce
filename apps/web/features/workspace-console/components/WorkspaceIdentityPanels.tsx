@@ -10,7 +10,7 @@ const noticeStyle = {
   border: '1px solid var(--settings-border)',
   borderRadius: 'var(--radius-lg)',
   background: 'var(--bg-elev)',
-  padding: 20,
+  padding: 'var(--space-5)',
 } as const;
 
 /**

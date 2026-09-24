@@ -41,12 +41,12 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           fontSize: 13,
           fontWeight: 500,
           color: 'var(--text-2)',
-          marginBottom: 8,
+          marginBottom: 'var(--space-2)',
         }}
       >
         {label}
       </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
         <input
           id={id}
           type="text"
@@ -56,7 +56,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
             flex: 1,
             fontSize: 13,
             fontFamily: 'var(--mono)',
-            padding: '8px 12px',
+            padding: 'var(--space-2) var(--space-3)',
             background: 'var(--bg-base)',
             color: 'var(--text-3)',
             border: '1px solid var(--settings-border)',
@@ -93,7 +93,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '8px 0 0' }}>{hint}</p>
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-2) 0 0' }}>{hint}</p>
     </>
   );
 }

@@ -50,7 +50,7 @@ export const WEB_SEARCH_MAX_RESULTS = 5;
 export const WEB_SEARCH_FREE_MAX_RESULTS = 5;
 export const WEB_SEARCH_MAX_CALLS_PER_TURN = 3;
 export const WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN = 10;
-const MAX_QUERY_LENGTH = 400;
+export const WEB_SEARCH_MAX_QUERY_LENGTH = 400;
 const MAX_SNIPPET_LENGTH = 500;
 
 export function webSearchToolDef(): {
@@ -394,7 +394,7 @@ export async function executeWebSearch(
     return err('invalid_tool_input', 'web_search requires a non-empty string "query" argument.');
   }
   const trimmedQuery = rawQuery.trim();
-  const query = trimmedQuery.slice(0, MAX_QUERY_LENGTH);
+  const query = trimmedQuery.slice(0, WEB_SEARCH_MAX_QUERY_LENGTH);
   const queryTruncated = query.length < trimmedQuery.length;
 
   const providers = configuredWebSearchProviders(
@@ -488,7 +488,7 @@ export function formatWebSearchResultForModel(
     return webSearchFailureForModel(outcome);
   }
   const truncationNote = outcome.queryTruncated
-    ? `\n(Note: the query was truncated to ${MAX_QUERY_LENGTH} characters before searching.)`
+    ? `\n(Note: the query was truncated to ${WEB_SEARCH_MAX_QUERY_LENGTH} characters before searching.)`
     : '';
   if (outcome.results.length === 0) {
     return `No results found for "${outcome.query}".${truncationNote}`;

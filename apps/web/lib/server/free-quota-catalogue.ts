@@ -1,7 +1,12 @@
 import 'server-only';
 
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import { getProviderOffering, type ProviderOffering } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getProviderOffering,
+  type ProviderOffering,
+  type ProviderOfferingCategory,
+} from '@agiworkforce/types';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 import {
   PolicySchema,
@@ -17,6 +22,7 @@ import {
 import { logger } from '@/lib/logger';
 import { getKeyValueProvider, getKeyValueStore } from '@/lib/server/key-value';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
+import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import freePoolsDocument from '@/config/free-pools.json';
 import { loadFreePools, type FreeQuotaInventory, type FreeQuotaObservation } from './free-pools';
 
@@ -55,6 +61,16 @@ export function freeQuotaPlanAllows(planTier: string | null | undefined): boolea
   return isFreePlanTier(planTier);
 }
 
+export function freeQuotaPlanAllowsOffering(
+  planTier: string | null | undefined,
+  category: ProviderOfferingCategory,
+): boolean {
+  if (category === 'chat') return freeQuotaPlanAllows(planTier);
+  if (category === 'image') return canUseBillingPlanCapability(planTier, 'image_generation');
+  if (category === 'video') return canUseBillingPlanCapability(planTier, 'video_generation');
+  return false;
+}
+
 export function sharedFreeQuotaStore(nodeEnv: string | undefined): KeyValueStore | null {
   try {
     const store = getKeyValueStore();
@@ -80,7 +96,7 @@ export function freeQuotaContextFor(request: {
     apiKey: process.env['QWEN_API_KEY'] ?? '',
     policy: loadFreeQuotaPolicy(),
     nowMs: request.nowMs ?? Date.now(),
-    mediaServed: local,
+    mediaServed: local || isGeneratedMediaStorageConfigured(),
     ...(local
       ? {
           localAttestation: async () => {
@@ -160,6 +176,7 @@ export async function resolveFreeQuotaDecisions(
 
 export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuotaCatalogue {
   const { inventory } = decisions;
+  const policy = loadFreeQuotaPolicy();
   return {
     issuer: inventory.issuer,
     observedOn: inventory.observedOn,
@@ -176,6 +193,12 @@ export function buildFreeQuotaCatalogue(decisions: FreeQuotaDecisions): FreeQuot
       consumedApproximate: entry.consumedApproximate,
       expiresOn: entry.expiresOn,
       status: decision.status,
+      ...(offering.quotaProbeProtocol === 'image-sync'
+        ? { outputSize: offering.quotaImageSize ?? policy.imageSize }
+        : {}),
+      ...(offering.quotaProbeProtocol === 'video-async'
+        ? { outputSize: policy.videoSize, durationSeconds: policy.videoSeconds }
+        : {}),
     })),
   };
 }

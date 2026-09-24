@@ -56,18 +56,18 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 13,
-  padding: '8px 11px',
+  padding: 'var(--space-2) var(--space-3)',
 } as const;
 
 const primaryButtonStyle = {
   minHeight: 38,
   border: 0,
   borderRadius: 'var(--radius-md)',
-  background: 'var(--chat-accent-primary, #c8892a)',
+  background: 'var(--chat-accent-primary)',
   color: 'var(--chat-accent-on-primary)',
   fontSize: 13,
   fontWeight: 600,
-  padding: '8px 14px',
+  padding: 'var(--space-2) var(--space-4)',
   cursor: 'pointer',
 } as const;
 
@@ -79,7 +79,7 @@ const secondaryButtonStyle = {
   color: 'var(--text-2)',
   fontSize: 12,
   fontWeight: 600,
-  padding: '7px 11px',
+  padding: 'var(--space-2) var(--space-3)',
   cursor: 'pointer',
 } as const;
 
@@ -124,13 +124,20 @@ function SectionCard({
     >
       <div
         style={{
-          padding: '14px 20px',
+          padding: 'var(--space-4) var(--space-5)',
           borderBottom: '1px solid var(--settings-border)',
         }}
       >
         <div style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>{title}</div>
         {description ? (
-          <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
+          <div
+            style={{
+              color: 'var(--text-3)',
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginTop: 'var(--space-1)',
+            }}
+          >
             {description}
           </div>
         ) : null}
@@ -146,7 +153,7 @@ function InlineError({ error }: { error: Error | null | undefined }) {
     <p
       role="alert"
       style={{
-        margin: '10px 0 0',
+        margin: 'var(--space-3) 0 0',
         color: 'var(--settings-destructive-text)',
         fontSize: 12,
         lineHeight: 1.5,
@@ -203,7 +210,10 @@ export function TeamSection() {
 
   if (overviewQuery.isLoading) {
     return (
-      <div role="status" style={{ color: 'var(--text-3)', fontSize: 13, padding: 20 }}>
+      <div
+        role="status"
+        style={{ color: 'var(--text-3)', fontSize: 13, padding: 'var(--space-5)' }}
+      >
         Loading team settings…
       </div>
     );
@@ -211,7 +221,14 @@ export function TeamSection() {
 
   if (overviewQuery.isError || !overview || !access) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 20 }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-3)',
+          padding: 'var(--space-5)',
+        }}
+      >
         <p role="alert" style={{ color: 'var(--text-2)', fontSize: 13, margin: 0 }}>
           Team settings could not be loaded.
         </p>
@@ -220,7 +237,7 @@ export function TeamSection() {
           onClick={() => void overviewQuery.refetch()}
           style={{ ...primaryButtonStyle, alignSelf: 'flex-start' }}
         >
-          <RefreshCw size={14} style={{ marginRight: 6, verticalAlign: -2 }} />
+          <RefreshCw size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
           Try again
         </button>
       </div>
@@ -249,8 +266,8 @@ export function TeamSection() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
-          padding: '14px 0',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-4) 0',
           borderBottom: '1px solid var(--settings-border)',
           flexWrap: 'wrap',
         }}
@@ -394,7 +411,7 @@ export function TeamSection() {
 
   if (!organization) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
         <div>
           <h1
             style={{
@@ -402,7 +419,7 @@ export function TeamSection() {
               fontSize: 24,
               fontWeight: 500,
               color: 'var(--text-1)',
-              margin: '0 0 4px',
+              margin: '0 0 var(--space-1)',
             }}
           >
             Workspace
@@ -417,7 +434,7 @@ export function TeamSection() {
 
         {!access.canManageTeam ? (
           <SectionCard title="Workspace administration">
-            <div style={{ padding: 20 }}>
+            <div style={{ padding: 'var(--space-5)' }}>
               <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
                 Workspace administration requires a Team or Enterprise plan. Choose at least 2 Team
                 seats to create a workspace. Your current plan is {titleCase(access.plan)}.
@@ -428,7 +445,7 @@ export function TeamSection() {
                   ...primaryButtonStyle,
                   display: 'inline-flex',
                   alignItems: 'center',
-                  marginTop: 14,
+                  marginTop: 'var(--space-4)',
                   textDecoration: 'none',
                 }}
               >
@@ -443,9 +460,21 @@ export function TeamSection() {
           >
             <form
               onSubmit={handleCreate}
-              style={{ display: 'grid', gap: 16, padding: 20, maxWidth: 520 }}
+              style={{
+                display: 'grid',
+                gap: 'var(--space-4)',
+                padding: 'var(--space-5)',
+                maxWidth: 520,
+              }}
             >
-              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-2)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                }}
+              >
                 Workspace name
                 <input
                   aria-label="Workspace name"
@@ -456,7 +485,14 @@ export function TeamSection() {
                   style={controlStyle}
                 />
               </label>
-              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-2)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                }}
+              >
                 Workspace slug
                 <input
                   aria-label="Workspace slug"
@@ -475,7 +511,7 @@ export function TeamSection() {
                 disabled={createOrganization.isPending}
                 style={{ ...primaryButtonStyle, justifySelf: 'start' }}
               >
-                <Building2 size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
+                <Building2 size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
                 {createOrganization.isPending ? 'Creating…' : 'Create workspace'}
               </button>
             </form>
@@ -486,7 +522,7 @@ export function TeamSection() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1
           style={{
@@ -494,7 +530,7 @@ export function TeamSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Workspace
@@ -509,7 +545,7 @@ export function TeamSection() {
       {!access.canManageTeam ? (
         <p
           role="alert"
-          style={{ color: 'var(--text-3)', fontSize: 12, margin: 0, padding: '2px 0' }}
+          style={{ color: 'var(--text-3)', fontSize: 12, margin: 0, padding: 'var(--space-1) 0' }}
         >
           This workspace is on the {titleCase(access.plan)} plan. Workspace administration needs a
           Team or Enterprise workspace plan.
@@ -522,11 +558,13 @@ export function TeamSection() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))',
-            gap: 14,
-            padding: 20,
+            gap: 'var(--space-4)',
+            padding: 'var(--space-5)',
           }}
         >
-          <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+          <label
+            style={{ display: 'grid', gap: 'var(--space-2)', color: 'var(--text-2)', fontSize: 13 }}
+          >
             Workspace name
             <input
               aria-label="Workspace name"
@@ -538,7 +576,9 @@ export function TeamSection() {
               style={controlStyle}
             />
           </label>
-          <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+          <label
+            style={{ display: 'grid', gap: 'var(--space-2)', color: 'var(--text-2)', fontSize: 13 }}
+          >
             Workspace slug
             <input
               aria-label="Workspace slug"
@@ -582,8 +622,8 @@ export function TeamSection() {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-            gap: 18,
-            padding: 20,
+            gap: 'var(--space-4)',
+            padding: 'var(--space-5)',
           }}
         >
           <div>
@@ -604,7 +644,9 @@ export function TeamSection() {
               {seatsAvailable ?? 'Unknown'}
             </div>
           </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 8 }}>
+          <div
+            style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 'var(--space-2)' }}
+          >
             <SettingsPageLink
               href={
                 contractPriced
@@ -632,7 +674,7 @@ export function TeamSection() {
             fontSize: 12,
             lineHeight: 1.5,
             margin: 0,
-            padding: '10px 20px',
+            padding: 'var(--space-3) var(--space-5)',
           }}
         >
           Active members and pending invitations each reserve one seat.
@@ -646,16 +688,16 @@ export function TeamSection() {
             style={{
               display: 'flex',
               flexWrap: 'wrap',
-              gap: 10,
+              gap: 'var(--space-3)',
               alignItems: 'end',
-              padding: 20,
+              padding: 'var(--space-5)',
             }}
           >
             <label
               style={{
                 display: 'grid',
                 flex: '1 1 240px',
-                gap: 7,
+                gap: 'var(--space-2)',
                 color: 'var(--text-2)',
                 fontSize: 13,
               }}
@@ -674,7 +716,7 @@ export function TeamSection() {
               style={{
                 display: 'grid',
                 flex: '1 1 140px',
-                gap: 7,
+                gap: 'var(--space-2)',
                 color: 'var(--text-2)',
                 fontSize: 13,
               }}
@@ -696,7 +738,7 @@ export function TeamSection() {
               disabled={createInvitation.isPending || seatsAvailable === 0}
               style={primaryButtonStyle}
             >
-              <Mail size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
+              <Mail size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
               {createInvitation.isPending ? 'Creating…' : 'Create invitation'}
             </button>
             <div style={{ flexBasis: '100%' }}>
@@ -705,7 +747,10 @@ export function TeamSection() {
                 an invitation email was sent. The recipient must sign in with the invited email.
               </p>
               {seatsAvailable === 0 ? (
-                <p role="alert" style={{ color: 'var(--text-2)', fontSize: 12, margin: '8px 0 0' }}>
+                <p
+                  role="alert"
+                  style={{ color: 'var(--text-2)', fontSize: 12, margin: 'var(--space-2) 0 0' }}
+                >
                   No seats are available. Revoke an invitation, remove a member, or buy more seats.
                 </p>
               ) : null}
@@ -719,7 +764,7 @@ export function TeamSection() {
               style={{
                 borderTop: '1px solid var(--settings-border)',
                 background: 'var(--bg-base)',
-                padding: 20,
+                padding: 'var(--space-5)',
               }}
             >
               <div
@@ -727,15 +772,15 @@ export function TeamSection() {
                   alignItems: 'center',
                   display: 'flex',
                   justifyContent: 'space-between',
-                  gap: 12,
-                  marginBottom: 8,
+                  gap: 'var(--space-3)',
+                  marginBottom: 'var(--space-2)',
                 }}
               >
                 <div>
                   <div style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>
                     Private link for {invitationLink.email}
                   </div>
-                  <p style={{ color: 'var(--text-2)', fontSize: 12, margin: '4px 0 0' }}>
+                  <p style={{ color: 'var(--text-2)', fontSize: 12, margin: 'var(--space-1) 0 0' }}>
                     {invitationLink.delivery.emailSent
                       ? `An invitation email was sent to ${invitationLink.email}. This link does the same thing if it does not arrive.`
                       : invitationLink.delivery.reason}
@@ -745,12 +790,12 @@ export function TeamSection() {
                   type="button"
                   aria-label="Dismiss invitation link"
                   onClick={() => setInvitationLink(null)}
-                  style={{ ...secondaryButtonStyle, minHeight: 32, padding: 7 }}
+                  style={{ ...secondaryButtonStyle, minHeight: 32, padding: 'var(--space-2)' }}
                 >
                   <X size={14} />
                 </button>
               </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
                 <input
                   aria-label="Private invitation link"
                   readOnly
@@ -762,12 +807,15 @@ export function TeamSection() {
                   onClick={() => void copyInvitationLink()}
                   style={primaryButtonStyle}
                 >
-                  <Copy size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
+                  <Copy size={14} style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }} />
                   {copyStatus === 'copied' ? 'Copied' : 'Copy link'}
                 </button>
               </div>
               {copyStatus === 'failed' ? (
-                <p role="alert" style={{ color: 'var(--text-2)', fontSize: 12, margin: '8px 0 0' }}>
+                <p
+                  role="alert"
+                  style={{ color: 'var(--text-2)', fontSize: 12, margin: 'var(--space-2) 0 0' }}
+                >
                   Copy is unavailable in this browser. Select the link and copy it manually.
                 </p>
               ) : null}
@@ -782,12 +830,18 @@ export function TeamSection() {
           description={`${pendingInvitations.length} pending ${pendingInvitations.length === 1 ? 'invitation' : 'invitations'}`}
         >
           {invitationsQuery.isLoading ? (
-            <div role="status" style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+            <div
+              role="status"
+              style={{ padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
+            >
               Loading invitations…
             </div>
           ) : invitationsQuery.isError ? (
-            <div style={{ padding: 20 }}>
-              <p role="alert" style={{ color: 'var(--text-2)', fontSize: 13, margin: '0 0 10px' }}>
+            <div style={{ padding: 'var(--space-5)' }}>
+              <p
+                role="alert"
+                style={{ color: 'var(--text-2)', fontSize: 13, margin: '0 0 var(--space-3)' }}
+              >
                 Invitations could not be loaded.
               </p>
               <button
@@ -799,7 +853,7 @@ export function TeamSection() {
               </button>
             </div>
           ) : pendingInvitations.length === 0 ? (
-            <div style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+            <div style={{ padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
               No pending invitations.
             </div>
           ) : (
@@ -811,9 +865,9 @@ export function TeamSection() {
                   borderTop: index === 0 ? 0 : '1px solid var(--settings-border)',
                   display: 'flex',
                   flexWrap: 'wrap',
-                  gap: 10,
+                  gap: 'var(--space-3)',
                   minHeight: 66,
-                  padding: '12px 20px',
+                  padding: 'var(--space-3) var(--space-5)',
                 }}
               >
                 <div style={{ minWidth: 0, flex: '1 1 220px' }}>
@@ -841,7 +895,10 @@ export function TeamSection() {
                   onClick={() => handleRenewInvitation(invitation)}
                   style={secondaryButtonStyle}
                 >
-                  <RotateCw size={13} style={{ marginRight: 6, verticalAlign: -2 }} />
+                  <RotateCw
+                    size={13}
+                    style={{ marginRight: 'var(--space-2)', verticalAlign: -2 }}
+                  />
                   New link
                 </button>
                 <button
@@ -872,12 +929,18 @@ export function TeamSection() {
         }
       >
         {membersQuery.isLoading ? (
-          <div role="status" style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+          <div
+            role="status"
+            style={{ padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
+          >
             Loading members…
           </div>
         ) : membersQuery.isError ? (
-          <div style={{ padding: 20 }}>
-            <p role="alert" style={{ color: 'var(--text-2)', fontSize: 13, margin: '0 0 10px' }}>
+          <div style={{ padding: 'var(--space-5)' }}>
+            <p
+              role="alert"
+              style={{ color: 'var(--text-2)', fontSize: 13, margin: '0 0 var(--space-3)' }}
+            >
               Members could not be loaded.
             </p>
             <button
@@ -898,9 +961,9 @@ export function TeamSection() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 12,
+                  gap: 'var(--space-3)',
                   minHeight: 66,
-                  padding: '12px 20px',
+                  padding: 'var(--space-3) var(--space-5)',
                   borderTop: index === 0 ? 0 : '1px solid var(--settings-border)',
                 }}
               >
@@ -995,8 +1058,15 @@ export function TeamSection() {
             );
           })
         ) : (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-3)', fontSize: 13 }}>
-            <Users size={20} style={{ marginBottom: 8 }} />
+          <div
+            style={{
+              padding: 'var(--space-5)',
+              textAlign: 'center',
+              color: 'var(--text-3)',
+              fontSize: 13,
+            }}
+          >
+            <Users size={20} style={{ marginBottom: 'var(--space-2)' }} />
             <div>No members found.</div>
           </div>
         )}
@@ -1008,7 +1078,7 @@ export function TeamSection() {
           title="Workspace ownership"
           description="Hand the owner role to another member while keeping your own seat."
         >
-          <div style={{ padding: 20 }}>
+          <div style={{ padding: 'var(--space-5)' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
               A workspace has exactly one owner. Transferring gives that member billing, deletion
               and every administrative control, and moves you to the role you pick below. Only the
@@ -1017,13 +1087,20 @@ export function TeamSection() {
             <div
               style={{
                 display: 'grid',
-                gap: 14,
+                gap: 'var(--space-4)',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))',
-                marginTop: 14,
+                marginTop: 'var(--space-4)',
                 maxWidth: 560,
               }}
             >
-              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-2)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                }}
+              >
                 New owner
                 <select
                   aria-label="Member to receive ownership"
@@ -1042,7 +1119,14 @@ export function TeamSection() {
                     ))}
                 </select>
               </label>
-              <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 'var(--space-2)',
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                }}
+              >
                 Your role afterwards
                 <select
                   aria-label="Your role after the transfer"
@@ -1081,7 +1165,7 @@ export function TeamSection() {
                     }),
                 });
               }}
-              style={{ ...secondaryButtonStyle, marginTop: 14 }}
+              style={{ ...secondaryButtonStyle, marginTop: 'var(--space-4)' }}
             >
               {transferOwnership.isPending ? 'Transferring…' : 'Transfer ownership'}
             </button>
@@ -1096,7 +1180,7 @@ export function TeamSection() {
           title="Delete this workspace"
           description="Only the owner can, and only by typing the workspace name."
         >
-          <div style={{ padding: 20 }}>
+          <div style={{ padding: 'var(--space-5)' }}>
             <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
               Deleting erases every chat, project, file, connector and API key in{' '}
               {organization?.name ?? 'this workspace'} for all {organization?.memberCount ?? 0}{' '}
@@ -1108,7 +1192,7 @@ export function TeamSection() {
               style={{
                 ...secondaryButtonStyle,
                 display: 'inline-flex',
-                marginTop: 14,
+                marginTop: 'var(--space-4)',
                 textDecoration: 'none',
               }}
             >
@@ -1122,7 +1206,7 @@ export function TeamSection() {
         title="Workspace membership"
         description="Leaving releases your seat and removes this workspace from your account."
       >
-        <div style={{ padding: 20 }}>
+        <div style={{ padding: 'var(--space-5)' }}>
           {isOwner ? (
             <>
               <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
@@ -1132,10 +1216,10 @@ export function TeamSection() {
               <label
                 style={{
                   display: 'grid',
-                  gap: 7,
+                  gap: 'var(--space-2)',
                   color: 'var(--text-2)',
                   fontSize: 13,
-                  marginTop: 14,
+                  marginTop: 'var(--space-4)',
                 }}
               >
                 New owner
@@ -1162,7 +1246,7 @@ export function TeamSection() {
                 style={{
                   ...secondaryButtonStyle,
                   color: 'var(--settings-destructive-text)',
-                  marginTop: 14,
+                  marginTop: 'var(--space-4)',
                 }}
               >
                 {leaveOrganization.isPending ? 'Leaving…' : 'Transfer ownership and leave'}
@@ -1182,7 +1266,7 @@ export function TeamSection() {
                 style={{
                   ...secondaryButtonStyle,
                   color: 'var(--settings-destructive-text)',
-                  marginTop: 14,
+                  marginTop: 'var(--space-4)',
                 }}
               >
                 {leaveOrganization.isPending ? 'Leaving…' : 'Leave workspace'}

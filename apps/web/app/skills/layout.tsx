@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { buildMetadata } from '@/lib/seo/metadata';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 /**
  * The page itself is a client component and cannot export metadata, so this
@@ -15,5 +16,5 @@ export const metadata = buildMetadata({
 });
 
 export default function SkillsLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

@@ -32,6 +32,7 @@ import { EmailArtifact } from './artifact-components/EmailArtifact';
 import { PresentationArtifact } from './artifact-components/PresentationArtifact';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { SpreadsheetArtifact } from './artifact-components/SpreadsheetArtifact';
+import { renderMermaidInOwnedHost } from './markdown/mermaid-render';
 
 export interface ArtifactRendererProps {
   artifact: Artifact;
@@ -271,7 +272,7 @@ function CodeArtifact({ artifact }: { artifact: Artifact }) {
   return (
     <div className="overflow-x-auto bg-zinc-900 text-zinc-200" data-testid="code-artifact">
       <pre className="p-4 text-sm font-mono leading-relaxed whitespace-pre">{artifact.content}</pre>
-      <div className="px-4 pb-2 text-[12px] text-zinc-500">{lines.length} lines</div>
+      <div className="px-4 pb-2 text-caption text-zinc-500">{lines.length} lines</div>
     </div>
   );
 }
@@ -321,7 +322,7 @@ function SvgArtifact({ artifact }: { artifact: Artifact }) {
  * preview them.
  */
 export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDark: boolean }) {
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const renderHostRef = React.useRef<HTMLDivElement>(null);
   const [svg, setSvg] = React.useState<string>('');
   const [error, setError] = React.useState<string | null>(null);
 
@@ -339,13 +340,16 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
           startOnLoad: false,
           theme: isDark ? 'dark' : 'default',
           securityLevel: 'strict',
+          suppressErrorRendering: true,
           fontFamily: 'Inter, sans-serif',
         });
 
         const id = `mermaid-${crypto.randomUUID().replace(/-/g, '')}`;
         if (!artifact.content.trim()) throw new Error('Empty diagram content');
 
-        const { svg } = await mermaid.render(id, artifact.content);
+        const renderHost = renderHostRef.current;
+        if (!renderHost) throw new Error('Diagram render host unavailable');
+        const { svg } = await renderMermaidInOwnedHost(mermaid, id, artifact.content, renderHost);
         // render() can succeed on markup the sanitiser then strips to nothing.
         // Committing that as success left a permanent "Rendering diagram..."
         // pulse - a loading state for work that had already finished.
@@ -397,9 +401,9 @@ export function MermaidArtifact({ artifact, isDark }: { artifact: Artifact; isDa
       className="p-4 bg-white/5 rounded-lg overflow-x-auto flex justify-center min-h-[200px] items-center"
       data-testid="mermaid-artifact"
     >
+      <div ref={renderHostRef} aria-hidden="true" className="sr-only" />
       {sanitized ? (
         <div
-          ref={containerRef}
           // llm-guardrail-allow: sanitised above before it reaches this sink
           dangerouslySetInnerHTML={{
             __html: sanitized,
@@ -438,7 +442,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
         <button
           type="button"
           onClick={() => setIsRunning((r) => !r)}
-          className="text-xs px-2 py-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className="text-xs px-2 py-1 rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
         >
           {isRunning ? 'Stop' : 'Run'}
         </button>
@@ -472,7 +476,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
           <button
             type="button"
             onClick={() => setIsRunning(true)}
-            className="px-3 py-1.5 text-xs bg-accent hover:bg-accent/80 rounded text-foreground"
+            className="px-3 py-1.5 text-xs bg-accent hover:bg-accent/80 rounded-compact text-foreground"
           >
             Run again
           </button>
@@ -580,7 +584,7 @@ export function ArtifactRenderer({
               `${artifact.type.charAt(0).toUpperCase() + artifact.type.slice(1)} Artifact`}
           </span>
           {artifact.language && (
-            <span className="text-xs px-1.5 py-0.5 rounded border border-border text-muted-foreground">
+            <span className="text-xs px-1.5 py-0.5 rounded-compact border border-border text-muted-foreground">
               {artifact.language}
             </span>
           )}
@@ -592,7 +596,7 @@ export function ArtifactRenderer({
               type="button"
               onClick={() => onApplyCode(artifact.id, artifact.content)}
               aria-label="Apply code to file"
-              className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+              className="h-8 w-8 flex items-center justify-center rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
             >
               <AlertTriangle className="h-3.5 w-3.5" />
             </button>
@@ -604,7 +608,7 @@ export function ArtifactRenderer({
             onClick={handleCopy}
             disabled={awaitingOutput}
             aria-label={copied ? 'Copied!' : 'Copy to clipboard'}
-            className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+            className="h-8 w-8 flex items-center justify-center rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-green-500" />
@@ -621,7 +625,7 @@ export function ArtifactRenderer({
               aria-label="Download or export artifact"
               aria-expanded={exportMenuOpen}
               onClick={() => setExportMenuOpen((o) => !o)}
-              className="h-8 flex items-center justify-center gap-0.5 px-2 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+              className="h-8 flex items-center justify-center gap-0.5 px-2 rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
             >
               <Download className="h-3.5 w-3.5" />
               <ChevronDown className="h-2.5 w-2.5 ml-0.5" />
@@ -629,11 +633,11 @@ export function ArtifactRenderer({
             {exportMenuOpen && (
               <>
                 <div
-                  className="fixed inset-0 z-10"
+                  className="fixed inset-0 z-[var(--z-control)]"
                   onClick={() => setExportMenuOpen(false)}
                   aria-hidden
                 />
-                <div className="absolute right-0 top-full mt-1 z-20 min-w-[180px] rounded-md border border-border bg-card shadow-lg py-1">
+                <div className="absolute right-0 top-full mt-1 z-[var(--z-content-sticky)] min-w-[180px] rounded-md border border-border bg-card shadow-lg py-1">
                   <button
                     type="button"
                     onClick={() => {

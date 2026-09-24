@@ -7,8 +7,11 @@ import { signIn } from './qa-capability-harness';
 const OUT_DIR = process.env['QA_OUT_DIR'] ?? path.resolve(__dirname, '../../../.qa-evidence');
 
 const VIEWPORTS = [
+  { name: 'minimum-mobile', width: 320, height: 568 },
   { name: 'mobile', width: 375, height: 812 },
   { name: 'tablet', width: 768, height: 1024 },
+  { name: 'tablet-panel', width: 820, height: 1180 },
+  { name: 'regular-panel', width: 1024, height: 768 },
   { name: 'desktop', width: 1440, height: 900 },
 ] as const;
 
@@ -100,7 +103,7 @@ test.describe('QA responsive sweep', () => {
   test.setTimeout(20 * 60_000);
   test.use({ reducedMotion: 'reduce' } as never);
 
-  test('no surface scrolls the page horizontally at 375, 768 or 1440', async ({ page }) => {
+  test('no surface scrolls the page horizontally at the release viewports', async ({ page }) => {
     await signIn(page);
 
     const results: Overflow[] = [];
@@ -143,5 +146,164 @@ test.describe('QA responsive sweep', () => {
     console.log(`[resp] ${broken.length}/${results.length} measurements overflow`);
 
     expect(results.length).toBe(VIEWPORTS.length * ROUTES.length);
+  });
+
+  test('chat keeps one complete secondary panel at 820 and 1024', async ({ page }) => {
+    await signIn(page);
+
+    for (const viewport of [
+      { width: 820, height: 1180 },
+      { width: 1024, height: 768 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/chat');
+      await page.getByRole('button', { name: 'Open artifacts panel' }).click();
+      await expect(page.getByTestId('artifacts-panel')).toBeVisible();
+      await expect
+        .poll(() =>
+          page.getByTestId('artifacts-panel').evaluate((panel) => {
+            const rect = panel.getBoundingClientRect();
+            return Math.round(rect.right - document.documentElement.clientWidth);
+          }),
+        )
+        .toBeLessThanOrEqual(0);
+
+      await page.getByRole('button', { name: 'Open sources panel' }).click();
+      await expect(page.getByLabel('Research panel')).toBeVisible();
+      await expect(page.getByTestId('artifacts-panel')).toHaveCount(0);
+      await expect(page.getByLabel('Research panel')).toHaveCount(1);
+    }
+  });
+
+  test('chat navigation stays inside the visible viewport at 320, 390 and 768', async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto('/chat');
+      await page
+        .getByRole('button', { name: /Open navigation|Toggle sidebar/ })
+        .first()
+        .click();
+
+      const drawer = page.getByTestId('chat-mobile-nav-drawer');
+      await expect(drawer).toBeVisible();
+      await expect
+        .poll(() =>
+          drawer.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            return {
+              bottom: Math.round(rect.bottom),
+              height: Math.round(rect.height),
+              viewportHeight: Math.round(window.visualViewport?.height ?? window.innerHeight),
+            };
+          }),
+        )
+        .toEqual({
+          bottom: viewport.height,
+          height: viewport.height,
+          viewportHeight: viewport.height,
+        });
+
+      await page.keyboard.press('Escape');
+      await expect(drawer).toHaveCount(0);
+    }
+  });
+
+  test('a saved Work dock and its composer fit tablet widths', async ({ page }) => {
+    await signIn(page);
+
+    const response = await page.request.get('/api/chat/conversations?limit=100');
+    expect(response.ok()).toBe(true);
+    const listing = (await response.json()) as {
+      conversations: { id: string; work_mode?: string | null }[];
+    };
+    let conversation = listing.conversations.find((entry) => entry.work_mode === 'agiwork');
+    if (!conversation) {
+      for (const entry of listing.conversations.slice(0, 30)) {
+        const messagesResponse = await page.request.get(
+          `/api/chat/conversations/${entry.id}/messages?limit=100`,
+        );
+        if (!messagesResponse.ok()) continue;
+        const body = (await messagesResponse.json()) as {
+          messages: { metadata?: { agentActivity?: unknown } | null }[];
+        };
+        if (body.messages.some((message) => message.metadata?.agentActivity)) {
+          conversation = entry;
+          break;
+        }
+      }
+    }
+    expect(conversation, 'no saved Work activity is available to this QA account').toBeDefined();
+
+    mkdirSync(OUT_DIR, { recursive: true });
+    for (const width of [768, 820, 1024]) {
+      await page.setViewportSize({ width, height: 1024 });
+      await page.goto(`/chat/${conversation!.id}`);
+      await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+      await page.getByRole('button', { name: /Open (AGI Work session dock|Chat details)/ }).click();
+
+      const main = page.locator('#main-content');
+      const dock = page.getByRole('complementary', { name: /AGI Work session dock|Chat details/ });
+      await expect(dock).toBeVisible();
+      await expect
+        .poll(async () => {
+          const box = await dock.boundingBox();
+          return box ? box.x + box.width : Infinity;
+        })
+        .toBeLessThanOrEqual(width + 1);
+      const mainBox = await main.boundingBox();
+      const dockBox = await dock.boundingBox();
+      const composerBox = await page.getByRole('textbox', { name: 'Message input' }).boundingBox();
+      expect(mainBox).not.toBeNull();
+      expect(dockBox).not.toBeNull();
+      expect(composerBox).not.toBeNull();
+      expect(mainBox!.x + mainBox!.width).toBeLessThanOrEqual(dockBox!.x + 1);
+      expect(dockBox!.x + dockBox!.width).toBeLessThanOrEqual(width + 1);
+      expect(composerBox!.x).toBeGreaterThanOrEqual(mainBox!.x);
+      expect(composerBox!.x + composerBox!.width).toBeLessThanOrEqual(mainBox!.x + mainBox!.width);
+
+      const composerCollisions = await page.locator('#chat-composer').evaluate((composer) => {
+        const controls = Array.from(composer.querySelectorAll('button')).filter((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+        const collisions: string[] = [];
+        for (let index = 0; index < controls.length; index += 1) {
+          const left = controls[index]!;
+          const leftRect = left.getBoundingClientRect();
+          for (const right of controls.slice(index + 1)) {
+            const rightRect = right.getBoundingClientRect();
+            const overlapWidth =
+              Math.min(leftRect.right, rightRect.right) - Math.max(leftRect.left, rightRect.left);
+            const overlapHeight =
+              Math.min(leftRect.bottom, rightRect.bottom) - Math.max(leftRect.top, rightRect.top);
+            if (overlapWidth > 2 && overlapHeight > 2) {
+              collisions.push(
+                `${left.getAttribute('aria-label') ?? left.textContent?.trim()} overlaps ${right.getAttribute('aria-label') ?? right.textContent?.trim()}`,
+              );
+            }
+          }
+        }
+        return collisions;
+      });
+      expect(composerCollisions, `composer controls overlap at ${width}px`).toEqual([]);
+      await page.screenshot({ path: path.join(OUT_DIR, `work-dock-open-${width}.png`) });
+
+      await dock
+        .getByRole('button', { name: /Close (AGI Work session dock|Chat details)/ })
+        .click();
+      await expect(dock).toHaveCount(0);
+      const restored = await main.boundingBox();
+      expect(restored).not.toBeNull();
+      expect(restored!.x + restored!.width).toBeLessThanOrEqual(width + 1);
+      await page.screenshot({ path: path.join(OUT_DIR, `work-dock-closed-${width}.png`) });
+    }
   });
 });

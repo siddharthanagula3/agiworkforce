@@ -23,7 +23,7 @@ function describePasskey(passkey: IdentityPasskey): string {
 
 const secondaryButtonStyle = {
   flexShrink: 0,
-  padding: '6px 10px',
+  padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
   fontWeight: 500,
   background: 'transparent',
@@ -72,7 +72,7 @@ export function PasskeysPanel() {
         border: '1px solid var(--settings-border)',
         borderRadius: 'var(--radius-lg)',
         background: 'var(--bg-elev)',
-        padding: '16px 20px',
+        padding: 'var(--space-4) var(--space-5)',
       }}
     >
       {confirmDialog}
@@ -81,14 +81,19 @@ export function PasskeysPanel() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          gap: 16,
+          gap: 'var(--space-4)',
           flexWrap: 'wrap',
         }}
       >
         <div style={{ minWidth: 0 }}>
           <h2
             id="settings-passkeys-heading"
-            style={{ margin: '0 0 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}
+            style={{
+              margin: '0 0 var(--space-1)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-2)',
+            }}
           >
             Passkeys
           </h2>
@@ -108,7 +113,7 @@ export function PasskeysPanel() {
               ...secondaryButtonStyle,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 'var(--space-2)',
               color: 'var(--text-1)',
               cursor: !isLoaded || adding ? 'default' : 'pointer',
             }}
@@ -120,11 +125,11 @@ export function PasskeysPanel() {
       </div>
 
       {!isLoaded ? (
-        <div style={{ paddingTop: 12 }}>
+        <div style={{ paddingTop: 'var(--space-3)' }}>
           <Spinner size="sm" />
         </div>
       ) : passkeys.length > 0 ? (
-        <ul style={{ listStyle: 'none', margin: '12px 0 0', padding: 0 }}>
+        <ul style={{ listStyle: 'none', margin: 'var(--space-3) 0 0', padding: 0 }}>
           {passkeys.map((passkey, index) => {
             const label = passkey.name ?? 'Passkey';
             return (
@@ -134,15 +139,17 @@ export function PasskeysPanel() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 16,
-                  padding: '12px 0',
+                  gap: 'var(--space-4)',
+                  padding: 'var(--space-3) 0',
                   borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                   flexWrap: 'wrap',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{label}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+                  <div
+                    style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
+                  >
                     {describePasskey(passkey)}
                   </div>
                 </div>
@@ -177,7 +184,11 @@ export function PasskeysPanel() {
       {error ? (
         <p
           role="alert"
-          style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--settings-destructive-text)' }}
+          style={{
+            margin: 'var(--space-2) 0 0',
+            fontSize: 12,
+            color: 'var(--settings-destructive-text)',
+          }}
         >
           {error}
         </p>

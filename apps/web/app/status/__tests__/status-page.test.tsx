@@ -66,10 +66,20 @@ describe('/status', () => {
     const signal = await renderStatus();
 
     const checked = new Date(CHECKED_AT).toUTCString();
-    expect(rowValue(signal, 'Hosted platform')).toContain(`Operational · checked ${checked}`);
-    for (const label of ['Postgres', 'Payments', 'Chat', 'Work', 'Voice', 'Search']) {
+    expect(rowValue(signal, 'Hosted checks')).toContain(`Checks passing · checked ${checked}`);
+    for (const label of [
+      'Postgres',
+      'Payments',
+      'Chat routing',
+      'Work',
+      'Voice routing',
+      'Search',
+    ]) {
       expect(rowValue(signal, label)).toContain(`Passing · checked ${checked}`);
     }
+    expect(screen.getByText(/does not verify that a model returns a usable answer/i)).toBeVisible();
+    expect(screen.getByText(/model inference and a user chat turn were not tested/i)).toBeVisible();
+    expect(signal).not.toHaveTextContent('Operational');
   });
 
   it('names the failing check and the degraded state instead of a blanket outage', async () => {
@@ -80,10 +90,10 @@ describe('/status', () => {
 
     const signal = await renderStatus();
 
-    expect(rowValue(signal, 'Hosted platform')).toContain('Degraded');
+    expect(rowValue(signal, 'Hosted checks')).toContain('Some checks failing');
     expect(rowValue(signal, 'Payments')).toContain('Failing (unavailable)');
-    expect(rowValue(signal, 'Chat')).toContain('Passing');
-    expect(screen.getByText(/Core serving passed, but at least one capability/)).toBeVisible();
+    expect(rowValue(signal, 'Chat routing')).toContain('Passing');
+    expect(screen.getByText(/Core checks passed, but at least one capability/)).toBeVisible();
   });
 
   it('says the check could not run, and shows no component rows, when the health run throws', async () => {
@@ -91,8 +101,8 @@ describe('/status', () => {
 
     const signal = await renderStatus();
 
-    expect(rowValue(signal, 'Hosted platform')).toContain('Live check unavailable');
-    expect(rowValue(signal, 'Hosted platform')).toContain('Not completed');
+    expect(rowValue(signal, 'Hosted checks')).toContain('Checks unavailable');
+    expect(rowValue(signal, 'Hosted checks')).toContain('Not completed');
     expect(within(signal).queryByText('Postgres')).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('ECONNREFUSED');
     expect(screen.getByText(/We could not complete the most recent health check/)).toBeVisible();

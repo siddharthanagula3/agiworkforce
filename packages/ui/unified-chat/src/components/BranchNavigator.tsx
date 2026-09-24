@@ -53,7 +53,7 @@ function BranchNavigatorComponent({
   const displayIndex = currentIndex === -1 ? '?' : currentIndex + 1;
 
   return (
-    <div className="inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1 py-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded-compact border border-border bg-muted px-1 py-0.5">
       <Button
         type="button"
         variant="ghost"
@@ -70,7 +70,7 @@ function BranchNavigatorComponent({
       </Button>
 
       <span
-        className="min-w-[28px] cursor-default px-0.5 text-center font-mono text-[12px] text-muted-foreground"
+        className="min-w-[28px] cursor-default px-0.5 text-center font-mono text-caption text-muted-foreground"
         title={activeBranch?.name ?? activeBranchId}
       >
         {displayIndex}/{total}

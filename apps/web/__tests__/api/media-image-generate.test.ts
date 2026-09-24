@@ -243,6 +243,12 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
 }));
 
+const cogsMocks = vi.hoisted(() => ({ recordSettledProviderCost: vi.fn(async () => undefined) }));
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  recordSettledProviderCost: cogsMocks.recordSettledProviderCost,
+}));
+
 const afterCallbacks = vi.hoisted(() => [] as Array<() => unknown>);
 vi.mock('next/server', async () => {
   const actual = await vi.importActual<typeof import('next/server')>('next/server');
@@ -1744,6 +1750,104 @@ describe('POST /api/media/image/generate', () => {
 
       expect(response.status).toBe(200);
       expect(mediaPersistenceMocks.storeMedia).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Provider charges for output that is never delivered', () => {
+    const REFUSED_BYTES = Buffer.from('generated-image-bytes-the-provider-billed-for');
+    const REFUSED_SHA256 = createHash('sha256').update(REFUSED_BYTES).digest('hex');
+
+    beforeEach(() => {
+      mediaPersistenceMocks.storageConfigured.mockReturnValue(true);
+      mediaAssetReadinessMocks.insertAtomically.mockResolvedValue([
+        '44444444-4444-4444-8444-444444444444',
+      ]);
+    });
+
+    afterEach(() => {
+      delete process.env['MODERATION_HASH_DENYLIST'];
+    });
+
+    it('meters a refused image at the provider price and charges the account nothing', async () => {
+      process.env['MODERATION_HASH_DENYLIST'] = `known-list:${REFUSED_SHA256}`;
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: REFUSED_BYTES.toString('base64') }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a benign ask', provider: 'openai' }),
+      );
+
+      expect(response.status).toBe(422);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledTimes(1);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+      );
+      expect(cogsMocks.recordSettledProviderCost).toHaveBeenCalledTimes(1);
+      expect(cogsMocks.recordSettledProviderCost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: TEST_USER.userId,
+          provider: 'openai',
+          actualCostCents: 5,
+          taskOutcome: 'undelivered',
+          sourceRef: expect.stringMatching(/^image_job:[0-9a-f-]{36}:attempt:1$/),
+          usage: expect.objectContaining({
+            operation: 'image',
+            outputCount: 1,
+            reason: 'output_moderation',
+          }),
+        }),
+      );
+    });
+
+    it('meters an image the library could not keep, and charges the account nothing', async () => {
+      mediaAssetReadinessMocks.insertAtomically.mockResolvedValue([]);
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: VALID_JPEG_BASE64 }] }),
+      });
+
+      await POST(makeAuthedRequest({ prompt: 'a benign ask', provider: 'openai' }));
+
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+      );
+      expect(cogsMocks.recordSettledProviderCost).toHaveBeenCalledTimes(1);
+      expect(cogsMocks.recordSettledProviderCost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskOutcome: 'undelivered',
+          usage: expect.objectContaining({ reason: 'image_persistence_failed', outputCount: 1 }),
+        }),
+      );
+    });
+
+    it('meters nothing when the provider produced no output to pay for', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Provider connection refused'));
+
+      await POST(makeAuthedRequest({ prompt: 'a benign ask', provider: 'openai' }));
+
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
+      );
+      expect(cogsMocks.recordSettledProviderCost).not.toHaveBeenCalled();
+    });
+
+    it('records no undelivered cost for an image that was delivered and billed', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ b64_json: VALID_JPEG_BASE64 }] }),
+      });
+
+      const response = await POST(
+        makeAuthedRequest({ prompt: 'a benign ask', provider: 'openai' }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+        expect.objectContaining({ outcome: 'completed' }),
+      );
+      expect(cogsMocks.recordSettledProviderCost).not.toHaveBeenCalled();
     });
   });
 

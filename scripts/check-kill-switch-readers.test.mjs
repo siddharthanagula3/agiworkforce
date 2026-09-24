@@ -99,27 +99,57 @@ pub fn from_flags(flags: &Flags) -> bool {
     flags.get(SWITCH_KEY) != Some(&false)
 }
 `;
-  const uncalled = fixture({ 'apps/desktop/src-tauri/src/speech/gate.rs': gate });
-  assert.deepEqual(checkKillSwitchReaders(uncalled).failures, []);
+  const uncalled = fixture({
+    [KILL_SWITCHES]: switches("  'dictation',"),
+    'apps/desktop/src-tauri/src/speech/gate.rs': gate,
+  });
+  assert.match(
+    checkKillSwitchReaders(uncalled).failures.join('\n'),
+    /dictation kill switch is declared .* nothing reads it/,
+  );
 
   const called = fixture({
+    [KILL_SWITCHES]: switches("  'dictation',"),
     'apps/desktop/src-tauri/src/speech/gate.rs': gate,
     'apps/desktop/src-tauri/src/session.rs': 'let open = gate::from_flags(&flags);\n',
   });
-  assert.match(
-    checkKillSwitchReaders(called).failures.join('\n'),
-    /dictation is read now .* remove its entry from UNREAD/,
-  );
+  assert.deepEqual(checkKillSwitchReaders(called).failures, []);
 });
 
 test('a Rust call inside a test module does not make the reader live', () => {
   const root = fixture({
+    [KILL_SWITCHES]: switches("  'dictation',"),
     'apps/desktop/src-tauri/src/speech/gate.rs':
       'pub const K: &str = "capability.dictation";\npub fn from_flags() -> &str {\n    K\n}\n',
     'apps/desktop/src-tauri/src/session.rs':
       '#[cfg(test)]\nmod tests {\n    fn t() { super::gate::from_flags(); }\n}\n',
   });
-  assert.deepEqual(checkKillSwitchReaders(root).failures, []);
+  assert.match(
+    checkKillSwitchReaders(root).failures.join('\n'),
+    /dictation kill switch is declared .* nothing reads it/,
+  );
+});
+
+test('an owed switch passes while unread and fails as stale once something reads it', () => {
+  const owed = [
+    {
+      capability: 'voice_clone',
+      owed: 'the clone route: capabilityAllowed before a voice is cloned',
+      reason:
+        'The switch is declared and published, but no route consults it yet, so flipping it would stop nothing.',
+    },
+  ];
+  const unread = fixture({ [KILL_SWITCHES]: switches("  'voice_clone',") });
+  assert.deepEqual(checkKillSwitchReaders(unread, owed).failures, []);
+
+  const read = fixture({
+    [KILL_SWITCHES]: switches("  'voice_clone',"),
+    'apps/web/app/api/voice/clone/route.ts': "gate.capabilityAllowed('voice_clone');\n",
+  });
+  assert.match(
+    checkKillSwitchReaders(read, owed).failures.join('\n'),
+    /voice_clone is read now .* remove its entry from UNREAD/,
+  );
 });
 
 test('the handshake losing either end of the platform path fails', () => {

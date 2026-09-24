@@ -39,6 +39,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { estimateTokens } from '@agiworkforce/routing';
 import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
@@ -174,7 +175,8 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     temperature: 0,
     stream: false,
   });
-  const wireMode = resolveWireMode(route.provider);
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const wireMode = resolveWireMode(dispatchProvider);
 
   const cacheFields: ExactResponseCacheKeyFields = {
     callType: 'conversation-title-generation',
@@ -234,11 +236,11 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     let providerCompleted = false;
     try {
       await markManagedUsageProviderStarted(reservation);
-      const adapter = buildServerProviderAdapter(route.provider);
+      const adapter = buildServerProviderAdapter(dispatchProvider);
       const response = await drainToLlmResponse(
         adapter.stream(chatRequest, new AbortController().signal),
         route.modelKey,
-        (chunk) => toGenericUpstreamError(route.provider, chunk),
+        (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
         wireMode,
       );
       providerCompleted = true;

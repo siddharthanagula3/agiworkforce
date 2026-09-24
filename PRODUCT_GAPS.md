@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-14
+Last updated: 2026-09-21
 
 The single product completeness register: what separates the shipped AGI
 Workforce surfaces from a polished production assistant. It records the gap
@@ -25,7 +25,35 @@ An ID from one of those registers in this file is a pointer. The row it names
 is authoritative and its evidence must be re-read before acting. A finding
 here with its own `PG-*` id is new as of this audit and is tracked here until
 it is fixed or promoted into one of the registers above. A closed finding is
-deleted, not archived; git carries the history.
+deleted after its remediation batch is merged; while that batch is under review,
+`Status: Done` keeps the implementation and verification evidence beside the
+finding. Git carries the long-term history.
+
+## Current remediation closeout, 2026-09-21
+
+The discrete `PG-*` findings that entered this pass as `Status: Partial` now
+have **zero unresolved Partial rows**. Twelve are retained below as `Done` for
+review: `PG-WEB-03`, `PG-WEB-08`, `PG-CHAT-04`, `PG-CHAT-10`,
+`PG-WEBSET-10`, `PG-DESK-12`, `PG-DESK-14`, `PG-DESK-15`, `PG-DESK-16`,
+`PG-CHROME-10`, `PG-VSCODE-06` and `PG-CLI-16`. This is not a claim that the
+product has zero gaps: findings explicitly classified as Broken, Missing,
+Inconsistent, Accessibility, UX Gap or another non-Partial state remain open
+and continue to control broader launch readiness.
+
+The Free managed-cloud entry point is open by default. The server subscription
+gate admits a Free account without a private-beta redemption, and the public
+launch switch defaults open unless the incident-response kill switch is
+explicitly set off. Promotional Free-provider quota is deliberately stricter:
+an offering is selectable only when the deployment has a provider credential,
+shared state and a current quota-only attestation. An unavailable promotional
+offering is therefore an operational/provider state, not a per-user waitlist.
+
+Paid upgrades remain separate and gated. A Free account is sent to the upgrade
+waitlist/access-code flow, and `/api/checkout` independently refuses a new paid
+checkout unless `beta_redemptions` grants the account access. Existing paying
+customers retain their billing portal and upgrade path. Focused Free-launch,
+quota-safety, checkout, portal, waitlist and access-code validation passes 131
+tests.
 
 ## 0. Audit method and evidence tiers
 
@@ -90,8 +118,9 @@ possible, so most web cells are 🟡 or ? even where the source reads well.
 
 Cell notes, by column:
 
-- **Web**: Search 🔴 because the documented ⌘K search cannot fire and the
-  palette never searches (`PG-WEB-02`, `PG-WEB-03`). Keyboard 🔴 because the
+- **Web**: Search 🔴 because the documented ⌘K search cannot fire
+  (`PG-WEB-02`); the command palette itself now uses canonical server search
+  (`PG-WEB-03`, Done). Keyboard 🔴 because the
   shortcut set is inert on every shell route except `/chat` (`PG-WEB-01`).
 - **Mobile**: Loading, Errors, Projects and Settings 🔴 for invisible failure
   (`PG-MOB-01` to `PG-MOB-04`, `PG-MOB-08`). Connectors 🔴 by
@@ -113,37 +142,37 @@ Cell notes, by column:
 
 ## 2. Micro-polish matrix
 
-| Pattern            | Coverage                                                                                                               | Problems                                                                                                                                                                                                        |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Search / Cmd+K     | Web command palette, web `GlobalSearchDialog`, desktop palette and search modal, Chrome history search, CLI `--search` | Web ⌘K is claimed twice and the search dialog has no key; palette filters five recents; palette live for signed-out visitors (`PG-WEB-02..04`, `PG-WEB-11`)                                                     |
-| Undo               | None anywhere                                                                                                          | Zero undo affordances repo-wide; confirm dialogs are the only safety net (`PG-SHARED-06`)                                                                                                                       |
-| Empty states       | Primitive exists; adopted in web, desktop, unified-chat, mobile                                                        | Several surfaces render empty for a failed load (`PG-WEBSET-03`, `PG-MOB-03`, `PG-CHROME-05/06`, `PG-VSCODE-03`); `agi plugin list` prints nothing (`PG-CLI-07`)                                                |
-| Skeletons          | `app/chat/loading.tsx` real; `Skeleton` in 12 web and 12 desktop files                                                 | Root and settings `loading.tsx` are bare spinners; mobile Chats and Projects lists have none (`PG-WEB-17`, `PG-MOB-04`)                                                                                         |
-| Drag/drop          | Web composer overlay, unified-chat `ChatInput`, Electron folder drop                                                   | Tauri sets `dragDropEnabled: false`; desktop `FileDropZone` is unreachable (`PG-DESK-DEAD`)                                                                                                                     |
-| Autosave           | Web settings 400 ms debounce with unmount flush                                                                        | Full name is the one field on its pane that needs explicit Save and is discarded on close; flush failures swallowed (`PG-WEBSET-02`)                                                                            |
-| Offline            | Web `OfflineIndicator`, mobile `OfflineBanner` + queue, Electron `did-fail-load` page                                  | Web chat has no proactive offline state or reconnect retry (`PG-CHAT-10`); Electron retry always lands on `/chat` (`PG-DESK-14`); no toast on Chrome                                                            |
-| Focus rings        | Global `:focus-visible` on web and desktop                                                                             | 159 `outline-none` sites not individually checked (unverified)                                                                                                                                                  |
-| Dark mode          | Blocking init script on web, `next-themes`, desktop theme settings, Chrome auto tokens, VS Code vars                   | ~2,700 Tailwind palette literals with no guard; light-theme failures in shared `ActionLogTimeline` (`PG-SHARED-01/02`)                                                                                          |
-| Hover states       | Present throughout                                                                                                     | Web message actions are hover-only on touch for user and older assistant turns (`PG-CHAT-05`)                                                                                                                   |
-| Sticky elements    | Sticky composer, virtualised transcript                                                                                | Web shell remounts per page so the rail loses state (`PG-WEB-06`)                                                                                                                                               |
-| Scroll helpers     | Scroll-to-bottom on web and mobile                                                                                     | No new-message indicator (`PG-CHAT-08`); retry viewport jump (`AGI-20`, fixed on main, unobserved)                                                                                                              |
-| Copy controls      | 46 independent implementations                                                                                         | Five with no failure path; no announcement in most; no shared primitive (`PG-SHARED-08`)                                                                                                                        |
-| Help / FAQ         | `/help` from the account menu; `/faq` and `/support` from the marketing footer                                         | `/faq` is a flat page with no disclosure (verified in the browser); Support is not in the account menu (`PG-WEB-20`)                                                                                            |
-| Progress           | Streaming, tool timeline, mobile model download                                                                        | No per-file upload progress anywhere; batch fails on first error (`PG-CHAT-03`); Electron update flow has no states (`PG-DESK-12`)                                                                              |
-| Confirmations      | `useConfirmAction` on web (24) and unified-chat (4)                                                                    | Zero desktop adopters, seven global `confirm()` sites, one fails open; a second confirm primitive exists (`PG-SHARED-05`); project delete names no consequence (`PG-WEBSET-12`)                                 |
-| Dates              | `packages/platform/utils/src/format.ts`                                                                                | `formatRelativeTime` pinned to English; three desktop re-implementations; billing hardcodes `en-US`; no timezone on instants (`PG-SHARED-11`, `PG-WEBSET-09`)                                                   |
-| Support            | Support widget, `/support`, `/contact`                                                                                 | One hop further than the account menu (`PG-WEB-20`)                                                                                                                                                             |
-| Success states     | Status lines on settings panes, toasts                                                                                 | Sidebar rename/pin/archive failures are silent, so "no change" reads as success (`PG-WEB-07`); mobile generation failure clears the composer (`PG-MOB-01`)                                                      |
-| Error states       | Boundaries never leak stacks (verified); `network-error.ts` sanitiser is real                                          | Missing `error.tsx` on every signed-in shell route except `/chat` and `/billing` (`PG-WEB-16`); raw strings in dictation, mobile local runtime, Chrome page context (`PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-09`) |
-| Disabled states    | Send-disabled reasons shown in the web composer                                                                        | Permanently disabled decorative controls in the shared Library composer (`PG-SHARED-10`)                                                                                                                        |
-| Tooltips           | Radix tooltip primitive, shortcut labels in menus                                                                      | Account menu advertises ⌘/ on routes where it does nothing (`PG-WEB-01`)                                                                                                                                        |
-| Keyboard shortcuts | One registry on web, desktop shortcut catalogue, VS Code keybindings, CLI REPL                                         | Web registry inert off `/chat`; VS Code Escape rejects a far-away diff unconfirmed (`PG-VSCODE-02`); Chrome `capture_page` unbound (`PG-CHROME-10`)                                                             |
-| Responsive         | `Dialog` width is viewport-relative; public pages clean at 375px (verified)                                            | `100vh` in the dialog primitive; no virtual-keyboard handling on web (`PG-SHARED-12/13`); iPad multitasking on with portrait lock (`PG-MOB-10`)                                                                 |
-| Reduced motion     | Web blanket rule plus in-app toggle; `Spinner` primitive correct                                                       | Desktop has no blanket rule and 215 bare spinners; mobile 0 of 51 Reanimated components read `useReduceMotion` (`PG-SHARED-07`, `PG-MOB-07`)                                                                    |
-| Retry / recovery   | Web stream error keeps the partial and offers Continue; mobile `SendErrorBanner`                                       | Stopped turn cannot Continue (`PG-CHAT-07`); Capabilities drops the `retrySave` its hook provides (`PG-WEBSET-10`); expired connector has no Reconnect (`PG-WEBSET-04`)                                         |
-| Optimistic updates | Web send, project pin, settings toggles all roll back                                                                  | Sidebar row mutations roll back silently (`PG-WEB-07`)                                                                                                                                                          |
-| Connection state   | Web banner, mobile banner, CLI bounded timeouts (runtime)                                                              | Mobile cloud-sync error state has no renderer (`PG-MOB-02`); CLI proxy failure reads "builder error" (`PG-CLI-12`)                                                                                              |
-| Draft preservation | Web per-conversation drafts in memory; mobile `draftStore`; parked failed sends on web                                 | Web drafts and parked sends die on refresh (`PG-CHAT-04`); VS Code webview persists no state (`PG-VSCODE-05`); Electron ⌘N reloads the page (`PG-DESK-13`)                                                      |
+| Pattern            | Coverage                                                                                                                                            | Problems                                                                                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Search / Cmd+K     | Web command palette with canonical server search, web `GlobalSearchDialog`, desktop palette and search modal, Chrome history search, CLI `--search` | Web ⌘K is claimed twice and the search dialog has no key; palette remains live for signed-out visitors (`PG-WEB-02`, `PG-WEB-04`, `PG-WEB-11`)                                                                              |
+| Undo               | None anywhere                                                                                                                                       | Zero undo affordances repo-wide; confirm dialogs are the only safety net (`PG-SHARED-06`)                                                                                                                                   |
+| Empty states       | Primitive exists; adopted in web, desktop, unified-chat, mobile                                                                                     | Several surfaces render empty for a failed load (`PG-WEBSET-03`, `PG-MOB-03`, `PG-CHROME-05/06`, `PG-VSCODE-03`); `agi plugin list` prints nothing (`PG-CLI-07`)                                                            |
+| Skeletons          | `app/chat/loading.tsx` real; `Skeleton` in 12 web and 12 desktop files                                                                              | Root and settings `loading.tsx` are bare spinners; mobile Chats and Projects lists have none (`PG-WEB-17`, `PG-MOB-04`)                                                                                                     |
+| Drag/drop          | Web composer overlay, unified-chat `ChatInput`, Electron folder drop                                                                                | Tauri sets `dragDropEnabled: false`; desktop `FileDropZone` is unreachable (`PG-DESK-DEAD`)                                                                                                                                 |
+| Autosave           | Web settings 400 ms debounce with unmount flush                                                                                                     | Full name is the one field on its pane that needs explicit Save and is discarded on close; flush failures swallowed (`PG-WEBSET-02`)                                                                                        |
+| Offline            | Shared online-state hook with web reconnect, mobile `OfflineBanner` + queue, Electron `did-fail-load` page and exact-route retry                    | No offline toast on Chrome                                                                                                                                                                                                  |
+| Focus rings        | Global `:focus-visible` on web and desktop                                                                                                          | 159 `outline-none` sites not individually checked (unverified)                                                                                                                                                              |
+| Dark mode          | Blocking init script on web, `next-themes`, desktop theme settings, Chrome auto tokens, VS Code vars                                                | ~2,700 Tailwind palette literals with no guard; light-theme failures in shared `ActionLogTimeline` (`PG-SHARED-01/02`)                                                                                                      |
+| Hover states       | Present throughout                                                                                                                                  | Web message actions are hover-only on touch for user and older assistant turns (`PG-CHAT-05`)                                                                                                                               |
+| Sticky elements    | Sticky composer, virtualised transcript                                                                                                             | Web shell remounts per page so the rail loses state (`PG-WEB-06`)                                                                                                                                                           |
+| Scroll helpers     | Scroll-to-bottom on web and mobile                                                                                                                  | No new-message indicator (`PG-CHAT-08`); retry viewport jump (`AGI-20`, fixed on main, unobserved)                                                                                                                          |
+| Copy controls      | 46 independent implementations                                                                                                                      | Five with no failure path; no announcement in most; no shared primitive (`PG-SHARED-08`)                                                                                                                                    |
+| Help / FAQ         | `/help` from the account menu; `/faq` and `/support` from the marketing footer                                                                      | `/faq` is a flat page with no disclosure (verified in the browser); Support is not in the account menu (`PG-WEB-20`)                                                                                                        |
+| Progress           | Streaming, tool timeline, mobile model download, Electron update notice and progress                                                                | No per-file upload progress anywhere; batch fails on first error (`PG-CHAT-03`)                                                                                                                                             |
+| Confirmations      | `useConfirmAction` on web (24) and unified-chat (4)                                                                                                 | Zero desktop adopters, seven global `confirm()` sites, one fails open; a second confirm primitive exists (`PG-SHARED-05`); project delete names no consequence (`PG-WEBSET-12`)                                             |
+| Dates              | `packages/platform/utils/src/format.ts`                                                                                                             | `formatRelativeTime` pinned to English; three desktop re-implementations; billing hardcodes `en-US`; no timezone on instants (`PG-SHARED-11`, `PG-WEBSET-09`)                                                               |
+| Support            | Support widget, `/support`, `/contact`                                                                                                              | One hop further than the account menu (`PG-WEB-20`)                                                                                                                                                                         |
+| Success states     | Status lines on settings panes, toasts                                                                                                              | Sidebar rename/pin/archive failures are silent, so "no change" reads as success (`PG-WEB-07`); mobile generation failure clears the composer (`PG-MOB-01`)                                                                  |
+| Error states       | Boundaries never leak stacks (verified); `network-error.ts` sanitiser is real                                                                       | Missing `error.tsx` on every signed-in shell route except `/chat` and `/billing` (`PG-WEB-16`); raw strings in dictation, mobile local runtime, Chrome page context (`PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-09`)             |
+| Disabled states    | Send-disabled reasons shown in the web composer                                                                                                     | Permanently disabled decorative controls in the shared Library composer (`PG-SHARED-10`)                                                                                                                                    |
+| Tooltips           | Radix tooltip primitive, shortcut labels in menus                                                                                                   | Account menu advertises ⌘/ on routes where it does nothing (`PG-WEB-01`)                                                                                                                                                    |
+| Keyboard shortcuts | One registry on web, desktop shortcut catalogue, VS Code keybindings, CLI REPL                                                                      | Web registry inert off `/chat`; VS Code Escape rejects a far-away diff unconfirmed (`PG-VSCODE-02`). Chrome capture is intentionally unbound at install and its options UI explains how to assign it (`PG-CHROME-10`, Done) |
+| Responsive         | `Dialog` width is viewport-relative; public pages clean at 375px (verified)                                                                         | `100vh` in the dialog primitive; no virtual-keyboard handling on web (`PG-SHARED-12/13`); iPad multitasking on with portrait lock (`PG-MOB-10`)                                                                             |
+| Reduced motion     | Web blanket rule plus in-app toggle; `Spinner` primitive correct                                                                                    | Desktop has no blanket rule and 215 bare spinners; mobile 0 of 51 Reanimated components read `useReduceMotion` (`PG-SHARED-07`, `PG-MOB-07`)                                                                                |
+| Retry / recovery   | Web stream error keeps the partial and offers Continue; settings exposes save retry; mobile `SendErrorBanner`                                       | Stopped turn cannot Continue (`PG-CHAT-07`); expired connector has no Reconnect (`PG-WEBSET-04`)                                                                                                                            |
+| Optimistic updates | Web send, project pin, settings toggles all roll back                                                                                               | Sidebar row mutations roll back silently (`PG-WEB-07`)                                                                                                                                                                      |
+| Connection state   | Web banner, mobile banner, CLI bounded timeouts (runtime)                                                                                           | Mobile cloud-sync error state has no renderer (`PG-MOB-02`); CLI proxy failure reads "builder error" (`PG-CLI-12`)                                                                                                          |
+| Draft preservation | Web per-conversation drafts, local crash copy and bounded failed-send recovery; mobile `draftStore`                                                 | VS Code webview persists no state (`PG-VSCODE-05`); Electron ⌘N reloads the page (`PG-DESK-13`)                                                                                                                             |
 
 ## 3. Root causes: one fix, many symptoms
 
@@ -151,23 +180,23 @@ These are the shared corrections. Each names the symptoms it retires so the
 execution order in section 12 can be read as a short list rather than a long
 one.
 
-| Root cause                                                                                                                       | Symptoms it closes                                                                                                    |
-| -------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| **RC-1 Load failure rendered as empty.** Stores swallow the error and screens branch only on `length === 0`.                     | `PG-WEBSET-03`, `PG-WEBSET-11`, `PG-MOB-02`, `PG-MOB-03`, `PG-MOB-08`, `PG-CHROME-05`, `PG-CHROME-06`, `PG-VSCODE-03` |
-| **RC-2 Failure channel has no consumer.** A state or callback is computed and nothing renders it.                                | `PG-WEB-07`, `PG-MOB-01`, `PG-MOB-02`, `PG-DESK-06`, `PG-DESK-07`, `PG-CHROME-01`, `PG-CHROME-02`                     |
-| **RC-3 Two web shells.** `WebAppShell` is mounted per page and duplicates `WebChatPage`'s sidebar wiring.                        | `PG-WEB-01`, `PG-WEB-06`, `PG-WEB-08`, `PG-WEB-09`, `PG-WEB-15`, `PG-WEB-16`                                          |
-| **RC-4 One chord, two owners.** ⌘K is captured by the palette while the shortcut registry documents it as search.                | `PG-WEB-02`, `PG-WEB-03`, `PG-WEB-11`                                                                                 |
-| **RC-5 Attachment client is batch-in, throw-on-first.** No progress channel, no per-file result, a second validator on web.      | `PG-CHAT-01`, `PG-CHAT-02`, `PG-CHAT-03`                                                                              |
-| **RC-6 Persist config omits user text.** `partialize` on the web store keeps model choice but not drafts.                        | `PG-CHAT-04`                                                                                                          |
-| **RC-7 No colour guard where the colour debt is.** `check:no-hex-*` skips desktop, VS Code, `packages/ui` and `apps/web/shared`. | `PG-SHARED-01`, `PG-SHARED-02`, `PG-SHARED-03`, `PG-WEBSET-13`, `PG-WEB-18`, `theme-only-text-colours` ratchet 152    |
-| **RC-8 Feedback primitive has no defaults.** `SonnerToaster` sets classNames only, so 290 error toasts inherit 4 s.              | `PG-SHARED-06`, plus every "error vanished" report                                                                    |
-| **RC-9 Two confirmation primitives, desktop uses neither.**                                                                      | `PG-SHARED-05`, `PG-DESK-10`, `PG-WEBSET-12`                                                                          |
-| **RC-10 Reduced motion is a per-site decision.** No blanket rule on desktop, no adoption on mobile.                              | `PG-SHARED-07`, `PG-MOB-07`, `PG-WEB-17`, `PG-WEBSET-13`                                                              |
-| **RC-11 Electron shell drives the web app by URL, not by message.** New chat, settings, retry and Quick Ask all `loadURL`.       | `PG-DESK-03`, `PG-DESK-13`, `PG-DESK-14`, `PG-DESK-16`                                                                |
-| **RC-12 Local model availability collapses to "not running".** One boolean carries five states.                                  | `PG-DESK-05`, `PG-DESK-06`                                                                                            |
-| **RC-13 Copy that outlived the code it described.**                                                                              | `PG-VSCODE-01`, `PG-WEBSET-07`, `PG-DESK-04` (comment), `PG-CLI-02`, `VSCODE-CLOUDONLY-DESC-CONFLICT-01`              |
-| **RC-14 Catalog membership used as validity.** Non-catalog local model ids are treated as invalid.                               | `PG-CLI-01`, and the same predicate shape behind `AGI-23`                                                             |
-| **RC-15 Register rot.** Roughly one row in five cited by the parity CSV is stale, and 47 "Open" rows are decisions.              | Section 11                                                                                                            |
+| Root cause                                                                                                                                                                       | Symptoms it closes                                                                                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **RC-1 Load failure rendered as empty.** Stores swallow the error and screens branch only on `length === 0`.                                                                     | `PG-WEBSET-03`, `PG-WEBSET-11`, `PG-MOB-02`, `PG-MOB-03`, `PG-MOB-08`, `PG-CHROME-05`, `PG-CHROME-06`, `PG-VSCODE-03` |
+| **RC-2 Failure channel has no consumer.** A state or callback is computed and nothing renders it.                                                                                | `PG-WEB-07`, `PG-MOB-01`, `PG-MOB-02`, `PG-DESK-06`, `PG-DESK-07`, `PG-CHROME-01`, `PG-CHROME-02`                     |
+| **RC-3 Two web shells.** `WebAppShell` is mounted per page and duplicates `WebChatPage`'s sidebar wiring.                                                                        | `PG-WEB-01`, `PG-WEB-06`, `PG-WEB-09`, `PG-WEB-15`, `PG-WEB-16`                                                       |
+| **RC-4 One chord, two owners.** ⌘K is captured by the palette while the shortcut registry documents it as search.                                                                | `PG-WEB-02`, `PG-WEB-11`                                                                                              |
+| **RC-5 Attachment client is batch-in, throw-on-first.** No progress channel, no per-file result, a second validator on web.                                                      | `PG-CHAT-01`, `PG-CHAT-02`, `PG-CHAT-03`                                                                              |
+| **RC-6 Persist config omitted failed-send text.** Resolved by bounded, expiring v5 recovery state.                                                                               | `PG-CHAT-04` (Done)                                                                                                   |
+| **RC-7 No colour guard where the colour debt is.** `check:no-hex-*` skips desktop, VS Code, `packages/ui` and `apps/web/shared`.                                                 | `PG-SHARED-01`, `PG-SHARED-02`, `PG-SHARED-03`, `PG-WEBSET-13`, `PG-WEB-18`, `theme-only-text-colours` ratchet 152    |
+| **RC-8 Feedback primitive has no defaults.** `SonnerToaster` sets classNames only, so 290 error toasts inherit 4 s.                                                              | `PG-SHARED-06`, plus every "error vanished" report                                                                    |
+| **RC-9 Two confirmation primitives, desktop uses neither.**                                                                                                                      | `PG-SHARED-05`, `PG-DESK-10`, `PG-WEBSET-12`                                                                          |
+| **RC-10 Reduced motion is a per-site decision.** No blanket rule on desktop, no adoption on mobile.                                                                              | `PG-SHARED-07`, `PG-MOB-07`, `PG-WEB-17`, `PG-WEBSET-13`                                                              |
+| **RC-11 Electron shell drives the web app by URL, not by message.** New chat and settings still use `loadURL`; exact-route retry and the dedicated Quick Ask route are resolved. | `PG-DESK-03`, `PG-DESK-13`                                                                                            |
+| **RC-12 Local model availability collapses to "not running".** One boolean carries five states.                                                                                  | `PG-DESK-05`, `PG-DESK-06`                                                                                            |
+| **RC-13 Copy that outlived the code it described.**                                                                                                                              | `PG-VSCODE-01`, `PG-WEBSET-07`, `PG-DESK-04` (comment), `PG-CLI-02`, `VSCODE-CLOUDONLY-DESC-CONFLICT-01`              |
+| **RC-14 Catalog membership used as validity.** Non-catalog local model ids are treated as invalid.                                                                               | `PG-CLI-01`, and the same predicate shape behind `AGI-23`                                                             |
+| **RC-15 Register rot.** Roughly one row in five cited by the parity CSV is stale, and 47 "Open" rows are decisions.                                                              | Section 11                                                                                                            |
 
 ## 4. Web findings
 
@@ -210,15 +239,8 @@ Verification: unit test that every `KEYBOARD_SHORTCUT_DOCS` id has a live handle
 Severity: P2
 Surface: Web
 Area: Search
-Status: Partial
-Evidence: `apps/web/shared/components/CommandPalette/CommandPalette.tsx:53` `RECENTS_LIMIT = 5`; `filtered` at `:233` is a client `includes` over static commands. No call to `/api/search`, no loading state, no result count. Placeholder reads "Search chats and actions" (`:350`); empty state reads "No commands found." (`:395`).
-Reproduction: ⌘K, type a word from the sixth-oldest chat title.
-Expected: the palette queries the server or offers a "Search all chats" row.
-Actual: the chat is not found and the user is told no command matched.
-Root cause: verified (RC-4).
-Recommended fix: add a debounced group backed by `apps/web/features/chat/services/global-search-service.ts`, or a permanent row that opens `GlobalSearchDialog` in place rather than `router.push('/chat?search=true')`.
-Shared impact: none.
-Verification: a query matching only a non-recent conversation appears in the palette.
+Status: Done
+Evidence: `CommandPalette.tsx` now debounces authenticated queries through the canonical `globalSearchService`, renders loading and failure states, and navigates every result through the same `globalSearchResultHref` helper as `GlobalSearchDialog`. The focused palette, dialog and service suites pass 43 tests. Local Browser verification on 2026-09-21 showed a `Search results` group populated from `/api/search`, including title and message matches beyond the local recents filter.
 
 ### [PG-WEB-04] The palette is live on marketing routes for signed-out visitors
 
@@ -285,14 +307,8 @@ Verification: mock a non-OK PUT, rename a non-active row, assert a toast and an 
 Severity: P3
 Surface: Web
 Area: Sharing
-Status: Partial
-Evidence: `WebChatPage.tsx:3853` opens the share dialog only for the displayed conversation and otherwise pushes the route; `WebAppShell` passes no `onShare`, so `packages/ui/ui/src/sidebar/SessionItem.tsx:298` hides the item there.
-Expected: Share from any row opens the dialog for that row.
-Actual: a navigation on `/chat`; no control on the other shell.
-Root cause: verified (RC-3).
-Recommended fix: let the share dialog take a conversation id and pass `onShare` from both hosts.
-Shared impact: none beyond the two hosts.
-Verification: row menu on a non-active chat, Share, dialog names that chat.
+Status: Done
+Evidence: both sidebar hosts now route Share through `conversationShareHref`, which carries a one-time share intent to the selected conversation. `WebChatPage` opens the dialog after that transcript loads and removes the intent from the URL. The shared destination, shell-parity and page behavior suites pass 20 tests. Local Browser verification on 2026-09-21 selected Share from the Projects shell, opened the correct saved conversation's share dialog, and observed the clean conversation URL after the intent was consumed.
 
 ### [PG-WEB-09] Two shells expose different row menus and list affordances
 
@@ -461,20 +477,20 @@ Recommended fix: `onFileSettled` callback and an `allSettled` result on `upload(
 Shared impact: every surface that attaches chat files.
 Verification: mock one file's PUT to 500; the others upload and the send proceeds with a named refusal note.
 
-### [PG-CHAT-04] Composer drafts and parked failed sends do not survive a refresh
+### [PG-CHAT-04] Composer drafts and parked failed sends survive a refresh
 
 Severity: P2
 Surface: Web
 Area: Chat / Composer
-Status: Partial
-Evidence: `apps/web/shared/stores/web-chat-store.ts:1912` `partialize` persists `selectedModel`, `selectedModelTier`, `sidebarCollapsed` and three per-conversation maps; it omits `draftsByConversation` and `parkedSendsByFingerprint` (verified). The comment at `WebChatPage.tsx:1674` states the opposite intent.
-Reproduction: type in conversation A, reload.
-Expected: a half-typed message and a send that never reached a model survive a reload.
-Actual: both are gone.
-Root cause: verified (RC-6).
-Recommended fix: add both maps to `partialize` with a size cap and age prune in `migrate`; bump the version.
+Status: Done
+Evidence: `apps/web/features/chat/components/Composer/composer-draft-storage.ts` writes a per-conversation local crash copy as the user types. `apps/web/shared/stores/web-chat-store.ts` v5 persists failed sends with creation times, retains only the newest eight for 24 hours, prunes on write, migration and hydration, and clears both content and timestamp together.
+Reproduction: type a draft or park a send that never reached a model, then reload before retrying it.
+Expected: both a half-typed message and a send that never reached a model survive a reload.
+Actual: both recovery paths survive; deliberate clear stays empty, browser-history restoration does not leak into a deliberate New Chat, and failed-send recovery remains exactly once.
+Root cause: fixed (RC-6).
+Resolution: bounded failed-send recovery in the canonical web chat store plus history-ordering and Strict Mode cleanup fixes in the composer.
 Shared impact: `packages/ui/unified-chat/src/stores/chatStore.ts` has its own persist config and should be checked for desktop and the extension.
-Verification: set a draft, rehydrate a fresh store, the draft returns.
+Verification: 99 focused store/composer tests passed on 2026-09-21; Browser on localhost:3100 verified reload restoration, deliberate clear, Projects → Back restoration and blank deliberate New Chat.
 
 ### [PG-CHAT-05] Message actions are hover-only on touch for user messages and older assistant turns
 
@@ -537,11 +553,11 @@ Verification: e2e with a dialog open; ⌘F is not consumed.
 Severity: P3
 Surface: Web
 Area: Chat / Streaming
-Status: Partial
-Evidence: the only `navigator.onLine` handling is inside `apps/web/features/chat/components/ChatFailureNotice.tsx:25`, which runs only inside error boundaries. `useConversations.ts:679` and `use-artifact-cloud-sync.ts:116` retry on `online`; nothing does for a parked send. The stream is a `fetch` `ReadableStream` with no reconnect; a mid-stream drop keeps the partial and Continue applies, so recovery is manual.
-Recommended fix: a `useOnlineStatus` hook in `packages/ui/unified-chat` beside `network-error.ts`, an annotation on Send, and an `online` retry for the parked send.
+Status: Done
+Evidence: `AppRuntimeMounts.tsx` globally mounts `OfflineIndicator`, and `packages/ui/unified-chat/src/hooks/use-online-status.ts` now owns the shared live connection subscription. `ChatComposerNew.tsx` keeps the draft editable, blocks both button and keyboard send while offline with an announced reason, and re-enables the same draft on `online`. Bounded failed-send recovery survives reload through the v5 web chat store. A mid-stream drop keeps the partial and Continue remains the explicit recovery action.
+Resolution: one shared online-state hook now drives both the offline page and the composer; the global status surface remains the proactive visual announcement.
 Shared impact: desktop and the extension get the same behaviour.
-Verification: dispatch `offline`, assert the banner; dispatch `online`, the parked send is re-offered.
+Verification: shared hook event test plus composer offline/reconnect test passed on 2026-09-21; the global indicator error test remains green.
 Overlaps: `AGI-34` (stalled server row, fixed on main) is the server axis; this is the client axis.
 
 ### [PG-WEBSET-01] A project past the first page of 50 reads as "Project not found"
@@ -648,9 +664,8 @@ Recommended fix: one `formatSettingsDate`/`DateTime` reading the i18n locale wit
 Severity: P3
 Surface: Web
 Area: Settings
-Status: Partial
-Evidence: `apps/web/features/settings/hooks/use-capabilities-preferences.ts:152` returns `retrySave`; `MemorySection.tsx:137` renders it; `apps/web/features/settings/sections/CapabilitiesSection.tsx:11` does not destructure it, so its "Try again" only reloads and the rejected toggle is lost.
-Recommended fix: render `retrySave` as Memory does.
+Status: Done
+Evidence: `CapabilitiesSection` now renders the hook's `retrySave` action only for a rejected write. Its regression test forces the first save to fail, invokes `Try saving again`, proves the same rejected patch is resubmitted, and verifies the failure state clears. The focused section suite passes all four tests.
 
 ### [PG-WEBSET-11] A settings read failure is returned as hardcoded defaults
 
@@ -976,9 +991,10 @@ Recommended fix: persist `getBounds()` on close into the existing `settingsStore
 Severity: P2
 Surface: Desktop
 Area: Updates
-Status: Partial
-Evidence: `apps/desktop/electron/preload.ts:103` exposes `checkForUpdate` and `openUpdateInstaller` with zero callers in `apps/web`; the only path is the tray item to a modal dialog that opens a browser download (`apps/desktop/electron/main.ts:591`). No startup or periodic check. `relaunch`, `windowControl` and `dialog` in the preload are likewise uncalled.
-Recommended fix: startup plus daily check with an in-app banner using the exposed bridge; `electron-updater` with the DMG feed as the proper fix.
+Status: Done
+Evidence: `DesktopUpdateRow.tsx` provides the manual checking, current, available, failure and retry states in Settings. `DesktopUpdateNotice.tsx` now checks at startup, schedules daily rechecks, presents an in-app available-update banner, remembers a dismissed version and opens the supported signed macOS installer route. The row now accurately labels that action “Download installer.”
+Resolution: the renderer consumes the existing `checkForUpdate` and `openUpdateInstaller` bridge contract; no unsupported fictional updater feed was added.
+Verification: 22 focused desktop-host surface, row and automatic-notice tests passed on 2026-09-21.
 
 ### [PG-DESK-13] Tray "New Chat" and menu "Settings" hard-navigate, discarding an in-flight turn and the draft
 
@@ -997,27 +1013,30 @@ Overlaps: `DESKTOP-NEWCHAT-DRAFT-NOT-CLEARED-01` is the opposite problem on Taur
 Severity: P3
 Surface: Desktop
 Area: Offline
-Status: Partial
-Evidence: `apps/desktop/electron/main.ts:472` builds the offline page with a retry to the constant entry URL; `validatedURL` at `:549` is available and unused; only `did-fail-load` on the main frame triggers it.
-Recommended fix: pass `validatedURL` as the retry target (RC-11).
+Status: Done
+Evidence: the main-frame `did-fail-load` handler now passes `validatedURL` through `retryUrlAfterFailedLoad`; the helper preserves the exact same-origin route and query while falling back to the window entry route for foreign, credentialed or malformed URLs.
+Resolution: the offline screen retries the page that failed without widening the shell navigation boundary.
+Verification: 10 focused shell-screen tests passed on 2026-09-21, including route preservation and foreign-origin fallback.
 
 ### [PG-DESK-15] Global-shortcut conflicts are announced once per process lifetime
 
 Severity: P3
 Surface: Desktop
 Area: Shortcuts
-Status: Partial
-Evidence: `apps/desktop/electron/shortcuts.ts:40` `warnOnce` never resets, not even in `unregisterGarnishShortcuts`.
-Recommended fix: reset on unregister or scope per accelerator.
+Status: Done
+Evidence: `unregisterGarnishShortcuts` now clears both OS registrations and the conflict-notification cycle before a preference-driven re-registration.
+Resolution: a shortcut conflict is announced once per active registration set, then may be announced again after the user reconfigures shortcuts.
+Verification: 7 focused shortcut tests passed on 2026-09-21, including conflict re-announcement after unregister/register.
 
 ### [PG-DESK-16] Quick Ask loads the full `/chat` page into a 480×620 frameless panel
 
 Severity: P3
 Surface: Desktop
 Area: Chat
-Status: Partial
-Evidence: `apps/desktop/electron/quickAsk.ts:7` and `:54`; no quick-ask route exists in `apps/web/app`; the composer is found heuristically by `composerFocus.ts`.
-Recommended fix: a `/quick-ask` route on web (RC-11).
+Status: Done
+Evidence: the Electron panel now loads the protected `/quick-ask` route directly, and both `/quick-ask` and `/quick-ask/[sessionId]` render the canonical chat implementation with its full-shell sidebar, header, research rail, artifacts rail and greeting removed. First sends navigate within the compact route, so the panel does not expand back into `/chat/[sessionId]`. The former heuristic composer lookup is no longer used.
+Resolution: a dedicated compact route backed by the canonical chat state, persistence and streaming implementation; `/quick-ask` is also registered in the shared product-route owner used by the web proxy and desktop shell.
+Verification: 15 focused route, compact-render, Electron-panel and product-route tests passed on 2026-09-21; web, Electron and contracts typechecks plus touched-file lint passed.
 
 ### [PG-DESK-17] `computer.use` is a declared capability with no command behind it in the Electron shell
 
@@ -1269,8 +1288,10 @@ Recommended fix: log the raw text, show one fixed sentence.
 Severity: P3
 Surface: Chrome
 Area: Desktop bridge
-Status: Partial
-Evidence: `apps/extension/manifest.json` `commands.capture_page` has no `suggested_key` and nothing points at `chrome://extensions/shortcuts`; the handler at `background.ts:4968` no-ops into a notification when unpaired.
+Status: Done
+Evidence: `capture_page` remains intentionally unbound, and the options page reads the live `chrome.commands.getAll()` result, shows “Not assigned,” and directs the user to Chrome’s Extensions → Keyboard shortcuts page. `captureCurrentPage` now refuses before capture when Desktop is disconnected or the site is not approved, identifies the exact recovery in a notification, and increments the Actions statistic only after the native host confirms delivery.
+Resolution: preserve user control over the browser chord while making assignment and the Desktop/site prerequisites explicit; never collect page pixels that have no authorized destination.
+Verification: 33 focused manifest, options and delivery tests plus the extension typecheck and full extension lint passed on 2026-09-21. Chrome’s Commands API documentation checked the same day defines `suggested_key` as optional and recommends informing users when a command is unassigned.
 Overlaps: `GAP-339` is the VS Code twin.
 
 ### [PG-CHROME-11] Web sign-in completion tells the user to reopen a panel that already listens for auth
@@ -1336,9 +1357,10 @@ Recommended fix: debounced `setState({draft, scroll})` and restore on load; the 
 Severity: P3
 Surface: VS Code
 Area: Chat / History
-Status: Partial
-Evidence: `webviewContent.ts:4686` `syncRecentChats()` inserts into `emptyStateEl`, which is nulled as soon as a message renders.
-Recommended fix: mount the block in a collapsible header region.
+Status: Done
+Evidence: the compact recent-session rows remain a new-chat convenience, while the permanent header Sessions button opens the full local/cloud session sheet before, during and after a conversation. The sheet now sets `aria-busy`, renders a source-specific loading status immediately, ignores responses for a source the user has switched away from, then distinguishes empty and unavailable results.
+Resolution: history reachability is owned by the persistent header sheet rather than the disposable empty-state block.
+Verification: the complete 237-test webview suite, six focused host-side recent-conversation tests, VS Code typecheck and full VS Code lint passed on 2026-09-21.
 Overlaps: the partially shipped state of `GAP-286` and `GAP-287`.
 
 Spot-checks of Open VS Code rows: `GAP-284` is stale as a UI claim (the rewind sender is gone; `ChatStateManager.ts:1531`, `sidebarProvider.ts:160` and the `rewindComplete` handler are orphans to delete), `GAP-292` is true and worse than stated (`showQuickPick` ignores `picked` without `canPickMany`, so there is provably no checkmark), `GAP-295` and `GAP-296` are half shipped, `GAP-294` and `GAP-339` hold. `VSCODE-CLOUDONLY-DESC-CONFLICT-01` holds.
@@ -1486,9 +1508,10 @@ Evidence: runtime: `agi completion powershell` exits 2; `apps/cli/src/lib.rs:660
 Severity: P4
 Surface: CLI
 Area: i18n
-Status: Partial
-Evidence: `apps/cli/src/tui/widgets/i18n.rs:28` embeds 12 catalogs declaring 10 keys; the module's own header says the migration is partial and nothing ties the list to `packages/ui/i18n`.
-Recommended fix: either the CI parity check the module asks for, or stop shipping 12 catalogs for 10 strings.
+Status: Done
+Evidence: the partial CLI-only locale resolver, its `AGI_WORKFORCE_LANG` override and all 12 ten-key catalogs have been removed. The command popup and agent picker now use explicit English copy, matching every other CLI widget; locale environment variables can no longer produce a misleading mixed-language terminal UI.
+Resolution: the CLI is consistently English until a complete, reviewed localization project covers the whole interface. Web/mobile catalog ownership remains unchanged in `packages/ui/i18n`.
+Verification: all 229 TUI widget tests passed on 2026-09-21, including command-popup width/CJK safety, agent-picker chrome and updated snapshots. The complete CLI library suite then passed 2,939 tests with one intentional ignore, and strict Clippy passed with `-D warnings -D unsafe-code`.
 
 `agi mcp-server` advertises no tools (`apps/cli/src/app_server.rs:32`) and says so in `--help`; the honest labelling is the right pattern and it is recorded only so it is not re-filed.
 
@@ -1514,28 +1537,28 @@ SHARED means one implementation in a shared package; PLATFORM-SPECIFIC means a
 native implementation that is correct for the platform; INTENTIONALLY DIFFERENT
 means a documented decision; the rest are gaps.
 
-| Capability                       | Web               | Mobile                    | Desktop                      | Chrome           | VS Code                   | CLI                       |
-| -------------------------------- | ----------------- | ------------------------- | ---------------------------- | ---------------- | ------------------------- | ------------------------- |
-| Chat composer + messages         | PARTIAL           | PLATFORM-SPECIFIC         | SHARED (unified-chat)        | SHARED           | SHARED                    | PLATFORM-SPECIFIC         |
-| Regenerate / retry               | SHARED            | PLATFORM-SPECIFIC         | PARTIAL (Local mode missing) | UNVERIFIED       | UNVERIFIED                | INTENTIONALLY DIFFERENT   |
-| Continue a stopped turn          | MISSING           | UNVERIFIED                | MISSING (shared list)        | UNVERIFIED       | UNVERIFIED                | ⚪                        |
-| Draft survives restart           | BROKEN            | SHARED-equivalent (works) | UNVERIFIED                   | UNVERIFIED       | BROKEN                    | ⚪                        |
-| Attachment progress + per-file   | MISSING (shared)  | PARTIAL                   | MISSING (shared)             | MISSING (shared) | MISSING (shared)          | ⚪                        |
-| Offline banner + reconnect       | PARTIAL           | PLATFORM-SPECIFIC (works) | PARTIAL                      | MISSING          | UNVERIFIED                | PLATFORM-SPECIFIC (works) |
-| Sync failure visible             | ⚪                | BROKEN                    | UNVERIFIED                   | ⚪               | ⚪                        | PLATFORM-SPECIFIC (works) |
-| Global search / ⌘K               | BROKEN            | PARTIAL                   | UNVERIFIED                   | PARTIAL          | INTENTIONALLY DIFFERENT   | PLATFORM-SPECIFIC (works) |
-| Keyboard shortcut registry       | PARTIAL           | ⚪                        | PARTIAL                      | PARTIAL          | PARTIAL                   | PLATFORM-SPECIFIC (works) |
-| Confirmation primitive           | SHARED            | PLATFORM-SPECIFIC (Alert) | MISSING                      | UNVERIFIED       | PLATFORM-SPECIFIC (works) | INTENTIONALLY DIFFERENT   |
-| Toast defaults (duration, close) | PARTIAL           | PLATFORM-SPECIFIC         | PARTIAL                      | MISSING          | PLATFORM-SPECIFIC (works) | ⚪                        |
-| Reduced motion                   | SHARED (works)    | BROKEN                    | BROKEN                       | UNVERIFIED       | INTENTIONALLY DIFFERENT   | ⚪                        |
-| Theme tokens, no literals        | PARTIAL           | PARTIAL                   | BROKEN                       | SHARED (works)   | PLATFORM-SPECIFIC (works) | ⚪                        |
-| Copy control                     | 46 ad hoc         | PLATFORM-SPECIFIC         | ad hoc                       | ad hoc           | PLATFORM-SPECIFIC         | ⚪                        |
-| Memory scope copy                | UNVERIFIED        | UNVERIFIED                | UNVERIFIED                   | ⚪               | BROKEN                    | UNVERIFIED                |
-| Custom MCP connectors            | SHARED (works)    | MISSING                   | MISSING                      | ⚪               | ⚪                        | UNVERIFIED                |
-| Local model discovery            | ⚪                | PLATFORM-SPECIFIC (works) | BROKEN                       | ⚪               | ⚪                        | BROKEN (resume)           |
-| Notification permission state    | SHARED (works)    | PLATFORM-SPECIFIC (works) | MISSING                      | ⚪               | ⚪                        | ⚪                        |
-| Update flow                      | ⚪                | store                     | PARTIAL (Electron)           | store            | marketplace               | npm (BROKEN)              |
-| Approval policy reaches runtime  | SHARED (verified) | UNVERIFIED                | UNVERIFIED                   | UNVERIFIED       | UNVERIFIED                | PARTIAL (mock list)       |
+| Capability                       | Web                       | Mobile                    | Desktop                      | Chrome           | VS Code                   | CLI                       |
+| -------------------------------- | ------------------------- | ------------------------- | ---------------------------- | ---------------- | ------------------------- | ------------------------- |
+| Chat composer + messages         | PARTIAL                   | PLATFORM-SPECIFIC         | SHARED (unified-chat)        | SHARED           | SHARED                    | PLATFORM-SPECIFIC         |
+| Regenerate / retry               | SHARED                    | PLATFORM-SPECIFIC         | PARTIAL (Local mode missing) | UNVERIFIED       | UNVERIFIED                | INTENTIONALLY DIFFERENT   |
+| Continue a stopped turn          | MISSING                   | UNVERIFIED                | MISSING (shared list)        | UNVERIFIED       | UNVERIFIED                | ⚪                        |
+| Draft survives restart           | PLATFORM-SPECIFIC (works) | SHARED-equivalent (works) | UNVERIFIED                   | UNVERIFIED       | BROKEN                    | ⚪                        |
+| Attachment progress + per-file   | MISSING (shared)          | PARTIAL                   | MISSING (shared)             | MISSING (shared) | MISSING (shared)          | ⚪                        |
+| Offline banner + reconnect       | SHARED (works)            | PLATFORM-SPECIFIC (works) | PLATFORM-SPECIFIC (works)    | MISSING          | UNVERIFIED                | PLATFORM-SPECIFIC (works) |
+| Sync failure visible             | ⚪                        | BROKEN                    | UNVERIFIED                   | ⚪               | ⚪                        | PLATFORM-SPECIFIC (works) |
+| Global search / ⌘K               | BROKEN                    | PARTIAL                   | UNVERIFIED                   | PARTIAL          | INTENTIONALLY DIFFERENT   | PLATFORM-SPECIFIC (works) |
+| Keyboard shortcut registry       | PARTIAL                   | ⚪                        | PARTIAL                      | PARTIAL          | PARTIAL                   | PLATFORM-SPECIFIC (works) |
+| Confirmation primitive           | SHARED                    | PLATFORM-SPECIFIC (Alert) | MISSING                      | UNVERIFIED       | PLATFORM-SPECIFIC (works) | INTENTIONALLY DIFFERENT   |
+| Toast defaults (duration, close) | PARTIAL                   | PLATFORM-SPECIFIC         | PARTIAL                      | MISSING          | PLATFORM-SPECIFIC (works) | ⚪                        |
+| Reduced motion                   | SHARED (works)            | BROKEN                    | BROKEN                       | UNVERIFIED       | INTENTIONALLY DIFFERENT   | ⚪                        |
+| Theme tokens, no literals        | PARTIAL                   | PARTIAL                   | BROKEN                       | SHARED (works)   | PLATFORM-SPECIFIC (works) | ⚪                        |
+| Copy control                     | 46 ad hoc                 | PLATFORM-SPECIFIC         | ad hoc                       | ad hoc           | PLATFORM-SPECIFIC         | ⚪                        |
+| Memory scope copy                | UNVERIFIED                | UNVERIFIED                | UNVERIFIED                   | ⚪               | BROKEN                    | UNVERIFIED                |
+| Custom MCP connectors            | SHARED (works)            | MISSING                   | MISSING                      | ⚪               | ⚪                        | UNVERIFIED                |
+| Local model discovery            | ⚪                        | PLATFORM-SPECIFIC (works) | BROKEN                       | ⚪               | ⚪                        | BROKEN (resume)           |
+| Notification permission state    | SHARED (works)            | PLATFORM-SPECIFIC (works) | MISSING                      | ⚪               | ⚪                        | ⚪                        |
+| Update flow                      | ⚪                        | store                     | PLATFORM-SPECIFIC (works)    | store            | marketplace               | npm (BROKEN)              |
+| Approval policy reaches runtime  | SHARED (verified)         | UNVERIFIED                | UNVERIFIED                   | UNVERIFIED       | UNVERIFIED                | PARTIAL (mock list)       |
 
 ## 13. Execution sequence
 
@@ -1549,25 +1572,24 @@ verification lines pass, not when its code lands.
 3. `PG-MOB-01` generation failure must not clear the composer (RC-2).
 4. `PG-VSCODE-01` memory scope copy (RC-13). Same pass: `VSCODE-CLOUDONLY-DESC-CONFLICT-01`, `PG-CLI-02`, `PG-WEBSET-07`.
 5. `PG-WEBSET-05` connector policy gate on the fourth writer; repoint the known-flaws row.
-6. `PG-CHAT-04` drafts and parked sends in `partialize` (RC-6).
 
-**Phase 1, broken core workflows.** 7. RC-3 the web shell: `PG-WEB-06` first, which retires `PG-WEB-01`, `PG-WEB-08`, `PG-WEB-09`; then `PG-WEB-05` and `PG-WEB-16`. 8. RC-4 ⌘K ownership: `PG-WEB-02`, `PG-WEB-03`, `PG-WEB-04`, `PG-WEB-11`. 9. `PG-WEBSET-01` project by id. `PG-WEBSET-02` full name in the flush. 10. RC-5 attachments: `PG-CHAT-01`, `PG-CHAT-03`, `PG-CHAT-02`. 11. `PG-DESK-13`, `PG-DESK-03` (RC-11), `PG-DESK-04`, `PG-DESK-01`. 12. `PG-CHROME-01`, `PG-CHROME-03`, `PG-CHROME-04`. `PG-VSCODE-02`. 13. `PG-CLI-03`, `PG-CLI-04`, `PG-CLI-05`.
+**Phase 1, broken core workflows.** 6. RC-3 the web shell: `PG-WEB-06` first, which retires `PG-WEB-01` and `PG-WEB-09`; then `PG-WEB-05` and `PG-WEB-16`. 7. RC-4 ⌘K ownership: `PG-WEB-02`, `PG-WEB-04`, `PG-WEB-11`. 8. `PG-WEBSET-01` project by id. `PG-WEBSET-02` full name in the flush. 9. RC-5 attachments: `PG-CHAT-01`, `PG-CHAT-03`, `PG-CHAT-02`. 10. `PG-DESK-13`, `PG-DESK-03` (RC-11), `PG-DESK-04`, `PG-DESK-01`. 11. `PG-CHROME-01`, `PG-CHROME-03`, `PG-CHROME-04`. `PG-VSCODE-02`. 12. `PG-CLI-03`, `PG-CLI-04`, `PG-CLI-05`.
 
-**Phase 2, misleading, failure and recovery states.** 14. RC-1 and RC-2 as one sweep: `PG-WEB-07`, `PG-WEBSET-03`, `PG-WEBSET-11`, `PG-MOB-02`, `PG-MOB-03`, `PG-MOB-08`, `PG-CHROME-05`, `PG-CHROME-06`, `PG-VSCODE-03`, `PG-DESK-07`. 15. `PG-WEBSET-04` Reconnect, `PG-WEBSET-10` retrySave, `PG-CHAT-07` Continue, `PG-CHAT-10` offline hook (shared). 16. Raw strings: `PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-09`; extend the raw-error scanner to template literals. 17. `PG-WEBSET-06` deleted chats, `PG-WEBSET-12` consequence copy, `PG-MOB-05` consent capture.
+**Phase 2, misleading, failure and recovery states.** 13. RC-1 and RC-2 as one sweep: `PG-WEB-07`, `PG-WEBSET-03`, `PG-WEBSET-11`, `PG-MOB-02`, `PG-MOB-03`, `PG-MOB-08`, `PG-CHROME-05`, `PG-CHROME-06`, `PG-VSCODE-03`, `PG-DESK-07`. 14. `PG-WEBSET-04` Reconnect and `PG-CHAT-07` Continue. 15. Raw strings: `PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-09`; extend the raw-error scanner to template literals. 16. `PG-WEBSET-06` deleted chats, `PG-WEBSET-12` consequence copy, `PG-MOB-05` consent capture.
 
 **Phase 3, cross-app inconsistencies.** 18. RC-8 `SonnerToaster` defaults (`PG-SHARED-06`); RC-9 one confirm primitive. 19. `PG-SHARED-08` copy primitive, unified-chat first. `PG-SHARED-11` dates, then `PG-WEBSET-09`. `PG-WEBSET-08` placeholder constant. 20. `CUSTOM-CONNECTORS-DESKTOP-MOBILE-GAP-01`, `PG-WEBSET-14`, `PG-WEBSET-15`, `PG-WEBSET-16`.
 
-**Phase 4, loading, empty, offline and system states.** 21. RC-12 `PG-DESK-05`, `PG-DESK-06`. `PG-DESK-09`, `PG-DESK-02`, `PG-DESK-12`, `PG-DESK-14`, `PG-DESK-11`. 22. `PG-MOB-04`, `PG-MOB-12`. `PG-CLI-07`, `PG-CLI-10`, `PG-CLI-06`, `PG-CLI-09`, `PG-CLI-11`, `PG-CLI-12`. 23. `PG-WEB-14`, `PG-WEB-15`, `PG-CHROME-08`, `PG-VSCODE-04`, `PG-VSCODE-05`, `PG-VSCODE-06`.
+**Phase 4, loading, empty, offline and system states.** 21. RC-12 `PG-DESK-05`, `PG-DESK-06`. `PG-DESK-09`, `PG-DESK-02`, `PG-DESK-11`. 22. `PG-MOB-04`, `PG-MOB-12`. `PG-CLI-07`, `PG-CLI-10`, `PG-CLI-06`, `PG-CLI-09`, `PG-CLI-11`, `PG-CLI-12`. 23. `PG-WEB-14`, `PG-WEB-15`, `PG-CHROME-08`, `PG-VSCODE-04`, `PG-VSCODE-05`.
 
 **Phase 5, accessibility, responsive, keyboard.** 24. RC-7 colour guard extension (`PG-SHARED-02`), then `PG-SHARED-01`, `PG-SHARED-03`, `PG-WEBSET-13`, `PG-WEB-18`. 25. RC-10 reduced motion: desktop blanket rule (`PG-SHARED-07`), mobile 14 loops (`PG-MOB-07`), then spinner migration. 26. `PG-CHAT-05`, `PG-SHARED-04`, `PG-SHARED-09`, `PG-SHARED-14`, `PG-WEB-10`, `PG-WEB-12`, `PG-CHAT-09`, `PG-CHROME-07`, `PG-MOB-09`, `PG-MOB-11`, `PG-SHARED-13`, `PG-MOB-10`.
 
-**Phase 6, microinteractions and final polish.** 27. `PG-CHAT-08`, `PG-SHARED-10`, `PG-SHARED-12`, `PG-WEB-13`, `PG-WEB-17`, `PG-WEB-19`, `PG-WEB-20`, `PG-DESK-15`, `PG-DESK-16`, `PG-DESK-17`, `PG-DESK-DEAD`, `PG-CHROME-02`, `PG-CHROME-10`, `PG-CHROME-11`, `PG-MOB-13`, `PG-CLI-08`, `PG-CLI-13` to `PG-CLI-16`. 28. Register hygiene from section 11: flip the fixed `GAP-*` rows, re-status the 47 declined rows, delete or repoint the nine known-flaws rows.
+**Phase 6, microinteractions and final polish.** 27. `PG-CHAT-08`, `PG-SHARED-10`, `PG-SHARED-12`, `PG-WEB-13`, `PG-WEB-17`, `PG-WEB-19`, `PG-WEB-20`, `PG-DESK-17`, `PG-DESK-DEAD`, `PG-CHROME-02`, `PG-CHROME-11`, `PG-MOB-13`, `PG-CLI-08`, `PG-CLI-13` to `PG-CLI-15`. 28. Register hygiene from section 11: flip the fixed `GAP-*` rows, re-status the 47 declined rows, delete or repoint the nine known-flaws rows.
 
 **Before public launch**, in addition to Phase 0 and Phase 1: the Chrome extension `CHROME-SURFACE-LOST-TURN-01` and `EXT-CRX-KEY-MISSING-BLOCKS-CLERK-SYNC-01`, the CLI npm publication (`PG-CLI-02`), `AGI-34` confirmed on a deployment, and the two live-validation notes in `ACTIVE_ISSUES.md` that are user-visible.
 
 ## 14. What still needs runtime verification
 
-- A signed-in web session for every `PG-WEB-*`, `PG-CHAT-*` and `PG-WEBSET-*` row; the existing `apps/web/e2e/qa-*.spec.ts` sweeps are the harness, and per `.claude/rules/ui-colour-and-interaction.md` a jsdom pass proves nothing for `PG-WEB-12` and `PG-CHAT-09`.
+- A signed-in web session for the remaining open `PG-WEB-*`, `PG-CHAT-*` and `PG-WEBSET-*` rows; the existing `apps/web/e2e/qa-*.spec.ts` sweeps are the harness, and per `.claude/rules/ui-colour-and-interaction.md` a jsdom pass proves nothing for `PG-WEB-12` and `PG-CHAT-09`. Completed rows record their runtime evidence individually.
 - A desktop build on macOS for `PG-DESK-03`, `PG-DESK-08`, `PG-DESK-13`, and whether `window.confirm` is ever unavailable in either webview host (`PG-SHARED-05`).
 - A device or simulator for `PG-MOB-07`, `PG-MOB-10`, `PG-MOB-11`, screen-reader order and dynamic type.
 - An extension host for `PG-CHROME-11` and the `PG-VSCODE-03` race.

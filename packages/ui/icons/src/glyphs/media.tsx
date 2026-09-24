@@ -47,6 +47,11 @@ export const Monitor = createIcon(
   </>,
 );
 
+export const Cloud = createIcon(
+  'Cloud',
+  <path d="M6.5 19h11.5l3-3v-3l-2-2h-2.5l-1.5-5-3-2H9L6 6.5V10H6l-3 3v3z" />,
+);
+
 export const MonitorPlay = createIcon(
   'MonitorPlay',
   <>

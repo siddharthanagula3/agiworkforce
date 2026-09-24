@@ -90,9 +90,9 @@ export function VerifyDeviceClient({ code }: { code: string }) {
           role="alert"
           style={{
             border: '1px solid var(--agi-rule)',
-            borderRadius: 8,
+            borderRadius: 'var(--corner-field)',
             color: 'var(--agi-error)',
-            padding: '12px 14px',
+            padding: 'var(--space-3) var(--space-4)',
             fontSize: 14,
           }}
         >
@@ -117,9 +117,9 @@ export function VerifyDeviceClient({ code }: { code: string }) {
           role={message.type === 'error' ? 'alert' : 'status'}
           style={{
             border: '1px solid var(--agi-rule)',
-            borderRadius: 8,
+            borderRadius: 'var(--corner-field)',
             color: message.type === 'success' ? 'var(--agi-success)' : 'var(--agi-error)',
-            padding: '12px 14px',
+            padding: 'var(--space-3) var(--space-4)',
             fontSize: 14,
           }}
         >

@@ -111,9 +111,9 @@ function MenuItem({
       aria-pressed={checked === undefined ? undefined : checked}
       className={cn(
         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm',
-        'text-[var(--chat-text-primary)] transition-colors duration-100',
+        'text-[var(--chat-text-primary)] transition-colors duration-instant',
         'hover:bg-[var(--chat-surface-hover)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
         disabled && 'pointer-events-none opacity-40',
         className,
       )}
@@ -261,7 +261,7 @@ function CameraCaptureOverlay({
       role="dialog"
       aria-modal="true"
       aria-label="Take a photo"
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/70 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -439,7 +439,7 @@ function LiveVisualOverlay({
       role="dialog"
       aria-modal="true"
       aria-label={LIVE_SOURCE_TITLE[source]}
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/70 p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -659,7 +659,7 @@ export function AttachmentMenu({
             align="start"
             sideOffset={8}
             className={cn(
-              'z-50 w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--chat-border)]',
+              'z-[var(--z-dropdown)] w-64 max-h-[70vh] overflow-y-auto rounded-xl border border-[var(--chat-border)]',
               'bg-[var(--chat-surface-elevated)] shadow-xl',
               'p-1.5',
               'data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -892,9 +892,9 @@ export function AttachmentMenu({
                     }}
                     className={cn(
                       'flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm',
-                      'transition-colors duration-100',
+                      'transition-colors duration-instant',
                       'hover:bg-[var(--chat-surface-hover)]',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                       activeStyle === opt.value
                         ? 'text-[var(--chat-accent-primary-text)]'
                         : 'text-[var(--chat-text-primary)]',

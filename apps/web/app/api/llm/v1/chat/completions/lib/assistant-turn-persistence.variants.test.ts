@@ -39,6 +39,8 @@ const LEAF_ROW = /select role, parent_id from web_messages/;
 const EXISTS_PROBE = /select id from web_messages where id = \$1 and conversation_id = \$2/;
 const INSERT = /insert into web_messages/;
 const LEAF_MOVE = /update web_conversations\s+set active_leaf_message_id/;
+const BRANCH_PROBE = /select not exists/;
+const LINEAR_STAMP = /lag\(id\) over \(order by created_at, id\)/;
 
 const PARENT_PARAM = 10;
 
@@ -68,7 +70,7 @@ function executes(): [string, unknown[]?][] {
   return mocks.execute.mock.calls as [string, unknown[]?][];
 }
 
-function persist() {
+function persist(assistantParentId?: string) {
   return persistAssistantTurn({
     userId: USER_ID,
     processed: {
@@ -76,6 +78,7 @@ function persist() {
       organizationId: ORGANIZATION_ID,
       conversationId: CONVERSATION_ID,
       assistantMessageId: NEW_ANSWER_ID,
+      ...(assistantParentId ? { assistantParentId } : {}),
       conversationIsTemporary: false,
     } as ProcessedRequest,
     snapshot: {
@@ -103,6 +106,42 @@ describe('persistAssistantTurn, threaded conversations', () => {
     expect(ran(executes(), LEAF_MOVE)).toBe(false);
     expect(ran(executes(), INSERT)).toBe(true);
     expect(paramsOf(executes(), INSERT)[PARENT_PARAM]).toBeNull();
+  });
+
+  it('persists an explicit sibling parent before the client save races it', async () => {
+    givenDatabase([
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: CONVERSATION_SELECT, rows: [{ active_leaf_message_id: null }] },
+      { match: BRANCH_PROBE, rows: [{ unbranched: true }] },
+    ]);
+    const baseQuery = mocks.query.getMockImplementation();
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
+      EXISTS_PROBE.test(sql)
+        ? params[0] === QUESTION_ID
+          ? [{ id: QUESTION_ID }]
+          : []
+        : baseQuery?.(sql, params),
+    );
+
+    await persist(QUESTION_ID);
+
+    expect(ran(queries(), LOCK)).toBe(true);
+    expect(ran(executes(), LINEAR_STAMP)).toBe(true);
+    expect(paramsOf(executes(), INSERT)[PARENT_PARAM]).toBe(QUESTION_ID);
+    expect(paramsOf(executes(), LEAF_MOVE)[0]).toBe(NEW_ANSWER_ID);
+  });
+
+  it('does not trust an explicit parent outside the conversation', async () => {
+    givenDatabase([
+      { match: LOCK, rows: [{ active_leaf_message_id: null }] },
+      { match: CONVERSATION_SELECT, rows: [{ active_leaf_message_id: null }] },
+      { match: EXISTS_PROBE, rows: [] },
+    ]);
+
+    await persist(QUESTION_ID);
+
+    expect(ran(executes(), INSERT)).toBe(false);
+    expect(ran(executes(), LEAF_MOVE)).toBe(false);
   });
 
   it('never locks for a conversation this request cannot see', async () => {

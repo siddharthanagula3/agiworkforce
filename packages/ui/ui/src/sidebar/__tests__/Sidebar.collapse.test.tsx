@@ -147,8 +147,8 @@ describe('collapsing the sidebar hides labels rather than clipping them', () => 
     expect(active.getAttribute('aria-current')).toBe('page');
     expect(inactive.getAttribute('aria-current')).toBeNull();
     expect(active.className).not.toEqual(inactive.className);
-    expect(classTokens(active)).toContain('bg-[hsl(var(--accent))]');
-    expect(classTokens(inactive)).not.toContain('bg-[hsl(var(--accent))]');
+    expect(classTokens(active)).toContain('bg-accent');
+    expect(classTokens(inactive)).not.toContain('bg-accent');
   });
 
   it.each([
@@ -180,7 +180,7 @@ describe('collapsing the sidebar hides labels rather than clipping them', () => 
 
     expect(root.className).toContain('transition-[width]');
     expect(root.className).not.toContain('transition-all');
-    expect(root.className).toContain('duration-300');
+    expect(root.className).toContain('duration-moved');
     expect(root.className).not.toContain('absolute');
     expect(root.className).not.toContain('fixed');
   });

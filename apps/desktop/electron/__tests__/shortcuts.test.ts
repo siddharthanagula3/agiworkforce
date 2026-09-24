@@ -82,6 +82,17 @@ describe('global shortcut registration', () => {
     expect(notifications[0]?.body).toContain(DEFAULT_SHORTCUTS.voiceShortcut);
   });
 
+  it('announces a conflict again after shortcuts are reconfigured', () => {
+    rejected.add(DEFAULT_SHORTCUTS.voiceShortcut);
+    registerGarnishShortcuts(handlers());
+    expect(notifications).toHaveLength(1);
+
+    unregisterGarnishShortcuts();
+    registerGarnishShortcuts(handlers());
+
+    expect(notifications).toHaveLength(2);
+  });
+
   it('reports a chord already assigned to another AGI shortcut as a duplicate', () => {
     stored = { ...DEFAULT_SHORTCUTS, voiceShortcut: DEFAULT_SHORTCUTS.quickAskShortcut };
     registerGarnishShortcuts(handlers());

@@ -5,7 +5,10 @@ import { PublishedArtifactView } from './PublishedArtifactView';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, fallback?: string) => fallback ?? _key,
+    t: (key: string, fallback?: string) =>
+      key === 'artifactPublish.sharedWithWorkspace'
+        ? 'Shared with your workspace'
+        : (fallback ?? key),
   }),
 }));
 

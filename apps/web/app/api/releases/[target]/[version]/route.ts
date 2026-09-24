@@ -13,6 +13,7 @@ import {
   selectSignedDesktopUpdaterAsset,
   type DesktopReleasePlatform,
 } from '@/lib/releases/github-desktop-releases';
+import { desktopUpdateHeld } from '@/lib/releases/desktop-update-hold';
 
 const TARGET_PLATFORMS: Readonly<Record<string, DesktopReleasePlatform>> = {
   'darwin-aarch64': 'darwin-aarch64',
@@ -47,6 +48,7 @@ async function handleReleaseCheck(
   if (!channel) {
     throw createError.validation('Invalid version format');
   }
+  if (await desktopUpdateHeld(request, version)) return noUpdateResponse();
 
   const release = await fetchLatestDesktopRelease(channel);
   if (!release || compareSemanticVersions(release.version, version) !== 1) {

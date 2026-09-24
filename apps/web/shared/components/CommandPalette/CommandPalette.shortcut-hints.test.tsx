@@ -17,8 +17,13 @@ vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: vi.fn() }),
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
+vi.mock('@/lib/identity/client', () => ({
+  useSession: () => ({ isLoaded: true, isSignedIn: true, userId: 'user-command-palette' }),
+  useCurrentUser: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    user: { id: 'user-command-palette', publicMetadata: {} },
+  }),
 }));
 
 vi.mock('@/shared/stores/model-store', () => ({

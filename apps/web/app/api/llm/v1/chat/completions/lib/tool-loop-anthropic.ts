@@ -4,7 +4,9 @@ import {
   normalizeModelId,
   type ChatRequest,
   type StreamChunk,
+  type StreamChunkErrorClassification,
   type ThinkingBlock,
+  type UpstreamFrameShape,
 } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import {
@@ -45,7 +47,27 @@ function applyWarmRouteProviderPinning(
 export interface ToolLoopStepSink {
   thinkingBlocks: ThinkingBlock[];
   text: string;
+  providerErrorClassification?: StreamChunkErrorClassification;
   usage?: ObservedProviderUsage;
+  providerTrace?: ProviderStreamShape;
+}
+
+export interface ProviderStreamShape {
+  chunks: number;
+  textChunks: number;
+  textChars: number;
+  thinkingChunks: number;
+  thinkingChars: number;
+  toolStarts: number;
+  stopChunks: number;
+  wireEvents: number;
+  upstreamModel?: string;
+  upstreamProvider?: string;
+  upstreamFrameShape?: UpstreamFrameShape;
+}
+
+function traceRouteLabel(value: string): string | undefined {
+  return /^[a-z0-9][a-z0-9._/:+-]{0,127}$/iu.test(value) ? value : undefined;
 }
 
 export async function buildToolLoopStream(
@@ -116,6 +138,16 @@ export function chunksToOpenAiSse(
   let usageCommitted = false;
   let upstreamProvider: string | undefined;
   let providerReportedCostUsd: number | undefined;
+  const providerTrace: ProviderStreamShape = {
+    chunks: 0,
+    textChunks: 0,
+    textChars: 0,
+    thinkingChunks: 0,
+    thinkingChars: 0,
+    toolStarts: 0,
+    stopChunks: 0,
+    wireEvents: 0,
+  };
   const streamUsage = {
     inputTokens: 0,
     outputTokens: 0,
@@ -143,8 +175,29 @@ export function chunksToOpenAiSse(
     async start(controller) {
       try {
         for await (const chunk of chunks) {
+          providerTrace.chunks += 1;
+          if (chunk.type === 'text-delta') {
+            providerTrace.textChunks += 1;
+            providerTrace.textChars += chunk.delta.length;
+          } else if (chunk.type === 'thinking-delta') {
+            providerTrace.thinkingChunks += 1;
+            providerTrace.thinkingChars += chunk.delta.length;
+          } else if (chunk.type === 'tool-use-start') {
+            providerTrace.toolStarts += 1;
+          } else if (chunk.type === 'stop') {
+            providerTrace.stopChunks += 1;
+          } else if (chunk.type === 'error' && chunk.classification && sink) {
+            sink.providerErrorClassification = chunk.classification;
+          }
+          if (chunk.type === 'response-meta' && typeof chunk.model === 'string') {
+            providerTrace.upstreamModel = traceRouteLabel(chunk.model);
+          }
           if (chunk.type === 'response-meta' && typeof chunk.provider === 'string') {
             upstreamProvider = chunk.provider;
+            providerTrace.upstreamProvider = traceRouteLabel(chunk.provider);
+          }
+          if (chunk.type === 'response-meta' && chunk.upstreamFrameShape) {
+            providerTrace.upstreamFrameShape = { ...chunk.upstreamFrameShape };
           }
           if (chunk.type === 'usage') {
             sawUsage = true;
@@ -172,6 +225,7 @@ export function chunksToOpenAiSse(
             }
           }
           const wireEvents = assembler.sseChunks(chunk);
+          providerTrace.wireEvents += wireEvents.length;
           if (wireEvents.length === 0) continue;
           const lines = wireEvents.map((event) => `data: ${JSON.stringify(event)}`).join('\n');
           controller.enqueue(encoder.encode(lines + '\n\n'));
@@ -179,10 +233,12 @@ export function chunksToOpenAiSse(
         if (sink) {
           sink.thinkingBlocks = assembler.canonicalThinkingBlocks();
           sink.text = assembler.canonicalText();
+          sink.providerTrace = providerTrace;
         }
         commitUsage();
         controller.close();
       } catch (err) {
+        if (sink) sink.providerTrace = providerTrace;
         commitUsage();
         controller.error(err);
       }

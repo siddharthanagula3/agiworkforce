@@ -46,7 +46,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const secondaryButtonClass =
@@ -150,7 +150,7 @@ export function WorkspaceMcpServers() {
     return (
       <div
         className="flex items-center gap-2"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         <Spinner size="sm" />
         Loading workspace MCP servers…
@@ -160,7 +160,7 @@ export function WorkspaceMcpServers() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load this workspace’s MCP servers
         </p>
@@ -225,7 +225,11 @@ export function WorkspaceMcpServers() {
     <div style={cardStyle}>
       {dialog}
       <div className="flex items-start gap-3 px-5 py-4">
-        <Server size={16} aria-hidden style={{ color: 'var(--text-3)', marginTop: 2 }} />
+        <Server
+          size={16}
+          aria-hidden
+          style={{ color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
+        />
         <div>
           <h3 className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
             Workspace MCP servers

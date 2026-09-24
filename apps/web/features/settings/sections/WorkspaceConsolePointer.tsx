@@ -20,8 +20,8 @@ export function WorkspaceConsolePointer() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: 16,
-        padding: '14px 0',
+        gap: 'var(--space-4)',
+        padding: 'var(--space-4) 0',
         borderBottom: '1px solid var(--settings-border)',
         textDecoration: 'none',
       }}

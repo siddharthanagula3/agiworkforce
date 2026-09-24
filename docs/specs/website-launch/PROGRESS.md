@@ -2,7 +2,7 @@
 
 Status: In progress
 Owner: Website launch preparation
-Last updated: 2026-09-20
+Last updated: 2026-09-22
 
 This is the entry point for current work. Historical audit artifacts remain immutable. Their local paths and fingerprints are
 recorded in [QA_COVERAGE.json](QA_COVERAGE.json); they are not tracked documentation links.
@@ -692,3 +692,749 @@ Web typecheck passed after correcting index-signature property access. Browser s
 verification confirmed the reopened Free section remains expanded, with category/search
 controls loaded and no catalogue loading error. Exhaustion UI itself was verified with
 fixtures, not by consuming the live allocation.
+
+### 2026-09-21: Ecosystem continuity scope correction
+
+The owner clarified that serial surface delivery is a release sequence, not six
+independent products. The current target is one account and one effective suite
+entitlement across all clients. Web, Mobile Cloud, Desktop Cloud and eligible Chrome
+Managed Cloud form the account continuity domain for chats/messages, memory, projects,
+Cloud files/artifacts, connected tools/apps, OAuth connection metadata, settings,
+personalization and entitlement state. Desktop Code, CLI and VS Code form the host-owned
+developer continuity domain for local session identity/transcripts, tools/extensions,
+permissions, repositories/files and credential references. Desktop participates in both;
+crossing between them remains an explicit provenance-preserving handoff.
+
+Canonical product definition, requirements, suite, commercial model and experience
+contract now state this topology. Stale wording that made the public Desktop entirely
+cloud-only was corrected: consumer Desktop chat remains Managed Cloud, while Desktop Code
+must use the same host developer runtime as CLI and VS Code. Local credentials stay in the
+OS credential store/host broker and are not copied into Cloud sync. A dated official-source
+comparison of ChatGPT/Codex, Claude and Perplexity continuity patterns is recorded in
+`docs/research/cross-surface-continuity-2026-09-21.md`.
+
+Website remains the only active implementation and launch surface. Later surface phases
+must consume the canonical owners and prove create/update/delete convergence, revocation,
+account switching, offline recovery, conflict behavior and explicit handoff rather than
+receive copied chat, memory, tool, OAuth, subscription, session or file implementations.
+
+### 2026-09-21: Official-doc rebaseline and literal angle-text closure
+
+First-party ChatGPT and Claude documentation was re-verified through September 21. The
+chronology and current ecosystem requirements are recorded in
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`. Product definition,
+requirements, suite, commercial, experience, decisions, trust boundaries and current work
+records now consume that baseline. Dated July-to-September competitor and repository
+observations are explicitly historical instead of claiming to be current. The current target
+uses one account/effective entitlement, one Cloud continuity domain, one host developer
+continuity domain and an explicit Desktop handoff. Managed Free remains available after
+sign-in; paid upgrades remain waitlist/access-code gated. Custom GPT/GPT Store parity is
+replaced by reusable plugin/workflow packages, and a separate Cowork-branded product is not
+an AGI target: direct answers and durable work share one product home.
+
+`WEB-CHAT-ANGLE-TEXT-2026-09-19` is closed. The shared Markdown renderer now has an explicit
+literal-HTML preprocessing mode, and Web enables it only for user-authored message text.
+Assistant Markdown keeps the existing HTML policy. Focused shared-renderer and Web message
+tests passed; shared-package lint/typecheck, Web lint and Web typecheck passed. The full Web
+suite passed 26,024 tests with six skipped across 2,405 passing files and four skipped files.
+A temporary, exactly tagged local conversation exercised the shipping `/chat/[id]` route with
+`FINAL=<number> and literal <script>alert(1)</script>`: all text remained visible and inert
+before and after full reload. The temporary conversation and cascading message were deleted
+and absence was verified. The open-flaw and active-issue rows were removed; historical QA
+evidence remains in this ledger and the earlier evidence file.
+
+### 2026-09-21: Markdown table alignment closure
+
+`WEB-MARKDOWN-TABLE-ALIGN-2026-09-19` is closed. A failing shared-renderer regression first
+reproduced the loss of GFM left, center and right alignment. The custom header and cell
+renderers now map only the supported alignment values emitted through `style.textAlign` to
+static presentation classes; arbitrary inline styles are not forwarded. Citation handling,
+escaping and the existing local overflow wrapper are unchanged.
+
+The focused shared-renderer regression passed 11 tests. The complete shared UI package passed
+2,122 tests across 182 files, plus package lint and typecheck. The Web message consumer passed
+108 tests, the development probe passed focused lint, and Web typecheck passed. Live localhost
+verification confirmed `left`, `center` and `right` computed styles for both headers and cells
+at wide and 390 px viewports. At 390 px, the table remained within its 342 px scroll region
+with readable wrapping. The open-flaw and active-issue rows were removed; the historical QA
+evidence remains preserved.
+
+### 2026-09-22: Inert HTML code and explicit artifact closure
+
+`WEB-INERT-CODE-ARTIFACT-2026-09-19` is closed. New Web assistant turns use the
+`explicit-v1` artifact-derivation policy: fenced HTML, SVG and Mermaid remain ordinary visible
+source unless the response carries the format-specific artifact marker. Explicit diagram,
+chart, vector and HTML-artifact requests receive that output contract as a hidden system
+instruction, so it never becomes part of the authored user transcript. Historical messages
+without the policy retain legacy derivation. The same policy now reaches direct saves, bulk
+saves, sync, branching and server Library indexing, so transcript and Library behavior do not
+diverge. Iframe script and network restrictions are unchanged.
+
+The canonical artifact package passed 42 tests and typecheck. Nine focused Web files passed
+233 tests; focused ESLint and Web typecheck passed. The isolated Playwright streaming-artifact
+case passed and proved a marked fence grows in the side panel without leaking into transcript
+prose. The full eight-case streaming file remains four-pass/four-fail: three unrelated existing
+height, announcer and Mermaid timing assertions failed, while the first artifact run exposed
+and led to correction of a generic-word routing edge case before the artifact case passed in
+isolation.
+
+Live Free-model localhost verification showed the exact requested
+`<script>alert("INERT_ARTIFACT_CHECK")</script>` fence visibly before and after reload, with no
+artifact button and no alert. Separate explicit HTML-artifact prompts opened sandboxed previews
+and persisted across reload. A second prompt after the hidden-instruction repair displayed only
+the user's authored text while its preview rendered `HIDDEN_DIRECTIVE_CHECK`; the earlier
+diagnostic turn remains historical test content. The open-flaw and active-issue rows were
+removed; the original QA batch evidence remains preserved.
+
+### 2026-09-22: Free generated media Library closure
+
+`WEB-FREE-MEDIA-LIBRARY-2026-09-19` is closed. The Free quota media branch no longer emits a
+provider-hosted artifact URL into a durable chat. It downloads through the guarded media fetcher,
+validates the returned media type, applies the same generated-output moderation floor, and sends
+the bytes through the canonical generated-file persistence owner. The resulting owner/workspace-
+scoped private asset carries prompt, provider, model, conversation, checksum and AI-generated
+provenance metadata. Chat receives only its authenticated same-origin `/api/files/{id}` URI, the
+same catalog row Library reads. Failed persistence and blocked output expose neither provider URLs
+nor uncatalogued bytes. Hosted Free media is offered only when private generated-media storage is
+configured; the existing local development storage remains eligible.
+
+Six focused route, catalogue, persistence, storage and Library files passed 119 tests. Focused
+ESLint and Web typecheck passed. Live localhost verification used a one-pixel synthetic PNG through
+the shipping private persistence path, not another provider generation: it appeared in Library
+All and Images, survived full reload, and opened through the authenticated file viewer. The probe
+row and bytes were then soft-deleted and permanently removed; reload returned to the original
+empty Library. The historical IG04 conversation is unavailable in the current fresh database, so
+the provider image was not regenerated. Route tests instead verify that a successful Free image
+result is downloaded, moderated, persisted with the admitted owner/workspace/conversation scope,
+returned by authenticated URI, and never leaks the provider URL; persistence failure and moderation
+refusal paths are covered. The open-flaw and active-issue rows were removed while the original QA
+batch observation remains preserved.
+
+### 2026-09-22: Free-route provenance reload closure
+
+`WEB-FREE-PROVENANCE-RELOAD-2026-09-19` is closed. The response header already identified the
+lane during a live stream, and server assistant-turn attribution already carried the requested
+lane, but the client's post-stream metadata save rebuilt its payload without the lane and the
+reload projection read only the transient message field. Both assistant-turn writers now persist
+the canonical `routeLane` metadata field. The bounded metadata projector treats it as essential,
+conversation hydration restores it, and the transcript can also recover the older explicit
+`requestedRoute.lane` attribution. Unknown, malformed and absent lane evidence remains unlabeled.
+
+Four focused Web files passed 53 tests, the Cloud message-metadata projection passed 10 tests,
+focused ESLint passed, and Web typecheck passed. Live localhost verification used a tagged
+synthetic conversation under the authenticated account with `routeLane: free`; the assistant
+displayed “OpenRouter Free Auto · via free pool” before and after a full Browser reload. No model
+request or quota was used. The exact synthetic conversation and its cascade messages were then
+deleted, and the Browser returned to the pre-existing localhost chat. The open-flaw and
+active-issue rows were removed while the original discovery evidence remains historical.
+
+### 2026-09-22: Mermaid diagnostic DOM cleanup closure
+
+`WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19` is closed. Both transcript diagrams and artifact previews
+now render through a component-owned temporary host instead of Mermaid's default `document.body`
+target. The host is removed in `finally` after success or failure, and Mermaid error rendering is
+suppressed at configuration level. The visible source-preserving fallback is unchanged. A source
+change owns a separate temporary child, so a cancelled older render cannot remove the newer one.
+
+Eight focused shared-UI files passed 159 tests, focused ESLint passed, and the unified-chat package
+typecheck passed. Live localhost verification used the development renderer probe with Mermaid
+11.17.2: two valid diagrams rendered, the invalid diagram retained its visible source fallback,
+and there were zero Mermaid-id or “Syntax error in text” nodes outside the probe. After navigation
+to an empty New Chat, the document contained zero Mermaid nodes and zero stale syntax-error nodes.
+The Browser then returned to the user's pre-existing localhost chat. The open-flaw and active-issue
+rows were removed while the original discovery evidence remains historical.
+
+### 2026-09-22: Scheduled-erasure harness boundary reconciliation
+
+`QA-ERASURE-HARNESS-BOUNDARY-2026-09-19` is closed as a stale register entry. Commit `053729ff8`
+on 2026-09-20 replaced the harness's direct `pg` client with the exported
+`PostgresDatabaseAdapter` from `@agiworkforce/data-layer`. The vendor-adapter allowlist still names
+the data-layer adapter as the sole `pg` owner, and the current repository boundary scan does not
+report the erasure harness.
+
+The opt-in live test compiles and skips cleanly without its destructive environment gate. Three
+available focused data-layer adapter assertions passed, 26 environment-gated adapter cases skipped,
+and the data-layer typecheck passed. The overall `pnpm check:boundaries` command remains red only
+for a separate current `@clerk/nextjs` import in `CommandPalette.tsx`; this closure neither changes
+nor suppresses that finding. The open-flaw and active-issue rows for the erasure harness were
+removed while the original audit evidence remains historical.
+
+### 2026-09-22: Theme bootstrap documentation and dead-helper closure
+
+- Closed `WEB-127` from the canonical Web public-release audit.
+- Removed `getSystemTheme` and `applyThemeToDocument`; repository search showed
+  that production never called them and their only consumers were tests of the
+  helpers themselves.
+- Corrected the bootstrap contract to match the root layout: the blocking
+  inline script is the first child of `<body>`, while the App Router owns
+  `<head>`. The script remains byte-checked against the disclosed public
+  artifact.
+- Verification: focused ThemeProvider and theme-init tests, focused ESLint,
+  Web typecheck, repository search, and documentation integrity guards.
+
+### 2026-09-22: Operator support-queue audit reconciliation
+
+- Closed stale Web audit row `WEB-125`. The operator dashboard's Support tab
+  directly renders both `SupportHandoffQueuePanel` and
+  `SupportTicketQueuePanel`; operators do not need to discover the separate
+  `/operator/support` route.
+- Git history attributes the support integration to September 21 commits
+  `24c11782d` and `75e47aca4`. This was documentation reconciliation, not a new
+  implementation claim.
+- Verification: current implementation read, repository-wide reference search,
+  focused operator tab tests, and documentation integrity guards.
+
+### 2026-09-22: Workspace artifact localization closure
+
+- Closed Web audit row `WEB-142` at its actual root. The organization-shared
+  artifact label no longer depends on an inline English fallback.
+- Added `artifactPublish.sharedWithWorkspace` to all 12 maintained `chat`
+  locale catalogs and made the component consume the catalog key directly.
+- Verification: `check:i18n-parity` passed with 1,277 keys in each of 12
+  locales, the focused published-artifact suite passed 10 tests, focused ESLint
+  passed, Web typecheck passed, and documentation integrity guards passed.
+
+### 2026-09-22: Offline-status error and color closure
+
+- Closed `WEB-113`. The earlier raw-error path was already routed through
+  `toUserMessage`; the remaining green, blue, yellow and red utility ramps are
+  now semantic success, info, warning and danger design tokens.
+- The retry control uses the same destructive surface and readable danger-text
+  tokens as the error banner. No status depends on a literal color family or a
+  dark-mode override.
+- Verification: the focused error-privacy and token-class regression passed,
+  focused ESLint passed, `check:css-tokens` passed, and
+  `check:theme-text-colours` passed with the unpaired count reduced from 114 to 113.
+
+### 2026-09-22: Dynamic public-route 404 closure
+
+- Closed `WEB-141`. Both `/blog/[slug]` and `/use-cases/[slug]` now own a
+  segment `not-found.tsx` that delegates to the canonical not-found page instead
+  of relying on framework fallback placement.
+- Raw localhost requests to unknown slugs returned HTTP 404 and contained the
+  canonical “That page is not here” heading plus its explanatory copy; the
+  content does not require hydration to appear.
+- Verification: both raw HTTP responses, Web typecheck, and documentation
+  integrity guards passed.
+
+### 2026-09-22: Sidebar browser-locator closure
+
+- Closed `WEB-060`. Four Playwright steps now locate a conversation row's
+  actions button by its rendered accessible-name pattern, “More options for
+  …”, instead of the deleted “Conversation actions” label.
+- The owning `SessionItem` suite continues to assert that the current label is
+  present and the deleted label is absent.
+- Verification: the owning UI suite passed 10 tests, Playwright discovered all
+  nine affected browser cases across both specs, focused ESLint passed, and a
+  targeted search found no stale label in either file.
+
+### 2026-09-22: Share-request cancellation reconciliation
+
+- Closed stale audit row `WEB-057`. The current share hook owns each request
+  with an `AbortController` and `SHARE_CONVERSATION_CLIENT_DEADLINE_MS`, aborts
+  on timeout, dismissal and unmount, and discards late failures after the
+  dialog closes.
+- The dialog's Cancel action remains enabled while creation is in flight and
+  calls the cancellation path before closing. The implementation originated in
+  release integration commit `c4097d64a` on September 19; this pass reconciled
+  the later audit row with that current code.
+- Verification: the focused hook and dialog suites passed 14 tests, including
+  never-resolving cancellation and timeout/retry cases, and focused ESLint
+  passed.
+
+### 2026-09-22: Transcript renderer warm-up closure
+
+- Closed `WEB-056` while preserving the markdown renderer's code split.
+- Pointer or keyboard intent inside the composer now starts one cached import of
+  `@agiworkforce/unified-chat`; the later `next/dynamic` transcript render uses
+  the browser's already-requested module instead of waiting until the first
+  assistant text reaches the DOM.
+- Verification: the cached-loader and composer-intent regressions passed with
+  the full editor-arm suite, 32 focused tests total, and focused ESLint passed.
+
+### 2026-09-22: Raw-error guard reconciliation
+
+- Closed stale audit row `WEB-059`. The current guard parses TypeScript and TSX
+  instead of matching one regex shape, detects direct, multiline and nested raw
+  messages in arbitrary error setters and toast sinks, and also checks rendered
+  failure-result fields.
+- The zero baseline is current: no raw exception message remains in the scanned
+  Web and shared-UI production roots.
+- Verification: all 23 adversarial guard tests passed and the repository scan
+  passed with zero remaining findings. Git attributes the final tool-result
+  coverage to September 21 commit `49e1924d8`.
+
+### 2026-09-22: Global substring-layout closure
+
+- Closed `WEB-051`. Deleted the global selectors that rewrote any class name
+  containing `sidebar`, `composer`, or `send-button`; the owning sidebar and
+  composer components now control their own responsive layout. The bounded
+  menu/listbox viewport-width rule remains.
+- Live signed-in localhost verification at 390×844 measured a 390px document
+  with no horizontal overflow, a row-direction composer, and a conversation
+  menu at x=73…265 with active pointer events, wholly inside the viewport.
+- Three focused composer/mobile/menu files passed nine tests and
+  `check:css-tokens` passed. `check:web-ui-invariants` ran its 24 guard tests
+  successfully but the repository scan remains red on unrelated untracked
+  `DesktopUpdateNotice.tsx` using `z-[100]`; this closure did not touch or
+  suppress that other work.
+
+### 2026-09-22: Primary coarse-pointer target closure
+
+- Closed `WEB-067` at the remaining current scope. The product already had
+  coarse-pointer sizing on notices, model controls and follow-up actions, so
+  the old claim that it had none was stale; Send, Stop, Queue, conversation
+  rows, and their row action controls were the unresolved 32–36px targets.
+- The Web composer and shared sidebar now expand those controls to 44px only
+  for coarse pointers, preserving their compact mouse-and-keyboard layout.
+- The browser target-size suite retains the WCAG 2.2 24px floor across product
+  routes and adds a touch-enabled 390×844 check for the stricter 44px composer
+  and sidebar contract.
+- Verification: 28 focused Web send-button tests and 20 shared-sidebar tests
+  passed; Web and shared-UI typechecks passed; Playwright discovered all three
+  target-size cases. In the signed-in localhost UI, a coarse-pointer emulation
+  measured the Send control at 44×44px, the conversation row at 213×44px and
+  its action button at 44×44px. The browser was returned to its original
+  desktop viewport with the draft cleared.
+
+### 2026-09-22: Hand-drawn dialog keyboard closure
+
+- Closed `WEB-040`. Web dialogs that own custom layouts now delegate focus
+  entry, Tab containment, Escape and opener-focus restoration to
+  `useDialogKeyboard` or `useOverlayDialog`; their local document-level Escape
+  listeners were removed.
+- This includes the three desktop-host dialogs, project source and file-preview
+  modals, generated-media sharing, the image lightbox, narrow support, all
+  three gallery overlays and the mobile artifacts panel. The latter no longer
+  keeps a private copy of the overlay focus algorithm.
+- Extended the modal invariant suite so any Web source that claims
+  `aria-modal` without one of the shared keyboard owners fails.
+- Verification: 85 focused tests passed across the affected panels and guard,
+  focused ESLint and Web typecheck passed. A live localhost gallery drawer
+  moved focus to its Close control, kept focus inside after ten Tab presses,
+  closed on Escape and returned focus to the exact gallery card that opened it.
+
+### 2026-09-22: Flagship stylesheet ownership closure
+
+- Closed `WEB-064` against the current code rather than the stale 86-rule
+  count. The live files contained 101 byte-identical `agi-fl-*` rules and five
+  root-context selector conflicts.
+- `legacy-pages.css` now owns shared flagship rules. `legacy-landing.css`
+  retains only landing-specific declarations; the homepage hero carries an
+  `agi-fl-hero--flagship` modifier for its 22px CTA spacing and inherited hero
+  variables. Shared device masks moved to the canonical page rules.
+- Added a parser-backed ownership regression that fails if the same flagship
+  selector is declared in both stylesheets under the same responsive context.
+- Verification: the ownership regression passed; 35 focused marketing,
+  device-mockup and hero-accessibility tests passed; focused ESLint passed. A
+  localhost `/web` visual check showed the hero, device mockup and CTA layout
+  rendering normally after hot reload.
+
+### 2026-09-22: Documentation-route design-system closure
+
+- Closed `WEB-062`. `/docs` now uses the same `PageHero`, `Section`, `Stack`,
+  `Prose` and `Ledger` primitives as the rest of the public site, replaces the
+  icon-card wall with semantic link ledgers, and restores the shared marketing
+  footer.
+- Deleted the now-unused `agi-docs*` CSS block instead of leaving a retired
+  sixth visual system in the global stylesheet.
+- Verification: the focused route regression passed; the combined docs and
+  marketing batch passed 36 tests; Web typecheck, focused ESLint and formatting
+  passed. Localhost `/docs` returned 200 and exposed the shared footer. At
+  390×844 the document and viewport both measured 390px wide, with the `h1`
+  wholly inside the viewport and no retired card nodes.
+
+### 2026-09-22: Flagship hero contract closure
+
+- Closed `WEB-063`. The landing hero now requires the confirmed public
+  signature: a line-based headline, an italic amber emphasis and a named
+  Local/BYOK/Cloud mode ribbon. The visual brand lockup is no longer a second
+  heading, so the page retains one semantic `h1`.
+- Renamed the landing-only section exports with a `Landing*` prefix. A
+  regression compares the two module export sets and fails if the flagship and
+  reusable surface systems publish the same runtime component name again.
+- Verification: both focused hero tests and the existing flagship
+  accessibility regression passed; Web typecheck, focused ESLint and
+  formatting passed. An unauthenticated request to `localhost:3100/` returned
+  200 with the new headline, all three trust modes and exactly one `h1`. The
+  rendered hero was inspected at the default desktop viewport and at 390×844;
+  after its entrance animation settled, the mobile layout showed the headline,
+  lede, wrapped mode ribbon and both CTAs without horizontal overflow.
+
+### 2026-09-22: Focus and secondary-accent ownership closure
+
+- Closed `WEB-065`. Foundation `--focus-ring` now feeds Tailwind's generic
+  ring, the chat ring, the global outline and shared sidebar controls. Web and
+  unified-chat focus states no longer use primary or secondary accent colours,
+  and the global outline now sits in the base layer instead of overriding a
+  component's explicit outline utility.
+- Removed the Web-only terracotta `--chat-accent-secondary` override. Web now
+  inherits the shared teal solid and soft secondary roles while retaining its
+  amber primary action family.
+- Added a source regression that scans Web, shared UI and unified chat for the
+  retired focus-role forms and pins the canonical aliases. Verification: 363
+  focused Web tests, 149 shared-sidebar tests and 49 affected unified-chat
+  tests passed; all four affected typechecks, focused/package lint and
+  `check:css-tokens` passed. Live dark chat resolved both focus tokens to
+  `#7aa0f0`, the secondary accent to `#21808d`, and visibly painted the focused
+  composer with the canonical boundary.
+
+### 2026-09-22: Responsive chat-shell closure
+
+- Closed `WEB-050`. `/chat` now uses the shared compact/tablet/regular shell
+  resolver instead of a private 768px media query. Tablet portrait and any
+  tablet-sized chat with a secondary panel use the 52px rail; its expand
+  control opens full navigation as an overlay.
+- Work, Research and Artifacts share one active right-side slot. A newly opened
+  panel replaces the previous one, including transcript-driven and shortcut
+  openings, while an automatic Work-dock open does not displace a panel the
+  user is reading.
+- Added 820 and 1024 to the responsive sweep plus a signed-in panel hand-off
+  case. Verification: 20 focused and 99 broader chat tests passed; Web
+  typecheck, focused ESLint and formatting passed. Live localhost geometry
+  changed from a panel ending at x=900 in an 820px viewport and stacked panels
+  ending at x=1180 in a 1024px viewport to exact-width, one-panel layouts at
+  820×1180, 820×640 and 1024×768. The tablet rail's navigation overlay was also
+  opened live and correctly made the covered chat inert.
+
+### 2026-09-22: Client chat-latency instrumentation
+
+- Closed `WEB-020`. Managed-cloud chat turns now record bounded T0 submit, T1
+  fetch, T7 first-chunk, T8 first-paint-proxy, T9 first-sentence and T10 done
+  marks plus interval measures. Abandoned and failed turns cancel instead of
+  recording a false completion, and old traces are evicted after twenty turns.
+- Each measured request sends a W3C `traceparent` through the existing server
+  correlation boundary. `x-request-id` remains the separate request identity;
+  no private header or second trace owner was added.
+- Verification: five focused latency and correlation files passed 28 tests; all
+  16 `useChatStream` test files passed 178 tests; focused ESLint and the Web
+  typecheck passed. A successful live-provider baseline remains open, so this
+  work establishes an instrument rather than a latency or capacity claim.
+
+### 2026-09-22: Durable user-turn admission without a browser save round trip
+
+- Closed `WEB-054`. Persistent managed-cloud turns now send the user-message
+  identity, metadata and branch parent with the completion request. The request
+  processor persists that turn before provider dispatch and fails closed with a
+  user-facing save error if durability is unavailable.
+- Extracted conversation-message persistence into one server owner consumed by
+  both the standalone messages route and completion admission. Branch lineage,
+  conversation activation, title generation and artifact indexing therefore do
+  not have parallel implementations. Temporary, local and regeneration flows
+  retain their prior contracts; assistant persistence is unchanged.
+- Verification: the focused admission/refactor batch passed 89 tests; all 14
+  message-route/helper files passed 76 tests; all 37 request-processor files
+  passed 357 tests; and all 16 `useChatStream` files passed 178 tests. Focused
+  ESLint and the Web typecheck passed. The failure regression proves that a
+  failed user write dispatches no provider request.
+
+### 2026-09-22: Connector-free chat request fast path
+
+- Closed `WEB-055` for Web without removing default-on connector behavior. Once
+  the composer has successfully loaded the account connector list, it reports
+  when no connector remains enabled for that conversation. A loading or failed
+  list sends no hint, and older or non-Web clients keep the existing discovery
+  path.
+- A no-tool turn with that negative hint skips the user connector catalogue,
+  connector verdicts, approval-policy read and the extra scoped-database
+  acquisition. Enabled connectors still receive the complete catalogue and
+  permission gates. Platform tools such as Web search still load approval
+  policy even when no connector is enabled.
+- Verification: the six-file client/server fast-path batch passed 122 tests;
+  six broader route files passed 53 tests; all 37 request-processor files passed
+  357 tests; and all 16 `useChatStream` files passed 178 tests. Focused ESLint
+  and the Web typecheck passed. The route regressions prove both the zero-read
+  fast path and retained platform-tool policy enforcement.
+
+### 2026-09-22: Public-root bundle isolation
+
+- Closed `WEB-010`. Capability, query, settings and app runtime providers now
+  mount from product route layouts, while pricing receives only its query
+  runtime. The public root no longer mounts the identity provider; identity-aware
+  routes still receive it. The disabled
+  support widget has no root mount under the Web v1 email-first support
+  decision.
+- Root UI consumers use published `@agiworkforce/ui` subpaths. The final large
+  dependency edge was the browser CSRF helper importing the full
+  `@agiworkforce/cloud-contracts` barrel for five request-header helpers; the
+  new `client-request` subpath owns that narrow browser contract without
+  pulling the model registry or billing catalogue into waitlist and support.
+- A successful Next 16.3.5 production build measured `/terms` at 24 scripts,
+  405,616 encoded bytes and 1,292,551 decoded bytes, down from the already
+  improved 35 scripts / 678 KB / 2,201 KB checkpoint and from the original
+  47 scripts / 1,594 KB / 6,442 KB audit baseline. No loaded script contained
+  the model-registry, billing-plan, Clerk-provider or support-widget
+  implementation markers, and no cross-origin request was made.
+- Verification: 461 cloud-contract tests, 38 bundle-boundary and shell
+  ownership tests, focused provider/waitlist/CSRF/proxy/identity tests,
+  cloud-contract lint, three affected typechecks, `check:boundaries`, and the
+  production build passed. The measurement's three 503s were framework link
+  prefetches to `/` and `/login` under deliberately missing local identity and
+  database credentials; `/terms` itself rendered successfully.
+
+### 2026-09-22: Existing-chat composer geometry
+
+- Closed `WEB-052`. The active-chat composer now follows the measured
+  ChatGPT/Claude parity contract already owned by the design skill: plus,
+  textbox and trailing controls share one non-wrapping 50px card. The larger
+  new-chat home composer remains two rows with the same greeting-only content.
+- Removed three global CSS layout overrides that had silently forced the field
+  to a full line and the controls below it. The component now owns the explicit
+  active-versus-home layout, and a source regression refuses those global
+  selectors if they return.
+- Verification: five focused files passed 118 tests. An authenticated
+  Playwright run against the configured `localhost:3100` server passed at
+  1440×900 and 390×844: the active composer stayed within 48–52px, remained
+  baseline-aligned, and had no horizontal overflow. Web typecheck, focused
+  ESLint and formatting passed.
+
+### 2026-09-22: Strict CSP rendering disposition
+
+- Closed `WEB-058`. The duplicate error-message implementation is gone, public
+  requests no longer perform an account-consent database read, and the
+  remaining dynamic rendering has an explicit release decision rather than a
+  partially resolved label.
+- Decision 25 keeps the per-request nonce CSP and Turbopack for Web v1. The
+  official Next.js 16.3.5 CSP guide, the installed guide and the installed
+  config schema were checked on 2026-09-22: nonce CSP requires dynamic
+  rendering; App Router SRI is now documented without the old webpack-only
+  restriction, but remains experimental and cannot cover dynamically generated
+  scripts. `unsafe-inline` and a security-driven bundler switch are rejected.
+- The static hash-CSP path can be revisited only after it is stable and a
+  production measurement shows material value, with CSP, hydration, identity,
+  consent and public-route caching verified together. No runtime or security
+  control changed in this disposition.
+
+### 2026-09-22: Web v1 support scope and two-click entry
+
+- Closed `WEB-031`. Decision 26 makes the help centre, signed-in tickets and
+  direct `contact@agiworkforce.com` email the Web v1 support product. The
+  incomplete AI/live-handoff widget remains unmounted and outside the public
+  root bundle; source presence is not treated as a shipped capability.
+- The one shared account menu now has a translated Email support item using the
+  canonical legal contact helper. `/help` owns documentation search and routes
+  unresolved questions to `/support`; `/support` owns channels and plan
+  commitments. Free through Max retain no response-time promise.
+- The authenticated localhost Playwright check passed: account menu then Email
+  support activated the canonical mailto in exactly two clicks and found no
+  support-widget mount. The two shell-ownership suites passed 105 tests.
+  Human monitoring of the mailbox cannot be proven in code and is recorded as
+  an explicit founder-operated Web launch gate.
+
+### 2026-09-22: Live chat latency and response-protocol disposition
+
+- Closed `WEB-053`. Three opt-in, zero-cost OpenRouter Free Auto turns used the
+  signed-in localhost composer and the real completion route. The cold
+  development sample measured fetch-to-first-chunk at 6,135ms. Two warm
+  samples measured 1,124ms and 813ms; their submit-to-first-paint proxies were
+  2,635ms and 2,016ms, and submit-to-done was 2,718ms and 2,264ms.
+- Decision 27 keeps the direct adapter's first-provider-chunk peek because it
+  preserves real HTTP error status and pre-commit failover. The standard chat
+  path already opens its durable response independently of visible model text,
+  so replacing those errors with in-band SSE frames has no measured launch-path
+  benefit. These localhost development samples are not production latency or
+  capacity claims.
+- The opt-in Playwright instrument requires an explicitly selected catalog
+  model with zero input/output cost and streaming support, and refuses retries
+  and repeats. Web typecheck, focused ESLint, deterministic latency tests and
+  the live run passed.
+
+### 2026-09-22: Selected-route transport-provider repair
+
+- The live probe exposed a separate background failure: utility calls received
+  canonical route provider `open_router`, while the server adapter registry is
+  keyed by dispatch provider `openrouter`. Conversation-title generation fell
+  back to a truncated title instead of using the selected route.
+- The existing route-ID owner now resolves the dispatch provider for a selected
+  route. Title generation, follow-ups, context compaction, memory extraction,
+  support AI, scanned-document OCR, code review, scheduled agents and rollout
+  shadow traffic use that value only at adapter/wire boundaries; policy,
+  pricing, reservation, cache and ledger records retain the canonical provider.
+- Twelve focused files passed 127 tests, including a catalog-derived OpenRouter
+  title regression. Web typecheck and focused ESLint passed. A fresh live chat
+  returned 200 for completion and message persistence, the title job reached
+  its cache-miss/provider path, and the former unregistered-provider error did
+  not recur.
+
+### 2026-09-22: Offline composer recovery
+
+- Closed `WEB-097`. The active composer consumes the shared ecosystem
+  online-status hook. Offline state disables Send, exposes the exact reason to
+  assistive technology, preserves the unsent draft and blocks Enter submission;
+  reconnect restores Send without changing the draft.
+- The composer regression passed nine tests and the shared hook regression
+  passed. An authenticated Chromium run toggled the browser context offline and
+  online on `localhost:3100`, verified the disabled reason and draft on the
+  disconnected state, then verified the control recovered on reconnect.
+
+### 2026-09-22: Streaming liveness and immediate reveal
+
+- Closed `WEB-100` without racing two provider executions. Plain managed chat
+  now allows 500ms for the durable workflow's first event, cancels it before an
+  inline fallback and uses the existing shared cooldown so a cold durable path
+  is not charged to every request. `AGI Work` keeps its durable contract.
+- Closed `WEB-101`. Assistant text that has reached the browser is coalesced for
+  one animation frame and then rendered in full; the old 280ms presentation
+  pace no longer delays a burst the provider already delivered.
+- Closed `WEB-102`. Every chat SSE endpoint consumes the canonical response
+  headers with `X-Accel-Buffering: no`, and the idle heartbeat interval is 2s.
+- Eleven focused files passed 143 tests. Focused ESLint and the Web typecheck
+  passed. An authenticated zero-cost OpenRouter Free Auto run on
+  `localhost:3100` asserted the real anti-buffering header and measured a 26ms
+  durable first event, 331ms route response, 375ms fetch-to-first-chunk,
+  2,087ms submit-to-first-paint and 2,137ms submit-to-done. The first browser
+  attempt also exposed a harness race where completion could be observed before
+  the scheduled paint mark; the probe now waits for both rather than reporting
+  that valid next-frame paint as missing.
+
+### 2026-09-22: One identity and balance read per managed-chat request
+
+- Closed `WEB-103`. The completion route now turns the bearer verified by the
+  auth gate into one request-scoped database adapter. Request processing,
+  cloud-agent admission and tool permissions reuse that adapter instead of
+  verifying the same credential again.
+- Paid routing and credit availability checks reuse the balance snapshot that
+  request processing already loaded. The atomic reservation remains the final
+  spending authority; no entitlement or allowance behavior changed.
+- Forty-four request, route and service test files passed 420 tests. The new
+  regressions reject a mismatched verified bearer and prove that a supplied
+  balance snapshot causes no database query. Focused ESLint and Web typecheck
+  passed. An authenticated OpenRouter Free Auto run on `localhost:3100`
+  completed successfully with a 6ms identity phase, 34ms durable first event,
+  500ms admitted chat turn and 614ms browser fetch-to-first-chunk.
+
+### 2026-09-22: Bounded transcript work during streaming
+
+- Closed `WEB-104`. Linear transcript updates use a cached message-id index and
+  replace one row. The Web projection carries that patch forward, rebuilding
+  one `ChatMessage`; grouping rebuilds one affected group; the list-level memo
+  compares the message-array identity instead of walking the transcript.
+- Structural changes, id or role changes and branched transcripts fall back to
+  the complete projection and grouping path so the optimization cannot hide a
+  real transcript change.
+- Three 500-message regressions prove that 499 store messages, projected
+  messages and message groups retain identity after a last-row stream patch. A
+  500-patch local profile measured 0.0029ms median and 0.0061ms p95 through the
+  store, projection and grouping pipeline. Twenty-seven broader stream, store
+  and message files passed 368 tests; focused ESLint and Web typecheck passed.
+  An authenticated localhost stream still completed, reaching first paint in
+  1,716ms and completion in 1,770ms.
+
+### 2026-09-22: Stable tables, remounts and code highlighting
+
+- Closed `WEB-105`. While content is streaming, a prospective GFM table header
+  and partial delimiter remain out of the visible Markdown DOM until the
+  delimiter is valid. A finished non-table pipe line still renders as prose.
+- Message entrance animation is consumed by stable message ID, so a
+  virtualized unmount and remount does not replay the vertical/opacity motion.
+  The recent-ID cache is bounded at 20,000 entries.
+- The 32-entry Shiki cache now keys on a compact length plus two hashes rather
+  than embedding the full code block in the map key. Each bucket retains the
+  exact source for collision-safe lookup.
+- Five shared Markdown files passed 67 tests and four Web message files passed
+  206 tests. Shared and Web typechecks, focused ESLint and an authenticated
+  localhost streaming run passed; that run reached first paint in 2,260ms and
+  completion in 2,326ms.
+
+### 2026-09-22: Mobile keyboard keeps the transcript tail visible
+
+- Closed `WEB-106`. `ChatMessageList` now consumes the same canonical
+  visual-viewport keyboard inset as the composer. On browsers that overlay the
+  keyboard instead of resizing layout, the transcript owner shrinks by that
+  inset and a bottom-pinned reader is re-anchored after the resize. A reader who
+  intentionally scrolled up is not forced back to the tail.
+- The first browser geometry run exposed that applying the height to
+  react-window's child was ineffective because the library retained full outer
+  sizing. Moving the inset to the transcript's owning container fixed the real
+  overlap rather than weakening the probe.
+- Ninety-nine transcript and keyboard tests passed. An authenticated Chromium
+  run at 390×844 with a synthetic 336px iOS-style overlay verified zero overlap
+  between the transcript and lifted composer and zero remaining distance from
+  the pinned tail. Focused ESLint and Web typecheck passed.
+
+### 2026-09-22: Shared Projects search accessible name
+
+- Closed the local `PROJECTS-SEARCH-ACCESSIBILITY` source defect in the shared
+  ProjectGallery. Its search field relied on placeholder text and appeared as
+  an unnamed searchbox. It now has a stable `aria-label` without changing the
+  compact toolbar layout.
+- The focused regression failed on the old input, then passed. ProjectGallery
+  and Web Projects-page suites passed 19 tests; shared typecheck, targeted
+  ESLint and formatting passed. The available localhost Browser session was
+  signed out and redirected `/chat/projects` to `/login`, so the signed-in
+  accessibility tree and production deployment remain unverified. Jev selected
+  the direct `aria-label` correction at confidence 1.00, request
+  `893ff52ce53ae5910c35194f97c7a2485b9f6caf8ce89b02cf12e8a8699dae3a`.
+
+### 2026-09-22: Hosted status signal scope
+
+- Closed the local `STATUS-EXECUTION-SIGNAL` presentation gap without claiming
+  end-to-end inference. The public `/status` hero and summary now identify
+  dependency and route checks; the Chat and Voice rows are explicitly routing
+  checks, and the hero says a passing result does not verify a usable model
+  answer. No health probe, provider request or provider-cost policy changed.
+- The status-page regression failed before the correction and passed eight
+  tests afterward. Web typecheck and targeted ESLint passed. The settled
+  `localhost:3100/status` accessibility tree showed the new labels and scope
+  above the detailed rows. It also showed a failing local Work queue check
+  and local 30-day Chat SLO of 93.69% over 111 events; these development
+  readings do not establish a production outage or a Free-user launch pass.
+- The separate authenticated Free-chat response gate remains open. Jev
+  selected the scoped-signal approach at confidence 0.93, request
+  `47caf48ae64cb7dcc4a4bc7646ac8efddc693f2e9bce03d9812c561d498d7067`.
+
+### 2026-09-22: Local Work queue signal attribution
+
+- A read-only query against the isolated localhost database found exactly two
+  queued `media-generation.image-attempt` jobs, both created on Sep 22 with
+  zero attempts, no worker lease and no recorded error. Their due times had
+  passed by more than 22 hours when inspected. No payload or user content was
+  read or printed.
+- `vercel.json` declares the production drain endpoint every five minutes;
+  the running `next dev` server does not establish that a scheduler invokes
+  it locally. The local Work failure is therefore consistent with an
+  undrained development queue, not evidence of a production queue failure.
+  The old jobs were not dispatched or altered because draining would execute
+  provider work. Live local media-generation completion and production queue
+  health remain unverified.
+
+### 2026-09-22: Workspace audit interactive authentication candidate
+
+- The Enterprise owner's audit page sent a Clerk session token as a bearer
+  credential. The audit route deliberately treats any bearer as a workspace API
+  key, so it rejected that token instead of using the signed-in browser session.
+  The audit export already used the cookie-backed route correctly.
+- The audit query now uses a same-origin credentialed request without an
+  Authorization header. This preserves the route's API-key path for callers
+  that explicitly provide an API key and its fail-closed handling of invalid
+  bearers. A regression failed before the change; the hook, route and caller
+  suites passed 39 tests afterward. Web typecheck, targeted lint and formatting
+  passed.
+- `ENTERPRISE-AUDIT-AUTH` remains pending. The available browser session is
+  signed out; a signed-in Enterprise owner must verify the rendered trail and
+  authorization behavior before the launch case can pass. No deployment or
+  production verification is claimed.
+
+### 2026-09-22: Browser QA runtime non-reproduction and evidence limit
+
+- The existing `localhost:3100` Next server and its esbuild child were observed
+  alive before and after five in-app Browser navigations: `/pricing`,
+  `/enterprise`, `/help`, `/web`, and `/chat` (which redirected to sign-in).
+  `/status` still returned 200. This signed-out route sample does not reproduce
+  either earlier development-server exit or cover the authenticated Enterprise
+  route sequence.
+- The earlier issue file records the esbuild fatal-deadlock signature and lost
+  connection, but not the complete stack, exact navigation sequence or parent
+  process exit reason. An esbuild panic can also be a secondary effect of an
+  upstream process exit; the current evidence cannot assign root cause. The
+  runtime QA case remains pending rather than being closed or patched on a
+  speculative compiler diagnosis.
+
+### 2026-09-22: Responsive drawer current-state check
+
+- Added a signed-in browser regression for the primary chat drawer actions at
+  390px and 320px. On the current localhost:3100 build, New chat, AGI Code and
+  Search all rendered within the viewport; the focused Chromium test passed.
+- This narrows the historical `RESPONSIVE-CHAT-NAV-WORK` evidence, but does not
+  close the case. The 360px model/reasoning controls and 768px Work dock still
+  need live geometry and interaction checks, including the dock-close state.

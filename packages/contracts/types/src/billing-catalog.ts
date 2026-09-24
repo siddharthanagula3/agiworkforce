@@ -291,8 +291,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     knowledgeStorageBytes: 104857600,
     customMcpServers: 1,
     maxConcurrentTurns: 1,
-    maxSandboxes: 0,
-    sandboxTtlMs: 0,
+    maxSandboxes: 1,
+    sandboxTtlMs: 10 * MINUTE_MS,
     maxConnectorTools: 25,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
@@ -364,6 +364,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     codeHarnessDailyCeilingCents: 'custom',
   },
 });
+
+export const FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD = 1_000_000;
 
 export function getBillingPlanProductLimits(
   plan: string | null | undefined,

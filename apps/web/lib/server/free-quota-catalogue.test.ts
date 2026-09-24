@@ -21,14 +21,22 @@ import {
 } from './free-quota-catalogue';
 import { FreeQuotaInventorySchema, eligibleFreeEligibility, loadFreePools } from './free-pools';
 
-const mocks = vi.hoisted(() => ({ local: vi.fn() }));
+const mocks = vi.hoisted(() => ({ local: vi.fn(), storageConfigured: vi.fn(() => false) }));
 
 vi.mock('@/lib/free-quota-authorization', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/free-quota-authorization')>()),
   readLocalQuotaVerification: mocks.local,
 }));
 
-afterEach(() => vi.unstubAllEnvs());
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  isGeneratedMediaStorageConfigured: mocks.storageConfigured,
+}));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  mocks.storageConfigured.mockReturnValue(false);
+});
 
 const NOW = Date.UTC(2026, 8, 21, 12);
 const API_KEY = 'fixture-provider-key';
@@ -323,5 +331,16 @@ describe('a free quota model is offered only on current quota-only evidence', ()
     expect(
       readyKeys(await statuses({ ...hosted, store: createMemoryKeyValueStore(), apiKey: API_KEY })),
     ).toEqual([]);
+  });
+
+  it('serves hosted free media only when private generated-media storage is configured', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const url = 'https://agiworkforce.com/api/models/free-quota';
+    expect(freeQuotaContextFor({ url, userId: 'fixture-user', nowMs: NOW }).mediaServed).toBe(
+      false,
+    );
+
+    mocks.storageConfigured.mockReturnValue(true);
+    expect(freeQuotaContextFor({ url, userId: 'fixture-user', nowMs: NOW }).mediaServed).toBe(true);
   });
 });

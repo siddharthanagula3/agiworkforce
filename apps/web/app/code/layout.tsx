@@ -5,6 +5,7 @@ import { CODE_ROUTES } from '@/features/code/code-surface';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,5 +23,5 @@ export default async function CodeLayout({ children }: { children: ReactNode }) 
 
   await requireCurrentTermsAcceptance(userId, redirectTo);
 
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

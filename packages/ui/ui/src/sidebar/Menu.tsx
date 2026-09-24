@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 import { ChevronRight } from '@agiworkforce/icons';
 import { cn } from '../cn';
+import { useMenuKeyboard } from '../primitives/useMenuKeyboard';
 import { MENU_PANEL_ATTRIBUTE } from './escape-guard';
 
 export {
@@ -60,6 +61,7 @@ export function Menu({
   const containerRef = useRef<HTMLDivElement>(null);
   const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const shiftRef = useRef(0);
   const shiftPassRef = useRef(0);
   const [mounted, setMounted] = useState(false);
@@ -94,8 +96,12 @@ export function Menu({
   useIsomorphicLayoutEffect(() => {
     const element = triggerElement();
     if (!element) return;
+    triggerRef.current = element;
     element.setAttribute('aria-haspopup', 'menu');
     element.setAttribute('aria-expanded', String(open));
+    return () => {
+      if (triggerRef.current === element) triggerRef.current = null;
+    };
   }, [open, triggerElement]);
 
   const close = useCallback(() => {
@@ -103,27 +109,8 @@ export function Menu({
     setOpen(false);
   }, [focusTrigger]);
 
-  // role="menu" promises the menu keyboard pattern. Without it a keyboard or
-  // screen-reader user can open this menu and then reach nothing inside it.
-  const menuItems = useCallback((): HTMLElement[] => {
-    const panel = panelRef.current;
-    if (!panel) return [];
-    return Array.from(
-      panel.querySelectorAll<HTMLElement>(
-        '[role="menuitem"]:not([disabled]):not([aria-disabled="true"])',
-      ),
-    );
-  }, []);
-
-  const focusItem = useCallback(
-    (index: number) => {
-      const items = menuItems();
-      if (items.length === 0) return;
-      const next = ((index % items.length) + items.length) % items.length;
-      items[next]?.focus();
-    },
-    [menuItems],
-  );
+  const closeFromKeyboard = useCallback(() => setOpen(false), []);
+  useMenuKeyboard({ open, onClose: closeFromKeyboard, panelRef, triggerRef });
 
   // A sidebar row near the bottom of the window has no room below it, so a
   // menu anchored to `rect.bottom` runs off-screen and its items become
@@ -227,55 +214,19 @@ export function Menu({
         setOpen(false);
       }
     };
-    // Capture phase: the surrounding sidebar runs its own list navigation on
-    // arrow keys, and in a real browser it consumed ArrowDown before the
-    // panel's React handler ever saw it, walking focus out of the open menu
-    // and into the conversation list. jsdom has no such competing listener,
-    // which is why a passing unit test did not catch this.
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.stopPropagation();
-        close();
-        return;
-      }
-      if (!['ArrowDown', 'ArrowUp', 'Home', 'End', 'Tab'].includes(e.key)) return;
-      const items = menuItems();
-      if (items.length === 0) return;
-      if (e.key === 'Tab') {
-        setOpen(false);
-        return;
-      }
-      e.preventDefault();
-      e.stopPropagation();
-      const current = items.indexOf(document.activeElement as HTMLElement);
-      if (e.key === 'ArrowDown') focusItem(current + 1);
-      else if (e.key === 'ArrowUp') focusItem(current - 1);
-      else if (e.key === 'Home') focusItem(0);
-      else focusItem(items.length - 1);
-    };
     const onScrollOrResize = () => {
       shiftPassRef.current = 0;
       computePosition();
     };
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('scroll', onScrollOrResize, { capture: true, passive: true });
     window.addEventListener('resize', onScrollOrResize, { passive: true });
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('scroll', onScrollOrResize, { capture: true });
       window.removeEventListener('resize', onScrollOrResize);
     };
-  }, [open, close, computePosition, focusItem, menuItems]);
-
-  // Synchronous for the same reason as the listener registration above: a
-  // setTimeout(0) auto-focus left a window where the very first key of a
-  // fast interaction landed before any item had real DOM focus.
-  useIsomorphicLayoutEffect(() => {
-    if (!open) return;
-    focusItem(0);
-  }, [open, focusItem]);
+  }, [open, computePosition]);
 
   const panel = open ? (
     <div
@@ -292,13 +243,13 @@ export function Menu({
             // layer, so without saying so it inherits `none` and every row
             // action, rename, delete, pin, move to project, renders and
             // ignores the tap.
-            'pointer-events-auto fixed z-[9999]'
+            'pointer-events-auto fixed z-[var(--z-popover)]'
           : cn(
-              'absolute z-50 mt-1 max-h-[min(24rem,60vh)]',
+              'absolute z-[var(--z-dropdown)] mt-1 max-h-[min(24rem,60vh)]',
               side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
             ),
         'min-w-[12rem] overflow-y-auto overscroll-contain rounded-md border p-1 shadow-lg',
-        'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
+        'border-border bg-popover text-popover-foreground',
         menuClassName,
       )}
     >
@@ -348,16 +299,16 @@ export function MenuItem({
       }}
       className={cn(
         'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm transition-colors',
-        'hover:bg-[hsl(var(--accent))] focus-visible:bg-[hsl(var(--accent))] focus-visible:outline-none',
-        destructive ? 'text-red-500 hover:text-red-500' : 'text-[hsl(var(--popover-foreground))]',
-        active && 'bg-[hsl(var(--accent))]',
+        'hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
+        destructive ? 'text-red-500 hover:text-red-500' : 'text-popover-foreground',
+        active && 'bg-accent',
         className,
       )}
     >
       {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
       <span className="min-w-0 flex-1 truncate">{children}</span>
       {trailing && (
-        <span className="ml-auto shrink-0 text-xs text-[hsl(var(--muted-foreground))]">
+        <span className="ml-auto shrink-0 text-xs text-muted-foreground">
           {trailing}
         </span>
       )}
@@ -366,7 +317,7 @@ export function MenuItem({
 }
 
 export function MenuSeparator() {
-  return <div role="separator" className="my-1 h-px bg-[hsl(var(--border))]" />;
+  return <div role="separator" className="my-1 h-px bg-border" />;
 }
 
 export interface MenuSubmenuProps {
@@ -464,7 +415,7 @@ export function MenuSubmenu({ label, icon, children }: MenuSubmenuProps) {
           triggerRef.current?.focus();
         }
       }}
-      className="fixed z-[9999] w-52 overflow-y-auto overscroll-contain rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--popover))] p-1 text-[hsl(var(--popover-foreground))] shadow-lg"
+      className="fixed z-[var(--z-popover)] w-52 overflow-y-auto overscroll-contain rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg"
     >
       {children}
     </div>
@@ -488,11 +439,11 @@ export function MenuSubmenu({ label, icon, children }: MenuSubmenuProps) {
             openNow();
           }
         }}
-        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-[hsl(var(--popover-foreground))] transition-colors hover:bg-[hsl(var(--accent))] focus-visible:bg-[hsl(var(--accent))] focus-visible:outline-none"
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-popover-foreground transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
       >
         {icon && <span className="flex h-4 w-4 shrink-0 items-center justify-center">{icon}</span>}
         <span className="min-w-0 flex-1 truncate">{label}</span>
-        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--muted-foreground))]" />
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       </button>
       {mounted && panel ? createPortal(panel, document.body) : null}
     </div>

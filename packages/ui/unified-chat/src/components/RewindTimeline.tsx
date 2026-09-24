@@ -134,7 +134,7 @@ export function RewindTimeline({
           disabled={loading}
           aria-label="Refresh checkpoints"
           className={cn(
-            'rounded p-1 text-muted-foreground hover:text-foreground transition-colors',
+            'rounded-compact p-1 text-muted-foreground hover:text-foreground transition-colors',
             loading && 'animate-spin',
           )}
         >
@@ -144,7 +144,7 @@ export function RewindTimeline({
 
       {/* Confirmation dialog */}
       {confirmState && (
-        <div className="mx-3 my-2 rounded border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3 shrink-0">
+        <div className="mx-3 my-2 rounded-compact border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3 shrink-0">
           <p className="text-xs text-[var(--chat-warning-fg)] mb-2">
             Rewind to checkpoint at{' '}
             <span className="font-mono font-semibold">{confirmState.label}</span>? This will undo
@@ -154,7 +154,7 @@ export function RewindTimeline({
             <button
               type="button"
               onClick={handleRewindConfirm}
-              className="flex items-center gap-1 rounded border border-[var(--chat-warning-border)] px-2 py-1 text-xs text-[var(--chat-warning-fg)] hover:bg-[var(--chat-warning-bg)] transition-colors"
+              className="flex items-center gap-1 rounded-compact border border-[var(--chat-warning-border)] px-2 py-1 text-xs text-[var(--chat-warning-fg)] hover:bg-[var(--chat-warning-bg)] transition-colors"
             >
               <RotateCcw className="w-3 h-3" />
               Confirm rewind
@@ -162,7 +162,7 @@ export function RewindTimeline({
             <button
               type="button"
               onClick={handleRewindCancel}
-              className="rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-[var(--chat-border)] hover:border-[var(--chat-border-strong)] transition-colors"
+              className="rounded-compact px-2 py-1 text-xs text-muted-foreground hover:text-foreground border border-[var(--chat-border)] hover:border-[var(--chat-border-strong)] transition-colors"
             >
               Cancel
             </button>
@@ -172,7 +172,7 @@ export function RewindTimeline({
 
       {/* Error */}
       {error && (
-        <div className="mx-3 my-2 rounded border border-[color:var(--chat-destructive)]/30 bg-[var(--chat-destructive)]/10 px-3 py-2 text-xs text-[var(--chat-destructive-text)] shrink-0">
+        <div className="mx-3 my-2 rounded-compact border border-[color:var(--chat-destructive)]/30 bg-[var(--chat-destructive)]/10 px-3 py-2 text-xs text-[var(--chat-destructive-text)] shrink-0">
           {error}
         </div>
       )}
@@ -260,7 +260,7 @@ export function RewindTimeline({
                         disabled={isRewinding || rewinding !== null}
                         aria-label={`Rewind to ${storeLabel ?? checkpoint.toolName} checkpoint`}
                         className={cn(
-                          'flex items-center gap-1 shrink-0 rounded px-1.5 py-0.5 text-xs',
+                          'flex items-center gap-1 shrink-0 rounded-compact px-1.5 py-0.5 text-xs',
                           'text-muted-foreground hover:text-foreground',
                           'border border-[var(--chat-border)] hover:border-[var(--chat-border-strong)] transition-colors',
                           (isRewinding || rewinding !== null) && 'opacity-40 cursor-not-allowed',

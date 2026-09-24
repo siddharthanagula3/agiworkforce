@@ -1,8 +1,12 @@
 # claude.ai web interface reference (observed 2026-09-03)
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-03
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. The observations below remain
+valid evidence of the September 3 UI only.
 
 Every statement here was observed in the founder's own signed-in claude.ai session (Max plan, one organisation, one project, about thirty chats) in Chrome on 2026-09-03. It records what is on screen, where it lives, what it does and what it talks to, so agents can build parity without re-exploring. Screenshot files referenced below live in the session capture folder (`/var/folders/9_/_g0m61810s75b_9vrd6hg_6r0000gn/T/claude-chrome-screenshots-PpPygo/screenshot-*.jpg`); the numbers are the last segment of each file name. Anything not marked observed was not opened and must not be assumed.
 

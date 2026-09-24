@@ -18,10 +18,10 @@ Body text with **bold**, *italic*, \`inline code\` and a [link](https://example.
 
 > A block quote that must keep its marker.
 
-| Column | Value |
-| ------ | ----- |
-| alpha  | 1     |
-| beta   | 2     |
+| Item                                | Status  | Amount |
+| :---------------------------------- | :-----: | -----: |
+| alpha                               | ready   |  1,234 |
+| beta with a deliberately long label | pending | 98,765 |
 
 Inline math $E = mc^2$ and display math:
 

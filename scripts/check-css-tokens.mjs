@@ -14,6 +14,7 @@ const SURFACES = [
       'apps/desktop/src/styles/globals.css',
       'packages/ui/design-tokens/src/chat.css',
       'packages/ui/design-tokens/src/foundation.css',
+      'packages/ui/design-tokens/src/tailwind.css',
     ],
   },
   {
@@ -23,6 +24,7 @@ const SURFACES = [
       'apps/web/app/globals.css',
       'packages/ui/design-tokens/src/chat.css',
       'packages/ui/design-tokens/src/foundation.css',
+      'packages/ui/design-tokens/src/tailwind.css',
     ],
   },
   {
@@ -167,7 +169,8 @@ const RAW_Z_INDEX_PATTERNS = [
   /\bzIndex\s*:\s*(?!['"`]?\s*var\()['"`]?-?\d+/g,
 ];
 
-const Z_SCALE_CSS = 'apps/web/app/globals.css';
+const Z_SCALE_CSS = 'packages/ui/design-tokens/src/foundation.css';
+const WEB_THEME_CSS = 'apps/web/app/globals.css';
 
 function stripComments(source) {
   return source
@@ -192,7 +195,7 @@ function checkPortalOverlays() {
             errors.push(
               `${file}:${index + 1} sets a raw z-index (\`${m[0].trim()}\`). This overlay is ` +
                 `portalled to <body>, so its layer is only meaningful relative to the others: use ` +
-                `var(--z-<layer>, <fallback>) from the scale in ${Z_SCALE_CSS}.`,
+                `var(--z-<layer>) from the scale in ${Z_SCALE_CSS}.`,
             );
           }
         }
@@ -202,6 +205,8 @@ function checkPortalOverlays() {
 
 const INVALID_TAILWIND_ARBITRARY_CANDIDATE =
   /(?:[!@a-z0-9_:/.-]+)-\[[^\]\n]*(?:<[^>\n]+>|…)[^\]\n]*\]/gi;
+const WEB_LITERAL_TOKEN_FALLBACK =
+  /var\(\s*(--[a-zA-Z0-9-]+)\s*,\s*(?:#[0-9a-fA-F]{3,8}\b|(?:rgb|hsl)a?\()/g;
 
 function checkInvalidTailwindArbitraryCandidates() {
   const files = new Set([
@@ -220,6 +225,55 @@ function checkInvalidTailwindArbitraryCandidates() {
           );
         }
       });
+  }
+}
+
+function checkWebLiteralTokenFallbacks() {
+  for (const file of walk('apps/web')) {
+    stripComments(fs.readFileSync(path.join(root, file), 'utf8'))
+      .split('\n')
+      .forEach((line, index) => {
+        for (const match of line.matchAll(WEB_LITERAL_TOKEN_FALLBACK)) {
+          errors.push(
+            `${file}:${index + 1} gives ${match[1]} a literal colour fallback. Web loads its ` +
+              `design-token owners before product UI; reference the canonical token directly so a ` +
+              `missing declaration fails the resolvability check instead of silently pinning a stale value.`,
+          );
+        }
+      });
+  }
+}
+
+function checkUnusedWebThemeColours() {
+  const themeSource = fs.readFileSync(path.join(root, WEB_THEME_CSS), 'utf8');
+  const themeBlock = /@theme\s*\{([\s\S]*?)\n\}/.exec(themeSource)?.[1] ?? '';
+  const colourNames = [...themeBlock.matchAll(/--color-([a-zA-Z0-9-]+)\s*:/g)].map(
+    (match) => match[1],
+  );
+  const utilityPrefixes =
+    '(?:accent|bg|border|caret|decoration|divide|fill|from|outline|placeholder|ring|shadow|stroke|text|to|via)';
+  const sources = [
+    ...new Set([
+      ...walk('apps/web'),
+      ...walk('packages/ui'),
+      ...walkTailwindSources('apps/web'),
+      ...walkTailwindSources('packages/ui'),
+    ]),
+  ]
+    .filter((file) => file !== WEB_THEME_CSS)
+    .map((file) => stripComments(fs.readFileSync(path.join(root, file), 'utf8')))
+    .join('\n');
+
+  for (const name of colourNames) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const utility = new RegExp(`${utilityPrefixes}-${escaped}(?=[^a-zA-Z0-9-]|$)`);
+    const direct = new RegExp(`var\\(\\s*--color-${escaped}\\s*\\)`);
+    if (utility.test(sources) || direct.test(sources)) continue;
+    errors.push(
+      `${WEB_THEME_CSS} declares --color-${name}, but no production Web/shared-UI source ` +
+        `consumes the generated colour utility or the custom property. Delete unused @theme ` +
+        `entries instead of shipping CSS for an unowned palette.`,
+    );
   }
 }
 
@@ -246,9 +300,76 @@ function checkSelfReferentialTokens() {
   }
 }
 
+function declaredValue(source, token) {
+  const escaped = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^\\s*${escaped}\\s*:\\s*([^;]+);`, 'm').exec(source)?.[1].trim();
+}
+
+function checkDesignTokenLadderOwnership() {
+  const tailwind = fs.readFileSync(
+    path.join(root, 'packages/ui/design-tokens/src/tailwind.css'),
+    'utf8',
+  );
+  const globals = fs.readFileSync(path.join(root, WEB_THEME_CSS), 'utf8');
+  const expectedTailwind = {
+    '--radius-xs': 'var(--corner-detail)',
+    '--radius-compact': 'var(--corner-compact)',
+    '--radius-sm': 'var(--corner-control)',
+    '--radius-md': 'var(--corner-field)',
+    '--radius-menu': 'var(--corner-menu)',
+    '--radius-lg': 'var(--corner-surface)',
+    '--radius-xl': 'var(--corner-panel)',
+    '--radius-2xl': 'var(--corner-overlay)',
+    '--radius-3xl': 'var(--corner-hero)',
+  };
+  const expectedMarketing = {
+    '--agi-radius-control': 'var(--corner-compact)',
+    '--agi-radius-frame': 'var(--corner-field)',
+    '--agi-radius-window': 'var(--corner-menu)',
+    '--agi-radius-pill': 'var(--corner-pill)',
+    '--agi-dur-fast': 'var(--duration-quick)',
+    '--agi-dur-base': 'var(--duration-moved)',
+    '--agi-dur-slow': 'var(--duration-reveal)',
+    '--agi-dur-hover': 'var(--duration-quick)',
+    '--agi-dur-hero': 'var(--duration-reveal)',
+    '--agi-dur-fade': 'var(--duration-quick)',
+    '--agi-ease-out': 'var(--curve-standard)',
+    '--agi-ease-expo': 'var(--curve-reveal)',
+  };
+  const expectedMotion = {
+    '--transition-duration-instant': 'var(--duration-instant)',
+    '--transition-duration-quick': 'var(--duration-quick)',
+    '--transition-duration-moved': 'var(--duration-moved)',
+    '--transition-duration-reveal': 'var(--duration-reveal)',
+    '--ease-standard': 'var(--curve-standard)',
+    '--ease-exit': 'var(--curve-exit)',
+    '--ease-spring': 'var(--curve-spring)',
+    '--ease-reveal': 'var(--curve-reveal)',
+  };
+  for (const [token, expected] of Object.entries({ ...expectedTailwind, ...expectedMotion })) {
+    const actual = declaredValue(tailwind, token);
+    if (actual !== expected) {
+      errors.push(
+        `packages/ui/design-tokens/src/tailwind.css must map ${token} to ${expected}; found ${actual ?? 'no declaration'}.`,
+      );
+    }
+  }
+  for (const [token, expected] of Object.entries(expectedMarketing)) {
+    const actual = declaredValue(globals, token);
+    if (actual !== expected) {
+      errors.push(
+        `${WEB_THEME_CSS} must map ${token} to ${expected}; found ${actual ?? 'no declaration'}.`,
+      );
+    }
+  }
+}
+
 checkPortalOverlays();
 checkInvalidTailwindArbitraryCandidates();
+checkWebLiteralTokenFallbacks();
+checkUnusedWebThemeColours();
 checkSelfReferentialTokens();
+checkDesignTokenLadderOwnership();
 
 for (const surface of SURFACES) {
   const { declared, hslTriplets } = declaredTokens(surface.stylesheets);

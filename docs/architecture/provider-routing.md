@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-09-19
+Last updated: 2026-09-22
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 

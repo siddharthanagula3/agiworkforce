@@ -182,7 +182,7 @@ export function MemoryEditor({
             aria-label="Add a new fact"
             placeholder="Example: I prefer Python over JavaScript for data work."
             rows={2}
-            className="flex-1 resize-none rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+            className="flex-1 resize-none rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
             style={{ borderColor: 'var(--chat-border)' }}
           />
           <button
@@ -198,7 +198,7 @@ export function MemoryEditor({
             Add
           </button>
         </div>
-        <div className="text-[12px] text-[var(--chat-text-muted)]">
+        <div className="text-caption text-[var(--chat-text-muted)]">
           {draft.length} / {MAX_FACT_CHARS}
         </div>
       </form>
@@ -215,7 +215,7 @@ export function MemoryEditor({
           onChange={(e) => setSearch(e.target.value)}
           aria-label="Search memory"
           placeholder="Search memory"
-          className="rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+          className="rounded-md border bg-[var(--chat-surface-base)] px-3 py-2 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
           style={{ borderColor: 'var(--chat-border)' }}
         />
       ) : null}
@@ -255,13 +255,13 @@ export function MemoryEditor({
                         onChange={(e) => setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
                         aria-label={`Editing memory: ${fact.text}`}
                         rows={2}
-                        className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+                        className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
                       />
                       <div className="mt-1 flex items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={onCancelEdit}
-                          className="rounded px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+                          className="rounded-compact px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
                         >
                           Cancel
                         </button>
@@ -269,7 +269,7 @@ export function MemoryEditor({
                           type="button"
                           onClick={() => void onSaveEdit(fact.id)}
                           disabled={fact.pending}
-                          className="rounded bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
+                          className="rounded-compact bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
                         >
                           Save
                         </button>
@@ -281,7 +281,7 @@ export function MemoryEditor({
                         type="button"
                         onClick={() => onBeginEdit(fact)}
                         disabled={fact.pending}
-                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)] disabled:cursor-default"
+                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-default"
                         aria-label={`Edit memory: ${fact.text}`}
                       >
                         {fact.text}
@@ -294,13 +294,13 @@ export function MemoryEditor({
                       */}
                       {fact.projectId ? (
                         <span
-                          className="self-start rounded px-1.5 py-0.5 text-[12px] text-[var(--chat-text-secondary)]"
+                          className="self-start rounded-compact px-1.5 py-0.5 text-caption text-[var(--chat-text-secondary)]"
                           style={{ background: 'var(--chat-surface-hover)' }}
                         >
                           Only in {fact.projectName ?? 'a project'}
                         </span>
                       ) : null}
-                      <div className="flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
+                      <div className="flex items-center justify-between text-caption text-[var(--chat-text-muted)]">
                         <span>
                           {fact.pending ? (
                             'Saving…'
@@ -321,7 +321,7 @@ export function MemoryEditor({
                             aria-pressed={fact.pinned === true}
                             aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
                             className={cn(
-                              'rounded p-1 hover:bg-[var(--chat-surface-hover)]',
+                              'rounded-compact p-1 hover:bg-[var(--chat-surface-hover)]',
                               fact.pinned
                                 ? 'text-[var(--chat-accent-primary-text)]'
                                 : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
@@ -345,7 +345,7 @@ export function MemoryEditor({
                               })
                             }
                             disabled={fact.pending}
-                            className="rounded p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
+                            className="rounded-compact p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
                             aria-label={`Delete memory fact`}
                           >
                             <Trash2 size={13} strokeWidth={1.75} />
@@ -371,7 +371,7 @@ export function MemoryEditor({
             type="button"
             onClick={onClearAll}
             disabled={mutating}
-            className="rounded px-2 py-1 text-xs font-medium text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)]"
+            className="rounded-compact px-2 py-1 text-xs font-medium text-[var(--chat-destructive-text)] hover:bg-[var(--chat-surface-hover)]"
           >
             Forget everything
           </button>

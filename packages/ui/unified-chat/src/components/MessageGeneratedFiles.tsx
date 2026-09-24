@@ -383,7 +383,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
       return (
         <div
           data-testid="generated-files-pending"
-          className="mt-2 flex items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3 text-xs text-[var(--chat-text-muted)]"
+          className="mt-2 flex items-center gap-2 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3 text-xs text-[var(--chat-text-muted)]"
         >
           <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
           <span>{runningExecutionLabel(message)}</span>
@@ -425,7 +425,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
             <div className="flex items-center gap-2">
               <span
                 role="alert"
-                className="text-[12px] text-[var(--chat-destructive-text)]"
+                className="text-caption text-[var(--chat-destructive-text)]"
                 data-testid="generated-file-download-error"
               >
                 {downloadErrors[entry.id]}
@@ -436,7 +436,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
                 onClick={() => void handleDownload(entry)}
                 disabled={Boolean(inFlightIds[entry.id]) || downloadingAll}
                 aria-label={`Retry download of ${entry.fileName}`}
-                className="h-6 gap-1 px-2 text-[12px] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                className="h-6 gap-1 px-2 text-caption text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
               >
                 <RotateCcw className="h-3 w-3" aria-hidden />
                 Retry

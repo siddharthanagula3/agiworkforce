@@ -84,7 +84,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
               <p className="text-xs font-medium text-muted-foreground mb-1">Output</p>
               <pre
                 className={cn(
-                  'rounded bg-background/60 px-3 py-2 text-xs font-mono leading-relaxed',
+                  'rounded-compact bg-background/60 px-3 py-2 text-xs font-mono leading-relaxed',
                   'overflow-x-auto whitespace-pre-wrap break-words text-foreground/90',
                   'max-h-64 overflow-y-auto',
                 )}
@@ -99,7 +99,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
               <p className="text-xs font-medium text-[var(--chat-destructive-text)] mb-1">Stderr</p>
               <pre
                 className={cn(
-                  'rounded bg-[var(--chat-destructive)]/5 border border-[var(--chat-destructive)]/20 px-3 py-2',
+                  'rounded-compact bg-[var(--chat-destructive)]/5 border border-[var(--chat-destructive)]/20 px-3 py-2',
                   'text-xs font-mono leading-relaxed text-[var(--chat-destructive-text)]',
                   'overflow-x-auto whitespace-pre-wrap break-words',
                   'max-h-48 overflow-y-auto',
@@ -117,7 +117,7 @@ export function CodeExecutionBlock({ isExecuting, result }: CodeExecutionBlockPr
               <img
                 src={image.src}
                 alt={`Code execution output ${i + 1}`}
-                className="max-w-full rounded border border-border/40"
+                className="max-w-full rounded-compact border border-border/40"
               />
             </div>
           ))}

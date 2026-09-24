@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth, useClerk, useUser } from '@clerk/nextjs';
+import { useAuth, useClerk, useSignUp, useUser } from '@clerk/nextjs';
 import { useCallback, useMemo } from 'react';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
@@ -58,6 +58,27 @@ export function useSession(): IdentitySessionState {
     isSignedIn: isSignedIn === true,
     userId: userId ?? null,
     getToken: readToken,
+  };
+}
+
+export function useCompletedSignUpForCurrentSession(): {
+  isLoaded: boolean;
+  isCurrentSession: boolean;
+} {
+  const { isLoaded: authLoaded, userId, sessionId } = useAuth();
+  const { fetchStatus, signUp } = useSignUp();
+  const isLoaded = authLoaded && fetchStatus === 'idle';
+  return {
+    isLoaded,
+    isCurrentSession:
+      isLoaded &&
+      signUp.status === 'complete' &&
+      typeof signUp.legalAcceptedAt === 'number' &&
+      signUp.legalAcceptedAt > 0 &&
+      userId !== null &&
+      sessionId !== null &&
+      signUp.createdUserId === userId &&
+      signUp.createdSessionId === sessionId,
   };
 }
 

@@ -1,25 +1,39 @@
 # AGI Workforce
 
-> One workspace for the AI models you already pay for, routed by task, cost, and cache warmth.
+> One AI ecosystem across chat, work, code, browser, and device surfaces, with
+> model choice routed by task, trust, cost, and cache warmth.
 
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
-AGI Workforce unifies 22 catalog providers (including local runtimes) into
-one application spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome
-Extension**, and **VS Code Extension**. Each surface enforces its own trust
-boundary: Local mode keeps data on device, BYOK (Bring Your Own Key) routes to
-a user's own provider account, and a managed cloud mode (public alpha, open by
-default since 2026-06-27) adds hosted inference. A request to a given model
-can be dispatched over more than one route, direct to the provider, through
-OpenRouter or Vercel AI Gateway, or through a compatible mirror, each with its
-own price and cache behavior; the router picks the cheapest healthy route to
-the exact model asked for and never substitutes a different model.
+AGI Workforce unifies 22 catalog providers (including local runtimes) into one
+product spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome
+Extension**, and **VS Code Extension**. One account and one effective
+entitlement span the suite. Managed Free is available after sign-in; new paid
+subscriptions and upgrades remain waitlist/access-code gated.
+
+The ecosystem has two connected continuity domains. Web, Mobile Cloud, Desktop
+Cloud, and eligible Chrome Managed Cloud share account-owned chats, projects,
+memory, cloud files and artifacts, connected tools/apps, OAuth connection
+metadata, settings, and personalization. Desktop Code, CLI, and VS Code share
+host-owned developer sessions, local tools, permissions, repositories, files,
+and credential references. Desktop connects the two domains, but moving data
+between them is an explicit, provenance-preserving handoff; local secrets and
+Local/BYOK content never become cloud state merely to make the clients look
+synchronized.
+
+Local mode keeps data on device, BYOK (Bring Your Own Key) routes to a user's
+own provider account, and Managed Cloud adds hosted inference. A request to a
+given model can be dispatched over more than one route, direct to the provider,
+through OpenRouter or Vercel AI Gateway, or through a compatible mirror, each
+with its own price and cache behavior; the router picks the cheapest healthy
+route to the exact model asked for and never substitutes a different model.
 
 Users chat, generate code, run agentic workflows, automate browsers and
-desktops, manage files, search the web, and orchestrate multi-step tasks
-through one interface. The repository is a polyglot monorepo (TypeScript and
-Rust) with six client surfaces sharing common packages for types, providers,
-routing, runtime, artifacts, and a unified chat protocol.
+desktops, manage files, search the web, and orchestrate multi-step tasks through
+native interfaces backed by shared contracts and canonical state owners. The
+repository is a polyglot monorepo (TypeScript and Rust) with six client surfaces
+sharing common packages for types, providers, routing, runtime, artifacts, and
+a unified chat protocol.
 
 ## Key features
 
@@ -48,8 +62,11 @@ routing, runtime, artifacts, and a unified chat protocol.
   Cloud.
 - **Voice, skills, and sync**: the CLI supports audio capture and optional
   local transcription; a loadable skill and plugin system has a marketplace;
-  and a WebRTC signaling server supports cross-device coordination. Retained
-  Tauri Whisper.cpp code is internal and is not a public Desktop capability.
+  account-owned cloud objects converge across eligible consumer clients; the
+  Desktop host projects developer sessions to authorized clients without
+  surrendering local authority; and a WebRTC signaling server supports
+  cross-device coordination. Retained Tauri Whisper.cpp code is internal and
+  is not a public Desktop capability.
 
 ## Surfaces
 

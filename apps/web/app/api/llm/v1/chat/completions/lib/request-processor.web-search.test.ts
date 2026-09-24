@@ -60,10 +60,12 @@ import {
   shouldOfferGenericWebSearchTool,
 } from './request-processor';
 import * as requestProcessorModule from './request-processor';
+import { buildApprovalCheckpointRequest } from './approval-checkpoint-request';
 import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
 } from '@/lib/web-search-support';
+import { EXECUTE_CODE_TOOL } from '@/lib/e2b/execution-tools';
 
 const ZERO_COST_USAGE = { estimatedInputTokens: 0, estimatedOutputTokens: 0 };
 
@@ -331,6 +333,71 @@ describe('Free capability gate, model-agnostic web search', () => {
     }
   });
 
+  it('offers required search for an explicit plural web-search request on the Free router', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: FREE_CHAT_MODEL,
+          messages: [
+            {
+              role: 'user',
+              content: 'Run two separate web searches for the official RFC pages.',
+            },
+          ],
+          web_search: true,
+          stream: true,
+        },
+        'free-ws-plural-1',
+      ),
+      { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.llmRequest.tools).toContainEqual(
+        expect.objectContaining({ function: expect.objectContaining({ name: 'web_search' }) }),
+      );
+    }
+  });
+
+  it('does not attach ambient Free tools for a turn that explicitly refuses search and code', async () => {
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: FREE_CHAT_MODEL,
+          messages: [
+            {
+              role: 'user',
+              content:
+                'Now reply with exactly FOLLOWUP_FREE_OK. Do not search the web or run code.',
+            },
+          ],
+          web_search: true,
+          web_fetch: true,
+          stream: true,
+        },
+        'free-ws-negated-1',
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        boundSurface: 'web',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.chatRequest.code_execution).toBeUndefined();
+      for (const name of ['web_search', 'url_fetch', EXECUTE_CODE_TOOL]) {
+        expect(result.llmRequest.tools).not.toContainEqual(
+          expect.objectContaining({ function: expect.objectContaining({ name }) }),
+        );
+      }
+    }
+  });
+
   it('preserves an explicit web-search opt-out on a current-information request', async () => {
     const result = await processRequest(
       freeTrialRequest(
@@ -371,6 +438,126 @@ describe('Free capability gate, model-agnostic web search', () => {
       expect(result.resolvedTaskType).not.toBe('research');
       expect(result.chatRequest.web_search).toBeUndefined();
       expect(result.llmRequest.tools).toBeUndefined();
+    }
+  });
+
+  it('does not offer ambient URL fetch to an ordinary Free chat on a required-only route', async () => {
+    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
+      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
+    );
+    expect(requiredOnlyModel).toBeDefined();
+
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: requiredOnlyModel,
+          messages: [{ role: 'user', content: 'Reply with exactly PONG and nothing else.' }],
+          web_search: true,
+          web_fetch: true,
+          stream: true,
+        },
+        'free-ws-ambient-fetch-1',
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        subscription: freeSubscription,
+        boundSurface: 'web',
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.chatSurface).toBe('web');
+      expect(getModelMetadataById(result.chatRequest.model)?.webSearchToolOfferPolicy).toBe(
+        'required_only',
+      );
+      expect(result.resolvedTaskType).not.toBe('research');
+      expect(result.llmRequest.tools).toBeUndefined();
+    }
+  });
+
+  it('does not force search on an ordinary follow-up after research turns', async () => {
+    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
+      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
+    );
+    expect(requiredOnlyModel).toBeDefined();
+
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: requiredOnlyModel,
+          messages: [
+            { role: 'user', content: 'Search the web for current IANA guidance.' },
+            { role: 'assistant', content: 'Earlier answer.' },
+            { role: 'user', content: 'Search the web for current example-domain guidance.' },
+            { role: 'assistant', content: 'Earlier answer.' },
+            { role: 'user', content: 'Reply with exactly PONG and nothing else.' },
+          ],
+          web_search: true,
+          web_fetch: true,
+          stream: true,
+        },
+        'free-ws-research-followup-1',
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        subscription: freeSubscription,
+        boundSurface: 'web',
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.resolvedTaskType).toBe('research');
+      expect(result.searchRequirement).toEqual({ required: false, source: null });
+      expect(result.llmRequest.tools).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ['Search the web for current AI headlines', 'web_search'],
+    ['Read https://example.com and summarize the page', 'url_fetch'],
+  ])('keeps the requested %s tool path available', async (prompt, expectedTool) => {
+    const requiredOnlyModel = getAllowedModelsForTier('economy').find(
+      (modelId) => getModelMetadataById(modelId)?.webSearchToolOfferPolicy === 'required_only',
+    );
+    expect(requiredOnlyModel).toBeDefined();
+
+    const result = await processRequest(
+      freeTrialRequest(
+        {
+          model: requiredOnlyModel,
+          messages: [{ role: 'user', content: prompt }],
+          web_search: true,
+          web_fetch: true,
+          stream: true,
+        },
+        `free-ws-requested-${expectedTool}`,
+      ),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        subscription: freeSubscription,
+        boundSurface: 'web',
+      },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.llmRequest.tools).toContainEqual(
+        expect.objectContaining({ function: expect.objectContaining({ name: expectedTool }) }),
+      );
+      const checkpointRequest = buildApprovalCheckpointRequest(
+        result.chatRequest,
+        result.callerToolFields,
+      );
+      expect(checkpointRequest).not.toHaveProperty('tools');
+      expect(checkpointRequest).not.toHaveProperty('tool_choice');
     }
   });
 

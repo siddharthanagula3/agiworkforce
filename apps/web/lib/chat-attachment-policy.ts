@@ -25,6 +25,7 @@ export const CHAT_ATTACHMENT_UNAVAILABLE_NOTES = {
   unsupported: 'is not a file type this chat can read.',
   foreign: 'is not available to this account.',
   over_budget: 'was left out because this conversation has reached its attachment limit.',
+  empty: 'is empty. Add content to the file and attach it again.',
   too_large: 'is larger than this chat can send.',
   too_many: 'was left out because this message already carries as many files as it can.',
 } as const;

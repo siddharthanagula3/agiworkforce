@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   fetchPreferenceNamespace: vi.fn(),
   hasTelemetryConsent: vi.fn(),
   setTelemetryConsentCache: vi.fn(),
+  initializeSentryAfterConsent: vi.fn(),
   useAuth: vi.fn(),
 }));
 
@@ -16,6 +17,9 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 vi.mock('@/lib/sentry-shared', () => ({
   hasTelemetryConsent: mocks.hasTelemetryConsent,
   setTelemetryConsentCache: mocks.setTelemetryConsentCache,
+}));
+vi.mock('@/lib/client/initialize-sentry-after-consent', () => ({
+  initializeSentryAfterConsent: mocks.initializeSentryAfterConsent,
 }));
 
 import { TelemetryConsentSync } from '../TelemetryConsentSync';
@@ -62,6 +66,25 @@ describe('telemetry consent reaches a device that never opened Settings', () => 
     render(<TelemetryConsentSync />);
 
     await waitFor(() => expect(mocks.setTelemetryConsentCache).toHaveBeenCalledWith(false));
+  });
+
+  it('starts telemetry on the current page when a new device confirms opt-in', async () => {
+    mocks.hasTelemetryConsent.mockReturnValue(false);
+    mocks.fetchPreferenceNamespace.mockResolvedValue({ shareTelemetry: true });
+
+    render(<TelemetryConsentSync />);
+
+    await waitFor(() => expect(mocks.setTelemetryConsentCache).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(mocks.initializeSentryAfterConsent).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not initialize telemetry twice when this device already has consent', async () => {
+    mocks.fetchPreferenceNamespace.mockResolvedValue({ shareTelemetry: true });
+
+    render(<TelemetryConsentSync />);
+
+    await waitFor(() => expect(mocks.fetchPreferenceNamespace).toHaveBeenCalled());
+    expect(mocks.initializeSentryAfterConsent).not.toHaveBeenCalled();
   });
 
   it('does not write when the mirror already agrees', async () => {

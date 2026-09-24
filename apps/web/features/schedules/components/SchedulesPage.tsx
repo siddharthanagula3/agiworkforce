@@ -779,7 +779,7 @@ export function SchedulesPage({
                         <span className="text-xs text-muted-foreground">
                           {template.description}
                         </span>
-                        <span className="mt-1 text-[12px] text-muted-foreground">
+                        <span className="mt-1 text-caption text-muted-foreground">
                           {template.cadenceLabel}
                         </span>
                       </button>

@@ -30,7 +30,7 @@ function TrustBadge({ boundary, label, showIcon = true, className, ...props }: T
     <span
       data-trust-boundary={boundary}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-[12px] font-medium',
+        'inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-0.5 text-caption font-medium',
         BOUNDARY_TEXT[boundary],
         className,
       )}

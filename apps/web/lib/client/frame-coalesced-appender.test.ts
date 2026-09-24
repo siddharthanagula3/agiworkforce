@@ -2,8 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createFrameCoalescedAppender,
-  CONTENT_CATCH_UP_MS,
-  CONTENT_REVEAL_FLOOR_CHARS,
   FRAME_COALESCE_FALLBACK_MS,
   type CoalescedAppendKind,
 } from './frame-coalesced-appender';
@@ -69,35 +67,20 @@ describe('createFrameCoalescedAppender', () => {
     expect(writes).toEqual([{ kind: 'content', messageId: MESSAGE_ID, text: 'Hello world' }]);
   });
 
-  it('paces a large content burst across frames instead of revealing it in one commit', () => {
+  it('reveals a large content burst in the next frame without artificial pacing', () => {
     const { appender, writes } = recordingAppender();
-    const burstLength = CONTENT_REVEAL_FLOOR_CHARS * 30;
+    const burstLength = 1_920;
     const burst = Array.from({ length: burstLength }, (_, i) => String(i % 10)).join('');
 
     appender.append('content', MESSAGE_ID, burst);
     runPendingFrames();
 
-    expect(writes.length).toBeGreaterThan(0);
-    expect(writes[0]!.text.length).toBeLessThan(burst.length);
-
-    const FRAME_STEP_MS = 16;
-    let elapsedMs = 0;
-    let revealedLength = writes.reduce((sum, write) => sum + write.text.length, 0);
-    while (revealedLength < burst.length) {
-      vi.advanceTimersByTime(FRAME_STEP_MS);
-      elapsedMs += FRAME_STEP_MS;
-      runPendingFrames();
-      revealedLength = writes.reduce((sum, write) => sum + write.text.length, 0);
-      expect(elapsedMs).toBeLessThanOrEqual(CONTENT_CATCH_UP_MS + FRAME_STEP_MS);
-    }
-
-    expect(writes.map((write) => write.text).join('')).toBe(burst);
-    expect(writes.length).toBeGreaterThan(1);
+    expect(writes).toEqual([{ kind: 'content', messageId: MESSAGE_ID, text: burst }]);
   });
 
   it('still collapses a large thinking buffer into a single write per frame', () => {
     const { appender, writes } = recordingAppender();
-    const burstLength = CONTENT_REVEAL_FLOOR_CHARS * 30;
+    const burstLength = 1_920;
     const burst = Array.from({ length: burstLength }, (_, i) => String(i % 10)).join('');
 
     appender.append('thinking', MESSAGE_ID, burst);

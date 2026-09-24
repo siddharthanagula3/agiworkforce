@@ -1,6 +1,10 @@
 import 'server-only';
 
-import { deriveArtifacts } from '@agiworkforce/artifacts';
+import {
+  artifactInclusionForPolicy,
+  deriveArtifacts,
+  type ArtifactDerivationPolicy,
+} from '@agiworkforce/artifacts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
@@ -54,10 +58,15 @@ export async function indexMessageArtifacts(options: {
   conversationId: string;
   messageId: string;
   content: string;
+  artifactDerivation?: ArtifactDerivationPolicy;
 }): Promise<number> {
-  const { db, userId, conversationId, messageId, content } = options;
+  const { db, userId, conversationId, messageId, content, artifactDerivation } = options;
 
-  const derived = deriveArtifacts(content, { conversationId, messageId });
+  const derived = deriveArtifacts(content, {
+    conversationId,
+    messageId,
+    include: artifactInclusionForPolicy(artifactDerivation),
+  });
 
   // Re-indexing is delete-then-insert scoped to this message. The messages
   // route upserts on conflict (a retry re-asserts content), so a second call
@@ -107,6 +116,7 @@ export function scheduleArtifactIndexing(options: {
   conversationId: string;
   messageId: string;
   content: string;
+  artifactDerivation?: ArtifactDerivationPolicy;
 }): void {
   void indexMessageArtifacts(options).catch((error) => {
     logger.warn(

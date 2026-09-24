@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ComposerSendMeta } from '@/features/chat/components/Composer/ChatComposerNew';
+import { getProviderOfferings } from '@agiworkforce/types';
 
 import {
   acknowledgeProjectChatHandoff,
@@ -43,11 +44,16 @@ const meta: Required<ComposerSendMeta> = {
   researchEnabled: true,
   searchRequested: true,
   styleInstruction: 'Use a concise project brief.',
+  artifactInstruction: 'Return a marked HTML artifact.',
   skillName: 'Planning',
   mcpContext: { resources: [{ connectorId: 'connector-1', uri: 'mcp://brief' }] },
   agiWorkGoal: { goal: 'Build the release plan', deliverable: 'A checked plan' },
   disabledConnectorIds: ['connector-2'],
+  connectorToolsEnabled: true,
   memoryEnabled: false,
+  modelOverrideId: Object.entries(getProviderOfferings()).find(
+    ([, offering]) => offering.quotaProbeProtocol === 'image-sync',
+  )![0],
 };
 
 describe('project chat handoff', () => {

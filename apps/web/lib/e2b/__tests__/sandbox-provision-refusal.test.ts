@@ -148,6 +148,14 @@ const DRIVES: Readonly<Record<string, RefusalDrive>> = {
       } as never),
     scope: () => chatScope('user-broke'),
   },
+  'free-allowance-exhausted': {
+    arrange: () =>
+      reserveSandboxComputeInterval.mockResolvedValueOnce({
+        outcome: 'refused',
+        error: { status: 429, code: 'free_sandbox_allowance_exhausted' },
+      } as never),
+    scope: () => chatScope('user-free-allowance'),
+  },
   'provider-error': {
     arrange: () => {},
     scope: () => chatScope('user-outage'),

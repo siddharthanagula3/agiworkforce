@@ -470,7 +470,12 @@ const NOT_COLLECTED: readonly { title: string; body: React.ReactNode }[] = [
         names each of those and the condition under which it carries a request. Those third parties
         handle that content under their applicable terms and data-use policies; this statement about
         AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is
-        governed by your own provider account and terms.
+        governed by your own provider account and terms. For Experiential Labs promotional routes,
+        its Free organization setting captures prompts and responses for up to 30 days and its
+        published policy permits using captured content to develop, evaluate and improve its
+        services and hosted models. Its no-training routing setting restricts upstream providers,
+        not this platform capture. Selecting one of those routes sends your content under that
+        provider policy; use another model for content you cannot share on those terms.
       </>
     ),
   },

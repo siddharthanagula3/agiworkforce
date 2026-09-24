@@ -50,7 +50,7 @@ function VariantPagerComponent({ index, total, onPrevious, onNext, disabled }: V
       <span
         aria-hidden="true"
         className={cn(
-          'min-w-[2.5rem] px-0.5 text-center font-mono text-[12px] tabular-nums',
+          'min-w-[2.5rem] px-0.5 text-center font-mono text-caption tabular-nums',
           'text-muted-foreground',
         )}
       >

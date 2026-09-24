@@ -6,6 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { mapProjectRow } from '@/lib/projects';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 
 type RouteContext = { params: Promise<{ id: string }> };
@@ -81,6 +82,14 @@ async function handleExportProject(request: NextRequest, context: RouteContext) 
     null,
     2,
   );
+
+  await recordAuditEvent({
+    userId,
+    eventType: 'data_exported',
+    organizationId,
+    request,
+    detail: { resourceType: 'project', resourceId: id, count: knowledgeFiles.length },
+  });
 
   return new NextResponse(body, {
     status: 200,

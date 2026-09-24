@@ -25,6 +25,12 @@ vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
 
+vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/feature-flags/flag-store')>()),
+  getActiveFlagDefinitions: async () => [],
+  getSubjectOverrides: async () => [],
+}));
+
 import { POST } from '../route';
 
 const CODE = 'ABCD1234WXYZ';

@@ -5,8 +5,10 @@ import {
   extractArtifactTitle,
   isRenderableArtifact,
   extractCodeBlocks,
+  artifactInclusionForPolicy,
   type DeriveArtifactsOptions,
   type DerivedCodeBlock,
+  type ArtifactDerivationPolicy,
 } from '@agiworkforce/artifacts';
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
@@ -39,11 +41,12 @@ export function extractArtifacts(
   markdown: string,
   context: ExtractArtifactsContext = {},
   blocks?: DerivedCodeBlock[],
+  policy?: ArtifactDerivationPolicy,
 ): ArtifactData[] {
   const opts: DeriveArtifactsOptions = {
     conversationId: context.conversationId,
     messageId: context.messageId,
-    include: 'renderable',
+    include: artifactInclusionForPolicy(policy),
     blocks,
   };
   return deriveArtifacts(markdown, opts).map(toArtifactData);
@@ -52,8 +55,11 @@ export function extractArtifacts(
 export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<ArtifactData, 'content' | 'language'>>,
+  policy?: ArtifactDerivationPolicy,
 ): string {
-  return removeArtifactBlocksShared(markdown, artifacts);
+  return removeArtifactBlocksShared(markdown, artifacts, {
+    include: artifactInclusionForPolicy(policy),
+  });
 }
 
 export function hasArtifacts(markdown: string): boolean {

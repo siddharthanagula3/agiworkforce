@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-09-21",
+  "lastUpdated": "2026-09-22",
   "currentSourcesOfTruth": [
     "ACTIVE_ISSUES.md",
     "AGENTS.md",
@@ -11,6 +11,7 @@
     "docs/security/security.md",
     "docs/product/definition.md",
     "docs/product/requirements.md",
+    "docs/product/competitive-guidance.md",
     "docs/work/implementation-status.md",
     "docs/product/experience-contract.md",
     "docs/architecture/byok-provider-strategy.md",
@@ -43,6 +44,21 @@
     "docs/standards/service-layer.md"
   ],
   "historicalOrCaution": [
+    {
+      "path": "docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md",
+      "status": "dated-external-research",
+      "rule": "Current through 2026-09-21 for competitor-sensitive decisions; implementation and launch status still come from code and current repository owners."
+    },
+    {
+      "path": "docs/research/cross-surface-continuity-2026-09-21.md",
+      "status": "dated-external-research",
+      "rule": "Use as the September 21 continuity rationale; it does not override repository trust boundaries or prove implementation."
+    },
+    {
+      "path": "docs/research/jev-typesafe-public-evidence-2026-09-21.md",
+      "status": "dated-external-research",
+      "rule": "Use as a bounded adoption hypothesis only; it does not authorize Jev for permissions, billing, trust, or consequential actions."
+    },
     {
       "path": "/Users/siddhartha/Desktop/claude_reference",
       "status": "external-reference-evidence",

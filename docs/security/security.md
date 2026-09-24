@@ -65,37 +65,33 @@ rather than falling through to an allow.
 is `manual` when the turn offers an MCP or connector tool, and also whenever any
 offered tool is one the account's `ToolApprovalPolicy` does not auto-approve.
 
-**Consequence, and the single most important honest statement on the public
-pages:** the default policy is `ask_every_time` (`DEFAULT_TOOL_APPROVAL_POLICY`
-in `packages/contracts/types/src/tool-approval-policy.ts`) and
-`policyAutoApprovesTool` auto-approves nothing under it, so on a default account
-every tool call asks, built-in tools included. A built-in tool runs with no
-prompt only once the account has chosen `auto_approve_read_only` or
-`autonomous`, or has saved `allow` for that one tool.
-
-Until 2026-09-20 this section said the reverse, that the built-in tools execute
-with no approval prompt whenever a turn carries no connector tool. That held
-while `approvalMode` was `hasMcpTools ? 'manual' : 'auto'` and stopped holding
-when the mode began following the account policy. `/agent-permissions` still
-renders the older statement and has to be corrected against this table.
+**Website account default:** every unconfigured website account with readable
+settings and a workspace that permits Skip approvals resolves to `autonomous`
+(`WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY` in
+`apps/web/shared/types/toolApprovalPolicy.ts`). Eligible built-in tools run
+without prompting, while destructive and unknown tools still ask. Saved
+per-tool verdicts and workspace restrictions outrank that default. The shared
+`DEFAULT_TOOL_APPROVAL_POLICY` remains `ask_every_time` for unreadable policy
+data, missing identity, and other fail-closed paths; under it
+`policyAutoApprovesTool` auto-approves nothing.
 
 Every declared platform tool, and what each policy does with it. The rows are
 `PLATFORM_TOOL_METADATA` in `tool-metadata.ts` and the answers are
 `policyAutoApprovesTool`:
 
-| Tool                 | Default account (`ask_every_time`) | Under `auto_approve_read_only` | Declared metadata (`tool-metadata.ts`)                                           |
-| -------------------- | ---------------------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
-| `web_search`         | asks                               | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
-| `search_maps`        | asks                               | runs                           | read, reversible                                                                 |
-| `url_fetch`          | asks                               | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
-| `execute_code`       | asks                               | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
-| `write_file`         | asks                               | asks                           | write, not reversible                                                            |
-| `create_folder`      | asks                               | asks                           | write, reversible                                                                |
-| `list_files`         | asks                               | runs                           | read, reversible                                                                 |
-| `read_file`          | asks                               | runs                           | read, reversible, acceptsUntrustedContent                                        |
-| `edit_file`          | asks                               | asks                           | write, not reversible                                                            |
-| `create_office_file` | asks                               | asks                           | write, reversible                                                                |
-| `skill`              | asks                               | runs                           | read, reversible                                                                 |
+| Tool                 | Under `ask_every_time` | Under `auto_approve_read_only` | Declared metadata (`tool-metadata.ts`)                                           |
+| -------------------- | ---------------------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `web_search`         | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `search_maps`        | asks                   | runs                           | read, reversible                                                                 |
+| `url_fetch`          | asks                   | runs                           | read, reversible, acceptsUntrustedContent, createsEgressPath, autoInReadOnlyMode |
+| `execute_code`       | asks                   | runs                           | execute, not reversible, createsEgressPath, autoInReadOnlyMode                   |
+| `write_file`         | asks                   | asks                           | write, not reversible                                                            |
+| `create_folder`      | asks                   | asks                           | write, reversible                                                                |
+| `list_files`         | asks                   | runs                           | read, reversible                                                                 |
+| `read_file`          | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `edit_file`          | asks                   | asks                           | write, not reversible                                                            |
+| `create_office_file` | asks                   | asks                           | write, reversible                                                                |
+| `skill`              | asks                   | runs                           | read, reversible                                                                 |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
@@ -577,20 +573,18 @@ column and the rotation sweep does not touch it.
 
 `DEVICE_TOKEN_ENCRYPTION_KEY` seals nothing and this table used to say it
 sealed `device_authorization_codes.access_token`. That column was never
-encrypted, it held plain text that every writer set to NULL, and no route names
-it or its sibling `refresh_token` any more. Both columns are dropped in the
-release after this one, once no deployed build names them. A device's real credential is a hashed renewable pair in
-`device_refresh_tokens`. `apps/web/lib/validate-env.ts` does not require it, no
-module reads it, and it can be deleted from the deployment environment.
+encrypted, and current routes neither read nor write it or its sibling
+`refresh_token`. Candidate migration `0292` retires both only if every value is
+NULL; it has passed a rolled-back local rehearsal but is not applied to
+production. The production non-NULL count remains to be checked before that
+release. A device's real credential is a hashed renewable pair in
+`device_refresh_tokens`. `apps/web/lib/validate-env.ts` does not require the
+old encryption key and no module reads it.
 
 `TOTP_ENCRYPTION_KEY` is not hex. `lib/crypto/totp-envelope.ts` takes the first
 32 characters of the env value as raw bytes through
 `loadKeyRing(_, { encoding: 'utf8' })`. Do not "fix" it to hex without
 re-encrypting first. It would orphan every enrolled secret.
-
-The desktop token minted by `apps/web/app/api/auth/desktop-token/route.ts` is
-also AES-256-GCM under `TOTP_ENCRYPTION_KEY`, but it is never stored: rotating
-that key invalidates outstanding desktop tokens and the desktop app re-pairs.
 
 ### The key ring
 
@@ -861,10 +855,9 @@ half of that itself; the "fully deployed" half is yours to confirm.
 
 ### Not yet done
 
-`app/api/auth/desktop-token/route.ts` is not on this list: it writes no durable
-column, and the desktop token is handed to the client and never stored. The
-`lib/device-token-crypto.ts` module this section used to name alongside it no
-longer exists.
+Nothing remains on this list. The `lib/device-token-crypto.ts` module and the
+desktop sign-in token route this section used to name both no longer exist; a
+device's credential is the hashed renewable pair in `device_refresh_tokens`.
 
 ---
 

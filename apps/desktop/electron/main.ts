@@ -74,7 +74,12 @@ import {
   type RendererFault,
   type RendererGoneReason,
 } from './runtime/rendererRecovery';
-import { crashScreen, offlineScreen, shellScreenUrl } from './shellScreens';
+import {
+  crashScreen,
+  offlineScreen,
+  retryUrlAfterFailedLoad,
+  shellScreenUrl,
+} from './shellScreens';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
 import {
   CLOUD_APP_ORIGIN,
@@ -1013,7 +1018,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       if (validatedURL.startsWith('data:')) return;
       recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed', cause: 'network' });
       void win.loadURL(
-        shellScreenUrl(offlineScreen(errorCode), entryUrl, nativeTheme.shouldUseDarkColors),
+        shellScreenUrl(
+          offlineScreen(errorCode),
+          retryUrlAfterFailedLoad(validatedURL, entryUrl),
+          nativeTheme.shouldUseDarkColors,
+        ),
       );
     },
   );

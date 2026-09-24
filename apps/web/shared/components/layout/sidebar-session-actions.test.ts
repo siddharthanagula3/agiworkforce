@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   conversationDeleteConfirm,
   conversationHref,
+  conversationShareHref,
   projectDeleteConfirm,
 } from '@shared/components/layout/sidebar-session-actions';
 import { projectHref, projectNewChatHref } from '@shared/components/layout/sidebar-project-actions';
@@ -64,6 +65,10 @@ describe('shared links survive a rename', () => {
     expect(before).toContain(id);
     expect(conversationHref(id)).toBe(before);
     expect(before).not.toContain('Untitled');
+  });
+
+  it('carries a one-time share intent to the selected conversation', () => {
+    expect(conversationShareHref('a b')).toBe('/chat/a%20b?share=true');
   });
 
   it('addresses a project by id and escapes it rather than interpolating it raw', () => {

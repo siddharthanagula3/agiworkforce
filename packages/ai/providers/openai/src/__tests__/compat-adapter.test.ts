@@ -210,6 +210,36 @@ describe('createOpenAICompatAdapter · stream translation', () => {
 
     expect(chunks).toContainEqual({ type: 'thinking-delta', delta: 'because' });
   });
+
+  it('maps OpenRouter reasoning deltas to thinking-delta chunks', async () => {
+    const adapter = createOpenAICompatAdapter(buildSpec(), {
+      apiKey: TEST_API_KEY,
+      fetch: async () => sseResponse([chunkEvent({ reasoning: 'thinking' }), TURN_CLOSED]),
+    });
+
+    const chunks = await collect(adapter.stream(buildRequest(), new AbortController().signal));
+
+    expect(chunks.filter((chunk) => chunk.type === 'thinking-delta')).toEqual([
+      { type: 'thinking-delta', delta: 'thinking' },
+    ]);
+  });
+
+  it('does not duplicate thinking when both reasoning aliases are present', async () => {
+    const adapter = createOpenAICompatAdapter(buildSpec(), {
+      apiKey: TEST_API_KEY,
+      fetch: async () =>
+        sseResponse([
+          chunkEvent({ reasoning: 'thinking', reasoning_content: 'thinking' }),
+          TURN_CLOSED,
+        ]),
+    });
+
+    const chunks = await collect(adapter.stream(buildRequest(), new AbortController().signal));
+
+    expect(chunks.filter((chunk) => chunk.type === 'thinking-delta')).toEqual([
+      { type: 'thinking-delta', delta: 'thinking' },
+    ]);
+  });
 });
 
 describe('createOpenAICompatAdapter · error classification', () => {

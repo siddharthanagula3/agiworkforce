@@ -3,31 +3,6 @@
     "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileMembership <- apps/web/lib/server/scim/scim-sign-in-linking.ts::linkPendingScimUsersAtSignIn": {
       "kind": "cannot-end",
       "reason": "linkPendingScimUsersAtSignIn passes only rows it locked with active = true, and reconcileMembership deletes a membership only for a row that is not active, so this caller can grant and never end one."
-    },
-    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileGroupMembers <- apps/web/app/api/admin/directory-sync/groups/route.ts::PATCH": {
-      "kind": "defect",
-      "reason": "Re-reconciling a group after a role mapping change deletes the membership of every inactive member of the group without revoking the sessions, device tokens and API keys that membership authorized.",
-      "fixIn": "apps/web/lib/server/scim/scim-provisioning-service.ts"
-    },
-    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileGroupMembers <- apps/web/lib/server/scim/scim-provisioning-service.ts::createScimGroup": {
-      "kind": "defect",
-      "reason": "A group push deletes the membership of every inactive member it names without revoking the credentials that membership authorized; the single-user paths call revokeCredentialsAfterScimRemoval and this batch path does not.",
-      "fixIn": "apps/web/lib/server/scim/scim-provisioning-service.ts"
-    },
-    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileGroupMembers <- apps/web/lib/server/scim/scim-provisioning-service.ts::deleteScimGroup": {
-      "kind": "defect",
-      "reason": "A group push deletes the membership of every inactive member it names without revoking the credentials that membership authorized; the single-user paths call revokeCredentialsAfterScimRemoval and this batch path does not.",
-      "fixIn": "apps/web/lib/server/scim/scim-provisioning-service.ts"
-    },
-    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileGroupMembers <- apps/web/lib/server/scim/scim-provisioning-service.ts::patchScimGroup": {
-      "kind": "defect",
-      "reason": "A group push deletes the membership of every inactive member it names without revoking the credentials that membership authorized; the single-user paths call revokeCredentialsAfterScimRemoval and this batch path does not.",
-      "fixIn": "apps/web/lib/server/scim/scim-provisioning-service.ts"
-    },
-    "apps/web/lib/server/scim/scim-provisioning-service.ts::reconcileGroupMembers <- apps/web/lib/server/scim/scim-provisioning-service.ts::replaceScimGroup": {
-      "kind": "defect",
-      "reason": "A group push deletes the membership of every inactive member it names without revoking the credentials that membership authorized; the single-user paths call revokeCredentialsAfterScimRemoval and this batch path does not.",
-      "fixIn": "apps/web/lib/server/scim/scim-provisioning-service.ts"
     }
   }
 }

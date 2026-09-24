@@ -871,13 +871,6 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'signs the short lived tokens the device and pairing flows exchange',
   }),
-  secret('DESKTOP_TOKEN_SECRET', {
-    type: 'string',
-    owner: 'apps/web/lib/auth',
-    defaultValue: null,
-    requiredIn: [],
-    description: 'signs the token a desktop build exchanges for a cloud session',
-  }),
   secret(OBJECT_STORAGE_ENDPOINT_ENV, {
     type: 'url',
     owner: 'object-storage',

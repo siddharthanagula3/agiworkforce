@@ -5,6 +5,13 @@ vi.mock('server-only', () => ({}));
 const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 vi.mock('@/lib/logger', () => ({ logger }));
 
+const quotaValues = vi.hoisted(() => new Map<string, number | boolean>());
+const quotaStore = vi.hoisted(() => ({ set: vi.fn(), increment: vi.fn() }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => quotaStore }));
+
+const recordInfrastructureCostEvent = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', () => ({ recordInfrastructureCostEvent }));
+
 vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
@@ -58,6 +65,23 @@ function resetMocks(): void {
   logger.warn.mockClear();
   logger.error.mockClear();
   logger.info.mockClear();
+  quotaValues.clear();
+  quotaStore.set.mockReset();
+  quotaStore.set.mockImplementation(
+    async (key: string, value: number | boolean, options?: { onlyIfAbsent?: boolean }) => {
+      if (options?.onlyIfAbsent && quotaValues.has(key)) return false;
+      quotaValues.set(key, value);
+      return true;
+    },
+  );
+  quotaStore.increment.mockReset();
+  quotaStore.increment.mockImplementation(async (key: string, amount: number) => {
+    const next = Number(quotaValues.get(key) ?? 0) + amount;
+    quotaValues.set(key, next);
+    return next;
+  });
+  recordInfrastructureCostEvent.mockReset();
+  recordInfrastructureCostEvent.mockResolvedValue(undefined);
   reserveManagedUsageRequest.mockReset();
   reserveManagedUsageRequest.mockImplementation(async (input: Record<string, unknown>) => ({
     db: input['db'],
@@ -379,6 +403,87 @@ describe('reserveSandboxComputeInterval', () => {
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
+  });
+
+  it('reserves Free sandbox compute against platform allowance without paid managed usage', async () => {
+    const mod = await loadModule();
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+    });
+    expect(outcome.outcome).toBe('reserved');
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    expect(outcome.reservation.fundingSource).toBe('platform-free');
+    expect(outcome.reservation.estimatedCostMicrousd).toBe(600 * DEFAULT_SHAPE_RATE);
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses Free compute after its daily platform allowance is exhausted', async () => {
+    const mod = await loadModule();
+    const outcomes = await Promise.all(
+      Array.from({ length: 37 }, () =>
+        mod.reserveSandboxComputeInterval({ ...reserveInput, planTier: 'free', ttlMs: 600_000 }),
+      ),
+    );
+    expect(outcomes.filter((outcome) => outcome.outcome === 'reserved')).toHaveLength(36);
+    const refusal = outcomes.find((outcome) => outcome.outcome === 'refused');
+    expect(refusal).toMatchObject({
+      outcome: 'refused',
+      error: { status: 429, code: 'free_sandbox_allowance_exhausted' },
+    });
+    expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
+  });
+
+  it('returns a Free platform hold when provisioning fails, once only', async () => {
+    const mod = await loadModule();
+    const outcome = await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: 600_000,
+    });
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    const reservation = outcome.reservation;
+    await mod.releaseSandboxComputeReservation({ userId: 'user-1', reservation, reason: 'failed' });
+    await mod.releaseSandboxComputeReservation({ userId: 'user-1', reservation, reason: 'failed' });
+    if (reservation.fundingSource !== 'platform-free') throw new Error('expected Free funding');
+    expect(quotaValues.get(reservation.quotaKey)).toBe(0);
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe('platform-funded Free sandbox settlement', () => {
+  beforeEach(() => {
+    clearScopedEnv();
+    resetMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('refunds unused reserved lifetime and records platform COGS without charging the user', async () => {
+    const mod = await loadModule();
+    const outcome = await mod.reserveSandboxComputeInterval({
+      userId: 'user-1',
+      planTier: 'free',
+      microusdPerSecond: DEFAULT_SHAPE_RATE,
+      ttlMs: 600_000,
+    });
+    if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
+    const reservation = outcome.reservation;
+    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(2_760);
+    if (reservation.fundingSource !== 'platform-free') throw new Error('expected Free funding');
+    expect(quotaValues.get(reservation.quotaKey)).toBe(2_760);
+    expect(recordInfrastructureCostEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: 'code_compute',
+        provider: 'e2b',
+        customerCanonicalMicrousd: 0,
+        providerEstimatedCostMicrousd: 2_760,
+      }),
+    );
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
   });
 });
 

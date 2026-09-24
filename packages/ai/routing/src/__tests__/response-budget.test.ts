@@ -114,6 +114,33 @@ describe('response budget planning', () => {
     ).toBe(600);
   });
 
+  it('reserves room for hidden reasoning without expanding the visible answer', () => {
+    const plan = planResponseBudget({
+      message: 'Reply with exactly: READY',
+      taskType: 'simple_chat',
+      modelMinimumOutputTokens: 1024,
+      modelMaxOutputTokens: 4096,
+    });
+
+    expect(plan.depth).toBe('very_short');
+    expect(plan.outputTokenBudget).toBe(1024);
+    expect(plan.instruction).toContain('Use at most three concise sentences.');
+  });
+
+  it('respects explicit caller and model ceilings even when a floor is configured', () => {
+    const request = {
+      message: 'Reply with exactly: READY',
+      taskType: 'simple_chat' as const,
+      modelMinimumOutputTokens: 1024,
+      modelMaxOutputTokens: 900,
+    };
+
+    expect(planResponseBudget(request).outputTokenBudget).toBe(900);
+    expect(
+      planResponseBudget({ ...request, requestedMaxOutputTokens: 128 }).outputTokenBudget,
+    ).toBe(128);
+  });
+
   it('does not make visible output detailed merely because reasoning is hard', () => {
     const simple = planResponseBudget({
       message: 'Did the production deployment succeed?',

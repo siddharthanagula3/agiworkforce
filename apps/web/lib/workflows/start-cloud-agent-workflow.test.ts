@@ -41,7 +41,8 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
 vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-agent-stream', () => ({
   buildManagedAgentStream: workflowMocks.buildStream,
 }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-failover', () => ({
+vi.mock('@/app/api/llm/v1/chat/completions/lib/managed-failover', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/managed-failover')>()),
   createFailoverPlan: () => ({ next: () => null }),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', () => ({

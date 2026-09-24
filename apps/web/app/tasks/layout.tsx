@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,5 +15,5 @@ export default async function TasksLayout({ children }: { children: ReactNode })
     return redirect(sessionExpiredRedirect('/tasks'));
   }
 
-  return <>{children}</>;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

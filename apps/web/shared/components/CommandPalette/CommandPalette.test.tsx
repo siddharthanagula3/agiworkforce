@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import type { SearchResult, SearchStats } from '@/features/chat/services/global-search-service';
 import { CommandPalette } from './CommandPalette';
 
 const modelFixtureIds = vi.hoisted(() => ({
@@ -17,6 +18,26 @@ const modelStoreMocks = vi.hoisted(() => ({
 }));
 
 const mockPush = vi.fn();
+const EMPTY_SEARCH_STATS: SearchStats = {
+  totalResults: 0,
+  sessionMatches: 0,
+  messageMatches: 0,
+  projectMatches: 0,
+  fileMatches: 0,
+  documentMatches: 0,
+  searchTime: 0,
+};
+const globalSearch = vi.fn(
+  async (..._args: unknown[]): Promise<{ results: SearchResult[]; stats: SearchStats }> => ({
+    results: [],
+    stats: EMPTY_SEARCH_STATS,
+  }),
+);
+
+vi.mock('@/features/chat/services/global-search-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/chat/services/global-search-service')>()),
+  globalSearchService: { search: (...args: unknown[]) => globalSearch(...args) },
+}));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -40,8 +61,18 @@ vi.mock('@shared/stores/web-chat-store', () => ({
   ),
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, user: { publicMetadata: {} } }),
+vi.mock('@/lib/identity/client', () => ({
+  useSession: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'user-command-palette',
+    getToken: vi.fn(),
+  }),
+  useCurrentUser: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    user: { id: 'user-command-palette', publicMetadata: {} },
+  }),
 }));
 
 vi.mock('@/shared/stores/model-store', () => ({
@@ -100,6 +131,7 @@ function renderPalette(open = true, onOpenChange = vi.fn()) {
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalSearch.mockResolvedValue({ results: [], stats: EMPTY_SEARCH_STATS });
     navigationState.pathname = '/';
   });
 
@@ -153,6 +185,38 @@ describe('CommandPalette', () => {
       fireEvent.change(input, { target: { value: 'zzzzzzz_impossible' } });
 
       expect(screen.getByText('No commands found.')).toBeInTheDocument();
+    });
+
+    it('finds a conversation outside the five in-memory recents', async () => {
+      globalSearch.mockResolvedValueOnce({
+        results: [
+          {
+            type: 'session',
+            sessionId: 'older-conversation',
+            sessionTitle: 'An older matching conversation',
+            content: 'needle',
+            matchedText: 'needle in an older chat',
+            createdAt: new Date('2026-01-01T00:00:00.000Z'),
+            updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          },
+        ],
+        stats: { ...EMPTY_SEARCH_STATS, totalResults: 1, sessionMatches: 1 },
+      });
+      renderPalette();
+
+      fireEvent.change(screen.getByPlaceholderText('Search chats and actions'), {
+        target: { value: 'needle' },
+      });
+
+      expect(await screen.findByText('An older matching conversation')).toBeInTheDocument();
+      expect(globalSearch).toHaveBeenCalledWith(
+        'user-command-palette',
+        { query: 'needle', limit: 10 },
+        expect.objectContaining({ trackSearch: false }),
+      );
+
+      fireEvent.click(screen.getByText('An older matching conversation'));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/chat/older-conversation'));
     });
 
     it('shows a Close button in the field, not an ESC chip', () => {

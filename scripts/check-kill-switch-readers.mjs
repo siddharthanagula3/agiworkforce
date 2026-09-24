@@ -35,37 +35,7 @@ export const READER_ROOTS = [
 ];
 
 /** Switches with no reader today, each naming the reader it is owed. */
-export const UNREAD = [
-  {
-    capability: 'dictation',
-    owed:
-      'apps/desktop/src-tauri: call RemoteSpeechGate::from_feature_flags with the /api/me flag map ' +
-      'and hand the result to VoiceWake::apply_remote_gate when the session refreshes',
-    reason:
-      'The desktop defines the reader (features/speech/wake.rs) and tests it, but no production code ' +
-      'calls from_feature_flags or apply_remote_gate, so flipping capability.dictation reaches /api/me ' +
-      'and stops nothing.',
-  },
-  {
-    capability: 'screen_share',
-    owed:
-      'the screen share admission point: readKillSwitchGate(subject).capabilityAllowed(' +
-      "'screen_share') before a visual session with a screen source is started",
-    reason:
-      'The switch is declared, accepted by the flag config schema and published in disabled_features, ' +
-      'but no server route and no client consults it, so an operator who flips it believes screen ' +
-      'share stopped while it keeps running.',
-  },
-  {
-    capability: 'desktop_update',
-    owed:
-      'the desktop update feed: refuse to offer an update while capabilityAllowed(' +
-      "'desktop_update') is false for the requesting client version",
-    reason:
-      'The switch is declared and published in disabled_features, but neither the update feed on the ' +
-      'web nor the desktop updater reads it, so a bad release cannot be held back through it.',
-  },
-];
+export const UNREAD = [];
 
 const SKIP_DIRS = new Set([
   'node_modules',
@@ -186,7 +156,7 @@ function rustFunctionsCalledElsewhere(rustFiles) {
   };
 }
 
-export function checkKillSwitchReaders(root) {
+export function checkKillSwitchReaders(root, unread = UNREAD) {
   const failures = [];
   const read = (relative) => {
     const full = path.join(root, relative);
@@ -245,7 +215,7 @@ export function checkKillSwitchReaders(root) {
         rustCallers: callersFor(entry.file),
       }),
     );
-    const owed = UNREAD.find((entry) => entry.capability === capability);
+    const owed = unread.find((entry) => entry.capability === capability);
     if (readers.length > 0) {
       readCount += 1;
       if (owed) {
@@ -264,7 +234,7 @@ export function checkKillSwitchReaders(root) {
     }
   }
 
-  for (const entry of UNREAD) {
+  for (const entry of unread) {
     if (!extras.includes(entry.capability)) {
       failures.push(
         `UNREAD names ${entry.capability}, which is no longer a kill switch; remove it.`,

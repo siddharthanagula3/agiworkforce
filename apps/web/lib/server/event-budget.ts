@@ -4,33 +4,29 @@ import { logger } from '@/lib/logger';
 import { getKeyValueStore } from '@/lib/server/key-value';
 
 /**
- * The global event spend ceiling: one number covering everybody, as opposed to
- * the per-user windows that already bound each individual account.
+ * The global event spend ceiling: one number covering everybody. Free accounts
+ * have no individual usage allowance, so this is the cost boundary for models
+ * made reachable only by a promotion.
  *
- * The four event ceilings are deliberately four separate controls, because they
+ * The three event ceilings are deliberately separate controls, because they
  * fail for different reasons and an operator needs to reach for exactly one:
  *
- *   per user      the existing free rolling windows (5h / week / month), which
- *                 event traffic already reserves against because the promotion
- *                 routes through `isFreeTrialRequest`. Bounds one runaway account.
  *   global        THIS module. Bounds the whole event, including the case every
- *                 per-user ceiling is respected and there are simply far more
- *                 users than expected. Nothing else bounds that.
+ *                 individual request is legitimate and there are simply far
+ *                 more users than expected. Nothing else bounds that.
  *   per model     `AGI_EVENT_DISABLED_MODELS`. Bounds one model that turns out
  *                 to be expensive, broken or embarrassing.
  *   per provider  `AGI_EVENT_DISABLED_PROVIDERS`. Bounds one supplier that is
  *                 down, throttling or over its own budget.
  *
- * None of them substitutes for another, and no single number could: 10,000
- * users each respecting a $0.10 monthly ceiling is $1,000 of entirely
- * legitimate per-user-compliant spend.
+ * Account rate limits and abuse controls remain separate admission boundaries;
+ * neither is a customer-visible usage allowance.
  *
  * Why the key-value store rather than Postgres: free traffic never reaches
  * `provider_cost_events`, so there is no table that already sums event spend,
  * and adding one needs a migration this event cannot wait for. The counter is
- * reserve-then-settle like the per-user ledger, so concurrent requests cannot
- * each see the same headroom and spend it. It is an operational cost guard, not
- * an accounting record: `free_daily_usage_reservations` remains the ledger.
+ * reserve-then-settle, so concurrent requests cannot each see the same
+ * headroom and spend it. It is an operational cost guard, not an account meter.
  */
 
 export const EVENT_BUDGET_USD_ENV = 'AGI_EVENT_GLOBAL_BUDGET_USD';
@@ -113,9 +109,8 @@ export async function reserveEventSpend(
 
 /**
  * Return the unspent remainder once the real cost is known. Reservations are
- * sized from the per-user headroom, so most turns hand back the large majority
- * of what they took; without this the ceiling would be reached long before the
- * money was actually spent.
+ * conservative, so most turns hand back the large majority of what they took;
+ * without this the ceiling would be reached long before the money was spent.
  */
 export async function settleEventSpend(
   reservation: EventBudgetReservation,

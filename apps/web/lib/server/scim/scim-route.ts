@@ -5,6 +5,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { authenticateScimRequest, scimBaseUrl, type ScimRequestContext } from './scim-auth';
 import { ScimError, scimError, SCIM_CONTENT_TYPE } from './scim-protocol';
+import { recordSyncEvent } from './scim-provisioning-service';
 
 export async function withScim(
   request: NextRequest,
@@ -15,16 +16,39 @@ export async function withScim(
     return scimError(429, 'Too many SCIM requests. Retry after the rate limit window.', 'tooMany');
   }
 
+  let context: ScimRequestContext | null = null;
   try {
-    const context = await authenticateScimRequest(request);
+    context = await authenticateScimRequest(request);
     return await handler(context, scimBaseUrl(request));
   } catch (error) {
+    if (context) await recordUnappliedRequest(context, request, error);
     if (error instanceof ScimError) {
       return error.toResponse();
     }
     logger.error({ error, path: new URL(request.url).pathname }, 'Unhandled SCIM error');
     return scimError(500, 'Internal error');
   }
+}
+
+async function recordUnappliedRequest(
+  context: ScimRequestContext,
+  request: Request,
+  error: unknown,
+): Promise<void> {
+  const attempted = { method: request.method, path: new URL(request.url).pathname };
+  if (error instanceof ScimError && error.status < 500) {
+    await recordSyncEvent(context.db, context, {
+      eventType: 'sync.rejected',
+      error: error.message,
+      payload: { ...attempted, status: error.status, scimType: error.scimType ?? null },
+    });
+    return;
+  }
+  await recordSyncEvent(context.db, context, {
+    eventType: 'sync.failed',
+    error: 'The request failed on our side',
+    payload: { ...attempted, status: error instanceof ScimError ? error.status : 500 },
+  });
 }
 
 export async function withScimDiscovery(

@@ -30,6 +30,14 @@ export const Settings = createIcon(
   </>,
 );
 
+export const SlidersHorizontal = createIcon(
+  'SlidersHorizontal',
+  <>
+    <path d="M3 6h6M15 6h6M3 12h2M11 12h10M3 18h8M17 18h4" />
+    <path d="M9 4v4M15 10v4M11 16v4" />
+  </>,
+);
+
 export const PanelLeft = createIcon(
   'PanelLeft',
   <>

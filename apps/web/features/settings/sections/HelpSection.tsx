@@ -85,7 +85,7 @@ export function HelpSection() {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-start gap-3 rounded-[var(--radius-lg)] border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3 transition-colors hover:border-[var(--text-3)]"
+              className="flex items-start gap-3 rounded-lg border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3 transition-colors hover:border-[var(--text-3)]"
             >
               <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--text-3)]" aria-hidden="true" />
               <span className="flex-1">
@@ -101,17 +101,17 @@ export function HelpSection() {
         ))}
       </ul>
 
-      <div className="rounded-[var(--radius-lg)] border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3">
+      <div className="rounded-lg border border-[var(--settings-border)] bg-[var(--bg-elev)] p-3">
         <div className="flex items-center gap-2">
           <Keyboard className="h-4 w-4 text-[var(--text-3)]" aria-hidden="true" />
           <span className="text-sm font-medium text-[var(--text-1)]">Keyboard shortcuts</span>
         </div>
         <p className="mt-1 text-xs text-[var(--text-3)]">
           Press{' '}
-          <kbd className="rounded border border-[var(--settings-border)] px-1">
+          <kbd className="rounded-compact border border-[var(--settings-border)] px-1">
             {primaryModifierLabel()}
           </kbd>{' '}
-          + <kbd className="rounded border border-[var(--settings-border)] px-1">/</kbd> anywhere in
+          + <kbd className="rounded-compact border border-[var(--settings-border)] px-1">/</kbd> anywhere in
           chat to see the full list.
         </p>
       </div>

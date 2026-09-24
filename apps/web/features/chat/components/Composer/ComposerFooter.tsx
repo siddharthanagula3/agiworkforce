@@ -112,21 +112,21 @@ const MODEL_CATALOG_ENDPOINT = '/api/models';
 
 /** Locked slot (upgrade prompt): a bordered pill signals it is not a live picker. */
 const MODEL_LOCKED_TRIGGER_CLASS =
-  'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs sm:px-2.5 sm:py-1 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground';
+  'flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs sm:px-2.5 sm:py-1 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground pointer-coarse:min-h-11';
 /** Live model trigger: plain text plus a chevron, no border or fill. */
 const EFFORT_TRIGGER_CLASS =
-  'flex min-h-7 shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
+  'flex min-h-7 shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
 const EFFORT_THUMB_INSET = '0.875rem';
 const EFFORT_TRACK_CLASS = 'h-7 rounded-full bg-muted';
 const EFFORT_RANGE_CLASS = 'bg-info';
-const EFFORT_THUMB_CLASS = 'h-7 w-7 border-0 bg-[var(--chat-accent-on-secondary)] shadow-md';
+const EFFORT_THUMB_CLASS = 'h-7 w-7 border-0 bg-[var(--chat-accent-on-secondary)] shadow-e2';
 const LADDER_FULL_PERCENT = 100;
 function ladderOffset(index: number, length: number): string {
   return `${(index / Math.max(length - 1, 1)) * LADDER_FULL_PERCENT}%`;
 }
 const EFFORT_OFF_LABEL = 'Off';
 const MODEL_TRIGGER_CLASS =
-  'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm';
+  'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
 
 const CACHE_RESET_HINT_TEXT = 'Switching models here starts a new prompt cache';
 
@@ -483,7 +483,7 @@ function AutoRow({
           <span className={PICKER_ROW_WRAPPED_GUIDANCE_CLASS}>{auto.continuity}</span>
         )}
       </span>
-      {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />}
+      {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
     </button>
   );
 }
@@ -565,9 +565,7 @@ function LocalModelSection({
               <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
                 {LOCAL_BADGE_LABEL}
               </span>
-              {isSelected && (
-                <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
-              )}
+              {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
             </button>
           );
         })
@@ -725,12 +723,12 @@ function ModelRow({
             className={`${PICKER_BADGE_CLASS} shrink-0 whitespace-nowrap bg-primary/10 normal-case text-primary`}
             aria-label={planLockLabel ?? 'Requires upgrade'}
           >
-            <Lock className="mr-0.5 inline h-2.5 w-2.5 align-[-0.1em]" aria-hidden="true" />
+            <Lock className="mr-0.5 inline h-4 w-4 align-[-0.1em]" aria-hidden="true" />
             {planLockLabel ?? 'Upgrade'}
           </span>
         )}
         {isSelected && !isLocked && (
-          <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         )}
       </span>
     </button>
@@ -759,6 +757,7 @@ interface ComposerFooterProps {
   className?: string;
   /** Images staged in the composer but not yet sent, for the compatibility check. */
   pendingImageCount?: number;
+  pendingAttachmentCount?: number;
   /** A tool control (search, connectors, code execution) is armed for the next turn. */
   toolsArmed?: boolean;
   /** What those armed controls are called, for the compatibility copy. */
@@ -774,6 +773,7 @@ export function ComposerFooter({
   inline = false,
   className,
   pendingImageCount = 0,
+  pendingAttachmentCount = 0,
   toolsArmed = false,
   toolsLabel,
 }: ComposerFooterProps) {
@@ -962,17 +962,19 @@ export function ComposerFooter({
     const historyImages = conversationMessages.some((message) =>
       (message.attachments ?? []).some((attachment) => attachment.type === 'image'),
     );
-    const historyTools = conversationMessages.some(
-      (message) =>
-        message.metadata?.webSearchRequested === true || (message.metadata?.tools?.length ?? 0) > 0,
+    const historicalAttachments = conversationMessages.some(
+      (message) => (message.attachments?.length ?? 0) > 0,
     );
     return {
       messages,
       hasImages: historyImages || pendingImageCount > 0,
-      needsTools: toolsArmed || historyTools,
+      hasAttachments: pendingAttachmentCount > 0,
+      hasNonImageAttachments: pendingAttachmentCount > pendingImageCount,
+      historicalAttachments,
+      needsTools: toolsArmed,
       ...(toolsLabel ? { toolLabel: toolsLabel } : {}),
     };
-  }, [conversationMessages, pendingImageCount, toolsArmed, toolsLabel]);
+  }, [conversationMessages, pendingAttachmentCount, pendingImageCount, toolsArmed, toolsLabel]);
 
   const selectedCompatibility = useMemo(
     () => evaluateModelCompatibility(selectedModelId, compatibilityRequest),
@@ -1270,7 +1272,7 @@ export function ComposerFooter({
               mic and send keep the control row to a single line on a phone.
               claude.ai's mobile composer drops it for the same reason. */}
           {showStyleSelector && (
-            <div className="hidden sm:block">
+            <div className="chat-composer-style-selector hidden sm:block">
               <StyleSelector />
             </div>
           )}
@@ -1303,7 +1305,7 @@ export function ComposerFooter({
                 >
                   {localSelection ? (
                     <Monitor
-                      className="h-3 w-3 shrink-0 text-muted-foreground"
+                      className="h-4 w-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                   ) : (
@@ -1331,7 +1333,7 @@ export function ComposerFooter({
                       {LOCAL_BADGE_LABEL}
                     </span>
                   )}
-                  <ChevronDown className="h-3 w-3 shrink-0" />
+                  <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
               );
               const body = (
@@ -1507,7 +1509,7 @@ export function ComposerFooter({
                                     : shortList.totalCount}
                                 </span>
                                 <ChevronRight
-                                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                  className="h-4 w-4 shrink-0 text-muted-foreground"
                                   aria-hidden="true"
                                 />
                               </button>
@@ -1631,11 +1633,11 @@ export function ComposerFooter({
                   aria-expanded={effortOpen}
                   title="Reasoning effort"
                 >
-                  <Brain className="hidden h-3.5 w-3.5 shrink-0 sm:block" aria-hidden="true" />
+                  <Brain className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
                   <span className="font-medium">
                     {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
                   </span>
-                  <ChevronDown className="h-3 w-3 shrink-0" />
+                  <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
@@ -1715,7 +1717,7 @@ export function ComposerFooter({
                             className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 text-muted-foreground"
                             style={{ left: ladderOffset(firstGatedIndex, effortLadder.length) }}
                           >
-                            <Lock className="h-3.5 w-3.5" />
+                            <Lock className="h-4 w-4" />
                           </span>
                         </span>
                       )}

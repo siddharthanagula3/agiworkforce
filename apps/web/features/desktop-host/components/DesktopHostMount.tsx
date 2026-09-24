@@ -10,6 +10,7 @@ import { useShellLayout } from '../hooks/use-shell-layout';
 import { useWindowZoom } from '../hooks/use-window-zoom';
 import { useDesktopHost } from '../lib/host';
 import { DesktopTitleStrip } from './DesktopTitleStrip';
+import { DesktopUpdateNotice } from './DesktopUpdateNotice';
 
 function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   useDesktopAccount(host);
@@ -19,7 +20,12 @@ function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   useHostCommands(host);
   useShellLayout(host);
   useWindowZoom(host);
-  return <DesktopTitleStrip />;
+  return (
+    <>
+      <DesktopTitleStrip />
+      <DesktopUpdateNotice host={host} />
+    </>
+  );
 }
 
 export function DesktopHostMount() {

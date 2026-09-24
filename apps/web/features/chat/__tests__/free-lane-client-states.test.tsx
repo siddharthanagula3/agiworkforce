@@ -207,10 +207,76 @@ describe('lane transparency reaches the transcript', () => {
       content: 'answer',
       createdAt: '2026-09-01T00:00:00.000Z',
       model: POOL_MODEL,
-      routeLane: 'free',
+      metadata: { routeLane: 'free' },
     };
 
     expect(toChatMessage(stored, CONVERSATION.id).metadata?.['routeLane']).toBe('free');
+  });
+
+  it('recovers older explicit route attribution without inventing provenance', () => {
+    const attributed = {
+      id: 'assistant-attributed',
+      role: 'assistant' as const,
+      content: 'answer',
+      createdAt: '2026-09-01T00:00:00.000Z',
+      model: POOL_MODEL,
+      metadata: { requestedRoute: { lane: 'free' } },
+    } as Message;
+    const unlabeled = { ...attributed, id: 'assistant-unlabeled', metadata: {} };
+
+    expect(toChatMessage(attributed, CONVERSATION.id).metadata?.['routeLane']).toBe('free');
+    expect(toChatMessage(unlabeled, CONVERSATION.id).metadata?.['routeLane']).toBeUndefined();
+  });
+
+  it('persists the streamed lane in the assistant metadata used after reload', async () => {
+    const persistentConversation = {
+      ...CONVERSATION,
+      id: 'conv-persisted-lane',
+      isTemporary: false,
+    };
+    useChatStore.setState({
+      activeConversationId: persistentConversation.id,
+      conversations: [persistentConversation],
+    });
+    const savedBodies: Array<Record<string, unknown>> = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/api/llm/')) {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `data: ${JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+              ),
+            );
+            controller.close();
+          },
+        });
+        return new Response(stream, {
+          status: 200,
+          headers: new Headers({ 'X-AGI-Route-Lane': 'free' }),
+        });
+      }
+      if (url.includes('/messages')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        savedBodies.push(body);
+        return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    const { result } = renderHook(() => useChatStream());
+    await act(async () => {
+      await result.current.sendMessage('persist the serving lane', {
+        conversationId: persistentConversation.id,
+      });
+    });
+    await vi.waitFor(() =>
+      expect(savedBodies.some((body) => body['role'] === 'assistant')).toBe(true),
+    );
+
+    const assistantSave = savedBodies.find((body) => body['role'] === 'assistant');
+    expect(assistantSave?.['metadata']).toMatchObject({ routeLane: 'free' });
   });
 
   it('says the free pool answered, under the model that answered', async () => {

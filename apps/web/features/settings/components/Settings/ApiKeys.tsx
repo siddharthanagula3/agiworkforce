@@ -212,7 +212,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                     <AlertTriangle className="mr-2 inline h-4 w-4" />
                     Save this key now. You will not be able to see it again!
                   </p>
-                  <div className="break-all rounded border border-border bg-background/50 p-3 font-mono text-sm text-success-text">
+                  <div className="break-all rounded-compact border border-border bg-background/50 p-3 font-mono text-sm text-success-text">
                     {generatedAPIKey}
                   </div>
                   <Button onClick={() => onCopyAPIKey(generatedAPIKey)} className="w-full">

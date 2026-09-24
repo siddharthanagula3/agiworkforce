@@ -130,9 +130,16 @@ export function MemoryExclusions() {
   }, [draft, terms, suppressedSources, persist]);
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
       <div>
-        <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: '0 0 4px' }}>
+        <h2
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--text-1)',
+            margin: '0 0 var(--space-1)',
+          }}
+        >
           Never remember
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
@@ -142,7 +149,7 @@ export function MemoryExclusions() {
         </p>
       </div>
 
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
         <input
           type="text"
           value={draft}
@@ -163,7 +170,7 @@ export function MemoryExclusions() {
           style={{
             flex: 1,
             height: 34,
-            padding: '0 10px',
+            padding: '0 var(--space-3)',
             fontSize: 13,
             color: 'var(--text-1)',
             background: 'var(--bg-base)',
@@ -177,7 +184,7 @@ export function MemoryExclusions() {
           disabled={!loaded || saving || draft.trim().length === 0}
           style={{
             height: 34,
-            padding: '0 12px',
+            padding: '0 var(--space-3)',
             fontSize: 13,
             color: 'var(--text-1)',
             background: 'transparent',
@@ -210,7 +217,7 @@ export function MemoryExclusions() {
           style={{
             display: 'flex',
             flexWrap: 'wrap',
-            gap: 6,
+            gap: 'var(--space-2)',
             listStyle: 'none',
             padding: 0,
             margin: 0,
@@ -222,13 +229,13 @@ export function MemoryExclusions() {
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '3px 6px 3px 10px',
+                  gap: 'var(--space-2)',
+                  padding: 'var(--space-1) var(--space-2) var(--space-1) var(--space-3)',
                   fontSize: 12,
                   color: 'var(--text-1)',
                   background: 'var(--bg-base)',
                   border: '1px solid var(--settings-border)',
-                  borderRadius: 999,
+                  borderRadius: 'var(--corner-pill)',
                 }}
               >
                 {term}
@@ -246,7 +253,7 @@ export function MemoryExclusions() {
                     display: 'inline-flex',
                     background: 'transparent',
                     border: 'none',
-                    padding: 2,
+                    padding: 'var(--space-1)',
                     cursor: saving ? 'default' : 'pointer',
                     color: 'var(--text-3)',
                   }}
@@ -260,7 +267,14 @@ export function MemoryExclusions() {
       )}
 
       <div>
-        <h2 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-1)', margin: '12px 0 4px' }}>
+        <h2
+          style={{
+            fontSize: 15,
+            fontWeight: 600,
+            color: 'var(--text-1)',
+            margin: 'var(--space-3) 0 var(--space-1)',
+          }}
+        >
           Where memories come from
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
@@ -273,7 +287,7 @@ export function MemoryExclusions() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 'var(--space-2)',
           listStyle: 'none',
           padding: 0,
           margin: 0,
@@ -285,7 +299,7 @@ export function MemoryExclusions() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--space-2)',
                 fontSize: 13,
                 color: 'var(--text-1)',
                 minHeight: 24,

@@ -98,7 +98,10 @@ const workflowMocks = vi.hoisted(() => ({
   loadConnectorTools: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: rlsMocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
+}));
 vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
   startCloudAgentWorkflowExecution: workflowMocks.start,
 }));

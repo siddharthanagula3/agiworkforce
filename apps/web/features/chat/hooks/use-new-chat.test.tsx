@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
   params: new URLSearchParams(),
+  pathname: '/chat',
   setDraftContent: vi.fn(),
   setComposerToggles: vi.fn(),
 }));
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
   useSearchParams: () => mocks.params,
+  usePathname: () => mocks.pathname,
 }));
 vi.mock('@shared/stores/web-chat-store', () => {
   const useChatStore = () => undefined;
@@ -29,6 +31,7 @@ const MESSAGE_ID = 'c4f2a1b8-3e5d-4a6f-9b7c-1d2e3f4a5b6c';
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.params = new URLSearchParams();
+  mocks.pathname = '/chat';
 });
 
 describe('useStartNewChat', () => {
@@ -77,6 +80,34 @@ describe('useNewChatEntry', () => {
     renderHook(() => useNewChatEntry());
 
     expect(mocks.replace).toHaveBeenCalledWith('/chat?highlightMessage=abc');
+  });
+
+  it('keeps a prefilled Quick Ask entry on its compact route', () => {
+    mocks.pathname = '/quick-ask';
+    mocks.params = new URLSearchParams('q=seeded');
+
+    renderHook(() => useNewChatEntry());
+
+    expect(mocks.setDraftContent).toHaveBeenCalledWith('seeded', '__new_conversation__');
+    expect(mocks.replace).toHaveBeenCalledWith('/quick-ask');
+  });
+
+  it('starts a new compact chat when a prefill is opened on an existing Quick Ask path', () => {
+    mocks.pathname = '/quick-ask/session-1';
+    mocks.params = new URLSearchParams('q=seeded');
+
+    renderHook(() => useNewChatEntry());
+
+    expect(mocks.replace).toHaveBeenCalledWith('/quick-ask');
+  });
+
+  it('does not treat a similarly named path as Quick Ask', () => {
+    mocks.pathname = '/quick-ask-other';
+    mocks.params = new URLSearchParams('q=seeded');
+
+    renderHook(() => useNewChatEntry());
+
+    expect(mocks.replace).toHaveBeenCalledWith('/chat');
   });
 
   it('touches nothing when the url carries no entry', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   NEW_CHAT_PATH,
+  QUICK_ASK_PATH,
   buildNewChatHref,
   parseNewChatEntry,
   parseNewChatSource,
@@ -70,6 +71,9 @@ describe('new chat deep link', () => {
       stripNewChatParams(new URLSearchParams('q=hi&from=message:1&mode=agiwork&tab=files')),
     ).toBe(`${NEW_CHAT_PATH}?tab=files`);
     expect(stripNewChatParams(new URLSearchParams('q=hi'))).toBe(NEW_CHAT_PATH);
+    expect(stripNewChatParams(new URLSearchParams('q=hi&tab=files'), QUICK_ASK_PATH)).toBe(
+      `${QUICK_ASK_PATH}?tab=files`,
+    );
   });
 });
 

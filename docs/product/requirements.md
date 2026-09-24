@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-07-18
+Last updated: 2026-09-21
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -29,16 +29,15 @@ The suite has six first-class surfaces:
 2. Mobile
 3. Desktop
 4. Chrome Extension
-5. VS Code Extension
-6. CLI
+5. CLI
+6. VS Code Extension
 
-The development order is shortest-remaining-work-first (founder decision
-2026-08-05, Decision #20, supersedes the prior fixed order): estimate the
-remaining Class-1 work per surface, complete the fastest surface first, then
-the next fastest, until all six are at zero. AGI still works on one surface at
-a time; a later surface does not become active unless the founder advances the
-sequence or explicitly authorizes work during QA, review, or another waiting
-period.
+The current development and release order is Website, Mobile, Desktop, Chrome,
+CLI, and VS Code (founder direction, 2026-09-21). AGI works on one surface at a
+time. The next surface begins only after the active surface passes its release
+gates, except for narrowly scoped shared-contract work required by the active
+surface. Connection verification follows each surface pass; it does not become
+permission to develop every surface simultaneously.
 
 AGI's core differentiation is:
 
@@ -46,7 +45,8 @@ AGI's core differentiation is:
 - BYOK, meaning Bring Your Own Key.
 - Multi-provider routing.
 - Hosted open-model and local model support.
-- Public-alpha AGI Managed Cloud (open by default; subscription/entitlement-gated).
+- Public-alpha AGI Managed Cloud Free access for signed-in users, with paid
+  upgrades waitlist/access-code gated.
 - One unified chat that can handle normal chat, files, reference material,
   images, artifacts, tools, connectors, and developer workflows without splitting
   users into separate chat products.
@@ -69,9 +69,9 @@ truth.
 
 ### 2.2 Development Order
 
-The surface roster is fixed; completion order is shortest-remaining-work-first
-(founder decision 2026-08-05, Decision #20). Numbers below are roster indices,
-not a sequence:
+The surface roster and current serial order are fixed by the founder's
+2026-09-21 direction. This supersedes the shortest-remaining-work-first order
+recorded on 2026-08-05:
 
 | Order | Surface           | Meaning                                                                            |
 | ----- | ----------------- | ---------------------------------------------------------------------------------- |
@@ -79,15 +79,14 @@ not a sequence:
 | 2     | Mobile            | Native Local/Cloud app; must pass App Store release requirements.                  |
 | 3     | Desktop           | Managed-cloud Electron shell, approved local files/tools, artifacts, computer use. |
 | 4     | Chrome Extension  | Browser context, capture, native bridge, page automation.                          |
-| 5     | VS Code Extension | IDE-native developer workflow.                                                     |
-| 6     | CLI               | Developer engine and terminal agent.                                               |
+| 5     | CLI               | Developer engine and terminal agent.                                               |
+| 6     | VS Code Extension | IDE-native developer workflow.                                                     |
 
 The parity ledger may track all six surfaces at all times. Implementation does
 not run on all six at once. A future agent must not start work on a non-active
-surface just because the row exists in a parity matrix. The active surface is
-determined by the shortest-remaining-work-first order (Decision #20,
-2026-08-05); the founder advances the sequence or authorizes next-surface work
-during QA or waiting periods.
+surface just because the row exists in a parity matrix. Website is active until
+its release gates pass; the founder advances the sequence or explicitly
+authorizes narrowly scoped next-surface work during QA or waiting periods.
 
 ### 2.3 Mobile Release Definition
 
@@ -107,11 +106,11 @@ focus from Mobile to Desktop.
 
 AGI has three user-visible trust modes:
 
-| User label | Internal meaning                                           | User promise                                                                                                                                                                                                                                |
-| ---------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local      | Local runtime, local storage, local tools where available. | AGI does not silently send chats, files, tools, or developer sessions to BYOK or managed cloud.                                                                                                                                             |
-| BYOK       | User-owned provider key and direct provider route.         | AGI uses the selected provider/model with visible provider labels and disclosure.                                                                                                                                                           |
-| Cloud      | AGI-managed compute and provider access.                   | Public alpha, open by default (2026-06-27); metering, abuse, billing, retention, deletion, and provider-term controls keep pace but no longer gate access. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is an incident-response kill-switch only. |
+| User label | Internal meaning                                           | User promise                                                                                                                                                                                                                                                                                 |
+| ---------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local      | Local runtime, local storage, local tools where available. | AGI does not silently send chats, files, tools, or developer sessions to BYOK or managed cloud.                                                                                                                                                                                              |
+| BYOK       | User-owned provider key and direct provider route.         | AGI uses the selected provider/model with visible provider labels and disclosure.                                                                                                                                                                                                            |
+| Cloud      | AGI-managed compute and provider access.                   | Free public alpha is enabled for signed-in users (2026-06-27); paid acquisition remains waitlist/access-code gated. Metering, abuse, retention, deletion, and provider-term controls keep pace with Free usage. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. |
 
 The original Local thread remains Local forever. Local to BYOK or Cloud is a
 fork/continuation with selected context, secret scan, payload preview, provider
@@ -170,22 +169,46 @@ exists, a route compiles, or a typecheck passes. A feature is complete only when
 
 ## 3. Competitive Reference Baseline
 
+This baseline was re-verified on 2026-09-21. The source-backed chronology for
+changes since July lives in
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`; older dated
+research is historical evidence, not the current product target.
+
 The reference products are:
 
 - ChatGPT web, mobile, and desktop.
-- ChatGPT Projects, Memory, Tasks, Canvas, files, voice, search, data analysis,
-  image generation/editing, apps/connectors, and custom GPT-style workflows.
+- ChatGPT Projects, Memory, Tasks, Canvas, files and Library, voice, unified
+  search, data analysis, image generation/editing, apps/connectors, Work, and
+  reusable plugins built from instructions plus apps/tools.
 - OpenAI Codex app, CLI, IDE extension, Chrome extension, cloud tasks,
   automations, skills, plugins, worktrees, browser/computer use, generated
   artifacts, and code review.
 - Claude web, mobile, and desktop.
-- Claude Projects, Artifacts, Memory/personalization, connectors, MCP, computer
-  use, and scheduled/dispatch-style work.
+- Claude Projects, Artifacts, inspectable Memory topics, connectors, MCP,
+  computer use, Cloud work in the same home as Chat, and scheduled work.
 - Claude Code CLI, Desktop Code tab, VS Code extension, Chrome integration,
   Remote Control, Routines, worktrees, permissions, hooks, skills, plugins,
   subagents, MCP, sessions, checkpointing, context compaction, and cloud sessions.
 
-Official references checked for this PRD include:
+Current official application references checked for this PRD include:
+
+| Area                                | Official source                                                                                                  |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ChatGPT release notes               | https://help.openai.com/en/articles/6825453-chatgpt-release-notes                                                |
+| ChatGPT Projects                    | https://help.openai.com/en/articles/10169521-projects-in-chatgpt                                                 |
+| ChatGPT Memory                      | https://help.openai.com/en/articles/8590148-memory-faq                                                           |
+| ChatGPT connected apps              | https://help.openai.com/en/articles/11487775-connectors-in-chatgpt                                               |
+| ChatGPT search                      | https://help.openai.com/en/articles/10056348-how-do-i-search-my-chat-history-in-the-chatgpt                      |
+| ChatGPT Library                     | https://help.openai.com/en/articles/20001052                                                                     |
+| ChatGPT subscription across devices | https://help.openai.com/en/articles/8980438-can-i-access-my-chatgpt-plus-or-pro-subscription-from-another-device |
+| Claude release notes                | https://support.claude.com/en/articles/12138966-release-notes                                                    |
+| Claude Cloud and host work          | https://support.claude.com/en/articles/15520349-use-claude-cowork-on-web-desktop-and-mobile                      |
+| Claude one Chat/work home           | https://support.claude.com/en/articles/16761823-claude-cowork-and-chat-are-one-claude                            |
+| Claude search and Memory            | https://support.claude.com/en/articles/11817273-use-claude-s-chat-search-and-memory-to-build-on-previous-context |
+| Claude connector split              | https://support.claude.com/en/articles/11725091-when-to-use-desktop-and-web-connectors                           |
+| Claude computer use                 | https://support.claude.com/en/articles/14128542-let-claude-use-your-computer-in-cowork                           |
+
+Developer-platform references checked for this PRD include:
 
 | Area                       | Official source                                                              |
 | -------------------------- | ---------------------------------------------------------------------------- |
@@ -230,13 +253,31 @@ AGI is one product suite. A user should not feel like the Mobile app, Website,
 Desktop app, CLI, Chrome extension, and VS Code extension are unrelated tools.
 They may have different capabilities, but they should share:
 
-- The same account concepts where accounts exist.
+- One account and one effective suite entitlement. A user does not buy or hold a
+  separate subscription for each surface; Stripe, Apple, or Google may own the
+  billing relationship, but all clients consume the same canonical entitlement.
 - The same Local/BYOK/Cloud trust labels.
 - The same provider/model naming rules.
 - The same memory and privacy concepts.
 - The same file and artifact vocabulary.
 - The same permissions model for tools and external actions.
 - The same visible limits and unavailable states.
+
+That common product has two deliberately separate continuity domains:
+
+- **Account Cloud:** Website, Mobile Cloud, Desktop Cloud, and eligible Chrome
+  Managed Cloud share chats/messages, memory, projects, files/artifacts,
+  connected tools/apps, OAuth connection metadata, settings, personalization,
+  and subscription/entitlement state.
+- **Host developer:** Desktop Code, CLI, and VS Code share local developer
+  session IDs and transcripts, tools/extensions, permission decisions,
+  repositories/files, and local authentication through the same trusted host
+  runtime and operating-system credential store.
+
+Desktop participates in both domains and keeps their trust labels visible. A
+Cloud chat does not silently become a local developer session, local credentials
+are never copied into account sync, and a cross-domain continuation requires an
+explicit provenance-preserving handoff.
 
 ### 4.2 One Chat
 
@@ -278,15 +319,25 @@ Users must be able to answer:
 
 ### 4.5 Website First, One Suite
 
-Website is the first release surface and the active development focus. Mobile
-follows, then Desktop, Chrome, VS Code, and CLI. Website-first does not weaken
-the suite boundaries: the public Desktop remains managed-cloud-only, while the
-CLI and forthcoming VS Code extension carry Local and BYOK developer workflows
-suited to their native surfaces.
+Website is the first release surface and the only active development focus until
+its launch gates pass. Work then advances one surface at a time: Mobile,
+Desktop, Chrome, CLI, and VS Code. Cross-surface connection work follows the
+surface-specific acceptance pass; it does not run in parallel with unfinished
+surface work. Website-first does not weaken the suite boundaries. Each phase
+must extend and consume the canonical account, entitlement, conversation,
+memory, tool, OAuth, file, context, and event contracts rather than create a
+surface-owned copy. Desktop Cloud joins the account domain, while Desktop Code,
+CLI, and VS Code join the host-owned developer domain.
 
 Website v1 should prove AGI can ship a polished, privacy-clear, user-facing Cloud
 product without pretending later native or developer surfaces are already
 released.
+
+The Desktop phase includes voice control of desktop applications and operating
+system actions. Speech recognition, semantic intent and target selection, policy
+authorization, user confirmation and native execution remain separate stages.
+No probabilistic classifier may authorize a consequential action, and destructive
+or difficult-to-reverse actions require the canonical confirmation surface.
 
 ## 5. Target Users
 
@@ -318,8 +369,8 @@ Developer users eventually become the strongest AGI audience. They care about:
 - BYOK and local models.
 - Avoiding silent cloud routing.
 
-Developer workflows are central to the company vision, but Mobile is still the
-first active release surface.
+Developer workflows are central to the company vision, but Website remains the
+only active release surface until its launch gates pass.
 
 ### 5.3 Power Users And Teams
 
@@ -460,11 +511,15 @@ Cloud mode means:
 - AGI-managed provider access or AGI-managed compute.
 - AGI pays or meters costs.
 - User may need account, invite, billing, and abuse controls.
-- Cloud is in public alpha and open by default (founder decision, 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. The account/invite/billing/abuse controls keep pace with public usage but no longer gate access.
+- Cloud Free is in public alpha and enabled for signed-in users (founder
+  decision, 2026-06-27). Paid upgrades remain waitlist/access-code gated, and
+  `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only.
+  Account, metering, and abuse controls keep pace with Free usage; billing and
+  commercial readiness gate paid acquisition.
 
-Public UI presents managed cloud as public alpha (open by default) and may still
-offer waitlist/invite entry for genuinely unavailable hosted capacity. It should
-label managed cloud as public alpha and must not over-claim full general
+Public UI presents Managed Free as public alpha and available after sign-in.
+Upgrade entry presents the paid waitlist/access-code gate. Capacity-specific
+access requests remain separate. The UI must not over-claim general
 availability or SLA guarantees it cannot yet honor.
 
 ### 7.4 Trust Boundary Crossing
@@ -551,7 +606,9 @@ The long-term provider setup should group routes as:
    - Text Generation Inference.
    - MLX/Apple Silicon routes.
 4. AGI Managed Cloud:
-   - Public alpha, open by default (2026-06-27); subscription/entitlement-gated, no longer waitlist-gated. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env is a kill-switch only.
+   - Free public alpha is enabled for signed-in users (2026-06-27); paid
+     acquisition is waitlist/access-code gated.
+     `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is a kill-switch only.
 
 ### 8.4 OpenAI-Specific Requirements
 
@@ -729,7 +786,8 @@ Website release readiness, unless the founder explicitly says otherwise.
 ### 10.1 Mobile V1 Goal
 
 Ship a polished iOS app publicly on the App Store that proves AGI's Local-first
-privacy thesis and creates demand for Cloud invite access.
+privacy thesis, includes honest Free Cloud access, and creates demand for gated
+paid upgrades.
 
 Mobile v1 is not expected to be the deepest AGI surface. It must be reliable,
 privacy-clear, and released.
@@ -747,7 +805,8 @@ Mobile v1 must include:
 - Chat history local to the app.
 - Attachment-ready controls with honest unavailable states.
 - Mic/dictation-ready control with honest unavailable states if not fully live.
-- Cloud sign-in entry (public alpha, open by default; no waitlist).
+- Cloud sign-in entry (Free public alpha; no waitlist for Free access).
+- Paid upgrade entry that enforces the waitlist/access-code gate.
 - Profile/settings/privacy basics.
 - Support, privacy policy, and delete/export/account paths as required for
   release.
@@ -764,8 +823,9 @@ Mobile v1 should not publicly promise:
 - Full connector/app directory parity.
 
 Mobile BYOK is not part of Mobile v1. The public Mobile path is small on-device
-Local LLM chat plus public-alpha Cloud sign-in; Cloud requires signed-in
-subscription/entitlement state before any hosted model request is allowed.
+Local LLM chat plus public-alpha Cloud sign-in. Free Cloud requires a signed-in
+Free entitlement before any hosted request; paid-only capabilities additionally
+require a paid entitlement obtained through the access-code/waitlist gate.
 
 ### 10.3 Mobile V1 Non-Goals
 
@@ -810,7 +870,8 @@ Acceptance criteria:
 - Sign-in entry is visible from the Cloud toggle/model picker.
 - Cloud is labeled public alpha, not general availability.
 - Failed sign-in attempts produce a helpful error.
-- A successful sign-in unlocks Cloud immediately, no separate invite code or waitlist step.
+- A successful sign-in unlocks eligible Free Cloud routes immediately; paid
+  capabilities still require an existing paid entitlement or a gated upgrade.
 - Cloud use is not silently mixed into Local chats.
 
 #### M-US-003: Returning Chat User
@@ -861,7 +922,8 @@ Acceptance criteria:
 
 - Privacy screen exists.
 - Local data behavior is explained.
-- Cloud sign-in behavior (public alpha, no waitlist) is explained.
+- Cloud sign-in behavior (Free public alpha, no Free waitlist) and the separate
+  paid upgrade gate are explained.
 - BYOK behavior, if present, is provider-labeled.
 - Data export/delete/account paths are present or clearly scoped.
 
@@ -936,13 +998,13 @@ dark and light appearance.
 
 ### 10.11 Mobile Cloud Sign-In Requirements
 
-| ID          | Requirement                         | Acceptance                                              |
-| ----------- | ----------------------------------- | ------------------------------------------------------- |
-| M-CLOUD-001 | Sign-in screen exists.              | User can sign in to unlock Cloud.                       |
-| M-CLOUD-002 | Sign-in unlocks Cloud immediately.  | No separate invite code or waitlist step.               |
-| M-CLOUD-003 | Cloud is labeled public alpha.      | No general-availability/SLA over-claim.                 |
-| M-CLOUD-004 | Cloud access is entitlement-scoped. | Cloud features remain gated to the account's plan tier. |
-| M-CLOUD-005 | Cloud cannot hijack Local chats.    | Cloud continuation is a fork/branch.                    |
+| ID          | Requirement                             | Acceptance                                                |
+| ----------- | --------------------------------------- | --------------------------------------------------------- |
+| M-CLOUD-001 | Sign-in screen exists.                  | User can sign in to unlock Cloud.                         |
+| M-CLOUD-002 | Sign-in unlocks Free Cloud immediately. | No invite code or waitlist step for eligible Free routes. |
+| M-CLOUD-003 | Cloud is labeled public alpha.          | No general-availability/SLA over-claim.                   |
+| M-CLOUD-004 | Cloud access is entitlement-scoped.     | Cloud features remain gated to the account's plan tier.   |
+| M-CLOUD-005 | Cloud cannot hijack Local chats.        | Cloud continuation is a fork/branch.                      |
 
 ### 10.12 Mobile Settings Requirements
 
@@ -983,7 +1045,8 @@ Before public release:
 - Login is not required for core Local functionality unless technically
   unavoidable and approved.
 - Any payments/subscriptions are either absent or compliant.
-- Cloud sign-in wording does not imply unavailable paid compute or waitlist gating.
+- Cloud sign-in wording distinguishes available Free routes from
+  waitlist/access-code-gated paid upgrades.
 - App handles offline/no-model/no-permission states.
 - Crash-free QA threshold is acceptable.
 - TestFlight external testing has passed.
@@ -1066,15 +1129,18 @@ Desktop must expose:
 - Computer use controls.
 - Browser use controls.
 - Scheduled tasks/routines.
-- AGI Code/Cowork-style task surfaces.
+- Durable AGI Work and AGI Code task surfaces inside the same product home.
 
-The CLI, and VS Code when published, are where BYOK Native First matters for v1
-parity. They must support native provider tools when the user enables them and
-capability metadata proves support. The public Electron Desktop accepts no key.
+Desktop Code, CLI, and VS Code are one Local/BYOK developer ecosystem. They must
+support native provider tools when the user enables them and capability metadata
+proves support. Provider and tool credentials are owned by the shared host
+credential broker and operating-system keychain; Electron, CLI, and VS Code
+reference that owner instead of storing separate copies. Consumer Desktop Cloud
+chat does not inherit those credentials.
 
 ## 13. CLI Requirements
 
-CLI is sixth in development order.
+CLI is fifth in development order.
 
 CLI's role:
 
@@ -1142,7 +1208,7 @@ chat by default.
 
 ## 15. VS Code Extension Requirements
 
-VS Code Extension is fifth in development order.
+VS Code Extension is sixth in development order.
 
 VS Code's role:
 
@@ -1488,8 +1554,9 @@ Plugins requirements:
 ## 20. Scheduled Tasks, Dispatch, And Automations
 
 AGI should support recurring and long-running work across the suite. Public
-Cloud execution is public alpha and open by default (2026-06-27),
-subscription/entitlement-gated rather than waitlist-gated.
+Free Cloud execution is public alpha and enabled for signed-in users
+(2026-06-27). Paid plans and paid-only execution remain entitlement-gated, and
+new paid acquisition remains waitlist/access-code gated.
 
 Required concepts:
 
@@ -1668,22 +1735,22 @@ Until resolved, these stay as tracked gaps rather than hidden assumptions.
 
 ## 26. Glossary
 
-| Term                    | Meaning                                                                                                                    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| AGI                     | Public product brand.                                                                                                      |
-| AGI Workforce           | Formal platform and repo name.                                                                                             |
-| Surface                 | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                                                 |
-| Local                   | Local-first mode with no silent provider/cloud routing.                                                                    |
-| BYOK                    | Bring Your Own Key, direct user-owned provider route.                                                                      |
-| Cloud                   | AGI-managed compute/provider route, public alpha and open by default; subscription/entitlement-gated (not waitlist-gated). |
-| Provider route          | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.                                    |
-| Native tool             | Tool executed by the model provider's infrastructure/API.                                                                  |
-| AGI local tool          | Tool executed by AGI on local device/host/runtime.                                                                         |
-| Connector               | Integration that exposes external data/actions, preferably through MCP.                                                    |
-| Artifact                | Generated or editable output shown outside the normal message stream.                                                      |
-| Visual design workspace | Canvas/artboard-based artifact workspace for generated designs, prototypes, slide-like flows, and visual documents.        |
-| Memory                  | Saved context AGI may use in future conversations.                                                                         |
-| Dispatch                | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work.                           |
+| Term                    | Meaning                                                                                                                              |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| AGI                     | Public product brand.                                                                                                                |
+| AGI Workforce           | Formal platform and repo name.                                                                                                       |
+| Surface                 | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                                                           |
+| Local                   | Local-first mode with no silent provider/cloud routing.                                                                              |
+| BYOK                    | Bring Your Own Key, direct user-owned provider route.                                                                                |
+| Cloud                   | AGI-managed compute/provider route. Free public alpha is enabled after sign-in; paid acquisition remains waitlist/access-code gated. |
+| Provider route          | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.                                              |
+| Native tool             | Tool executed by the model provider's infrastructure/API.                                                                            |
+| AGI local tool          | Tool executed by AGI on local device/host/runtime.                                                                                   |
+| Connector               | Integration that exposes external data/actions, preferably through MCP.                                                              |
+| Artifact                | Generated or editable output shown outside the normal message stream.                                                                |
+| Visual design workspace | Canvas/artboard-based artifact workspace for generated designs, prototypes, slide-like flows, and visual documents.                  |
+| Memory                  | Saved context AGI may use in future conversations.                                                                                   |
+| Dispatch                | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work.                                     |
 
 ## 27. PRD Maintenance Rule
 

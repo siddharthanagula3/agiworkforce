@@ -35,6 +35,11 @@ import {
 
 export const ANONYMOUS_PLAN_TIER = normalizeBillingPlanTier(null);
 
+export function isConfiguredManagedModelRoute(modelId: string, routeId: string): boolean {
+  const route = listManagedRoutesForModel(modelId).find((entry) => entry.routeId === routeId);
+  return route !== undefined && listAvailableManagedProviderIds().has(route.provider);
+}
+
 export type ModelCatalogueRouteStatus = 'available' | 'degraded' | 'not_configured';
 export type ModelCatalogueFreeInventory = 'promotional' | 'recurring';
 

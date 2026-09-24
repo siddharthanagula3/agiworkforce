@@ -57,7 +57,7 @@ function ResourceRow({
         <span className="truncate">{labelOf(resource)}</span>
         {resource.isApp ? (
           <span
-            className="shrink-0 rounded px-1.5 py-0.5 text-xs"
+            className="shrink-0 rounded-compact px-1.5 py-0.5 text-xs"
             style={{ background: 'var(--bg-hover)', color: 'var(--text-3)' }}
           >
             App

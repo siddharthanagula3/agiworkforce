@@ -3,14 +3,20 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   parseToolApprovalPolicy,
 } from './toolApprovalPolicy';
 
 describe('parseToolApprovalPolicy', () => {
-  it('falls back to asking when the account has no stored default', () => {
-    expect(parseToolApprovalPolicy({})).toBe('ask_every_time');
-    expect(parseToolApprovalPolicy(null)).toBe('ask_every_time');
+  it('uses Skip approvals for an unconfigured website account', () => {
+    expect(parseToolApprovalPolicy({})).toBe('autonomous');
+    expect(parseToolApprovalPolicy(null)).toBe('autonomous');
+    expect(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY).toBe('autonomous');
+  });
+
+  it('keeps the shared error fallback asking', () => {
     expect(DEFAULT_TOOL_APPROVAL_POLICY).toBe('ask_every_time');
+    expect(parseToolApprovalPolicy('unreadable')).toBe('ask_every_time');
   });
 
   it('reads the namespace the settings panel writes', () => {

@@ -215,10 +215,9 @@ export interface CloudAgentTurnTransport {
  *    died with the client connection, and a pause it recorded could never be
  *    resumed. Both reservations now cross the invocation boundary (see
  *    `CloudAgentWorkflowBilling`), so the tier no longer decides the transport.
- *    Durable is not unmetered: the workflow rehydrates a free-trial reservation
- *    onto `processed.freeTrial`, so the tool loop applies the same per-step free
- *    output-budget cap it applies inline, and settlement releases that same free
- *    reservation row.
+ *    The workflow rehydrates the Free access marker onto
+ *    `processed.freeTrial`, preserving feature policy and any shared event
+ *    reservation without creating an account usage allowance.
  *
  *  - AGI-39: the resume entry points always started the durable workflow with no
  *    fallback, so a Workflow-platform outage, or the AGI_DURABLE_INITIAL_TURNS
@@ -353,7 +352,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         events: checkpoint.events,
       });
@@ -367,7 +366,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         events: checkpoint.events,
@@ -382,7 +381,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         inputRequests: checkpoint.inputRequests,
@@ -399,7 +398,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         deviceStep: checkpoint.deviceStep,

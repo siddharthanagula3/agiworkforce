@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Menu } from 'lucide-react';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@agiworkforce/ui/sheet';
 import { CHAT_ROOT_HREF, CONTACT_SALES_HREF, NAV_GROUPS, WEB_ENTRY_HREF } from './nav';
 
 const ICON_SIZE = 20;

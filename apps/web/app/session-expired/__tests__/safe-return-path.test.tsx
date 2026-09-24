@@ -17,6 +17,12 @@ function hrefFor(query: string): string {
 }
 
 describe('session-expired return path', () => {
+  it('passes through the existing stale-session recovery before showing sign-in', () => {
+    expect(hrefFor('redirectTo=/chat/abc')).toBe(
+      `/login/complete?redirectTo=${encodeURIComponent('/chat/abc')}`,
+    );
+  });
+
   it('keeps a same-origin path so the user lands back where they were', () => {
     expect(hrefFor('redirectTo=/chat/abc')).toContain(encodeURIComponent('/chat/abc'));
   });

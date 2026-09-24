@@ -11,11 +11,16 @@ import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capabil
 import {
   getModelMetadataById,
   getModels,
+  getProviderOfferings,
   getVideoQualityOptionsForModel,
   isExecutableVideoModel,
   isModelLive,
 } from '@agiworkforce/types';
-import { getSelectableModels, isAutoModeModelId } from '@shared/config/llm';
+import {
+  getAllowedAutoModesForTier,
+  getSelectableModels,
+  isAutoModeModelId,
+} from '@shared/config/llm';
 import { providerSupportsWebSearch } from '@/lib/web-search-support';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
@@ -43,11 +48,26 @@ const chatComposerMocks = vi.hoisted(() => ({
     admissionFor: vi.fn(),
     retry: vi.fn(),
   },
+  promotionalMedia: {
+    models: [] as Array<{
+      key: string;
+      displayName: string;
+      category: 'image' | 'video';
+      status: 'ready';
+      outputSize?: string;
+      durationSeconds?: number;
+    }>,
+    issuer: 'QwenCloud',
+    status: 'ready' as 'loading' | 'ready' | 'error',
+    retry: vi.fn(),
+  },
   connectors: {
     connectedIds: new Set<string>(),
     sources: {} as Record<string, string>,
     customNames: {} as Record<string, string>,
     toolConnectorIds: {} as Record<string, string>,
+    loading: false,
+    error: null as string | null,
   },
   memoryCapabilityEnabled: true,
   memoryCapabilityListeners: new Set<() => void>(),
@@ -78,6 +98,10 @@ vi.mock('@features/chat/hooks/use-skills-list', () => ({
 
 vi.mock('@features/chat/hooks/use-media-model-availability', () => ({
   useMediaModelAvailability: () => chatComposerMocks.mediaAvailability,
+}));
+
+vi.mock('@features/chat/hooks/use-promotional-media-models', () => ({
+  usePromotionalMediaModels: () => chatComposerMocks.promotionalMedia,
 }));
 
 vi.mock('@features/connectors/hooks/use-connectors', () => ({
@@ -138,6 +162,13 @@ const PRO_SUBSCRIPTION: SubscriptionPlan = {
   plan_name: 'Pro',
 };
 
+const FREE_SUBSCRIPTION: SubscriptionPlan = {
+  ...PRO_SUBSCRIPTION,
+  tier: 'free',
+  display_name: 'Free',
+  plan_name: 'Free',
+};
+
 describe('ChatComposerNew', () => {
   let originalModelId: string;
   let originalFeatureFlags: ReturnType<typeof useBillingStore.getState>['featureFlags'];
@@ -168,9 +199,15 @@ describe('ChatComposerNew', () => {
       state: 'enabled',
     }));
     chatComposerMocks.mediaAvailability.retry.mockReset();
+    chatComposerMocks.promotionalMedia.models = [];
+    chatComposerMocks.promotionalMedia.status = 'ready';
+    chatComposerMocks.promotionalMedia.retry.mockReset();
     chatComposerMocks.connectors.connectedIds = new Set();
     chatComposerMocks.connectors.sources = {};
     chatComposerMocks.connectors.customNames = {};
+    chatComposerMocks.connectors.toolConnectorIds = {};
+    chatComposerMocks.connectors.loading = false;
+    chatComposerMocks.connectors.error = null;
     chatComposerMocks.memoryCapabilityEnabled = true;
     chatComposerMocks.memoryCapabilityListeners.clear();
     originalModelId = useModelStore.getState().selectedModelId;
@@ -225,13 +262,14 @@ describe('ChatComposerNew', () => {
       render(<ChatComposerNew onSend={vi.fn()} />);
       const textarea = screen.getByRole('textbox', { name: /message input/i });
       // Not the empty-state (home) instance: rest height is the one-row
-      // chat target, 36px content plus the card's own 8px padding = 52px.
+      // chat target, 36px content plus the compact card inset and border.
       expect(textarea).toHaveStyle({
         height: '36px',
       });
       expect(textarea.closest('.chat-composer-container')).toHaveClass('bg-[var(--chat-bg)]');
       expect(textarea.closest('.chat-composer-container')).not.toHaveClass('bg-background/95');
       expect(textarea.closest('#chat-composer')).toHaveClass('bg-[var(--chat-input-bg)]');
+      expect(textarea.closest('#chat-composer')).not.toHaveClass('backdrop-blur-sm');
     } finally {
       scrollHeight.mockRestore();
     }
@@ -246,11 +284,15 @@ describe('ChatComposerNew', () => {
     const plus = screen.getByRole('button', { name: /add attachments and tools/i });
     const send = screen.getByRole('button', { name: /send message/i });
     const textarea = screen.getByRole('textbox', { name: /message input/i });
+    const controls = container.querySelector('.chat-composer-controls') as HTMLElement | null;
+    const leading = container.querySelector('.chat-composer-leading-end') as HTMLElement | null;
     // Parity target: one row at rest (plus, textbox, right cluster), not the
     // textbox on its own row above a separate control row.
     expect(cluster!.contains(plus)).toBe(true);
     expect(cluster!.contains(textarea)).toBe(true);
     expect(cluster!.contains(send)).toBe(true);
+    expect(controls).toHaveClass('contents');
+    expect(leading).toHaveClass('order-[-2]');
   });
 
   it('calls onSend with typed message on Cmd+Enter', async () => {
@@ -266,9 +308,48 @@ describe('ChatComposerNew', () => {
         'hello world',
         undefined,
         undefined,
-        expect.objectContaining({ workMode: 'chat', projectId: null }),
+        expect.objectContaining({
+          workMode: 'chat',
+          projectId: null,
+          connectorToolsEnabled: false,
+        }),
       );
     });
+  });
+
+  it('does not claim the connector fast path before the account connector list settles', async () => {
+    chatComposerMocks.connectors.loading = true;
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'hello');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() => expect(onSend).toHaveBeenCalled());
+    expect(onSend.mock.calls[0]?.[3]).toHaveProperty('connectorToolsEnabled', undefined);
+  });
+
+  it('reports an enabled connected tool only after the connector list settles', async () => {
+    chatComposerMocks.connectors.connectedIds = new Set(['custom-abc123']);
+    chatComposerMocks.connectors.sources = { 'custom-abc123': 'custom' };
+    chatComposerMocks.connectors.customNames = { 'custom-abc123': 'Internal Docs MCP' };
+    chatComposerMocks.connectors.toolConnectorIds = { 'custom-abc123': 'custom-abc123' };
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, 'check the internal docs');
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(onSend).toHaveBeenCalledWith(
+        'check the internal docs',
+        undefined,
+        undefined,
+        expect.objectContaining({ connectorToolsEnabled: true }),
+      ),
+    );
   });
 
   it('calls onSend with typed message on plain Enter (ChatGPT/Claude convention)', async () => {
@@ -471,6 +552,268 @@ describe('ChatComposerNew', () => {
     await waitFor(() =>
       expect(onSend).toHaveBeenCalledWith('Summarize it', [pdf], undefined, expect.any(Object)),
     );
+  });
+
+  it('does not offer file upload while a text-only promotional chat model is selected', async () => {
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+    const attach = screen.getByRole('button', { name: /Add photos & files/ });
+    expect(attach).toBeDisabled();
+    expect(attach).toHaveAttribute('title', expect.stringContaining('text only'));
+    expect(container.querySelector('input[type="file"]')).toBeDisabled();
+  });
+
+  it('keeps an existing file draft and blocks sending after switching to a text-only promotion', async () => {
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    const onSend = vi.fn();
+    const { container } = render(<ChatComposerNew onSend={onSend} />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(['port 8080'], 'example.txt', { type: 'text/plain' })] },
+    });
+    await userEvent.type(screen.getByRole('textbox', { name: /message input/i }), 'Read this');
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('accepts text only');
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Read this');
+    fireEvent.click(screen.getByRole('button', { name: 'Remove attachments' }));
+    expect(screen.getByRole('button', { name: 'Send message' })).not.toBeDisabled();
+  });
+
+  it('persists the Free Auto recovery model through the conversation change callback', async () => {
+    useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    const onModelChange = vi.fn(async (modelId: string) => {
+      act(() => useModelStore.getState().setSelectedModelId(modelId));
+      return true;
+    });
+    const { container } = render(
+      <ChatComposerNew onSend={vi.fn()} onModelChange={onModelChange} />,
+    );
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File(['port 8080'], 'example.txt', { type: 'text/plain' })] },
+    });
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Free Auto' }));
+    await waitFor(() => expect(onModelChange).toHaveBeenCalledOnce());
+    expect(isAutoModeModelId(onModelChange.mock.calls[0]![0])).toBe(true);
+    expect(screen.queryByText(/Switch to Free Auto to send files/i)).toBeNull();
+  });
+
+  it('keeps the text-only selection and file draft when saving the recovery model fails', async () => {
+    useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    const onModelChange = vi.fn(async () => false);
+    const { container } = render(
+      <ChatComposerNew onSend={vi.fn()} onModelChange={onModelChange} />,
+    );
+    fireEvent.change(container.querySelector('input[type="file"]') as HTMLInputElement, {
+      target: { files: [new File(['port 8080'], 'example.txt', { type: 'text/plain' })] },
+    });
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Use Free Auto' }));
+    await waitFor(() => expect(onModelChange).toHaveBeenCalledOnce());
+    expect(useModelStore.getState().selectedModelId).toBe(promotional![0]);
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(screen.getByText(/Could not save this conversation’s model/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remove example.txt' })).toBeInTheDocument();
+  });
+
+  it.each(['qwen', 'experientiallabs'])(
+    'offers an explicit Free Auto switch before submitting a web-search turn on %s',
+    async (provider) => {
+      useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+      const promotional = Object.entries(getProviderOfferings()).find(
+        ([, offering]) => offering.provider === provider && offering.quotaProbeProtocol === 'chat',
+      );
+      expect(promotional).toBeDefined();
+      act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+      const onSend = vi.fn();
+      const onModelChange = vi.fn(async (modelId: string) => {
+        act(() => useModelStore.getState().setSelectedModelId(modelId));
+        return true;
+      });
+      render(<ChatComposerNew onSend={onSend} onModelChange={onModelChange} />);
+      const textbox = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textbox, {
+        target: { value: 'Search the web for the official IANA Example Domains page.' },
+      });
+
+      await waitFor(() =>
+        expect(screen.getByRole('alert')).toHaveTextContent('cannot search the web'),
+      );
+      expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+      expect(onSend).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: 'Use Free Auto' }));
+      await waitFor(() => expect(onModelChange).toHaveBeenCalledOnce());
+      expect(isAutoModeModelId(onModelChange.mock.calls[0]![0])).toBe(true);
+      expect(textbox).toHaveValue('Search the web for the official IANA Example Domains page.');
+      expect(screen.queryByText(/cannot search the web/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+      expect(onSend).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('does not offer Free Auto as a search recovery when the Free search allowance is exhausted', async () => {
+    let resolveCheck!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (resolveCheck = resolve))),
+    );
+    useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+    const onSend = vi.fn();
+    const onModelChange = vi.fn();
+    render(<ChatComposerNew onSend={onSend} onModelChange={onModelChange} />);
+    const textbox = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textbox, { target: { value: 'Search the web for the IANA page.' } });
+
+    expect(screen.getByText('Checking Free web-search availability…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Use Free Auto' })).not.toBeInTheDocument();
+    await act(async () => {
+      resolveCheck(
+        new Response(JSON.stringify({ status: 'exhausted', used: 20, limit: 20, windowDays: 30 })),
+      );
+    });
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('20 web searches'));
+    expect(screen.queryByRole('button', { name: 'Use Free Auto' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    expect(textbox).toHaveValue('Search the web for the IANA page.');
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onModelChange).not.toHaveBeenCalled();
+  });
+
+  it('blocks an exhausted Free Auto search before send but still permits ordinary Free chat', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ status: 'exhausted', used: 20, limit: 20, windowDays: 30 }),
+          ),
+      ),
+    );
+    useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+    useBillingStore.setState({
+      featureFlags: { advanced_model_access: false, generic_web_search: true },
+    });
+    act(() => useModelStore.getState().setSelectedModelId(getAllowedAutoModesForTier('free')[0]!));
+    const onSend = vi.fn();
+    render(<ChatComposerNew onSend={onSend} />);
+    const textbox = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textbox, { target: { value: 'Search the web for the IANA page.' } });
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('20 web searches'));
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Send message' }));
+    expect(onSend).not.toHaveBeenCalled();
+
+    fireEvent.change(textbox, { target: { value: 'Hello, answer from your own knowledge.' } });
+    await waitFor(() => expect(screen.queryByText(/20 web searches/i)).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
+  });
+
+  it('waits for the Free search check before allowing an explicit search turn', async () => {
+    let resolveCheck!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (resolveCheck = resolve))),
+    );
+    useBillingStore.setState({
+      subscription: FREE_SUBSCRIPTION,
+      featureFlags: { advanced_model_access: false, generic_web_search: true },
+    });
+    act(() => useModelStore.getState().setSelectedModelId(getAllowedAutoModesForTier('free')[0]!));
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    fireEvent.change(screen.getByRole('textbox', { name: /message input/i }), {
+      target: { value: 'Search the web for the IANA page.' },
+    });
+
+    expect(screen.getByText('Checking Free web-search availability…')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    await act(async () => {
+      resolveCheck(
+        new Response(JSON.stringify({ status: 'available', used: 19, limit: 20, windowDays: 30 })),
+      );
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled());
+  });
+
+  it('does not strand a Free search draft when the allowance preflight fails', async () => {
+    const check = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ status: 'available', used: 19, limit: 20, windowDays: 30 })),
+      );
+    vi.stubGlobal('fetch', check);
+    useBillingStore.setState({
+      subscription: FREE_SUBSCRIPTION,
+      featureFlags: { advanced_model_access: false, generic_web_search: true },
+    });
+    act(() => useModelStore.getState().setSelectedModelId(getAllowedAutoModesForTier('free')[0]!));
+    render(<ChatComposerNew onSend={vi.fn()} />);
+    const textbox = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textbox, { target: { value: 'Search the web for the IANA page.' } });
+
+    await waitFor(() =>
+      expect(screen.getByText(/Search availability could not be checked/)).toBeInTheDocument(),
+    );
+    expect(textbox).toHaveValue('Search the web for the IANA page.');
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(
+        screen.queryByText(/Search availability could not be checked/),
+      ).not.toBeInTheDocument(),
+    );
+    expect(textbox).toHaveValue('Search the web for the IANA page.');
+  });
+
+  it('keeps the pinned free model and code draft when switching models cannot be saved', async () => {
+    useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'qwen' && offering.quotaProbeProtocol === 'chat',
+    );
+    expect(promotional).toBeDefined();
+    act(() => useModelStore.getState().setSelectedModelId(promotional![0]));
+    const onSend = vi.fn();
+    const onModelChange = vi.fn(async () => false);
+    render(<ChatComposerNew onSend={onSend} onModelChange={onModelChange} />);
+    const textbox = screen.getByRole('textbox', { name: /message input/i });
+    fireEvent.change(textbox, { target: { value: 'Run Python to calculate 17 * 19.' } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('cannot run code');
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Use Free Auto' }));
+    await waitFor(() => expect(onModelChange).toHaveBeenCalledOnce());
+    expect(useModelStore.getState().selectedModelId).toBe(promotional![0]);
+    expect(textbox).toHaveValue('Run Python to calculate 17 * 19.');
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it('offers explicit recovery choices when an image conflicts with the selected model', async () => {
@@ -855,7 +1198,8 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByText('Connectors'));
 
     expect(chatComposerMocks.openSettings).not.toHaveBeenCalled();
-    expect(screen.getByRole('menu', { name: 'Connectors' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Connectors' })).toBeInTheDocument();
+    expect(screen.queryByRole('menu', { name: 'Connectors' })).not.toBeInTheDocument();
     expect(screen.getByText('No connectors connected yet.')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Browse connectors' }));
@@ -1584,6 +1928,50 @@ describe('ChatComposerNew', () => {
       });
     });
 
+    it('puts an available promotional image route ahead of paid models and sends through the free offering', async () => {
+      const [key, offering] = Object.entries(getProviderOfferings()).find(
+        ([, candidate]) => candidate.quotaProbeProtocol === 'image-sync',
+      )!;
+      chatComposerMocks.promotionalMedia.models = [
+        {
+          key,
+          displayName: offering.displayName,
+          category: 'image',
+          status: 'ready',
+          outputSize: offering.quotaImageSize ?? '1024*1024',
+        },
+      ];
+      const onSend = vi.fn();
+      const onGenerateImage = vi.fn();
+      render(<ChatComposerNew onSend={onSend} onGenerateImage={onGenerateImage} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create image'));
+      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
+      const promotional = screen.getByRole('button', { name: offering.displayName });
+      const paid = screen.getByRole('button', { name: IMAGE_MODELS[0]!.label });
+      expect(
+        promotional.compareDocumentPosition(paid) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(promotional).toHaveTextContent('Free · QwenCloud quota');
+      expect(paid).toHaveTextContent('Paid');
+      fireEvent.click(promotional);
+      expect(screen.queryByRole('button', { name: /select aspect ratio/i })).toBeNull();
+      expect(screen.getByText(/Free quota · .* × .*/)).toBeVisible();
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textarea, { target: { value: 'a blue paper boat' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(onSend).toHaveBeenCalledWith(
+        'a blue paper boat',
+        undefined,
+        undefined,
+        expect.objectContaining({ modelOverrideId: key, webSearchEnabled: false }),
+      );
+      expect(onGenerateImage).not.toHaveBeenCalled();
+    });
+
     it('removes unsupported ratios and resets a stale choice when OpenAI is selected', () => {
       const googleModel = IMAGE_MODELS.find((model) => model.provider === 'google');
       const openAiModel = IMAGE_MODELS.find((model) => model.provider === 'openai');
@@ -1790,6 +2178,51 @@ describe('ChatComposerNew', () => {
       const picker = screen.getByRole('button', { name: /select video model/i });
       expect(picker).toBeInTheDocument();
       expect(picker).not.toHaveTextContent(/no video model available/i);
+    });
+
+    it('offers a ready promotional video before paid video models with fixed settings', () => {
+      const [key, offering] = Object.entries(getProviderOfferings()).find(
+        ([, candidate]) => candidate.quotaProbeProtocol === 'video-async',
+      )!;
+      chatComposerMocks.promotionalMedia.models = [
+        {
+          key,
+          displayName: offering.displayName,
+          category: 'video',
+          status: 'ready',
+          outputSize: '1280*720',
+          durationSeconds: 2,
+        },
+      ];
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      const onSend = vi.fn();
+      const onGenerateVideo = vi.fn();
+      render(<ChatComposerNew onSend={onSend} onGenerateVideo={onGenerateVideo} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+      fireEvent.click(screen.getByText('Create video'));
+      fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
+      const promotional = screen.getByRole('button', { name: offering.displayName });
+      const paid = screen.getByRole('button', { name: VIDEO_MODELS[0]!.label });
+      expect(
+        promotional.compareDocumentPosition(paid) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      fireEvent.click(promotional);
+      expect(screen.queryByRole('button', { name: /select video aspect ratio/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /select video quality/i })).toBeNull();
+      expect(screen.getByText('Free quota · 1280 × 720 · 2s')).toBeVisible();
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textarea, { target: { value: 'a paper boat moving across water' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(onSend).toHaveBeenCalledWith(
+        'a paper boat moving across water',
+        undefined,
+        undefined,
+        expect.objectContaining({ modelOverrideId: key, webSearchEnabled: false }),
+      );
+      expect(onGenerateVideo).not.toHaveBeenCalled();
     });
 
     it('derives every executable video candidate from the catalog without a provider allowlist', () => {

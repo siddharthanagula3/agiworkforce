@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
 import type {
   ResearchDeliverableSpec,
   ResearchStep,
@@ -41,10 +42,14 @@ import {
   REQUIRED_SEARCH_SYSTEM_NUDGE,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
+  shouldOfferWebSearchForTurn,
   type RequiredSearchEnforcement,
   type WebSearchRequirement,
 } from '@/lib/web-search/required-search';
-import { hasExplicitCodeExecutionIntent as hasExplicitCodeExecutionRequest } from '@/lib/code-execution/explicit-execution-intent';
+import {
+  hasExplicitCodeExecutionIntent as hasExplicitCodeExecutionRequest,
+  hasExplicitCodeExecutionOptOut,
+} from '@/lib/code-execution/explicit-execution-intent';
 import {
   EXECUTION_PLAN_GATED_SYSTEM_NOTICE,
   REQUIRED_EXECUTION_SYSTEM_NUDGE,
@@ -62,7 +67,12 @@ import {
   type PlacesRequirement,
   type RequiredPlacesEnforcement,
 } from '@/lib/places/required-places';
-import { hasExplicitWebSearchIntent, webSearchNeedsGenericTool } from '@agiworkforce/search';
+import {
+  hasExplicitWebFetchIntent,
+  hasExplicitWebSearchIntent,
+  hasExplicitWebSearchOptOut,
+  webSearchNeedsGenericTool,
+} from '@agiworkforce/search';
 import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
 import {
   supportsOpenAIReasoningEffort,
@@ -178,6 +188,7 @@ import {
 } from '@/lib/services/model-rollout/rollout-routing-inputs';
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
+import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
 import { promptStampsFor, resolvePromptText } from '@/lib/prompts/prompt-registry';
 import {
   orderInstructionBlocks,
@@ -198,7 +209,7 @@ import { buildInterimRoutePlanId } from '@/lib/cpst-telemetry';
 import type { AuthGateSuccess } from './auth-gate';
 import { resolveAuthenticatedSurface } from './request-surface';
 import { resolveChatWorkload } from '@/lib/billing/usage-attribution';
-import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { readOrganizationRegion } from '@/lib/server/data-region';
 import {
   MANAGED_CHAT_CONTRACT_VERSION,
@@ -446,6 +457,12 @@ export const ChatCompletionRequestSchema = z
      * a disabled connector is never advertised to the model for this turn.
      */
     disabled_connector_ids: z.array(z.string().min(1).max(200)).max(64).optional(),
+    /**
+     * A negative capability hint from a first-party surface that has finished
+     * loading the account connector list. False may skip connector discovery;
+     * omission preserves discovery for older and third-party clients.
+     */
+    connector_tools_enabled: z.boolean().optional(),
     work_mode: z.enum(CLOUD_WORK_MODES).optional(),
     agi_work_goal: AgiWorkGoalSchema.optional(),
     thinking_mode: z.boolean().optional(),
@@ -465,6 +482,14 @@ export const ChatCompletionRequestSchema = z
       .optional(),
     conversation_id: z.string().uuid().optional(),
     assistant_message_id: z.string().uuid().optional(),
+    assistant_parent_id: z.string().uuid().optional(),
+    user_message: z
+      .object({
+        id: z.string().uuid(),
+        metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
+        parent_id: z.string().uuid().nullable().optional(),
+      })
+      .optional(),
     skill_name: z
       .string()
       .trim()
@@ -483,6 +508,13 @@ export const ChatCompletionRequestSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.user_message && !value.conversation_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['user_message'],
+        message: 'user_message requires conversation_id',
+      });
+    }
     if (value.response_format?.type === 'json_object' && value.stream) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -513,9 +545,6 @@ const RE_OFFICE_CREATION_ACTION = /\b(create|generate|make|prepare|produce|expor
 const RE_OFFICE_CREATION_ARTIFACT =
   /\.(docx|pptx|xlsx|pdf|csv)\b|\b(word document|powerpoint|slide deck|presentation|office file|excel|spreadsheet|workbook|pdf|csv)\b/i;
 
-const RE_HTTP_URL = /https?:\/\/[^\s<>"']+/i;
-const RE_URL_FETCH_ACTION = /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
-
 export type ImplicitManagedToolIntentContext = {
   prompt: string;
   taskType: RoutingTaskType;
@@ -528,6 +557,7 @@ export function applyImplicitManagedToolIntent(
 ): void {
   if (
     request.web_search === undefined &&
+    !hasExplicitWebSearchOptOut(context.prompt) &&
     (context.taskType === 'research' || hasExplicitWebSearchIntent(context.prompt))
   ) {
     request.web_search = true;
@@ -535,11 +565,7 @@ export function applyImplicitManagedToolIntent(
 
   if (!request.stream) return;
 
-  if (
-    request.web_fetch === undefined &&
-    RE_HTTP_URL.test(context.prompt) &&
-    RE_URL_FETCH_ACTION.test(context.prompt)
-  ) {
+  if (request.web_fetch === undefined && hasExplicitWebFetchIntent(context.prompt)) {
     request.web_fetch = true;
   }
 
@@ -552,11 +578,12 @@ export function applyImplicitManagedToolIntent(
   }
 
   const hasExplicitCodeExecutionIntent =
-    hasExplicitCodeExecutionRequest(context.prompt) ||
-    (RE_CODE_EXECUTION_ACTION.test(context.prompt) &&
-      RE_CODE_EXECUTION_SUBJECT.test(context.prompt)) ||
-    (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
-      RE_DATA_EXECUTION_SUBJECT.test(context.prompt));
+    !hasExplicitCodeExecutionOptOut(context.prompt) &&
+    (hasExplicitCodeExecutionRequest(context.prompt) ||
+      (RE_CODE_EXECUTION_ACTION.test(context.prompt) &&
+        RE_CODE_EXECUTION_SUBJECT.test(context.prompt)) ||
+      (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
+        RE_DATA_EXECUTION_SUBJECT.test(context.prompt)));
 
   if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
     request.code_execution = true;
@@ -796,6 +823,7 @@ export type ProcessedRequest = {
   organizationId?: string | null;
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
+  callerToolFields?: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'>;
   conversationId: string | undefined;
   conversationIsTemporary?: boolean;
   /**
@@ -807,6 +835,8 @@ export type ProcessedRequest = {
   /** The earlier conversations this turn's recall quoted, shown beside the answer. */
   pastChatSources?: readonly PastChatCitation[];
   assistantMessageId?: string | undefined;
+  assistantParentId?: string | undefined;
+  userMessageId?: string | undefined;
   autoMemoryFacts?: string[];
   autoMemoryFactsRequireToolFreeTurn?: boolean;
   /**
@@ -1740,6 +1770,7 @@ export function buildWebCloudAutoRoutingRequest(
    * route with no published residency answer is refused rather than assumed.
    */
   residencyRegion?: string | null,
+  requiredRouteId?: string | null,
 ): AutoRoutingRequest {
   const gatewayFlagHarnessIds = admittedHarnessIds();
   return {
@@ -1771,6 +1802,7 @@ export function buildWebCloudAutoRoutingRequest(
         }
       : {}),
     ...(routeHealth?.preferredRouteId ? { preferredRouteId: routeHealth.preferredRouteId } : {}),
+    ...(requiredRouteId ? { requiredRouteId } : {}),
     ...(routeHealth?.currentModelKey ? { currentModelKey: routeHealth.currentModelKey } : {}),
     ...(routeHealth?.previousTaskType ? { previousTaskType: routeHealth.previousTaskType } : {}),
     ...(availableProviderIds && availableProviderIds.size > 0 ? { availableProviderIds } : {}),
@@ -2174,6 +2206,7 @@ const MAX_TOTAL_LENGTH = 1000000;
 
 export interface ProcessRequestOptions {
   workspaceControls?: ResolvedWorkspaceControls | null;
+  scopedDbPromise?: Promise<UserScopedDb>;
 }
 
 export function workspaceFeaturesForChatRequest(
@@ -2327,6 +2360,10 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
+    ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
+    ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
+  };
   applyWorkspaceDefaultModel(chatRequest, workspaceControls);
   const workModeEntitlementError = getWorkModeEntitlementError(
     chatRequest.work_mode,
@@ -2348,7 +2385,8 @@ export async function processRequest(
   }
 
   // round trips, scoped-db handshake, ownership lookup, safety preference,
-  const scopedDbPromise = getUserScopedDb(request, { apiKeyScope: 'inference:write' });
+  const scopedDbPromise =
+    options.scopedDbPromise ?? getUserScopedDb(request, { apiKeyScope: 'inference:write' });
   scopedDbPromise.catch(() => {});
 
   applyFreePlanDefaultModel(chatRequest, subscription.plan_tier);
@@ -2437,6 +2475,7 @@ export async function processRequest(
     | {
         ok: true;
         isTemporary: boolean;
+        selectedRouteId: string | null;
         projectId: string | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
@@ -2468,8 +2507,9 @@ export async function processRequest(
             id: string;
             project_id: string | null;
             is_temporary: boolean;
+            selected_route_id: string | null;
           }>(
-            `select id, project_id, is_temporary
+            `select id, project_id, is_temporary, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id
                  from web_conversations
                 where id = $1 and user_id = $2 and deleted_at is null
                 limit 1`,
@@ -2548,6 +2588,7 @@ export async function processRequest(
           return {
             ok: true,
             isTemporary: ownedRows[0].is_temporary,
+            selectedRouteId: ownedRows[0].selected_route_id,
             projectId: ownedRows[0].project_id,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
@@ -2572,7 +2613,13 @@ export async function processRequest(
           };
         }
       })()
-    : Promise.resolve({ ok: true, isTemporary: false, projectId: null, projectBlocks: [] });
+    : Promise.resolve({
+        ok: true,
+        isTemporary: false,
+        selectedRouteId: null,
+        projectId: null,
+        projectBlocks: [],
+      });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
     const platform = moderateManagedPrompt({
@@ -2647,6 +2694,46 @@ export async function processRequest(
 
   const conversationIsTemporary = ownership.isTemporary;
   const conversationProjectId = ownership.projectId;
+  if (chatRequest.user_message && !conversationIsTemporary && chatRequest.conversation_id) {
+    try {
+      const scoped = await scopedDbPromise;
+      await persistConversationMessage({
+        db: scoped.db,
+        scope: {
+          conversationId: chatRequest.conversation_id,
+          userId,
+          organizationId: scoped.organizationId,
+        },
+        message: {
+          id: chatRequest.user_message.id,
+          role: 'user',
+          content: latestUserPrompt,
+          metadata: chatRequest.user_message.metadata,
+          ...(chatRequest.user_message.parent_id !== undefined
+            ? { parentId: chatRequest.user_message.parent_id }
+            : {}),
+        },
+      });
+    } catch (error) {
+      logger.error(
+        { error, userId, conversationId: chatRequest.conversation_id },
+        'User message could not be persisted before provider dispatch',
+      );
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message: 'Your message could not be saved. No model request was sent.',
+              type: 'server_error',
+              code: 'user_message_persistence_failed',
+            },
+          },
+          { status: 503 },
+        ),
+      };
+    }
+  }
   const projectInstructionBlock =
     ownership.projectBlocks.find((block) => block.layer === 'project')?.text ?? null;
 
@@ -2991,6 +3078,7 @@ export async function processRequest(
         })
     : undefined;
 
+  const currentTurnTaskType = classifyTaskLocally(lastUserText, [], routingAttachments).type;
   let classifierResult = classifyTaskLocally(lastUserText, routingHistory, routingAttachments);
 
   if (routingHistory.length > 0) {
@@ -3024,6 +3112,8 @@ export async function processRequest(
           taskType: resolvedTaskType,
           apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
           requestedMaxOutputTokens,
+          modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
+            ?.responseBudgetFloorTokens,
         });
   const routeSelection =
     resolvedTaskType === classifierResult.type
@@ -3190,6 +3280,8 @@ export async function processRequest(
           taskType: resolvedTaskType,
           apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
           requestedMaxOutputTokens,
+          modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
+            ?.responseBudgetFloorTokens,
           semanticAssessment: semanticResponseAssessment.assessment,
         });
   const routeUsage = {
@@ -3220,6 +3312,7 @@ export async function processRequest(
         userRoutingPreferences,
         rolloutInputs,
         residencyRegion,
+        ownership.selectedRouteId,
       ),
       routeResolutionNowMs,
     );
@@ -3229,7 +3322,7 @@ export async function processRequest(
   // enter it: `tierAllowedSlots` is what keeps free capacity off paid traffic and
   // paid traffic off free pools, and it is applied per tier inside the resolver.
   const freeLane = activateFreeLane({
-    configuredMode: resolveFreeLaneMode(),
+    configuredMode: ownership.selectedRouteId ? 'off' : resolveFreeLaneMode(),
     isFreePlan: isFreePlanTier(subscription.plan_tier),
   });
   const freeLaneMode = freeLane.mode;
@@ -3330,9 +3423,11 @@ export async function processRequest(
       response: NextResponse.json(
         {
           error: {
-            message: isAutoModeModelId(requestedModel)
-              ? AUTO_ROUTE_UNAVAILABLE_MESSAGE
-              : EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE,
+            message: ownership.selectedRouteId
+              ? 'Your selected API provider is unavailable for this model. Choose another provider or clear the provider pin, then try again.'
+              : isAutoModeModelId(requestedModel)
+                ? AUTO_ROUTE_UNAVAILABLE_MESSAGE
+                : EXPLICIT_ROUTE_UNAVAILABLE_MESSAGE,
             type: 'invalid_request_error',
             code: 'model_route_unavailable',
           },
@@ -3884,6 +3979,8 @@ export async function processRequest(
           apiResponseFormat: wantsJsonObject(chatRequest.response_format) ? 'json_object' : null,
           requestedMaxOutputTokens,
           modelMaxOutputTokens: resolveMaxOutputTokens(chatRequest.model),
+          modelMinimumOutputTokens: getModelMetadataById(chatRequest.model)
+            ?.responseBudgetFloorTokens,
           semanticAssessment: semanticResponseAssessment.assessment,
         });
   let maxTokens =
@@ -3998,6 +4095,7 @@ export async function processRequest(
         (await scopedDbPromise).db,
         userId,
         estimatedCostMicrousd,
+        existingBalance,
       ),
     );
 
@@ -4012,13 +4110,15 @@ export async function processRequest(
     );
 
     if (!hasCredits) {
-      const fallbackModel = findCheaperFallbackModel(
-        chatRequest.model,
-        provider,
-        estimatedPromptTokens,
-        maxTokens,
-        fallbackAllowedByPolicy,
-      );
+      const fallbackModel = ownership.selectedRouteId
+        ? null
+        : findCheaperFallbackModel(
+            chatRequest.model,
+            provider,
+            estimatedPromptTokens,
+            maxTokens,
+            fallbackAllowedByPolicy,
+          );
 
       if (!fallbackModel && workspaceModelPolicy) {
         // Name the control that actually closed the door. A cheaper model that
@@ -4056,6 +4156,7 @@ export async function processRequest(
           (await scopedDbPromise).db,
           userId,
           fallbackCostMicrousd,
+          existingBalance,
         );
 
         if (hasFallbackCredits) {
@@ -4168,8 +4269,29 @@ export async function processRequest(
     .filter((text) => text.length > 0)
     .join('\n\n');
 
+  const searchRequirement = resolveWebSearchRequirement({
+    webSearchEnabled: chatRequest.web_search,
+    searchRequested: chatRequest.search_requested === true,
+    agiWorkRun: chatRequest.work_mode === 'agiwork',
+    researchTask: chatRequest.research === true || currentTurnTaskType === 'research',
+    userMessage: lastUserText,
+  });
+  const webSearchToolOfferPolicy = getModelMetadataById(
+    chatRequest.model,
+  )?.webSearchToolOfferPolicy;
+  const offerWebSearch = shouldOfferWebSearchForTurn({
+    webSearchEnabled: chatRequest.web_search,
+    requirement: searchRequirement,
+    modelPolicy: webSearchToolOfferPolicy,
+    surface: chatSurface,
+    userOptOut:
+      chatSurface === 'web' &&
+      chatRequest.search_requested !== true &&
+      hasExplicitWebSearchOptOut(lastUserText),
+  });
+
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
-  if (chatRequest.web_search) {
+  if (offerWebSearch) {
     const googleGroundingPoolAvailable =
       providerLower === 'google' ? (await peekGroundingPool(providerLower)).withinPool : true;
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps, {
@@ -4218,13 +4340,6 @@ export async function processRequest(
     });
   }
 
-  const searchRequirement = resolveWebSearchRequirement({
-    webSearchEnabled: chatRequest.web_search,
-    searchRequested: chatRequest.search_requested === true,
-    agiWorkRun: chatRequest.work_mode === 'agiwork',
-    researchTask: resolvedTaskType === 'research',
-    userMessage: lastUserText,
-  });
   const searchEnforcement = resolveRequiredSearchEnforcement({
     required: searchRequirement.required,
     requestedToolChoice: chatRequest.tool_choice,
@@ -4242,7 +4357,13 @@ export async function processRequest(
     });
   }
 
-  if (chatRequest.web_fetch) {
+  if (
+    chatRequest.web_fetch &&
+    (chatSurface !== 'web' ||
+      webSearchToolOfferPolicy !== 'required_only' ||
+      offerWebSearch ||
+      hasExplicitWebFetchIntent(lastUserText))
+  ) {
     resolvedTools = resolveWebFetchTools({
       providerLower,
       model: chatRequest.model,
@@ -4484,6 +4605,7 @@ export async function processRequest(
     zeroDataRetentionOnly,
     managedUsage,
     chatRequest,
+    callerToolFields,
     conversationId: chatRequest.conversation_id,
     conversationIsTemporary,
     ...(ownership.ok && ownership.projectSources?.length
@@ -4491,6 +4613,8 @@ export async function processRequest(
       : {}),
     ...(pastChatSources.length ? { pastChatSources } : {}),
     assistantMessageId: chatRequest.assistant_message_id,
+    assistantParentId: chatRequest.assistant_parent_id,
+    ...(chatRequest.user_message ? { userMessageId: chatRequest.user_message.id } : {}),
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,
     ...(autoMemorySourceText ? { autoMemorySourceText } : {}),

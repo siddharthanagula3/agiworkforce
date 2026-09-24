@@ -18,6 +18,7 @@ export { routeToCloud } from './http';
 export {
   applyAgentActivityEvent,
   finishAgentActivityLocally,
+  hasUnavailableWebSearch,
   isGenerationProgressEntry,
   isLocalPlaceholderActivityEntry,
   REASONING_PROGRESS_SUMMARY,

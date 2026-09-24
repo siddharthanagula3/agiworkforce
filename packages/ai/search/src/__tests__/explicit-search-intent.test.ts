@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPLICIT_SEARCH_INTENT_PHRASES,
   detectExplicitWebSearchIntent,
+  hasExplicitWebFetchIntent,
+  hasExplicitWebSearchOptOut,
   hasExplicitWebSearchIntent,
 } from '../explicit-search-intent';
 
@@ -13,6 +15,9 @@ describe('detectExplicitWebSearchIntent', () => {
     );
     expect(detectExplicitWebSearchIntent('can you look this up for me')).toBe('search_verb');
     expect(detectExplicitWebSearchIntent('Look up the current CEO')).toBe('search_verb');
+    expect(
+      detectExplicitWebSearchIntent('Run two separate web searches for the official RFC pages'),
+    ).toBe('search_verb');
   });
 
   it('reports the recency signal for a question that only current data answers', () => {
@@ -50,6 +55,17 @@ describe('detectExplicitWebSearchIntent', () => {
     expect(detectExplicitWebSearchIntent('rename latestValue to newestValue')).toBeNull();
   });
 
+  it('treats an explicit instruction not to search as a refusal, not a search request', () => {
+    for (const text of [
+      'Now reply exactly. Do not search the web or run code.',
+      "Don't search online; answer from the conversation.",
+      'Answer without web search, even if the subject is current.',
+    ]) {
+      expect(hasExplicitWebSearchOptOut(text)).toBe(true);
+      expect(detectExplicitWebSearchIntent(text)).toBeNull();
+    }
+  });
+
   it('matches regardless of case and surrounding punctuation', () => {
     expect(hasExplicitWebSearchIntent('LOOK UP: the spec')).toBe(true);
     expect(hasExplicitWebSearchIntent('(today) what shipped?')).toBe(true);
@@ -63,5 +79,24 @@ describe('detectExplicitWebSearchIntent', () => {
       expect(phrases.length).toBeGreaterThan(0);
       expect(signal.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('hasExplicitWebFetchIntent', () => {
+  it('requires a URL and a request to inspect its contents', () => {
+    expect(hasExplicitWebFetchIntent('Summarize https://www.iana.org/help/example-domains')).toBe(
+      true,
+    );
+    expect(
+      hasExplicitWebFetchIntent('Open this URL: https://www.iana.org/help/example-domains'),
+    ).toBe(true);
+    expect(hasExplicitWebFetchIntent('A URL I remember is https://www.iana.org/')).toBe(false);
+    expect(hasExplicitWebFetchIntent('Summarize this text, no link supplied.')).toBe(false);
+  });
+
+  it('does not fetch a URL when the user explicitly forbids opening it', () => {
+    expect(
+      hasExplicitWebFetchIntent('Do not open this URL: https://example.com. Summarize my note.'),
+    ).toBe(false);
   });
 });

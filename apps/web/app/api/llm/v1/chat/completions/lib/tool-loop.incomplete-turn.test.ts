@@ -134,6 +134,17 @@ describe('runToolLoop, why a turn came back with no answer', () => {
     expect(reportedFailure(output)).toBeUndefined();
     expect(output).toContain('"reason":"end-turn"');
   });
+
+  it('keeps partial text but does not complete a stream that lacks a terminal signal', async () => {
+    const output = await drive([
+      { choices: [{ index: 0, delta: { content: 'The answer started' } }] },
+    ]);
+
+    expect(output).toContain('The answer started');
+    expect(reportedFailure(output)?.code).toBe('stream_interrupted');
+    expect(output).toContain('"reason":"error"');
+    expect(output).not.toContain('"reason":"end-turn"');
+  });
 });
 
 describe('runToolLoop, a turn that failed after the reader had already seen text', () => {

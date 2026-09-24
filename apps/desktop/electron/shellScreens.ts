@@ -65,6 +65,24 @@ export function crashScreen(reference: string): ShellScreen {
   };
 }
 
+export function retryUrlAfterFailedLoad(validatedUrl: string, entryUrl: string): string {
+  try {
+    const target = new URL(validatedUrl);
+    const entry = new URL(entryUrl);
+    if (
+      target.protocol === entry.protocol &&
+      target.host === entry.host &&
+      target.username === '' &&
+      target.password === ''
+    ) {
+      return target.href;
+    }
+  } catch {
+    return entryUrl;
+  }
+  return entryUrl;
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

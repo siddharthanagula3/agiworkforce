@@ -75,31 +75,31 @@ export function OfflineIndicator({
   const message = getStatusMessage();
 
   const bgColor = {
-    success: 'bg-green-50 dark:bg-green-950',
-    info: 'bg-blue-50 dark:bg-blue-950',
-    warning: 'bg-yellow-50 dark:bg-yellow-950',
-    error: 'bg-red-50 dark:bg-red-950',
+    success: 'bg-success-fill/10',
+    info: 'bg-info-fill/10',
+    warning: 'bg-warning-fill/10',
+    error: 'bg-destructive/10',
   }[severity];
 
   const borderColor = {
-    success: 'border-green-200 dark:border-green-800',
-    info: 'border-blue-200 dark:border-blue-800',
-    warning: 'border-yellow-200 dark:border-yellow-800',
-    error: 'border-red-200 dark:border-red-800',
+    success: 'border-success-fill/30',
+    info: 'border-info-fill/30',
+    warning: 'border-warning-fill/30',
+    error: 'border-destructive/30',
   }[severity];
 
   const textColor = {
-    success: 'text-green-900 dark:text-green-100',
-    info: 'text-blue-900 dark:text-blue-100',
-    warning: 'text-yellow-900 dark:text-yellow-100',
-    error: 'text-red-900 dark:text-red-100',
+    success: 'text-success-text',
+    info: 'text-info-text',
+    warning: 'text-warning-text',
+    error: 'text-danger-text',
   }[severity];
 
   const iconColor = {
-    success: 'text-green-600 dark:text-green-400',
-    info: 'text-blue-600 dark:text-blue-400',
-    warning: 'text-yellow-600 dark:text-yellow-400',
-    error: 'text-red-600 dark:text-red-400',
+    success: 'text-success-text',
+    info: 'text-info-text',
+    warning: 'text-warning-text',
+    error: 'text-danger-text',
   }[severity];
 
   const getIcon = () => {
@@ -123,7 +123,7 @@ export function OfflineIndicator({
 
   return (
     <div
-      className={`pointer-events-none fixed ${position}-0 left-0 right-0 z-50 ${className}`}
+      className={`pointer-events-none fixed ${position}-0 left-0 right-0 z-[var(--z-notification)] ${className}`}
       role="status"
       aria-live="polite"
       aria-label="Network status indicator"
@@ -133,7 +133,7 @@ export function OfflineIndicator({
           pointer-events-auto mx-4 mb-4 px-4 py-3 rounded-lg border
           flex items-center justify-between gap-3
           ${bgColor} ${borderColor} ${textColor}
-          transition-all duration-200 ease-in-out
+          transition-all duration-quick ease-standard
         `}
       >
         <div className="flex items-center gap-3 flex-1">
@@ -157,10 +157,10 @@ export function OfflineIndicator({
             <button
               onClick={() => retrySync()}
               className={`
-                px-3 py-1 rounded text-sm font-medium
-                bg-red-200 hover:bg-red-300 dark:bg-red-800 dark:hover:bg-red-700
-                text-red-900 dark:text-red-100
-                transition-colors duration-150
+                px-3 py-1 rounded-compact text-sm font-medium
+                bg-destructive/15 hover:bg-destructive/25
+                text-danger-text
+                transition-colors duration-quick
               `}
               aria-label="Retry sync"
             >
@@ -169,13 +169,13 @@ export function OfflineIndicator({
           )}
 
           {state.queuedCount > 0 && state.state !== SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded text-xs font-medium bg-opacity-50">
+            <span className="px-2 py-1 rounded-compact text-xs font-medium bg-opacity-50">
               {state.queuedCount} pending
             </span>
           )}
 
           {state.state === SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded text-xs font-medium opacity-75">Syncing…</span>
+            <span className="px-2 py-1 rounded-compact text-xs font-medium opacity-75">Syncing…</span>
           )}
         </div>
       </div>

@@ -269,6 +269,101 @@ describe('video settlement feeds the COGS ledger', () => {
       }),
     );
   });
+
+  function finalizedRow(status: 'completed' | 'failed', billingOutcome: 'completed' | 'released') {
+    return {
+      id: 'job-2',
+      user_id: 'user-1',
+      idempotency_key: 'k',
+      request_hash: 'h',
+      billing_lease_token: 't',
+      provider: 'google',
+      model: 'fixture-video-model',
+      prompt: 'p',
+      duration_secs: 8,
+      resolution: '720p',
+      source_surface: 'web',
+      estimated_cost_cents: 120,
+      actual_cost_cents: null,
+      estimated_duration_secs: 60,
+      status,
+      billing_outcome: billingOutcome,
+      reconcile_failures: 0,
+      next_attempt_at: '2026-08-01T00:00:00.000Z',
+      created_at: '2026-08-01T00:00:00.000Z',
+      updated_at: '2026-08-01T00:00:00.000Z',
+    };
+  }
+
+  it('records what the provider charged for an undelivered video without billing the account', async () => {
+    recordSettledProviderCostMock.mockClear();
+    const db = { query: vi.fn().mockResolvedValue([finalizedRow('failed', 'released')]) };
+
+    await finalizeVideoGenerationJob({
+      db: db as never,
+      jobId: 'job-2',
+      claimToken: 'claim',
+      outcome: 'failed',
+      publicError: 'refused',
+      undeliveredProviderCostCents: 120,
+    });
+
+    expect(db.query.mock.calls[0]?.[1]).toEqual([
+      'job-2',
+      'claim',
+      'failed',
+      null,
+      'refused',
+      null,
+    ]);
+    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
+    expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'google',
+        actualCostCents: 120,
+        sourceRef: 'video_job:job-2',
+        taskOutcome: 'undelivered',
+        usage: expect.objectContaining({ operation: 'video', durationSecs: 8 }),
+      }),
+    );
+  });
+
+  it('records nothing for a failure the provider never charged for', async () => {
+    recordSettledProviderCostMock.mockClear();
+    const db = { query: vi.fn().mockResolvedValue([finalizedRow('failed', 'released')]) };
+
+    await finalizeVideoGenerationJob({
+      db: db as never,
+      jobId: 'job-2',
+      claimToken: 'claim',
+      outcome: 'failed',
+      publicError: 'provider failed',
+    });
+
+    expect(recordSettledProviderCostMock).not.toHaveBeenCalled();
+  });
+
+  it('never records an undelivered cost over a job a concurrent finalization delivered', async () => {
+    recordSettledProviderCostMock.mockClear();
+    const db = { query: vi.fn().mockResolvedValue([finalizedRow('completed', 'completed')]) };
+
+    await finalizeVideoGenerationJob({
+      db: db as never,
+      jobId: 'job-2',
+      claimToken: 'claim',
+      outcome: 'failed',
+      publicError: 'refused',
+      undeliveredProviderCostCents: 120,
+    });
+
+    expect(recordSettledProviderCostMock).toHaveBeenCalledTimes(1);
+    expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceRef: 'video_job:job-2' }),
+    );
+    expect(recordSettledProviderCostMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ taskOutcome: 'undelivered' }),
+    );
+  });
 });
 
 describe('acquireVideoGenerationAdmission SQL', () => {

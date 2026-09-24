@@ -169,7 +169,7 @@ export default function ProjectsPage() {
         style={{
           minHeight: '100%',
           background: 'hsl(var(--background))',
-          padding: '48px 32px',
+          padding: 'var(--space-7) var(--space-6)',
           color: 'hsl(var(--foreground))',
         }}
       >
@@ -179,7 +179,7 @@ export default function ProjectsPage() {
             margin: '0 auto',
             display: 'flex',
             flexDirection: 'column',
-            gap: 24,
+            gap: 'var(--space-5)',
           }}
         >
           {/* Page header with sort control */}
@@ -188,7 +188,7 @@ export default function ProjectsPage() {
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
-              gap: 16,
+              gap: 'var(--space-4)',
               // Without wrapping, the 177px sort control held its width against
               // a 320px screen and squeezed the introduction into a 109px
               // column 304px tall - one and two words per line - while its own
@@ -200,7 +200,7 @@ export default function ProjectsPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 6,
+                gap: 'var(--space-2)',
                 flex: '1 1 260px',
                 minWidth: 0,
               }}
@@ -240,10 +240,10 @@ export default function ProjectsPage() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
+                  gap: 'var(--space-2)',
+                  padding: 'var(--space-2) var(--space-4)',
                   border: '1px solid transparent',
-                  borderRadius: 9999,
+                  borderRadius: 'var(--corner-pill)',
                   background: 'var(--color-primary)',
                   color: 'var(--color-primary-foreground)',
                   fontSize: 12,
@@ -267,10 +267,10 @@ export default function ProjectsPage() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
+                  gap: 'var(--space-2)',
+                  padding: 'var(--space-2) var(--space-4)',
                   border: '1px solid var(--agi-rule-strong)',
-                  borderRadius: 9999,
+                  borderRadius: 'var(--corner-pill)',
                   background: showArchived ? 'var(--agi-rule)' : 'transparent',
                   color: 'var(--agi-ink-2)',
                   fontSize: 12,
@@ -342,29 +342,33 @@ export default function ProjectsPage() {
           */}
           <section
             style={{
-              padding: '4px 0 0',
+              padding: 'var(--space-1) 0 0',
               minHeight: 320,
             }}
           >
             {projectStatus === 'loading' || projectStatus === 'idle' ? (
               <div
                 role="status"
-                style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--agi-ink-2)' }}
+                style={{
+                  padding: 'var(--space-7) var(--space-4)',
+                  textAlign: 'center',
+                  color: 'var(--agi-ink-2)',
+                }}
               >
                 Loading projects…
               </div>
             ) : projectStatus === 'error' ? (
-              <div style={{ padding: '48px 16px', textAlign: 'center' }}>
-                <p role="alert" style={{ color: 'var(--agi-ink-2)', margin: '0 0 12px' }}>
+              <div style={{ padding: 'var(--space-7) var(--space-4)', textAlign: 'center' }}>
+                <p role="alert" style={{ color: 'var(--agi-ink-2)', margin: '0 0 var(--space-3)' }}>
                   {projectError ?? 'Projects could not be loaded.'}
                 </p>
                 <button
                   type="button"
                   onClick={retry}
                   style={{
-                    padding: '7px 14px',
+                    padding: 'var(--space-2) var(--space-4)',
                     border: '1px solid var(--agi-rule-strong)',
-                    borderRadius: 9999,
+                    borderRadius: 'var(--corner-pill)',
                     background: 'transparent',
                     color: 'var(--agi-ink-2)',
                     fontSize: 12,
@@ -376,7 +380,13 @@ export default function ProjectsPage() {
                 </button>
               </div>
             ) : projectStatus === 'signed-out' ? (
-              <div style={{ padding: '48px 16px', textAlign: 'center', color: 'var(--agi-ink-2)' }}>
+              <div
+                style={{
+                  padding: 'var(--space-7) var(--space-4)',
+                  textAlign: 'center',
+                  color: 'var(--agi-ink-2)',
+                }}
+              >
                 Sign in to view your cloud projects.
               </div>
             ) : useGallery ? (
@@ -408,8 +418,8 @@ export default function ProjectsPage() {
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 8,
-                      padding: '48px 16px',
+                      gap: 'var(--space-2)',
+                      padding: 'var(--space-7) var(--space-4)',
                       textAlign: 'center',
                     }}
                   >
@@ -433,10 +443,10 @@ export default function ProjectsPage() {
                           data-testid="projects-empty-new-btn"
                           onClick={() => setCreateOpen(true)}
                           style={{
-                            marginTop: 8,
-                            padding: '8px 16px',
+                            marginTop: 'var(--space-2)',
+                            padding: 'var(--space-2) var(--space-4)',
                             border: '1px solid transparent',
-                            borderRadius: 9999,
+                            borderRadius: 'var(--corner-pill)',
                             background: 'var(--color-primary)',
                             color: 'var(--color-primary-foreground)',
                             fontSize: 13,
@@ -459,7 +469,7 @@ export default function ProjectsPage() {
                       // 256px of content width inside this page's 32px side
                       // padding, 4px short of a bare 260px floor.
                       gridTemplateColumns: 'repeat(auto-fill, minmax(min(260px, 100%), 1fr))',
-                      gap: 12,
+                      gap: 'var(--space-3)',
                     }}
                   >
                     {displayProjects.map((project) => (
@@ -485,7 +495,9 @@ export default function ProjectsPage() {
             )}
 
             {hasMoreProjects && projects.length > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+              <div
+                style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--space-4)' }}
+              >
                 <button
                   type="button"
                   data-testid="projects-load-more"
@@ -494,9 +506,9 @@ export default function ProjectsPage() {
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: 6,
+                    gap: 'var(--space-2)',
                     minHeight: 24,
-                    padding: '0 4px',
+                    padding: '0 var(--space-1)',
                     border: 0,
                     background: 'transparent',
                     color: 'var(--color-primary)',

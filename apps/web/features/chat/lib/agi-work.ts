@@ -7,7 +7,7 @@ export const WORK_HISTORY_ROUTE = '/tasks';
 export const AGI_WORK_TITLE_SUFFIX = ` · ${AGI_WORK_LABEL}`;
 
 export const AGI_WORK_AUTONOMY_NOTICE_BODY =
-  'Read-only actions run without asking. Anything that writes, runs code, searches the web, or reaches outside AGI, including your connectors, pauses for your approval.';
+  'Some tools run without asking under your Tool Approvals setting. Destructive or unknown actions, saved Ask and Deny choices, and workspace restrictions still apply.';
 
 export const AGI_WORK_AUTONOMY_NOTICE_ACTION = 'Review approvals';
 

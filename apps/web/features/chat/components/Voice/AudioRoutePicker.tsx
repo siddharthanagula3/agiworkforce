@@ -133,7 +133,7 @@ export function AudioRoutePicker({ audioRef, className }: AudioRoutePickerProps)
           aria-label={LABEL.menu}
           data-testid="voice-audio-route-menu"
           className={cn(
-            'absolute bottom-full z-50 mb-2 min-w-56 overflow-hidden rounded-xl p-1',
+            'absolute bottom-full z-[var(--z-dropdown)] mb-2 min-w-56 overflow-hidden rounded-xl p-1',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-lg',
           )}
         >

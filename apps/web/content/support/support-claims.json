@@ -11,7 +11,7 @@
     },
     {
       "doc": "agi-work",
-      "sha256": "1211267113d1ff79ddc54eda68750c0f7e2e91cfbf96439c38b28c3bd036b576"
+      "sha256": "6391c3f69946f2ee74a255b14742dd39301946a206c7dd8e689f25082ddb4e8a"
     },
     {
       "doc": "artifacts",
@@ -185,19 +185,19 @@
       ]
     },
     {
-      "id": "approvals-default-is-ask",
+      "id": "approvals-default-is-skip-on-web",
       "doc": "tool-approvals",
       "section": "The account-wide default",
       "kind": "prose",
-      "sentence": "This is the default.",
+      "sentence": "**Skip approvals.** This is the website default for an unconfigured account.",
       "implementation": [
-        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY"
+        "apps/web/shared/types/toolApprovalPolicy.ts#WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "packages/contracts/types/src/__tests__/tool-approval-policy.test.ts",
-          "name": "keeps asking as the default a never-configured account lands on"
+          "file": "apps/web/shared/types/toolApprovalPolicy.test.ts",
+          "name": "uses Skip approvals for an unconfigured website account"
         }
       ]
     },
@@ -220,6 +220,23 @@
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
           "name": "runs a web search without asking under the read-only policy"
+        }
+      ]
+    },
+    {
+      "id": "approvals-unreadable-policy-asks",
+      "doc": "tool-approvals",
+      "section": "The account-wide default",
+      "kind": "prose",
+      "sentence": "If the website cannot read it, tools ask rather than assuming automatic approval.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts#loadToolApprovalPolicy"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/tool-approval-policy.turn-permissions.test.ts",
+          "name": "asks when the account policy read fails"
         }
       ]
     },
@@ -265,7 +282,7 @@
       "doc": "tool-approvals",
       "section": "Per-tool permissions",
       "kind": "prose",
-      "sentence": "**Reset all to default** clears every override for that connector and asks first.",
+      "sentence": "**Reset all to default** clears every override for that connector and applies the account policy.",
       "implementation": ["apps/web/features/connectors/components/ToolPermissionsPanel.tsx"],
       "proof": [
         {
@@ -285,7 +302,7 @@
       "doc": "tool-approvals",
       "section": "Approving in the moment",
       "kind": "prose",
-      "sentence": "Choosing **Always allow** saves that verdict so the same tool can run without prompting again.",
+      "sentence": "When a tool requires approval, choosing **Always allow** saves that verdict so the same tool can run without prompting again.",
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#loadConnectorToolPermissions"
       ],
@@ -302,7 +319,7 @@
       "doc": "tool-approvals",
       "section": "Approving in the moment",
       "kind": "prose",
-      "sentence": "A temporary chat ignores saved \"Always allow\" verdicts and asks every time.",
+      "sentence": "A temporary chat ignores saved \"Always allow\" verdicts.",
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#withoutStandingApprovals"
       ],
@@ -2120,19 +2137,19 @@
       ]
     },
     {
-      "id": "troubleshooting-default-waits-for-approval",
+      "id": "troubleshooting-default-auto-approves-eligible-tools",
       "doc": "troubleshooting",
       "section": "A tool or connector did nothing",
       "kind": "prose",
-      "sentence": "On the default approval setting every tool action waits for you, so a session that looks stalled may be waiting on an approval.",
+      "sentence": "Under the website's Skip approvals default, eligible tools run automatically.",
       "implementation": [
-        "packages/contracts/types/src/tool-approval-policy.ts#DEFAULT_TOOL_APPROVAL_POLICY"
+        "apps/web/shared/types/toolApprovalPolicy.ts#WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
-          "name": "asks for approval on a read-only tool when the account keeps the fail-closed default"
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "runs eligible built-ins for an unconfigured website account"
         }
       ]
     },
@@ -2161,6 +2178,29 @@
           "kind": "copy",
           "file": "apps/web/features/connectors/components/ToolPermissionsPanel.tsx",
           "text": "Never run this tool"
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting-some-actions-still-ask",
+      "doc": "troubleshooting",
+      "section": "A tool or connector did nothing",
+      "kind": "prose",
+      "sentence": "A session may still wait for a destructive or unknown action, a saved Ask choice, or a workspace restriction.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts#resolveToolCallGate",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-approval-policy.ts#loadToolApprovalPolicy"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/tool-approval-policy.turn-permissions.test.ts",
+          "name": "drops the stored autonomous choice to the default when a workspace forbids it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "keeps a per-tool Ask verdict ahead of read-only auto-approval"
         }
       ]
     },
@@ -2638,7 +2678,7 @@
       "doc": "tool-approvals",
       "section": "The account-wide default",
       "kind": "prose",
-      "sentence": "Settings carries one **Default approval for tool actions** with two settings:",
+      "sentence": "Settings carries one **Default approval for tool actions** with three settings:",
       "implementation": [
         "packages/contracts/types/src/tool-approval-policy.ts#TOOL_APPROVAL_POLICY_OPTIONS"
       ],

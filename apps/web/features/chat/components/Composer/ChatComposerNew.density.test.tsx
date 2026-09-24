@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ChatComposerNew } from './ChatComposerNew';
@@ -40,10 +42,8 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
  * on its own.
  *
  * The parity wave then merged the textbox and the control row into one
- * flex-nowrap line (plus, textbox, right cluster), so the budget at 390px is
- * 2 (border) + 12 (p-1.5) + 36 (one row) = 50px at rest. Desktop keeps the
- * 12px inner padding (`sm:p-3`) and the 52px textbox row the founder approved
- * on 2026-09-05; the tighter parity target was reverted on their instruction.
+ * flex-nowrap line (plus, textbox, right cluster), so the budget is
+ * 2 (border) + 12 (p-1.5) + 36 (one row) = 50px at rest.
  * A browser re-measure is the proof; these are the class states it measures.
  */
 function box(): HTMLElement {
@@ -57,23 +57,30 @@ function column(): HTMLElement {
 }
 
 describe('composer mobile density', () => {
-  it('halves the column padding and row gap below sm and restores both above it', () => {
+  it('keeps global CSS from splitting the active-chat row', () => {
+    const globalCss = readFileSync(path.resolve(__dirname, '../../../../app/globals.css'), 'utf8');
+
+    expect(globalCss).not.toMatch(/\.chat-composer-(?:row|field|leading-end)\s*\{/);
+  });
+
+  it('keeps the chat card on one compact inset at every width', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
-    expect(column()).toHaveClass('p-1.5', 'gap-1.5', 'sm:p-3', 'sm:gap-2');
+    expect(column()).toHaveClass('p-1.5', 'gap-1.5');
+    expect(column()).not.toHaveClass('sm:p-space-3', 'sm:gap-2');
   });
 
   it('keeps the empty-state surface on the same mobile step', () => {
     render(<ChatComposerNew onSend={vi.fn()} emptyState />);
 
-    expect(column()).toHaveClass('px-3', 'py-1.5', 'sm:px-5', 'sm:py-3');
+    expect(column()).toHaveClass('px-space-3', 'py-1.5', 'sm:px-5', 'sm:py-space-3');
   });
 
-  it('shares the 36px mobile step, and keeps the desktop chat row at 52px', () => {
+  it('keeps the chat row at 36px and reserves 40px for the home textbox', () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} />);
     const row = () => screen.getByRole('textbox').parentElement as HTMLElement;
 
-    expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[52px]');
+    expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[36px]');
 
     view.rerender(<ChatComposerNew onSend={vi.fn()} emptyState />);
     expect(row()).toHaveClass('min-h-[36px]', 'sm:min-h-[40px]');
@@ -94,7 +101,7 @@ describe('composer mobile density', () => {
     vi.unstubAllGlobals();
   });
 
-  it('drops the control row to a single 32px height, mic included', () => {
+  it('keeps each mobile control within the 32px active-chat row, mic included', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     // The mic was 44px and set the row's height by itself; the "+" beside it

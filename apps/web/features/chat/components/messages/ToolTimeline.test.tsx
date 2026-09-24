@@ -73,23 +73,27 @@ describe('ToolTimeline · expand and collapse', () => {
   });
 });
 
-describe('ToolTimeline · auto-expand and userForcedClosed', () => {
-  it('auto-expands while tools are running', () => {
+describe('ToolTimeline · streaming disclosure', () => {
+  it('keeps the running timeline compact by default', () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
 
     render(<ToolTimeline tools={tools} />);
 
     expect(screen.getByText('Working...')).toBeInTheDocument();
-    expect(screen.getByText('running-tool')).toBeInTheDocument();
+    expect(screen.queryByText('running-tool')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /toggle tool timeline/i })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 
-  it('respects userForcedClosed · stays closed after manual collapse during run', async () => {
+  it('opens on request and stays closed after manual collapse during a run', async () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
     const { rerender } = render(<ToolTimeline tools={tools} />);
 
-    expect(screen.getByText('running-tool')).toBeInTheDocument();
-
     const headerButton = screen.getByRole('button', { name: /toggle tool timeline/i });
+    fireEvent.click(headerButton);
+    expect(screen.getByText('running-tool')).toBeInTheDocument();
     fireEvent.click(headerButton);
 
     await waitFor(() => {
@@ -108,6 +112,8 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
     const { rerender } = render(<ToolTimeline tools={tools} />);
 
     const headerButton = screen.getByRole('button', { name: /toggle tool timeline/i });
+    fireEvent.click(headerButton);
+    expect(screen.getByText('running-tool')).toBeInTheDocument();
     fireEvent.click(headerButton);
 
     await waitFor(() => {
@@ -309,7 +315,7 @@ describe('ToolTimeline · edge cases', () => {
 });
 
 describe('ToolTimeline · audit-trail collapse lifecycle', () => {
-  it('shows steps live while running, auto-collapses to a summary on completion, and re-expands on click', async () => {
+  it('keeps steps compact while running and on completion, then opens on click', async () => {
     const running = [
       { name: 'Read', status: 'completed' as const, durationMs: 120 },
       { name: 'file_create', status: 'running' as const, statusPhrase: 'Creating file…' },
@@ -317,7 +323,7 @@ describe('ToolTimeline · audit-trail collapse lifecycle', () => {
     const { rerender } = render(<ToolTimeline tools={running} />);
 
     expect(screen.getByText('Creating file…')).toBeInTheDocument();
-    expect(screen.getByText('Read')).toBeInTheDocument();
+    expect(screen.queryByText('Read')).not.toBeInTheDocument();
 
     const completed = [
       { name: 'Read', status: 'completed' as const, durationMs: 120 },

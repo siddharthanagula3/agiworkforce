@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   useChatStore,
   firstParkedSend,
@@ -14,6 +14,10 @@ const CONTENT = 'Actually, forget the file, just say hi';
 
 beforeEach(() => {
   useChatStore.getState().reset();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('parked blocked sends', () => {
@@ -70,5 +74,61 @@ describe('parked blocked sends', () => {
     useChatStore.getState().clearParkedSend(FINGERPRINT);
 
     expect(firstParkedSend(selectParkedSends(useChatStore.getState()))).toBeNull();
+  });
+
+  it('survives rehydrating a fresh store after a reload', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    useChatStore.getState().parkBlockedSend(FINGERPRINT, CONTENT);
+    const partialize = useChatStore.persist.getOptions().partialize;
+    const merge = useChatStore.persist.getOptions().merge;
+    expect(partialize).toBeDefined();
+    expect(merge).toBeDefined();
+
+    const persisted = partialize!(useChatStore.getState());
+    useChatStore.getState().reset();
+    const rehydrated = merge!(persisted, useChatStore.getState());
+
+    expect(firstParkedSend(selectParkedSends(rehydrated))).toEqual({
+      fingerprint: FINGERPRINT,
+      content: CONTENT,
+    });
+  });
+
+  it('drops a persisted send after its retry window expires', () => {
+    const merge = useChatStore.persist.getOptions().merge;
+    expect(merge).toBeDefined();
+    vi.spyOn(Date, 'now').mockReturnValue(100_000_000);
+
+    const rehydrated = merge!(
+      {
+        parkedSendsByFingerprint: { [FINGERPRINT]: CONTENT },
+        parkedSendCreatedAtByFingerprint: { [FINGERPRINT]: 1 },
+      },
+      useChatStore.getState(),
+    );
+
+    expect(firstParkedSend(selectParkedSends(rehydrated))).toBeNull();
+  });
+
+  it('bounds the persisted queue to the eight newest failed sends', () => {
+    const partialize = useChatStore.persist.getOptions().partialize;
+    expect(partialize).toBeDefined();
+    vi.spyOn(Date, 'now').mockReturnValue(100);
+    useChatStore.setState({
+      parkedSendsByFingerprint: Object.fromEntries(
+        Array.from({ length: 12 }, (_, index) => [`fingerprint-${index + 1}`, `send-${index + 1}`]),
+      ),
+      parkedSendCreatedAtByFingerprint: Object.fromEntries(
+        Array.from({ length: 12 }, (_, index) => [`fingerprint-${index + 1}`, index + 1]),
+      ),
+    });
+
+    const persisted = partialize!(useChatStore.getState()) as {
+      parkedSendsByFingerprint: Record<string, string>;
+    };
+
+    expect(Object.keys(persisted.parkedSendsByFingerprint)).toEqual(
+      Array.from({ length: 8 }, (_, index) => `fingerprint-${index + 5}`),
+    );
   });
 });

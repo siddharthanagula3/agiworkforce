@@ -272,7 +272,7 @@ export function ReactPreview({
     <div
       className={cn(
         'flex flex-col',
-        isExpanded && 'fixed inset-4 z-50 bg-card rounded-lg shadow-2xl',
+        isExpanded && 'fixed inset-4 z-[var(--z-modal)] bg-card rounded-lg shadow-2xl',
         className,
       )}
     >
@@ -293,7 +293,7 @@ export function ReactPreview({
           type="button"
           onClick={handleReload}
           aria-label="Reload preview"
-          className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className="h-7 w-7 flex items-center justify-center rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw className="h-3 w-3" />
         </button>
@@ -301,7 +301,7 @@ export function ReactPreview({
           type="button"
           onClick={toggleExpanded}
           aria-label={isExpanded ? 'Minimize' : 'Maximize'}
-          className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          className="h-7 w-7 flex items-center justify-center rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
         >
           {isExpanded ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
         </button>

@@ -20,7 +20,7 @@ import {
 } from 'react-window';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { settledActivityStatus } from '@agiworkforce/unified-chat';
-import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import { hasUnavailableWebSearch, type AgentActivityState } from '@agiworkforce/client-runtime';
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { isAccountWideUsageBlock } from '@features/chat/stores/account-usage-block';
 import type { MessageMetadata, MessageToolEntry } from '@shared/stores/web-chat-store';
@@ -29,6 +29,7 @@ import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
 import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
+import { hasCompatibleFreeErrorRecoveryModel } from '../../lib/free-error-model-recovery';
 import type { ResearchPlanDecision, ResearchPlanOptions } from '../research/ResearchActivity';
 import {
   InlinePaywallCard,
@@ -44,6 +45,7 @@ import { useGeneratedFollowUps } from '../../hooks/use-generated-follow-ups';
 import { collectMessageResearchSources } from '../../utils/research-sources';
 import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
+import { useSoftKeyboardInset } from '../Composer/soft-keyboard-inset';
 import { TranscriptNotice } from './TranscriptNotice';
 import { ArrowRight, ChevronDown, RefreshCw, ShieldAlert, Square } from '@agiworkforce/icons';
 import { cn } from '@shared/lib/utils';
@@ -144,6 +146,7 @@ function streamErrorNeedsModelSwitch(message: ChatMessage): boolean {
 
 export interface ChatMessageListProps {
   messages: ChatMessage[];
+  transcriptPatch?: { previous: readonly ChatMessage[]; index: number } | null;
   currentTier?: UserTier;
   conversationId?: string | null;
   isLoading?: boolean;
@@ -217,6 +220,7 @@ interface MessageGroup {
   role: 'user' | 'assistant';
   messages: ChatMessage[];
   firstId: string;
+  startIndex: number;
 }
 
 // Pure helpers (exported for tests)
@@ -258,17 +262,75 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 
   const groups: MessageGroup[] = [];
 
-  for (const msg of messages) {
+  for (const [index, msg] of messages.entries()) {
     const role = msg.role === 'user' ? 'user' : 'assistant';
     const lastGroup = groups[groups.length - 1];
 
     if (lastGroup && lastGroup.role === role) {
       lastGroup.messages.push(msg);
     } else {
-      groups.push({ role, messages: [msg], firstId: msg.id });
+      groups.push({ role, messages: [msg], firstId: msg.id, startIndex: index });
     }
   }
 
+  return groups;
+}
+
+function findMessageGroup(groups: MessageGroup[], messageIndex: number): number {
+  let low = 0;
+  let high = groups.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const group = groups[middle]!;
+    if (messageIndex < group.startIndex) {
+      high = middle - 1;
+    } else if (messageIndex >= group.startIndex + group.messages.length) {
+      low = middle + 1;
+    } else {
+      return middle;
+    }
+  }
+  return -1;
+}
+
+export function patchMessageGroups(
+  messages: ChatMessage[],
+  patch: { previous: readonly ChatMessage[]; index: number },
+  previousGroups: MessageGroup[],
+): MessageGroup[] {
+  if (patch.previous.length !== messages.length) return groupMessages(messages);
+  const before = patch.previous[patch.index];
+  const after = messages[patch.index];
+  if (!before || !after || before.id !== after.id || before.role !== after.role) {
+    return groupMessages(messages);
+  }
+  const groupIndex = findMessageGroup(previousGroups, patch.index);
+  if (groupIndex < 0) return groupMessages(messages);
+  const previousGroup = previousGroups[groupIndex]!;
+  const position = patch.index - previousGroup.startIndex;
+  if (previousGroup.messages[position] !== before) return groupMessages(messages);
+
+  const nextGroupMessages = previousGroup.messages.slice();
+  nextGroupMessages[position] = after;
+  const groups = previousGroups.slice();
+  groups[groupIndex] = { ...previousGroup, messages: nextGroupMessages };
+  return groups;
+}
+
+const groupedMessageTranscripts = new WeakMap<readonly ChatMessage[], MessageGroup[]>();
+
+function projectMessageGroups(
+  messages: ChatMessage[],
+  patch: { previous: readonly ChatMessage[]; index: number } | null | undefined,
+): MessageGroup[] {
+  const cached = groupedMessageTranscripts.get(messages);
+  if (cached) return cached;
+  const previousGroups = patch ? groupedMessageTranscripts.get(patch.previous) : undefined;
+  const groups =
+    patch && previousGroups
+      ? patchMessageGroups(messages, patch, previousGroups)
+      : groupMessages(messages);
+  groupedMessageTranscripts.set(messages, groups);
   return groups;
 }
 
@@ -995,6 +1057,7 @@ export function buildStreamAnnouncement(message: ChatMessage | undefined): strin
 
 const ChatMessageListComponent = ({
   messages,
+  transcriptPatch,
   currentTier = 'free',
   conversationId = null,
   isLoading,
@@ -1052,7 +1115,10 @@ const ChatMessageListComponent = ({
 
   const prefersReducedMotion = useReducedMotion();
 
-  const groups = useMemo(() => groupMessages(messages), [messages]);
+  const groups = useMemo(
+    () => projectMessageGroups(messages, transcriptPatch),
+    [messages, transcriptPatch],
+  );
 
   // Only a different transcript invalidates every measurement. A re-order
   // inside one transcript invalidates the rows it rewrote, and those alone: see
@@ -1094,6 +1160,7 @@ const ChatMessageListComponent = ({
     }
   }, [dynamicRowHeight, groups, virtualRowCount]);
   const [viewportHeight, setViewportHeight] = useState(DEFAULT_TRANSCRIPT_VIEWPORT_HEIGHT);
+  const softKeyboardInset = useSoftKeyboardInset();
   const estimatedContentHeight = useMemo(() => {
     let height = 0;
     for (let index = 1; index < virtualRowCount; index += 1) {
@@ -1104,6 +1171,10 @@ const ChatMessageListComponent = ({
   const topSpacerHeight = Math.max(1, viewportHeight - estimatedContentHeight);
 
   const lastMessage = useMemo(() => messages[messages.length - 1], [messages]);
+  const lastUserMessage = useMemo(
+    () => messages.findLast((message) => message.role === 'user'),
+    [messages],
+  );
 
   const lastUserMessageId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -1229,6 +1300,9 @@ const ChatMessageListComponent = ({
     enabled: showFollowUps && lastTurnSearched,
     cached: cachedFollowUps,
   });
+  const searchUnavailable = useMemo(() => {
+    return hasUnavailableWebSearch(lastMessage?.metadata?.['agentActivity']);
+  }, [lastMessage]);
 
   // `MessageSearch` was complete but never exported or mounted, and nothing
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1369,6 +1443,13 @@ const ChatMessageListComponent = ({
     },
     [scrollToBottom, requestScrollToBottom],
   );
+
+  const previousSoftKeyboardInsetRef = useRef(softKeyboardInset);
+  useLayoutEffect(() => {
+    if (previousSoftKeyboardInsetRef.current === softKeyboardInset) return;
+    previousSoftKeyboardInsetRef.current = softKeyboardInset;
+    if (!userScrolledUp) scrollToBottomFast('auto');
+  }, [scrollToBottomFast, softKeyboardInset, userScrolledUp]);
 
   const followBottom = useCallback(
     (behavior: ScrollBehavior) => {
@@ -1553,16 +1634,22 @@ const ChatMessageListComponent = ({
     if (!showStreamErrorNotice || !lastMessage) return null;
     return (
       <>
-        {streamErrorNeedsModelSwitch(lastMessage) && (
-          <button
-            type="button"
-            onClick={() => openModelPicker()}
-            className={TURN_NOTICE_LINK_CLASS}
-            aria-label={SWITCH_MODEL_ACTION_ARIA}
-          >
-            {SWITCH_MODEL_ACTION_LABEL}
-          </button>
-        )}
+        {streamErrorNeedsModelSwitch(lastMessage) &&
+          (currentTier !== 'free' ||
+            hasCompatibleFreeErrorRecoveryModel(
+              lastUserMessage,
+              lastMessage.model,
+              regenerateModelOptions,
+            )) && (
+            <button
+              type="button"
+              onClick={() => openModelPicker()}
+              className={TURN_NOTICE_LINK_CLASS}
+              aria-label={SWITCH_MODEL_ACTION_ARIA}
+            >
+              {SWITCH_MODEL_ACTION_LABEL}
+            </button>
+          )}
         <button
           type="button"
           onClick={() => onRegenerate?.(lastMessage.id)}
@@ -1573,7 +1660,14 @@ const ChatMessageListComponent = ({
         </button>
       </>
     );
-  }, [showStreamErrorNotice, lastMessage, onRegenerate]);
+  }, [
+    showStreamErrorNotice,
+    lastMessage,
+    lastUserMessage,
+    currentTier,
+    regenerateModelOptions,
+    onRegenerate,
+  ]);
 
   const groupProps = useMemo<Omit<MessageGroupRowProps, 'group' | 'isLastGroup'>>(
     () => ({
@@ -1733,6 +1827,7 @@ const ChatMessageListComponent = ({
               isUserTyping={isUserTyping}
               messageCount={messages.length}
               suggestions={generatedFollowUps}
+              searchUnavailable={searchUnavailable}
             />
           </div>
         )}
@@ -1755,6 +1850,7 @@ const ChatMessageListComponent = ({
       isUserTyping,
       messages.length,
       generatedFollowUps,
+      searchUnavailable,
     ],
   );
 
@@ -1780,7 +1876,14 @@ const ChatMessageListComponent = ({
   }
 
   return (
-    <div className={cn('relative flex h-full flex-col', className)} data-testid="chat-message-list">
+    <div
+      className={cn('relative flex h-full flex-col', className)}
+      data-testid="chat-message-list"
+      data-soft-keyboard-inset={softKeyboardInset > 0 ? softKeyboardInset : undefined}
+      style={{
+        height: softKeyboardInset > 0 ? `calc(100% - ${softKeyboardInset}px)` : '100%',
+      }}
+    >
       {/* AUDIT-FIX GOV-29: the ONLY live region on this surface. Off-screen,
           atomic, and carrying one short phrase per generation state change.
           so a screen reader hears "Generating response" and then the finished
@@ -1822,7 +1925,11 @@ const ChatMessageListComponent = ({
         // `contain` keeps a transcript fling from chaining into the shell scroll
         // container behind it, and kills the rubber band that showed the page
         // background under the transcript on touch.
-        style={{ overflowX: 'hidden', overscrollBehaviorY: 'contain' }}
+        style={{
+          height: '100%',
+          overflowX: 'hidden',
+          overscrollBehaviorY: 'contain',
+        }}
       />
 
       {/* Scroll-to-bottom FAB · shown when user has scrolled up. Its screen
@@ -1886,11 +1993,7 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     prev.turnErrorActive === next.turnErrorActive &&
     prev.onRegenerateWithModel === next.onRegenerateWithModel &&
     prev.regenerateModelOptions === next.regenerateModelOptions &&
-    prev.messages.every((prevMessage, index) => {
-      const nextMessage = next.messages[index];
-      if (!nextMessage) return false;
-      return messageRenderEqual(prevMessage, nextMessage);
-    })
+    prev.messages === next.messages
   );
 });
 

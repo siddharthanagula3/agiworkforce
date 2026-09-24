@@ -44,7 +44,7 @@ test.describe('responsive interaction regressions', () => {
       row,
       'no conversation in the sidebar, the account fixture this spec needs is gone',
     ).toBeVisible();
-    await row.getByRole('button', { name: 'Conversation actions' }).click();
+    await row.getByRole('button', { name: /^More options for / }).click();
     await page.waitForTimeout(SETTLE_MS);
     await page.getByRole('menuitem', { name: 'Rename' }).click();
     await page.waitForTimeout(SETTLE_MS);
@@ -69,7 +69,7 @@ test.describe('responsive interaction regressions', () => {
     const drawer = await openDrawer(page);
 
     const row = drawer.locator('[data-sidebar-session-index]').first();
-    await row.getByRole('button', { name: 'Conversation actions' }).click();
+    await row.getByRole('button', { name: /^More options for / }).click();
     await page.waitForTimeout(SETTLE_MS);
     await page.getByRole('menuitem', { name: 'Rename' }).click();
     await page.waitForTimeout(SETTLE_MS);
@@ -125,7 +125,7 @@ test.describe('responsive interaction regressions', () => {
     const drawer = await openDrawer(page);
 
     const row = drawer.locator('[data-sidebar-session-index]').first();
-    await row.getByRole('button', { name: 'Conversation actions' }).click();
+    await row.getByRole('button', { name: /^More options for / }).click();
     await page.waitForTimeout(SETTLE_MS);
     await expect(page.locator('[role="menu"]').first()).toBeVisible();
     expect(await outsideViewport(page), 'the row menu rendered outside the viewport').toEqual([]);

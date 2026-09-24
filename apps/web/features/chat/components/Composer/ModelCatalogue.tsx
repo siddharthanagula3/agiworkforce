@@ -149,7 +149,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         onClick={onBack}
         className="mb-3 flex h-7 w-fit items-center gap-1.5 rounded-md px-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
       >
-        <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         {MODEL_CARD_BACK_LABEL}
       </button>
 
@@ -339,7 +339,7 @@ export function ModelCatalogue({
           aria-label={CATALOGUE_BACK_LABEL}
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
         >
-          <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         </button>
         <input
           autoFocus
@@ -372,9 +372,9 @@ export function ModelCatalogue({
                 ].join(' ')}
               >
                 {entry.key === FAVOURITES_RAIL_KEY ? (
-                  <Star className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <Star className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                 ) : (
-                  <ProviderLogo providerKey={entry.key} size={14} />
+                  <ProviderLogo providerKey={entry.key} size={16} />
                 )}
                 <span className="min-w-0 flex-1 truncate">{entry.label}</span>
                 <span className="shrink-0 text-xs text-muted-foreground">{entry.count}</span>
@@ -570,14 +570,14 @@ export function ModelCatalogue({
                             className={`${TAG_CLASS} whitespace-nowrap bg-primary/10 text-primary`}
                           >
                             <Lock
-                              className="mr-0.5 inline h-2.5 w-2.5 align-[-0.1em]"
+                              className="mr-0.5 inline h-4 w-4 align-[-0.1em]"
                               aria-hidden="true"
                             />
                             {`${entry.minimumPlanLabel} and above`}
                           </span>
                         )}
                         {isSelected && !locked && (
-                          <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                          <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                         )}
                       </span>
                     </button>
@@ -593,7 +593,7 @@ export function ModelCatalogue({
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
                     >
                       <Star
-                        className={['h-3.5 w-3.5', isFavourite ? 'text-primary' : ''].join(' ')}
+                        className={['h-4 w-4', isFavourite ? 'text-primary' : ''].join(' ')}
                         aria-hidden="true"
                       />
                     </button>
@@ -603,7 +603,7 @@ export function ModelCatalogue({
                       aria-label={`About ${entry.displayName}`}
                       className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:bg-muted/60"
                     >
-                      <CircleHelp className="h-3.5 w-3.5" aria-hidden="true" />
+                      <CircleHelp className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 );

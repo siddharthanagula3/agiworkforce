@@ -281,7 +281,7 @@ export function MessageList({
               : t('list.scrollToLatest', 'Scroll to latest')
           }
           className="
-            absolute bottom-4 left-1/2 z-10 -translate-x-1/2
+            absolute bottom-4 left-1/2 z-[var(--z-control)] -translate-x-1/2
             inline-flex items-center gap-2
             rounded-full border px-3 py-1.5
             text-xs font-medium
@@ -298,7 +298,7 @@ export function MessageList({
         >
           {unreadCount > 0 ? (
             <span
-              className="inline-flex items-center justify-center rounded-full px-1.5 text-[12px] font-semibold leading-tight"
+              className="inline-flex items-center justify-center rounded-full px-1.5 text-caption font-semibold leading-tight"
               style={{
                 background: 'var(--chat-accent-primary)',
                 color: 'var(--chat-surface-elevated)',

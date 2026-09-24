@@ -24,6 +24,7 @@ const ProjectChatHandoffSchema = z.object({
     researchEnabled: z.boolean().optional(),
     searchRequested: z.boolean().optional(),
     styleInstruction: z.string().max(10_000).optional(),
+    artifactInstruction: z.string().max(10_000).optional(),
     skillName: z.string().min(1).max(200).optional(),
     agiWorkGoal: z
       .object({
@@ -33,7 +34,9 @@ const ProjectChatHandoffSchema = z.object({
       })
       .optional(),
     disabledConnectorIds: z.array(z.string().min(1).max(200)).max(200).optional(),
+    connectorToolsEnabled: z.boolean().optional(),
     memoryEnabled: z.boolean().optional(),
+    modelOverrideId: z.string().min(1).max(200).optional(),
     mcpContext: z
       .object({
         prompt: z

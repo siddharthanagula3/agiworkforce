@@ -12,6 +12,8 @@ import {
   FileText,
   Scale,
   LogOut,
+  Mail,
+  MessageSquareText,
 } from '@agiworkforce/icons';
 import {
   DropdownMenuItem,
@@ -19,8 +21,7 @@ import {
   DropdownMenuSeparator,
   shortcutLabel,
 } from '@agiworkforce/ui';
-import { MessageSquareText } from 'lucide-react';
-import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { CANONICAL_POLICY_ROUTES, contactMailto } from '@/lib/legal-constants';
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 
 export interface AccountMenuItemsProps {
@@ -82,6 +83,12 @@ export function AccountMenuItems({
         <HelpCircle className="mr-2 h-4 w-4" />
         {t('common:navGetHelp')}
       </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <a href={contactMailto()}>
+          <Mail className="mr-2 h-4 w-4" />
+          {t('common:navEmailSupport')}
+        </a>
+      </DropdownMenuItem>
       <DropdownMenuItem onClick={onOpenFeedback}>
         <MessageSquareText className="mr-2 h-4 w-4" />
         {t('common:navSendFeedback')}
@@ -89,7 +96,7 @@ export function AccountMenuItems({
       <DropdownMenuItem onClick={onOpenKeyboardShortcuts}>
         <Keyboard className="mr-2 h-4 w-4" />
         {t('common:navKeyboardShortcuts')}
-        <span className="ml-auto text-[12px] text-muted-foreground">{shortcutLabel('/')}</span>
+        <span className="ml-auto text-caption text-muted-foreground">{shortcutLabel('/')}</span>
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       {/* Hidden once there is nothing left to buy: this menu offered

@@ -87,22 +87,22 @@ const titleStyle: CSSProperties = {
   fontSize: 24,
   fontWeight: 500,
   color: 'var(--text-1)',
-  margin: '0 0 4px',
+  margin: '0 0 var(--space-1)',
 };
 
 const sectionHeadingStyle: CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   color: 'var(--text-2)',
-  margin: '20px 0 12px',
+  margin: 'var(--space-5) 0 var(--space-3)',
 };
 
 const rowStyle: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  gap: 16,
-  padding: '14px 0',
+  gap: 'var(--space-4)',
+  padding: 'var(--space-4) 0',
   borderBottom: '1px solid var(--settings-border)',
   flexWrap: 'wrap',
 };
@@ -126,15 +126,15 @@ const rowLabelStyle: CSSProperties = {
 const rowHintStyle: CSSProperties = {
   fontSize: 12,
   color: 'var(--text-3)',
-  margin: '2px 0 0',
+  margin: 'var(--space-1) 0 0',
 };
 
 const outlineButtonStyle: CSSProperties = {
   flexShrink: 0,
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 6,
-  padding: '8px 14px',
+  gap: 'var(--space-2)',
+  padding: 'var(--space-2) var(--space-4)',
   fontSize: 13,
   fontWeight: 500,
   color: 'var(--text-1)',
@@ -146,7 +146,7 @@ const outlineButtonStyle: CSSProperties = {
 
 const dangerButtonStyle: CSSProperties = {
   flexShrink: 0,
-  padding: '8px 14px',
+  padding: 'var(--space-2) var(--space-4)',
   fontSize: 13,
   fontWeight: 500,
   color: 'var(--settings-destructive-text)',
@@ -160,7 +160,7 @@ const backRowStyle: CSSProperties = {
   alignSelf: 'flex-start',
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 6,
+  gap: 'var(--space-2)',
   padding: 0,
   fontSize: 13,
   fontWeight: 500,
@@ -363,7 +363,7 @@ export function AccountSection() {
   const pendingDeletion = deletionStatus.data?.pending === true;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       {confirmDialog}
 
       {showApiKeys ? (
@@ -403,7 +403,7 @@ export function AccountSection() {
               </button>
             </AccountRow>
             {logoutError && (
-              <p role="alert" style={{ ...errorTextStyle, padding: '0 0 12px' }}>
+              <p role="alert" style={{ ...errorTextStyle, padding: '0 0 var(--space-3)' }}>
                 {logoutError}
               </p>
             )}
@@ -468,7 +468,7 @@ export function AccountSection() {
               </AccountRow>
             )}
             {deletionStatus.isError && (
-              <p role="alert" style={{ ...errorTextStyle, padding: '12px 0 0' }}>
+              <p role="alert" style={{ ...errorTextStyle, padding: 'var(--space-3) 0 0' }}>
                 Could not check whether a deletion is already pending.{' '}
                 <button
                   type="button"
@@ -487,7 +487,12 @@ export function AccountSection() {
               </p>
             )}
 
-            <div style={{ padding: '14px 0', borderBottom: '1px solid var(--settings-border)' }}>
+            <div
+              style={{
+                padding: 'var(--space-4) 0',
+                borderBottom: '1px solid var(--settings-border)',
+              }}
+            >
               <CopyableIdField
                 id="user-id-field"
                 label="User ID"
@@ -504,7 +509,12 @@ export function AccountSection() {
               load rather than that there is nothing to show.
             */}
             {organizationId ? (
-              <div style={{ padding: '14px 0', borderBottom: '1px solid var(--settings-border)' }}>
+              <div
+                style={{
+                  padding: 'var(--space-4) 0',
+                  borderBottom: '1px solid var(--settings-border)',
+                }}
+              >
                 <CopyableIdField
                   id="organization-id-field"
                   label="Organization ID"
@@ -522,12 +532,18 @@ export function AccountSection() {
             <h2 style={sectionHeadingStyle}>Active sessions</h2>
 
             {sessionsLoading ? (
-              <div role="status" style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-3)' }}>
+              <div
+                role="status"
+                style={{ padding: 'var(--space-2) 0', fontSize: 13, color: 'var(--text-3)' }}
+              >
                 Loading active sessions…
               </div>
             ) : sessionsError ? (
               <div>
-                <p role="alert" style={{ ...errorTextStyle, margin: '0 0 12px', fontSize: 13 }}>
+                <p
+                  role="alert"
+                  style={{ ...errorTextStyle, margin: '0 0 var(--space-3)', fontSize: 13 }}
+                >
                   {sessionsError}
                 </p>
                 <button
@@ -540,7 +556,14 @@ export function AccountSection() {
                 </button>
               </div>
             ) : sessions.length === 0 ? (
-              <p style={{ padding: '8px 0', fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+              <p
+                style={{
+                  padding: 'var(--space-2) 0',
+                  fontSize: 13,
+                  color: 'var(--text-3)',
+                  margin: 0,
+                }}
+              >
                 No active sessions found.
               </p>
             ) : (
@@ -560,7 +583,7 @@ export function AccountSection() {
                           scope="col"
                           className={className}
                           style={{
-                            padding: '0 16px 10px 0',
+                            padding: '0 var(--space-4) var(--space-3) 0',
                             textAlign: 'left',
                             fontSize: 12,
                             fontWeight: 700,
@@ -586,7 +609,7 @@ export function AccountSection() {
                       >
                         <td
                           style={{
-                            padding: '12px 16px 12px 0',
+                            padding: 'var(--space-3) var(--space-4) var(--space-3) 0',
                             color: 'var(--text-1)',
                             fontWeight: 500,
                           }}
@@ -595,7 +618,7 @@ export function AccountSection() {
                           {row.browser ? (
                             <div
                               style={{
-                                marginTop: 2,
+                                marginTop: 'var(--space-1)',
                                 color: 'var(--text-3)',
                                 fontSize: 12,
                                 fontWeight: 400,
@@ -607,15 +630,15 @@ export function AccountSection() {
                           {row.isCurrent && (
                             <span
                               style={{
-                                marginLeft: 8,
+                                marginLeft: 'var(--space-2)',
                                 fontSize: 12,
                                 fontWeight: 700,
                                 letterSpacing: '0.05em',
                                 textTransform: 'uppercase',
                                 color: 'var(--teal-text)',
                                 background: 'rgba(33,128,141,0.12)',
-                                borderRadius: 3,
-                                padding: '1px 5px',
+                                borderRadius: 'var(--corner-compact)',
+                                padding: 'var(--space-1) var(--space-1)',
                               }}
                             >
                               Current
@@ -642,7 +665,7 @@ export function AccountSection() {
                         <td
                           className="hidden sm:table-cell"
                           style={{
-                            padding: '12px 16px 12px 0',
+                            padding: 'var(--space-3) var(--space-4) var(--space-3) 0',
                             color: 'var(--text-3)',
                             whiteSpace: 'nowrap',
                           }}
@@ -652,7 +675,7 @@ export function AccountSection() {
                         <td
                           className="hidden sm:table-cell"
                           style={{
-                            padding: '12px 16px 12px 0',
+                            padding: 'var(--space-3) var(--space-4) var(--space-3) 0',
                             color: 'var(--text-3)',
                             whiteSpace: 'nowrap',
                           }}
@@ -662,14 +685,14 @@ export function AccountSection() {
                         <td
                           className="hidden sm:table-cell"
                           style={{
-                            padding: '12px 16px 12px 0',
+                            padding: 'var(--space-3) var(--space-4) var(--space-3) 0',
                             color: 'var(--text-3)',
                             whiteSpace: 'nowrap',
                           }}
                         >
                           {formatSessionDateTime(row.lastActiveAt)}
                         </td>
-                        <td style={{ padding: '12px 0', textAlign: 'right' }}>
+                        <td style={{ padding: 'var(--space-3) 0', textAlign: 'right' }}>
                           <button
                             type="button"
                             onClick={() =>
@@ -691,7 +714,7 @@ export function AccountSection() {
                                 : `Revoke ${row.device} session`
                             }
                             style={{
-                              padding: '6px 10px',
+                              padding: 'var(--space-2) var(--space-3)',
                               fontSize: 12,
                               fontWeight: 500,
                               // The fill value, not the text one: in dark it is
@@ -727,20 +750,32 @@ export function AccountSection() {
               </div>
             )}
             {sessionActionError ? (
-              <p role="alert" style={{ ...errorTextStyle, padding: '12px 0 0' }}>
+              <p role="alert" style={{ ...errorTextStyle, padding: 'var(--space-3) 0 0' }}>
                 {sessionActionError}
               </p>
             ) : null}
             {sessionsTruncated ? (
               <p
                 role="status"
-                style={{ padding: '12px 0 0', fontSize: 12, color: 'var(--text-2)', margin: 0 }}
+                style={{
+                  padding: 'var(--space-3) 0 0',
+                  fontSize: 12,
+                  color: 'var(--text-2)',
+                  margin: 0,
+                }}
               >
                 {`Showing ${sessions.length} of ${sessionTotalCount} sessions.`}{' '}
                 {SESSION_TRUNCATION_HINT}
               </p>
             ) : null}
-            <p style={{ padding: '12px 0 0', fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+            <p
+              style={{
+                padding: 'var(--space-3) 0 0',
+                fontSize: 12,
+                color: 'var(--text-3)',
+                margin: 0,
+              }}
+            >
               Sessions are reported by your account provider across devices. Revoke anything you do
               not recognize, or use &ldquo;Log out of all devices&rdquo; above.
             </p>
@@ -772,7 +807,13 @@ export function AccountSection() {
                 </AlertDialogDescription>
               </AlertDialogHeader>
               {deleteAccountMutation.data?.scheduledFor && (
-                <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '-8px 0 0' }}>
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: 'var(--text-3)',
+                    margin: 'calc(var(--space-2) * -1) 0 0',
+                  }}
+                >
                   Your data is permanently erased on{' '}
                   {formatDateTime(new Date(deleteAccountMutation.data.scheduledFor))}. Sign back in
                   and cancel from Settings &gt; Account any time before then to keep your account.

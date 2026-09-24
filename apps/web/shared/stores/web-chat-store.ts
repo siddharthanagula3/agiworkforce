@@ -6,7 +6,7 @@
  * Used by: WebChatPage, useChatStream, useConversations, ChatSettings,
  * CommandPalette, and localByokHandoff.
  *
- * Persist key: 'agiworkforce-web-chat' (persists model selection + sidebar state only).
+ * Persist key: 'agiworkforce-web-chat' (durable chat preferences and bounded recovery state).
  *
  * Related stores (distinct purposes, different shapes -- do NOT merge):
  *   - shared/stores/chat-store.ts         (MGX-style conversation store; persist key 'agi-chat-store')
@@ -24,6 +24,7 @@ import {
   type GeneratedFile,
 } from '@agiworkforce/types';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import type { ArtifactDerivationPolicy } from '@agiworkforce/artifacts';
 import type {
   CloudAgentWorkMode,
   CloudToolApprovalProjection,
@@ -187,6 +188,7 @@ export interface GeneratedFileMetadataEntry {
 }
 
 export interface MessageMetadata {
+  artifactDerivation?: ArtifactDerivationPolicy;
   /**
    * D-2026-09-05-06. The model Auto left, and why, when this turn escalated off
    * the conversation's pinned model. Persisted, so the receipt survives a
@@ -203,6 +205,8 @@ export interface MessageMetadata {
   model?: string;
   /** Provider that served the turn, written into metadata by turn persistence. */
   provider?: string;
+  /** The routing lane that served this turn, when the router explicitly named one. */
+  routeLane?: string;
   /**
    * Per-turn usage, lifted from the PERSISTED `web_messages.input_tokens` /
    * `output_tokens` columns by `toChatMessage` on conversation load. There is
@@ -478,10 +482,9 @@ export interface Message {
    */
   fallbackReason?: string;
   /**
-   * Which lane served this turn, from `X-AGI-Route-Lane`. Per-turn and not
-   * persisted, on the same terms as `fallbackReason`: the header is absent on
-   * every response that never consulted the free lane, so absent means "no claim
-   * to make" rather than "managed".
+   * Which lane served this turn, from `X-AGI-Route-Lane`. Persisted in message
+   * metadata when the router names one; absent means "no claim to make" rather
+   * than "managed".
    */
   routeLane?: string;
   /**
@@ -538,6 +541,7 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   model?: string | null;
+  selectedRouteId?: string | null;
   projectId?: string | null;
   messageCount?: number;
   isTemporary?: boolean;
@@ -678,6 +682,8 @@ interface ChatState {
    * rename and the composer remount it triggers.
    */
   parkedSendsByFingerprint: Record<string, string>;
+  /** Creation time used to expire and bound persisted failed-send recovery. */
+  parkedSendCreatedAtByFingerprint: Record<string, number>;
 
   /**
    * AUDIT-FIX CMP-1/CMP-2/CMP-5: composer send options per conversation. See
@@ -717,9 +723,6 @@ interface ChatState {
    * default that should reset the instant the tab reloads.
    */
   workModeByConversation: Record<string, CloudWorkMode>;
-
-  // Sidebar state
-  sidebarCollapsed: boolean;
 
   /**
    * The composer's "Temporary chat" toggle is armed before any conversation
@@ -931,8 +934,6 @@ interface ChatState {
   setMemoryEnabled: (enabled: boolean, conversationId?: string | null) => void;
 
   // Actions - Sidebar
-  toggleSidebar: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
 
   // Utility
   resetOnWorkspaceSwitch: () => void;
@@ -956,11 +957,11 @@ const initialState = {
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
   parkedSendsByFingerprint: {} as Record<string, string>,
+  parkedSendCreatedAtByFingerprint: {} as Record<string, number>,
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
   disabledConnectorIdsByConversation: {} as Record<string, string[]>,
   memoryDisabledByConversation: {} as Record<string, boolean>,
   workModeByConversation: {} as Record<string, CloudWorkMode>,
-  sidebarCollapsed: false,
   pendingTemporaryChat: null,
 };
 
@@ -973,6 +974,41 @@ const initialState = {
  */
 export const PENDING_CONVERSATION_KEY = '__new_conversation__';
 
+const MAX_PERSISTED_PARKED_SENDS = 8;
+const PARKED_SEND_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+
+function pruneParkedSends(
+  sends: Record<string, string> | undefined,
+  createdAtByFingerprint: Record<string, number> | undefined,
+  now = Date.now(),
+): {
+  parkedSendsByFingerprint: Record<string, string>;
+  parkedSendCreatedAtByFingerprint: Record<string, number>;
+} {
+  const retained = Object.entries(sends ?? {})
+    .flatMap(([fingerprint, content]) => {
+      const createdAt = createdAtByFingerprint?.[fingerprint];
+      return typeof content === 'string' &&
+        content.trim() &&
+        typeof createdAt === 'number' &&
+        Number.isFinite(createdAt) &&
+        createdAt >= now - PARKED_SEND_MAX_AGE_MS
+        ? [{ fingerprint, content, createdAt }]
+        : [];
+    })
+    .sort((left, right) => left.createdAt - right.createdAt)
+    .slice(-MAX_PERSISTED_PARKED_SENDS);
+
+  return {
+    parkedSendsByFingerprint: Object.fromEntries(
+      retained.map(({ fingerprint, content }) => [fingerprint, content]),
+    ),
+    parkedSendCreatedAtByFingerprint: Object.fromEntries(
+      retained.map(({ fingerprint, createdAt }) => [fingerprint, createdAt]),
+    ),
+  };
+}
+
 function conversationKey(conversationId: string | null | undefined): string {
   return conversationId ?? PENDING_CONVERSATION_KEY;
 }
@@ -981,6 +1017,49 @@ type MessageStateSlice = Pick<
   ChatState,
   'messages' | 'messagesByConversation' | 'activeConversationId' | 'activeLeafByConversation'
 >;
+
+export interface MessageArrayPatch {
+  previous: readonly Message[];
+  index: number;
+}
+
+const messageArrayPatches = new WeakMap<Message[], MessageArrayPatch>();
+const messageIndexes = new WeakMap<readonly Message[], ReadonlyMap<string, number>>();
+
+export function readMessageArrayPatch(messages: readonly Message[]): MessageArrayPatch | null {
+  return messageArrayPatches.get(messages as Message[]) ?? null;
+}
+
+function indexMessages(messages: readonly Message[]): ReadonlyMap<string, number> {
+  const cached = messageIndexes.get(messages);
+  if (cached) return cached;
+  const index = new Map(messages.map((message, position) => [message.id, position]));
+  messageIndexes.set(messages, index);
+  return index;
+}
+
+function patchOneMessage(
+  messages: Message[],
+  messageId: string,
+  updater: (message: Message) => Message,
+): Message[] {
+  const index = indexMessages(messages).get(messageId);
+  if (index === undefined) return messages;
+  const current = messages[index];
+  if (!current) return messages;
+  const updated = updater(current);
+  if (updated === current) return messages;
+  const next = messages.slice();
+  next[index] = updated;
+  messageIndexes.set(
+    next,
+    updated.id === current.id
+      ? indexMessages(messages)
+      : new Map(next.map((message, position) => [message.id, position])),
+  );
+  messageArrayPatches.set(next, { previous: messages, index });
+  return next;
+}
 
 /**
  * Current transcript for `key`. When the bucket is missing but `key` IS the
@@ -1058,7 +1137,10 @@ function patchMessageMetadata(
   patch: Partial<MessageMetadata>,
 ) {
   return updateConversationMessages(state, conversationId, (messages) =>
-    messages.map((m) => (m.id === messageId ? { ...m, metadata: { ...m.metadata, ...patch } } : m)),
+    patchOneMessage(messages, messageId, (message) => ({
+      ...message,
+      metadata: { ...message.metadata, ...patch },
+    })),
   );
 }
 
@@ -1348,7 +1430,7 @@ export const useChatStore = create<ChatState>()(
           set(
             (state) =>
               updateConversationMessages(state, conversationId, (messages) =>
-                messages.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+                patchOneMessage(messages, id, (message) => ({ ...message, ...updates })),
               ),
             undefined,
             'chat/updateMessage',
@@ -1358,7 +1440,10 @@ export const useChatStore = create<ChatState>()(
           set(
             (state) =>
               updateConversationMessages(state, conversationId, (messages) =>
-                messages.map((m) => (m.id === id ? { ...m, content: m.content + content } : m)),
+                patchOneMessage(messages, id, (message) => ({
+                  ...message,
+                  content: message.content + content,
+                })),
               ),
             undefined,
             'chat/appendToMessage',
@@ -1368,17 +1453,13 @@ export const useChatStore = create<ChatState>()(
           set(
             (state) =>
               updateConversationMessages(state, conversationId, (messages) =>
-                messages.map((m) =>
-                  m.id === id
-                    ? {
-                        ...m,
-                        metadata: {
-                          ...m.metadata,
-                          thinkingContent: (m.metadata?.thinkingContent ?? '') + thinking,
-                        },
-                      }
-                    : m,
-                ),
+                patchOneMessage(messages, id, (message) => ({
+                  ...message,
+                  metadata: {
+                    ...message.metadata,
+                    thinkingContent: (message.metadata?.thinkingContent ?? '') + thinking,
+                  },
+                })),
               ),
             undefined,
             'chat/appendToThinking',
@@ -1450,13 +1531,15 @@ export const useChatStore = create<ChatState>()(
           set(
             (state) =>
               updateConversationMessages(state, conversationId, (messages) =>
-                messages.map((m) => {
-                  if (m.id !== messageId) return m;
-                  const tools = m.metadata?.tools ?? [];
+                patchOneMessage(messages, messageId, (message) => {
+                  const tools = message.metadata?.tools ?? [];
                   const updatedTools = tools.map((t) =>
                     t.toolCallId === toolCallId ? { ...t, ...updates } : t,
                   );
-                  return { ...m, metadata: { ...m.metadata, tools: updatedTools } };
+                  return {
+                    ...message,
+                    metadata: { ...message.metadata, tools: updatedTools },
+                  };
                 }),
               ),
             undefined,
@@ -1590,7 +1673,10 @@ export const useChatStore = create<ChatState>()(
                 // AUDIT-FIX ROOT-CAUSE: flip the flag inside the OWNING
                 // conversation's transcript, not "whatever is on screen".
                 ...updateConversationMessages(state, conversationId, (messages) =>
-                  messages.map((m) => (m.id === messageId ? { ...m, isStreaming: true } : m)),
+                  patchOneMessage(messages, messageId, (message) => ({
+                    ...message,
+                    isStreaming: true,
+                  })),
                 ),
                 isLoading: deriveIsLoading({ ...state, streamingConversationIds }),
               };
@@ -1687,7 +1773,7 @@ export const useChatStore = create<ChatState>()(
                 conversationId === undefined ? state.activeConversationId : conversationId;
               const key = conversationKey(targetId);
               const draftsByConversation = { ...state.draftsByConversation };
-              if (content) draftsByConversation[key] = content;
+              if (content || targetId) draftsByConversation[key] = content;
               else delete draftsByConversation[key];
               return {
                 draftsByConversation,
@@ -1714,7 +1800,8 @@ export const useChatStore = create<ChatState>()(
                 conversationId === undefined ? state.activeConversationId : conversationId;
               const key = conversationKey(targetId);
               const draftsByConversation = { ...state.draftsByConversation };
-              delete draftsByConversation[key];
+              if (targetId) draftsByConversation[key] = '';
+              else delete draftsByConversation[key];
               return {
                 draftsByConversation,
                 ...(key === conversationKey(state.activeConversationId)
@@ -1737,6 +1824,10 @@ export const useChatStore = create<ChatState>()(
                       ...state.parkedSendsByFingerprint,
                       [fingerprint]: content,
                     },
+                    parkedSendCreatedAtByFingerprint: {
+                      ...state.parkedSendCreatedAtByFingerprint,
+                      [fingerprint]: Date.now(),
+                    },
                   },
             undefined,
             'chat/parkBlockedSend',
@@ -1748,7 +1839,9 @@ export const useChatStore = create<ChatState>()(
               if (!(fingerprint in state.parkedSendsByFingerprint)) return state;
               const { [fingerprint]: _cleared, ...parkedSendsByFingerprint } =
                 state.parkedSendsByFingerprint;
-              return { parkedSendsByFingerprint };
+              const { [fingerprint]: _clearedCreatedAt, ...parkedSendCreatedAtByFingerprint } =
+                state.parkedSendCreatedAtByFingerprint;
+              return { parkedSendsByFingerprint, parkedSendCreatedAtByFingerprint };
             },
             undefined,
             'chat/clearParkedSend',
@@ -1942,17 +2035,6 @@ export const useChatStore = create<ChatState>()(
             'chat/setMemoryEnabled',
           ),
 
-        // Sidebar
-        toggleSidebar: () =>
-          set(
-            (state) => ({ sidebarCollapsed: !state.sidebarCollapsed }),
-            undefined,
-            'chat/toggleSidebar',
-          ),
-
-        setSidebarCollapsed: (collapsed) =>
-          set({ sidebarCollapsed: collapsed }, undefined, 'chat/setSidebarCollapsed'),
-
         setPendingTemporaryChat: (value) =>
           set({ pendingTemporaryChat: value }, undefined, 'chat/setPendingTemporaryChat'),
 
@@ -1963,7 +2045,6 @@ export const useChatStore = create<ChatState>()(
               ...initialState,
               selectedModel: state.selectedModel,
               selectedModelTier: state.selectedModelTier,
-              sidebarCollapsed: state.sidebarCollapsed,
             }),
             undefined,
             'chat/resetOnWorkspaceSwitch',
@@ -1973,26 +2054,32 @@ export const useChatStore = create<ChatState>()(
       {
         name: 'agiworkforce-web-chat',
         storage: createJSONStorage(() => localStorage),
-        version: 4,
-        partialize: (state) => ({
-          // Per-conversation composer toggles are deliberately NOT persisted:
-          // they describe one live conversation's next turn. Managed search is
-          // ambient and therefore has no stale user preference to carry.
-          selectedModel: state.selectedModel,
-          selectedModelTier: state.selectedModelTier,
-          sidebarCollapsed: state.sidebarCollapsed,
-          // Unlike the composer toggles above, a per-conversation connector
-          // opt-out is a standing decision about what a chat is allowed to
-          // reach, not a next-turn default -- it must survive a reload.
-          disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
-          // Same reasoning: a per-chat Memory opt-out is a standing decision
-          // about that conversation, not a next-turn default.
-          memoryDisabledByConversation: state.memoryDisabledByConversation,
-          // Same reasoning again: the Chat/AGI Work axis is a standing fact
-          // about a conversation, not a next-turn default, so it is mirrored
-          // out of composerTogglesByConversation and persisted on its own.
-          workModeByConversation: state.workModeByConversation,
-        }),
+        version: 5,
+        partialize: (state) => {
+          const parkedSends = pruneParkedSends(
+            state.parkedSendsByFingerprint,
+            state.parkedSendCreatedAtByFingerprint,
+          );
+          return {
+            // Per-conversation composer toggles are deliberately NOT persisted:
+            // they describe one live conversation's next turn. Managed search is
+            // ambient and therefore has no stale user preference to carry.
+            selectedModel: state.selectedModel,
+            selectedModelTier: state.selectedModelTier,
+            // Unlike the composer toggles above, a per-conversation connector
+            // opt-out is a standing decision about what a chat is allowed to
+            // reach, not a next-turn default -- it must survive a reload.
+            disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
+            // Same reasoning: a per-chat Memory opt-out is a standing decision
+            // about that conversation, not a next-turn default.
+            memoryDisabledByConversation: state.memoryDisabledByConversation,
+            // Same reasoning again: the Chat/AGI Work axis is a standing fact
+            // about a conversation, not a next-turn default, so it is mirrored
+            // out of composerTogglesByConversation and persisted on its own.
+            workModeByConversation: state.workModeByConversation,
+            ...parkedSends,
+          };
+        },
         // `getComposerToggles` falls back to `workModeByConversation` when the
         // ephemeral bucket has no entry, but every component reads the toggle
         // state directly off `composerTogglesByConversation` through a plain
@@ -2003,11 +2090,20 @@ export const useChatStore = create<ChatState>()(
         // fallback into each selector.
         merge: (persistedState, currentState) => {
           const persisted = (persistedState ?? {}) as Partial<ChatState>;
+          const parkedSends = pruneParkedSends(
+            persisted.parkedSendsByFingerprint,
+            persisted.parkedSendCreatedAtByFingerprint,
+          );
           const composerTogglesByConversation = { ...currentState.composerTogglesByConversation };
           for (const [key, workMode] of Object.entries(persisted.workModeByConversation ?? {})) {
             composerTogglesByConversation[key] ??= { ...DEFAULT_COMPOSER_TOGGLES, workMode };
           }
-          return { ...currentState, ...persisted, composerTogglesByConversation };
+          return {
+            ...currentState,
+            ...persisted,
+            ...parkedSends,
+            composerTogglesByConversation,
+          };
         },
         migrate: (persisted: unknown) => {
           const next = { ...(persisted as Record<string, unknown>) };
@@ -2023,6 +2119,13 @@ export const useChatStore = create<ChatState>()(
           } else {
             next['selectedModel'] = canonicalModel;
           }
+          Object.assign(
+            next,
+            pruneParkedSends(
+              next['parkedSendsByFingerprint'] as Record<string, string> | undefined,
+              next['parkedSendCreatedAtByFingerprint'] as Record<string, number> | undefined,
+            ),
+          );
           return next;
         },
       },
@@ -2104,7 +2207,6 @@ export const selectIsActiveConversationStreaming = (state: ChatState) =>
 export const selectSelectedModel = (state: ChatState) => state.selectedModel;
 export const selectSelectedModelTier = (state: ChatState) => state.selectedModelTier;
 export const selectError = (state: ChatState) => state.error;
-export const selectSidebarCollapsed = (state: ChatState) => state.sidebarCollapsed;
 export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 
 /**

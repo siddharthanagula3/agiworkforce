@@ -2,25 +2,26 @@ import 'server-only';
 
 import { createHash } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
 import type { KeyValueStore } from '@agiworkforce/key-value';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
-import { getModelMetadataById, type ProviderOffering } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getProviderOffering,
+  type ProviderOffering,
+} from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { assertAccountActive } from '@/lib/api-auth';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { moderateManagedPrompt } from '@/lib/moderation';
+import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
+import { moderateGeneratedMedia, moderateManagedPrompt } from '@/lib/moderation';
 import { enforceManagedContentSafetyPreference } from '@/lib/services/managed-content-safety-service';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   FREE_TRIAL_MODEL,
-  beginFreeTrialRequest,
   estimateConservativeFreeInputTokens,
-  settleFreeTrialRequest,
-  type FreeTrialReservation,
 } from '@/lib/services/free-trial-service';
 import type { TokenUsage } from '@/lib/services/llm-cost-calculator';
 import {
@@ -32,12 +33,17 @@ import {
   evaluateActiveWorkspacePolicy,
 } from '@/lib/services/organization-policy-gate';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
-import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from '@/app/api/llm/v1/chat/completions/lib/upstream-error-copy';
-import { MAX_MESSAGE_LENGTH } from '@/lib/validations/llm';
+import {
+  FreeOfferingRequestSchema,
+  freeOfferingContentText,
+  freeOfferingRequiresCodeExecution,
+  freeOfferingRequiresWebAccess,
+  type FreeOfferingMessage,
+} from '@/features/models/lib/free-offering-request';
 import { loadFreePools } from '@/lib/server/free-pools';
 import {
   freeQuotaContextFor,
-  freeQuotaPlanAllows,
+  freeQuotaPlanAllowsOffering,
   resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
 import {
@@ -53,43 +59,43 @@ import {
   type FreeQuotaRefusal,
 } from '@/lib/free-quota-authorization';
 import { freeQuotaFailure, type FreeQuotaFailure } from '@/features/models/lib/free-quota-copy';
+import { bytesFromUrl } from '@/lib/server/media-storage';
+import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
+import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
+import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
+import { validatePromotionalChatStream } from '@/features/models/lib/promotional-chat-stream';
+import {
+  ChatAttachmentHydrationError,
+  hydrateChatAttachments,
+} from '@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration';
+import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
 
-const RequestSchema = z.object({
-  model: z.string().min(1),
-  conversation_id: z.string().uuid(),
-  assistant_message_id: z.string().uuid(),
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['system', 'user', 'assistant']),
-        content: z.string().max(MAX_MESSAGE_LENGTH),
-      }),
-    )
-    .min(1)
-    .refine(
-      (messages) =>
-        messages.reduce((total, message) => total + message.content.length, 0) <=
-        MAX_MESSAGE_LENGTH,
-    ),
-  max_tokens: z.number().int().positive().optional(),
-  work_mode: z.literal('chat').optional(),
-  web_search: z.literal(false).optional(),
-  web_fetch: z.literal(false).optional(),
-  research: z.literal(false).optional(),
-  code_execution: z.literal(false).optional(),
-  office_creation: z.literal(false).optional(),
-  skill_name: z.undefined().optional(),
-  mcp_context: z.undefined().optional(),
-});
-
-type ChatMessage = z.infer<typeof RequestSchema>['messages'][number];
+type ChatMessage = FreeOfferingMessage;
+type ChatPart =
+  | { type: 'text'; text: string }
+  | { type: 'file'; file: { asset_id: string } }
+  | { type: 'image_url'; image_url: { url: string } };
+type PreparedChatMessage = {
+  role: ChatMessage['role'];
+  content: string | ChatPart[];
+};
 
 const MINIMUM_REPLY_TOKENS = 256;
 const THINKING_BUDGET_MULTIPLIER = 2;
 const TURN_ID_LENGTH = 32;
+
+const FREE_MEDIA_EXTENSION: Readonly<Record<string, string>> = {
+  'image/gif': 'gif',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+};
 
 const REFUSAL_FAILURE: Readonly<Record<FreeQuotaRefusal, FreeQuotaFailure>> = {
   exhausted: 'exhausted',
@@ -175,6 +181,10 @@ function readUsage(value: unknown): TokenUsage | null {
   };
 }
 
+function normalizedMediaType(value: string): string {
+  return value.split(';', 1)[0]?.trim().toLowerCase() ?? '';
+}
+
 interface TurnSettlement {
   outcome: 'completed' | 'failed' | 'cancelled';
   consumedUnits: number | null;
@@ -186,9 +196,7 @@ interface TurnLedger {
   store: KeyValueStore;
   apiKey: string;
   offeringKey: string;
-  provider: string;
   allowance: AllowanceReservation;
-  reservation: FreeTrialReservation;
 }
 
 async function recordRefusal(
@@ -233,14 +241,6 @@ async function settleTurn(ledger: TurnLedger, settlement: TurnSettlement): Promi
       '[free-quota] shared allowance settlement failed; the reservation stands',
     );
   }
-  await settleFreeTrialRequest({
-    reservation: ledger.reservation,
-    outcome: settlement.outcome,
-    provider: ledger.provider,
-    model: ledger.offeringKey,
-    ...(settlement.usage ? { usage: settlement.usage } : {}),
-    measuredCostDollars: 0,
-  });
 }
 
 function meteredChatStream(
@@ -283,6 +283,22 @@ function meteredChatStream(
     }
     const reported = readUsage(event['usage']);
     if (reported) usage = reported;
+    const choices = event['choices'];
+    if (
+      Array.isArray(choices) &&
+      choices.some((choice: unknown) => {
+        if (!choice || typeof choice !== 'object') return false;
+        const delta = (choice as { delta?: unknown }).delta;
+        return (
+          delta !== null &&
+          typeof delta === 'object' &&
+          (delta as { x_stream_error?: unknown }).x_stream_error !== undefined
+        );
+      })
+    ) {
+      refusal = { kind: 'failed', signal: 'untrusted_stream_error' };
+      return `data: ${streamErrorFrame('provider_failed', copy)}`;
+    }
     if (event['error'] !== undefined || typeof event['code'] === 'string') {
       const failure = readProviderFailure(event);
       const kind = classifyFreeQuotaRefusal(failure);
@@ -322,7 +338,7 @@ function meteredChatStream(
     },
     async cancel(reason) {
       await reader.cancel(reason).catch(() => undefined);
-      await settle('cancelled');
+      await settle(finished && !refusal ? 'completed' : 'cancelled');
     },
   });
 }
@@ -331,14 +347,30 @@ function turnUnits(
   offeringKey: string,
   offering: ProviderOffering,
   policy: FreeQuotaPolicy,
-  messages: ChatMessage[],
+  messages: PreparedChatMessage[],
   replyTokens: number,
 ): number {
   if (offering.quotaProbeProtocol === 'image-sync') return 1;
   if (offering.quotaProbeProtocol === 'video-async') return policy.videoSeconds;
   const multiplier = offering.quotaThinkingRequired ? THINKING_BUDGET_MULTIPLIER : 1;
+  const imageCount = messages.reduce(
+    (total, message) =>
+      total +
+      (typeof message.content === 'string'
+        ? 0
+        : message.content.filter((part) => part.type === 'image_url').length),
+    0,
+  );
   return (
-    estimateConservativeFreeInputTokens({ model: offeringKey, messages }) + replyTokens * multiplier
+    estimateConservativeFreeInputTokens({
+      model: offeringKey,
+      messages: messages.map((message) => ({
+        role: message.role,
+        content: freeOfferingContentText(message.content),
+      })),
+    }) +
+    imageCount * policy.chatImageReserveTokens +
+    replyTokens * multiplier
   );
 }
 
@@ -360,13 +392,28 @@ async function handlePost(request: NextRequest): Promise<Response> {
   };
   if (!inventory) return refuse('unavailable', baseCopy);
 
-  const parsed = RequestSchema.safeParse(await request.json().catch(() => null));
+  const parsed = FreeOfferingRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return refuse('unsupported_prompt', baseCopy);
   const body = parsed.data;
+  if (freeOfferingRequiresWebAccess(body)) {
+    return policyRefusal(
+      'This promotional model cannot search the web or open pages in Chat. Choose a search-capable Free model, such as Free Auto, and send your request again. No model request was sent.',
+      'free_quota_search_unsupported',
+      400,
+    );
+  }
+  if (
+    getProviderOffering(body.model)?.quotaProbeProtocol === 'chat' &&
+    freeOfferingRequiresCodeExecution(body)
+  ) {
+    return policyRefusal(
+      'This promotional model cannot run code in the sandbox. Choose Free Auto and send your request again. No model request was sent.',
+      'free_quota_code_unsupported',
+      400,
+    );
+  }
 
   const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
-  if (!freeQuotaPlanAllows(planTier)) return refuse('plan', baseCopy);
-
   const context = freeQuotaContextFor({ url: request.url, userId: scoped.userId });
   const decisions = await resolveFreeQuotaDecisions(context, {
     offeringKey: body.model,
@@ -375,6 +422,28 @@ async function handlePost(request: NextRequest): Promise<Response> {
   const resolved = decisions?.offerings[0];
   if (!resolved) return refuse('unavailable', baseCopy);
   const { entry, offering, decision } = resolved;
+  if (!freeQuotaPlanAllowsOffering(planTier, offering.category)) return refuse('plan', baseCopy);
+  const latestUserIndex = body.messages.findLastIndex((message) => message.role === 'user');
+  const hasAttachmentReferences = body.messages.some(
+    (message) =>
+      typeof message.content !== 'string' && message.content.some((part) => part.type === 'file'),
+  );
+  if (
+    hasAttachmentReferences &&
+    (!offering.quotaChatImageInput ||
+      body.messages.some(
+        (message, index) =>
+          index !== latestUserIndex &&
+          typeof message.content !== 'string' &&
+          message.content.some((part) => part.type === 'file'),
+      ))
+  ) {
+    return policyRefusal(
+      'This free model cannot read the attached image. Choose an image-capable Free model or remove the attachment. No model request was sent.',
+      'free_quota_image_unsupported',
+      400,
+    );
+  }
   const copy: CopyContext = {
     ...baseCopy,
     modelName: offering.displayName,
@@ -422,7 +491,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
     return refuse('workspace_restricted', copy);
   }
 
-  const texts = body.messages.map((message) => message.content);
+  const texts = body.messages.map((message) => freeOfferingContentText(message.content));
   const moderation = moderateManagedPrompt({
     userId: scoped.userId,
     segments: texts.filter((text) => text.length > 0),
@@ -430,11 +499,11 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (!moderation.allowed) {
     return policyRefusal(moderation.refusal, 'content_policy_violation', 422);
   }
-  const latestUserPrompt = body.messages.findLast((message) => message.role === 'user')?.content;
+  const latestUserPrompt = body.messages.findLast((message) => message.role === 'user');
   try {
     const safety = await enforceManagedContentSafetyPreference(scoped.db, {
       userId: scoped.userId,
-      prompt: latestUserPrompt ?? '',
+      prompt: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : '',
     });
     if (!safety.allowed) return policyRefusal(safety.refusal, 'reduce_sensitive_content', 422);
   } catch (error) {
@@ -454,10 +523,64 @@ async function handlePost(request: NextRequest): Promise<Response> {
       403,
     );
   }
-  const messages = body.messages.map((message, index) => ({
-    ...message,
-    content: secrets.texts[index]!,
+  const messages: PreparedChatMessage[] = body.messages.map((message, index) => ({
+    role: message.role,
+    content:
+      typeof message.content === 'string'
+        ? secrets.texts[index]!
+        : [
+            ...(secrets.texts[index]
+              ? [{ type: 'text' as const, text: secrets.texts[index]! }]
+              : []),
+            ...message.content.filter((part) => part.type === 'file'),
+          ],
   }));
+  if (hasAttachmentReferences) {
+    try {
+      const hydrated = await hydrateChatAttachments(messages, scoped.userId);
+      const expected = body.messages.reduce(
+        (count, message) =>
+          count +
+          (typeof message.content === 'string'
+            ? 0
+            : message.content.filter((part) => part.type === 'file').length),
+        0,
+      );
+      if (
+        hydrated.length !== expected ||
+        hydrated.some((file) => !isChatImageMimeType(file.mimeType))
+      ) {
+        return policyRefusal(
+          'This free model accepts images, but not this file type. Remove the file or use Free Auto. No model request was sent.',
+          'free_quota_file_unsupported',
+          400,
+        );
+      }
+    } catch (error) {
+      if (error instanceof ChatAttachmentHydrationError) {
+        return policyRefusal(error.message, error.code, error.status);
+      }
+      logger.error({ error, userId: scoped.userId }, '[free-quota] image hydration failed');
+      return policyRefusal(
+        'Your image could not be loaded. Attach it again and retry. No model request was sent.',
+        'free_quota_image_unavailable',
+        503,
+      );
+    }
+    if (
+      messages.some(
+        (message) =>
+          typeof message.content !== 'string' &&
+          message.content.some((part) => part.type !== 'text' && part.type !== 'image_url'),
+      )
+    ) {
+      return policyRefusal(
+        'This free model accepts images, but not this file type. Remove the file or use Free Auto. No model request was sent.',
+        'free_quota_file_unsupported',
+        400,
+      );
+    }
+  }
   const egress = await buildProviderEgressGateResponse({
     mode: 'managed',
     surface: 'web',
@@ -467,6 +590,16 @@ async function handlePost(request: NextRequest): Promise<Response> {
     payload: JSON.stringify(messages),
   });
   if (egress) return egress;
+
+  const userPersistence = await persistFreeOfferingUser({
+    db: scoped.db,
+    userId: scoped.userId,
+    organizationId: scoped.organizationId,
+    conversationId: body.conversation_id,
+    messages: body.messages,
+    userMessage: body.user_message,
+  });
+  if (userPersistence) return userPersistence;
 
   const turnId = createHash('sha256')
     .update(`${body.assistant_message_id}\n${request.headers.get('Idempotency-Key') ?? 'send'}`)
@@ -484,23 +617,6 @@ async function handlePost(request: NextRequest): Promise<Response> {
   if (claimed === null) return refuse('unavailable', copy);
   if (!claimed) return refuse('duplicate', copy);
 
-  const trial = await beginFreeTrialRequest({
-    userId: scoped.userId,
-    requestId: `free-quota:${turnId}`,
-  });
-  if (!trial.ok) {
-    return NextResponse.json(
-      {
-        error: {
-          message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
-          type: 'insufficient_quota',
-          code: 'free_trial_token_budget_reached',
-        },
-      },
-      { status: 429 },
-    );
-  }
-
   const { policy } = context;
   const multiplier = offering.quotaThinkingRequired ? THINKING_BUDGET_MULTIPLIER : 1;
   const inputUnits = turnUnits(entry.offeringKey, offering, policy, messages, 0);
@@ -511,7 +627,6 @@ async function handlePost(request: NextRequest): Promise<Response> {
     Math.floor((remainingUnits - inputUnits) / multiplier),
   );
   if (offering.quotaProbeProtocol === 'chat' && replyTokens < MINIMUM_REPLY_TOKENS) {
-    await settleFreeTrialRequest({ reservation: trial.reservation, outcome: 'failed' });
     return refuse('too_long', copy);
   }
   let allowance: AllowanceReservation | null;
@@ -527,11 +642,9 @@ async function handlePost(request: NextRequest): Promise<Response> {
     });
   } catch (error) {
     logger.error({ error, offering: entry.offeringKey }, '[free-quota] allowance meter unwritable');
-    await settleFreeTrialRequest({ reservation: trial.reservation, outcome: 'failed' });
     return refuse('unavailable', copy);
   }
   if (!allowance) {
-    await settleFreeTrialRequest({ reservation: trial.reservation, outcome: 'failed' });
     return refuse('exhausted', copy);
   }
 
@@ -539,12 +652,10 @@ async function handlePost(request: NextRequest): Promise<Response> {
     store,
     apiKey: context.apiKey,
     offeringKey: entry.offeringKey,
-    provider: offering.provider,
     allowance,
-    reservation: trial.reservation,
   };
   const headers = {
-    'Content-Type': 'text/event-stream',
+    ...SSE_RESPONSE_HEADERS,
     'Cache-Control': 'private, no-store',
     'X-AGI-Resolved-Model': entry.offeringKey,
     'X-AGI-Resolved-Provider': offering.provider,
@@ -562,7 +673,19 @@ async function handlePost(request: NextRequest): Promise<Response> {
           maxOutputTokens: replyTokens,
           requestTimeoutMs: policy.chatRequestTimeoutMs,
         },
-        { messages, signal: request.signal },
+        {
+          messages: messages.map((message) => ({
+            role: message.role,
+            content:
+              typeof message.content === 'string'
+                ? message.content
+                : message.content.map((part) => {
+                    if (part.type === 'file') throw new Error('Unhydrated image reference');
+                    return part;
+                  }),
+          })),
+          signal: request.signal,
+        },
       );
     } catch {
       await settleTurn(ledger, {
@@ -584,9 +707,17 @@ async function handlePost(request: NextRequest): Promise<Response> {
       });
       return refuse(REFUSAL_FAILURE[kind], copy);
     }
-    return new Response(meteredChatStream(upstream.body, ledger, copy), { headers });
+    return new Response(
+      validatePromotionalChatStream(meteredChatStream(upstream.body, ledger, copy), {
+        trustedErrorFrames: true,
+        onFailure: (reason) =>
+          logger.warn({ offering: entry.offeringKey, reason }, '[free-quota] invalid chat stream'),
+      }),
+      { headers },
+    );
   }
 
+  let consumedMediaUnits: number | null = null;
   try {
     const result = await runQwenQuotaProbe(
       entry.offeringKey,
@@ -594,7 +725,13 @@ async function handlePost(request: NextRequest): Promise<Response> {
       policy,
       undefined,
       undefined,
-      { messages, signal: request.signal },
+      {
+        messages: messages.map((message) => ({
+          role: message.role,
+          content: freeOfferingContentText(message.content),
+        })),
+        signal: request.signal,
+      },
     );
     if (result.status === 'quota_exhausted' || result.status === 'failed') {
       const kind =
@@ -621,6 +758,84 @@ async function handlePost(request: NextRequest): Promise<Response> {
       });
       return refuse(result.status === 'submitted' ? 'interrupted' : 'provider_failed', copy);
     }
+    consumedMediaUnits = allowance.units;
+    const generated = await bytesFromUrl(artifact.href);
+    const mimeType = normalizedMediaType(generated.contentType);
+    const mediaKind = offering.category === 'image' ? 'image' : 'video';
+    if (!mimeType.startsWith(`${mediaKind}/`)) {
+      await settleTurn(ledger, {
+        outcome: 'failed',
+        consumedUnits: allowance.units,
+        usage: null,
+        refusal: null,
+      });
+      return refuse('provider_failed', copy);
+    }
+    const moderation = await moderateGeneratedMedia({
+      userId: scoped.userId,
+      media: mediaKind,
+      operation: 'free_quota_generation',
+      bytes: generated.data,
+      mimeType,
+      prompt: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : undefined,
+      signal: request.signal,
+    });
+    if (!moderation.allowed) {
+      await settleTurn(ledger, {
+        outcome: 'failed',
+        consumedUnits: allowance.units,
+        usage: null,
+        refusal: null,
+      });
+      return policyRefusal(moderation.refusal, 'content_policy_violation', 422);
+    }
+    const generatedAt = new Date().toISOString();
+    const provenance = buildAiGeneratedProvenance({
+      kind: mediaKind,
+      provider: offering.provider,
+      model: entry.offeringKey,
+      generatedAt,
+      contentHashSha256: moderation.contentSha256,
+    });
+    const extension = FREE_MEDIA_EXTENSION[mimeType];
+    if (!extension) {
+      await settleTurn(ledger, {
+        outcome: 'failed',
+        consumedUnits: allowance.units,
+        usage: null,
+        refusal: null,
+      });
+      return refuse('provider_failed', copy);
+    }
+    const persisted = await persistGeneratedFileBytes(
+      {
+        userId: scoped.userId,
+        organizationId: scoped.organizationId,
+        data: generated.data,
+        mimeType,
+        filename: `free-generated-${mediaKind}.${extension}`,
+        provider: offering.provider,
+        origin: 'free_quota',
+        model: entry.offeringKey,
+        prompt: latestUserPrompt ? freeOfferingContentText(latestUserPrompt.content) : undefined,
+        conversationId: body.conversation_id,
+        extraMetadata: {
+          aiAct: provenance,
+          freeQuotaOffering: entry.offeringKey,
+          generatedAt,
+        },
+      },
+      scoped.db,
+    );
+    if (!persisted.ok) {
+      await settleTurn(ledger, {
+        outcome: 'failed',
+        consumedUnits: allowance.units,
+        usage: null,
+        refusal: null,
+      });
+      return refuse('interrupted', copy);
+    }
     await settleTurn(ledger, {
       outcome: 'completed',
       consumedUnits: allowance.units,
@@ -629,8 +844,8 @@ async function handlePost(request: NextRequest): Promise<Response> {
     });
     const content =
       offering.category === 'image'
-        ? `![Generated image](<${artifact.href}>)`
-        : `[View generated video](<${artifact.href}>)`;
+        ? `![Generated image](<${persisted.file.uri}>)`
+        : `[View generated video](<${persisted.file.uri}>)`;
     const chunk = JSON.stringify({
       choices: [{ index: 0, delta: { content }, finish_reason: null }],
     });
@@ -639,7 +854,7 @@ async function handlePost(request: NextRequest): Promise<Response> {
   } catch {
     await settleTurn(ledger, {
       outcome: 'failed',
-      consumedUnits: null,
+      consumedUnits: consumedMediaUnits,
       usage: null,
       refusal: null,
     });

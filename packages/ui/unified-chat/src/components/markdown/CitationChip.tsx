@@ -105,7 +105,7 @@ function TooltipSourceRow({ index, citation }: CitationItem) {
     <div className="flex items-start gap-1.5">
       <CitationFavicon
         citation={citation}
-        imgClassName="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-[2px] object-contain"
+        imgClassName="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-detail object-contain"
         fallbackClassName="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--chat-text-muted)]"
       />
       <span className="min-w-0">
@@ -156,8 +156,8 @@ export function CitationChip({ items }: { items: readonly CitationItem[] }) {
           className={cn(
             'mx-0.5 inline-flex h-6 max-w-[9.5rem] items-center gap-1 align-middle',
             'rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-hover)]',
-            'px-2 text-[12px] font-medium text-[var(--chat-text-secondary)] no-underline',
-            'transition-colors duration-100 hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]',
+            'px-2 text-caption font-medium text-[var(--chat-text-secondary)] no-underline',
+            'transition-colors duration-instant hover:bg-[var(--chat-surface-elevated)] hover:text-[var(--chat-text-primary)]',
           )}
         >
           <CitationFavicon
@@ -174,7 +174,7 @@ export function CitationChip({ items }: { items: readonly CitationItem[] }) {
           side="top"
           sideOffset={6}
           className={cn(
-            'z-50 flex max-w-[320px] flex-col gap-2 rounded-lg border px-3 py-2 text-[12px]',
+            'z-[var(--z-dropdown)] flex max-w-[320px] flex-col gap-2 rounded-lg border px-3 py-2 text-caption',
             'bg-[var(--chat-surface-overlay)] text-[var(--chat-text-primary)]',
             'border-[var(--chat-border)] shadow-[var(--chat-shadow-lg)]',
           )}

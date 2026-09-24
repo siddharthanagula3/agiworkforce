@@ -249,7 +249,7 @@ export function LocalByokHandoffDialog({
                         <div className="mt-2 break-all text-xs text-muted-foreground">
                           {finding.location}
                         </div>
-                        <pre className="mt-2 max-h-20 overflow-auto whitespace-pre-wrap break-words rounded bg-black/30 p-2 text-xs">
+                        <pre className="mt-2 max-h-20 overflow-auto whitespace-pre-wrap break-words rounded-compact bg-black/30 p-2 text-xs">
                           {finding.redactedPreview}
                         </pre>
                       </div>

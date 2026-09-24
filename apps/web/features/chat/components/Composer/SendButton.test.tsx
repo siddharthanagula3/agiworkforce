@@ -159,4 +159,12 @@ describe('SendButton · button type', () => {
       expect(btn).toHaveAttribute('type', 'button');
     },
   );
+
+  it.each(['send', 'stop', 'queue'] as const)(
+    'expands the %s control to a 44px coarse-pointer target',
+    (mode) => {
+      renderButton({ mode, hasContent: true, onClick: vi.fn() });
+      expect(screen.getByRole('button')).toHaveClass('pointer-coarse:h-11', 'pointer-coarse:w-11');
+    },
+  );
 });

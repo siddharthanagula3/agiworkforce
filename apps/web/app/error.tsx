@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { RefreshCw, Home, AlertTriangle } from 'lucide-react';
 import { getFriendlyError } from '@agiworkforce/utils';
-import { AgiMark } from '@agiworkforce/ui';
+import { AgiMark } from '@agiworkforce/ui/agi-mark';
 import { logger } from '@shared/lib/logger';
 import { PRODUCT_HOME_PATH } from '@/features/desktop-host/lib/deep-links';
 import { useHomeHref } from '@/features/desktop-host/hooks/use-home-href';

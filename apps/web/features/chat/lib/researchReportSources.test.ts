@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  renumberCitationMarkersFromTrailingList,
+  reconcileCitationMarkersFromSourceList,
   stripTrailingCitationOnlyBlock,
   stripTrailingSourceList,
 } from './researchReportSources';
@@ -133,7 +133,7 @@ describe('stripTrailingCitationOnlyBlock', () => {
   });
 });
 
-describe('renumberCitationMarkersFromTrailingList', () => {
+describe('reconcileCitationMarkersFromSourceList', () => {
   const delivered = [
     { url: 'https://www.democracynow.org/2026/9/10/headlines' },
     { url: 'https://www.nst.com.my/news/regional/2026/09/1530078/news9' },
@@ -150,13 +150,37 @@ describe('renumberCitationMarkersFromTrailingList', () => {
   ].join('\n');
 
   it('moves a marker onto the delivered position of the url the model meant', () => {
-    const out = renumberCitationMarkersFromTrailingList(answer, delivered);
+    const out = reconcileCitationMarkersFromSourceList(answer, delivered).markdown;
     expect(out).toContain('*Democracy Now!* [1]');
     expect(out).toContain('*New York Post* [3]');
   });
 
+  it('remaps prose references from a model-authored numbered markdown-link source list', () => {
+    const canonical = [
+      { url: 'https://www.iana.org/help/http-changes' },
+      { url: 'https://www.iana.org/help/example-domains' },
+      { url: 'https://www.iana.org/domains/reserved' },
+    ];
+    const report = [
+      'The official page explains reserved examples [1][2].',
+      '',
+      'Five relevant sources:',
+      '1. [Example Domains](https://www.iana.org/help/example-domains)',
+      '2. [Reserved Domains](https://www.iana.org/domains/reserved)',
+      '3. [HTTP changes](https://www.iana.org/help/http-changes)',
+      '',
+      'These links are useful starting points.',
+    ].join('\n');
+
+    const reconciled = reconcileCitationMarkersFromSourceList(report, canonical);
+    expect(reconciled.canLinkNumericCitations).toBe(true);
+    const out = reconciled.markdown;
+    expect(out).toContain('reserved examples [2][3].');
+    expect(out).toContain('1. [Example Domains](https://www.iana.org/help/example-domains)');
+  });
+
   it('leaves the trailing block itself untouched for the stripper that follows', () => {
-    const out = renumberCitationMarkersFromTrailingList(answer, delivered);
+    const out = reconcileCitationMarkersFromSourceList(answer, delivered).markdown;
     expect(stripTrailingSourceList(out)).toBe(
       [
         '1. **"Trump Predicts Iran War"** - *Democracy Now!* [1]',
@@ -170,7 +194,63 @@ describe('renumberCitationMarkersFromTrailingList', () => {
       'https://nypost.com/2026/09/10/',
       'https://elsewhere.example/x',
     );
-    expect(renumberCitationMarkersFromTrailingList(withStranger, delivered)).toBe(withStranger);
+    expect(reconcileCitationMarkersFromSourceList(withStranger, delivered).markdown).toBe(
+      withStranger,
+    );
+    expect(reconcileCitationMarkersFromSourceList(withStranger, delivered)).toEqual({
+      markdown: withStranger,
+      canLinkNumericCitations: false,
+    });
+  });
+
+  it('does not link numeric markers when the explicit list omits one used in prose', () => {
+    const report = [
+      'Two claims [1][2].',
+      '',
+      'Sources:',
+      '- [1] https://www.democracynow.org/2026/9/10/headlines',
+    ].join('\n');
+
+    expect(reconcileCitationMarkersFromSourceList(report, delivered)).toEqual({
+      markdown: report,
+      canLinkNumericCitations: false,
+    });
+  });
+
+  it('does not link conflicting duplicate source numbers', () => {
+    const report = [
+      'One claim [1].',
+      '',
+      'Sources:',
+      '- [1] https://www.democracynow.org/2026/9/10/headlines',
+      '- [1] https://nypost.com/2026/09/10/',
+    ].join('\n');
+
+    expect(reconcileCitationMarkersFromSourceList(report, delivered)).toEqual({
+      markdown: report,
+      canLinkNumericCitations: false,
+    });
+  });
+
+  it('fails closed for a numbered URL section containing an undelivered page', () => {
+    const report = [
+      'Official examples [1][2].',
+      '',
+      '### Three relevant IANA URLs',
+      '1. https://www.iana.org/help/example-domains',
+      '2. https://www.iana.org/domains/reserved',
+      '3. https://www.rfc-editor.org/rfc/rfc2606',
+    ].join('\n');
+
+    const known = [
+      { url: 'https://www.iana.org/help/example-domains' },
+      { url: 'https://www.iana.org/domains/reserved' },
+    ];
+
+    expect(reconcileCitationMarkersFromSourceList(report, known)).toEqual({
+      markdown: report,
+      canLinkNumericCitations: false,
+    });
   });
 
   it('changes nothing when the model already numbered by the delivered order', () => {
@@ -180,12 +260,12 @@ describe('renumberCitationMarkersFromTrailingList', () => {
       'Sources:',
       '- [1] https://www.democracynow.org/2026/9/10/headlines',
     ].join('\n');
-    expect(renumberCitationMarkersFromTrailingList(aligned, delivered)).toBe(aligned);
+    expect(reconcileCitationMarkersFromSourceList(aligned, delivered).markdown).toBe(aligned);
   });
 
   it('changes nothing on an answer with no trailing source list', () => {
     const plain = 'One claim. [2]';
-    expect(renumberCitationMarkersFromTrailingList(plain, delivered)).toBe(plain);
+    expect(reconcileCitationMarkersFromSourceList(plain, delivered).markdown).toBe(plain);
   });
 
   it('never rewrites a bracketed index inside a fenced code block', () => {
@@ -198,7 +278,7 @@ describe('renumberCitationMarkersFromTrailingList', () => {
       'Sources:',
       '- [2] https://nypost.com/2026/09/10/',
     ].join('\n');
-    const out = renumberCitationMarkersFromTrailingList(withFence, delivered);
+    const out = reconcileCitationMarkersFromSourceList(withFence, delivered).markdown;
     expect(out).toContain('Body [3].');
     expect(out).toContain('rows[2]');
   });

@@ -39,7 +39,7 @@ vi.mock('./request-processor', () => ({
   buildThinkingConfig: vi.fn(() => undefined),
 }));
 
-import { createFailoverPlan } from './managed-failover';
+import { createFailoverPlan, isFreePostToolSameRouteRetryEligible } from './managed-failover';
 import type { ProcessedRequest } from './request-processor';
 import { FREE_LANE_MODES, type FreeLaneMode } from '@/lib/services/free-lane/mode';
 import { toFreeAutoCandidate, type FreeLanePlan } from '@/lib/services/free-lane/plan';
@@ -259,6 +259,26 @@ describe('free-lane rotation never reaches paid capacity', () => {
   it('still refuses to rotate on a refusal, which has no exception', () => {
     const plan = makePlan(makeProcessed());
     expect(plan.next(httpError(400, 'content was blocked by safety'))).toBeNull();
+  });
+});
+
+describe('Free continuation same-route retry classification', () => {
+  it('accepts transient server failures without a requested delay', () => {
+    expect(isFreePostToolSameRouteRetryEligible(httpError(500))).toBe(true);
+    expect(isFreePostToolSameRouteRetryEligible(httpError(503))).toBe(true);
+  });
+
+  it('does not retry a provider-requested delay, rate limit, credential failure, or refusal', () => {
+    expect(
+      isFreePostToolSameRouteRetryEligible(
+        Object.assign(httpError(503), { retryAfterSeconds: 15 }),
+      ),
+    ).toBe(false);
+    expect(isFreePostToolSameRouteRetryEligible(httpError(429))).toBe(false);
+    expect(isFreePostToolSameRouteRetryEligible(httpError(401))).toBe(false);
+    expect(
+      isFreePostToolSameRouteRetryEligible(httpError(400, 'content was blocked by safety')),
+    ).toBe(false);
   });
 });
 

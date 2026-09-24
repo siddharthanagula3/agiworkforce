@@ -45,7 +45,7 @@ export function FreePlanTrainingNotice() {
       role="note"
       aria-label={FREE_PLAN_TRAINING_NOTICE_TITLE}
       data-testid="free-plan-training-notice"
-      className="mb-2 flex items-start gap-2 rounded-[var(--chat-radius-lg)] border border-[var(--chat-border-subtle)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-[13px] leading-relaxed text-[var(--chat-text-secondary)]"
+      className="mb-2 flex items-start gap-2 rounded-lg border border-[var(--chat-border-subtle)] bg-[var(--chat-surface-elevated)] px-3 py-2 text-[13px] leading-relaxed text-[var(--chat-text-secondary)]"
     >
       <Info className="mt-0.5 h-4 w-4 shrink-0 text-[var(--chat-text-muted)]" aria-hidden="true" />
       <p className="min-w-0 flex-1">

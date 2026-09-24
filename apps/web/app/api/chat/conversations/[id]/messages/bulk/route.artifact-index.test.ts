@@ -28,6 +28,7 @@ const { scheduleArtifactIndexing } = vi.hoisted(() => ({ scheduleArtifactIndexin
 vi.mock('../lib/index-artifacts', () => ({ scheduleArtifactIndexing }));
 
 import { POST as postBulkMessages } from './route';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 
 const USER_ID = 'user_1';
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -43,7 +44,12 @@ function makeContext() {
   return { params: Promise.resolve({ id: CONVERSATION_ID }) };
 }
 
-function mockSavedRow(id: string, role: string, content: string) {
+function mockSavedRow(
+  id: string,
+  role: string,
+  content: string,
+  metadata: Record<string, unknown> = {},
+) {
   mockQuery.mockResolvedValueOnce([
     {
       id,
@@ -54,7 +60,7 @@ function mockSavedRow(id: string, role: string, content: string) {
       input_tokens: null,
       output_tokens: null,
       created_at: 'now',
-      metadata: {},
+      metadata,
     },
   ]);
 }
@@ -87,6 +93,27 @@ describe('POST /api/chat/conversations/[id]/messages/bulk, artifact indexing', (
       messageId,
       content: 'assistant reply',
     });
+  });
+
+  it('keeps the explicit derivation policy on bulk assistant saves', async () => {
+    const messageId = '22222222-2222-4222-8222-222222222222';
+    const metadata = { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY };
+    mockSavedRow(messageId, 'assistant', 'assistant reply', metadata);
+
+    const res = await postBulkMessages(
+      makeRequest({
+        messages: [{ id: messageId, role: 'assistant', content: 'assistant reply', metadata }],
+      }),
+      makeContext(),
+    );
+
+    expect(res.status).toBe(200);
+    expect(scheduleArtifactIndexing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId,
+        artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+      }),
+    );
   });
 
   it('leaves user and system messages unindexed', async () => {

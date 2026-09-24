@@ -207,14 +207,19 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          marginBottom: 16,
+          marginBottom: 'var(--space-4)',
         }}
       >
         <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--agi-ink)', margin: 0 }}>
           Knowledge Files
           {files.length > 0 && (
             <span
-              style={{ fontSize: 12, fontWeight: 400, color: 'var(--agi-ink-2)', marginLeft: 6 }}
+              style={{
+                fontSize: 12,
+                fontWeight: 400,
+                color: 'var(--agi-ink-2)',
+                marginLeft: 'var(--space-2)',
+              }}
             >
               {/*
                 The cap was invisible until the upload route refused the 21st
@@ -240,7 +245,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                 </>
               ) : null}
               {files.length >= MAX_PROJECT_KNOWLEDGE_FILES && (
-                <span style={{ color: 'var(--color-primary)', marginLeft: 6 }}>
+                <span style={{ color: 'var(--color-primary)', marginLeft: 'var(--space-2)' }}>
                   &middot; full, remove one to add another
                 </span>
               )}
@@ -253,8 +258,8 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           onClick={() => fileInputRef.current?.click()}
           data-testid="knowledge-files-upload-btn"
           style={{
-            padding: '6px 14px',
-            borderRadius: 9999,
+            padding: 'var(--space-2) var(--space-4)',
+            borderRadius: 'var(--corner-pill)',
             border: '1px solid var(--agi-rule-strong)',
             background: 'transparent',
             color: isUploading ? 'var(--agi-ink-2)' : 'var(--agi-ink)',
@@ -280,9 +285,9 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       {uploadState.status === 'uploading' && (
         <div
           style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
+            marginBottom: 'var(--space-3)',
+            padding: 'var(--space-2) var(--space-3)',
+            borderRadius: 'var(--corner-field)',
             border: '1px solid var(--agi-rule)',
             background: 'var(--agi-bg-2)',
             fontSize: 12,
@@ -296,9 +301,9 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       {uploadState.status === 'error' && (
         <div
           style={{
-            marginBottom: 12,
-            padding: '8px 12px',
-            borderRadius: 8,
+            marginBottom: 'var(--space-3)',
+            padding: 'var(--space-2) var(--space-3)',
+            borderRadius: 'var(--corner-field)',
             border: '1px solid rgba(239,68,68,0.3)',
             background: 'rgba(239,68,68,0.08)',
             fontSize: 12,
@@ -306,7 +311,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 8,
+            gap: 'var(--space-2)',
           }}
         >
           <span>{uploadState.message}</span>
@@ -348,8 +353,8 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           }}
           style={{
             border: `2px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule-strong)'}`,
-            borderRadius: 12,
-            padding: '32px 16px',
+            borderRadius: 'var(--corner-surface)',
+            padding: 'var(--space-6) var(--space-4)',
             textAlign: 'center',
             cursor: 'pointer',
             background: isDragging
@@ -358,7 +363,14 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             transition: 'border-color 0.15s, background 0.15s',
           }}
         >
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
+          <p
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--agi-ink)',
+              margin: '0 0 var(--space-2)',
+            }}
+          >
             No knowledge files yet
           </p>
           <p
@@ -382,7 +394,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             fontSize: 12,
             color: 'var(--agi-ink-2)',
             textAlign: 'center',
-            padding: '24px 0',
+            padding: 'var(--space-5) 0',
           }}
         >
           Loading...
@@ -395,7 +407,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
             fontSize: 12,
             color: 'var(--agi-ink-2)',
             textAlign: 'center',
-            padding: '24px 0',
+            padding: 'var(--space-5) 0',
           }}
         >
           Failed to load knowledge files.
@@ -405,7 +417,13 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       {/* File list */}
       {loadState === 'loaded' && files.length > 0 && (
         <ul
-          style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 0, margin: 0 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-2)',
+            padding: 0,
+            margin: 0,
+          }}
           data-testid="knowledge-files-list"
         >
           {files.map((file) => (
@@ -414,11 +432,11 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
               style={{
                 listStyle: 'none',
                 border: '1px solid var(--agi-rule)',
-                borderRadius: 12,
-                padding: '10px 14px',
+                borderRadius: 'var(--corner-surface)',
+                padding: 'var(--space-3) var(--space-4)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
+                gap: 'var(--space-3)',
                 cursor: 'pointer',
               }}
               onClick={() => setPreviewFile(file)}
@@ -441,7 +459,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                   minWidth: 0,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 2,
+                  gap: 'var(--space-1)',
                 }}
               >
                 <span
@@ -488,7 +506,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
                   border: 'none',
                   cursor: 'pointer',
                   color: 'var(--agi-ink-2)',
-                  padding: 4,
+                  padding: 'var(--space-1)',
                   display: 'flex',
                   alignItems: 'center',
                 }}
@@ -511,10 +529,10 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
           onDragLeave={() => setIsDragging(false)}
           onDrop={handleDrop}
           style={{
-            marginTop: 8,
+            marginTop: 'var(--space-2)',
             border: `1px dashed ${isDragging ? 'var(--color-primary)' : 'var(--agi-rule)'}`,
-            borderRadius: 8,
-            padding: '8px 12px',
+            borderRadius: 'var(--corner-field)',
+            padding: 'var(--space-2) var(--space-3)',
             textAlign: 'center',
             fontSize: 12,
             color: 'var(--agi-ink-2)',
@@ -558,7 +576,7 @@ function KnowledgeIndexStatus({
         display: 'flex',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: 6,
+        gap: 'var(--space-2)',
         fontSize: 12,
         color: !inProgress && indexing.chunkCount === 0 ? 'var(--agi-error)' : 'var(--agi-ink-2)',
       }}

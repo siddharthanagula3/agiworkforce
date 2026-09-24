@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page, type Route } from '@playwright/test';
 import { signIn } from './qa-capability-harness';
 
 /**
@@ -25,6 +25,65 @@ const CASES = [
   // help until they sign in again.
   { status: 401, body: { error: { message: 'Unauthorized' } } },
 ];
+
+const PROJECTS_ENDPOINT = /\/api\/projects(?:\?.*)?$/;
+const LIBRARY_ENDPOINT = /\/api\/library(?:\?.*)?$/;
+const TASK_RUNS_ENDPOINT = /\/api\/llm\/v1\/chat\/completions\/runs(?:\?.*)?$/;
+const TASK_ARCHIVE_ENDPOINT = /\/api\/llm\/v1\/chat\/completions\/runs\/[0-9a-f-]+\/archive$/;
+const SCHEDULES_ENDPOINT = /\/api\/schedules(?:\?.*)?$/;
+const TASK_RUN_ID = '11111111-1111-4111-8111-111111111111';
+const RAW_FAILURE = /500|Internal error|TypeError|Error:/i;
+
+const libraryItem = {
+  id: 'qa-write-failure-item',
+  file_name: 'qa-write-failure.txt',
+  mime_type: 'text/plain',
+  kind: 'file',
+  byte_count: 128,
+  uri: '/api/files/qa-write-failure-item',
+  surface: 'file',
+  previewable: false,
+  origin: 'generated',
+  source_surface: 'web',
+  provider: null,
+  model: null,
+  prompt: null,
+  created_at: '2026-09-22T00:00:00.000Z',
+};
+
+const completedTask = {
+  id: TASK_RUN_ID,
+  userId: 'qa-user',
+  requestId: 'qa-write-failure',
+  conversationId: null,
+  conversationTitle: 'Write failure fixture',
+  conversationPreview: 'Verify that failed writes remain recoverable.',
+  originSurface: 'web',
+  workMode: 'agiwork',
+  state: 'completed',
+  provider: 'openai',
+  model: 'fixture-task-model',
+  lastEventSequence: 1,
+  cancellationRequestedAt: null,
+  completedAt: '2026-09-22T00:05:00.000Z',
+  createdAt: '2026-09-22T00:00:00.000Z',
+  updatedAt: '2026-09-22T00:05:00.000Z',
+};
+
+async function json(route: Route, status: number, body: unknown) {
+  await route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+}
+
+async function dismissConsent(page: Page) {
+  await page
+    .getByLabel('Close and reject non-essential cookies')
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
+}
 
 test('server error states are announced, actionable and free of raw detail', async ({ page }) => {
   test.setTimeout(900_000);
@@ -105,4 +164,100 @@ test('server error states are announced, actionable and free of raw detail', asy
     .filter((f) => !/sign in|session/i.test(f.announced.join(' ')))
     .map((f) => `${f.route}: ${f.announced.join(' ').slice(0, 60)}`);
   expect(vagueOn401, `401 answered generically on: ${vagueOn401.join(', ')}`).toEqual([]);
+});
+
+test('failed writes stay recoverable on projects, library, tasks and schedules', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+
+  await page.route('**/api/me', async (route) => {
+    const response = await route.fetch();
+    if (!response.ok()) {
+      await route.fulfill({ response });
+      return;
+    }
+    const body = (await response.json()) as { plan?: Record<string, unknown> };
+    if (body.plan) {
+      body.plan['tier'] = 'pro';
+      body.plan['display_name'] = 'Pro';
+    }
+    await route.fulfill({ response, json: body });
+  });
+
+  await signIn(page);
+  await dismissConsent(page);
+
+  await page.route(PROJECTS_ENDPOINT, (route) =>
+    route.request().method() === 'POST'
+      ? json(route, 500, { error: { message: 'Internal error' } })
+      : json(route, 200, { projects: [] }),
+  );
+  await page.goto('/chat/projects?new=1', { waitUntil: 'domcontentloaded' });
+  const projectDialog = page.getByRole('dialog', { name: 'Create project' });
+  await expect(projectDialog).toBeVisible({ timeout: 20_000 });
+  await projectDialog.getByLabel('Project name').fill('Write failure project');
+  await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
+  const projectFailure = projectDialog.getByRole('alert');
+  await expect(projectFailure).toContainText('Something went wrong on our side');
+  await expect(projectFailure).not.toContainText(RAW_FAILURE);
+  await expect(projectDialog.getByLabel('Project name')).toHaveValue('Write failure project');
+  await page.unroute(PROJECTS_ENDPOINT);
+
+  await page.route(PROJECTS_ENDPOINT, (route) => json(route, 200, { projects: [] }));
+  await page.route(LIBRARY_ENDPOINT, (route) =>
+    json(route, 200, { items: [libraryItem], has_more: false, next_offset: null }),
+  );
+  await page.route(/\/api\/media\?id=qa-write-failure-item$/, (route) =>
+    json(route, 500, { error: { message: 'Internal error' } }),
+  );
+  await page.goto('/chat/library', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByText(libraryItem.file_name).first()).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: `Actions for ${libraryItem.file_name}` }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  const libraryFailure = page.getByRole('status').filter({
+    hasText: 'Something went wrong on our side',
+  });
+  await expect(libraryFailure).toBeVisible();
+  await expect(libraryFailure).not.toContainText(RAW_FAILURE);
+  await expect(page.getByText(libraryItem.file_name).first()).toBeVisible();
+  await page.unroute(PROJECTS_ENDPOINT);
+  await page.unroute(LIBRARY_ENDPOINT);
+  await page.unroute(/\/api\/media\?id=qa-write-failure-item$/);
+
+  await page.route(TASK_RUNS_ENDPOINT, (route) =>
+    json(route, 200, { runs: [completedTask], nextCursor: null }),
+  );
+  await page.route(TASK_ARCHIVE_ENDPOINT, (route) =>
+    json(route, 500, { error: { message: 'Internal error' } }),
+  );
+  await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
+  const archive = page.getByRole('button', { name: 'Archive', exact: true });
+  await expect(archive).toBeVisible({ timeout: 20_000 });
+  await archive.click();
+  const taskFailure = page.locator('[data-sonner-toast]').filter({
+    hasText: 'Something went wrong on our side',
+  });
+  await expect(taskFailure).toBeVisible();
+  await expect(taskFailure).not.toContainText(RAW_FAILURE);
+  await expect(archive).toBeVisible();
+  await page.unroute(TASK_RUNS_ENDPOINT);
+  await page.unroute(TASK_ARCHIVE_ENDPOINT);
+
+  await page.route(PROJECTS_ENDPOINT, (route) => json(route, 200, { projects: [] }));
+  await page.route(SCHEDULES_ENDPOINT, (route) =>
+    route.request().method() === 'POST'
+      ? json(route, 500, { error: { message: 'Internal error' } })
+      : json(route, 200, { schedules: [], pagination: { limit: 20, offset: 0 } }),
+  );
+  await page.goto('/chat/schedules', { waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Daily briefing' }).click({ timeout: 20_000 });
+  const scheduleDialog = page.getByRole('dialog', { name: 'Create Schedule' });
+  await expect(scheduleDialog).toBeVisible();
+  await scheduleDialog.getByRole('button', { name: 'Create Schedule' }).click();
+  const scheduleFailure = scheduleDialog.getByRole('alert');
+  await expect(scheduleFailure).toContainText('Something went wrong on our side');
+  await expect(scheduleFailure).not.toContainText(RAW_FAILURE);
+  await expect(scheduleDialog.getByLabel('Schedule Name')).toHaveValue('Daily briefing');
 });

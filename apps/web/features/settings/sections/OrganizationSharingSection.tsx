@@ -26,7 +26,7 @@ const cardStyle = {
 } as const;
 
 const headerStyle = {
-  padding: '14px 20px',
+  padding: 'var(--space-4) var(--space-5)',
   borderBottom: '1px solid var(--settings-border)',
 } as const;
 
@@ -37,7 +37,7 @@ const buttonStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 10px',
+  padding: 'var(--space-1) var(--space-3)',
   cursor: 'pointer',
 } as const;
 
@@ -48,7 +48,7 @@ const selectStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '5px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 function SectionCard({
@@ -69,7 +69,7 @@ function SectionCard({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 'var(--space-2)',
             color: 'var(--text-2)',
             fontSize: 13,
             fontWeight: 600,
@@ -78,11 +78,22 @@ function SectionCard({
           {icon}
           {title}
         </div>
-        <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
+        <div
+          style={{
+            color: 'var(--text-3)',
+            fontSize: 12,
+            lineHeight: 1.5,
+            marginTop: 'var(--space-1)',
+          }}
+        >
           {description}
         </div>
       </div>
-      <div style={{ padding: '14px 20px', display: 'grid', gap: 12 }}>{children}</div>
+      <div
+        style={{ padding: 'var(--space-4) var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}
+      >
+        {children}
+      </div>
     </section>
   );
 }
@@ -97,7 +108,10 @@ function Empty({ children }: { children: React.ReactNode }) {
 
 function LoadError({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <div role="alert" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div
+      role="alert"
+      style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}
+    >
       <span style={{ color: 'var(--settings-destructive-text)', fontSize: 12 }}>{message}</span>
       <button type="button" style={buttonStyle} onClick={onRetry}>
         Retry
@@ -175,7 +189,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
         />
       ) : null}
       {overview.canManageSharing && !ownProjects.isError ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <label htmlFor="org-share-project" style={{ position: 'absolute', left: -9999 }}>
             Project to share
           </label>
@@ -209,7 +223,15 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
       {overview.sharedProjects.length === 0 ? (
         <Empty>Nothing is shared yet.</Empty>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 10 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gap: 'var(--space-3)',
+          }}
+        >
           {overview.sharedProjects.map((project) => {
             const denied = new Set(
               project.memberGrants
@@ -226,9 +248,9 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 style={{
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
+                  padding: 'var(--space-3) var(--space-3)',
                   display: 'grid',
-                  gap: 8,
+                  gap: 'var(--space-2)',
                 }}
               >
                 <div
@@ -236,7 +258,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: 'var(--space-2)',
                   }}
                 >
                   <div>
@@ -266,7 +288,7 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                 </div>
 
                 {overview.canManageSharing ? (
-                  <div style={{ display: 'grid', gap: 4 }}>
+                  <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
                     {overview.members.map((member) => {
                       const grant = project.memberGrants.find((g) => g.userId === member.userId);
                       const value =
@@ -279,7 +301,12 @@ function SharedProjects({ overview }: { overview: OrgSharedOverview }) {
                       return (
                         <div
                           key={member.userId}
-                          style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'var(--space-2)',
+                            fontSize: 12,
+                          }}
                         >
                           <label
                             htmlFor={controlId}
@@ -340,7 +367,15 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
           No artifacts are shared yet. Publish one from a chat and choose your workspace.
         </Empty>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gap: 'var(--space-2)',
+          }}
+        >
           {artifacts.map((artifact) => {
             const name = artifact.title || 'Untitled artifact';
             const canWithdraw =
@@ -351,11 +386,11 @@ function SharedArtifacts({ overview }: { overview: OrgSharedOverview }) {
                 style={{
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
+                  padding: 'var(--space-3) var(--space-3)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: 8,
+                  gap: 'var(--space-2)',
                   flexWrap: 'wrap',
                 }}
               >
@@ -417,7 +452,15 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
           No conversations are shared yet. Share one from a chat and choose your workspace.
         </Empty>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gap: 'var(--space-2)',
+          }}
+        >
           {conversations.map((conversation) => {
             const name = conversation.title || 'Untitled conversation';
             const canWithdraw =
@@ -429,11 +472,11 @@ function SharedConversations({ overview }: { overview: OrgSharedOverview }) {
                 style={{
                   border: '1px solid var(--settings-border)',
                   borderRadius: 'var(--radius-md)',
-                  padding: '10px 12px',
+                  padding: 'var(--space-3) var(--space-3)',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
-                  gap: 8,
+                  gap: 'var(--space-2)',
                   flexWrap: 'wrap',
                 }}
               >
@@ -510,7 +553,7 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
         />
       ) : null}
       {overview.canManageSharing && !ownConnectors.isError ? (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           <label htmlFor="org-share-connector" style={{ position: 'absolute', left: -9999 }}>
             Connector to share
           </label>
@@ -544,18 +587,26 @@ function SharedConnectors({ overview }: { overview: OrgSharedOverview }) {
       {overview.sharedConnectors.length === 0 ? (
         <Empty>No connectors are shared yet.</Empty>
       ) : (
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 8 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gap: 'var(--space-2)',
+          }}
+        >
           {overview.sharedConnectors.map((connector) => (
             <li
               key={connector.connectorRowId}
               style={{
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
-                padding: '10px 12px',
+                padding: 'var(--space-3) var(--space-3)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                gap: 8,
+                gap: 'var(--space-2)',
               }}
             >
               <div style={{ minWidth: 0 }}>
@@ -622,7 +673,7 @@ export function OrganizationSharingSection() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
+              gap: 'var(--space-2)',
               color: 'var(--text-2)',
               fontSize: 13,
               fontWeight: 600,
@@ -631,7 +682,14 @@ export function OrganizationSharingSection() {
             <Share2 size={14} aria-hidden />
             Shared with your organization
           </div>
-          <div style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, marginTop: 3 }}>
+          <div
+            style={{
+              color: 'var(--text-3)',
+              fontSize: 12,
+              lineHeight: 1.5,
+              marginTop: 'var(--space-1)',
+            }}
+          >
             You are not in an organization yet. Create one from the Team section to share projects,
             conversations, artifacts and connectors with your members.
           </div>
@@ -641,7 +699,7 @@ export function OrganizationSharingSection() {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 16 }}>
+    <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
       <SectionCard
         icon={<Users size={14} aria-hidden />}
         title="Who is in your organization"

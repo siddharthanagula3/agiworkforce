@@ -70,7 +70,7 @@ export function ProductLinkUnavailable({
       <p className="text-sm leading-relaxed text-[var(--chat-text-secondary)]">{body}</p>
       <Link
         href={back.href}
-        className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-[var(--chat-surface-hover)] px-4 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)] pointer-coarse:min-h-11"
+        className="mt-2 inline-flex min-h-9 items-center rounded-lg bg-[var(--chat-surface-hover)] px-4 text-sm font-medium text-[var(--chat-text-primary)] outline-none transition-colors hover:bg-[var(--chat-surface-elevated)] focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] pointer-coarse:min-h-11"
       >
         {back.label}
       </Link>

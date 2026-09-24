@@ -135,6 +135,7 @@ describe('SettingsModal nav (web IA)', () => {
     expect(dialog.className).toContain('md:flex-row');
     expect(nav.className).toContain('md:w-[220px]');
     expect(screen.getByRole('searchbox', { name: 'Search settings' })).toBeTruthy();
+    expect(dialog.querySelector('#settings-pane')?.tagName).toBe('SECTION');
   });
 
   it('lays the sections out as a strip on phones and cues an overflowing column with a scroll fade', () => {

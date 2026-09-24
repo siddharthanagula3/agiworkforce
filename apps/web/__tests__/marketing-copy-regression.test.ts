@@ -184,7 +184,7 @@ describe('public marketing copy regressions', () => {
     const byokSetup = readWebFile('app/docs/byok-env/page.tsx');
     const apiDocs = readWebFile('app/api-docs/page.tsx');
     const waitlist = readWebFile('app/waitlist/page.tsx');
-    const waitlistModal = readWebFile('features/marketing/components/WaitlistModal.tsx');
+    const waitlistModal = readWebFile('features/marketing/components/WaitlistDialog.tsx');
     const publicWaitlistForm = readWebFile('features/marketing/components/PublicWaitlistForm.tsx');
 
     expect(byokSetup).not.toContain('Private-beta key entry');

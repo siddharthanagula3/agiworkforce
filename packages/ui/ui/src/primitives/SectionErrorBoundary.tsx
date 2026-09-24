@@ -153,7 +153,7 @@ export class SectionErrorBoundary extends Component<SectionErrorBoundaryProps, S
               <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                 Error details (development only)
               </summary>
-              <pre className="mt-2 max-h-32 overflow-auto rounded border border-border bg-muted/50 p-2 text-xs">
+              <pre className="mt-2 max-h-32 overflow-auto rounded-compact border border-border bg-muted/50 p-2 text-xs">
                 {error.message}
                 {errorInfo?.componentStack && (
                   <>

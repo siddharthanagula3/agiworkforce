@@ -9,6 +9,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/open/[target]/[id]',
   '/pair/[code]',
   '/plugins/[id]',
+  '/quick-ask/[sessionId]',
   '/settings/[section]',
   '/share/[token]',
   '/shared-artifact/[token]',

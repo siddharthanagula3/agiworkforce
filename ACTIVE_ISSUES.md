@@ -2,11 +2,1440 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-19
+Last updated: 2026-09-23
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
+
+## WEB-MIGRATION-STATUS-2026-09-23
+
+A read-only `pnpm db:migrate -- status` using the local environment's configured
+`AGI_DATABASE_URL` reported 272 applied migrations, 21 pending (0273–0293),
+and a checksum drift for applied `0268_conversation_activation.sql`. Migration
+0219 for conversation drafts is within the applied range on this database.
+The 0268 file is clean in this worktree; the runner did not expose the SQL that
+was recorded when it was applied. The same database has no deployment records,
+so this check does not establish which release environment it represents.
+Do not apply pending migrations, change an applied migration, or call this
+launch-ready until the target and drift are reconciled through the migration
+procedure and the intended deployment has been verified separately.
+
+## WEB-SIGNUP-CONSENT-2026-09-23
+
+The authenticated `/signup` route sent an existing signed-in account to
+`/signup/complete`, where the client automatically POSTed a versioned Terms
+acceptance. A direct visit to the completion URL did the same. Neither action
+proved a new sign-up or a fresh agreement. The existing `/login/complete` route
+already reads durable acceptance and shows an explicit Terms gate when it is
+missing. The signed-in `/signup` route now goes there; `/signup/complete`
+requires the current signup-action marker before auto-recording, otherwise it
+also goes through the login-completion gate. Failed email or provider signup
+initiation, including a rejected network request, clears that marker and
+recovers to a retryable state. The founder's one-action sign-up agreement
+remains intact for an actual signup. Jev selected this route-and-marker repair
+at confidence 0.98, request
+`165c7d2bd65b0ad0bc68fcdc65c8fe41ba295665f88467de49848b888dd6dcb5`.
+[Clerk's current legal-acceptance guide](https://clerk.com/docs/guides/development/custom-flows/authentication/legal-acceptance)
+confirms the custom signup passes `legalAccepted` at initiation; the app's own
+profile remains the source for the precise policy version.
+An OAuth callback carrying a provider failure now clears the pending signup
+marker as well; its focused regression passes. Closing the browser without a
+callback can still leave an abandoned marker. The completion route now
+auto-records only when Clerk reports a completed sign-up with a legal-acceptance
+timestamp and both the created user and session matching the active account;
+otherwise it clears the marker and uses the explicit login Terms gate. This
+prevents an abandoned marker from accepting for another account or later
+session. Jev selected the account-bound check at confidence 0.99, request
+`7d7b3b148a5f1801eebeb0816fa0de0cc8d59dffea5c87daf40c8b2e49472fb9`.
+[Clerk's current SignUpFuture reference](https://clerk.com/docs/nextjs/reference/objects/sign-up-future)
+documents the created user/session and legal-acceptance fields; its current
+`useSignUp` hook exposes `fetchStatus`, not an `isLoaded` field. A localhost
+signed-in direct completion visit redirected to chat without remaining on the
+spinner. The account-bound and abandoned-flow regressions pass; a genuine new
+signup has not been exercised end-to-end.
+The latest combined eight-file auth, Free-search allowance, routing and Code
+approval test run passes 153 tests; Web typecheck, targeted lint and diff checks
+also pass after these edits.
+
+Five adjacent signup/auth suites pass 60 tests. A signed-in localhost visit to
+`/signup?redirectTo=%2Fchat` visibly passed through `/login/complete` and
+returned to chat; it did not show a new-user signup or test an unaccepted
+account. Full first-time registration, email/OAuth verification, terms write,
+and onboarding still require an authorized end-to-end test account. A stale
+signup marker from an abandoned earlier attempt can remain in localStorage,
+but is no longer sufficient to auto-record acceptance. It may require an
+explicit Terms confirmation when Clerk does not preserve the completed signup
+resource across the return navigation; that fallback has not been live-tested
+with a new account.
+
+The wider web suite was stopped after roughly ten minutes across a 2,501-file
+test inventory, not reported as passing. Two deterministic failures from that
+run were reproduced and corrected in isolation: the Code approval-menu test
+assumed the first option was selected instead of resolving the website's
+configured default, and the canonical routing test mocked the older DB helper
+instead of the verified-bearer helper its route now calls. The isolated files
+now pass 99 and 15 tests respectively. Other files in the interrupted suite
+remain unassessed by that run.
+The mock-export guard now reports zero factories missing an export used by a
+subject or direct dependency. Web whole-module mocks are back at their
+recorded ceiling of 4,331 after preserving real exports in the affected
+chat, Free-provider, search-allowance, failover and device-link test factories.
+Their focused suites pass 124 tests, the guard's own 20 tests pass, targeted
+Web lint and Web typecheck pass. The repository-wide guard is still red on
+Desktop whole-module drift (273 versus 271), outside this website pass; this
+is an open validation gate, not evidence of a production runtime failure.
+
+## WEB-QUICK-ASK-ROUTES-2026-09-23
+
+The route-test guard found both `/quick-ask` and its conversation route without
+a browser spec. A new Chromium spec navigates to each route as a signed-out
+visitor and verifies the sign-in destination survives, the login form renders
+without spurious 401 API responses, same-origin console errors, page exceptions
+or a framework error overlay, and its email control responds. At 390px,
+the form remains in view without horizontal page overflow. All three browser
+cases pass against localhost `:3100`; the existing three route unit tests also
+pass and verify that both pages request compact chat and the layout enforces
+current Terms. The route-test guard now passes at its 12-page ratchet. The
+first mobile screenshot caught the cookie notice mid-animation; a settled
+capture did not show the apparent footer overlap. This is signed-out and
+mocked-component evidence only. A new red hook regression also proved that
+`/quick-ask?q=...` consumed its draft and then navigated to full `/chat`.
+The shared entry hook now chooses its validated chat-surface root from the
+current path, so a prefilled Quick Ask entry remains compact and a prefill
+opened on an existing Quick Ask conversation starts a new compact chat.
+The shared route constants also replace the duplicate root literals in the
+Web chat page. Three focused entry/route files pass 24 tests; Web typecheck,
+targeted lint and formatting pass. A signed-in, Terms-accepted Quick Ask send,
+conversation reload, and live compact-layout interaction remain unverified.
+Jev prioritized the route workflow at confidence 0.87, request
+`430d72b2ab3e8df608a9df65857aa42b7b5884bb9acaa3768f8f21e2e51e77b7`.
+Jev chose the shared pathname-aware repair at confidence 0.46, request
+`8e5a7b18b179248e84131fcaa987f1f5ebbffbae530118e312cdc86870ba5173`.
+
+## WEB-FREE-MODEL-SWITCH-2026-09-23
+
+A live localhost Free account's “Try again with” menu offered paid chat models
+without an access label, even though a Free send would silently coerce such a
+selection back to the Free workhorse. The menu now filters to the canonical
+Free-entitled set and selectable promotional chat offerings; paid accounts
+retain their model choices. Jev selected this at confidence 1.00, request
+`bfff9951dc2629684f060d8e87d02e89f017d82296fbfc1ac1fcbca23527c305`.
+The live Free menu now showed only OpenRouter Free Auto, with no paid options.
+
+Switching a previously branched Free conversation to a QwenCloud promotional
+model exposed two durability failures. A pre-stream provider error deleted the
+assistant placeholder and reset the active leaf to the prior answer, hiding
+the new user prompt; “Retry this turn” then regenerated the unrelated prior
+search. Sibling-path restoration now applies only to an actual assistant
+regeneration, so a failed new turn remains visible and retryable. Jev selected
+this at confidence 0.99, request
+`9c83b39c8d51b0d03e34f79922ec6a9aeca06799ae88b62308142161fe63c920`.
+
+The QwenCloud route then returned a valid answer but did not persist its user
+message before the client attempted to save the assistant beneath that user;
+the save returned 404 and the UI warned that the turn was not durable. Both
+promotional Free chat routes now validate and persist the user message through
+the shared conversation owner before provider dispatch, failing closed if that
+write fails. Jev selected the shared server boundary at confidence 0.99,
+request `b62b6223eb2c71f1ba89d2722799c74d333e9309d9fe9509f5a047be86978022`.
+For route refusals that occur before this point, the normal-send error path
+idempotently persists the failed user row before saving its error reply, so a
+retry does not lose the parent. Jev selected that at confidence 0.94, request
+`bd1e363cc09bca8793f2bc576f995ca75c8d2ade799bc26c892e21037e6178d2`.
+
+Live QwenCloud `qwen3.8-max` returned `QWEN_FREE_PERSIST_OK` through
+`/api/models/free-quota/completions`, with the prompt and answer both present
+after reload and no persistence warning. Experiential Labs' picker reported
+five ready promotions, but GPT-6 Luna's live completion first refused the
+promotion and then returned a provider error. Its failed prompt and error
+now survive reload; this does not establish a working Experiential route or
+accurate promotion availability. The model-switch warning also no longer calls
+every promotional provider QwenCloud. From the persisted failed Experiential
+turn, “Try again with” offered only Free Auto; selecting it answered the same
+prompt through the Free route, and that answer survived reload. The five
+focused route, variant, compatibility, and regeneration-option files pass 78
+tests; targeted lint and Web typecheck pass. A Free Auto turn uploaded a 92-byte
+text fixture, answered its port correctly with a rendered file source, and
+survived reload. The same file selected under a text-only QwenCloud promotion
+then produced a failed turn: the composer had allowed upload despite the
+server's explicit text-only contract. The composer now derives that limit from
+the canonical offering, disables file selection, and warns before a model
+switch with a staged attachment. If the user switches anyway, Send stays
+blocked without losing the draft; “Use Free Auto” restores a viable Free path.
+The deliberately failed Qwen attachment turn was also retried through Free
+Auto: the request carried the original file bytes, answered correctly, cleared
+the failure notice, and survived reload. This was checked in localhost, and
+four focused composer suites pass 141 tests
+with Web typecheck and targeted lint. Jev selected the guard at confidence
+0.99, request `4f375cac31b977c558bf6313dc73af8feec05836d4364d6739d439819160b37e`.
+An adjacent live reload showed that the “Use Free Auto” recovery button had
+changed only local model state; the conversation reopened on Qwen. The button
+now uses the picker's durable conversation-model update path and fails visibly
+without changing models if saving fails. Another reload resurrected a prompt
+the user had manually deleted: clearing a draft removed its map entry, so the
+server-sync loop never wrote the empty draft. Saved conversations now retain
+an empty draft until sync, and editing a restored blocked-send draft releases
+its replay slot. A localhost clear remained empty after reload and Free Auto
+remained selected after recovery/reload. Jev selected the draft tombstone
+approach at confidence 0.54, request
+`59c74acbe63e34b2f7e5230e1859737b60fbeead17a06723e3647bc8f5f9f13d`.
+Seven adjacent composer and draft suites pass 174 tests; targeted lint and Web
+typecheck pass. An immediate reload before the debounce could still restore
+the older server draft. A scoped pending-clear marker now survives that reload,
+suppresses hydration of the stale server text, and replays the clear until the
+server acknowledges it. The current document serializes its draft writes so an
+older in-flight text save cannot follow its clear. Jev chose this repair at
+confidence 0.88, request
+`da4672e02bc6847417d1b93bcebcf78ffcd8205a9b595101c365d3bcef30a9ca`.
+Localhost confirmed a just-cleared draft stayed empty after immediate reload
+and the subsequent server PUT carried `draft: null` with HTTP 200. Four focused
+draft, composer, and conversation suites pass 57 tests; targeted lint and Web
+typecheck pass. A later red regression confirmed that text typed into an open
+chat was absent from the sync store until navigation. The composer now mirrors
+live textarea/editor edits into that store, without staging temporary chats.
+The existing handback effect initially replayed sent or manually cleared text;
+adjacent tests caught it, and composer-owned writes are now marked before the
+handback effect sees them. A stale draft PUT also returned 200; the draft route
+now compares the last observed server `draft_updated_at` atomically and returns
+409 instead of overwriting a newer write. The client carries revisions from
+conversation loads and save acknowledgements, retains its local text on a
+conflict, and shows a persistent warning. The crash copy used to occupy one
+conversation-wide `localStorage` key, so a second tab could overwrite or clear
+the first tab's unsent text. It now uses a random per-document owner, inherits
+the prior owner on reload or tab duplication, and keeps an empty tombstone so
+older text cannot reappear. A reload retires the prior owner's copy only after
+copying it; legacy shared records migrate on first read. Eight adjacent suites
+pass 107 tests, including account/workspace cache purging, with Web typecheck,
+targeted lint and the production Web build passing. Jev chose the live store path
+(confidence 1, request `5eb92d87fbb995f766ca2f07650a5d6cfa9bf444ac5dec743228af63be1a6d05`),
+timestamp compare-and-swap (confidence 1, request `b8c4fe4ebae4ec46f5d21026741947aa5aaaf6de4a65b4a02de2acb85741b275`),
+and marking composer-owned writes (confidence 0.98, request `b57b61e799b013c397ca14fafd624cbbcaca95ecf97dd4eda48b47f57eb9a685`).
+Jev selected per-document local storage at confidence 0.55, request
+`180f2c57532cfdf026ee4956333dda2455ff918dcf8ff9325324bc4c6be6bfac`.
+In headless Chromium against `localhost:3100`, a popup inherited its opener's
+session-storage pointer but reported navigation type `navigate`; reloading that
+popup reported `reload`. The implementation generates a new random owner per
+document load. This is one
+browser observation, not proof of identical behavior in Safari or Firefox.
+Live cross-device typing and conflict resolution have not been exercised in an
+authenticated browser. Conflict resolution currently preserves the local text
+and warns rather than offering a two-draft merge. Copies inherited by a
+duplicated tab remain until sign-out unless that tab later reloads; storage
+pressure and disabled storage still need browser exercise. Migration 0219 was
+absent from the pending list on the locally configured database, but that
+database's deployment target is unverified and its ledger has a separate 0268
+checksum drift; do not claim server draft sync is deployed to users.
+After a transient draft PUT failure, the open composer previously waited for
+another keystroke before retrying. It now makes at most three automatic
+attempts with backoff, preserves the local draft, and offers a persistent Retry
+action if syncing remains unavailable. Scheduled retries stop on unmount. The
+focused hook suite passes 12 tests; Web typecheck, targeted lint and production
+build pass. This does not resolve a true cross-device draft conflict: the user
+still needs a deliberate choice between versions.
+A localhost Free Auto turn uploaded the repository's synthetic
+`supplier-invoice.pdf`, correctly answered the total due as $1,275.00 USD,
+rendered a PDF source, and retained the attachment and answer after reload.
+Another turn uploaded the public `logo.png`, correctly read “AGI WORKFORCE,”
+rendered an image source, and retained the image and answer after reload. The
+image response took noticeably longer than the PDF response; this single
+success does not prove multimodal route reliability or that every Free Auto
+choice can consume images.
+A capability-class switch revealed a further dead end. After those historical
+attachments, selecting text-only QwenCloud `qwen3-vl-flash` and sending a new
+unrelated text prompt failed because the chat adapter forwarded earlier
+`file`/`image_url` parts to a text-only promotional route. The adapter now
+keeps earlier text, replaces historical attachment parts with an explicit
+unavailable note, and leaves the current user turn untouched so a newly
+attached file is never silently discarded. The switch warning now distinguishes
+historical files from staged files. Jev chose this approach at confidence 1.00,
+request `be8c7245f9657dbf31864c236d951e4dcb5044cfa0922053c2a812c114cbea46`.
+Retrying the exact failed Qwen turn in localhost answered
+`QWEN_VL_TEXT_AFTER_IMAGE` via the free pool and survived reload. The three
+adjacent adapter, compatibility, and chat-stream suites pass 81 tests;
+targeted lint and Web typecheck pass. A subsequent basic Qwen `qwen3-8b`
+turn answered `BASIC_QWEN_FREE_OK`, and reasoning Qwen
+`qwen3-30b-a3b-thinking-2507` answered `17*19=323`; both used the Free pool
+and persisted after reload. These representative successes do not establish
+the availability of every listed Qwen offering.
+An empty `.txt` selected in the live Free composer initially appeared as a
+0-byte attachment and failed only after Send with a generic upload error and
+futile Retry upload control. The server already rejects a non-positive upload
+size; the client admission hook now rejects zero bytes before upload, names
+the file and remedy, and carries an unavailable-attachment note if the user
+still sends the question. Jev selected this boundary at confidence 1.00,
+request `89a8ba592fe50b0c10bc5c1965ffb98d7e8a1e1d49263b8d283c9a61fbd01245`.
+Three adjacent attachment suites pass 25 tests; targeted lint and Web
+typecheck pass. In localhost the same empty file immediately produced the
+specific warning with no attachment preview or upload attempt; sending the
+remaining draft displayed the unavailable-file note in the user turn. The
+model continuation itself hit a separate Free-provider overload, so that
+answer is not a pass. A restored failed-upload draft remained in this test
+chat after the overloaded turn and reload, but development hot reload occurred
+between the two sends; reproduce without hot reload before attributing it to
+production draft handling. A focused resubmission regression passes.
+In another authenticated localhost Free Auto turn on 2026-09-23, a synthetic
+79-byte `.txt` file uploaded, passed verification, appeared as a downloadable
+attachment in the user turn, and the assistant answered `cobalt` from its
+contents. The attachment link and answer survived reload. This proves one
+small text-file path; image/PDF inputs, size limits, corrupt files, and upload
+failure recovery remain unverified live.
+The same account uploaded a synthetic four-bar PNG and the image appeared in
+the submitted turn, but OpenRouter Free Auto returned a Free-model overload
+before answering. One manual regeneration returned the same overload. Image
+understanding is therefore not verified, and the currently selectable
+promotional Free routes are text-only by product policy, leaving no tested
+Free vision recovery route for this failed request.
+The failed turn had also offered a generic “Switch model” action even though
+the available promotional alternatives cannot replay its image or tool-bearing
+turn. The Free-tier error action now checks the failed turn's attachment and
+tool needs against the same catalogue-backed compatibility evaluator used by
+the composer, and appears for constrained turns only when a distinct compatible
+Free option exists. Retry remains available; paid-tier switching is unchanged.
+Five focused compatibility cases and the message-list integration regression
+pass (88 tests across both files), as do Web typecheck and targeted lint. In
+the failed image turn on localhost, the incompatible switch action was absent
+after reload while Regenerate remained visible. This does not add a working
+Free vision fallback or change the upstream overload rate. Jev selected the
+capability-aware recovery approach at confidence 0.98, request
+`8931a92d3ab11b2d5f3675bb313a7b2f1bc48a2d84f3615b20aae71c7d6698e8`.
+On 2026-09-23, the authenticated QwenCloud Benefits console showed 276 eligible
+models and two unavailable models. A read-only pass across all 28 pages found
+every displayed Free Quota Only switch enabled (276 on, zero off); the two
+unavailable rows had no switch. The account showed $0.00 spend for September.
+The shared attestation for the current API key was recorded on 2026-09-22
+with `all` scope and remains valid under the code's 30-day limit. The checked
+console supports that scope today, but the 30-day freshness window permits
+provider-side settings to drift; the static inventory also trails the live
+console (272 versus 278 rows). An operator re-check or provider-supported
+automatic status mechanism is still needed before treating that window as an
+ongoing billing guarantee.
+The Free provider launch gate remains open for
+provider outages/quotas, other Free provider capability classes, and
+new-account testing.
+On 2026-09-23, the Web candidate added a catalogue-backed image-input flag for
+six Qwen3-VL chat offerings. The pinned Qwen Free route now accepts server-owned
+image references, hydrates and validates the bytes through the shared chat
+attachment path, and refuses non-image files before provider egress. The
+composer and model-recovery logic distinguish image-capable promotional routes
+from text-only routes. Focused Free-route, Qwen-adapter and composer tests pass;
+the Web and Qwen typechecks, targeted lint, model sync and catalogue guard pass.
+This is not a live vision pass: the localhost QA account reached the new
+2026-09-23 Terms acceptance gate before an image turn could be sent. The user
+must review and accept the updated agreement themselves before authenticated
+browser verification can resume. Real Qwen image understanding, provider
+quota/overload behavior and Free-only recovery remain open launch gates. A
+separate direct synthetic-logo provider probe could not start because this
+worktree's shell has no `QWEN_API_KEY` or `.env.local`; it did not send a
+provider request.
+
+## WEB-FREE-SEARCH-APPROVAL-2026-09-23
+
+An authenticated localhost Free Auto user could complete a first web search,
+but a follow-up search after source content entered the conversation correctly
+required safety approval and then failed with the paid-only custom-tool gate.
+The processor checked the Free request before adding platform skill/card tools;
+approval checkpoints saved those added tools as if the caller had declared
+them, so reprocessing the approval treated a normal Free search as a paid API
+add-on. The processor now records the original caller tool fields, and inline
+and durable checkpoint paths persist those fields instead of server additions.
+Free resume also strips tool fields from older checkpoints that predate this
+fix; paid checkpoints retain caller-defined tools. Jev selected the provenance
+fix at confidence 0.96, request
+`c20a3e3a6a14b99a18b4fad699ab4020762d537b7c1ddbc87fa00021039b4fae`,
+and legacy Free recovery at confidence 0.98, request
+`b25b8325118ed4d77971793f55312f9fe9f8035a2df0ea5e53982533d66cfe54`.
+
+In localhost `:3100`, a new Free Auto conversation
+`89a75e2b-b5da-4e41-aaef-f0f18051f0cc` completed an initial IANA search.
+Its second turn requested two public searches, paused for two approvals, and
+after both were allowed completed with an answer and 10 sources; the result
+survived reload. The legacy-resume boundary has automated coverage but could
+not be live-replayed because the earlier failed turn no longer had a pending
+checkpoint. Focused checkpoint, Free request, approval-route and workflow tests
+pass; Web typecheck and targeted lint pass. Denial, cancellation, malformed
+source, rate-limit, and multiple-provider behavior are not yet live-verified.
+The Free web-search launch gate remains open pending those cases and broader
+new-user testing.
+
+A further live Free Auto turn said it had no web-search tool for the explicit
+request “Run two separate web searches.” The canonical search-intent matcher
+covered singular `web search` but not plural `web searches`; the Free router's
+required-only policy therefore omitted the tool. The plural phrase now lives
+in the shared intent owner, with a red/green detector regression and a Web
+request-processor test. Jev selected that narrow correction at confidence
+0.97, request
+`883598e58a9e3d7d698d8bab2152af1efbecaf56a3aff7ccfdd035bd594d5b42`.
+Regenerating the same localhost turn then performed a public search and
+requested approval for another. Denying it exposed a second flaw: the loop
+asked again via a server-owned fallback before failing. A required Web Search
+denial now stops immediately whether the call came from the model or server;
+optional-search behavior remains unchanged. A red/green test covers this and
+Jev selected the boundary at confidence 1.00, request
+`7100af11f9492eaac7b4889941fd5787dd4ddf5fa2c3c231f252a064e350edc4`.
+In the live retry, allowing one public search and denying the other produced
+one failure with no repeat approval. A further retry allowed both public RFC
+searches and completed with 10 sources and both official URLs. Seven adjacent
+Web test files pass 170 tests; the shared search test passes eight. The Free
+search gate remains open for repeated multi-search reliability, errors,
+quotas, and slow-provider behavior.
+
+In a mixed-tool localhost chat on 2026-09-23, a follow-up said “Do not search
+the web or run code,” but Free Auto performed a web search and two code calls,
+then attached five sources to an unrelated exact-reply answer. The search and
+execution phrase detectors had read the negated verbs as affirmative requests.
+The shared search intent owner and Web execution intent owner now recognize
+explicit opt-outs; automatic tool admission and required tool selection honor
+those opt-outs while preserving an explicitly selected Search mode. Jev
+selected the intent-boundary repair at confidence 1.00, request
+`1175f25c17b831f216182f7153cb8cc05c5748a9ba1e373fd0d0bb1b2a86b092`.
+The exact follow-up replayed in the same live chat and returned only
+`FOLLOWUP_FREE_OK`, with no activity or source badge; it survived reload. The
+five focused Web suites pass 184 tests and the shared search suite passes
+nine; targeted lint, Web and search-package typechecks pass. A stale execution
+test was also updated to reflect the current Free sandbox allowance. The
+opt-out grammar covers common direct phrases but is not a complete natural-
+language policy; unusual compound requests still need adversarial testing.
+
+A pinned QwenCloud free chat model accepted an explicit web-search prompt and
+created a failed conversation turn before the text-only route refused it.
+The composer now derives promotional text-only capability from the canonical
+offering, detects explicit search/code requests before Send, disables the
+unsupported send, and offers a deliberate Free Auto switch that retains the
+draft and uses the existing durable model-selection path. Both promotional
+server routes also refuse explicit sandbox execution before provider traffic,
+preventing a text-only model from inventing an executed result. Jev selected
+preflight with an explicit switch at confidence 0.99, request
+`54164e3efad1103511685874c4aa5b8771387d74a03dbb655a3aafd46b4dac15`.
+Four focused selection, composer, and provider-route suites pass 156 tests;
+targeted lint and Web typecheck pass. In localhost, Qwen `qwen3.8-max` showed
+the inline warning and disabled Send for the same IANA search, then clicking
+Use Free Auto preserved the prompt and admitted the send. The resulting Free
+Auto turn returned the official IANA URL and a rendered source citation; the
+answer and Free Auto selection persisted after reload. Complex implied tool
+intent and all provider-specific tool paths remain open. A second live Qwen
+draft requesting Python execution showed the same pre-send guard; after an
+explicit Free Auto switch, agent activity showed an actual `print(17 * 19)`
+call and stdout `323`. A fresh, ordinary Qwen `qwen3.8-max` text turn remained
+enabled and returned `QWEN_PLAIN_AFTER_PREFLIGHT_OK` via the free pool.
+
+Both promotional Free chat routes could previously accept an HTTP 200 stream
+that ended without any visible answer; Experiential Labs also passed a raw
+upstream SSE error body to the browser. A shared bounded stream validator now
+turns empty, truncated, malformed, output-limited, filtered, unsupported-tool,
+and provider-error streams into safe, actionable chat errors without exposing
+upstream diagnostics or forwarding provider-authored tool calls. Qwen's metered
+route sanitizes untrusted `x_stream_error` frames before validation and settles
+an already-finished stream as completed when the validator closes it after
+`[DONE]`. Jev selected the shared validator at confidence 0.99, request
+`8551cb49b20c86b2a03d2fd0fe82cde7240822db1e54c74fa96815618f6674bb`.
+The focused validator and both route suites pass 63 tests, including a provider
+that leaves its body open after `[DONE]`; targeted ESLint and Web typecheck
+pass. Authenticated localhost turns returned `QWEN_STREAM_VALIDATION_OK` from
+QwenCloud and `EXPERIENTIAL_STREAM_VALIDATION_OK` from the Experiential Labs
+free route, both visibly rendered with free-pool attribution. The live checks
+prove successful streams, not live provider outage, quota, or malformed-stream
+recovery; those launch gates remain open.
+
+The pre-send guard still missed a direct request to summarize a supplied URL:
+the normal managed path recognizes that as a web fetch, while promotional
+routes could previously send it to a text-only model. The explicit URL-fetch
+detector now lives in the shared search package and is used by normal managed
+tool admission, the promotional composer, and both promotional server routes.
+Jev chose that shared owner at confidence 1.00, request
+`338dbfacf6921d218970f8bcad4b99932c2e0eaf968508b3f9ec910d619b3d98`.
+The Free picker disabled Send for a real IANA URL-summary draft under
+Experiential Labs, “Use Free Auto” preserved it, and the ensuing localhost
+turn fetched the page and rendered the official IANA citation. The shared
+search tests pass 11 cases and six adjacent Web suites pass 210; targeted
+ESLint, search-package typecheck, and Web typecheck pass. At a 390-pixel
+mobile viewport, the Free picker, warning, disabled Send, and Free Auto
+recovery were visible and usable without horizontal page overflow. Ambiguous
+mixed instructions about multiple URLs remain an intent edge case, not
+evidence of a working fetch in every phrasing.
+
+A localhost Free Auto no-result search on 2026-09-23 first ended with the
+generic empty-response error. Retrying showed the separate, observed search
+blocker: the account had exhausted its existing 20-search rolling allowance;
+the tool result said 20, while the model inaccurately told the user it had used 2. This is not evidence that the search provider returned no results. The
+post-tool Free continuation could also expose reasoning-only output before
+checking whether the provider ended with an empty answer, preventing its one
+safe retry. The bounded pre-answer hold now applies to the first post-tool
+Free continuation, discards a clean reasoning-only stop and retries once
+without rerunning the completed tool; if the same stream produces an answer,
+its buffered output is released in order. Jev selected that repair at
+confidence 1.00, request
+`bac61871e5202580ddb42a5be7d845ac818eccdeedf27fd57ef4d058d0391d2a`.
+Four adjacent tool-loop suites pass 65 tests; targeted ESLint and Web
+typecheck pass. A fresh localhost Free
+Auto Python sandbox turn actually ran `print(7 * 6)` and visibly answered `42`.
+The original empty failure's precise provider trace was not captured, so this
+regression is a matched failure class rather than proof of the live root cause.
+Search allowance policy and the inaccurate quota wording remain open; the
+founder's earlier explicit limit has not been changed without direction.
+In a later authenticated Free Auto turn, the allowance refusal accurately
+reached the assistant as 20 searches in 30 days, but the UI marked the
+unexecuted search as completed. The tool loop now reports plan-bound and
+credit-reservation refusals as failed/unavailable tool results, without
+calling the search provider or taking away the assistant's ability to explain
+the refusal. The two refusal paths pass focused mocked-provider tests. A
+separate live retest could not verify the activity card because the Free Auto
+provider failed before search (first overloaded, then output-limited). The
+founder's 20-search allowance is unchanged, and the same UI still suggested
+"Search the web to verify" after disclosing that the allowance was exhausted.
+The client runtime now recognizes an unavailable web-search activity entry;
+the transcript suppresses search follow-up suggestions and the otherwise dead
+"Retry this response with web search" action for that turn. Component, list,
+and runtime tests pass. An authenticated localhost turn on 2026-09-23 showed
+the 20/30 refusal in Agent activity, answered without claiming a live search,
+and no longer displayed the retry action after reload. It did not prove a
+working search because this account's allowance remains exhausted.
+On 2026-09-23 a pinned QwenCloud promotional Free text route answered an
+authenticated localhost chat, then correctly refused an explicit search draft
+and offered “Use Free Auto” without discarding it. After the switch, the
+exhausted allowance was misclassified as `web_search_no_sources` in the
+server-owned path, and the collapsed failure card concatenated the precise
+20/30 allowance notice with an unrelated “no usable sources” error. A red/green
+server regression now distinguishes unavailable search from successful-empty
+search and emits `web_search_not_performed`; the shared activity view keeps the
+precise unavailable-tool notice without appending the generic terminal error.
+Jev selected the coupled server/UI fix at confidence 0.94, request
+`1fd41847c5f9a4554484881efe1f88e4f885bfc91f18349c05d4b6a1c034281c`.
+The focused server and shared UI suites pass 64 tests. Reloading the failed
+localhost turn showed one concise allowance reason; regenerating it produced
+a visibly caveated answer from existing knowledge, not a claimed live search.
+Five adjacent Web/shared UI suites pass 123 tests, the client activity suite
+passes 28, Web and shared-chat typechecks and targeted lint pass, and the
+raw-error-to-user guard reports zero leaks. The regenerated card and answer
+survived another page reload. A current read-only QwenCloud Benefits check
+also showed the selected text model active, at 98.29% remaining quota with
+“Free quota only” enabled, expiring 2026-10-21; that is a point-in-time account
+observation, not a permanent capacity or terms guarantee.
+The real search-allowance gate remains unsatisfied and no policy limit was
+changed.
+
+The composer also offered that Free Auto switch before checking the account's
+search allowance, creating a predictable dead end for this exhausted account.
+An authenticated, read-only `/api/web-search/allowance` endpoint now reads the
+same rolling ledger count and canonical Free limit as search admission. The
+Free composer checks it on explicit search drafts; while the check is pending
+or exhausted, it prevents a search send without discarding the draft. At the
+limit it explains 20 searches in 30 days instead of offering an unusable Free
+Auto switch; the switch is also withheld while the check is pending. A count
+failure is shown as unknown, not a false claim of
+availability; the actual server check remains authoritative. Jev chose the
+dedicated read endpoint at confidence 0.96, request
+`9168b06a44d7837f512ba54946da8b603e3ad428641f843f8e54a868e92f9aba`.
+The client check has a 10-second deadline so a hung read cannot disable Send
+indefinitely; two hook tests cover timeout, late response and completed-read
+behavior. The search-policy and endpoint tests pass 25 cases, all 107 composer tests pass,
+targeted lint, Web typecheck and the hardcoded-endpoint guard pass. Localhost
+`:3100` showed the new pre-send 20/30 warning for both Free Auto and pinned
+QwenCloud text, with Send disabled and the draft retained; a non-search
+QwenCloud Free turn then rendered `FREE_CHAT_STILL_WORKS`. A 390px mobile
+viewport showed the warning above the composer without horizontal overflow.
+The 20-search founder cap is unchanged, and this account still cannot exercise
+a live successful search until allowance is restored or the founder changes
+the policy. `check:route-account-gate`, `check:resource-metadata`, and
+`check:raw-error-to-user` pass. `check:route-tests` remains red on 14
+unspecced page routes against its ratchet of 12; this new API route has its
+own test and is not among those 14.
+
+A successful required search with zero hits was also being classified as
+`web_search_no_sources` when the server supplied the search call for a Free
+model. The tool result now carries an explicit successful-empty status through
+the durable workflow contract. A first-step standalone required search or a
+server-supplied required search with zero results ends with a deterministic
+"I searched the web, but found no results" answer and no fabricated source;
+a failed search still takes the existing error path. Jev chose this at
+confidence 0.98, request
+`6d44affed3ee6d56a9e29a32d651f70ad0b1587c423b85b06b357cb73962b9ee`.
+Focused required-search and workflow-contract tests pass. Live zero-result
+verification remains gated by this test account's exhausted search allowance.
+
+## WEB-FREE-SANDBOX-2026-09-23
+
+The local Free plan now admits one platform-funded E2B code sandbox with a
+10-minute active interval. In authenticated localhost `:3100`, a Free Auto turn
+ran Python and displayed actual stdout; a new conversation then ran code, and
+a second turn in that conversation resumed code execution and displayed actual
+stdout. An earlier Free Auto turn had received a running-session-limit refusal,
+so the observed successes do not establish reliability under repeated failures.
+
+The turn-end E2B pause path previously cleared the active interval and settled
+usage even when provider pause threw. That could leave a running sandbox holding
+the Free user's sole slot while local accounting said it had stopped. The live
+executor and session-level pause now use one reconciliation path: check provider
+state, retry pause once, or kill and clear the session after a second failure.
+If neither pause nor kill is confirmed, the interval remains open rather than
+being falsely settled. Jev selected reconciliation at confidence 0.65, request
+`2702b91cdbe1ba77d8e0d34b12dc2cbad3e672443236a7a4de78c790fd598032`.
+
+A paused session also kept its already-settled compute reservation. Resuming it
+could therefore run another active interval without a fresh Free allowance hold
+or paid usage reservation. Pauses now remove that reservation; resumes reserve
+again before reconnecting, including legacy paused sessions, and release a new
+hold if reconnect fails before a replacement is created. Jev selected a new
+hold per active interval at confidence 0.98, request
+`8779a64708e001b7e46d9495bcca8fcfaa124136d77eabfb04f221bdec4dd012`.
+The focused E2B suite passes 85 tests and Web typecheck passes. Forced provider
+pause failures are simulated in tests, not yet reproduced against live E2B.
+The Free sandbox launch gate remains open pending repeated live execution,
+provider outage/quota tests, and a full new-user workflow.
+
+Another authenticated localhost Free Auto pass on 2026-09-23 ran a notebook
+cell computing the sum of squares from 1 through 10. The expanded tool card
+showed the actual Python request and `385` result; the assistant reported
+`stdout: 385` and exit code 0. A deliberate `ValueError` test first ended
+before code execution with a user-facing Free-model overload and retry/model
+picker controls. One manual retry ran the cell: the card contained the real
+traceback, and the assistant accurately reported no stdout and no process exit
+code for the failed notebook cell. This covers one success and one recovered
+failure, not sustained availability or automatic cross-provider recovery.
+
+A localhost cancellation test stopped a 30-second Free Auto Python turn while
+agent activity said Running code. An immediate new request in that conversation
+then exposed a different failure: the model ended with literal
+`<tool_call>execute_code ...</tool_call>` markup, which the site displayed as
+the answer without running Python. Jev selected a bounded adapter at
+confidence 1.00, request
+`b4d1263aada47109653a1d78133b546e16631e45db1fd0fc2d4e7ae9ea424675`.
+For a Free turn that explicitly requires code, the Web harness now withholds
+pre-tool output up to a fixed bound, accepts only a whole-response, strictly
+formed textual `execute_code` request when that sandbox tool was offered, and
+passes it through the existing approval, quota, sandbox, and audit path. Bad
+markup or a missing real tool call yields an actionable error without showing
+the markup or inventing stdout. A focused regression proves a fragmented
+textual request invokes mocked E2B once and a malformed request invokes it
+zero times. Retrying the exact failed localhost turn after the patch produced
+actual `CANCEL_RECOVERY_OK` stdout with a Running code activity card; its call
+ID shows the model used a native structured tool call on that retry, so the
+adapter branch is covered by tests but not yet by a live provider repetition.
+The cancellation and immediate successful retry show that the Free sandbox
+slot was not stranded in this one case; repeated cancellation and timeout
+recovery remain open.
+
+Reloading that successful retry exposed a separate response-variant race: the
+failed answer and its replacement both appeared because the server snapshot
+created the replacement before the client save, when the legacy conversation
+had no active leaf. The later client upsert could not change its parent, so the
+replacement was stored as a child rather than a sibling. The completion
+request now carries the assistant's intended parent to the server snapshot;
+the tenant-scoped save validates the parent, converts a linear transcript
+before insertion, and moves the active leaf in the same transaction. Jev chose
+this at confidence 1.00, request
+`36c4799f03fb614f1e06f4622cf935f3791cb949b710496b9445ff5d58a0033a`.
+Focused client/server variant suites pass 30 tests and Web typecheck passes.
+A new localhost Free Auto regeneration ran the sandbox again, returned real
+stdout, and after reload showed only the selected sibling plus a 2-of-2
+response pager. The older test reply remains mis-parented in that test chat;
+the fix prevents new writes from repeating it rather than rewriting history.
+
+A negative localhost sandbox test deliberately raised a Python `RuntimeError`.
+The tool ran and showed its traceback, but the first Free Auto answer invented
+a non-zero process exit code and called the traceback stderr. `execute_code`
+uses a persistent notebook cell, which has neither a process exit code nor
+stderr for that exception. Its tool description and failed-cell result now
+state those semantics explicitly; Jev selected result annotation at confidence
+0.98, request
+`001fcad610ad5aae22f76ded732779abdfa16eb7f0e362e4d36d25471ea4171b`.
+On live regeneration, the same Free route ran the cell again and correctly
+said the exit code was unavailable while showing the exception traceback; the
+answer and response pager survived reload. The focused tool-loop and E2B tool
+suites pass 97 tests. Other sandbox failure and timeout classes remain open.
+
+The same negative test exposed a separate fail-open policy boundary in logs:
+when the per-user Cloud code-execution setting could not be read, the tool
+treated it as enabled even if the user might have opted out. A successful read
+with no explicit opt-out still defaults on; a failed settings read or adapter
+construction now refuses execution before provisioning a sandbox and supplies
+a temporary-settings-unavailable explanation, distinct from an explicit off
+setting. Jev selected fail-closed at confidence 1.00, request
+`9cf3f0365315689af8e9249ff5f6f7a282c6906d7e6f8c92b9fd74cdad9a5cc8`.
+Three focused policy and tool-loop suites pass 48 tests; lint and Web
+typecheck pass. A live Free Auto code turn first hit an upstream overload,
+then its single retry ran Python and rendered `POLICY_OK`, showing the ordinary
+available-setting path still works. The settings-unavailable case is mocked,
+not induced against the live account.
+
+The same authenticated localhost Free account then selected a QwenCloud
+free-quota text model and received the exact requested `QWEN_FREE_OK` answer,
+attributed in the UI to the free pool. A sandbox request on that promotional
+route was blocked before submission with a specific explanation and a
+`Use Free Auto` action that retained the draft; using it ran real Python and
+displayed `QWEN_PROMO_TOOL_CHECK` stdout. An OpenRouter Free Auto turn also
+uploaded a synthetic 47-byte text file, answered its exact `BLUE-HARBOR-27`
+canary, and kept both the attachment and answer after reload. The synthetic
+local fixture was removed after the check. These are one-route, one-file
+happy paths, not proof that every advertised Free model or file type works.
+An image attachment of the repository's public logo initially received an
+actionable upstream Free-model overload, then a user retry returned the
+correct non-white spoke color, `Orange`. That verifies one small PNG/vision
+path, while also reproducing the need for a manual retry under provider load.
+The OpenRouter Free Auto model has one configured same-route transient retry
+and a focused overload regression; the observed live overload still required
+one user retry, and its server-side attempt count was not captured. Free
+provider outage and retry effectiveness remain launch gates.
+
+The Free composer also advertises `Create Office files`. Enabling it in
+localhost and requesting a one-row Excel workbook invoked the file workflow,
+rendered a 2.4 KB `.xlsx` artifact card, and triggered a browser download when
+clicked. The card remained after reloading the conversation. The workbook's
+cell contents were described by the model but not independently opened, so
+this is evidence for creation, delivery, and persistence rather than verified
+spreadsheet content or reliability across formats.
+At a measured 390 CSS-pixel viewport, the same long conversation retained
+mobile navigation, model switcher, composer, attachment cards, agent activity,
+and the Office download link; document scroll width remained 390 pixels.
+This checks core layout and accessible controls, not touch input or every
+panel. The temporary viewport override was cleared afterward.
+
+In a fresh localhost Free Auto conversation on 2026-09-23, one turn explicitly
+requested both web search and a Python sandbox calculation. Agent activity
+showed a real code call with `print(17 * 19)` returning `323`, a web search,
+and a page fetch; the final answer linked the IANA example-domains source and
+reported `323`, with five sources rendered. This covers one mixed-tool happy
+path, not concurrent failure, cancellation, provider exhaustion or quota
+recovery. A second code call attempted an unnecessary page fetch through
+Python and showed an empty result; the dedicated web tools supplied the
+source. Whether repeated or long-running mixed turns remain reliable is open.
+
+## WEB-FREE-MEDIA-2026-09-23
+
+The paid image/video composer now reads the authorized QwenCloud free-quota
+catalogue, places ready compatible Free offerings above paid routes, labels
+each funding source, and hides unsupported size/quality controls for a fixed
+Free offering. A paid user's selection sends that exact provider/model through
+the existing free-quota route; server-side image/video entitlements remain in
+force and promotional chat routes remain Free-only. Focused catalogue, route,
+composer and stream tests pass. No paid account has yet exercised this selector
+in localhost, so its live paid-user gate is open.
+
+An authenticated localhost Free user selected `qwen-image-2.0` and
+`wan2.6-t2v` in the promotional picker. Both generated a persisted file with a
+visible `via free pool` attribution. The image rendered inline. The first
+video result exposed a bare link; the stream now projects only the exact
+server-generated `/api/files/{uuid}` video result into the existing inline
+video player, leaving arbitrary links unembedded. A second live Free video
+rendered in that player and survived reload. The browser reported a loaded
+2.035-second, 1280×720 video with no media error. The video-projection stream
+suite passes 65 tests; targeted lint and Web typecheck pass. Jev selected this
+projection at confidence 0.99, request
+`efcb138dcfe944b8b20ee7b28bdcc31dc3d02aa216341864c70642cd604b5048`.
+The Free generation route is locally verified; model-specific quality and
+failure behavior, paid selector interaction, and deployment remain open.
+The Free account's earlier image/video successes also exposed an entitlement
+contradiction: the ordinary Create image/video controls said Upgrade, but the
+promotional route admitted every offering category for a Free plan. The shared
+offering gate now admits Free chat promotions only, checks image and video
+capabilities for paid plans, and governs both catalogue visibility and server
+dispatch. The Free picker no longer offers media categories with no eligible
+models; a paid account whose catalogue begins with media no longer opens on
+an empty chat category. Jev chose this shared gate at confidence 1.00,
+request `5f2ef810e0bf2276058bd80ca438b630050d1778d58d59713a32a2efc6de05c7`.
+The three focused picker/catalogue/dispatch suites pass 45 tests, targeted
+lint and Web typecheck pass. Localhost Free picker showed chat offerings only
+after the change. A paid account has not yet exercised the media promotions
+end to end, so paid selector and free-vs-paid rendering remain a live gate.
+
+## WEB-EXPERIENTIAL-FREE-2026-09-22
+
+The website candidate now keeps Experiential Labs promotional chat offers in a
+separate Free-only provider path. The curated registry contains five eligible
+chat offerings; the picker shows only entries confirmed as free by the live
+provider promotion feed and this organization's authenticated free-lane
+grants. Requests use the provider's explicit `:free` suffix,
+reject non-Free accounts and unsupported tools, enforce workspace and retention
+gates, and do not fall back to a paid route when the promotion or allowance is
+unavailable. The Free-plan content-capture terms are disclosed in the picker,
+Terms, Privacy and Subprocessors pages.
+
+On authenticated localhost `:3100`, one synthetic conversation completed a
+turn on each of the five offers with the requested marker and a `via free pool`
+attribution. Browser resource timing recorded five HTTP 200 requests to
+`/api/models/experiential-free/completions`; the conversation is
+`29c4b7e1-f796-4825-aa6f-c53e7ac4c145`. Focused route, promotion-parser and
+selection suites pass 11 tests; the Free picker and landing suites pass seven,
+and legal-surface suites pass 72. Web typecheck and `sync:models:check` pass.
+The promotion-parser test first exposed and then closed a malformed-entry
+failure that would have turned a provider `null` item into a server error.
+
+On 2026-09-23, a fresh localhost Free conversation exposed drift between the
+public promotion feed and this organization's grants: the picker marked GPT-6
+Sol ready, but the free-only completion returned HTTP 502. A direct synthetic
+free-only provider request identified upstream `model_not_granted` (403); the
+authenticated `/api/v1/models` list granted only the GPT-5.6 Luna and Nemotron
+3 Ultra free aliases among the five curated promotions. Both granted aliases
+answered direct free-only probes. The catalogue and completion route now use
+one loader that intersects public promotions with authenticated `:free`
+grants, failing closed if either source is unreadable; send-time validation
+protects stale picker selections. Jev selected this approach at confidence
+0.96, request
+`298d00b26b2b84b873f482ead2fef41452d2217dbb6bbe96f6be336b88a331ed`.
+After the change, localhost disabled Claude Opus 5.5, GPT-6 Luna and GPT-6
+Sol as “Not available right now,” left the two granted aliases selectable,
+and switching the failed conversation to GPT-5.6 Luna produced
+`EXP_LUNA_FREE_OK` with `via free pool`. Switching again to Nemotron 3 Ultra
+produced `EXP_NEMO_FREE_OK` with the same Free-pool attribution. The
+promotion-parser and completion
+route suites pass 14 tests; targeted lint and Web typecheck pass. Provider
+quota exhaustion, stale grants during an in-flight call and multi-turn
+reliability remain open. This is a local repair, not deployment.
+In a later localhost Free QA conversation
+`d4a8e914-b8d2-4648-ba35-347bb423777e`, the same two granted aliases
+answered consecutive exact-reply turns after a QwenCloud turn: GPT-5.6 Luna
+returned `EXPERIENTIAL_PROMO_OK`, then Nemotron 3 Ultra returned
+`NEMOTRON_FREE_OK`. Both replies, their source prompts, the selected Nemotron
+model, and the `via free pool` attribution survived reload. The three other
+curated Experiential promotions remained visibly unavailable. This is another
+live success for the granted pair, not an outage/quota or new-account test.
+At a tab-scoped 390×844 mobile viewport on 2026-09-23, the Free chat composer
+and model picker remained operable with no document or picker horizontal
+overflow; the picker measured 390 CSS pixels wide. The Experiential catalogue
+returned HTTP 503 during this pass, and the picker replaced its loading state
+with a visible retry control while the QwenCloud Free list remained usable.
+A separate new conversation at that phone width sent an exact-reply Free Auto
+prompt and rendered `MOBILE_FREE_OK` in chat
+`b7844bc6-5eb6-419a-ab9e-4f608a2258fa`; the document still measured 390
+CSS pixels with no horizontal overflow, and the answer survived reload. This checks one mobile send and an
+error state, not promotional-provider availability or the remaining mobile
+workflows.
+
+On 2026-09-22, the promotional route's pre-stream failure copy was tightened:
+provider rate limiting now returns a distinct 429 rather than a generic 502,
+while exhaustion and other failures explain the retry or free-model choice and
+state that no alternate or paid route was used. The focused route suite passes
+9 tests; event-access, Free-event overlay, Free web-search admission and
+free-quota copy suites pass 118 tests; targeted lint/format and Web typecheck
+pass. These are mocked route tests, not a live provider outage observation.
+The existing Free event overlay can sponsor selected canonical models within
+an explicit time window and global budget, but its required environment
+settings are absent locally. The multi-provider free lane is also off, and its
+pool records lack verification. Neither mechanism currently supplies automatic
+fallback for a manually selected QwenCloud or Experiential Labs promotion.
+Admitting additional provider routes requires current quota, terms, retention,
+tool and budget evidence; do not turn on the lane or imply tool coverage from
+these error-copy tests.
+
+This is local verification, not deployment or a closed Free-user launch gate.
+The local server currently uses an in-process `NEXT_PUBLIC_APP_URL` override
+for `http://localhost:3100`; that configuration is not saved for a restart.
+The full signup, terms-acceptance, account-recovery and paid-upgrade gates still
+need end-to-end release verification. `check:model-id-literals` currently fails
+on pre-existing prose references in seven documentation files.
+The policy-copy digest previously missed a substantive JSX addition to Privacy
+because a semicolon caused the extractor to discard the whole prose block. A
+red regression now passes after the extractor retains semicolon-bearing JSX
+text, and 18 unchanged policy pages have appended same-date fingerprint
+migration entries rather than rewritten history. The September 23 Terms copy
+and acceptance date now match its ledger. The founder explicitly approved
+dating the corrected Cookies notice September 23, which changes the consent
+version and re-prompts visitors. Signed-in visitors were exempt from the banner
+even when their prior choice was stale, leaving analytics off without asking
+again. The exemption is removed; a current choice still avoids interruption.
+An already-open tab now closes its banner when another tab records a current
+choice; the pending prompt timer also rechecks storage before opening. The
+three consent suites pass 52 tests. In headless Chromium on localhost, a
+stale record with a simulated session cookie showed the notice; choosing
+Necessary only saved `cookies:2026-09-23+privacy:2026-09-22`, and reload did
+not re-open it. A 390px viewport showed no horizontal overflow, and the
+consent inset reserved space for the card. This was not a real
+authenticated-session test. The Trust
+corrections are recorded against
+their September 21 row review, with all 39 evidence rows passing the independent
+guard; neither entry implies a new whole-page review. On 2026-09-23, the
+Security page's four changed claims were checked against the current route
+prefix contract, connector and built-in-tool audit paths, public Electron
+release workflow and download API, and weekly host-neutral restore drill.
+Its logging copy overstated completeness: connector writes are best-effort,
+and built-in tool events go to a security audit path but not the account
+activity feed. The corrected wording and digest are recorded as a targeted
+same-date version, without silently presenting August 14 as a new full-page
+review. The policy-version guard and 65 focused legal/security tests pass;
+localhost `/security` serves the revised text with HTTP 200. This does not
+establish a full independent review of every Security page row. Jev selected
+this next investigation at confidence 0.95, request
+`850f81772b1bec97ef2b9775f8d2306c33db18a11271acd85dbb4167bb4afff1`.
+The local production Web build passes with an 8 GiB Node heap. Its first run
+with Node's default 4 GiB heap compiled but failed during TypeScript with an
+out-of-memory error; the repository already documents the larger Web heap.
+The successful build warned that the admin audit-coverage route's dynamic
+filesystem sweep traces 5,316 files (about 46.7 MiB of present traced files)
+into that server function. This is a packaging-size and deployment-behavior
+risk, not a proven customer-facing failure; the route intentionally returns
+503 when route sources are unavailable. The local build also logged missing
+Redis and Stripe configuration; those logs do not establish production's
+environment, so production configuration remains separately unverified.
+Jev previously selected
+the policy-digest investigation at confidence 0.95, request
+`7b678b3b384743d709737a92edc558f872f36bad7eba88d789f0816c012e9cc5`,
+and the tokenizer repair at confidence 0.46, request
+`9eb02ea79b8e308dc5c413f7da75ef66a27c946e750c600a44bf146b4e3054be`.
+The public Desktop download page and Security page also overstated release
+status. The public Electron release workflow has no GitHub runs or published
+assets; the historical Tauri desktop tag has Linux assets, not a public
+Electron installer. A red website regression now passes after download copy
+became conditional and Security stopped presenting Tauri's Windows signing
+workflow or a universal Mac disk image as shipped public artifacts. Security
+also no longer says there is no restore-test evidence: a weekly host-neutral
+drill exists, but no scheduled production-data restore test does. Localhost
+`/download` visibly showed the corrected wording and no Desktop link; six
+focused Web suites passed 143 tests. Jev selected conditional copy at
+confidence 1.00, request
+`3a68c616862bb32a06a3212f374fb0762b48a8ad07b54ad10a9e0425404371bb`.
+
+## WEB-STALE-SESSION-RECOVERY-2026-09-22
+
+An authenticated localhost session expired on the server while Clerk still held
+a client session. `/chat` redirected to `/session-expired`, whose "Sign in again"
+link went directly to `/login`; starting Google sign-in then returned Clerk
+HTTP 400 `session_exists`, leaving the user at a generic error. The existing
+`/login/complete` route already owns a bounded stale-session recovery: it
+clears the client session once and returns to login with `authRetry=1`.
+The candidate sends the session-expired action through that existing route,
+retaining its same-origin return-path validation. A regression failed on the
+old link and then passed; the related login-complete tests pass (17 combined),
+as do the Web typecheck, targeted lint and formatting. In the live localhost browser, the new
+link invoked recovery, returned to login with the retry marker, and Google
+sign-in reached the account picker instead of `session_exists`. The full
+account-selection and return-to-chat workflow is not yet verified, so this
+is a locally repaired path, not a closed launch gate. Jev selected reuse of
+the existing recovery route at confidence 1.00, request
+`f40f707f81b17f0bcca4051a0add5af413f1759f1319613586f9e40a6de2a197`.
+
+## WEB-DEVICE-AUTH-TOKEN-RETIREMENT-2026-09-22
+
+The local Web auth contract previously recorded two plaintext columns,
+`device_authorization_codes.access_token` and `refresh_token`. Current QR and
+CLI exchange routes mint credentials without reading or writing either column,
+and the currently deployed application commit has no application reference to
+them or the old `consume_device_authorization_tokens` SQL function. The local
+development table had zero rows and zero non-NULL legacy token values. Production
+values have **not** been queried.
+
+Candidate migration `0292` preserves the old function's return shape while
+removing its column dependency, then drops both columns. It aborts before any
+change if either column contains a non-NULL value. The migration and its down
+body were rehearsed inside rolled-back local transactions: pending and approved
+function outcomes, one-time consume, no tokens after retirement, schema
+restoration, and the non-NULL refusal (`23514`) all passed. The schema-inventory
+guard now follows dropped columns in migration order, and the local auth-surface
+guard reports zero bearer columns and zero recorded audit gaps. Eight QR and CLI
+device-auth route suites passed 84 tests, and the device-auth grant guard
+passed. Jev selected preserving the function contract at confidence 0.33, request
+`f084aff7192edeb634588cb3dcbe240fdc33a56c6d26b5e7edd8bda744b920a8`;
+the low-confidence selection is not safety evidence, so the guards and
+transactional probes are the acceptance evidence.
+
+The canonical local migration runner reports 272 applied, 20 pending including
+`0292`, and a checksum drift at `0268_conversation_activation.sql`. No migration
+was applied through that drifted ledger; the rehearsal rolled back its changes.
+
+This is **not deployed or applied**. Before the release, obtain a read-only
+production count of non-NULL legacy values and confirm the serving build has no
+column/RPC dependency. If any value exists, stop and resolve its ownership and
+revocation instead of dropping it. Then run canonical migration verification and
+the device sign-in workflows against the release candidate. Use a clean migration
+target rather than treating the drifted local ledger as an apply rehearsal.
+
+## WEB-FREE-ROUTER-EMPTY-2026-09-22
+
+The Free-router production-terms gate is separate from stream reliability.
+The draft [free-pool terms workbook](docs/research/free-inference-tos-workbook-2026-09-01.md)
+excluded OpenRouter zero-price routes because its default provider policy may
+admit prompt collection; no pool entry has founder sign-off. That default is
+not the website router's current request path: `canonical-request.ts` requires
+zero retention for every OpenRouter router, and the provider adapter sends
+`data_collection: deny` plus `zdr: true`, with focused regressions for both
+halves. [OpenRouter's current routing documentation](https://openrouter.ai/docs/guides/get-started/sovereign-ai)
+describes those request filters, but its
+[terms](https://openrouter.ai/terms) make customers responsible for the
+underlying models' individual terms and allow the available models to change.
+The [Free-router page](https://openrouter.ai/openrouter/free) says it selects
+among the currently available zero-price members. The managed key's effective
+account settings and every current or newly admitted member's terms have not
+been verified for production third-party serving. The site's stricter request
+filters are evidence against the workbook's default-setting concern, **not**
+evidence of per-model terms clearance or launch approval. Do not add the router
+to the company free-lane inventory merely because live calls work; obtain a
+current account/member-terms review or use a vetted fixed free route.
+
+Capacity is a separate launch gate. On 2026-09-23, a read-only
+`GET /api/v1/key` using the website's configured managed OpenRouter key returned
+HTTP 200 and `free_model_daily_requests: { used: 178, limit: 1000,
+remaining: 822 }`; the deprecated `rate_limit` object reported no useful
+ceiling. [OpenRouter's current limits documentation](https://openrouter.ai/docs/api_reference/limits)
+says the free-model counter is account-scoped, additional accounts or keys do
+not increase capacity, and some exempt accounts/endpoints report a policy
+counter that is not enforced. This response therefore does **not** prove the
+site has an enforced 1,000-request/day cap, nor does it prove an exemption or
+launch-scale capacity. A tool-assisted chat may require multiple model
+requests, so the reported policy counter alone is plainly insufficient
+evidence for thousands of Free users. Verify effective account treatment,
+upstream per-minute and per-member capacity, permissible production serving,
+and a load-tested all-free route pool before a public launch. Do not work
+around limits with extra keys or quietly use paid inference.
+
+The OpenRouter Free Auto route sometimes returns a successful upstream stream
+with `finish_reason: stop` and no visible answer. A short response budget could
+also be spent entirely on hidden reasoning; the catalog now gives this route a
+1,024-token response floor, and the website only offers its web-search tool
+when the turn needs search. A localhost search completed with five sources and
+zero pending approvals, but an unrelated exact-reply turn still produced the clean
+empty response after those changes. The error remains intermittent, not fixed.
+On 2026-09-22, a repeat of the public IANA search in localhost returned a
+maximum-output-length failure, so the free route's live search reliability is
+also unproven with the new budget floor.
+On 2026-09-23 another short, authenticated Free Auto search failed first with
+an upstream overload and then, on user retry, with a maximum-output-length
+error before search ran. The [current Free Router page](https://openrouter.ai/openrouter/free)
+says it randomly chooses among compatible zero-price Free models, so a single
+member's reasoning behavior cannot be assumed for every turn. Jev selected
+a one-time pre-answer output-limit retry with a doubled output budget, capped
+by the catalog's model output limit, at confidence 0.59 (request
+`94ae4252040d01d04b09c37f35e692844a9b09dc038782c53e74d18f1f016a09`).
+It applies only to the configured same-route Free router's first provider
+step, when no public answer or tool action was emitted and the user supplied
+no explicit output cap. Focused tests confirm the larger second request,
+discarded first reasoning, no provider/model change, one-retry bound, and
+explicit-cap behavior. A further localhost retry still ended at the output
+limit. The actual upstream member and both attempt budgets were not captured
+in that browser run, so this is a bounded mitigation, not a verified root-cause
+fix or a passed search-reliability gate.
+On 2026-09-23 a fresh localhost failure was captured with the server console
+attached for request `agi.chat.web.send.621c6364-2c8b-4129-89ee-efb488a3e745`.
+OpenRouter selected the catalogued InclusionAI medical free variant through
+Novita. The request's 4,096 output-token cap was fully consumed; the raw stream
+had 38 reasoning frames and zero content or tool-call frames, then stopped for
+length before search. The generated Free Auto catalog had no model-specific
+output maximum, so its 4,096-token default also prevented the bounded retry.
+[OpenRouter's current model catalog](https://openrouter.ai/api/v1/models)
+lists a 32,768-token completion maximum for that selected member; its public
+models API currently lists 23 zero-price non-router models with published
+maxima of at least 8,192, though the Free Router page counts 27 members and
+membership can change. Jev selected an 8,192-token Free Auto catalog ceiling
+with the existing one-time same-route retry at confidence 0.96 (request
+`e3fd3f73ce28462aa017f74ef6dfa04d37e1d0936fa52a019abab1e6477414a2`).
+The catalog was regenerated, sync/integrity checks and focused retry tests
+pass. The first browser regeneration after that change completed with an
+honest search-allowance refusal, but did not exercise the larger retry; live
+reliability is still unproven. No paid inference fallback was added.
+The same Free budget edge exists after a tool has completed. A reasoning-only
+Free continuation that stops for output length now receives at most one
+same-route continuation retry with a doubled, catalog-bounded output cap,
+provided no user cap was set and no provider lines reached the client. The
+completed tool result is reused; the tool is never executed again for this
+retry. This extends the prior clean-empty-stop continuation recovery. Jev
+selected this at confidence 0.99, request
+`434dea7329ce861b51bf5a6fd60af3ce991becbf0599228057522271b19fd273`.
+The red/green E2B-mocked regression checks budget expansion, unchanged tool
+messages, a single sandbox execution, explicit-cap behavior and the one-retry
+bound; the two focused tool-loop suites pass 52 tests, with Web typecheck and
+targeted lint green. No live output-limited post-tool stream has yet exercised
+this branch, so its real-world effectiveness remains unverified.
+An authenticated localhost Free Auto sandbox request in chat
+`08f8f907-9df7-4645-8794-7fc90ccf44da` first failed before tool execution
+with the actionable upstream-overload message. The UI's Retry regenerated the
+same prompt, ran `print(7 * 6)` once in the sandbox, displayed stdout `42` in
+the expanded execution card, and retained the answer after reload. This
+verifies a real recovery workflow, not reliable first-attempt availability;
+the Free provider overload gate remains open.
+The web provider path now records an empty turn's sanitized post-adapter stream
+shape: chunk/text/thinking/tool counts, the selected upstream route, reported
+token counts and pre/post-assembly text lengths, correlated by request and
+attempt IDs. It does not log prompt or response content. Adapter and tool-loop
+tests pass, but at that stage they had not captured a real Free Auto failure or ruled out
+an adapter-side drop of raw provider frames. An earlier direct probe with a
+different available local OpenRouter key returned 401
+from the [official current-key endpoint](https://openrouter.ai/docs/api/api-reference/api-keys/get-current-key).
+That was not the credential used to start the localhost server; direct probes
+through the latter succeeded as recorded below.
+
+On 2026-09-22, [OpenRouter's current reasoning documentation](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
+confirmed streamed `reasoning_details` and a `reasoning` field. Eight direct
+public-prompt Free Auto streams through the website's credential all returned
+visible text, and every one carried `delta.reasoning` but no
+`delta.reasoning_content`. The shared OpenAI-compatible translator previously
+read only `reasoning_content`; a focused regression failed on that observed
+shape. It now accepts either string alias once, with the provider's raw frame
+counts still kept content-free. The 160 OpenAI-compatible and 52 OpenRouter
+package tests, both package typechecks, the web typecheck, focused web stream
+tests, targeted lint and the stream-protocol guard pass. A post-fix live adapter call
+returned four public text characters and 175 thinking characters in 45
+thinking chunks from a stream whose raw shape counted 175 reasoning characters.
+One authenticated localhost Free Auto turn then returned the requested `PONG`
+without a visible error, and that answer survived a full reload.
+This fixes a proven adapter drop, **not** a proven cause of the intermittent
+empty answer: none of the direct streams reproduced a clean-empty stop. The
+website's earlier same-route retry deliberately excluded a step that streamed
+hidden thinking, leaving a reasoning-only clean stop without recovery. Jev
+prioritized capturing live upstream evidence at confidence 0.58, request
+`8800424fed830aa12fe9de90a8209417b1eb01d25df39bbde10d9ca46cb36e8e`,
+then selected the documented alias correction after that evidence at
+confidence 0.78, request
+`081d6b38d69f3392a48c08a5221df88cce43434e05ce739575f124a7b21233f7`.
+The website now holds the first configured same-route attempt's pre-answer
+stream within a 64 KiB cap. If that attempt stops cleanly with only reasoning,
+it discards the unreleased trace and retries the exact same route once. A public
+answer, tool activity, or buffer overflow releases the trace in order and
+prevents that retry; refusals and output-limit stops remain errors. A focused
+regression first failed on the old path, then passed with the change. The 27
+focused web tool-loop tests and 26 route/failover tests, web typecheck,
+targeted lint, and stream-protocol guard passed. Two ordinary authenticated
+localhost Free Auto checks then
+completed: an exact `PONG` reply and a web search that returned five IANA
+sources with zero pending approvals. Both answers and the canonical search
+activity survived reload. These successful turns did **not** exercise the
+new retry or establish a live failure rate, so the Free-user chat launch gate
+remains open. Jev selected bounded buffering and same-route retry at confidence
+0.69, request `434df062061a61de79fcdae8ac707855c65b5acfca25f7b1166a680abaf6a06e`.
+A candidate also carries bounded, content-free counts of upstream
+OpenRouter frames, content, reasoning, reasoning details, tool calls and finish
+signals into the existing empty-turn trace. It also reports those counts before
+an unterminated stream error escapes. Provider, web stream-sink and strict
+workflow-schema regressions pass; package and web typechecks, targeted lint and
+stream-protocol guard pass. Nine follow-up public exact-reply Free Auto chats
+completed before this candidate, and one post-change localhost turn completed
+with no diagnostic fields on the client wire. No live empty turn was captured,
+so neither the raw-versus-adapted comparison nor general reliability is proven.
+Jev selected the bounded trace investigation at confidence 0.57, request
+`4fac27cf1520886796e94257368534384eb2ebddeb87a15e7f9e64b2df4d47af`.
+An authenticated localhost Free Auto turn with a public exact-reply prompt then
+failed with the app's upstream-overload message. A separate fresh-chat probe
+returned the requested `PONG` text but marked its first response interrupted;
+three subsequent attempts to the same public prompt completed. The completed
+attempts also ended their browser network request with `ERR_ABORTED`, so that
+network event alone does not explain the first failure. The interrupted first
+response remains visible as an incomplete variant. These observations do not
+reproduce a clean-empty turn or pass the Free-user chat launch gate.
+
+A later localhost batch exposed a separate failure before inference: two new
+conversations could not start because `POST /api/chat/conversations` returned
+HTTP 429 (`RATE_LIMIT_EXCEEDED`, `Retry-After: 60`). The 60/min conversation
+mutation bucket was also charged by repeated conversation-detail, branch-list,
+and sync-pull reads. A candidate moves those three reads to a separate bounded
+120/min bucket while leaving the 60/min write bucket unchanged, and preserves
+the retry-window message instead of replacing it with a generic start error.
+The web typecheck, focused hook and rate-limit tests, and affected route tests
+pass. Five independent localhost Free Auto chats completed after the change;
+the captured browser network sample contained no chat HTTP 429s. This is a
+local regression check, not proof of sustained provider or launch reliability.
+Read amplification remains to be measured and reduced independently. Jev
+selected the separate read bucket and rate-limit-specific retry copy at
+confidence 1.0, request
+`63f3d349eaa0b4736c0afdd98939c4497cc4e45a812378137a1ad414e614aa3d`.
+
+A candidate now permits one same-route retry for this catalog entry when a
+transient overload or connection reset occurs before any line is released to
+the client, or when the first provider step cleanly stops before any public
+answer or tool activity. Leading reasoning is held only within the bounded
+first-attempt window described above.
+It does not retry after released output or side effects, a positive retry-after,
+quota, refusal, or a later tool step; it does not cross into another provider.
+The route, tool-loop, failover and strict workflow tests pass, along with the
+web typecheck, model-sync check, targeted lint and retry/stream guards. The
+candidate has **not** yet been shown to trigger on a live Free Auto failure;
+the false-interrupted first response happened after text was visible and is
+outside this retry's safety window. Jev selected the bounded same-route
+approach at confidence 0.77, request
+`27267bc91ce3a7abf0a6df32ad7a8f0d83862ca3152c126dd01fe71be966b43a`.
+
+A fresh localhost IANA search initially failed with the generic no-response
+notice. Its server log identified a different deterministic defect: the
+provider step returned a sanitized `providerTrace`, but the strict durable
+workflow result schema rejected that unrecognized field and discarded the
+whole result. The candidate adds the trace to the typed result and strict
+schema, with a full-shape regression fixture. The same public search then
+completed with five sources and zero approval prompts. While it streamed,
+the activity stayed collapsed; after completion, the expanded search row
+showed its icon and `Done` inline with a separate Copy control. This proves
+that local workflow, not general Free Auto reliability.
+The shared row now exposes keyboard focus and a visible 44×44px Copy target on
+coarse-pointer devices. A localhost check at 320px found an 8px gap between
+`Done` and Copy; the activity timeline, inline tool, and file-diff tests passed
+(97 tests), as did the shared-package typecheck and targeted lint.
+The first successful conversation lost its canonical activity row on reload,
+leaving only legacy `Tool run complete` entries. Readback showed
+`agentActivity.status: completed` with zero entries: generic projection of a
+5,516-character search trace into the 4,000-character activity budget removed
+its sole step. A bounded projection now retains the latest tool step, source
+identities, and pending approval identity while discarding bulky snippets.
+The focused projection regressions pass. A fresh localhost Free Auto search
+completed with five sources; after reload, its canonical `Searched the web · 5
+sources` summary and expanded inline search/Done row survived, with Copy
+separate. This verifies this local readback path, not broader route reliability.
+Jev selected bounded projection over raising the metadata cap or adding a
+separate journal at confidence 0.98, request
+`a0e4bbd1f972d5dd96be4d175c9fa5c16e3fb9845a4bb18423779496cbcf9275`.
+
+A separate tool-loop regression proved that a partial answer with no terminal
+signal was marked complete. The candidate now keeps the partial text, emits a
+classified `stream_interrupted` error, and terminates as an error without
+retrying after visible output. The focused test first failed on the old code
+and passes after the correction; this is not yet tied to the intermittent live
+Free Auto case. Jev selected this treatment at confidence 0.99, request
+`0cef603c4d9dc12191010e9381d0befaf342e5f4895e09814b099f4f26020fa1`.
+
+Exact model selections intentionally do not rotate into other providers, and
+QwenCloud's promotional free-quota models have a separate quota and tool
+contract. Do not silently cross those routes. Next: obtain a reproducible
+live provider response/route trace for both clean-empty and interrupted-after-
+text cases that excludes application-side dropped chunks. Test repeated
+ordinary turns, tool turns, quota exhaustion and refusal separately; measure
+live failure rate before calling the route reliable.
+
+Five fresh authenticated localhost Free Auto exact-reply chats on 2026-09-22
+returned `PONG`; none reproduced the intermittent failure. A synthetic provider
+stream did expose a separate recovery bug: one reasoning frame was held for a
+safe first-attempt retry, then the stream disconnected, but the tool loop marked
+that held frame as already delivered and skipped failover. The red regression
+now passes after retry safety tracks released lines rather than ingested lines.
+A second red regression showed that the real failover plan rejected connection
+resets even under that no-release condition; it now admits one same-route
+connection retry. A visible partial answer still cannot retry. The focused
+tool-loop, incomplete-turn and failover suites pass (112 tests), as do web
+typecheck, targeted lint/format and the unsafe-retry, retry-semantics and
+stream-protocol guards. The generated `contract-registry.json` was refreshed by
+its owner script, and the agent-context and repository-organization guards now
+pass. The full operability chain currently stops at 18 undeclared, unreachable
+Web support modules in `check:surface-reachability`. The independent LLM-failure
+guard's undeclared skip in the opt-in live-latency test now has its required
+inline annotation, and `pnpm check:llm-failures` passes. No
+live connection reset was captured, so this repair is code-verified only and
+the Free-user launch gate remains open. Jev chose released-line tracking at
+confidence 1.00, request
+`1cf227bc90bb4824097102ddd2f866842412c945d3b4c0203c11174cad972b17`,
+and the bounded connection retry at confidence 0.96, request
+`df5e692e9d79b321a3fea789f4af0c98fd22dea9579956d0a3afe52cc75f98d0`.
+
+The current reachability check identifies exactly 18 undeclared files in the
+deliberately unmounted Web support widget. The Web v1 launch record specifies
+email-first support and no widget mount, so importing the widget solely to
+satisfy the graph check would change the public bundle boundary. Jev returned
+an inconsistent probability distribution when asked to choose between a scoped
+intentional exception, removal, and a gated mount; that choice is paused pending
+review rather than treating a failed decision as authorization.
+
+An authenticated, strictly sequential localhost Free Auto check in chat
+`9554ee10-74f9-4b3b-b06f-720afab02825` completed seven exact-`PONG` turns
+but failed on turn 4: the model unexpectedly requested `url_fetch` for
+`https://example.com` on an ordinary exact-reply prompt, and a later provider
+step ended with the free-model-overloaded message. This is not the clean-empty
+failure. The web composer sends ambient `web_search: true` and `web_fetch: true`;
+the server's required-only catalog policy withheld search from that ordinary
+turn but still offered URL fetch. A new integration regression, bound to the
+authenticated Web surface rather than an unbound test token, failed on the
+extra `url_fetch`. A candidate now applies the same required-only admission
+policy to fetch: the tool is offered when search is required or the latest user
+turn explicitly asks to read a URL, while other model/API behavior is unchanged.
+The request-processor suite passes (64 tests), as do web typecheck, targeted
+ESLint/format, stream-protocol and unsafe-retry checks. A fresh localhost
+exact-`PONG` turn in chat `3a57b4f4-f0ee-420f-a316-9e2048d13b16` completed
+without a tool call despite the client still sending both ambient flags. The
+unit regression proves the server-side tool list; that single live answer does
+not prove a failure rate. Jev selected the server admission boundary at
+confidence 0.83, request
+`88c6ff47507b5913b20e83fef1939e5220b3a0f7e51b286d08d8ffc7a51ae8f4`.
+
+A later authenticated localhost public IANA search captured a real clean-empty
+provider step. The OpenRouter Free Auto upstream selected an Inclusion AI free
+model through Novita and emitted 22 raw data frames: 20 reasoning frames (205
+reasoning characters), zero content frames, zero tool-call frames, and two
+finish frames. The adapted trace likewise had zero public text and zero tool
+starts while the provider reported a normal `stop` finish (39 output tokens,
+52 reasoning tokens) on attempt 1. This rules out a dropped text frame in the
+adapter for this occurrence. The server later performed a five-source search,
+but the subsequent continuation ended with the visible free-model-overloaded
+error. The Free-user search and chat reliability gates therefore remain open.
+This is one observed provider-route failure, not a measured failure rate.
+Jev selected live provider-failure capture at confidence 0.62, request
+`ed09cf24317509c31d004afe1a91b224d2a050327fe571056445e44c9962b6ce`.
+For repeatable localhost diagnosis, the Web logger now accepts the development-
+only `AGI_DEV_LOG_FORMAT=json` opt-in; default development formatting and
+production behavior are unchanged. The wrapper exposes only content-free
+provider-step and empty-trace fields. Focused logger/redaction tests (nine),
+targeted lint and formatting pass. Jev selected that logging approach at
+confidence 0.89, request
+`c110471beea3ef2747141d40f76f3c110bdbfdaa08e84c8ae5ecf5ea5dc857e9`.
+The [current QwenCloud free-quota rules](https://docs.qwencloud.com/resources/free-quota)
+state that quota expires or depletes, pay-as-you-go can follow, and the
+`Free quota only` stop is disabled by default. Built-in tool fees are outside
+the token quota. The current worktree has no account-bound local quota
+verification artifact. Consequently, its catalogued promotional offerings
+are not eligible as an automatic Managed Free fallback on this evidence;
+account-key matching, current remaining quota, stop protection and tool
+contract must be verified first.
+
+A fresh localhost QA run on 2026-09-22 isolated a separate configuration
+blocker before inference. The QA ticket established a client session, but the
+server initially rejected it because this port-3100 process had no local Clerk
+authorized party; its fallback was the production origin. Restarting the local
+server with `CLERK_AUTHORIZED_PARTIES=http://localhost:3100` made the server
+recognize the session and opened the composer. The subsequent OpenRouter Free
+Auto send returned HTTP 401 `provider_credentials_rejected`; the same local
+`OPENROUTER_API_KEY` returned HTTP 401 from OpenRouter's documented read-only
+current-key endpoint. This is evidence of a rejected **local credential**, not
+of a new model empty-response occurrence or the deployed credential's state.
+The QA account used by this harness is paid, so even a successful retry would
+not prove the Free-plan launch path. The live latency spec now asserts client
+session, browser session cookie, and server recognition before sending, and
+reports only the classified API error on failure. Jev selected this diagnostic
+at confidence 0.59, request
+`9abf5915a7634027f571a766cf94c4efcd669fe0ed21d3c24b5f9721702d49c1`.
+
+On 2026-09-23, a new focused regression reproduced another empty-output edge:
+the Free router emitted only whitespace followed by a clean `stop`, but the
+pre-answer buffer released the whitespace as though it were an answer and
+therefore skipped its configured same-route retry. The bounded hold now waits
+for non-whitespace public text or tool activity, preserving leading whitespace
+in order when a real answer follows. The 64 KiB release cap still prevents a
+retry after any buffered data has crossed the client boundary. Four focused
+empty-response, tool-loop, managed-failover and agent-stream suites pass 162
+tests. A separate code-execution regression shows
+a whitespace-only post-tool continuation retries once without re-running the
+sandbox command. Jev selected the bounded hold at confidence 0.97, request
+`4cced92b07c46b254014673ad295e6704614b5e9e921c819983f77e7d1341b68`.
+This is a fixture-proven edge-case fix, not a live resolution of intermittent
+Free Auto emptiness or upstream overload. The current signed-in QA session is
+at a new Terms acceptance gate that the user must review and accept before
+further authenticated browser tests.
+
+On 2026-09-23, a fixture reproduced a separate provider-failure route: an
+adapter can report an overload inside its stream as `x_stream_error`. The tool
+loop then counted that attempt as a route success and ended the turn, even
+though an eligible pre-answer fallback route existed. A local candidate now
+holds first-step pre-answer frames under the existing size bound, preserves
+the adapter's structured error class in the server-only step sink, raises the
+reported failure inside the provider operation, and uses the existing
+bounded failover plan. A durable failed receipt retains that class for replay;
+a partial answer already shown to the user is not replayed. Red/green tests
+cover pre-answer rotation, route health, partial-output containment,
+classification preservation, and durable receipts. A safety refusal remains a
+refusal even if its error text resembles overload; it is not rotated to another
+route. For a Free Web continuation after a completed tool call, a transient
+connection, timeout, server error, or overload before any released answer now
+gets one same-route retry with the existing tool results. This does not
+re-execute the search or sandbox, cross providers, ignore a positive Retry-After,
+or loop after a second failure. Negative tests cover each of those boundaries
+and partial-answer containment. Nine relevant Web suites pass 153 tests; Web
+typecheck, targeted ESLint, formatting, stream-protocol, unsafe-retry,
+LLM-failure, raw-error-to-user, and log-hygiene guards pass.
+Jev selected the investigation at confidence 0.52, request
+`886623ad7b2cf24510b9783d3c034be40cf015269ba59e8036b768e821338035`,
+and the provider-step repair at confidence 1.00, request
+`752698eadd03f23eceffe88ae20f277812d45836e326b1f084faa982c3e14628`.
+Jev selected the bounded post-tool same-route retry at confidence 0.96, request
+`9240984aa16f1419072c8afb775852e3aa73b3c2469d67178f433d1fa0860607`.
+This is fixture proof, not a new live Free search pass. A continuation after
+an executed search remains provider-bound by the current tool transcript
+policy; the observed post-search overload, invalid localhost OpenRouter
+credential, and signed-in browser Terms gate keep repeated live Free search
+verification open.
+
+## WEB-FREE-SEARCH-ADHERENCE-2026-09-22
+
+The next turn in authenticated localhost chat
+`3a57b4f4-f0ee-420f-a316-9e2048d13b16` explicitly requested a search for
+the official IANA Example Domains page. The browser request carried
+`web_search: true` and `web_fetch: true`, and the completed HTTP 200 SSE stream
+had 16 frames, nine content deltas, zero structured `tool_calls` deltas, and a
+normal network completion. Its public answer was literal
+`<tool_call>web_search ...</tool_call>` text, with no source or executed search;
+the UI correctly labeled it an answer without live sources. This is a separate
+Free-user launch blocker, not evidence that the new URL-fetch admission rule
+removed the search tool. Request-processor tests prove that required search
+and explicit URL fetch remain offered. The tool loop currently buffers and
+retries one ungrounded required-search answer but releases an ungrounded second
+answer; its test explicitly encodes that behavior. The live transcript proves
+the final text was not a structured tool call, but does not identify which
+upstream free model produced it or prove whether the one retry ran.
+
+[OpenRouter's Free Router page](https://openrouter.ai/openrouter/free/) currently
+documents feature filtering for tool-calling requests, not a guarantee that
+every selected model will issue a valid tool call. Jev selected a deterministic
+platform search before answer generation, reusing the existing tool approval,
+charging, source and audit path rather than parsing provider-authored pseudo
+markup, at confidence 0.59, request
+`04dd5a875616eadecedd34d10269f633cff2aedc3e3c1f85338903289da197ea`.
+Further inspection found that deriving a platform search query from the full
+user message could disclose private context, and a synthetic pre-search needs
+to preserve Ask/deny and tool-result adjacency across the durable approval
+checkpoint. With that evidence, Jev selected a narrower fail-closed increment
+at confidence 0.46, request
+`176560ffac90fbe1efb581d463cd5602695efbebf18f68cbcc4a97a9c8d2312b`.
+The Free Web required-search loop now withholds an answer until search is
+observed and emits `web_search_not_performed` if the provider finishes without
+one, including after its existing retry. Regression tests cover ignored forced
+choice, pseudo tool-call text, and ordinary Free answers. This does not make
+the search execute; deterministic search with privacy and approval handling
+remains open. An authenticated localhost retry of the same public IANA search
+after this change ended in `Response failed`; Agent activity said the search
+did not run, and no pseudo tool-call answer appeared. That verifies the
+fail-closed behavior in the live UI, not successful search. Until a real search
+request executes and the final answer cites delivered sources in repeated
+localhost checks, this launch gate is open.
+
+Later on 2026-09-22, Jev selected a server-owned fallback through the existing
+`web_search` tool path at confidence 1.00, request
+`3015bc3280da36f1ec137799308152df76a413d05b98ab6a92e42ca9b7eaabe4`.
+When the Free Web route produces an answer instead of a required structured
+search call, the loop now discards that answer, builds a bounded query from
+only the current user turn with recognized secrets redacted, and submits a
+deterministic search call through the same approval, permission, charge,
+source, audit and durable-resume path. A rejected or blocked call and a search
+with no usable sources fail closed; the fallback is excluded from model
+tool-calling success metrics. Focused search, approval-resume, permission,
+request-processor and citation tests pass (111 tests), as do Web typecheck,
+targeted ESLint, stream-protocol and unsafe-retry guards. An authenticated
+localhost Free Auto search in chat
+`3a57b4f4-f0ee-420f-a316-9e2048d13b16` returned five source links and a
+one-sentence answer citing the official IANA Example Domains page, with no
+browser console errors. That is one successful live turn, not a measured
+reliability rate. Repeat search, approval, failure and reload workflows remain
+necessary before this launch gate can close. The QwenCloud promotional routes
+were not enabled as a managed fallback for this repair.
+
+That live run also exposed a separate over-broad requirement: after two
+search turns, an ordinary exact-PONG follow-up inherited `research` from
+conversation-sticky routing and was wrongly required to search. The browser
+request had ambient `web_search: true`, but no current-turn research request.
+Jev selected current-turn research intent as the requirement boundary at
+confidence 1, request
+`5bad63fcd7d7065237596b299c2d28097cb5dc245e3e9a966f060ff92e78adb3`.
+The request processor now retains context-aware task type for routing while
+deriving mandatory research search from the current user turn or explicit
+research mode. A red/green regression preserves this distinction; the same
+localhost conversation then completed a new PONG follow-up successfully.
+The later live IANA failure recorded above proves that a search can execute
+through the fallback yet the answer continuation can still fail under upstream
+load; search execution alone is not a pass for this launch gate.
+
+## WEB-CITATION-MAPPING-2026-09-22
+
+A localhost IANA web-search answer numbered its own five-link list differently
+from the search tool's canonical Sources order. The shared renderer linked bare
+`[n]` markers by canonical position, so a prose marker could open another page.
+This is distinct from `AGI-16`, which concerns provider redirect URLs. A local
+candidate now reconciles a numbered source list against the delivered URLs,
+including adjacent markers such as `[1][2]`, before creating numeric citation
+links. If a listed URL, number, or prose marker cannot be reconciled without
+ambiguity, the numeric markers stay unlinked; explicit source URLs remain
+clickable. Streaming answers do not link numeric markers until the answer is
+complete, and the Sources grouping reads the reconciled numbers.
+
+The focused web source and MessageBubble suites pass (155 tests), shared
+markdown render/stream suites pass (56 tests), both affected package typechecks,
+targeted ESLint and formatting pass. An authenticated localhost Free Auto IANA
+search in chat `44ca74bb-f114-4118-9947-6dff88c68872` completed and survived
+reload. Its own numbered URL list included an RFC page absent from the two
+delivered IANA sources; after the candidate update and reload, prose `[1][2]`
+stayed plain text while the explicit URLs remained links, and the known
+Reserved Domains link used Sources-panel number 2 rather than the provider's
+duplicate annotation position 3. The earlier exact wrong-page case with a
+fully reconcilable but reordered list has test proof, not a live replay; do not
+count it as fully live-verified until that click is observed. General Free Auto
+reliability remains a separate launch gate. Jev selected this correction at confidence 0.98,
+request `bc2435ed20082ac57bdb14aa18fe7b29a10da89f3fff479ee9b56f2ca2342927`.
 
 ## CI-WINDOWS-RUNTIME-2026-09-20
 
@@ -85,112 +1514,6 @@ Do not disable the upload failure gate or broaden token permissions. Do not
 lower the floor or count the old green job as successful coverage. Evidence and
 next verification: [deployment handoff](docs/work/deployment-handoff-2026-09-19.md#coverage-gate-integrity-follow-up).
 
-## WEB-MARKDOWN-TABLE-ALIGN-2026-09-19
-
-Browser TB02 copied valid Markdown with a right-aligned numeric column, but the rendered
-numbers were left-aligned. `MarkdownTableCell` accepts only children; the header renderer
-also accepts only children and forces text-left. Alignment metadata is lost in this shared
-renderer. Preserve supported alignment props for headers and cells without changing escaping
-or citation handling. Verify left/center/right alignment, numeric values and local overflow
-with a focused renderer regression and the affected browser case.
-Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
-No repair attempted in this QA batch.
-
-## WEB-INERT-CODE-ARTIFACT-2026-09-19
-
-Browser SA01 requested an inert fenced HTML example, never a preview. The model returned
-the requested fence, but the app extracted an HTML artifact and opened a blank preview instead
-of preserving the visible code block. Source view retained the code. A script-disabled warning
-appeared and no alert was observed; this is a presentation defect, not proof of a sandbox escape.
-The candidate ownership path is MessageBubble code-block extraction/artifact promotion; exact
-opt-in gating remains to be traced. Keep instructional code examples as source while retaining
-explicitly requested artifact previews. Test both paths without weakening iframe restrictions.
-Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
-No repair attempted in this QA batch.
-
-## WEB-FREE-MEDIA-LIBRARY-2026-09-19
-
-Browser IG04 produced a real1024×1024 HELLO QA poster and reload retained it. Library > Images
-then settled to Your library is empty. The Free completion path emits a provider image URL in
-Markdown and records the probe result; that is not equivalent to registering an owned Library
-asset. Trace the canonical generated-media ingestion/indexing owner and connect this experimental
-route without copying ownership logic or exposing private provider links across accounts.
-Acceptance: the same authorized image appears in chat and Library, remains accessible after
-reload and respects the existing asset/privacy boundaries. Do not regenerate images to repair
-an indexing issue.
-Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#qaPackBrowserBatch`.
-No repair attempted in this QA batch.
-
-## WEB-FREE-PROVENANCE-RELOAD-2026-09-19
-
-Free quota assistant replies display “via free pool” during the live browser session,
-but that suffix disappears after a full reload. The model name and composer FREE badge
-persist. Confirmed on three synthetic replies; no evidence of paid routing or lost message
-content. Root cause is not yet traced. Compare streamed message metadata with persisted
-message serialization and rendering; preserve the canonical route provenance on rehydrate.
-Acceptance: the same source label before and after reload without inventing provenance for
-older messages. Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#browserCapabilityExperiments`.
-
-## WEB-CHAT-ANGLE-TEXT-2026-09-19
-
-A user message containing `FINAL=<number>` renders as `FINAL=`. Opening Edit message
-shows the full original placeholder; Cancel returns to the truncated rendering. This
-confirms display loss, not storage loss. Root cause remains untraced. Investigate user-message
-Markdown/HTML handling; preserve literal text without enabling unsafe HTML. Acceptance:
-angle-bracket placeholders remain visible and editable, with hostile HTML still inert.
-Evidence: `docs/specs/website-launch/evidence/qwen-free-quota.json#browserCapabilityExperiments`.
-
-## WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19
-
-An invalid Mermaid fixture receives the intended source-preserving fallback, but
-Mermaid also leaves body-level error-render containers outside the chat tree.
-Two remained after navigating to an empty New Chat and exposed “Syntax error in
-text” and the library version in the accessibility tree, without `aria-hidden`.
-This is stale diagnostic/accessibility noise, not evidence of a private-data leak.
-`MermaidDiagram.tsx` calls `mermaid.render` without a scoped container and its cleanup
-only sets the cancellation flag. Review supported error-render suppression and
-owned-container cleanup, preserving the visible source fallback. Verify invalid
-render, rerender and navigation leave no orphan nodes. Evidence:
-local audit artifact `browser-render.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)). No repair attempted.
-
-## QA-ERASURE-HARNESS-BOUNDARY-2026-09-19
-
-`pnpm check:boundaries` fails because the pre-existing untracked
-`apps/web/lib/server/__tests__/scheduled-account-erasure.live.test.ts` imports
-`pg` directly outside `@agiworkforce/data-layer`. The test provided useful local
-execution evidence, but it does not meet the repository's adapter ownership rule.
-Adapt the harness through the canonical entrypoint and rerun the boundary check
-in the repair phase. Do not weaken the guard or treat this as a production data
-leak. Evidence: local audit artifact `boundaries.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
-
-## WEB-DRAFT-CLEAR-RESTORE-2026-09-19
-
-In local Browser, type an unsent new-chat draft, reload, wait for restoration,
-then select all and delete. The draft immediately returns with “Couldn't send.
-Restored here so you can try again.” No send was attempted. This was reproduced
-twice; a second clear empties the input. The mount/restoration path and deferred
-handback effect in `ChatComposerNew.tsx` are the investigation boundary, not a
-proven root cause. Distinguish navigation/reload parking from a failed-send
-handback, then verify deliberate clearing stays empty without a false failure
-notice. Evidence: local audit artifact `browser-composer.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
-No application repair was made in this QA pass.
-
-## WEB-DRAFT-NAVIGATION-LOSS-2026-09-19
-
-Local Browser QA reproduced unsent new-chat draft loss twice: type into the
-composer at `/`, open Projects, then use Browser Back. The route returns but the
-composer is empty. The second reproduction used normal typing to rule out a
-programmatic-value-only artifact. No message was submitted. This is a current
-Next development-session failure, not a claim about every browser or production.
-
-Evidence: local audit artifact `browser-draft-search.json` (path and fingerprint in [QA_COVERAGE.json](docs/specs/website-launch/QA_COVERAGE.json)).
-The composer lifecycle and the one-use history restoration gate in
-`apps/web/features/chat/lib/pending-composer-draft.ts` are investigation pointers;
-a root cause has not been established. In the repair phase, trace mount/cleanup
-and history restoration, add a component-level regression for the demonstrated
-path, then verify Back and Forward preserve the draft without leaking it into a
-new conversation. No application repair was made in this QA pass.
-
 ## RELEASE-MAIN-PROTECTION-2026-09-19
 
 The 2026-09-19 read-only GitHub verification reports `main.protected=false`,
@@ -228,10 +1551,9 @@ scope for this file.
 The website's public-release audit lives in `WEB_PUBLIC_RELEASE_AUDIT.md`
 (2026-09-14, founder-requested, one canonical file). It carries the `WEB-*`
 findings for the web UI, what the pass fixed, and the order for the rest; this
-file points to it rather than restating its rows. Its open P2 items that need a
-decision rather than code are the composer rest-height contract (`WEB-052`), an
-early byte before the provider's first token (`WEB-053`), and whether the
-built-but-dark support widget ships (`WEB-031`).
+file points to it rather than restating its rows. It has no open P1 or P2 after
+the successful live-provider baseline and WEB-053 protocol disposition; its P3
+and P4 queues remain open.
 
 **A closed issue is deleted, not archived.** Git history is the record of what
 was fixed and why; a resolved section left here is a second, staler copy of a
@@ -694,6 +2016,17 @@ in shipped builds.
 **Dependencies:** None.
 **Implementation direction:** Work the spec's own gate ledger in order. Keep
 the ledger as the acceptance record.
+**Founder option, 2026-09-22:** Evaluate the [open-weight Laya decision
+model](https://huggingface.co/convaiinnovations/laya) as a local typed-decision
+alternative to Jev for the Tauri desktop phase if Jev proves unsuitable there.
+This is not a vendor selection or an implemented capability. Its published
+contract handles classification and bounded choices, not speech capture,
+transcription, OS actions or permission enforcement; those remain separate
+native gates. When desktop work begins after the website launch gate, measure
+decision quality, latency, memory/packaging cost, license, native integration,
+privacy/egress behavior and fit with the existing gate ledger before adopting
+it. Do not confuse this model with an unrelated desktop product also named
+Laya.
 **Acceptance criteria:** Every gate in the ledger is met, or the entry point is
 removed from shipped builds.
 **Validation:** The spec's gate ledger, exercised on a signed build.

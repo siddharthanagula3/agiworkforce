@@ -8,8 +8,14 @@ import {
 const ANTHROPIC_FAILOVER_MODEL = listCanonicalModels().find(
   (model) => model.provider === 'anthropic' && !!model.openRouterSlug,
 )?.id;
+const TRANSIENT_RETRY_MODEL = listCanonicalModels().find(
+  (model) => model.transientSameRouteRetries === 1,
+)?.id;
 if (!ANTHROPIC_FAILOVER_MODEL) {
   throw new Error('Canonical Anthropic OpenRouter failover fixture is missing');
+}
+if (!TRANSIENT_RETRY_MODEL) {
+  throw new Error('Canonical transient same-route retry fixture is missing');
 }
 
 vi.mock('server-only', () => ({}));
@@ -103,12 +109,104 @@ function makePlan(processed: ProcessedRequest, aborted = false) {
   });
 }
 
+function makeTransientRetryProcessed(): ProcessedRequest {
+  return makeProcessed({
+    requestedModel: TRANSIENT_RETRY_MODEL,
+    originalModel: TRANSIENT_RETRY_MODEL,
+    provider: 'openrouter',
+    subscriptionTier: 'free',
+    fallbackModels: [],
+    chatRequest: {
+      model: TRANSIENT_RETRY_MODEL,
+      messages: [{ role: 'user', content: 'hi' }],
+    } as ProcessedRequest['chatRequest'],
+    llmRequest: {
+      model: TRANSIENT_RETRY_MODEL,
+      messages: [{ role: 'user', content: 'hi' }],
+      max_tokens: 100,
+    } as ProcessedRequest['llmRequest'],
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mockCanAccessModel.mockReturnValue(true);
   mockResolveProviderFromModel.mockImplementation((model: string) =>
     model === 'candidate-a' ? 'openai' : 'google',
   );
+});
+
+describe('configured transient same-route retry', () => {
+  const safeFirstStep = { step: FIRST_PROVIDER_STEP, sameRouteRetrySafe: true };
+
+  it('retries overload once without changing the explicitly chosen route', () => {
+    const plan = makePlan(makeTransientRetryProcessed());
+    const overload = httpError(529, '{"type":"overloaded_error"}');
+
+    const attempt = plan.next(overload, safeFirstStep);
+    expect(attempt).toMatchObject({
+      model: TRANSIENT_RETRY_MODEL,
+      provider: 'openrouter',
+      processed: {
+        requestedModel: TRANSIENT_RETRY_MODEL,
+        usedFallback: false,
+        retries: 1,
+      },
+    });
+    expect(plan.next(overload, safeFirstStep)).toBeNull();
+  });
+
+  it('retries a connection reset once when the first attempt released no output', () => {
+    const plan = makePlan(makeTransientRetryProcessed());
+
+    expect(plan.next(connectionError(), safeFirstStep)).toMatchObject({
+      model: TRANSIENT_RETRY_MODEL,
+      provider: 'openrouter',
+      processed: { retries: 1 },
+    });
+    expect(plan.next(connectionError(), safeFirstStep)).toBeNull();
+  });
+
+  it('retries one clean empty response but never an unsafe or later step', () => {
+    const empty = new EmptyProviderResponseError('stop');
+    expect(makePlan(makeTransientRetryProcessed()).next(empty)).toBeNull();
+    expect(
+      makePlan(makeTransientRetryProcessed()).next(empty, {
+        step: FIRST_PROVIDER_STEP + 1,
+        sameRouteRetrySafe: true,
+      }),
+    ).toBeNull();
+    const plan = makePlan(makeTransientRetryProcessed());
+    expect(plan.next(empty, safeFirstStep)?.provider).toBe('openrouter');
+    expect(plan.next(empty, safeFirstStep)).toBeNull();
+  });
+
+  it('does not retry a provider wait, quota, refusal, or aborted request', () => {
+    expect(
+      makePlan(makeTransientRetryProcessed()).next(
+        Object.assign(httpError(503, 'overloaded_error'), { retryAfterSeconds: 12 }),
+        safeFirstStep,
+      ),
+    ).toBeNull();
+    expect(
+      makePlan(makeTransientRetryProcessed()).next(
+        httpError(429, 'resource_exhausted: quota exceeded for this window'),
+        safeFirstStep,
+      ),
+    ).toBeNull();
+    expect(
+      makePlan(makeTransientRetryProcessed()).next(
+        httpError(400, 'content was blocked by safety'),
+        safeFirstStep,
+      ),
+    ).toBeNull();
+    expect(
+      makePlan(makeTransientRetryProcessed(), true).next(
+        httpError(529, 'overloaded_error'),
+        safeFirstStep,
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('rotation eligibility (gateway parity)', () => {

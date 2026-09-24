@@ -150,7 +150,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-start justify-center pt-[15vh]"
       aria-modal="true"
       role="dialog"
       aria-label={t('interface.searchConversations', 'Search conversations')}
@@ -162,7 +162,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
       />
       <div
         className={cn(
-          'relative z-10 w-full max-w-lg overflow-hidden rounded-xl',
+          'relative z-[var(--z-control)] w-full max-w-lg overflow-hidden rounded-xl',
           'bg-[var(--chat-surface-base)] border border-[var(--chat-border)]',
           'shadow-xl',
         )}
@@ -185,7 +185,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
           <button
             type="button"
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] transition-colors"
+            className="flex h-6 w-6 items-center justify-center rounded-compact text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] transition-colors"
             aria-label={t('stream.closeSearch', 'Close search')}
           >
             <X size={14} />
@@ -224,7 +224,7 @@ function SearchOverlay({ open, onClose }: SearchOverlayProps) {
               )}
             >
               <span className="flex-1 truncate">{conv.title}</span>
-              <span className="shrink-0 text-[12px] text-[var(--chat-text-muted)]">
+              <span className="shrink-0 text-caption text-[var(--chat-text-muted)]">
                 {new Date(conv.updatedAt).toLocaleDateString()}
               </span>
             </button>
@@ -837,7 +837,7 @@ export function ChatInterface({
           activeConversationId &&
           hostBridge?.fetchCodingCheckpoints &&
           hostBridge.rewindCodingCheckpoint && (
-            <div className="absolute inset-0 z-50 flex justify-end bg-black/35">
+            <div className="absolute inset-0 z-[var(--z-modal)] flex justify-end bg-black/35">
               <section
                 className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] shadow-2xl"
                 aria-label={t('interface.rewindCheckpoints', 'Rewind checkpoints')}
@@ -849,7 +849,7 @@ export function ChatInterface({
                   <button
                     type="button"
                     onClick={() => setRewindTimelineOpen(false)}
-                    className="rounded p-1 text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
+                    className="rounded-compact p-1 text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
                     aria-label={t('interface.closeRewindCheckpoints', 'Close rewind checkpoints')}
                   >
                     <X className="h-4 w-4" />

@@ -35,6 +35,18 @@ export interface CreditBalance {
   last_daily_reset_at?: string;
 }
 
+export function creditBalanceHasAvailableMicrousd(
+  balance: CreditBalance | null,
+  amountMicrousd: number,
+): boolean {
+  if (!balance?.account_id || amountMicrousd < 0) return false;
+  if (balance.credits_remaining_microusd < amountMicrousd) return false;
+  return (
+    balance.daily_remaining_microusd === undefined ||
+    balance.daily_remaining_microusd >= amountMicrousd
+  );
+}
+
 export interface DeductCreditsResult {
   success: boolean;
   account_id?: string;
@@ -235,7 +247,11 @@ export class CreditService {
     db: DatabaseAdapter,
     userId: string,
     amountMicrousd: number,
+    balanceSnapshot?: CreditBalance | null,
   ): Promise<boolean> {
+    if (balanceSnapshot !== undefined) {
+      return creditBalanceHasAvailableMicrousd(balanceSnapshot, amountMicrousd);
+    }
     try {
       const [row] = await db.query<{ check_credits_available: boolean }>(
         'select check_credits_available_microusd($1, $2) as check_credits_available',

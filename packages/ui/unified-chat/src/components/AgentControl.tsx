@@ -46,7 +46,7 @@ function OverrideDot({ show }: OverrideDotProps) {
           <Tooltip.Content
             side="top"
             className={cn(
-              'z-50 rounded-md px-2 py-1 text-[12px] shadow-md',
+              'z-[var(--z-dropdown)] rounded-md px-2 py-1 text-caption shadow-md',
               'bg-[var(--chat-surface-elevated)] border border-[var(--chat-border)]',
               'text-[var(--chat-text-secondary)]',
             )}
@@ -63,8 +63,8 @@ function OverrideDot({ show }: OverrideDotProps) {
 function chipClass(active?: boolean) {
   return cn(
     'relative inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1',
-    'text-[12px] font-medium transition-colors duration-150 select-none',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+    'text-caption font-medium transition-colors duration-quick select-none',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
     active
       ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
       : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
@@ -111,14 +111,14 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
             align="start"
             sideOffset={6}
             className={cn(
-              'z-50 w-64 overflow-hidden rounded-xl shadow-lg',
+              'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-lg',
               'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
               'animate-in fade-in-0 zoom-in-95',
               'data-[side=top]:slide-in-from-bottom-2',
             )}
           >
             <div className="border-b border-[var(--chat-border)] px-3 py-2">
-              <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+              <span className="text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
                 Agent Mode
               </span>
             </div>
@@ -132,8 +132,8 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                       onClick={() => selectMode(mode)}
                       className={cn(
                         'flex w-full items-start gap-2 rounded-lg px-2.5 py-2 text-left',
-                        'transition-colors duration-100',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                        'transition-colors duration-instant',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                         isSelected
                           ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
                           : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
@@ -143,14 +143,14 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium">{AGENT_MODE_LABEL[mode]}</span>
                           {mode === 'bypass' && (
-                            <span className="rounded px-1 py-0.5 text-[12px] font-semibold uppercase tracking-wide bg-red-500/15 text-red-500">
+                            <span className="rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-red-500/15 text-red-500">
                               danger
                             </span>
                           )}
                         </div>
                         <p
                           className={cn(
-                            'mt-0.5 text-[12px]',
+                            'mt-0.5 text-caption',
                             isSelected
                               ? 'text-[var(--chat-accent-primary-text)]'
                               : 'text-[var(--chat-text-muted)]',
@@ -224,17 +224,17 @@ function EffortChip({ conversationId, projectId, modelId, effortOptions }: Effor
           align="start"
           sideOffset={6}
           className={cn(
-            'z-50 w-64 overflow-hidden rounded-xl shadow-lg',
+            'z-[var(--z-dropdown)] w-64 overflow-hidden rounded-xl shadow-lg',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
             'animate-in fade-in-0 zoom-in-95',
             'data-[side=top]:slide-in-from-bottom-2',
           )}
         >
           <div className="flex items-center justify-between gap-2 border-b border-[var(--chat-border)] px-3 py-2">
-            <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+            <span className="text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               Reasoning Effort
             </span>
-            <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-secondary)]">
+            <span className="text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-secondary)]">
               {EFFORT_LABEL[effectiveEffort]}
             </span>
           </div>

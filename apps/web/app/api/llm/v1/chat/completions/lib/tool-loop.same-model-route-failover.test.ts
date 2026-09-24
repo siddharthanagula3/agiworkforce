@@ -110,6 +110,28 @@ function textStream(text: string): ReadableStream<Uint8Array> {
   });
 }
 
+function providerErrorStream(status: number, message: string): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(
+        encoder.encode(
+          `data: ${JSON.stringify({
+            choices: [
+              {
+                index: 0,
+                delta: { x_stream_error: { message, code: String(status) } },
+                finish_reason: 'error',
+              },
+            ],
+          })}\n\n`,
+        ),
+      );
+      controller.close();
+    },
+  });
+}
+
 /**
  * Erroring a controller discards whatever is still queued, so the delta has to
  * be pulled and delivered before the failure is raised, or the test proves
@@ -217,6 +239,31 @@ describe('runToolLoop, a gateway that refuses a pinned model before it says anyt
     expect(output).not.toContain('x_stream_error');
   });
 
+  it('rotates a provider-reported overload before any answer and records the failed route', async () => {
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(providerErrorStream(503, 'Upstream at capacity'))
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const processed = pinnedOnGateway();
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
+    expect(output).toContain('Answered on the direct route.');
+    expect(output).not.toContain('x_stream_error');
+    expect(mockRecordRouteOutcome).toHaveBeenCalledWith(
+      `${GATEWAY_PROVIDER}/${PINNED_MODEL}`,
+      expect.objectContaining({ class: 'server_error' }),
+      expect.any(Number),
+    );
+    expect(mockRecordRouteOutcome).not.toHaveBeenCalledWith(
+      `${GATEWAY_PROVIDER}/${PINNED_MODEL}`,
+      expect.objectContaining({ class: 'success' }),
+      expect.any(Number),
+    );
+  });
+
   it('records the outcome against the route that actually served', async () => {
     mockBuildToolLoopStream
       .mockRejectedValueOnce(gatewayRejection())
@@ -292,6 +339,76 @@ describe('runToolLoop, a gateway that refuses a pinned model before it says anyt
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     expect(output).toContain('Half of an answer the user can already read.');
     expect(streamErrorFrom(output).message).not.toBe('');
+  });
+
+  it('keeps a partial answer when a provider reports an error frame after text', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          const encoder = new TextEncoder();
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'Partial answer.' } }] })}\n\n`,
+            ),
+          );
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({
+                choices: [
+                  {
+                    index: 0,
+                    delta: { x_stream_error: { message: 'Upstream at capacity', code: '503' } },
+                    finish_reason: 'error',
+                  },
+                ],
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      }),
+    );
+
+    const processed = pinnedOnGateway();
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(output).toContain('Partial answer.');
+    expect(streamErrorFrom(output).message).not.toContain('Upstream at capacity');
+    expect(output).toContain('"reason":"error"');
+  });
+
+  it('does not rotate a provider-reported safety refusal even when its message resembles overload', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            new TextEncoder().encode(
+              `data: ${JSON.stringify({
+                choices: [
+                  {
+                    index: 0,
+                    delta: { x_stream_error: { message: 'Upstream overloaded', code: '503' } },
+                    finish_reason: 'content_filter',
+                  },
+                ],
+              })}\n\n`,
+            ),
+          );
+          controller.close();
+        },
+      }),
+    );
+
+    const processed = pinnedOnGateway();
+    const output = await drain(
+      runToolLoop(processed, { approvalMode: 'auto', failover: realFailoverPlan(processed) }),
+    );
+
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(output).toContain('content_blocked');
   });
 });
 
@@ -409,6 +526,20 @@ describe('the durable transport rotates the same pinned model the inline one doe
     expect(mockBuildToolLoopStream.mock.calls[1]?.[0]).toBe(VENDOR_PROVIDER);
     expect(output).toContain('Answered on the direct route.');
     expect(output).not.toContain('x_stream_error');
+    expect(ledger.statusOf(providerAttemptOperationKey(1, 0))).toBe('failed');
+    expect(ledger.statusOf(providerAttemptOperationKey(1, 1))).toBe('completed');
+  });
+
+  it('fails the durable receipt before rotating an error reported inside the stream', async () => {
+    const ledger = receiptLedger();
+    mockBuildToolLoopStream
+      .mockResolvedValueOnce(providerErrorStream(503, 'Upstream at capacity'))
+      .mockResolvedValueOnce(textStream('Answered on the direct route.'));
+
+    const processed = pinnedOnGateway();
+    const output = await drain(runToolLoop(processed, durableOptions(processed)));
+
+    expect(output).toContain('Answered on the direct route.');
     expect(ledger.statusOf(providerAttemptOperationKey(1, 0))).toBe('failed');
     expect(ledger.statusOf(providerAttemptOperationKey(1, 1))).toBe('completed');
   });

@@ -9,6 +9,7 @@ import { resolveOrgMembership, type OrgRole } from '@/lib/services/org-sharing-s
 import { WorkspaceConsoleShell } from '@/features/workspace-console/components/WorkspaceConsoleShell';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,12 +59,14 @@ export default async function WorkspaceConsoleLayout({ children }: { children: R
   }
 
   return (
-    <WorkspaceConsoleShell
-      role={role}
-      organizationId={organizationId}
-      membershipUnavailable={membershipUnavailable}
-    >
-      {children}
-    </WorkspaceConsoleShell>
+    <ProductRuntimeProviders>
+      <WorkspaceConsoleShell
+        role={role}
+        organizationId={organizationId}
+        membershipUnavailable={membershipUnavailable}
+      >
+        {children}
+      </WorkspaceConsoleShell>
+    </ProductRuntimeProviders>
   );
 }

@@ -159,16 +159,16 @@ describe('the Settings effort picker matches what the server will honour', () =>
   });
 });
 
-// Higher effort raises ANTHROPIC_THINKING_BUDGET from 4096 to 65536, so it
-// genuinely draws down the usage allowance faster. Nothing said so.
-describe('the effort picker states its usage cost', () => {
-  it('warns that higher effort spends the allowance faster', () => {
+describe('the effort picker describes usage only where the plan has an allowance', () => {
+  it('does not invent a usage allowance for the Free plan', () => {
     render(<GeneralSection />);
 
-    expect(screen.getByText(/draws on your usage allowance faster/i)).toBeVisible();
+    expect(screen.queryByText(/draws on your usage allowance faster/i)).toBeNull();
+    expect(screen.getByText(/up to 16x longer/i)).toBeVisible();
   });
 
-  it('describes a ceiling, not a spend', () => {
+  it('warns a paid plan that higher effort draws its allowance faster', () => {
+    mocks.tier = 'basic';
     render(<GeneralSection />);
 
     // The budget is a maximum; an easy question uses far less. "Costs 16x more"

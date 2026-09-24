@@ -48,7 +48,7 @@ function EntryRow({ entry, onSelect, onDelete }: EntryRowProps) {
         <p className="text-xs font-medium text-foreground truncate leading-snug">
           {entryPreview(entry)}
         </p>
-        <p className="text-[12px] text-muted-foreground mt-0.5">{formatDate(entry.createdAt)}</p>
+        <p className="text-caption text-muted-foreground mt-0.5">{formatDate(entry.createdAt)}</p>
       </div>
       <button
         type="button"
@@ -57,7 +57,7 @@ function EntryRow({ entry, onSelect, onDelete }: EntryRowProps) {
           e.stopPropagation();
           onDelete(entry.id);
         }}
-        className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 rounded p-0.5 text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
+        className="opacity-0 group-hover:opacity-100 shrink-0 mt-0.5 rounded-compact p-0.5 text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -181,7 +181,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
           ref={panelRef}
           role="listbox"
           aria-label="Saved prompts"
-          className="absolute bottom-full right-0 mb-2 z-50 w-80 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
+          className="absolute bottom-full right-0 mb-2 z-[var(--z-dropdown)] w-80 rounded-xl border border-border bg-popover shadow-xl overflow-hidden"
         >
           {/* Save current prompt */}
           <div className="px-2 pt-2 pb-1.5 border-b border-border">
@@ -206,7 +206,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
             <div className="py-6 px-4 text-center">
               <Bookmark className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">No saved prompts yet.</p>
-              <p className="text-[12px] text-muted-foreground mt-1">
+              <p className="text-caption text-muted-foreground mt-1">
                 Type a prompt and click &quot;Save current prompt&quot; above.
               </p>
             </div>
@@ -228,7 +228,7 @@ export function PromptStash({ currentText, onLoad, disabled = false, onToast }: 
                 <button
                   type="button"
                   onClick={confirmClearAll}
-                  className="flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[12px] text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
+                  className="flex w-full items-center justify-center gap-1 rounded-md px-2 py-1.5 text-caption text-muted-foreground hover:text-danger hover:bg-destructive/10 transition-colors"
                 >
                   <Trash2 className="h-3 w-3" />
                   Clear all

@@ -1,5 +1,4 @@
 import { BrowserWindow, screen } from 'electron';
-import { focusPageComposer } from './composerFocus';
 import { CLOUD_APP_ORIGIN, REMOTE_SESSION_PARTITION, RENDERER_MODE } from './config';
 import { centeredUpperPosition } from './garnishCore';
 import { applyRemoteWindowPolicy } from './windowPolicy';
@@ -52,7 +51,7 @@ function createPanel(): BrowserWindow {
     panel = null;
   });
 
-  void win.loadURL(`${CLOUD_APP_ORIGIN}/chat`);
+  void win.loadURL(`${CLOUD_APP_ORIGIN}/quick-ask`);
   return win;
 }
 
@@ -93,7 +92,6 @@ export function surfaceQuickAsk(mainWindow: BrowserWindow | null): BrowserWindow
   win.show();
   win.focus();
   win.webContents.focus();
-  void focusPageComposer(win);
   return win;
 }
 

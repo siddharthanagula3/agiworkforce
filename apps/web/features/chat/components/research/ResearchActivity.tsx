@@ -101,10 +101,10 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       >
         {step.description}
         {step.status === 'dropped' && step.note ? (
-          <span className="block text-[12px] text-muted-foreground">{step.note}</span>
+          <span className="block text-caption text-muted-foreground">{step.note}</span>
         ) : null}
       </span>
-      <span className="shrink-0 text-[12px] uppercase tracking-wide text-muted-foreground">
+      <span className="shrink-0 text-caption uppercase tracking-wide text-muted-foreground">
         {STEP_STATUS_LABELS[step.status]}
       </span>
     </li>
@@ -314,7 +314,7 @@ export function ResearchActivity({
               disabled={isRetrying}
               className={cn(
                 'inline-flex items-center gap-1 min-h-6 rounded-md border border-border/40 px-2 py-0.5',
-                'text-[12px] font-medium text-foreground transition-colors',
+                'text-caption font-medium text-foreground transition-colors',
                 'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
               )}
               data-testid="research-retry"
@@ -364,7 +364,7 @@ export function ResearchActivity({
                     <button
                       type="button"
                       onClick={() => setSources((current) => removeResearchSource(current, key))}
-                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground"
+                      className="inline-flex min-h-6 min-w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground"
                       data-testid={`research-plan-remove-${key}`}
                       aria-label={`Remove ${source.label} from this research run`}
                     >
@@ -434,7 +434,7 @@ export function ResearchActivity({
               disabled={!canAdd}
               className={cn(
                 'inline-flex min-h-7 items-center gap-1 rounded-md border border-border/40 px-2 py-0.5',
-                'text-[12px] font-medium text-foreground transition-colors',
+                'text-caption font-medium text-foreground transition-colors',
                 'hover:border-border hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60',
               )}
               data-testid="research-plan-add-source"

@@ -37,6 +37,7 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
@@ -116,7 +117,8 @@ export async function extractAutoMemoryFactsWithModel(
     );
     return patternFacts(input.message);
   }
-  const wireMode = resolveWireMode(route.provider);
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
+  const wireMode = resolveWireMode(dispatchProvider);
 
   let reservation;
   try {
@@ -184,11 +186,11 @@ export async function extractAutoMemoryFactsWithModel(
           temperature: 0,
           stream: false,
         });
-        const adapter = buildServerProviderAdapter(route.provider);
+        const adapter = buildServerProviderAdapter(dispatchProvider);
         const response = await drainToLlmResponse(
           adapter.stream(chatRequest, signal),
           route.modelKey,
-          (chunk) => toGenericUpstreamError(route.provider, chunk),
+          (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
           wireMode,
         );
 
