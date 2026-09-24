@@ -35,6 +35,9 @@ export const METRIC_NAME = {
   queueAge: 'agi.queue.age',
   queueStuck: 'agi.queue.stuck',
   routingDecisions: 'agi.routing.decisions',
+  semanticDecisions: 'agi.decision.count',
+  semanticDecisionDuration: 'agi.decision.duration',
+  semanticDecisionDisagreements: 'agi.decision.disagreements',
   configurationState: 'agi.configuration.state',
   completions: 'agi.completions',
   falseSuccess: 'agi.completion.false_success',
@@ -99,6 +102,9 @@ interface Instruments {
   readonly queueAge: Gauge;
   readonly queueStuck: Gauge;
   readonly routingDecisions: Counter;
+  readonly semanticDecisions: Counter;
+  readonly semanticDecisionDuration: Histogram;
+  readonly semanticDecisionDisagreements: Counter;
   readonly configurationState: Gauge;
   readonly completions: Counter;
   readonly falseSuccess: Counter;
@@ -136,6 +142,11 @@ function instruments(): Instruments {
     queueAge: meter.createGauge(METRIC_NAME.queueAge, { unit: MILLISECONDS }),
     queueStuck: meter.createGauge(METRIC_NAME.queueStuck),
     routingDecisions: meter.createCounter(METRIC_NAME.routingDecisions),
+    semanticDecisions: meter.createCounter(METRIC_NAME.semanticDecisions),
+    semanticDecisionDuration: meter.createHistogram(METRIC_NAME.semanticDecisionDuration, {
+      unit: MILLISECONDS,
+    }),
+    semanticDecisionDisagreements: meter.createCounter(METRIC_NAME.semanticDecisionDisagreements),
     configurationState: meter.createGauge(METRIC_NAME.configurationState),
     completions: meter.createCounter(METRIC_NAME.completions),
     falseSuccess: meter.createCounter(METRIC_NAME.falseSuccess),
@@ -515,6 +526,51 @@ export function recordRoutingDecision(input: {
     }),
   );
   if (input.status === 'unavailable') recordFailure('model', 'no_route');
+}
+
+export type SemanticDecisionOutcome = 'accepted' | 'shadow' | 'fallback' | 'skipped';
+
+// Kind, mode and outcome are labels; the state, the answers, the raw
+// confidence and the decision id are not. A fallback is counted, not absent.
+export function recordSemanticDecision(input: {
+  kind: string;
+  mode: string;
+  outcome: SemanticDecisionOutcome;
+  reason?: string | undefined;
+  confidenceBin?: string | undefined;
+  latencyMs?: number | undefined;
+}): void {
+  const attributes = clean({
+    [OBSERVABILITY_ATTRIBUTE.decisionKind]: input.kind,
+    [OBSERVABILITY_ATTRIBUTE.decisionMode]: input.mode,
+    [OBSERVABILITY_ATTRIBUTE.decisionOutcome]: input.outcome,
+    [OBSERVABILITY_ATTRIBUTE.decisionFallbackReason]: input.reason,
+    [OBSERVABILITY_ATTRIBUTE.decisionConfidenceBin]: input.confidenceBin,
+  });
+  const recorded = instruments();
+  recorded.semanticDecisions.add(1, attributes);
+  if (input.latencyMs !== undefined) {
+    recorded.semanticDecisionDuration.record(nonNegative(input.latencyMs), attributes);
+  }
+}
+
+// The point of a shadow: an evaluator that never disagrees buys nothing, and
+// one that always does is not ready to be believed.
+export function recordSemanticDecisionComparison(input: {
+  kind: string;
+  question: string;
+  agree: boolean;
+  confidenceBin: string;
+}): void {
+  if (input.agree) return;
+  instruments().semanticDecisionDisagreements.add(
+    1,
+    clean({
+      [OBSERVABILITY_ATTRIBUTE.decisionKind]: input.kind,
+      [OBSERVABILITY_ATTRIBUTE.decisionQuestion]: input.question,
+      [OBSERVABILITY_ATTRIBUTE.decisionConfidenceBin]: input.confidenceBin,
+    }),
+  );
 }
 
 export type BrowserTaskStatus =

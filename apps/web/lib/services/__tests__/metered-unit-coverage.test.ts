@@ -50,6 +50,7 @@ const MEASUREMENT: Readonly<
   connector: { usage: { requests: 8 }, units: 8 },
   artifact: { usage: { gibibyteMonths: 0.75 }, units: 0.75 },
   visual: { usage: { visualMinutes: 22 }, units: 22 },
+  decision: { usage: { totalTokens: 320 }, units: 320 },
 };
 
 /** Token counts loud enough that a meter reading them instead would be obvious. */

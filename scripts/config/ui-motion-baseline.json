@@ -3,31 +3,31 @@
   "note": "Keyframes declared in globals.css that nothing plays. They are dead rather than dangerous, and globals.css is frozen for this lane, so they are recorded here and the guard refuses an eighth.",
   "entries": [
     {
-      "key": "apps/web/app/globals.css:409:marquee",
+      "key": "apps/web/app/globals.css:297:marquee",
       "reason": "superseded by agi-provider-marquee in the marketing stylesheet; nothing references this one"
     },
     {
-      "key": "apps/web/app/globals.css:506:pulse-thinking",
+      "key": "apps/web/app/globals.css:394:pulse-thinking",
       "reason": "the thinking indicator moved to a Tailwind animate-pulse utility; the keyframe was left behind"
     },
     {
-      "key": "apps/web/app/globals.css:518:pulse-status",
+      "key": "apps/web/app/globals.css:406:pulse-status",
       "reason": "the status dot moved to a Tailwind animate-pulse utility; the keyframe was left behind"
     },
     {
-      "key": "apps/web/app/globals.css:530:pulse-soft",
+      "key": "apps/web/app/globals.css:418:pulse-soft",
       "reason": "no class or inline style plays it anywhere in apps/web or packages/ui"
     },
     {
-      "key": "apps/web/app/globals.css:540:cursor-blink",
+      "key": "apps/web/app/globals.css:428:cursor-blink",
       "reason": "the streaming caret is drawn by the transcript-caret keyframe instead"
     },
     {
-      "key": "apps/web/app/globals.css:569:opsz-morph",
+      "key": "apps/web/app/globals.css:457:opsz-morph",
       "reason": "references --opsz-from and --opsz-to, which nothing sets; the effect could never have run"
     },
     {
-      "key": "apps/web/app/globals.css:578:slide-in-right",
+      "key": "apps/web/app/globals.css:466:slide-in-right",
       "reason": "panels animate through the Radix data-state utilities instead"
     }
   ]

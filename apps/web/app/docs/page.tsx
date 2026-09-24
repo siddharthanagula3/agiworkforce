@@ -45,7 +45,7 @@ const SURFACE_GUIDES = [
   {
     href: '/chrome-extension',
     title: 'Chrome',
-    body: 'The planned browser side panel, page context, approvals, and eligible Managed Cloud chat continuity.',
+    body: 'The planned browser side panel for page context and approvals. Answers come back from AGI Managed Cloud; pairing Desktop is an optional local road for approved handoffs.',
   },
   {
     href: '/cli',

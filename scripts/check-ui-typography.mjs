@@ -21,6 +21,7 @@ import {
 
 export const BASELINE_PATH = 'scripts/config/ui-typography-baseline.json';
 export const GLOBALS_PATH = 'apps/web/app/globals.css';
+export const FOUNDATION_TOKENS_PATH = 'packages/ui/design-tokens/src/foundation.css';
 export const CHAT_TOKENS_PATH = 'packages/ui/design-tokens/src/chat.css';
 export const SETTINGS_STORE_PATH = 'apps/web/shared/stores/web-settings-store.ts';
 
@@ -70,11 +71,16 @@ export function readUnion(source, name) {
  */
 export function readingSystemFailures(repoRoot) {
   const globals = read(repoRoot, GLOBALS_PATH);
+  const foundation = read(repoRoot, FOUNDATION_TOKENS_PATH);
   const chat = read(repoRoot, CHAT_TOKENS_PATH);
   const store = read(repoRoot, SETTINGS_STORE_PATH);
   const failures = [];
 
-  if (!/max-width:\s*\d+(?:\.\d+)?ch/.test(globals)) {
+  const literalMeasure = /max-width:\s*\d+(?:\.\d+)?ch/.test(globals);
+  const tokenMeasure =
+    /max-width:\s*var\(--measure-prose\)/.test(globals) &&
+    /--measure-prose:\s*\d+(?:\.\d+)?ch/.test(foundation);
+  if (!literalMeasure && !tokenMeasure) {
     failures.push(
       `${GLOBALS_PATH}: the reading column declares no measure in ch, so a long answer runs the full window width`,
     );

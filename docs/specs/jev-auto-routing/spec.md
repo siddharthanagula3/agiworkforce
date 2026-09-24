@@ -71,8 +71,9 @@ ceiling. The initial design changes neither subscriptions nor customer billing.
 
 Excluded from this slice: skill selection, retrieval reranking, enabling tools,
 judging task completion, autonomous action authorization, local evaluator
-inference, and replacing the Rust router. The developer helper
-`scripts/jev-decide.mjs` remains a separate coding-agent workflow.
+inference, replacing the Rust router, and coding-agent workflow decisions. The
+former mandatory coding-agent Jev helper was removed on 2026-09-23; this product
+proposal does not restore it.
 
 ## Verified starting point
 

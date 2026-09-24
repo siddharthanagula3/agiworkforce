@@ -55,6 +55,12 @@ export const OBSERVABILITY_ATTRIBUTE = {
   workPlanMeasure: 'agi.work.plan.measure',
   clientFailureClass: 'agi.client.failure.class',
   clientFailureDetail: 'agi.client.failure.detail',
+  decisionKind: 'agi.decision.kind',
+  decisionMode: 'agi.decision.mode',
+  decisionOutcome: 'agi.decision.outcome',
+  decisionQuestion: 'agi.decision.question',
+  decisionFallbackReason: 'agi.decision.fallback_reason',
+  decisionConfidenceBin: 'agi.decision.confidence_bin',
 } as const;
 
 export type ObservabilityAttribute =

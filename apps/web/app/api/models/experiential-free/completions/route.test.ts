@@ -59,7 +59,8 @@ vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) 
   ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
   enforceManagedContentSafetyPreference: vi.fn(async () => ({ allowed: true })),
 }));
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildProviderEgressGateResponse: mocks.egress,
 }));
@@ -68,7 +69,10 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   evaluateActiveWorkspacePolicy: mocks.privacy,
   resolveZeroDataRetentionPolicy: mocks.retention,
 }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', () => ({
+vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate')
+  >()),
   applySecretHandlingToTexts: vi.fn(async (_user: string, texts: string[]) => ({
     action: 'clean',
     texts,

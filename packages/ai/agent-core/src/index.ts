@@ -61,7 +61,13 @@ export type {
   TokenAccounting,
 } from './context';
 
-export { createDecisionEvaluator, isDecisionResult } from './semantic-decisions';
+export {
+  createDecisionEvaluator,
+  decisionSampledIn,
+  isDecisionResult,
+  DECISION_FALLBACK_REASONS,
+  DECISION_STATUSES,
+} from './semantic-decisions';
 export type {
   DecisionQuestion,
   DecisionAnswer,

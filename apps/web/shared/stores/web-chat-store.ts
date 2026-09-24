@@ -671,6 +671,8 @@ interface ChatState {
   draftsByConversation: Record<string, string>;
   /** Live draft for the ACTIVE conversation (derived from the map above). */
   draftContent: string;
+  /** Failed sends waiting behind newer live text in the same conversation. */
+  deferredUnsentDraftsByConversation: Record<string, string>;
 
   /**
    * Messages the send guard refused, keyed by their send fingerprint rather
@@ -884,6 +886,8 @@ interface ChatState {
   getDraftContent: (conversationId?: string | null) => string;
   /** Discard one conversation's parked draft. */
   clearDraftContent: (conversationId?: string | null) => void;
+  /** Discard a failed send after its composer has restored it. */
+  clearDeferredUnsentDraft: (conversationId?: string | null) => void;
 
   // Actions - Blocked sends
   /**
@@ -956,6 +960,7 @@ const initialState = {
   selectedModelTier: 'balanced' as ModelTier,
   draftsByConversation: {} as Record<string, string>,
   draftContent: '',
+  deferredUnsentDraftsByConversation: {} as Record<string, string>,
   parkedSendsByFingerprint: {} as Record<string, string>,
   parkedSendCreatedAtByFingerprint: {} as Record<string, number>,
   composerTogglesByConversation: {} as Record<string, ComposerToggleState>,
@@ -1813,6 +1818,21 @@ export const useChatStore = create<ChatState>()(
             'chat/clearDraftContent',
           ),
 
+        clearDeferredUnsentDraft: (conversationId) =>
+          set(
+            (state) => {
+              const targetId =
+                conversationId === undefined ? state.activeConversationId : conversationId;
+              const key = conversationKey(targetId);
+              if (!(key in state.deferredUnsentDraftsByConversation)) return state;
+              const { [key]: _cleared, ...deferredUnsentDraftsByConversation } =
+                state.deferredUnsentDraftsByConversation;
+              return { deferredUnsentDraftsByConversation };
+            },
+            undefined,
+            'chat/clearDeferredUnsentDraft',
+          ),
+
         // Blocked sends
         parkBlockedSend: (fingerprint, content) =>
           set(
@@ -2236,6 +2256,13 @@ export const selectDraftContent =
       conversationKey(conversationId === undefined ? state.activeConversationId : conversationId)
     ] ?? '';
 
+export const selectDeferredUnsentDraft =
+  (conversationId?: string | null) =>
+  (state: ChatState): string =>
+    state.deferredUnsentDraftsByConversation[
+      conversationKey(conversationId === undefined ? state.activeConversationId : conversationId)
+    ] ?? '';
+
 /**
  * The whole parked-send map, returned by reference so a subscriber does not
  * re-render on every unrelated store write.
@@ -2257,12 +2284,26 @@ export function firstParkedSend(
 }
 
 /**
- * Hand text back to the user after a send that never reached a model. An
- * existing draft wins: whatever they have typed since is newer than this.
+ * Hand text back to the user after a send that never reached a model. A newer
+ * live draft stays in place while the failed send waits for that composer to
+ * become empty.
  */
 export function parkUnsentDraft(conversationId: string | null, content: string): void {
   if (!content.trim()) return;
   const state = useChatStore.getState();
-  if (state.draftsByConversation[conversationKey(conversationId)]) return;
+  const key = conversationKey(conversationId);
+  if (state.draftsByConversation[key]) {
+    useChatStore.setState(
+      (current) => ({
+        deferredUnsentDraftsByConversation: {
+          ...current.deferredUnsentDraftsByConversation,
+          [key]: content,
+        },
+      }),
+      undefined,
+      'chat/parkDeferredUnsentDraft',
+    );
+    return;
+  }
   state.setDraftContent(content, conversationId);
 }

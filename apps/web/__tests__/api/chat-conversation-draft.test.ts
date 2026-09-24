@@ -49,7 +49,7 @@ describe('PUT /api/chat/conversations/[id] · composer draft', () => {
     const response = await PUT(putRequest({ draft: 'half a thought' }), context);
 
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ saved: true });
+    expect(await response.json()).toEqual({ saved: true, draftUpdatedAt: null });
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toMatch(/set draft =/);

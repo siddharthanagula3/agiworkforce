@@ -109,6 +109,11 @@ const BUDGETS = [
     why: 'BYOK base-URL presets shown to the user for prefill; not an outbound endpoint.',
   },
   {
+    file: 'apps/web/app/terms/page.tsx',
+    max: 1,
+    why: 'Public provider terms hyperlink in the legal policy; never used for outbound inference.',
+  },
+  {
     file: 'apps/desktop/src-tauri/src/core/llm/providers/direct_api_provider.rs',
     max: 14,
     why: "Desktop's default_base_url() provider table plus RETIRED_PROVIDER_HOSTS, the canonical desktop declaration.",

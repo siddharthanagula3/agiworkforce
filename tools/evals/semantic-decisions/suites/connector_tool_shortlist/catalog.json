@@ -1,0 +1,955 @@
+{
+  "note": "Tool names are the real ones recorded in apps/web/lib/connectors/directory/sources/first-party.json for these eight connectors. Connector labels and one-line connector descriptions are from that file and from apps/web/lib/connectors/directory/sources/vendor-directory.json. Per-tool descriptions and input schemas are written here in the register of the three declared GitHub tools in apps/web/lib/user-connector-tools.ts:265, because production discovers a remote server tool description at connect time and the repository does not store one.",
+  "connectorCount": 8,
+  "toolCount": 40,
+  "totalSchemaBytes": 15190,
+  "tools": [
+    {
+      "qualifiedName": "mcp__gmail__search_threads",
+      "serverId": "gmail",
+      "toolName": "search_threads",
+      "origin": "connector",
+      "serverLabel": "Gmail",
+      "description": "Search Gmail threads with a Gmail query string and return matching thread summaries.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Gmail search query, for example from:someone is:unread."
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of threads to return."
+          }
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__gmail__get_thread",
+      "serverId": "gmail",
+      "toolName": "get_thread",
+      "origin": "connector",
+      "serverLabel": "Gmail",
+      "description": "Fetch one Gmail thread with all of its messages and headers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "description": "Gmail thread identifier."
+          }
+        },
+        "required": ["thread_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__gmail__get_message",
+      "serverId": "gmail",
+      "toolName": "get_message",
+      "origin": "connector",
+      "serverLabel": "Gmail",
+      "description": "Fetch one Gmail message with its headers, body and attachment metadata.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "description": "Gmail message identifier."
+          }
+        },
+        "required": ["message_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__gmail__create_draft",
+      "serverId": "gmail",
+      "toolName": "create_draft",
+      "origin": "connector",
+      "serverLabel": "Gmail",
+      "description": "Create a Gmail draft reply or new message without sending it.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Recipient email address."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line."
+          },
+          "body": {
+            "type": "string",
+            "description": "Plain text body of the draft."
+          },
+          "thread_id": {
+            "type": "string",
+            "description": "Thread to reply within, when replying."
+          }
+        },
+        "required": ["to", "body"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__gmail__label_thread",
+      "serverId": "gmail",
+      "toolName": "label_thread",
+      "origin": "connector",
+      "serverLabel": "Gmail",
+      "description": "Apply a Gmail label to every message in a thread.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "thread_id": {
+            "type": "string",
+            "description": "Gmail thread identifier."
+          },
+          "label_id": {
+            "type": "string",
+            "description": "Label to apply."
+          }
+        },
+        "required": ["thread_id", "label_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-calendar__list_events",
+      "serverId": "google-calendar",
+      "toolName": "list_events",
+      "origin": "connector",
+      "serverLabel": "Google Calendar",
+      "description": "List events on a calendar within a time window.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "calendar_id": {
+            "type": "string",
+            "description": "Calendar identifier, primary for the default calendar."
+          },
+          "time_min": {
+            "type": "string",
+            "description": "Start of the window as an RFC3339 timestamp."
+          },
+          "time_max": {
+            "type": "string",
+            "description": "End of the window as an RFC3339 timestamp."
+          }
+        },
+        "required": ["time_min", "time_max"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-calendar__search_events",
+      "serverId": "google-calendar",
+      "toolName": "search_events",
+      "origin": "connector",
+      "serverLabel": "Google Calendar",
+      "description": "Search events on a calendar by free text across title, description and attendees.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Text to match."
+          },
+          "calendar_id": {
+            "type": "string",
+            "description": "Calendar identifier."
+          }
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-calendar__create_event",
+      "serverId": "google-calendar",
+      "toolName": "create_event",
+      "origin": "connector",
+      "serverLabel": "Google Calendar",
+      "description": "Create a calendar event with a title, a time window and optional attendees.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "string",
+            "description": "Event title."
+          },
+          "start": {
+            "type": "string",
+            "description": "Start as an RFC3339 timestamp."
+          },
+          "end": {
+            "type": "string",
+            "description": "End as an RFC3339 timestamp."
+          },
+          "attendees": {
+            "type": "array",
+            "description": "Attendee email addresses."
+          }
+        },
+        "required": ["summary", "start", "end"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-calendar__suggest_time",
+      "serverId": "google-calendar",
+      "toolName": "suggest_time",
+      "origin": "connector",
+      "serverLabel": "Google Calendar",
+      "description": "Suggest meeting times that are free for every named attendee.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "attendees": {
+            "type": "array",
+            "description": "Attendee email addresses."
+          },
+          "duration_minutes": {
+            "type": "integer",
+            "description": "Meeting length in minutes."
+          },
+          "window_days": {
+            "type": "integer",
+            "description": "How many days ahead to search."
+          }
+        },
+        "required": ["attendees", "duration_minutes"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-calendar__respond_to_event",
+      "serverId": "google-calendar",
+      "toolName": "respond_to_event",
+      "origin": "connector",
+      "serverLabel": "Google Calendar",
+      "description": "Accept, decline or tentatively accept an invitation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "description": "Event identifier."
+          },
+          "response": {
+            "type": "string",
+            "description": "One of accepted, declined, tentative."
+          }
+        },
+        "required": ["event_id", "response"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-drive__search_files",
+      "serverId": "google-drive",
+      "toolName": "search_files",
+      "origin": "connector",
+      "serverLabel": "Google Drive",
+      "description": "Search Google Drive by file name, content and type, returning file metadata.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "description": "Search text or Drive query."
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "Restrict to one MIME type."
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of files to return."
+          }
+        },
+        "required": ["q"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-drive__list_recent_files",
+      "serverId": "google-drive",
+      "toolName": "list_recent_files",
+      "origin": "connector",
+      "serverLabel": "Google Drive",
+      "description": "List the files most recently opened or edited by the connected account.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of files to return."
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-drive__read_file_content",
+      "serverId": "google-drive",
+      "toolName": "read_file_content",
+      "origin": "connector",
+      "serverLabel": "Google Drive",
+      "description": "Read the text content of a Drive document, spreadsheet or plain file.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Drive file identifier."
+          },
+          "sheet_range": {
+            "type": "string",
+            "description": "Range to read, for spreadsheets only."
+          }
+        },
+        "required": ["file_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-drive__get_file_permissions",
+      "serverId": "google-drive",
+      "toolName": "get_file_permissions",
+      "origin": "connector",
+      "serverLabel": "Google Drive",
+      "description": "List who has access to a Drive file and at what level.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Drive file identifier."
+          }
+        },
+        "required": ["file_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__google-drive__create_file",
+      "serverId": "google-drive",
+      "toolName": "create_file",
+      "origin": "connector",
+      "serverLabel": "Google Drive",
+      "description": "Create a new Drive file from supplied text content in a named folder.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "File name."
+          },
+          "content": {
+            "type": "string",
+            "description": "File content."
+          },
+          "folder_id": {
+            "type": "string",
+            "description": "Destination folder identifier."
+          },
+          "mime_type": {
+            "type": "string",
+            "description": "MIME type to create."
+          }
+        },
+        "required": ["name", "content"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__notion__notion-search",
+      "serverId": "notion",
+      "toolName": "notion-search",
+      "origin": "connector",
+      "serverLabel": "Notion",
+      "description": "Search the connected Notion workspace for pages and databases matching a query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Text to search for."
+          },
+          "filter": {
+            "type": "string",
+            "description": "Restrict to page or database."
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__notion__notion-fetch",
+      "serverId": "notion",
+      "toolName": "notion-fetch",
+      "origin": "connector",
+      "serverLabel": "Notion",
+      "description": "Fetch one Notion page or database by id or URL, including its blocks.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Page or database id, or a Notion URL."
+          }
+        },
+        "required": ["id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__notion__notion-create-pages",
+      "serverId": "notion",
+      "toolName": "notion-create-pages",
+      "origin": "connector",
+      "serverLabel": "Notion",
+      "description": "Create one or more Notion pages under a parent page or database.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "description": "Parent page or database id."
+          },
+          "pages": {
+            "type": "array",
+            "description": "Pages to create, each with a title and content."
+          }
+        },
+        "required": ["parent", "pages"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__notion__notion-update-page",
+      "serverId": "notion",
+      "toolName": "notion-update-page",
+      "origin": "connector",
+      "serverLabel": "Notion",
+      "description": "Update the properties or content of an existing Notion page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "page_id": {
+            "type": "string",
+            "description": "Page id."
+          },
+          "properties": {
+            "type": "object",
+            "description": "Properties to set."
+          },
+          "content": {
+            "type": "string",
+            "description": "Replacement content."
+          }
+        },
+        "required": ["page_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__notion__notion-create-database",
+      "serverId": "notion",
+      "toolName": "notion-create-database",
+      "origin": "connector",
+      "serverLabel": "Notion",
+      "description": "Create a Notion database with a named schema under a parent page.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "parent": {
+            "type": "string",
+            "description": "Parent page id."
+          },
+          "title": {
+            "type": "string",
+            "description": "Database title."
+          },
+          "schema": {
+            "type": "object",
+            "description": "Column definitions."
+          }
+        },
+        "required": ["parent", "title", "schema"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__asana__search_tasks",
+      "serverId": "asana",
+      "toolName": "search_tasks",
+      "origin": "connector",
+      "serverLabel": "Asana",
+      "description": "Search Asana tasks across the workspace by text, assignee and completion state.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to match in the task name or notes."
+          },
+          "assignee": {
+            "type": "string",
+            "description": "Restrict to one assignee."
+          },
+          "completed": {
+            "type": "boolean",
+            "description": "Restrict by completion state."
+          }
+        },
+        "required": ["text"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__asana__get_task",
+      "serverId": "asana",
+      "toolName": "get_task",
+      "origin": "connector",
+      "serverLabel": "Asana",
+      "description": "Fetch one Asana task with its notes, assignee, due date and subtasks.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "Task identifier."
+          }
+        },
+        "required": ["task_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__asana__create_tasks",
+      "serverId": "asana",
+      "toolName": "create_tasks",
+      "origin": "connector",
+      "serverLabel": "Asana",
+      "description": "Create one or more Asana tasks in a project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "Project to create the tasks in."
+          },
+          "tasks": {
+            "type": "array",
+            "description": "Tasks to create, each with a name and optional notes and due date."
+          }
+        },
+        "required": ["project_id", "tasks"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__asana__update_tasks",
+      "serverId": "asana",
+      "toolName": "update_tasks",
+      "origin": "connector",
+      "serverLabel": "Asana",
+      "description": "Update the assignee, due date or completion state of existing Asana tasks.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task_ids": {
+            "type": "array",
+            "description": "Task identifiers."
+          },
+          "assignee": {
+            "type": "string",
+            "description": "New assignee."
+          },
+          "due_on": {
+            "type": "string",
+            "description": "New due date as YYYY-MM-DD."
+          },
+          "completed": {
+            "type": "boolean",
+            "description": "Mark complete or incomplete."
+          }
+        },
+        "required": ["task_ids"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__asana__add_comment",
+      "serverId": "asana",
+      "toolName": "add_comment",
+      "origin": "connector",
+      "serverLabel": "Asana",
+      "description": "Add a comment to an Asana task.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "Task identifier."
+          },
+          "text": {
+            "type": "string",
+            "description": "Comment body."
+          }
+        },
+        "required": ["task_id", "text"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__jira__searchJiraIssuesUsingJql",
+      "serverId": "jira",
+      "toolName": "searchJiraIssuesUsingJql",
+      "origin": "connector",
+      "serverLabel": "Jira",
+      "description": "Search Jira issues with a JQL query and return the matching issues.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "jql": {
+            "type": "string",
+            "description": "JQL query string."
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum number of issues to return."
+          }
+        },
+        "required": ["jql"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__jira__getJiraIssue",
+      "serverId": "jira",
+      "toolName": "getJiraIssue",
+      "origin": "connector",
+      "serverLabel": "Jira",
+      "description": "Fetch one Jira issue with its fields, status, assignee and comments.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "issue_key": {
+            "type": "string",
+            "description": "Issue key, for example ENG-412."
+          }
+        },
+        "required": ["issue_key"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__jira__createJiraIssue",
+      "serverId": "jira",
+      "toolName": "createJiraIssue",
+      "origin": "connector",
+      "serverLabel": "Jira",
+      "description": "Create a Jira issue in a project with a summary, description and issue type.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_key": {
+            "type": "string",
+            "description": "Project key."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Issue summary."
+          },
+          "description": {
+            "type": "string",
+            "description": "Issue description."
+          },
+          "issue_type": {
+            "type": "string",
+            "description": "Issue type name."
+          }
+        },
+        "required": ["project_key", "summary", "issue_type"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__stripe_api_search",
+      "serverId": "stripe",
+      "toolName": "stripe_api_search",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Search Stripe objects such as customers, charges, invoices and subscriptions by query.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object type to search."
+          },
+          "query": {
+            "type": "string",
+            "description": "Stripe search query string."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of results."
+          }
+        },
+        "required": ["object", "query"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__stripe_api_read",
+      "serverId": "stripe",
+      "toolName": "stripe_api_read",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Read one Stripe object by id, returning its full representation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object type."
+          },
+          "id": {
+            "type": "string",
+            "description": "Object id."
+          }
+        },
+        "required": ["object", "id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__stripe_api_write",
+      "serverId": "stripe",
+      "toolName": "stripe_api_write",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Create or update a Stripe object such as a customer, price or subscription.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Object type."
+          },
+          "id": {
+            "type": "string",
+            "description": "Object id, omitted when creating."
+          },
+          "params": {
+            "type": "object",
+            "description": "Fields to set."
+          }
+        },
+        "required": ["object", "params"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__get_balance_summary",
+      "serverId": "stripe",
+      "toolName": "get_balance_summary",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Return the current Stripe balance, available and pending, by currency.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__stripe_analytics",
+      "serverId": "stripe",
+      "toolName": "stripe_analytics",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Return revenue, churn and payment metrics over a period for the connected account.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "description": "Metric name."
+          },
+          "period": {
+            "type": "string",
+            "description": "Period such as last_30_days."
+          }
+        },
+        "required": ["metric", "period"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__stripe__search_stripe_documentation",
+      "serverId": "stripe",
+      "toolName": "search_stripe_documentation",
+      "origin": "connector",
+      "serverLabel": "Stripe",
+      "description": "Search the Stripe documentation and return the passages that answer a question.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "What to look up."
+          }
+        },
+        "required": ["question"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__list_deployments",
+      "serverId": "vercel",
+      "toolName": "list_deployments",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "List deployments for a project, newest first, with their state and commit.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "Project identifier."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of deployments."
+          },
+          "state": {
+            "type": "string",
+            "description": "Restrict to one deployment state."
+          }
+        },
+        "required": ["project_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__get_deployment",
+      "serverId": "vercel",
+      "toolName": "get_deployment",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "Fetch one deployment with its state, target, creator and timings.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "type": "string",
+            "description": "Deployment identifier."
+          }
+        },
+        "required": ["deployment_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__get_deployment_build_logs",
+      "serverId": "vercel",
+      "toolName": "get_deployment_build_logs",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "Return the build log for one deployment.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "deployment_id": {
+            "type": "string",
+            "description": "Deployment identifier."
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of log lines."
+          }
+        },
+        "required": ["deployment_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__get_runtime_errors",
+      "serverId": "vercel",
+      "toolName": "get_runtime_errors",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "Return runtime errors recorded for a project over a time window.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "Project identifier."
+          },
+          "since": {
+            "type": "string",
+            "description": "Start of the window as an RFC3339 timestamp."
+          }
+        },
+        "required": ["project_id"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__get_web_analytics",
+      "serverId": "vercel",
+      "toolName": "get_web_analytics",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "Return page views, visitors and top paths for a project over a period.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "project_id": {
+            "type": "string",
+            "description": "Project identifier."
+          },
+          "period": {
+            "type": "string",
+            "description": "Period such as last_7_days."
+          }
+        },
+        "required": ["project_id", "period"],
+        "additionalProperties": false
+      }
+    },
+    {
+      "qualifiedName": "mcp__vercel__search_vercel_documentation",
+      "serverId": "vercel",
+      "toolName": "search_vercel_documentation",
+      "origin": "connector",
+      "serverLabel": "Vercel",
+      "description": "Search the Vercel documentation and return the passages that answer a question.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "question": {
+            "type": "string",
+            "description": "What to look up."
+          }
+        },
+        "required": ["question"],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

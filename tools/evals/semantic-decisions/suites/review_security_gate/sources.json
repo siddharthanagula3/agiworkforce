@@ -1,0 +1,647 @@
+{
+  "note": "(sha, path) pairs selected from this repository history by path category. The category is provenance, never a label.",
+  "sources": [
+    {
+      "id": "rs-001",
+      "sha": "b326a0f922465fa195b7b9ece0ca819a224c15ac",
+      "path": "apps/web/lib/server/__tests__/step-up-auth.test.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-002",
+      "sha": "133bffa6d49fc7479d8ce3a56c8917959e40aa97",
+      "path": "apps/web/lib/authorization/denial.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-003",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/app/api/auth/clear-token/route.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-004",
+      "sha": "133bffa6d49fc7479d8ce3a56c8917959e40aa97",
+      "path": "apps/web/lib/authorization/index.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-005",
+      "sha": "133bffa6d49fc7479d8ce3a56c8917959e40aa97",
+      "path": "apps/web/lib/authorization/subject.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-006",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/lib/api-key-scopes.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-007",
+      "sha": "133bffa6d49fc7479d8ce3a56c8917959e40aa97",
+      "path": "apps/web/lib/authorization/escalation.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-008",
+      "sha": "d1beb288d62d6532adcea0eeac1c7461d19ffa84",
+      "path": "apps/web/lib/auth/account-status.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-009",
+      "sha": "b326a0f922465fa195b7b9ece0ca819a224c15ac",
+      "path": "apps/web/app/api/auth/step-up/route.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-010",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/app/api/auth/logout/route.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-011",
+      "sha": "d1beb288d62d6532adcea0eeac1c7461d19ffa84",
+      "path": "apps/web/lib/auth/session-policy.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-012",
+      "sha": "82d7047b072bb4f3df4fdda57e260eb113e8360a",
+      "path": "apps/web/lib/auth-guards.ts",
+      "bucket": "auth"
+    },
+    {
+      "id": "rs-013",
+      "sha": "d3726d90153195b2bd6ecdd1cf3601d895a85c3a",
+      "path": "apps/web/lib/custom-connector-crypto.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-014",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/lib/connectors/pkce.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-015",
+      "sha": "d240b4657558b79a987da6a9d811a0399822ef09",
+      "path": "packages/platform/utils/src/crypto.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-016",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "packages/platform/utils/src/crypto.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-017",
+      "sha": "58a4722430ce643b15ef3fe8b8ba4a47e05e06fa",
+      "path": "apps/web/lib/security/entropy.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-018",
+      "sha": "d32c55f3357a30abf0eec088410e0d3d1b2b2328",
+      "path": "apps/web/lib/custom-connector-crypto.ts",
+      "bucket": "crypto"
+    },
+    {
+      "id": "rs-019",
+      "sha": "1bde97cd860aa63896997933248110d7a4d6fc9f",
+      "path": "apps/web/lib/connectors/mcp-endpoints.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-020",
+      "sha": "193dda354052e279b201b4bfccb39b00409f1bd1",
+      "path": "apps/web/lib/egress-policy.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-021",
+      "sha": "7b44a03630852aa89d793a784cbf6ee2535fb17e",
+      "path": "apps/web/lib/mcp-egress-policy.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-022",
+      "sha": "b9746febc9c30500ace5d291db5df8a858f3c730",
+      "path": "apps/web/lib/connectors/mcp-endpoints.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-023",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/lib/connectors/mcp-endpoints.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-024",
+      "sha": "2f4cebaf48e407a36f8c31f4caf96916a4735ea4",
+      "path": "apps/web/lib/connectors/mcp-endpoints.ts",
+      "bucket": "ssrf"
+    },
+    {
+      "id": "rs-026",
+      "sha": "cbe4303dc3e8f267bb265f8c9431076149110e71",
+      "path": "apps/web/lib/security/bot-challenge-routes.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-027",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "apps/web/lib/security/outbound-content-inspection.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-028",
+      "sha": "92e5cd3706afe1b754289f49806fb68f11dfe029",
+      "path": "apps/web/lib/security/upload-scan.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-029",
+      "sha": "58a4722430ce643b15ef3fe8b8ba4a47e05e06fa",
+      "path": "apps/web/lib/security/secrets-audit.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-030",
+      "sha": "9dbc30816fbcdb73e02b6657f7ff3fc86c53d251",
+      "path": "apps/web/lib/security/secret-patterns.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-031",
+      "sha": "7f1d0b53d0d36b3b384efaa0abdfb49a4bd0b599",
+      "path": "apps/web/lib/security/__tests__/bot-protection.test.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-032",
+      "sha": "88c7aec519d7e25e79bd511fa7cd2756a8e3635b",
+      "path": "apps/web/lib/security/__tests__/botid-next-config.test.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-033",
+      "sha": "e3edcc86c4275735e1e18ca3a875866f1018b1d5",
+      "path": "apps/web/lib/security/__tests__/secrets-audit.value-scan.test.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-034",
+      "sha": "7f1d0b53d0d36b3b384efaa0abdfb49a4bd0b599",
+      "path": "apps/web/lib/security/bot-protection.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-035",
+      "sha": "58a4722430ce643b15ef3fe8b8ba4a47e05e06fa",
+      "path": "apps/web/lib/security/mcp-tool-inspection.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-036",
+      "sha": "d3726d90153195b2bd6ecdd1cf3601d895a85c3a",
+      "path": "apps/web/lib/connectors/oauth-scope-allowlist.ts",
+      "bucket": "permission"
+    },
+    {
+      "id": "rs-037",
+      "sha": "9c926bb194199c9063d3cbbd19ef123ef1b336b7",
+      "path": "apps/web/db/neon/0259_extension_versions_and_lifecycle.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-038",
+      "sha": "f2d37b75199827d315b25bf1b6cf57b2b4f6e7c2",
+      "path": "apps/web/db/neon/down/0196_work_execution_states_and_pause.down.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-039",
+      "sha": "e96de1d8a11d2ff296e613e22e69937a01a439ba",
+      "path": "apps/web/db/neon/0250_organization_mcp_servers.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-040",
+      "sha": "7612dd6eb48a1fbdc50a6002bf9169533d1b20c8",
+      "path": "apps/web/db/neon/0226_durable_image_generation_jobs.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-041",
+      "sha": "1ea99a208f64bc24bcdbc1b92f4febf55e589142",
+      "path": "apps/web/db/neon/0266_automation_audit_events.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-042",
+      "sha": "82bc3d3ec4f95649312b73beec0e23fd7cff7450",
+      "path": "apps/web/db/neon/0180_provider_cost_events_customer_and_cogs_split.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-043",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "apps/web/db/neon/down/0272_active_membership_authorization.down.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-044",
+      "sha": "87618b9c5990bfcec7df92bfaccca0282358f6d2",
+      "path": "apps/web/db/neon/0247_study_sessions.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-045",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "apps/web/db/neon/down/0267_admin_read_policies_ask_for_permissions.down.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-046",
+      "sha": "f2d37b75199827d315b25bf1b6cf57b2b4f6e7c2",
+      "path": "apps/web/db/neon/0195_provider_cost_events_workload_project_session.sql",
+      "bucket": "sql"
+    },
+    {
+      "id": "rs-047",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "apps/web/lib/server/claimed-user-scope-db.ts",
+      "bucket": "tenancy"
+    },
+    {
+      "id": "rs-048",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "apps/web/lib/services/active-workspace-service.ts",
+      "bucket": "tenancy"
+    },
+    {
+      "id": "rs-049",
+      "sha": "310ca5667fa1c34972981f3c5381c09cc26c1990",
+      "path": "apps/web/lib/server/claimed-user-scope-db.ts",
+      "bucket": "tenancy"
+    },
+    {
+      "id": "rs-050",
+      "sha": "878ad2ba0ff6537f04b979d39d17adfd008df407",
+      "path": "apps/web/lib/services/active-workspace-service.ts",
+      "bucket": "tenancy"
+    },
+    {
+      "id": "rs-051",
+      "sha": "c66eaecf04e3e3763207d7ff6c07f9236c387721",
+      "path": "apps/web/lib/services/active-workspace-service.ts",
+      "bucket": "tenancy"
+    },
+    {
+      "id": "rs-052",
+      "sha": "193dda354052e279b201b4bfccb39b00409f1bd1",
+      "path": "packages/ai/agent-core/src/memory.ts",
+      "bucket": "deserialization"
+    },
+    {
+      "id": "rs-055",
+      "sha": "94fdef78df3107c35e9bfe574c9040d66b8c0c15",
+      "path": "packages/ai/agent-core/src/memory.ts",
+      "bucket": "deserialization"
+    },
+    {
+      "id": "rs-056",
+      "sha": "37ae497674ef82f2265a6ea51d8b9e00dfecb682",
+      "path": "packages/ai/agent-core/src/memory.ts",
+      "bucket": "deserialization"
+    },
+    {
+      "id": "rs-057",
+      "sha": "2b00a1d3e04b28639b0ad1da14260d565fa9c8ff",
+      "path": "packages/ai/agent-core/src/memory.ts",
+      "bucket": "deserialization"
+    },
+    {
+      "id": "rs-058",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "docs/decisions/README.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-059",
+      "sha": "6f41474bd0b84d54f9e6f7b84d9ff09136492730",
+      "path": "docs/runbooks/incident-response.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-060",
+      "sha": "b438818ae2c3568c4adc4b2da75e61eaf7320fd7",
+      "path": "docs/compliance/enterprise-procurement-standard.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-061",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "docs/development/agent-workflow.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-062",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "docs/specs/website-launch/DEMO_CHAT_FINDINGS.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-063",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "docs/architecture/trust-boundaries.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-064",
+      "sha": "b62a59b128d14bf45e250f27e14565b82d8a4ff7",
+      "path": "docs/work/enterprise-completion-plan-2026-09-16.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-065",
+      "sha": "94fada312a53fea70519418547494c52d687c7d0",
+      "path": "docs/specs/website-launch/PRODUCTION_REMAINING.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-066",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "docs/product/requirements.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-067",
+      "sha": "1cec706bc5e56143ff86b7cc9174f47083b439d2",
+      "path": "docs/agent-context/known-flaws.md",
+      "bucket": "docs"
+    },
+    {
+      "id": "rs-068",
+      "sha": "d0fbba12176516e3e6fd0de3f979b0b6d3362a28",
+      "path": "apps/desktop/archive/features/chat/__tests__/__snapshots__/ToolTimelineFileOps.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-069",
+      "sha": "5955e743d92dac1bff3f811f567c61b1abc732c5",
+      "path": "apps/mobile/__tests__/__snapshots__/code-block-header.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-070",
+      "sha": "b438818ae2c3568c4adc4b2da75e61eaf7320fd7",
+      "path": "apps/mobile/src/features/settings/permissions/__tests__/__snapshots__/PermissionsScreen.snapshot.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-071",
+      "sha": "e41ede348904f99a677858e2d793a27331815592",
+      "path": "apps/mobile/__tests__/__snapshots__/chat-tab-greeting.snapshot.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-072",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "apps/mobile/__tests__/__snapshots__/chat-list-artifact-fullscreen.snapshot.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-073",
+      "sha": "fc62f20d4f17aadd8169b95c3d499dcbcfab45a4",
+      "path": "apps/mobile/src/features/projects/__tests__/__snapshots__/ProjectDetailScreen.snapshot.test.tsx.snap",
+      "bucket": "snapshots"
+    },
+    {
+      "id": "rs-074",
+      "sha": "24c11782d7b89d9b9ba04576e88c24ce018d635c",
+      "path": "apps/web/features/support/components/SupportWidget.module.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-075",
+      "sha": "44a133a4a6b3bcd7ffba7473a52df6eef3b3d6e9",
+      "path": "apps/web/features/marketing/components/system/system.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-076",
+      "sha": "c03074d03f75ab74b6e658d9228ff86b0969e83b",
+      "path": "packages/ui/design-tokens/src/foundation.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-077",
+      "sha": "8cc0ab77f0be961bd0217ffc057318184197c7d5",
+      "path": "apps/web/features/marketing/components/landing/landing.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-078",
+      "sha": "9031a173cedb84f04ddd73556218c9c22280c0bd",
+      "path": "apps/desktop/src/features/auth/auth.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-079",
+      "sha": "7ff0f3117cef19e7ecd3b882a42400158cba8f62",
+      "path": "apps/web/features/notebook/NotebookPanel.module.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-080",
+      "sha": "97c0c1064b35e0b555c67da47438b7e0f58f39a8",
+      "path": "apps/web/features/chat/chat-interface.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-081",
+      "sha": "015ae3c0354a47ae378df68d186426bf8f256343",
+      "path": "apps/web/features/marketing/components/pages/business/data-table.css",
+      "bucket": "css"
+    },
+    {
+      "id": "rs-082",
+      "sha": "1a3f2b56886b75727d005e1ea081fad6260714d0",
+      "path": "packages/ai/routing/src/__tests__/pinned-model-fallback-plan.test.ts",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-083",
+      "sha": "0d45f9f49e03f9e750b3694fe0002c1c91c28106",
+      "path": "packages/ui/unified-chat/src/components/tasks/__tests__/TasksPage.deepLink.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-084",
+      "sha": "0f143a7288f7455afb48f150db4e70349a952d3e",
+      "path": "packages/ui/unified-chat/src/components/markdown/__tests__/StreamAnnouncer.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-085",
+      "sha": "83c0871c16a426dfa658fad98f216a279343fa39",
+      "path": "packages/ui/ui/src/directory/__tests__/directory-manage-view.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-086",
+      "sha": "0ba851acec597cfee9ccbc84894d90a09b87b5e0",
+      "path": "packages/ui/ui/src/primitives/__tests__/SegmentedControl.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-087",
+      "sha": "0d421cd99e5082d358a6fcfff4f0e076e9658cb0",
+      "path": "packages/ai/routing/src/__tests__/release-ledger.test.ts",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-088",
+      "sha": "ff8ccc4b0edee0f655c9262e2581f491afe7da74",
+      "path": "packages/ui/ui/src/sidebar/__tests__/Sidebar.searchShortcut.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-089",
+      "sha": "810335a708b049b43a9224b2fc88a241bff893ed",
+      "path": "packages/ui/ui/src/sidebar/__tests__/Sidebar.loadMore.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-090",
+      "sha": "0ba851acec597cfee9ccbc84894d90a09b87b5e0",
+      "path": "packages/ui/ui/src/primitives/__tests__/SearchInput.test.tsx",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-091",
+      "sha": "135087a3f41b38c19327fbc09ce5cd3ff0781f43",
+      "path": "packages/ui/unified-chat/src/lib/__tests__/greeting.test.ts",
+      "bucket": "tests"
+    },
+    {
+      "id": "rs-092",
+      "sha": "54d4c039e9a4583d1dc64e2fac734e0b49bcb659",
+      "path": "apps/web/shared/components/ui/button.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-093",
+      "sha": "c9eea17b430df214db145e250399aed45905f298",
+      "path": "apps/web/shared/components/layout/SidebarBrandRow.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-094",
+      "sha": "7ef0d007d740193376dabf994b18c92561b43015",
+      "path": "apps/web/shared/components/layout/AccountMenuItems.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-095",
+      "sha": "f829e76c829c61530ba3c4979e649bbb99915d0c",
+      "path": "apps/web/shared/components/ui/input.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-096",
+      "sha": "25a2224f93acb313ab6aade7d397db0fc32797a3",
+      "path": "apps/web/shared/components/CommandPalette/CommandPalette.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-097",
+      "sha": "f829e76c829c61530ba3c4979e649bbb99915d0c",
+      "path": "apps/web/shared/components/cloud-bridge/InviteCodeModal.test.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-098",
+      "sha": "16b344dff1e619063e310d0129ad8bcac206f0bd",
+      "path": "apps/web/shared/components/seo/SEOHead.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-099",
+      "sha": "6a49ffc35d269731204e64f23c14d17007f7d330",
+      "path": "apps/web/shared/components/CommandPalette/CommandPalette.legibility.test.tsx",
+      "bucket": "copy"
+    },
+    {
+      "id": "rs-101",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/ja/auth.json",
+      "bucket": "locale-ja"
+    },
+    {
+      "id": "rs-102",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/ko/auth.json",
+      "bucket": "locale-ko"
+    },
+    {
+      "id": "rs-103",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/zh/auth.json",
+      "bucket": "locale-zh"
+    },
+    {
+      "id": "rs-104",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/ar/auth.json",
+      "bucket": "locale-ar"
+    },
+    {
+      "id": "rs-105",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/hi/auth.json",
+      "bucket": "locale-hi"
+    },
+    {
+      "id": "rs-106",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/de/auth.json",
+      "bucket": "locale-de"
+    },
+    {
+      "id": "rs-107",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/es/auth.json",
+      "bucket": "locale-es"
+    },
+    {
+      "id": "rs-108",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/fr/auth.json",
+      "bucket": "locale-fr"
+    },
+    {
+      "id": "rs-109",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/pt/auth.json",
+      "bucket": "locale-pt"
+    },
+    {
+      "id": "rs-110",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/ru/auth.json",
+      "bucket": "locale-ru"
+    },
+    {
+      "id": "rs-111",
+      "sha": "c4097d64ad20ba65c29e7d337ae5da6814352cde",
+      "path": "packages/ui/i18n/locales/it/auth.json",
+      "bucket": "locale-it"
+    }
+  ]
+}

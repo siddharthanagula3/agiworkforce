@@ -42,6 +42,22 @@
     {
       "key": "AGI_OTEL_EXPORTER_ENDPOINT",
       "reason": "read by packages/platform/observability, which owns the exporter"
+    },
+    {
+      "key": "TYPESAFE_API_KEY",
+      "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
+    },
+    {
+      "key": "TYPESAFE_BASE_URL",
+      "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
+    },
+    {
+      "key": "TYPESAFE_MODEL",
+      "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
+    },
+    {
+      "key": "TYPESAFE_INPUT_MICROUSD_PER_MTOK",
+      "reason": "read dynamically from the injected environment map by apps/web/lib/services/semantic-decisions/config.ts"
     }
   ]
 }

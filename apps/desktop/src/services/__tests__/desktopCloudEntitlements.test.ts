@@ -76,7 +76,7 @@ describe('Desktop Cloud entitlement projection', () => {
     expect(canUseDesktopCloudImageGeneration('basic')).toBe(false);
     expect(canUseDesktopCloudImageGeneration('pro')).toBe(true);
 
-    expect(canUseDesktopCloudCodeExecution('free', true)).toBe(false);
+    expect(canUseDesktopCloudCodeExecution('free', true)).toBe(true);
     expect(canUseDesktopCloudCodeExecution('basic', true)).toBe(true);
     expect(canUseDesktopCloudCodeExecution('pro', false)).toBe(false);
   });

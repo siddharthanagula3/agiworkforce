@@ -18,7 +18,7 @@ Last updated: 2026-09-22
   commit and has additional committed and uncommitted changes. Its Web UI fixes
   and the local price-removal commit must not be described as deployed.
 - The public model catalogue reports the Free plan and one live, admitted
-  OpenRouter Free Auto route. An authenticated localhost Free account displays
+  configured OpenRouter free route. An authenticated localhost Free account displays
   that route and a saved successful response; one older saved Free turn also
   displays a model-empty failure. Selecting Basic from that account opens the
   waitlist/access-code dialog, not checkout. The deployed checkout source

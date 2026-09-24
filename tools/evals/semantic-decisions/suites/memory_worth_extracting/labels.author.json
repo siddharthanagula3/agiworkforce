@@ -1,0 +1,249 @@
+{
+  "suite": "memory_worth_extracting",
+  "labeller": "single author, one pass, not independently reviewed",
+  "question": "Does this message state a durable fact about the speaker, one still true next week?",
+  "labels": {
+    "mwe-001": { "label": "yes", "rationale": "A move is a location change that holds next week." },
+    "mwe-002": { "label": "yes", "rationale": "Role, employer and shift pattern, all durable." },
+    "mwe-003": {
+      "label": "yes",
+      "rationale": "A preferred form of address is a standing instruction about the speaker."
+    },
+    "mwe-004": {
+      "label": "yes",
+      "rationale": "A decision already made about the speaker's stack."
+    },
+    "mwe-005": { "label": "yes", "rationale": "Property purchase and location, durable." },
+    "mwe-006": {
+      "label": "yes",
+      "rationale": "A permanent physical constraint plus the accommodation it implies."
+    },
+    "mwe-007": {
+      "label": "yes",
+      "rationale": "A dietary constraint stated absolutely; a negation carrying a durable fact."
+    },
+    "mwe-008": { "label": "yes", "rationale": "An ongoing project and the tool chosen for it." },
+    "mwe-009": {
+      "label": "yes",
+      "rationale": "A platform decision already made, reinforced by the negation."
+    },
+    "mwe-010": { "label": "yes", "rationale": "An explicit standing billing instruction." },
+    "mwe-011": { "label": "yes", "rationale": "Team, industry and city." },
+    "mwe-012": {
+      "label": "yes",
+      "rationale": "A unit preference that applies to every future answer."
+    },
+    "mwe-013": {
+      "label": "yes",
+      "rationale": "Management responsibility after a completed reorg."
+    },
+    "mwe-014": { "label": "yes", "rationale": "Name and profession." },
+    "mwe-015": {
+      "label": "yes",
+      "rationale": "A household rule constraining when the speaker works."
+    },
+    "mwe-016": {
+      "label": "yes",
+      "rationale": "A durable constraint with an explicit consequence for answers."
+    },
+    "mwe-017": { "label": "no", "rationale": "A definitional question with no self-reference." },
+    "mwe-018": { "label": "no", "rationale": "An acknowledgement." },
+    "mwe-019": { "label": "no", "rationale": "A one-off editing instruction about this artefact." },
+    "mwe-020": {
+      "label": "no",
+      "rationale": "A task request; the formatting ask is scoped to this document."
+    },
+    "mwe-021": {
+      "label": "no",
+      "rationale": "An acknowledgement, and below the production minimum length."
+    },
+    "mwe-022": { "label": "no", "rationale": "A product capability question." },
+    "mwe-023": {
+      "label": "no",
+      "rationale": "A one-off rewrite instruction, not a stated preference about the speaker."
+    },
+    "mwe-024": { "label": "no", "rationale": "A historical fact question." },
+    "mwe-025": { "label": "no", "rationale": "A generation request." },
+    "mwe-026": {
+      "label": "no",
+      "rationale": "A translation request; the formality ask is scoped to this text."
+    },
+    "mwe-027": { "label": "no", "rationale": "A language semantics question." },
+    "mwe-028": { "label": "no", "rationale": "A sports trivia question." },
+    "mwe-029": { "label": "no", "rationale": "An incident that will be over next week." },
+    "mwe-030": {
+      "label": "no",
+      "rationale": "An opinion about one slide, not a standing aesthetic preference."
+    },
+    "mwe-031": { "label": "no", "rationale": "Reading position in one document." },
+    "mwe-032": { "label": "no", "rationale": "An intention for the next ten minutes." },
+    "mwe-033": {
+      "label": "no",
+      "rationale": "A transient event, despite the first person and the word again."
+    },
+    "mwe-034": { "label": "no", "rationale": "Progress through one set of instructions." },
+    "mwe-035": { "label": "no", "rationale": "A realisation about the current artefact." },
+    "mwe-036": {
+      "label": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "rationale": "A single deadline is transient, but read as a working constraint it shapes later turns; the message does not say which."
+    },
+    "mwe-037": {
+      "label": "ambiguous",
+      "alternatives": ["no", "yes"],
+      "rationale": "The word here scopes it to this answer, yet it is the exact phrasing people use for a standing formatting preference."
+    },
+    "mwe-038": { "label": "no", "rationale": "An afternoon's activity, not a decision or a role." },
+    "mwe-039": {
+      "label": "yes",
+      "rationale": "Employment history changed; the negation is the fact."
+    },
+    "mwe-040": { "label": "yes", "rationale": "A permanent capability fact about the speaker." },
+    "mwe-041": {
+      "label": "yes",
+      "rationale": "A role denial plus a standing routing instruction."
+    },
+    "mwe-042": { "label": "yes", "rationale": "Expertise level and years of experience." },
+    "mwe-043": {
+      "label": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "rationale": "The sentence does state a durable fact, and it also forbids retaining it; a gate that answers only the literal question hands a suppression decision to a layer that may not make one."
+    },
+    "mwe-044": {
+      "label": "yes",
+      "rationale": "A contact channel decision that holds going forward."
+    },
+    "mwe-045": {
+      "label": "no",
+      "rationale": "A statement about the message, not a fact about the speaker."
+    },
+    "mwe-046": { "label": "no", "rationale": "An instruction about memory, carrying no fact." },
+    "mwe-047": {
+      "label": "yes",
+      "rationale": "The 8am to 2am gap fixes the speaker's time zone, indirectly but unambiguously."
+    },
+    "mwe-048": {
+      "label": "yes",
+      "rationale": "Being phoned by a school about a policy implies a child at that school."
+    },
+    "mwe-049": {
+      "label": "yes",
+      "rationale": "Commute length and the standup conflict both persist."
+    },
+    "mwe-050": {
+      "label": "yes",
+      "rationale": "The speaker is a founder whose remit excludes sales."
+    },
+    "mwe-051": {
+      "label": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "rationale": "It fixes employment and a compliance obligation, but only through a statement about a department, and the obligation expires at Q3."
+    },
+    "mwe-052": {
+      "label": "yes",
+      "rationale": "Owning a dog, and the wake time that follows from it."
+    },
+    "mwe-053": { "label": "yes", "rationale": "Having a landlord means the speaker rents." },
+    "mwe-054": {
+      "label": "no",
+      "rationale": "A durable fact about a third party, which the extraction prompt excludes."
+    },
+    "mwe-055": {
+      "label": "no",
+      "rationale": "The first person inside the quotation is the manager, not the speaker."
+    },
+    "mwe-056": {
+      "label": "no",
+      "rationale": "A counterfactual, explicitly denied in the same sentence."
+    },
+    "mwe-057": {
+      "label": "no",
+      "rationale": "Role-play framing; Paris belongs to the character the speaker asked for."
+    },
+    "mwe-058": {
+      "label": "no",
+      "rationale": "Fiction written to order; the narrator is not the speaker."
+    },
+    "mwe-059": {
+      "label": "no",
+      "rationale": "An injection followed by a trivia question; neither states a fact about the speaker."
+    },
+    "mwe-060": {
+      "label": "no",
+      "rationale": "The injected claim is not evidence; the real message is a recipe request."
+    },
+    "mwe-061": {
+      "label": "no",
+      "rationale": "Remember that is the production pattern's trigger, but the clause is about the classifier."
+    },
+    "mwe-062": {
+      "label": "yes",
+      "rationale": "Occupation and employer type are stated; the injection is an attempt to flip a correct answer."
+    },
+    "mwe-063": {
+      "label": "yes",
+      "rationale": "A move and an intention to stay; the comment is an attempt to suppress a correct answer."
+    },
+    "mwe-064": { "label": "no", "rationale": "Pure injection, no content." },
+    "mwe-065": {
+      "label": "yes",
+      "rationale": "Team and city arrive in one clause after 500 characters of incident detail."
+    },
+    "mwe-066": {
+      "label": "no",
+      "rationale": "A long debugging report with no statement about the speaker."
+    },
+    "mwe-067": {
+      "label": "yes",
+      "rationale": "Household size, two dietary constraints and a broken oven are all constraints that persist."
+    },
+    "mwe-068": {
+      "label": "no",
+      "rationale": "Every fact belongs to a named colleague; the speaker only took the notes."
+    },
+    "mwe-069": {
+      "label": "yes",
+      "rationale": "Vegetarian and will not fly on Sundays are standing constraints, not trip details."
+    },
+    "mwe-070": {
+      "label": "no",
+      "rationale": "The first person belongs to the quoted handbook; the speaker is asking what it means."
+    },
+    "mwe-071": { "label": "yes", "rationale": "Spanish: a move and a working arrangement." },
+    "mwe-072": { "label": "no", "rationale": "Spanish: a summarisation request." },
+    "mwe-073": { "label": "yes", "rationale": "German: medical speciality and employer." },
+    "mwe-074": { "label": "no", "rationale": "German: a time zone question." },
+    "mwe-075": {
+      "label": "yes",
+      "rationale": "French: an abstention stated as a standing request."
+    },
+    "mwe-076": { "label": "no", "rationale": "French: a proofreading request." },
+    "mwe-077": { "label": "yes", "rationale": "Japanese: city of residence and office pattern." },
+    "mwe-078": { "label": "no", "rationale": "Japanese: a translation request." },
+    "mwe-079": {
+      "label": "yes",
+      "rationale": "Chinese: an allergy plus the instruction that follows from it."
+    },
+    "mwe-080": { "label": "yes", "rationale": "Portuguese: a job change and the new role." },
+    "mwe-081": {
+      "label": "yes",
+      "rationale": "Hindi: a dietary constraint stated as a standing request."
+    },
+    "mwe-082": { "label": "no", "rationale": "Arabic: a summarisation request." },
+    "mwe-083": {
+      "label": "yes",
+      "rationale": "Korean: name plus a standing instruction on how to address the speaker."
+    },
+    "mwe-084": { "label": "no", "rationale": "Spanish: waiting for a bus, transient." },
+    "mwe-085": {
+      "label": "yes",
+      "rationale": "Age is durable; the day of the week is a distractor that needs no arithmetic."
+    },
+    "mwe-086": { "label": "no", "rationale": "Today's calendar, gone next week." },
+    "mwe-087": {
+      "label": "yes",
+      "rationale": "A dietary identity, stated in the shortest possible form."
+    },
+    "mwe-088": { "label": "yes", "rationale": "A preferred name." }
+  }
+}

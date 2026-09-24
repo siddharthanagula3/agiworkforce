@@ -5,8 +5,8 @@ Owner: Website launch preparation
 Last updated: 2026-09-21
 
 Canonical existing proposal: [Jev Auto routing](../jev-auto-routing/spec.md).
-It is proposed architecture, not implemented product behavior. The developer helper
-scripts/jev-decide.mjs is callable and separate from conversation generation.
+It is proposed architecture, not implemented product behavior. The former mandatory
+coding-agent Jev helper was removed on 2026-09-23 and remains separate from this proposal.
 This task retains explicit Luna selection and does not authorize a production routing change.
 
 Current evidence: helper returned typed choices from synthetic task metadata using jev-1.13.0,
@@ -25,8 +25,7 @@ do not qualify a full-desktop integration or change the website-first sequence.
 Candidate work must compare existing behavior, deterministic improvement and advisory Jev,
 with held-out minimized cases. No private history sent. Permissions, billing and execution remain
 in deterministic code. Availability failures must preserve the existing authorized product path.
-A mandatory developer decision failure pauses its affected choice under AGENTS.md; this is distinct
-from optional product recommendations. No new product integration selected yet.
+No coding-agent workflow depends on Jev. No new product integration selected yet.
 
 ## Official documentation checked on 2026-09-19
 

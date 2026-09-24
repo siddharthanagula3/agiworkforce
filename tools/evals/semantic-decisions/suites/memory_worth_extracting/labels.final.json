@@ -1,0 +1,364 @@
+{
+  "suite": "memory_worth_extracting",
+  "rule": "two blind labellers must agree",
+  "labels": {
+    "mwe-001": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-002": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-003": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-004": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-005": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-006": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-007": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-008": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-009": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-010": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-011": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-012": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-013": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-014": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-015": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-016": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-017": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-018": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-019": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-020": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-021": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-022": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-023": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-024": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-025": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-026": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-027": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-028": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-029": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-030": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-031": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-032": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-033": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-034": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-035": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-036": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "mwe-037": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "mwe-038": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-039": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-040": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-041": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-042": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-043": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "mwe-044": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-045": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-046": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-047": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-048": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-049": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-050": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-051": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "mwe-052": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-053": {
+      "label": null,
+      "scored": false,
+      "why": "contested",
+      "votes": ["yes", "no"]
+    },
+    "mwe-054": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-055": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-056": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-057": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-058": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-059": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-060": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-061": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-062": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-063": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-064": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-065": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-066": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-067": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-068": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-069": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-070": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-071": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-072": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-073": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-074": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-075": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-076": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-077": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-078": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-079": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-080": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-081": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-082": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-083": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-084": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-085": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-086": {
+      "label": "no",
+      "scored": true
+    },
+    "mwe-087": {
+      "label": "yes",
+      "scored": true
+    },
+    "mwe-088": {
+      "label": "yes",
+      "scored": true
+    }
+  }
+}

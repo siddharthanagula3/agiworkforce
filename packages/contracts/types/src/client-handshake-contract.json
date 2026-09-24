@@ -10,7 +10,7 @@
     "clientVersion": {
       "value": "x-agi-client-version",
       "symbol": "CLIENT_VERSION_HEADER",
-      "declaredIn": "packages/contracts/cloud-contracts/src/me.ts",
+      "declaredIn": "packages/contracts/cloud-contracts/src/header-names.ts",
       "answers": "which build of that surface the user is running"
     },
     "apiVersion": {

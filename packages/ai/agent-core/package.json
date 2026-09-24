@@ -13,6 +13,9 @@
     "test": "vitest run",
     "lint": "eslint src --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0"
   },
+  "dependencies": {
+    "@agiworkforce/types": "workspace:*"
+  },
   "devDependencies": {
     "vitest": "^4.1.11"
   }

@@ -166,7 +166,7 @@ This is a selected, verified starting inventory of relevant changes, not an exha
 ### 4.4 Google / Gemini
 
 - **September 10:** a Windows app is listed in consumer release notes. Earlier entries cover macOS dictation and Spark. Check actual operating-system support and whether remote continuation is shipped or merely promised in a particular announcement. [G01][G03]
-- **September 2 and 15:** the API changelog lists Gemini 3.8 Flash and Gemini 3.8 Live variants as generally available. The consumer product’s release history is not a complete model/API catalog. [G02]
+- **September 2 and 15:** the API changelog lists new Flash and Live variants as generally available. The consumer product’s release history is not a complete model/API catalog. [G02]
 - **September 17:** the Antigravity preview update changes local tool schemas, including parameter naming and file-edit behavior; the older May preview is scheduled to shut down October 5. A model-ID-only migration is not sufficient for every integration. [G02]
 - **Late August / September API entries:** video generation/editing, transcription, music, and agentic video understanding also change. Investigate actual supported modalities, events, pricing, and lifecycle instead of assuming all media use one text-generation contract. [G02]
 - **Current product guides:** Personal Intelligence makes connected personal context and privacy controls relevant; Canvas and Spark are separate references for creation and delegated work. Record eligibility and scope rather than attributing all functionality to every Gemini account. [G04][G05][G03]
@@ -182,7 +182,7 @@ This is a selected, verified starting inventory of relevant changes, not an exha
 
 ### 4.6 xAI / Grok
 
-- **September 21:** Grok 4.7 is announced. Recheck model access, endpoint names, capabilities, and retirement implications rather than freezing an earlier catalog. Benchmark assertions remain vendor claims. [X03]
+- **September 21:** a new xAI frontier model is announced. Recheck model access, endpoint names, capabilities, and retirement implications rather than freezing an earlier catalog. Benchmark assertions remain vendor claims. [X03]
 - **September 18:** Voice Transcribe 2 is announced. Separate transcription from conversational voice and verify live/batch integration contracts. [X04]
 - **September 16:** Build Memory documents project/global persistent memory, topic files, and review/consolidation commands. The documentation says current conversation instructions take precedence. Study scoped, inspectable durable guidance, not indiscriminate storage of every tool result. [X05]
 - **August 11:** Grok Bot adds a persistent-agent product reference. Use the current documentation to establish task lifetime, permissions, and supported interfaces rather than assuming parity from the name. [X06]
@@ -609,8 +609,8 @@ Research access date for this initial registry: **September 22, 2026**. Follow l
 - **[A10] Anthropic engineering index:** https://www.anthropic.com/engineering
 - **[A11] How we contain Claude, May 25, 2026:** https://www.anthropic.com/engineering/how-we-contain-claude
 - **[P01] Perplexity changelog:** https://www.perplexity.ai/changelog
-- **[P02] Effort Mode, portable/hybrid compute, and marketplace, September 21, 2026:** https://www.perplexity.ai/changelog/effort-mode-gpt-6-astra-and-skills-marketplace
-- **[P03] Computer in email, permissions, and Search as Code, August 24, 2026:** https://www.perplexity.ai/changelog/computer-in-email-gpt-5-6-terra-luna-and-grok-4-6
+- **[P02] Effort Mode, portable/hybrid compute, and marketplace, September 21, 2026:** https://www.perplexity.ai/changelog
+- **[P03] Computer in email, permissions, and Search as Code, August 24, 2026:** https://www.perplexity.ai/changelog
 - **[P04] Projects, Windows Personal Computer, and Model Council, August 4, 2026:** https://www.perplexity.ai/changelog/shared-workspaces-personal-computer-for-windows-and-model-council
 - **[G01] Gemini consumer release notes:** https://gemini.google/release-notes/
 - **[G02] Gemini API changelog:** https://ai.google.dev/gemini-api/docs/changelog
@@ -628,7 +628,7 @@ Research access date for this initial registry: **September 22, 2026**. Follow l
 - **[M09] Historical Manus context-engineering lessons, July 18, 2025:** https://manus.im/blog/Context-Engineering-for-AI-Agents-Lessons-from-Building-Manus
 - **[X01] xAI / Grok announcements:** https://x.ai/news
 - **[X02] Grok API documentation:** https://docs.x.ai/overview
-- **[X03] Grok 4.7, September 21, 2026:** https://x.ai/news/grok-4-7
+- **[X03] xAI frontier-model announcement, September 21, 2026:** https://x.ai/news
 - **[X04] Grok Voice Transcribe 2, September 18, 2026:** https://x.ai/news/grok-voice-transcribe-2
 - **[X05] Grok Build Memory, September 16, 2026:** https://x.ai/news/grok-build-memory
 - **[X06] Grok Bot, August 11, 2026:** https://x.ai/news/introducing-grok-bot

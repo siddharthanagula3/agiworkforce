@@ -71,6 +71,7 @@ export {
 export {
   validateBaseUrl,
   resolveValidatedBaseUrl,
+  ALLOWED_DECISION_TRANSPORT_HOSTS,
   ALLOWED_MANAGED_PROVIDER_HOSTS,
   type ValidateBaseUrlOptions,
   type ValidateBaseUrlResult,

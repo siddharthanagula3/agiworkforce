@@ -1,0 +1,435 @@
+{
+  "labeller": "label-c",
+  "labels": {
+    "rs-001": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-002": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-003": {
+      "label": "ambiguous",
+      "certainty": "high",
+      "note": "Only deletes the comment above the sign-out route's CSRF/audit calls; no code changed, but the route sits on the auth trust boundary so a reviewer would open it anyway and find nothing."
+    },
+    "rs-004": {
+      "label": "no",
+      "certainty": "medium",
+      "note": "Pure re-export barrel for the new authorization module; this chunk carries no logic to review itself."
+    },
+    "rs-005": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-006": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "Deletes a doc comment about legacy empty-scope API-key handling; no code changed, but api-key-scopes.ts is itself part of the authorization boundary."
+    },
+    "rs-007": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-008": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-009": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-010": {
+      "label": "ambiguous",
+      "certainty": "high",
+      "note": "Deletes the comment stating credential verification must precede the CSRF check; the code order itself is unchanged."
+    },
+    "rs-011": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-012": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-013": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-014": {
+      "label": "ambiguous",
+      "certainty": "high",
+      "note": "Deletes the PKCE module doc and the comment on state non-persistence; the functions themselves are unchanged."
+    },
+    "rs-015": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-016": {
+      "label": "no",
+      "certainty": "medium",
+      "note": "Removes three trivial one-line code annotations (base64 padding, RFC4122 bits) in a crypto utils file; no logic changes and the comments document no security invariant."
+    },
+    "rs-017": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-018": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-019": {
+      "label": "yes",
+      "certainty": "medium",
+      "note": "Updates the monday.com MCP endpoint URL/transport in the vetted connector table; domain is unchanged but a reviewer should confirm the new path still targets the real vendor."
+    },
+    "rs-020": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-021": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-022": {
+      "label": "yes",
+      "certainty": "medium",
+      "note": "Same kind of change as rs-019 for the cloudflare MCP endpoint; domain unchanged, path/transport updated."
+    },
+    "rs-023": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "Deletes the file's doc comment, including the stated rationale for an issuer-echo defense against authorization-server substitution; the type/interface code is unchanged."
+    },
+    "rs-024": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-026": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-027": {
+      "label": "yes",
+      "certainty": "medium",
+      "note": "Narrows the OutboundChannel type (drops 'prompt') and updates the scanner comment; changes which channels the secret-pattern scanner can be wired to."
+    },
+    "rs-028": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-030": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-031": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-032": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-033": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-034": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-035": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-036": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-037": {
+      "label": "no",
+      "certainty": "medium",
+      "note": "New plugin-version/lifecycle-audit tables, but no RLS, GRANT or policy statement appears in this chunk."
+    },
+    "rs-038": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-039": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-040": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-041": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-042": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-043": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-044": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-045": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-046": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-047": {
+      "label": "ambiguous",
+      "certainty": "high",
+      "note": "Deletes the comment documenting the drop back to the non-bypass RLS role; the code that does the drop is unchanged."
+    },
+    "rs-048": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-049": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-050": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-051": {
+      "label": "yes",
+      "certainty": "medium",
+      "note": "Adds a read-only accessor for the recorded workspace selection that deliberately bypasses the membership check for an offboarding use case; touches tenancy resolution but is not itself a new check."
+    },
+    "rs-052": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-055": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-056": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-057": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-058": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-059": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-060": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-061": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-062": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-063": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-064": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-065": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-066": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-067": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-069": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-070": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-071": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-072": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-073": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-074": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-075": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-076": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-077": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-078": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-079": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-082": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-083": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-084": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-085": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-086": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-087": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-088": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-089": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-090": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-091": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-093": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-094": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-096": {
+      "label": "yes",
+      "certainty": "medium",
+      "note": "Gates two command-palette entries on workspace-disabled-feature entitlements; the check is client-side only, so a reviewer should confirm equivalent enforcement exists server-side."
+    },
+    "rs-099": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-101": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-102": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-103": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-104": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-105": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-106": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-107": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-108": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-109": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-110": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-111": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-201": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-202": {
+      "label": "yes",
+      "certainty": "high"
+    },
+    "rs-203": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-204": {
+      "label": "no",
+      "certainty": "high"
+    },
+    "rs-205": {
+      "label": "yes",
+      "certainty": "high"
+    }
+  }
+}

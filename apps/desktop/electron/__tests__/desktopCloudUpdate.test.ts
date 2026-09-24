@@ -86,13 +86,16 @@ describe('desktop cloud update contract', () => {
     expect(result.currentVersion).toBe('1.2.0');
   });
 
-  it('tells the feed which build is asking, so a hold on one version reaches it', async () => {
+  it('sends the complete desktop handshake to the update feed', async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => releaseResponse('1.3.0'));
 
     await checkDesktopCloudUpdate('1.2.0', 'arm64', fetchMock as unknown as typeof fetch);
 
     const init = fetchMock.mock.calls[0]?.[1];
-    expect(new Headers(init?.headers).get('x-agi-client-version')).toBe('1.2.0');
+    const headers = new Headers(init?.headers);
+    expect(headers.get('x-agi-surface')).toBe('desktop');
+    expect(headers.get('x-agi-client-version')).toBe('1.2.0');
+    expect(headers.get('x-agi-api-version')).toBeTruthy();
   });
 
   it('reports a held update as unavailable rather than as the app being up to date', async () => {
