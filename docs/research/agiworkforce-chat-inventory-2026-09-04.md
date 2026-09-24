@@ -1,8 +1,11 @@
 # AGI Workforce chat inventory
 
-Status: Current
+Status: Historical repository snapshot
 Owner: Repository maintainers
 Last updated: 2026-09-04
+
+This inventory is pinned to the commit and date named below. It remains useful
+for provenance but does not establish current ownership, behavior, or gaps.
 
 Read-only map of the web chat product as of commit ce1391c49 on 2026-09-04, built for the
 chatgpt.com and claude.ai parity work. It records entry points, components, behaviours,

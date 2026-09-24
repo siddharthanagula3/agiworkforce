@@ -130,7 +130,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
 
         {/* Slide card */}
         <div
-          className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 @[30rem]:p-8 @[40rem]:p-12 shadow-2xl flex flex-col relative z-10 transition-transform duration-500"
+          className="w-full max-w-4xl aspect-[16/9] bg-card/60 backdrop-blur-xl border border-white/10 rounded-2xl p-4 @[30rem]:p-8 @[40rem]:p-12 shadow-2xl flex flex-col relative z-[var(--z-control)] transition-transform duration-moved"
           role="group"
           aria-roledescription="slide"
           aria-label={`Slide ${slideIndex + 1} of ${slides.length}`}
@@ -147,7 +147,7 @@ export function PresentationArtifact({ artifact, className }: PresentationArtifa
         </div>
 
         {/* Navigation controls (visible on hover/focus) */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 focus-within:opacity-100 transition-all duration-300 shadow-xl z-20">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/60 backdrop-blur-md border border-white/10 rounded-full px-4 py-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 focus-within:opacity-100 transition-all duration-moved shadow-xl z-[var(--z-content-sticky)]">
           <button
             type="button"
             onClick={() => goTo(slideIndex - 1)}

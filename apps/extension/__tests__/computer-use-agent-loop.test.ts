@@ -94,6 +94,19 @@ const chromeMock = vi.hoisted(() => {
     agi_site_allowlist: ['https://example.com'],
   };
 
+  const readLocal = (keys: string | string[]): Promise<Record<string, unknown>> => {
+    const result: Record<string, unknown> = {};
+    const keyList = typeof keys === 'string' ? [keys] : keys;
+    for (const k of keyList) {
+      if (k in localStore) result[k] = localStore[k];
+    }
+    return Promise.resolve(result);
+  };
+  const writeLocal = (items: Record<string, unknown>): Promise<void> => {
+    Object.assign(localStore, items);
+    return Promise.resolve();
+  };
+
   const mock = {
     debugger: debuggerMock,
     tabs: {
@@ -106,19 +119,15 @@ const chromeMock = vi.hoisted(() => {
     },
     storage: {
       local: {
-        get: vi.fn((keys: string | string[]) => {
-          const result: Record<string, unknown> = {};
-          const keyList = typeof keys === 'string' ? [keys] : keys;
-          for (const k of keyList) {
-            if (k in localStore) result[k] = localStore[k];
-          }
-          return Promise.resolve(result);
-        }),
-        set: vi.fn((items: Record<string, unknown>) => {
-          Object.assign(localStore, items);
-          return Promise.resolve();
-        }),
+        get: vi.fn(readLocal),
+        set: vi.fn(writeLocal),
       },
+    },
+    // A test that swaps a storage reader in keeps it for the rest of the file,
+    // because the config restores spies rather than reassigned properties.
+    installDefaultStorage(): void {
+      mock.storage.local.get = vi.fn(readLocal);
+      mock.storage.local.set = vi.fn(writeLocal);
     },
   };
 
@@ -725,5 +734,63 @@ describe('COMPUTER_USE_MODEL, sourced from models.json catalog', () => {
   it("resolves to the canonical SLOT_REGISTRY 'computer_use' slot model", () => {
     expect(COMPUTER_USE_MODEL).toBe(getRoutingSlotModel('computer_use'));
     expect(COMPUTER_USE_MODEL.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the trail a run leaves behind', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    fetchMock.mockReset();
+    chromeMock.installDefaultStorage();
+    chromeMock.runtime.lastError = null;
+
+    const defaultImpl = (chromeMock.debugger as Record<string, unknown>)
+      ._defaultSendCommandImpl as Parameters<
+      typeof chromeMock.debugger.sendCommand.mockImplementation
+    >[0];
+    chromeMock.debugger.sendCommand.mockImplementation(defaultImpl);
+    chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
+      cb(),
+    );
+    chromeMock.debugger.detach.mockImplementation((_t: unknown, cb: () => void) => cb());
+    chromeMock.tabs.get.mockImplementation((tabId: number) =>
+      Promise.resolve({ id: tabId, url: 'https://example.com/page?thread=private-subject' }),
+    );
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeToolCallSseStream() })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+  });
+
+  async function receipts(): Promise<
+    Array<{ runId: string; action: string; claim: string; target: string | null }>
+  > {
+    const stored = await chromeMock.storage.local.get(['agi_automation_audit_outbox']);
+    return (stored['agi_automation_audit_outbox'] ?? []) as Array<{
+      runId: string;
+      action: string;
+      claim: string;
+      target: string | null;
+    }>;
+  }
+
+  it('writes a receipt for every action, under the run id the host leased', async () => {
+    await chromeMock.storage.local.set({ agi_automation_audit_outbox: [] });
+
+    await runAgentLoop('Read the page', 42, { maxSteps: 10, runId: 'lease-under-test' });
+
+    const written = await receipts();
+    expect(written.map((entry) => entry.action)).toEqual(['read_dom']);
+    expect(written[0]?.runId).toBe('lease-under-test');
+    expect(written[0]?.claim).toBe('succeeded');
+  });
+
+  it('names the origin the action touched and not the page', async () => {
+    await chromeMock.storage.local.set({ agi_automation_audit_outbox: [] });
+
+    await runAgentLoop('Read the page', 42, { maxSteps: 10, runId: 'lease-under-test' });
+
+    const written = await receipts();
+    expect(written[0]?.target).toBe('https://example.com');
+    expect(JSON.stringify(written)).not.toContain('private-subject');
   });
 });

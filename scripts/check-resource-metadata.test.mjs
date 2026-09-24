@@ -51,6 +51,24 @@ test('the real guard passes on the repository as it stands', () => {
   assert.equal(result.status, 0, `expected clean repo, got:\n${result.stderr}${result.stdout}`);
 });
 
+test('the column inventory follows drops and later additions in migration order', () => {
+  const dir = sandbox({
+    migrations: {
+      '0001_widgets.sql': TABLE(
+        '  id uuid primary key,\n  legacy_token text,\n  created_at timestamptz not null',
+      ),
+      '0002_retire_token.sql': 'alter table public.widgets drop column if exists legacy_token;\n',
+      '0003_add_current.sql':
+        'alter table public.widgets add column if not exists current_token_hash text;\n',
+    },
+    contract: { roles: BASE_ROLES, tables: {}, gaps: [] },
+  });
+
+  const columns = readTableColumns(dir).get('widgets');
+  assert.ok(columns?.has('current_token_hash'));
+  assert.ok(!columns?.has('legacy_token'));
+});
+
 test('a table that records no creation time fails', () => {
   const errors = errorsFor({
     migrations: { '0001_widgets.sql': TABLE('  id uuid primary key,\n  user_id text not null') },

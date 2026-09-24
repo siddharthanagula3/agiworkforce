@@ -1,5 +1,6 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { ConsentSurface } from '@/lib/consent-purposes';
+import { readBrowserGlobalPrivacyControl } from '@/lib/consent-signals';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const ANALYTICS_REQUIRES_CONSENT: boolean = true;
@@ -83,10 +84,22 @@ export function readCookieConsentRecord(): CookieConsentRecord | null {
   }
 }
 
+// A browser sending Global Privacy Control has already refused everything that
+// is not needed to serve the request, so that answer stands for this browser
+// whatever is stored here, and the banner has nothing left to ask.
+export function isAnalyticsLockedByOptOutSignal(): boolean {
+  return readBrowserGlobalPrivacyControl();
+}
+
+function resolvePreferences(preferences: CookiePreferences): CookiePreferences {
+  return isAnalyticsLockedByOptOutSignal() ? NECESSARY_ONLY_PREFERENCES : preferences;
+}
+
 // A record that carries no version, or a version from a superseded notice,
 // cannot prove what was agreed to, so it reads as undecided: analytics stops
 // and the banner asks again.
 export function readCookiePreferences(): CookiePreferences | null {
+  if (isAnalyticsLockedByOptOutSignal()) return NECESSARY_ONLY_PREFERENCES;
   const record = readCookieConsentRecord();
   if (!record || !isCookieConsentCurrent(record)) return null;
   return { necessary: true, analytics: record.analytics };
@@ -143,7 +156,7 @@ function storeCookieConsentRecord(record: CookieConsentRecord): void {
 
 export function writeCookiePreferences(preferences: CookiePreferences): void {
   if (typeof window === 'undefined') return;
-  const record = buildCookieConsentRecord(preferences);
+  const record = buildCookieConsentRecord(resolvePreferences(preferences));
   storeCookieConsentRecord(record);
   void recordCookieConsentOnServer(record);
 }
@@ -153,8 +166,9 @@ export function writeCookiePreferences(preferences: CookiePreferences): void {
 // twice.
 export function applyAnalyticsConsentLocally(granted: boolean): void {
   if (typeof window === 'undefined') return;
-  if (readCookiePreferences()?.analytics === granted) return;
-  storeCookieConsentRecord(buildCookieConsentRecord({ necessary: true, analytics: granted }));
+  const effective = resolvePreferences({ necessary: true, analytics: granted });
+  if (readCookiePreferences()?.analytics === effective.analytics) return;
+  storeCookieConsentRecord(buildCookieConsentRecord(effective));
 }
 
 export function isAnalyticsAllowed(preferences: CookiePreferences | null): boolean {

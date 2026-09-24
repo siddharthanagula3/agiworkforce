@@ -45,13 +45,13 @@ describe('/signup', () => {
     mocks.identity.mockResolvedValue({ subject: null });
   });
 
-  it('sends a visitor whose session the server verifies straight to completion', async () => {
+  it('sends an already-signed-in visitor through the existing terms-aware login gate', async () => {
     mocks.identity.mockResolvedValue({ subject: 'user_1' });
 
     await expect(
       SignupPage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }),
-    ).rejects.toThrow('redirect:/signup/complete?redirectTo=%2Fchat');
-    expect(mocks.redirect).toHaveBeenCalledWith('/signup/complete?redirectTo=%2Fchat');
+    ).rejects.toThrow('redirect:/login/complete?redirectTo=%2Fchat');
+    expect(mocks.redirect).toHaveBeenCalledWith('/login/complete?redirectTo=%2Fchat');
     expect(flowProps).not.toHaveBeenCalled();
   });
 

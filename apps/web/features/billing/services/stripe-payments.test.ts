@@ -12,6 +12,7 @@ vi.mock('@stripe/stripe-js/pure', () => ({
 }));
 
 import {
+  fetchSavedPaymentMethods,
   previewUpgrade,
   startPlanCheckout,
   startTopUpCheckout,
@@ -36,6 +37,25 @@ describe('stripe payments', () => {
       configurable: true,
       value: { href: '' },
     });
+  });
+
+  it('reports a failed payment method read instead of answering that none is on file', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: { message: 'Billing is temporarily unavailable.' } }),
+    } as Response);
+
+    await expect(fetchSavedPaymentMethods()).rejects.toThrow('Billing is temporarily unavailable.');
+  });
+
+  it('still answers an empty list when the account really has no payment method', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ payment_methods: [] }),
+    } as Response);
+
+    await expect(fetchSavedPaymentMethods()).resolves.toEqual([]);
   });
 
   it('starts Max 15x checkout with the canonical tier id', async () => {

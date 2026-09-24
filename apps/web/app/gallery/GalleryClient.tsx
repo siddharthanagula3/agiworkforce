@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import { X, Code, Layers, Plus } from 'lucide-react';
@@ -13,6 +13,7 @@ import { useArtifactIndex } from '@/features/chat/hooks/use-artifact-index';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 
 // ---------------------------------------------------------------------------
 // Inspiration examples (curated, static)
@@ -318,10 +319,10 @@ function NoMatchesState({ onClear }: { onClear: () => void }) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 12,
-        padding: '80px 24px',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-9) var(--space-5)',
         border: '1px dashed var(--agi-rule)',
-        borderRadius: 16,
+        borderRadius: 'var(--corner-panel)',
         textAlign: 'center',
       }}
     >
@@ -367,11 +368,11 @@ function SkeletonCard() {
       style={{
         background: 'var(--agi-card)',
         border: '1px solid var(--agi-rule)',
-        borderRadius: 14,
-        padding: '20px 20px 18px',
+        borderRadius: 'var(--corner-panel)',
+        padding: 'var(--space-5) var(--space-5) var(--space-4)',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 'var(--space-3)',
       }}
     >
       {/* Thumbnail placeholder */}
@@ -379,29 +380,29 @@ function SkeletonCard() {
         style={{
           width: '100%',
           height: 120,
-          borderRadius: 8,
+          borderRadius: 'var(--corner-field)',
           background: 'var(--agi-rule)',
-          animation: 'agi-pulse 1.4s ease-in-out infinite',
+          animation: 'agi-pulse 1.4s var(--curve-standard) infinite',
         }}
       />
       {/* Title row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
         <div
           style={{
             height: 14,
             width: '60%',
-            borderRadius: 6,
+            borderRadius: 'var(--corner-control)',
             background: 'var(--agi-rule)',
-            animation: 'agi-pulse 1.4s ease-in-out infinite',
+            animation: 'agi-pulse 1.4s var(--curve-standard) infinite',
           }}
         />
         <div
           style={{
             height: 14,
             width: '20%',
-            borderRadius: 6,
+            borderRadius: 'var(--corner-control)',
             background: 'var(--agi-rule)',
-            animation: 'agi-pulse 1.4s ease-in-out 0.2s infinite',
+            animation: 'agi-pulse 1.4s var(--curve-standard) 0.2s infinite',
           }}
         />
       </div>
@@ -410,9 +411,9 @@ function SkeletonCard() {
         style={{
           height: 12,
           width: '45%',
-          borderRadius: 6,
+          borderRadius: 'var(--corner-control)',
           background: 'var(--agi-rule)',
-          animation: 'agi-pulse 1.4s ease-in-out 0.4s infinite',
+          animation: 'agi-pulse 1.4s var(--curve-standard) 0.4s infinite',
         }}
       />
     </div>
@@ -442,9 +443,9 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
       style={{
         background: 'var(--agi-card)',
         border: '1px solid var(--agi-rule)',
-        borderRadius: 14,
+        borderRadius: 'var(--corner-panel)',
         padding: '0',
-        textAlign: 'left',
+        textAlign: 'start',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -496,10 +497,10 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
       {/* Text area */}
       <div
         style={{
-          padding: '14px 18px 16px',
+          padding: 'var(--space-4) var(--space-4) var(--space-4)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 'var(--space-2)',
         }}
       >
         <div
@@ -507,7 +508,7 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: 8,
+            gap: 'var(--space-2)',
           }}
         >
           <span
@@ -527,8 +528,8 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
               color: 'var(--agi-ink-2)',
               background: 'var(--agi-bg-2)',
               border: '1px solid var(--agi-rule)',
-              borderRadius: 6,
-              padding: '2px 7px',
+              borderRadius: 'var(--corner-control)',
+              padding: 'var(--space-1) var(--space-2)',
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}
@@ -560,13 +561,8 @@ interface CategoryPickerProps {
 }
 
 function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useDialogKeyboard({ open: true, onClose, panelRef });
 
   return (
     <>
@@ -581,6 +577,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Choose artifact type"
@@ -593,11 +590,11 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           width: 'min(560px, 92vw)',
           background: 'var(--agi-bg-2)',
           border: '1px solid var(--agi-rule-strong)',
-          borderRadius: 18,
-          padding: '32px 28px 28px',
+          borderRadius: 'var(--corner-panel)',
+          padding: 'var(--space-6) var(--space-6) var(--space-6)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 20,
+          gap: 'var(--space-5)',
         }}
       >
         <div>
@@ -614,7 +611,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           </h2>
           <p
             style={{
-              margin: '6px 0 0',
+              margin: 'var(--space-2) 0 0',
               fontSize: 'var(--agi-text-sm)',
               color: 'var(--agi-ink-quiet)',
             }}
@@ -627,7 +624,7 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(152px, 1fr))',
-            gap: 10,
+            gap: 'var(--space-3)',
           }}
         >
           {ARTIFACT_CATEGORIES.map((cat) => (
@@ -639,13 +636,13 @@ function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
-                gap: 6,
-                padding: '14px 14px 12px',
+                gap: 'var(--space-2)',
+                padding: 'var(--space-4) var(--space-4) var(--space-3)',
                 background: 'var(--agi-card)',
                 border: '1px solid var(--agi-rule)',
-                borderRadius: 12,
+                borderRadius: 'var(--corner-surface)',
                 cursor: 'pointer',
-                textAlign: 'left',
+                textAlign: 'start',
                 transition: 'border-color 150ms',
               }}
               onMouseEnter={(e) => {
@@ -699,16 +696,10 @@ interface CreationWizardProps {
 }
 
 function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState<string[]>(['', '', '']);
-
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  useDialogKeyboard({ open: true, onClose, panelRef });
 
   const step = WIZARD_STEPS[currentStep]!;
   const isLast = currentStep === WIZARD_STEPS.length - 1;
@@ -752,6 +743,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-label="Create artifact"
@@ -764,11 +756,11 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
           width: 'min(520px, 92vw)',
           background: 'var(--agi-bg-2)',
           border: '1px solid var(--agi-rule-strong)',
-          borderRadius: 18,
-          padding: '32px 28px 28px',
+          borderRadius: 'var(--corner-panel)',
+          padding: 'var(--space-6) var(--space-6) var(--space-6)',
           display: 'flex',
           flexDirection: 'column',
-          gap: 20,
+          gap: 'var(--space-5)',
         }}
       >
         {/* Header with step indicator */}
@@ -776,7 +768,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
           <div>
             <p
               style={{
-                margin: '0 0 4px',
+                margin: '0 0 var(--space-1)',
                 fontSize: 'var(--agi-text-xs)',
                 color: 'var(--agi-ink-quiet)',
                 fontWeight: 600,
@@ -807,7 +799,7 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
               border: 'none',
               cursor: 'pointer',
               color: 'var(--agi-ink-2)',
-              padding: 4,
+              padding: 'var(--space-1)',
             }}
           >
             <X size={16} />
@@ -815,14 +807,14 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
         </div>
 
         {/* Step dots */}
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           {WIZARD_STEPS.map((_, i) => (
             <div
               key={i}
               style={{
                 height: 4,
                 flex: 1,
-                borderRadius: 4,
+                borderRadius: 'var(--corner-compact)',
                 background: i <= currentStep ? 'var(--agi-ink)' : 'var(--agi-rule)',
                 transition: 'background 200ms',
               }}
@@ -839,10 +831,10 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
           autoFocus
           style={{
             width: '100%',
-            padding: '12px 14px',
+            padding: 'var(--space-3) var(--space-4)',
             background: 'var(--agi-card)',
             border: '1px solid var(--agi-rule)',
-            borderRadius: 10,
+            borderRadius: 'var(--corner-menu)',
             color: 'var(--agi-ink)',
             fontSize: 'var(--agi-text-sm)',
             fontFamily: 'inherit',
@@ -879,10 +871,10 @@ function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
             type="button"
             onClick={handleNext}
             style={{
-              padding: '9px 22px',
+              padding: 'var(--space-2) var(--space-5)',
               background: 'var(--agi-ink)',
               border: 'none',
-              borderRadius: 9,
+              borderRadius: 'var(--corner-menu)',
               color: 'var(--agi-bg)',
               fontSize: 'var(--agi-text-sm)',
               fontWeight: 600,
@@ -907,13 +899,8 @@ interface ArtifactDrawerProps {
 }
 
 function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  useDialogKeyboard({ open: artifact !== null, onClose, panelRef });
 
   if (!artifact) return null;
 
@@ -940,6 +927,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
       />
       {/* Panel */}
       <div
+        ref={panelRef}
         style={{
           position: 'fixed',
           top: 0,
@@ -962,8 +950,8 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
-            padding: '14px 20px',
+            gap: 'var(--space-3)',
+            padding: 'var(--space-4) var(--space-5)',
             borderBottom: '1px solid var(--agi-rule)',
             flexShrink: 0,
           }}
@@ -990,8 +978,8 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
               color: 'var(--agi-ink-2)',
               background: 'var(--agi-bg-2)',
               border: '1px solid var(--agi-rule)',
-              borderRadius: 6,
-              padding: '2px 7px',
+              borderRadius: 'var(--corner-control)',
+              padding: 'var(--space-1) var(--space-2)',
             }}
           >
             {languageLabel(artifact.language)}
@@ -1006,7 +994,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
               justifyContent: 'center',
               width: 28,
               height: 28,
-              borderRadius: 8,
+              borderRadius: 'var(--corner-field)',
               background: 'transparent',
               border: 'none',
               cursor: 'pointer',
@@ -1019,7 +1007,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
         </div>
 
         {/* Panel body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: 'var(--space-5)' }}>
           <ArtifactPreview artifact={previewArtifact} />
         </div>
       </div>
@@ -1045,8 +1033,8 @@ function TabButton({
       type="button"
       onClick={onClick}
       style={{
-        padding: '6px 16px',
-        borderRadius: 8,
+        padding: 'var(--space-2) var(--space-4)',
+        borderRadius: 'var(--corner-field)',
         border: 'none',
         fontFamily: 'inherit',
         fontSize: 'var(--agi-text-sm)',
@@ -1068,9 +1056,7 @@ function TabButton({
 
 type TabId = 'yours' | 'inspiration';
 type OverlayState =
-  | { kind: 'none' }
-  | { kind: 'category' }
-  | { kind: 'wizard'; category: ArtifactCategory };
+  { kind: 'none' } | { kind: 'category' } | { kind: 'wizard'; category: ArtifactCategory };
 
 /**
  * One row in the gallery grid: either a locally-derived artifact (has `content`
@@ -1264,7 +1250,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const cardGridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: 16,
+    gap: 'var(--space-4)',
   };
 
   return (
@@ -1285,16 +1271,16 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         }}
       >
         {/* Page header */}
-        <div className="agi-ds-container" style={{ paddingTop: 56 }}>
+        <div className="agi-ds-container" style={{ paddingTop: 'var(--space-8)' }}>
           {/* Title row with New Artifact button (Fix 33) */}
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 16,
+              gap: 'var(--space-4)',
               flexWrap: 'wrap',
-              marginBottom: 8,
+              marginBottom: 'var(--space-2)',
             }}
           >
             <div>
@@ -1312,7 +1298,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
             </button>
           </div>
 
-          <div style={{ marginBottom: 36 }}>
+          <div style={{ marginBottom: 'var(--space-6)' }}>
             <Prose>
               Browse artifacts you have built in conversations, or explore curated examples to spark
               your next idea.
@@ -1324,12 +1310,12 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 4,
-              padding: 4,
+              gap: 'var(--space-1)',
+              padding: 'var(--space-1)',
               background: 'var(--agi-bg-2)',
               border: '1px solid var(--agi-rule)',
-              borderRadius: 10,
-              marginBottom: 20,
+              borderRadius: 'var(--corner-menu)',
+              marginBottom: 'var(--space-5)',
             }}
           >
             <TabButton active={activeTab === 'yours'} onClick={() => selectTab('yours')}>
@@ -1344,7 +1330,10 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
           </div>
 
           {/* Search + filters */}
-          <div className="agi-ds-form-row" style={{ alignItems: 'center', marginBottom: 32 }}>
+          <div
+            className="agi-ds-form-row"
+            style={{ alignItems: 'center', marginBottom: 'var(--space-6)' }}
+          >
             <input
               type="search"
               value={query}
@@ -1405,7 +1394,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
         </div>
 
         {/* Tab content */}
-        <div className="agi-ds-container" style={{ paddingBottom: 80 }}>
+        <div className="agi-ds-container" style={{ paddingBottom: 'var(--space-9)' }}>
           {/* Your artifacts tab */}
           {activeTab === 'yours' && (
             <>
@@ -1423,10 +1412,10 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 12,
-                    padding: '80px 24px',
+                    gap: 'var(--space-3)',
+                    padding: 'var(--space-9) var(--space-5)',
                     border: '1px dashed var(--agi-rule)',
-                    borderRadius: 16,
+                    borderRadius: 'var(--corner-panel)',
                     textAlign: 'center',
                   }}
                 >
@@ -1454,7 +1443,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                     type="button"
                     onClick={() => setOverlay({ kind: 'category' })}
                     style={{
-                      marginTop: 8,
+                      marginTop: 'var(--space-2)',
                       fontSize: 'var(--agi-text-sm)',
                       fontWeight: 600,
                       color: 'var(--agi-ink)',

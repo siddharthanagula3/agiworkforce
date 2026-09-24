@@ -97,7 +97,7 @@ const TASK_TYPES: readonly RoutingTaskType[] = [
   'computer-use',
   'image_generation',
 ];
-const TIERS = ['free', 'pro', 'max', 'enterprise', 'byok'] as const;
+const TIERS = ['free', 'basic', 'pro', 'max', 'enterprise', 'byok'] as const;
 const TRUST_MODES: readonly RoutingTrustMode[] = ['local', 'on_device', 'byok', 'managed_cloud'];
 
 interface ConformanceRegistryView {
@@ -105,6 +105,8 @@ interface ConformanceRegistryView {
   policies: {
     auto: {
       aliases: Record<string, unknown>;
+      tasks: Record<string, unknown>;
+      tierAllowedSlots: Record<string, unknown>;
       providerPolicies: { usOnly: { allowedTiers: string[] } };
     };
   };
@@ -396,6 +398,11 @@ describe('auto-route cross-language conformance', () => {
   }
 
   const recorded = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as Record<string, string>;
+
+  it('replays every task and plan tier the compiled Auto policy routes', () => {
+    expect([...TASK_TYPES].sort()).toEqual(Object.keys(registry.policies.auto.tasks).sort());
+    expect([...TIERS].sort()).toEqual(Object.keys(registry.policies.auto.tierAllowedSlots).sort());
+  });
 
   it('covers every alias, task, tier, trust mode and registry model', () => {
     expect(Object.keys(computed).sort()).toEqual(Object.keys(recorded).sort());

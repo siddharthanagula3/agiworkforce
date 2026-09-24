@@ -448,6 +448,7 @@ describe('buildStreamResponse golden fixture · response headers', () => {
     expect(response.headers.get('Content-Type')).toBe('text/event-stream');
     expect(response.headers.get('Cache-Control')).toBe('no-cache');
     expect(response.headers.get('Connection')).toBe('keep-alive');
+    expect(response.headers.get('X-Accel-Buffering')).toBe('no');
   });
 
   it('carries the secret redaction count when the prompt was redacted', async () => {

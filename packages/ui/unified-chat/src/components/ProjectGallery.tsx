@@ -227,10 +227,11 @@ export function ProjectGallery({
           />
           <input
             type="search"
+            aria-label="Search projects"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search projects"
-            className="w-full rounded-md border bg-[var(--chat-surface-base)] py-1.5 pl-8 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+            className="w-full rounded-md border bg-[var(--chat-surface-base)] py-1.5 pl-8 pr-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
             style={{ borderColor: 'var(--chat-border)' }}
           />
         </div>
@@ -240,7 +241,7 @@ export function ProjectGallery({
             setCreateError(null);
             setCreating((v) => !v);
           }}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-sm font-medium text-[var(--chat-accent-on-primary)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+          className="flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-sm font-medium text-[var(--chat-accent-on-primary)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
         >
           <Plus size={14} strokeWidth={2} />
           New
@@ -280,7 +281,7 @@ export function ProjectGallery({
               onChange={(e) => setNewName(e.target.value.slice(0, 80))}
               placeholder="Project name"
               data-testid="project-create-name-input"
-              className="flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-secondary)]"
+              className="flex-1 rounded-md border-0 bg-transparent px-2 py-1 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
             />
           </div>
 
@@ -304,7 +305,7 @@ export function ProjectGallery({
                     setEmojiPickerOpen(false);
                   }}
                   className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded text-base hover:bg-[var(--chat-surface-hover)]',
+                    'flex h-8 w-8 items-center justify-center rounded-compact text-base hover:bg-[var(--chat-surface-hover)]',
                     emoji === newEmoji && 'bg-[var(--chat-surface-hover)]',
                   )}
                 >
@@ -318,7 +319,7 @@ export function ProjectGallery({
             data-testid="project-create-presets"
             className="flex flex-wrap items-center gap-1.5 pt-1"
           >
-            <span className="text-[12px] uppercase tracking-wide text-[var(--chat-text-muted)]">
+            <span className="text-caption uppercase tracking-wide text-[var(--chat-text-muted)]">
               Quick start
             </span>
             {PROJECT_PRESETS.map((preset) => (
@@ -353,7 +354,7 @@ export function ProjectGallery({
                 setEmojiPickerOpen(false);
                 setCreateError(null);
               }}
-              className="rounded px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              className="rounded-compact px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
             >
               Cancel
             </button>
@@ -361,7 +362,7 @@ export function ProjectGallery({
               type="submit"
               disabled={submitting || newName.trim().length === 0}
               className={cn(
-                'rounded px-3 py-1 text-xs font-medium text-white',
+                'rounded-compact px-3 py-1 text-xs font-medium text-white',
                 submitting || newName.trim().length === 0
                   ? 'cursor-not-allowed bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
                   : 'bg-[var(--chat-accent-primary)] hover:opacity-90',

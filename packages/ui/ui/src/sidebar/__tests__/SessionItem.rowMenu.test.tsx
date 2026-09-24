@@ -169,4 +169,13 @@ describe('chat row menu (Sidebar > SessionItem)', () => {
     fireEvent.click(within(menu).getByRole('menuitem', { name: 'Pin' }));
     expect(document.activeElement).toBe(trigger);
   });
+
+  it('uses a 44px coarse-pointer target for the row and its actions', () => {
+    renderRowMenu();
+    const row = screen.getByRole('link', { name: 'Repository structure overview' });
+    const action = screen.getByLabelText('More options for Repository structure overview');
+    expect(row.classList.contains('pointer-coarse:h-11')).toBe(true);
+    expect(action.classList.contains('pointer-coarse:h-11')).toBe(true);
+    expect(action.classList.contains('pointer-coarse:w-11')).toBe(true);
+  });
 });

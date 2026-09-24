@@ -19,7 +19,17 @@ export type {
   ToolApprovalPreferences,
 } from '@agiworkforce/types';
 
-import { DEFAULT_TOOL_APPROVAL_POLICY, type ToolApprovalPolicy } from '@agiworkforce/types';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  type ToolApprovalPolicy,
+  type ToolApprovalPreferences,
+} from '@agiworkforce/types';
+
+export const WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY: ToolApprovalPolicy = 'autonomous';
+
+export const WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES: ToolApprovalPreferences = {
+  defaultPolicy: WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
+};
 
 const StoredToolApprovalSettingsSchema = z
   .object({
@@ -34,6 +44,7 @@ export function parseToolApprovalPolicy(settings: unknown): ToolApprovalPolicy {
   const parsed = StoredToolApprovalSettingsSchema.safeParse(settings ?? {});
   if (!parsed.success) return DEFAULT_TOOL_APPROVAL_POLICY;
   return (
-    parsed.data[TOOL_APPROVAL_PREFERENCE_NAMESPACE]?.defaultPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY
+    parsed.data[TOOL_APPROVAL_PREFERENCE_NAMESPACE]?.defaultPolicy ??
+    WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY
   );
 }

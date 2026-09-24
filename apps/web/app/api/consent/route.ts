@@ -17,6 +17,10 @@ import {
   recordConsentBatch,
 } from '@/lib/server/consent-records';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import {
+  isNonEssentialConsentPurpose,
+  readGlobalPrivacyControlHeader,
+} from '@/lib/consent-signals';
 
 const ConsentDecisionSchema = z.object({
   purpose: z.string().refine(isConsentPurpose, 'Unknown consent purpose'),
@@ -79,10 +83,18 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     seen.add(decision.purpose);
   }
 
+  // A browser sending Global Privacy Control has refused every purpose that is
+  // not needed to serve it, so a grant for one is recorded as the refusal it is.
+  const optedOut = readGlobalPrivacyControlHeader(request.headers);
+  const decisions = parsed.data.decisions.map((decision) => ({
+    purpose: decision.purpose,
+    granted: optedOut && isNonEssentialConsentPurpose(decision.purpose) ? false : decision.granted,
+  }));
+
   try {
     const written = await recordConsentBatch(
       { kind: 'user', userId },
-      parsed.data.decisions,
+      decisions,
       parsed.data.surface,
     );
     return NextResponse.json({ recorded: written, noticeVersion: CURRENT_NOTICE_VERSION });

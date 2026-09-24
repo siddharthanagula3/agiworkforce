@@ -1,5 +1,5 @@
-import { ChatLoadingSkeleton } from '@features/chat/components/ChatLoadingSkeleton';
+import { RouteLoading } from '@shared/components/RouteLoading';
 
 export default function ChatLoading() {
-  return <ChatLoadingSkeleton />;
+  return <RouteLoading label="Loading chat" />;
 }

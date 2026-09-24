@@ -1,4 +1,3 @@
-
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const guardedFetchMock = jest.fn();
@@ -92,6 +91,40 @@ describe('model-tier-gate 403 handling', () => {
     expect(err.feature).toBe('model_access');
     expect(err.requiredTier).toBe('pro');
     expect(err.reason).toBe(MODEL_ACCESS_MESSAGE);
+  });
+
+  it('keeps the staged-upgrade fact and sends nobody off the phone to buy', async () => {
+    const { streamChat } = await loadStreamingService();
+    guardedFetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      text: async () =>
+        JSON.stringify({
+          error: {
+            message: `Model ${MODEL_ID} is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages, so they need an access code or a place on the upgrade waitlist.`,
+            type: 'invalid_request_error',
+            code: 'model_not_available',
+            requiredTier: 'pro',
+          },
+        }),
+    } as unknown as Response);
+
+    const callbacks = makeCallbacks();
+    await streamChat(
+      {
+        model: MODEL_ID,
+        messages: [{ role: 'user', content: 'hi' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000014',
+      },
+      callbacks,
+    );
+
+    const err = callbacks.onError.mock.calls[0][0];
+    expect(err.reason).toBe(
+      `Model ${MODEL_ID} is on the PRO plan, not yours. Choose a model your plan includes. Paid upgrades are opening in stages.`,
+    );
+    expect(err.reason).not.toMatch(/access code|waitlist/i);
   });
 
   it('falls back to a generic Error for a 403 without the model_not_available code', async () => {

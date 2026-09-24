@@ -8,6 +8,7 @@ import { SessionTimeoutGuard } from '@shared/components/SessionTimeoutGuard';
 import { ConnectorOutcomeAnnouncer } from '@/features/connectors/components/ConnectorOutcomeAnnouncer';
 import { DesktopHostMount } from '@/features/desktop-host';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
+import { WebPushOptIn } from '@/features/notifications';
 
 export default function AppRuntimeMounts() {
   return (
@@ -20,6 +21,7 @@ export default function AppRuntimeMounts() {
       <ConnectorOutcomeAnnouncer />
       <DesktopHostMount />
       <OfflineIndicator position="bottom" />
+      <WebPushOptIn />
     </>
   );
 }

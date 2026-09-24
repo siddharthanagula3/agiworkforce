@@ -248,7 +248,9 @@ function describeTranscriptionFailure(status: number): string {
   return 'Transcription failed.';
 }
 
-async function handleTranscriptions(request: NextRequest) {
+export type TranscriptionAdmission = (request: NextRequest, userId: string) => Promise<void>;
+
+async function handleTranscriptions(request: NextRequest, admit?: TranscriptionAdmission) {
   const preflightResponse = handleCorsPreflightRequest(request);
   if (preflightResponse) return preflightResponse;
 
@@ -261,6 +263,7 @@ async function handleTranscriptions(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request, { apiKeyScope: 'inference:write' });
+  await admit?.(request, userId);
 
   const managedGateResponse = buildManagedComputeGateResponse(
     request,
@@ -687,7 +690,11 @@ async function handleTranscriptions(request: NextRequest) {
   });
 }
 
-export const POST = withErrorHandler(handleTranscriptions);
+export function transcriptionsHandler(admit?: TranscriptionAdmission) {
+  return withErrorHandler((request: NextRequest) => handleTranscriptions(request, admit));
+}
+
+export const POST = transcriptionsHandler();
 
 export function OPTIONS(request: NextRequest) {
   return (

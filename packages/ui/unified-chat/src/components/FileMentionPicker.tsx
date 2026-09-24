@@ -183,15 +183,15 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
     <div
       ref={listRef}
       className={cn(
-        'absolute bottom-full left-0 z-50 mb-2 w-80 max-h-72 overflow-y-auto',
-        'rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--popover))] shadow-2xl backdrop-blur-xl',
+        'absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-80 max-h-72 overflow-y-auto',
+        'rounded-xl border border-border bg-popover shadow-2xl backdrop-blur-xl',
       )}
       role="listbox"
       aria-label="File mentions"
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-3 py-2">
-        <span className="flex items-center gap-1 text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <span className="flex items-center gap-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
           {isSearchMode ? (
             <>
               <Search size={10} />
@@ -225,7 +225,7 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
               'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
               i === selectedIndex
                 ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground'
-                : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))]',
+                : 'text-foreground hover:bg-accent',
             )}
             onClick={() => handleEntryActivate(entry)}
             onMouseEnter={() => setSelectedIndex(i)}
@@ -233,16 +233,16 @@ export const FileMentionPicker: React.FC<FileMentionPickerProps> = ({
             {getFileIcon(entry)}
             <span className="flex-1 truncate font-medium">{entry.name}</span>
             {isSearchMode && (
-              <span className="shrink-0 max-w-[120px] truncate text-[12px] text-muted-foreground">
+              <span className="shrink-0 max-w-[120px] truncate text-caption text-muted-foreground">
                 {shortPath(entry.path, projectRoot)}
               </span>
             )}
             {!entry.isDir && !isSearchMode && entry.size > 0 && (
-              <span className="shrink-0 text-[12px] text-muted-foreground">
+              <span className="shrink-0 text-caption text-muted-foreground">
                 {formatSize(entry.size)}
               </span>
             )}
-            {entry.isDir && <span className="shrink-0 text-[12px] text-muted-foreground">/</span>}
+            {entry.isDir && <span className="shrink-0 text-caption text-muted-foreground">/</span>}
           </button>
         ))
       )}

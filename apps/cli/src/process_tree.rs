@@ -604,9 +604,18 @@ async fn supervise(
     })
 }
 
-async fn read_pipe(mut pipe: impl AsyncRead + Unpin) -> io::Result<Vec<u8>> {
+/// What one pipe of a child keeps. Past this the pipe is still drained, so a
+/// chatty child never stalls on a full pipe, but nothing more is held.
+const MAX_CAPTURED_PIPE_BYTES: u64 = 64 * 1024 * 1024;
+
+async fn read_pipe(pipe: impl AsyncRead + Unpin) -> io::Result<Vec<u8>> {
+    read_pipe_bounded(pipe, MAX_CAPTURED_PIPE_BYTES).await
+}
+
+async fn read_pipe_bounded(mut pipe: impl AsyncRead + Unpin, limit: u64) -> io::Result<Vec<u8>> {
     let mut bytes = Vec::new();
-    pipe.read_to_end(&mut bytes).await?;
+    (&mut pipe).take(limit).read_to_end(&mut bytes).await?;
+    tokio::io::copy(&mut pipe, &mut tokio::io::sink()).await?;
     Ok(bytes)
 }
 
@@ -797,6 +806,26 @@ mod tests {
     use nix::sys::signal::kill;
     use nix::unistd::Pid;
     use std::path::Path;
+
+    #[tokio::test]
+    async fn a_pipe_past_its_limit_is_drained_so_the_child_still_finishes() {
+        let _guard = CHILD_SPAWNING_TESTS.lock().await;
+        let mut child = Command::new("sh")
+            .arg("-c")
+            .arg("head -c 1000000 /dev/zero")
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let stdout = child.stdout.take().expect("stdout");
+
+        let kept = read_pipe_bounded(stdout, 1_000).await.expect("read");
+
+        assert_eq!(kept.len(), 1_000);
+        assert!(
+            child.wait().await.expect("wait").success(),
+            "the child was left writing into a pipe nobody read"
+        );
+    }
 
     #[test]
     fn executable_check_accepts_an_absolute_executable_without_spawning_a_lookup_process() {

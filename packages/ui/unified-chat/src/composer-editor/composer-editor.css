@@ -37,7 +37,7 @@
 
 .composer-editor__mention {
   border: 1px solid var(--chat-border-strong);
-  border-radius: 0.25rem;
+  border-radius: var(--corner-compact);
   padding-inline: 0.125rem;
   color: var(--chat-accent-primary-text);
   white-space: nowrap;

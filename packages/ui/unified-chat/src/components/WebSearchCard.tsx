@@ -42,7 +42,7 @@ export function WebSearchCard({
           'flex items-center gap-2 select-none',
           'h-7 px-1 rounded-md text-left w-full',
           'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
-          'transition-colors duration-100',
+          'transition-colors duration-instant',
         )}
       >
         <Globe
@@ -55,7 +55,7 @@ export function WebSearchCard({
           {query}
         </span>
         {/* Result count badge */}
-        <span className="web-search-card__count shrink-0 text-[12px] text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
+        <span className="web-search-card__count shrink-0 text-caption text-[color:var(--chat-text-muted,#8b8680)] tabular-nums">
           {resultCount} {resultCount === 1 ? 'result' : 'results'}
         </span>
         <ChevronDown
@@ -63,7 +63,7 @@ export function WebSearchCard({
           strokeWidth={2}
           className={cn(
             'shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
-            'transition-transform duration-150',
+            'transition-transform duration-quick',
             open && 'rotate-180',
           )}
           aria-hidden="true"
@@ -89,7 +89,7 @@ export function WebSearchCard({
                 'web-search-card__result-row',
                 'w-full flex items-center gap-2 px-3 py-2 text-left',
                 'border-b border-[color:var(--border-subtle,rgba(0,0,0,0.06))] last:border-b-0',
-                'hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))] transition-colors duration-100',
+                'hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))] transition-colors duration-instant',
               )}
             >
               {/* Favicon */}
@@ -100,7 +100,7 @@ export function WebSearchCard({
                   aria-hidden="true"
                   width={16}
                   height={16}
-                  className="w-4 h-4 rounded-[2px] shrink-0 object-contain"
+                  className="w-4 h-4 rounded-detail shrink-0 object-contain"
                   onError={(e) => {
                     (e.currentTarget as HTMLImageElement).style.display = 'none';
                   }}
@@ -118,7 +118,7 @@ export function WebSearchCard({
                 {result.title}
               </span>
               {/* Domain */}
-              <span className="shrink-0 text-[12px] text-[color:var(--chat-text-muted,#8b8680)] truncate max-w-[120px]">
+              <span className="shrink-0 text-caption text-[color:var(--chat-text-muted,#8b8680)] truncate max-w-[120px]">
                 {result.domain}
               </span>
             </button>
@@ -129,7 +129,7 @@ export function WebSearchCard({
             <button
               type="button"
               onClick={() => setShowAll(true)}
-              className="web-search-card__show-more w-full px-3 py-2 text-left text-[12px] text-[color:var(--chat-text-muted,#8b8680)] hover:text-[color:var(--chat-text-secondary,inherit)] transition-colors duration-100"
+              className="web-search-card__show-more w-full px-3 py-2 text-left text-caption text-[color:var(--chat-text-muted,#8b8680)] hover:text-[color:var(--chat-text-secondary,inherit)] transition-colors duration-instant"
             >
               Show more ({hiddenCount} more)
             </button>

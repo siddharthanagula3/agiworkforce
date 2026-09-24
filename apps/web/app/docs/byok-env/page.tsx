@@ -18,14 +18,16 @@ export default function ByokEnvDocsPage() {
         <Header />
 
         <section className="agi-page-hero">
-          <nav aria-label="Breadcrumb" style={{ marginBottom: 16 }}>
+          <nav aria-label="Breadcrumb" style={{ marginBottom: 'var(--space-4)' }}>
             <Link
               href="/docs"
               style={{ fontSize: 13, color: 'var(--text-3)', textDecoration: 'none' }}
             >
               Docs
             </Link>
-            <span style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 6px' }}>/</span>
+            <span style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 var(--space-2)' }}>
+              /
+            </span>
             <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Provider keys</span>
           </nav>
           <h1 className="agi-page-h1">Provider-key configuration</h1>
@@ -52,15 +54,15 @@ export default function ByokEnvDocsPage() {
 
         <section className="agi-section">
           <p className="agi-section-eyebrow">Supported providers and env vars</p>
-          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
+          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 var(--space-4)' }}>
             Set any combination below. Only providers with a key present will be active.
           </p>
           <table className="agi-ledger">
             <thead>
               <tr>
-                <th style={{ textAlign: 'left' }}>Provider</th>
-                <th style={{ textAlign: 'left' }}>Environment variable</th>
-                <th style={{ textAlign: 'left' }}>Notes</th>
+                <th style={{ textAlign: 'start' }}>Provider</th>
+                <th style={{ textAlign: 'start' }}>Environment variable</th>
+                <th style={{ textAlign: 'start' }}>Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -88,7 +90,7 @@ export default function ByokEnvDocsPage() {
               background: 'var(--bg-elev)',
               border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-lg)',
-              padding: '16px 20px',
+              padding: 'var(--space-4) var(--space-5)',
               overflowX: 'auto',
               color: 'var(--text-2)',
               lineHeight: 1.7,
@@ -120,7 +122,7 @@ GOOGLE_API_KEY=AIza...
 
         <section className="agi-section">
           <p className="agi-section-eyebrow">Provider-key clients</p>
-          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
+          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 var(--space-4)' }}>
             The released CLI stores provider keys in the operating system keyring. VS Code support
             uses SecretStorage and is coming soon. Self-hosted Web deployments continue to use
             environment variables. AGI&rsquo;s hosted Web, Mobile, Desktop, and Chrome surfaces do

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-08-28
+Last updated: 2026-09-22
 
 A compact map of the repository. Depth lives in `docs/architecture/`; rules for
 changing any of it live in `AGENTS.md`.
@@ -45,10 +45,10 @@ none is forced into another's framework conventions.
 `apps/desktop` builds two applications, and confusing them is the single most
 expensive mistake made against this tree.
 
-| Shell    | Host                              | What it loads                                                     | Build                                       |
-| -------- | --------------------------------- | ----------------------------------------------------------------- | ------------------------------------------- |
-| Tauri    | `apps/desktop/src-tauri` (Rust)   | the Vite renderer in `apps/desktop/src`                            | `pnpm --filter @agiworkforce/desktop build` |
-| Electron | `apps/desktop/electron` (Node)    | the hosted web app by default, the same Vite renderer on opt-out   | `pnpm --filter @agiworkforce/desktop build:electron` |
+| Shell    | Host                            | What it loads                                                    | Build                                                |
+| -------- | ------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| Tauri    | `apps/desktop/src-tauri` (Rust) | the Vite renderer in `apps/desktop/src`                          | `pnpm --filter @agiworkforce/desktop build`          |
+| Electron | `apps/desktop/electron` (Node)  | the hosted web app by default, the same Vite renderer on opt-out | `pnpm --filter @agiworkforce/desktop build:electron` |
 
 The Electron shell's renderer mode is decided by `apps/desktop/electron/config.ts`:
 `RENDERER_MODE` is `remote` unless `AGI_CLOUD_RENDERER=bundled` is set, so the
@@ -112,6 +112,15 @@ No client invents a value another layer owns. Quota, credit, reset, entitlement
 and plan values come from the server; surfaces render them and never compute
 them. Teams, organizations and billing are Managed and enterprise concerns and
 are never required for a Local or BYOK session.
+
+The ecosystem has two continuity domains, not six private app stores and not
+one undifferentiated history. Account Cloud joins Web, Mobile Cloud, Desktop
+Cloud and provenance-eligible Chrome Managed Cloud around chats, projects,
+Cloud memory, files, connected tools, settings and entitlement state. Host
+Developer joins Desktop Code, CLI and VS Code around local session IDs,
+transcripts, repositories, tools, approvals, files and credential references.
+Cross-domain movement is an explicit handoff; it never copies local secrets or
+silently promotes Local/BYOK content into Managed Cloud.
 
 ## Provider strategy
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-28
+Last updated: 2026-09-22
 
 This folder is the tool-neutral map for coding agents. Codex, Claude Code, Cursor, VS Code agents, opencode, and future agents should read this before deep exploration.
 

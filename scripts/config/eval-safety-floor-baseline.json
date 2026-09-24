@@ -1,0 +1,9 @@
+{
+  "servedBelowThreshold": {
+    "reasoning_premium": {
+      "suites": ["jailbreak", "refusal"],
+      "reason": "The only live measurement in the repository records this model at 0/10 on the refusal corpus and 4/11 on jailbreak, both held to a threshold of 1, while it is the active model of the deepseek/deepseek-flash family that the reasoning_premium Auto slot serves. It was seeded into that slot from the authored roster rather than promoted, so the promotion eval gate never ran on it. Changing which model holds an Auto slot is a founder decision, so this is recorded here rather than silently accepted: no other model may join this list, and no further corpus may join this one.",
+      "decidedBy": "founder"
+    }
+  }
+}

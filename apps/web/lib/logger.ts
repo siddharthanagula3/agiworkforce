@@ -5,6 +5,7 @@ import { deployEnvironment, deployRegion, releaseSha } from '@/lib/server/hostin
 import { redactLogRecord, redactSecrets } from '@/lib/redaction';
 
 const isDevelopment = process.env.NODE_ENV === 'development';
+const DEV_LOG_FORMAT_ENV = 'AGI_DEV_LOG_FORMAT';
 
 export const PINO_LEVELS = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'] as const;
 
@@ -28,6 +29,13 @@ export function resolveLogLevel(requested: string | undefined, development: bool
   if (development) return level;
   const floor = PINO_LEVELS.indexOf(MINIMUM_DEPLOYED_LEVEL);
   return PINO_LEVELS.indexOf(level) < floor ? MINIMUM_DEPLOYED_LEVEL : level;
+}
+
+export function shouldUsePrettyLogTransport(
+  development: boolean,
+  requested: string | undefined,
+): boolean {
+  return development && requested?.trim().toLowerCase() !== 'json';
 }
 
 function deploymentBase(): Record<string, string> {
@@ -56,7 +64,7 @@ export const loggerOptions: LoggerOptions = {
       );
     },
   },
-  ...(isDevelopment && {
+  ...(shouldUsePrettyLogTransport(isDevelopment, process.env[DEV_LOG_FORMAT_ENV]) && {
     transport: {
       target: 'pino-pretty',
       options: {

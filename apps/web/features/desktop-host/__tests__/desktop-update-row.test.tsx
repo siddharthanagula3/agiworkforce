@@ -51,7 +51,7 @@ describe('DesktopUpdateRow', () => {
     await waitFor(() => {
       expect(screen.getByRole('status')).toHaveTextContent('This is the latest version.');
     });
-    expect(screen.queryByRole('button', { name: 'Install' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
   });
 
   it('offers the installer when a newer version is published', async () => {
@@ -72,7 +72,7 @@ describe('DesktopUpdateRow', () => {
       expect(screen.getByRole('status')).toHaveTextContent('Version 1.3.0 is available.');
     });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Install' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Download installer' }));
     expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
   });
 

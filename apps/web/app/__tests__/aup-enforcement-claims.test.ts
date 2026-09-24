@@ -6,7 +6,10 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
-import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
+} from '@shared/types/toolApprovalPolicy';
 import { policyAutoApprovesTool } from '../api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { classifyToolLoopInputs } from '../api/llm/v1/chat/completions/lib/tool-loop-routing';
 import { TOOL_CALL_GATE_RANKS } from '../api/llm/v1/chat/completions/lib/tool-call-gate';
@@ -63,7 +66,7 @@ describe('Q-1 · "Your Tool Approvals setting decides, and it governs our own to
     expect(withMcp.approvalMode).toBe('manual');
   });
 
-  it('holds because the account default policy auto-approves nothing', () => {
+  it('keeps the failure fallback asking for every tool', () => {
     expect(DEFAULT_TOOL_APPROVAL_POLICY).toBe('ask_every_time');
     for (const name of ['gmail__list_messages', 'notion__search', 'slack__post_message']) {
       expect(policyAutoApprovesTool(DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(false);
@@ -73,17 +76,17 @@ describe('Q-1 · "Your Tool Approvals setting decides, and it governs our own to
     }
   });
 
-  it('governs our own tools on the default, which is what the page now claims', () => {
+  it('governs built-ins under the new website default', () => {
     const builtInsOnly = classifyToolLoopInputs(
       [],
       [{ function: { name: 'web_search' } }, { function: { name: 'url_fetch' } }],
-      DEFAULT_TOOL_APPROVAL_POLICY,
+      WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
     );
-    expect(builtInsOnly.approvalMode).toBe('manual');
+    expect(builtInsOnly.approvalMode).toBe('auto');
   });
 
   it('runs web search and page fetch without asking when read-only work is auto-approved', () => {
-    expect(AUP).toContain('web search, page fetch and code in the AGI sandbox run on their own');
+    expect(AUP).toContain('web search, page fetch and code in the AGI sandbox');
     const result = classifyToolLoopInputs(
       [],
       [{ function: { name: 'web_search' } }, { function: { name: 'url_fetch' } }],

@@ -19,11 +19,14 @@ vi.mock('./object-storage-runtime', () => ({
   objectStorageConfig: mocks.objectStorageConfig,
 }));
 
+import { OBJECT_STORAGE_ACCESS_KEY_ID_ENV } from '@agiworkforce/object-storage';
+
 import {
   BACKUP_ACCESS_KEY_ID_ENV,
   BACKUP_BUCKET_ENV,
   BACKUP_ENDPOINT_ENV,
   BACKUP_SECRET_ACCESS_KEY_ENV,
+  backupSharesPrimaryCredential,
   deleteBackupObject,
   missingBackupEnv,
   objectBackupReadiness,
@@ -70,6 +73,27 @@ describe('objectBackupReadiness', () => {
       BACKUP_ACCESS_KEY_ID_ENV,
       BACKUP_SECRET_ACCESS_KEY_ENV,
     ]);
+  });
+
+  it('calls a backup written under the primary storage key dependent on that key', () => {
+    const shared = {
+      [BACKUP_ENDPOINT_ENV]: 'https://backup',
+      [BACKUP_BUCKET_ENV]: 'agi-backup',
+      [BACKUP_ACCESS_KEY_ID_ENV]: 'key-one',
+      [BACKUP_SECRET_ACCESS_KEY_ENV]: 'backup-secret',
+      [OBJECT_STORAGE_ACCESS_KEY_ID_ENV]: 'key-one',
+    };
+
+    expect(backupSharesPrimaryCredential(shared)).toBe(true);
+    expect(objectBackupReadiness(shared).independentCredential).toBe(false);
+    expect(
+      objectBackupReadiness({ ...shared, [OBJECT_STORAGE_ACCESS_KEY_ID_ENV]: 'key-two' })
+        .independentCredential,
+    ).toBe(true);
+  });
+
+  it('does not call an unconfigured backup independent', () => {
+    expect(objectBackupReadiness({}).independentCredential).toBe(false);
   });
 
   it('reports only what is still missing when the backup is half configured', () => {
@@ -163,7 +187,7 @@ describe('reconcileBackupDeletions', () => {
 
 describe('requeueReplicasAfterRestore', () => {
   it('marks every tracked replica due so the sweep re-checks the whole bucket', async () => {
-    mocks.query.mockResolvedValueOnce([{ object_key: 'a.png' }, { object_key: 'b.png' }]);
+    mocks.query.mockResolvedValueOnce([{ requeued: '2' }]);
 
     await expect(requeueReplicasAfterRestore()).resolves.toBe(2);
 
@@ -171,5 +195,6 @@ describe('requeueReplicasAfterRestore', () => {
     expect(sql).toContain('object_backup_replicas');
     expect(sql).toContain("set verified_at = 'epoch'::timestamptz");
     expect(sql).not.toContain('where');
+    expect(sql).toContain('count(*)');
   });
 });

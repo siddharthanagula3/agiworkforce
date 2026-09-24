@@ -263,7 +263,7 @@
     },
     {
       "path": "apps/web/lib/support/tickets/store.ts",
-      "reason": "service context, following the access model 0089 states for the sibling handoff tables: no privilege is granted to app_rls and every statement here carries an explicit user_id predicate, including the reply insert and read, which are scoped through their ticket's owner rather than the reply's own author so a staff reply stays visible to the customer"
+      "reason": "service context, following the access model 0089 states for the sibling handoff tables: no privilege is granted to app_rls; every customer statement carries an explicit user_id predicate, the reply insert and read are scoped through the ticket's owner so a staff reply stays visible to the customer; every staff queue statement instead requires the acting id to be on the platform operator allowlist in the SQL; the escalation reads run behind requirePlatformAdmin"
     },
     {
       "path": "apps/web/lib/user-connector-tools.ts",

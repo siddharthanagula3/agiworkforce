@@ -178,4 +178,126 @@ describe('remote control host in the desktop main process', () => {
     expect(host.stop()).toMatchObject({ status: 'idle', qrPayload: null });
     expect(close).toHaveBeenCalled();
   });
+  it('returns to waiting when the phone goes away, and forgets its session', async () => {
+    const host = makeHost();
+    const started = host.start(startRequest());
+    const secret = secretFrom(started);
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT, deviceName: 'A phone' },
+    });
+    await flush();
+    expect(states.at(-1)).toMatchObject({ status: 'connected', phoneName: 'A phone' });
+
+    clientOptions?.onEvent({ type: 'peer_left', role: 'mobile' });
+    expect(states.at(-1)).toMatchObject({
+      status: 'waiting',
+      phoneName: null,
+      attachedSessions: 0,
+    });
+
+    const before = signals.length;
+    const session = createDispatchSession(deriveDispatchKey(CODE, SALT, secret));
+    clientOptions?.onEvent({
+      type: 'signal',
+      kind: 'control',
+      payload: signDispatchEnvelope(session, 'heartbeat', { action: 'heartbeat' }),
+    });
+    await flush();
+    expect(signals.length).toBe(before);
+  });
+
+  it('takes the phone back after it reconnects, on a key of its own', async () => {
+    const host = makeHost();
+    const started = host.start(startRequest());
+    const secret = secretFrom(started);
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT },
+    });
+    await flush();
+    clientOptions?.onEvent({ type: 'peer_left', role: 'mobile' });
+
+    const secondSalt = '0f1e2d3c4b5a6978';
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: secondSalt, deviceName: 'A phone again' },
+    });
+    await flush();
+    expect(states.at(-1)).toMatchObject({ status: 'connected', phoneName: 'A phone again' });
+
+    const before = signals.length;
+    const reconnected = createDispatchSession(deriveDispatchKey(CODE, secondSalt, secret));
+    clientOptions?.onEvent({
+      type: 'signal',
+      kind: 'control',
+      payload: signDispatchEnvelope(reconnected, 'heartbeat', {
+        action: 'heartbeat',
+        timestamp: 5,
+      }),
+    });
+    await flush();
+    expect(signals.length).toBeGreaterThan(before);
+  });
+
+  it('ignores a control still signed with the key the last session used', async () => {
+    const host = makeHost();
+    const started = host.start(startRequest());
+    const secret = secretFrom(started);
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT },
+    });
+    await flush();
+    clientOptions?.onEvent({ type: 'peer_left', role: 'mobile' });
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: '0f1e2d3c4b5a6978' },
+    });
+    await flush();
+
+    const before = signals.length;
+    const stale = createDispatchSession(deriveDispatchKey(CODE, SALT, secret));
+    clientOptions?.onEvent({
+      type: 'signal',
+      kind: 'control',
+      payload: signDispatchEnvelope(stale, 'heartbeat', { action: 'heartbeat' }),
+    });
+    await flush();
+    expect(signals.length).toBe(before);
+  });
+
+  it('ends the session when the relay drops it rather than waiting on a dead socket', () => {
+    for (const type of ['session_expired', 'terminated'] as const) {
+      states = [];
+      const host = makeHost();
+      host.start(startRequest());
+      clientOptions?.onEvent({ type, role: 'mobile' });
+      expect(states.at(-1), type).toMatchObject({ status: 'idle', qrPayload: null });
+      expect(host.state().status).toBe('idle');
+    }
+  });
+
+  it('says the relay failed only while nothing is connected through it', async () => {
+    const host = makeHost();
+    host.start(startRequest());
+    clientOptions?.onEvent({ type: 'error', role: 'mobile' });
+    expect(states.at(-1)).toMatchObject({ status: 'error' });
+
+    const connected = makeHost();
+    connected.start(startRequest());
+    clientOptions?.onEvent({
+      type: 'peer_ready',
+      role: 'mobile',
+      metadata: { dispatchSalt: SALT },
+    });
+    await flush();
+    clientOptions?.onEvent({ type: 'error', role: 'mobile' });
+    expect(connected.state().status).toBe('connected');
+  });
 });

@@ -33,6 +33,18 @@ export interface ActiveSpan {
   readonly traceId: string;
   readonly spanId: string;
   setAttributes(attributes: Readonly<Record<string, unknown>>): void;
+  /**
+   * The work was declined on purpose and the caller was answered normally
+   * rather than raised at. Without this the span closes ok, so a refusal is
+   * counted as a success and the rate of the thing failing never moves. The
+   * reason comes from the caller's own closed set, never from provider text.
+   */
+  refuse(reason: string, detail: string): void;
+}
+
+interface SpanFailure {
+  readonly type: string;
+  readonly message: string;
 }
 
 const DEFAULT_SPAN_KIND: SpanKind = 'internal';
@@ -48,6 +60,17 @@ export function annotateActiveSpan(attributes: Readonly<Record<string, unknown>>
   const context = getTraceContext();
   if (!context) return;
   activeSpans.get(context)?.setAttributes(attributes);
+}
+
+/**
+ * The span this call is running inside, so an operation that decides its
+ * outcome deep in nested work can settle its OWN span rather than whichever
+ * span happens to be active at the moment it decides.
+ */
+export function activeSpan(): ActiveSpan | null {
+  const context = getTraceContext();
+  if (!context) return null;
+  return activeSpans.get(context) ?? null;
 }
 
 export async function withSpan<R>(
@@ -67,17 +90,21 @@ export async function withSpan<R>(
     ...(parent?.userId === undefined ? {} : { userId: parent.userId }),
   };
   const extra: Record<string, unknown> = {};
+  let refusal: SpanFailure | null = null;
   const span: ActiveSpan = {
     traceId: context.traceId,
     spanId: context.spanId,
     setAttributes(attributes) {
       Object.assign(extra, attributes);
     },
+    refuse(reason, detail) {
+      refusal ??= { type: reason, message: detail };
+    },
   };
   activeSpans.set(context, span);
 
   const startedAt = Date.now();
-  const emit = (status: 'ok' | 'error', error?: unknown): void => {
+  const emit = (status: 'ok' | 'error', failure?: SpanFailure): void => {
     const durationMs = Date.now() - startedAt;
     const attributes = redactAttributes({ ...options.attributes, ...extra });
     recordSpanMetrics({
@@ -101,12 +128,11 @@ export async function withSpan<R>(
       ...attributes,
     };
     bridged.setAttributes({ ...attributes, [SPAN_DOMAIN_ATTRIBUTE]: options.domain });
-    if (status === 'error') {
-      const type = error instanceof Error ? error.name : typeof error;
-      const message = redactValue(error instanceof Error ? error.message : String(error));
-      record['error.type'] = type;
+    if (failure) {
+      const message = redactValue(failure.message);
+      record['error.type'] = failure.type;
       record['error.message'] = message;
-      bridged.setError(type, message);
+      bridged.setError(failure.type, message);
       bridged.end();
       logger.error(record, `span ${name} failed`);
       return;
@@ -120,10 +146,14 @@ export async function withSpan<R>(
 
   try {
     const result = await runWithTraceContext(context, () => bridged.runWith(() => fn(span)));
-    emit('ok');
+    if (refusal) emit('error', refusal);
+    else emit('ok');
     return result;
   } catch (error) {
-    emit('error', error);
+    emit('error', {
+      type: error instanceof Error ? error.name : typeof error,
+      message: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 }

@@ -23,21 +23,21 @@
  */
 
 .root {
-  --support-bg: var(--agi-bg-2, #131109);
-  --support-card: var(--agi-card, #131109);
-  --support-ink: var(--agi-ink, #f5f0e6);
-  --support-ink-2: var(--agi-ink-2, #c4bcac);
-  --support-ink-quiet: var(--agi-ink-quiet, #948b79);
-  --support-rule: var(--agi-rule-strong, rgba(245, 240, 230, 0.17));
-  --support-accent: var(--agi-amber, #f0a84a);
-  --support-accent-soft: var(--agi-amber-soft, rgba(240, 168, 74, 0.16));
-  --support-button-bg: var(--agi-button-bg, #f5f0e6);
-  --support-button-ink: var(--agi-button-ink, #0b0a08);
-  --support-error: var(--agi-error, #eb6a55);
-  --support-shadow: var(--agi-shadow, rgba(0, 0, 0, 0.5));
+  --support-bg: var(--agi-bg-2);
+  --support-card: var(--agi-card);
+  --support-ink: var(--agi-ink);
+  --support-ink-2: var(--agi-ink-2);
+  --support-ink-quiet: var(--agi-ink-quiet);
+  --support-rule: var(--agi-rule-strong);
+  --support-accent: var(--agi-amber);
+  --support-accent-soft: var(--agi-amber-soft);
+  --support-button-bg: var(--agi-button-bg);
+  --support-button-ink: var(--agi-button-ink);
+  --support-error: var(--agi-error);
+  --support-shadow: var(--agi-shadow);
   --support-radius: 14px;
-  --support-dur: var(--agi-dur-fast, 180ms);
-  --support-ease: var(--agi-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+  --support-dur: var(--duration-quick);
+  --support-ease: var(--curve-standard);
 
   position: fixed;
   right: 1rem;
@@ -47,8 +47,8 @@
      the fixed 148px this used to carry was short by 119px at 390, and applied
      just as wrongly once the banner was closed. */
   bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + var(--agi-consent-inset, 0px));
-  /* Strictly below CookieConsent and OfflineIndicator, which are both z-50. */
-  z-index: 40;
+  /* Strictly below CookieConsent and OfflineIndicator, which use --z-notification. */
+  z-index: var(--z-panel);
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -83,7 +83,7 @@
   min-width: 48px;
   padding: 0 16px;
   border: 1px solid var(--support-rule);
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   background: var(--support-card);
   color: var(--support-ink);
   font: inherit;
@@ -140,7 +140,7 @@
 /* ── Panel ────────────────────────────────────────────────────────── */
 
 .panel {
-  z-index: 45;
+  z-index: var(--z-panel-raised);
   display: flex;
   flex-direction: column;
   width: min(380px, calc(100vw - 2rem));
@@ -192,7 +192,7 @@
   min-width: 0;
   padding: 4px 8px;
   border: 1px solid var(--support-rule);
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   font-size: 12px;
   color: var(--support-ink-2);
   white-space: nowrap;
@@ -207,7 +207,7 @@
   min-height: 32px;
   padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--corner-field);
   background: transparent;
   color: var(--support-ink-2);
   font: inherit;
@@ -247,7 +247,8 @@
   max-width: 88%;
   min-width: 0;
   padding: 8px 12px;
-  border-radius: 12px 12px 4px 12px;
+  border-radius: var(--corner-surface) var(--corner-surface) var(--corner-compact)
+    var(--corner-surface);
   background: var(--support-accent-soft);
   font-size: 13.5px;
   line-height: 1.55;
@@ -277,7 +278,7 @@
   padding: 12px 14px;
   border: 1px solid var(--support-rule);
   border-left: 3px solid var(--support-accent);
-  border-radius: 10px;
+  border-radius: var(--corner-menu);
   background: color-mix(in srgb, var(--support-accent) 8%, transparent);
   font-size: 13.5px;
   line-height: 1.6;
@@ -338,7 +339,7 @@
   max-width: 100%;
   padding: 3px 10px;
   border: 1px solid var(--support-rule);
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   color: var(--support-ink);
   font-size: 12px;
   /* Never colour-only: the underline carries the affordance too. */
@@ -363,7 +364,7 @@
   min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--support-rule);
-  border-radius: 10px;
+  border-radius: var(--corner-menu);
   background: var(--support-card);
   font-size: 13px;
   line-height: 1.55;
@@ -399,7 +400,7 @@
   margin-top: 8px;
   padding: 2px 8px;
   border: 1px solid var(--support-rule);
-  border-radius: 999px;
+  border-radius: var(--corner-pill);
   font-size: 12px;
   color: var(--support-ink-quiet);
 }
@@ -415,7 +416,7 @@
   margin-top: 10px;
   padding: 10px;
   border: 1px dashed var(--support-accent);
-  border-radius: 8px;
+  border-radius: var(--corner-field);
   font-family: var(--agi-font-mono, ui-monospace, SFMono-Regular, monospace);
   font-size: 12px;
   word-break: break-all;
@@ -435,7 +436,7 @@
   min-height: 44px;
   min-width: 0;
   padding: 10px 16px;
-  border-radius: 9px;
+  border-radius: var(--corner-menu);
   font: inherit;
   font-size: 13px;
   font-weight: 650;
@@ -539,7 +540,8 @@
   max-width: 88%;
   min-width: 0;
   padding: 8px 12px;
-  border-radius: 12px 12px 12px 4px;
+  border-radius: var(--corner-surface) var(--corner-surface) var(--corner-surface)
+    var(--corner-compact);
   border: 1px solid var(--support-rule);
   background: var(--support-card);
   font-size: 13.5px;
@@ -574,7 +576,7 @@
   min-height: 44px;
   padding: 10px 12px;
   border: 1px solid var(--support-rule);
-  border-radius: 9px;
+  border-radius: var(--corner-menu);
   background: var(--support-bg);
   color: var(--support-ink);
   font: inherit;
@@ -598,7 +600,7 @@
   min-width: 44px;
   padding: 10px 14px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--corner-menu);
   background: var(--support-button-bg);
   color: var(--support-button-ink);
   font: inherit;
@@ -634,7 +636,7 @@
   min-width: 0;
   padding: 10px 12px;
   border: 1px solid var(--support-rule);
-  border-radius: 9px;
+  border-radius: var(--corner-menu);
   background: var(--support-bg);
   color: var(--support-ink);
   font: inherit;

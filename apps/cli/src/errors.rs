@@ -1,4 +1,6 @@
+use agiworkforce_llm::StreamFailureDetail;
 use agiworkforce_protocol::developer_session::{TurnFailure, TurnFailureCode};
+use agiworkforce_protocol::error::AgiworkforceErr;
 use regex::Regex;
 use std::fmt;
 use std::sync::LazyLock;
@@ -65,6 +67,69 @@ pub fn detect_context_overflow(message: &str) -> bool {
 // Error enum
 // ---------------------------------------------------------------------------
 
+/// Why a generation produced no turn worth delivering.
+///
+/// Each member owns its own two sentences: what happened, then the one next
+/// move. They are the sentences the web and the extension already show for the
+/// same three outcomes, so a reader who meets one in the terminal and again in
+/// an editor is told the same thing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncompleteTurnCause {
+    /// Nothing came back: no text and no tool call.
+    NoResponse,
+    /// The provider's safety layer stopped the response.
+    RefusedBySafety,
+    /// The answer was cut at the model's output limit.
+    OutputLimitReached,
+}
+
+impl IncompleteTurnCause {
+    /// What happened, as one sentence with no provider text in it.
+    pub fn summary(self) -> &'static str {
+        match self {
+            Self::NoResponse => "The model returned no response for this turn.",
+            Self::RefusedBySafety => "The safety system stopped this response.",
+            Self::OutputLimitReached => {
+                "The answer reached this model's maximum length and stopped there."
+            }
+        }
+    }
+
+    /// The one next move.
+    pub fn next_move(self) -> &'static str {
+        match self {
+            Self::NoResponse => "Send it again, or rephrase your message.",
+            Self::RefusedBySafety => "Rephrase the request and send it again.",
+            Self::OutputLimitReached => "Ask for a shorter answer, or split the request.",
+        }
+    }
+
+    /// Both sentences, for a surface that shows one line beside a delivered
+    /// answer rather than an error and a hint on separate lines.
+    pub fn notice(self) -> String {
+        format!("{} {}", self.summary(), self.next_move())
+    }
+
+    /// Stable, machine-readable kind for `--json` and `--json-events`.
+    pub fn kind(self) -> &'static str {
+        match self {
+            Self::NoResponse => "empty_response",
+            Self::RefusedBySafety => "refused_by_safety",
+            Self::OutputLimitReached => "output_limit_reached",
+        }
+    }
+
+    /// The protocol's own member for this outcome. Retryability and the action
+    /// a surface offers are read from there, never decided a second time here.
+    pub fn code(self) -> TurnFailureCode {
+        match self {
+            Self::NoResponse => TurnFailureCode::ProviderUnavailable,
+            Self::RefusedBySafety => TurnFailureCode::RefusedBySafety,
+            Self::OutputLimitReached => TurnFailureCode::OutputLimitReached,
+        }
+    }
+}
+
 /// Structured error types for the CLI.
 ///
 /// Replaces ad-hoc `anyhow::bail!` calls with typed, matchable errors that
@@ -109,6 +174,8 @@ pub enum CliError {
         provider: String,
         message: String,
         is_retryable: bool,
+        /// The code, stated wait and reference the gateway sent, when it did.
+        detail: StreamFailureDetail,
     },
     /// No AGI Workforce session, and no other route can run the model.
     AccountSignedOut { model: String },
@@ -126,6 +193,13 @@ pub enum CliError {
         feature: String,
         required_tier: String,
         reason: String,
+    },
+    /// The provider answered and the turn still has nothing to deliver: no
+    /// text and no tool calls, a response its safety layer stopped, or an
+    /// answer cut at the model's output limit before any of it arrived.
+    IncompleteTurn {
+        provider: String,
+        cause: IncompleteTurnCause,
     },
     /// The deployment no longer answers the contract version this build sends.
     /// Nothing about the request is wrong, so it is not an API failure: the
@@ -212,6 +286,9 @@ impl fmt::Display for CliError {
                 write!(f, "[{}] Authentication failed: {}", provider, message)
             }
             CliError::Config { message } => write!(f, "Configuration error: {}", message),
+            CliError::IncompleteTurn { provider, cause } => {
+                write!(f, "[{}] {}", provider, cause.summary())
+            }
             CliError::ClientUpdateRequired {
                 message,
                 minimum_api_version,
@@ -274,7 +351,7 @@ impl fmt::Display for CliError {
             } => {
                 write!(
                     f,
-                    "Cloud chat requires {} plan. Reason: {}\nUpgrade: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
+                    "Cloud chat requires {} plan. Reason: {}\nPlans and access codes: https://agiworkforce.com/pricing?from=cli-paywall&tier={}&feature={}",
                     required_tier,
                     reason,
                     urlencoding::encode(required_tier),
@@ -294,6 +371,7 @@ impl CliError {
             | CliError::Auth { message, .. }
             | CliError::AuthMissing { message, .. }
             | CliError::StreamError { message, .. } => message.clone(),
+            CliError::IncompleteTurn { cause, .. } => cause.summary().to_string(),
             CliError::RateLimited { retry_after, .. } => match retry_after {
                 Some(secs) => format!("Rate limited, retry after {secs}s"),
                 None => "Rate limited, please wait before retrying".to_string(),
@@ -319,19 +397,34 @@ pub fn terminal_text(error: &anyhow::Error) -> String {
 /// beside the text so a script reads them without parsing prose.
 pub fn result_error_json(error: &anyhow::Error) -> serde_json::Value {
     let cli = cli_cause(error);
+    let failure = cli.map(CliError::turn_failure);
     serde_json::json!({
         "type": "result",
         "is_error": true,
         "error": format!("{error:#}"),
         "kind": cli.map(CliError::kind),
         "hint": cli.map(CliError::hint),
+        // The same two facts every other surface shows, where a script reads
+        // them instead of parsing them back out of the sentence.
+        "retry_after_seconds": failure.as_ref().and_then(|failure| failure.retry_after_seconds),
+        "reference": engine_cause(error)
+            .and_then(AgiworkforceErr::request_id)
+            .or_else(|| failure.as_ref().and_then(|failure| failure.request_id.as_deref())),
     })
 }
 
-fn cli_cause(error: &anyhow::Error) -> Option<&CliError> {
+pub(crate) fn cli_cause(error: &anyhow::Error) -> Option<&CliError> {
     error
         .chain()
         .find_map(|cause| cause.downcast_ref::<CliError>())
+}
+
+/// The shared engine's own error, when one is in the chain. It carries the
+/// reference the CLI's own error type never had.
+fn engine_cause(error: &anyhow::Error) -> Option<&AgiworkforceErr> {
+    error
+        .chain()
+        .find_map(|cause| cause.downcast_ref::<AgiworkforceErr>())
 }
 
 // ---------------------------------------------------------------------------
@@ -355,6 +448,7 @@ impl CliError {
             CliError::Auth { .. } => "auth_expired",
             CliError::AuthMissing { .. } => "auth_missing",
             CliError::Config { .. } => "config_invalid",
+            CliError::IncompleteTurn { cause, .. } => cause.kind(),
             CliError::ClientUpdateRequired { .. } => "client_update_required",
             CliError::Tool { .. } => "tool_failed",
             CliError::Network { .. } => "network",
@@ -418,6 +512,7 @@ impl CliError {
                  file path manually."
                     .to_string()
             }
+            CliError::IncompleteTurn { cause, .. } => cause.next_move().to_string(),
             CliError::ClientUpdateRequired { .. } => {
                 "Run `agi update` to install a build this deployment still answers.".to_string()
             }
@@ -445,30 +540,27 @@ impl CliError {
                      or wait and retry."
                 ),
             },
-            CliError::StreamError { is_retryable, .. } => if *is_retryable {
-                "Stream disconnected. Retrying automatically; if it persists, check provider \
-                 status."
-            } else {
-                "Pick another model with `agi models list`, or try again later."
-            }
-            .to_string(),
+            CliError::StreamError {
+                is_retryable,
+                detail,
+                ..
+            } => stream_failure_hint(*is_retryable, detail),
             CliError::AccountSignedOut { .. } => {
                 "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
                     .to_string()
             }
-            CliError::PlanExcludesModel { .. } => {
-                "Upgrade at https://agiworkforce.com/pricing, choose a model your plan includes, \
-                 or set that provider's own key."
-                    .to_string()
-            }
+            CliError::PlanExcludesModel { .. } => format!(
+                "Choose a model your plan includes, or set that provider's own key. \
+                 {PAID_UPGRADES_ARE_STAGED}"
+            ),
             CliError::ModelUnavailable { .. } => {
                 "Choose another model, or try again shortly; `agi models list` shows what is \
                  available now."
                     .to_string()
             }
-            CliError::Paywall { required_tier, .. } => format!(
-                "Visit https://agiworkforce.com/pricing to upgrade to {required_tier}, \
-                 or switch to a BYOK provider with `--provider anthropic`."
+            CliError::Paywall { .. } => format!(
+                "Run `agi usage` to see when the limit resets, or switch to your own provider \
+                 key with `--provider <name>`. {PAID_UPGRADES_ARE_STAGED}"
             ),
         }
     }
@@ -565,6 +657,30 @@ impl CliError {
             provider: provider.into(),
             message: message.into(),
             is_retryable,
+            detail: StreamFailureDetail::default(),
+        }
+    }
+
+    /// A stream error with what the gateway's own error frame stated.
+    pub fn stream_failure(
+        provider: impl Into<String>,
+        message: impl Into<String>,
+        is_retryable: bool,
+        detail: StreamFailureDetail,
+    ) -> Self {
+        CliError::StreamError {
+            provider: provider.into(),
+            message: message.into(),
+            is_retryable,
+            detail,
+        }
+    }
+
+    /// A generation that finished without a turn to deliver.
+    pub fn incomplete_turn(provider: impl Into<String>, cause: IncompleteTurnCause) -> Self {
+        CliError::IncompleteTurn {
+            provider: provider.into(),
+            cause,
         }
     }
 
@@ -595,6 +711,16 @@ impl CliError {
             CliError::Auth { .. } | CliError::AuthMissing { .. } => ExitClass::NoPermission,
             CliError::AccountSignedOut { .. } => ExitClass::NoPermission,
             CliError::Config { .. } => ExitClass::Configuration,
+            // A turn that came back empty is worth sending again; one the
+            // safety layer stopped, or one already cut at the model's limit,
+            // reproduces itself, so it is not a temporary failure.
+            CliError::IncompleteTurn { cause, .. } => {
+                if cause.code().is_retryable() {
+                    ExitClass::TemporaryFailure
+                } else {
+                    ExitClass::Failure
+                }
+            }
             CliError::Tool { .. } => ExitClass::Failure,
             CliError::Network { .. } => ExitClass::Unavailable,
             CliError::ContextOverflow { .. } => ExitClass::DataError,
@@ -637,12 +763,13 @@ impl CliError {
                 (TurnFailureCode::ProviderRateLimited, Some(provider))
             }
             // A paywall is a quota the account has spent, not a broken
-            // credential: the same shape as a rate limit, and the remedy is
-            // the plan rather than a sign-in.
+            // credential and not the provider refusing traffic: the remedy is
+            // the plan, and a reader told to retry in a moment waits out a
+            // window that only the billing period reopens.
             CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
             CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
             CliError::ModelUnavailable { .. } => (TurnFailureCode::ProviderUnavailable, None),
-            CliError::Paywall { .. } => (TurnFailureCode::ProviderRateLimited, None),
+            CliError::Paywall { .. } => (TurnFailureCode::UsageLimitReached, None),
             CliError::Api {
                 provider, status, ..
             } => (
@@ -655,9 +782,20 @@ impl CliError {
                 },
                 Some(provider),
             ),
-            CliError::StreamError { provider, .. } => {
-                (TurnFailureCode::ProviderUnavailable, Some(provider))
-            }
+            // The provider had begun answering and the connection ended, which
+            // is not the same failure as a provider that never answered: the
+            // reply the reader can see is real and only the rest is missing.
+            CliError::StreamError {
+                provider, detail, ..
+            } => (
+                detail
+                    .code
+                    .as_deref()
+                    .and_then(turn_failure_code_for_gateway_code)
+                    .unwrap_or(TurnFailureCode::StreamInterrupted),
+                Some(provider),
+            ),
+            CliError::IncompleteTurn { provider, cause } => (cause.code(), Some(provider)),
             CliError::Network { .. } => (TurnFailureCode::Network, None),
             CliError::ContextOverflow { .. } => (TurnFailureCode::ContextWindowExceeded, None),
             CliError::Tool { .. } => (TurnFailureCode::ToolDenied, None),
@@ -665,6 +803,17 @@ impl CliError {
             CliError::ClientUpdateRequired { .. } => (TurnFailureCode::InvalidRequest, None),
         };
         let failure = TurnFailure::new(code, self.detail());
+        // Only a figure the provider itself sent in `Retry-After` ever becomes
+        // a wait a surface states.
+        let failure = match self {
+            CliError::RateLimited { retry_after, .. } => {
+                failure.with_retry_after_seconds(*retry_after)
+            }
+            CliError::StreamError { detail, .. } => failure
+                .with_retry_after_seconds(detail.retry_after)
+                .with_request_id(detail.request_id.clone()),
+            _ => failure,
+        };
         match (provider, self) {
             (Some(provider), _) => failure.with_provider(provider.clone()),
             (None, CliError::ModelUnavailable { .. }) => failure.with_provider(
@@ -673,6 +822,81 @@ impl CliError {
             (None, _) => failure,
         }
     }
+}
+
+/// Upgrades are gated by an access code or the waitlist, so no hint may read as
+/// a self serve purchase.
+const PAID_UPGRADES_ARE_STAGED: &str = "Paid upgrades are opening in stages and need an access \
+     code or a place on the waitlist: https://agiworkforce.com/pricing";
+
+/// The next move for a failure the gateway reported inside an open stream. A
+/// wait is stated only when the provider stated one.
+fn stream_failure_hint(is_retryable: bool, detail: &StreamFailureDetail) -> String {
+    let code = detail
+        .code
+        .as_deref()
+        .and_then(turn_failure_code_for_gateway_code);
+    let next = match code {
+        Some(TurnFailureCode::FreeAllowanceExhausted) => {
+            "This is the allowance every Free account shares, not a limit on yours. Try again \
+             later, or switch to your own provider key with `--provider <name>`."
+        }
+        Some(TurnFailureCode::RefusedBySafety) => "Rephrase the request and send it again.",
+        Some(TurnFailureCode::OutputLimitReached) => {
+            "Ask for a shorter answer, or split the request."
+        }
+        Some(TurnFailureCode::ContextWindowExceeded) => {
+            "Try `/compact` to summarize history, or switch to a model with a larger context \
+             window."
+        }
+        Some(TurnFailureCode::InvalidRequest) => {
+            "Change the request or the attachment it names, then send it again."
+        }
+        Some(TurnFailureCode::Interrupted) => "Send it again when you are ready.",
+        _ if is_retryable => {
+            "Stream disconnected. Retrying automatically; if it persists, check provider status."
+        }
+        _ => "Pick another model with `agi models list`, or try again later.",
+    };
+    let wait = detail
+        .retry_after
+        .map(|secs| format!("Wait {secs}s before sending it again. "))
+        .unwrap_or_default();
+    let reference = detail
+        .request_id
+        .as_deref()
+        .map(|id| format!("\nReference: {id}"))
+        .unwrap_or_default();
+    format!("{wait}{next}{reference}")
+}
+
+/// The gateway's in-stream failure code as the protocol's closed set. A code
+/// this does not know stays a stream interruption, which is what was observed.
+fn turn_failure_code_for_gateway_code(code: &str) -> Option<TurnFailureCode> {
+    Some(match code {
+        "provider_rate_limited" => TurnFailureCode::ProviderRateLimited,
+        "free_allowance_exhausted" => TurnFailureCode::FreeAllowanceExhausted,
+        // The platform's own route failed; the reader's key and plan are fine.
+        "provider_quota_exhausted"
+        | "provider_billing_exhausted"
+        | "provider_credentials_rejected"
+        | "provider_overloaded"
+        | "provider_unreachable"
+        | "provider_paused_turn"
+        | "provider_error"
+        | "model_not_found"
+        | "empty_response" => TurnFailureCode::ProviderUnavailable,
+        "provider_timeout" => TurnFailureCode::Timeout,
+        "context_length_exceeded" => TurnFailureCode::ContextWindowExceeded,
+        "max_output_tokens_exceeded" => TurnFailureCode::OutputLimitReached,
+        "content_filter" | "content_blocked" => TurnFailureCode::RefusedBySafety,
+        "request_cancelled" => TurnFailureCode::Interrupted,
+        "attachment_too_large"
+        | "unsupported_attachment"
+        | "tool_call_invalid"
+        | "provider_rejected_request" => TurnFailureCode::InvalidRequest,
+        _ => return None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -707,6 +931,9 @@ impl CliError {
             | CliError::ModelUnavailable { .. } => true,
             CliError::Api { status, .. } => RETRYABLE_API_STATUSES.contains(status),
             CliError::StreamError { is_retryable, .. } => *is_retryable,
+            // The protocol already decides which of these a caller may send
+            // again; a second table here would let the two drift.
+            CliError::IncompleteTurn { cause, .. } => cause.code().is_retryable(),
             _ => false,
         }
     }
@@ -913,6 +1140,169 @@ mod tests {
         assert!(json["hint"].as_str().unwrap().contains("agi login"));
         let plain = result_error_json(&anyhow::anyhow!("plain"));
         assert!(plain["kind"].is_null() && plain["hint"].is_null());
+    }
+
+    /// A script reads the wait and the reference as fields. Before they were
+    /// carried, the only way to get either was to parse them back out of the
+    /// English sentence, which changes whenever the copy does.
+    #[test]
+    fn the_json_result_carries_the_wait_and_the_reference_as_fields() {
+        let timed = result_error_json(&anyhow::Error::new(CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: Some(45),
+        }));
+        assert_eq!(timed["retry_after_seconds"], 45);
+
+        let untimed = result_error_json(&anyhow::Error::new(CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: None,
+        }));
+        assert!(
+            untimed["retry_after_seconds"].is_null(),
+            "no header, no figure: {untimed}"
+        );
+        assert!(untimed["reference"].is_null());
+
+        let referenced = result_error_json(&anyhow::Error::new(
+            agiworkforce_protocol::error::AgiworkforceErr::RetryLimit(
+                agiworkforce_protocol::error::RetryLimitReachedError {
+                    status: reqwest::StatusCode::SERVICE_UNAVAILABLE,
+                    request_id: Some("req_7f3a".to_string()),
+                },
+            ),
+        ));
+        assert_eq!(referenced["reference"], "req_7f3a");
+    }
+
+    /// The wait a provider asked for reaches the clients that render it, and
+    /// nothing else does. A figure the CLI made up is worse than no figure.
+    #[test]
+    fn the_typed_failure_carries_only_a_wait_the_provider_sent() {
+        let timed = CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: Some(45),
+        }
+        .turn_failure();
+        assert_eq!(timed.code, TurnFailureCode::ProviderRateLimited);
+        assert_eq!(timed.retry_after_seconds, Some(45));
+
+        let untimed = CliError::RateLimited {
+            provider: "deepseek".to_string(),
+            retry_after: None,
+        }
+        .turn_failure();
+        assert_eq!(untimed.retry_after_seconds, None);
+
+        // A spent account quota is the reader's own limit, and a connection
+        // that ended part way through is not a provider that never answered.
+        assert_eq!(
+            CliError::paywall("chat", "pro", "quota")
+                .turn_failure()
+                .code,
+            TurnFailureCode::UsageLimitReached
+        );
+        assert_eq!(
+            CliError::stream_error("deepseek", "dropped", true)
+                .turn_failure()
+                .code,
+            TurnFailureCode::StreamInterrupted
+        );
+    }
+
+    fn gateway_failure(code: &str) -> CliError {
+        CliError::stream_failure(
+            "managed_cloud",
+            "The gateway's own sentence.",
+            false,
+            StreamFailureDetail {
+                code: Some(code.to_string()),
+                retry_after: Some(42),
+                request_id: Some("req_7f3a".to_string()),
+            },
+        )
+    }
+
+    #[test]
+    fn a_gateway_stream_failure_keeps_its_code_wait_and_reference() {
+        let failure = gateway_failure("provider_rate_limited").turn_failure();
+        assert_eq!(failure.code, TurnFailureCode::ProviderRateLimited);
+        assert_eq!(failure.retry_after_seconds, Some(42));
+        assert_eq!(failure.request_id.as_deref(), Some("req_7f3a"));
+        assert_eq!(failure.message, "The gateway's own sentence.");
+
+        for (code, expected) in [
+            (
+                "free_allowance_exhausted",
+                TurnFailureCode::FreeAllowanceExhausted,
+            ),
+            ("content_filter", TurnFailureCode::RefusedBySafety),
+            (
+                "max_output_tokens_exceeded",
+                TurnFailureCode::OutputLimitReached,
+            ),
+            (
+                "context_length_exceeded",
+                TurnFailureCode::ContextWindowExceeded,
+            ),
+            // The platform's credential, never the reader's: no "fix your key".
+            (
+                "provider_credentials_rejected",
+                TurnFailureCode::ProviderUnavailable,
+            ),
+            (
+                "a_code_from_a_newer_gateway",
+                TurnFailureCode::StreamInterrupted,
+            ),
+        ] {
+            assert_eq!(
+                gateway_failure(code).turn_failure().code,
+                expected,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_gateway_stream_failure_hint_states_only_what_was_sent() {
+        let timed = gateway_failure("provider_rate_limited").hint();
+        assert!(
+            timed.starts_with("Wait 42s before sending it again."),
+            "{timed}"
+        );
+        assert!(timed.ends_with("Reference: req_7f3a"), "{timed}");
+
+        let untimed = CliError::stream_error("managed_cloud", "dropped", false).hint();
+        assert!(!untimed.contains("Wait"), "{untimed}");
+        assert!(!untimed.contains("Reference"), "{untimed}");
+
+        let shared = gateway_failure("free_allowance_exhausted").hint();
+        assert!(shared.contains("not a limit on yours"), "{shared}");
+        assert!(gateway_failure("content_filter")
+            .hint()
+            .contains("Rephrase"));
+    }
+
+    #[test]
+    fn no_hint_offers_a_self_serve_upgrade() {
+        for hint in [
+            CliError::paywall("chat", "pro", "quota").hint(),
+            CliError::PlanExcludesModel {
+                model: "fixture-model".to_string(),
+                tier: "free".to_string(),
+            }
+            .hint(),
+        ] {
+            assert!(hint.contains("access code"), "{hint}");
+            assert!(!hint.to_lowercase().contains("upgrade to"), "{hint}");
+            assert!(!hint.contains("Upgrade at"), "{hint}");
+        }
+    }
+
+    #[test]
+    fn a_stream_failure_with_no_stated_wait_states_none() {
+        let failure = CliError::stream_error("managed_cloud", "dropped", true).turn_failure();
+        assert_eq!(failure.retry_after_seconds, None);
+        assert_eq!(failure.request_id, None);
     }
 
     #[test]
@@ -1453,6 +1843,163 @@ mod tests {
                 "{class:?} took the parser's status"
             );
             assert!(class.label().len() > 10, "{class:?} has no sentence");
+        }
+    }
+
+    // -- A turn that came back with nothing to deliver --
+
+    /// The three sentences, exactly. `output_limit_reached` and
+    /// `refused_by_safety` are word for word what
+    /// `apps/web/features/code/local-code.ts` and the VS Code sidebar already
+    /// show, so a reader who meets one in the terminal and again in the editor
+    /// is told one story.
+    #[test]
+    fn an_incomplete_turn_says_what_happened_then_the_one_next_move() {
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::OutputLimitReached)
+                .to_string(),
+            "[openai] The answer reached this model's maximum length and stopped there."
+        );
+        assert_eq!(
+            IncompleteTurnCause::OutputLimitReached.next_move(),
+            "Ask for a shorter answer, or split the request."
+        );
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::RefusedBySafety).to_string(),
+            "[openai] The safety system stopped this response."
+        );
+        assert_eq!(
+            IncompleteTurnCause::RefusedBySafety.next_move(),
+            "Rephrase the request and send it again."
+        );
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::NoResponse).to_string(),
+            "[openai] The model returned no response for this turn."
+        );
+        assert_eq!(
+            IncompleteTurnCause::NoResponse.next_move(),
+            "Send it again, or rephrase your message."
+        );
+    }
+
+    #[test]
+    fn an_incomplete_turn_notice_is_the_two_sentences_a_reader_sees_beside_the_answer() {
+        assert_eq!(
+            IncompleteTurnCause::OutputLimitReached.notice(),
+            "The answer reached this model's maximum length and stopped there. Ask for a \
+             shorter answer, or split the request."
+        );
+    }
+
+    #[test]
+    fn the_terminal_prints_the_failure_and_its_remedy_for_an_incomplete_turn() {
+        let error = anyhow::Error::new(CliError::incomplete_turn(
+            "google",
+            IncompleteTurnCause::NoResponse,
+        ));
+        assert_eq!(
+            terminal_text(&error),
+            "[google] The model returned no response for this turn.\nSend it again, or rephrase \
+             your message."
+        );
+    }
+
+    /// Each cause maps onto the protocol's own member, and nothing here decides
+    /// retryability a second time: a caller may send an empty turn again
+    /// because `ProviderUnavailable` says so, and may not send a refusal or a
+    /// truncation again because those reproduce themselves.
+    #[test]
+    fn every_incomplete_cause_takes_its_code_and_its_retryability_from_the_protocol() {
+        for (cause, code) in [
+            (
+                IncompleteTurnCause::NoResponse,
+                TurnFailureCode::ProviderUnavailable,
+            ),
+            (
+                IncompleteTurnCause::RefusedBySafety,
+                TurnFailureCode::RefusedBySafety,
+            ),
+            (
+                IncompleteTurnCause::OutputLimitReached,
+                TurnFailureCode::OutputLimitReached,
+            ),
+        ] {
+            assert_eq!(cause.code(), code);
+            let error = CliError::incomplete_turn("anthropic", cause);
+            assert_eq!(error.turn_failure().code, code);
+            assert_eq!(error.turn_failure().provider.as_deref(), Some("anthropic"));
+            assert_eq!(
+                error.is_retryable(),
+                code.is_retryable(),
+                "{cause:?} must not answer retryability differently from the protocol"
+            );
+        }
+        assert!(
+            CliError::incomplete_turn("anthropic", IncompleteTurnCause::NoResponse).is_retryable()
+        );
+        assert!(
+            !CliError::incomplete_turn("anthropic", IncompleteTurnCause::RefusedBySafety)
+                .is_retryable()
+        );
+        assert!(
+            !CliError::incomplete_turn("anthropic", IncompleteTurnCause::OutputLimitReached)
+                .is_retryable()
+        );
+    }
+
+    #[test]
+    fn an_incomplete_turn_exits_on_whether_the_same_command_may_survive() {
+        assert_eq!(
+            CliError::incomplete_turn("openai", IncompleteTurnCause::NoResponse).exit_class(),
+            ExitClass::TemporaryFailure
+        );
+        for reproduces in [
+            IncompleteTurnCause::RefusedBySafety,
+            IncompleteTurnCause::OutputLimitReached,
+        ] {
+            assert_eq!(
+                CliError::incomplete_turn("openai", reproduces).exit_class(),
+                ExitClass::Failure
+            );
+        }
+    }
+
+    #[test]
+    fn the_json_result_of_an_incomplete_turn_carries_its_kind_and_its_hint() {
+        let json = result_error_json(&anyhow::Error::new(CliError::incomplete_turn(
+            "google",
+            IncompleteTurnCause::RefusedBySafety,
+        )));
+        assert_eq!(json["kind"], "refused_by_safety");
+        assert_eq!(json["hint"], "Rephrase the request and send it again.");
+        assert_eq!(
+            json["error"],
+            "[google] The safety system stopped this response."
+        );
+        assert_eq!(json["retry_after_seconds"], serde_json::Value::Null);
+    }
+
+    /// The `--json-events` kind and the protocol code are two spellings of one
+    /// decision; a cause that grew a third would be inventing a vocabulary.
+    #[test]
+    fn every_incomplete_cause_has_a_kind_and_a_code_a_client_can_branch_on() {
+        let mut kinds = std::collections::HashSet::new();
+        let mut codes: Vec<TurnFailureCode> = Vec::new();
+        for cause in [
+            IncompleteTurnCause::NoResponse,
+            IncompleteTurnCause::RefusedBySafety,
+            IncompleteTurnCause::OutputLimitReached,
+        ] {
+            assert!(!cause.summary().is_empty());
+            assert!(!cause.next_move().is_empty());
+            assert!(kinds.insert(cause.kind()), "{cause:?} shares a kind");
+            assert!(!codes.contains(&cause.code()), "{cause:?} shares a code");
+            codes.push(cause.code());
+            assert!(
+                agiworkforce_protocol::developer_session::TURN_FAILURE_CODES
+                    .contains(&cause.code()),
+                "{cause:?} names a code the protocol does not carry"
+            );
         }
     }
 }

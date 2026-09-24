@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
@@ -162,6 +162,7 @@ vi.mock('../hooks/use-settings-queries', () => ({
 
 vi.mock('./team/SSOPanel', () => ({ SSOPanel: () => null }));
 
+import { useChatStore } from '@shared/stores/web-chat-store';
 import { TeamSection } from './TeamSection';
 import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
 
@@ -222,6 +223,42 @@ describe('TeamSection', () => {
 
     expect(state.switchWorkspace).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
     expect(screen.getByRole('option', { name: 'Invited Team · Member' })).toBeVisible();
+  });
+
+  it('names unsent work and waits for a decision before switching away from it', async () => {
+    state.workspaces = [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Invited Team',
+        slug: 'invited-team',
+        role: 'member',
+        joinedAt: '2026-08-11T00:00:00.000Z',
+      },
+    ];
+    useChatStore.setState({ draftsByConversation: { 'conv-1': 'half a question' } });
+    try {
+      render(<TeamSection />);
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Active workspace' }), {
+        target: { value: '11111111-1111-4111-8111-111111111111' },
+      });
+
+      expect(await screen.findByText(/You have an unsent message\./)).toBeVisible();
+      expect(state.switchWorkspace).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Stay in this workspace' }));
+      expect(state.switchWorkspace).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Active workspace' }), {
+        target: { value: '11111111-1111-4111-8111-111111111111' },
+      });
+      fireEvent.click(await screen.findByRole('button', { name: 'Switch anyway' }));
+      await waitFor(() =>
+        expect(state.switchWorkspace).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111'),
+      );
+    } finally {
+      useChatStore.setState({ draftsByConversation: {} });
+    }
   });
 
   it('renders the workspace picker as a label-left row, not a titled card', () => {
@@ -350,7 +387,47 @@ describe('TeamSection', () => {
       },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
-    expect(screen.getByText(/No email is sent yet/i)).toBeVisible();
+    expect(screen.queryByText(/No email is sent yet/i)).toBeNull();
+  });
+
+  it.each([
+    [
+      { emailSent: true as const },
+      'An invitation email was sent to member@example.com. This link does the same thing if it does not arrive.',
+    ],
+    [
+      {
+        emailSent: false as const,
+        reason: 'No transactional email provider is configured. Send the link yourself.',
+      },
+      'No transactional email provider is configured. Send the link yourself.',
+    ],
+  ])('says whether the invitation email went out: %o', (delivery, sentence) => {
+    state.organization = {
+      id: 'org-1',
+      name: 'Demo Team',
+      slug: 'demo-team',
+      plan: 'team',
+      memberCount: 1,
+      maxMembers: null,
+      currentUserRole: 'owner',
+    };
+    state.createInvitation.mockImplementation(
+      (_input: unknown, options: { onSuccess: (result: unknown) => void }) =>
+        options.onSuccess({
+          invitation: { id: 'inv-1' },
+          inviteToken: 'x'.repeat(32),
+          delivery,
+        }),
+    );
+
+    render(<TeamSection />);
+    fireEvent.change(screen.getByLabelText('Invitee email'), {
+      target: { value: 'member@example.com' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create invitation' }));
+
+    expect(screen.getByText(sentence)).toBeVisible();
   });
 
   it('surfaces an invitation error inline', () => {

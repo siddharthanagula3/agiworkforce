@@ -27,7 +27,9 @@ use serde_json::Value;
 
 use crate::assembler::{ToolCallAssembler, normalize_tool_arguments_value};
 use crate::decode::Utf8StreamDecoder;
-use crate::error::{LlmError, classify_error_response, provider_name_from_url};
+use crate::error::{
+    LlmError, StreamFailureDetail, classify_error_response, provider_name_from_url,
+};
 use crate::events::{ChatOutcome, StreamEvent, Usage};
 use crate::serialize::{
     add_message_cache_breakpoint, anthropic_tools_json, build_gemini_tool_name_map,
@@ -37,6 +39,7 @@ use crate::serialize::{
     openai_function_tools_json, openai_responses_function_tools_json, set_openai_max_tokens,
 };
 use crate::spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
+use crate::stop::GenerationStop;
 use crate::watchdog::IdleWatchdog;
 use crate::wire::{Message, ToolCall, ToolDefinition};
 
@@ -698,11 +701,13 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason.as_deref().map(GenerationStop::anthropic);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -869,6 +874,7 @@ where
                             .get("retryable")
                             .and_then(Value::as_bool)
                             .unwrap_or(false),
+                        detail: StreamFailureDetail::from_frame(stream_error),
                     });
                 }
                 {
@@ -972,11 +978,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::openai_finish_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1390,11 +1400,13 @@ where
             stop_reason: stop_reason.clone(),
         });
     }
+    let stop = stop_reason.as_deref().map(GenerationStop::openai_responses);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls: assembler.finish(),
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1658,11 +1670,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::gemini_finish_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -1806,7 +1822,17 @@ fn handle_ollama_stream_event(event: &Value, fold: &mut OllamaFold, on_event: On
             .and_then(serde_json::Value::as_u64)
             .unwrap_or(0) as u32;
         if fold.stop_reason.is_none() {
-            fold.stop_reason = Some("stop".to_string());
+            // Ollama states why it stopped on `done_reason`; without reading it
+            // an answer cut at `num_predict` is indistinguishable from one that
+            // finished.
+            fold.stop_reason = Some(
+                event
+                    .get("done_reason")
+                    .and_then(serde_json::Value::as_str)
+                    .filter(|reason| !reason.is_empty())
+                    .unwrap_or("stop")
+                    .to_string(),
+            );
         }
         on_event(StreamEvent::Usage {
             usage: fold.usage.clone(),
@@ -1887,11 +1913,15 @@ where
     on_event(StreamEvent::End {
         stop_reason: stop_reason.clone(),
     });
+    let stop = stop_reason
+        .as_deref()
+        .map(GenerationStop::ollama_done_reason);
     Ok(ChatOutcome {
         text: full_text,
         tool_calls,
         usage,
         stop_reason,
+        stop,
     })
 }
 
@@ -2500,12 +2530,50 @@ mod openai_compat_stream_tests {
                 provider,
                 message,
                 retryable,
+                detail,
             } => {
                 assert_eq!(provider, "managed_cloud");
                 assert_eq!(message, "This model is unavailable right now.");
                 assert!(!retryable, "the gateway said not to retry");
+                assert_eq!(detail.code.as_deref(), Some("provider_billing_exhausted"));
+                assert_eq!(detail.retry_after, None, "no wait was stated");
+                assert_eq!(detail.request_id, None);
             }
             other => panic!("unexpected error: {other}"),
         }
+    }
+
+    #[tokio::test]
+    async fn a_stream_error_frame_keeps_the_stated_wait_and_the_reference() {
+        let frames = concat!(
+            "data: {\"choices\":[{\"delta\":{\"x_stream_error\":{\"message\":\"Busy.\",\"code\":\"provider_rate_limited\",\"retryable\":true,\"retryAfterSeconds\":42,\"requestId\":\"req_7f3a\"}},\"index\":0}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let error =
+            run_openai_compat_stream(stream, Duration::from_secs(5), "managed_cloud", &mut |_| {})
+                .await
+                .expect_err("the frame is an error");
+        assert_eq!(error.retry_after(), Some(42));
+        match error {
+            LlmError::StreamError { detail, .. } => {
+                assert_eq!(detail.code.as_deref(), Some("provider_rate_limited"));
+                assert_eq!(detail.request_id.as_deref(), Some("req_7f3a"));
+            }
+            other => panic!("unexpected error: {other}"),
+        }
+    }
+
+    #[test]
+    fn a_wait_no_provider_would_state_is_dropped() {
+        for wait in [0_u64, 86_401] {
+            let frame = serde_json::json!({ "message": "x", "retryAfterSeconds": wait });
+            assert_eq!(StreamFailureDetail::from_frame(&frame).retry_after, None);
+        }
+        let blank = serde_json::json!({ "code": " ", "requestId": "" });
+        assert_eq!(
+            StreamFailureDetail::from_frame(&blank),
+            StreamFailureDetail::default()
+        );
     }
 }

@@ -89,14 +89,25 @@ const VECTOR_SIGNALS = ['svg', 'vector graphic', 'vector illustration', 'vector 
 
 const INTERACTIVE_SIGNALS = [
   'html page',
+  'html artifact',
   'html mockup',
   'html prototype',
+  'web artifact',
+  'artifact preview',
+  'interactive artifact',
   'interactive chart',
   'interactive diagram',
   'interactive visualisation',
   'interactive visualization',
   'clickable prototype',
   'wireframe',
+] as const;
+
+const EXPLICIT_ARTIFACT_DESTINATION_SIGNALS = [
+  'html artifact',
+  'web artifact',
+  'artifact preview',
+  'interactive artifact',
 ] as const;
 
 /**
@@ -147,6 +158,10 @@ function matches(haystack: string, phrases: readonly string[]): string[] {
   return phrases.filter(
     (phrase) => haystack.includes(` ${phrase} `) || haystack.includes(` ${phrase}s `),
   );
+}
+
+export function explicitlyRequestsArtifact(prompt: string): boolean {
+  return matches(normalize(prompt), EXPLICIT_ARTIFACT_DESTINATION_SIGNALS).length > 0;
 }
 
 interface StructuredMatch {

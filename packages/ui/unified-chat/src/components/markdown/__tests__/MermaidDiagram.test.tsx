@@ -29,6 +29,8 @@ describe('MermaidDiagram', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-mermaid="ready"] svg')).toBeTruthy();
     });
+    expect(renderMock.mock.calls[0]?.[2]).toBeInstanceOf(HTMLElement);
+    expect((renderMock.mock.calls[0]?.[2] as HTMLElement).isConnected).toBe(false);
   });
 
   it('passes the drawn markup through the package sanitizer', async () => {
@@ -46,7 +48,12 @@ describe('MermaidDiagram', () => {
   });
 
   it('keeps the source and states the reason when the source does not parse', async () => {
-    renderMock.mockRejectedValue(new Error('Parse error on line 2:\nunexpected token'));
+    renderMock.mockImplementation((_id: string, _source: string, host: HTMLElement) => {
+      const errorNode = document.createElement('div');
+      errorNode.textContent = 'Syntax error in text Mermaid 11.17.2';
+      host.append(errorNode);
+      return Promise.reject(new Error('Parse error on line 2:\nunexpected token'));
+    });
     const { container } = render(<MermaidDiagram source={'flowchart TD\n  A[Broken'} />);
 
     await waitFor(() => {
@@ -55,6 +62,26 @@ describe('MermaidDiagram', () => {
     expect(screen.getByRole('status').textContent).toContain('Parse error on line 2:');
     // The block must never disappear - its source is the fallback.
     expect(container.querySelector('.mermaid-source')?.textContent).toContain('A[Broken');
+    expect(document.body.textContent).not.toContain('Syntax error in text');
+  });
+
+  it('removes each renderer-owned error node across rerender and unmount', async () => {
+    renderMock.mockImplementation((_id: string, _source: string, host: HTMLElement) => {
+      const errorNode = document.createElement('div');
+      errorNode.textContent = 'Syntax error in text Mermaid 11.17.2';
+      host.append(errorNode);
+      return Promise.reject(new Error('Parse error'));
+    });
+    const view = render(<MermaidDiagram source={'flowchart TD\n  A[First'} />);
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(document.body.textContent).not.toContain('Syntax error in text'));
+
+    view.rerender(<MermaidDiagram source={'flowchart TD\n  B[Second'} />);
+    await waitFor(() => expect(renderMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(document.body.textContent).not.toContain('Syntax error in text'));
+
+    view.unmount();
+    expect(document.body.textContent).not.toContain('Syntax error in text');
   });
 
   it('does not compile an unfinished source while the turn is still streaming', async () => {

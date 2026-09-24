@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
 import {
@@ -98,14 +99,24 @@ describe('the approval posture section 1.1 publishes', () => {
   });
 });
 
-describe('the default account asks before every tool call', () => {
-  it('ships ask_every_time as the default policy', () => {
+describe('website account authority and fail-closed fallback', () => {
+  it('keeps ask_every_time as the shared failure fallback', () => {
     expect(DEFAULT_TOOL_APPROVAL_POLICY).toBe('ask_every_time');
   });
 
-  it('auto-approves nothing under the default policy', () => {
+  it('auto-approves nothing when policy loading fails', () => {
     for (const name of Object.keys(PLATFORM_TOOL_METADATA)) {
       expect(policyAutoApprovesTool(DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(false);
+    }
+  });
+
+  it('runs eligible built-ins for an unconfigured website account', () => {
+    expect(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY).toBe('autonomous');
+    for (const name of ['web_search', 'url_fetch', 'execute_code']) {
+      expect(policyAutoApprovesTool(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(true);
+    }
+    for (const name of ['write_file', 'edit_file']) {
+      expect(policyAutoApprovesTool(WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY, name)).toBe(false);
     }
   });
 

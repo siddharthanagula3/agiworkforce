@@ -113,7 +113,7 @@ export function ProjectCard({
         aria-current={active ? 'true' : undefined}
         className={cn(
           'group relative flex w-full flex-col gap-2 rounded-xl border bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors',
-          'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-accent-secondary)]',
+          'hover:bg-[var(--chat-surface-hover)] focus-within:ring-2 focus-within:ring-[var(--chat-focus-ring)]',
           active
             ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_color-mix(in_srgb,var(--chat-accent-primary)_18%,transparent)]'
             : 'border-[var(--chat-border)]',
@@ -140,17 +140,17 @@ export function ProjectCard({
               onSelect?.(project);
             }}
             aria-label={`Open project ${project.name}`}
-            className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+            className="absolute inset-0 z-[var(--z-base)] cursor-pointer rounded-xl focus:outline-none"
           />
         ) : (
           <button
             type="button"
             onClick={() => onSelect?.(project)}
             aria-label={`Open project ${project.name}`}
-            className="absolute inset-0 z-0 cursor-pointer rounded-xl focus:outline-none"
+            className="absolute inset-0 z-[var(--z-base)] cursor-pointer rounded-xl focus:outline-none"
           />
         )}
-        <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+        <div className="pointer-events-none relative z-[var(--z-control)] flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
             <FolderOpen
               size={16}
@@ -171,7 +171,7 @@ export function ProjectCard({
               aria-pressed={project.starred ?? false}
               className={cn(
                 'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
-                'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                'hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
                 project.starred
                   ? 'text-[var(--chat-accent-primary-text)]'
                   : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
@@ -192,7 +192,7 @@ export function ProjectCard({
                     e.stopPropagation();
                     setMenuOpen((v) => !v);
                   }}
-                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]"
+                  className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
                 >
                   <MoreHorizontal size={14} strokeWidth={1.75} aria-hidden="true" />
                 </button>
@@ -202,7 +202,7 @@ export function ProjectCard({
                     ref={menuPanelRef}
                     role="menu"
                     aria-label={`Options for ${project.name}`}
-                    className="absolute right-0 top-full z-20 mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
+                    className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
                   >
                     {/* Order matches the leaders' project row menu: share,
                         edit (rename + settings), archive, delete. Star lives
@@ -327,12 +327,12 @@ export function ProjectCard({
         </div>
 
         {project.description ? (
-          <p className="pointer-events-none relative z-10 line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
+          <p className="pointer-events-none relative z-[var(--z-control)] line-clamp-2 text-xs text-[var(--chat-text-secondary)]">
             {project.description}
           </p>
         ) : null}
 
-        <div className="pointer-events-none relative z-10 flex items-center justify-between text-[12px] text-[var(--chat-text-muted)]">
+        <div className="pointer-events-none relative z-[var(--z-control)] flex items-center justify-between text-caption text-[var(--chat-text-muted)]">
           <span>
             {conversationCount === 0
               ? 'No conversations yet'

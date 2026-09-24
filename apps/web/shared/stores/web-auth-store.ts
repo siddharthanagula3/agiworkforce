@@ -1,7 +1,11 @@
 'use client';
 
 import { create } from 'zustand';
-import { parseMeResponse, type MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
+import {
+  parseMeResponse,
+  type MeDisabledFeature,
+  type MeSubscriptionSource,
+} from '@agiworkforce/cloud-contracts';
 import { normalizeBillingPlanTier, type BillingPlanTier } from '@agiworkforce/types';
 import {
   hasClerkSessionCookie,
@@ -45,6 +49,7 @@ export interface AuthState {
   user: User | null;
   subscription: SubscriptionPlan | null;
   featureFlags: FeatureFlags | null;
+  disabledFeatures: readonly MeDisabledFeature[];
   isLoading: boolean;
   error: string | null;
   initialized: boolean;
@@ -59,6 +64,7 @@ const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_reset'> = {
   user: null,
   subscription: null,
   featureFlags: null,
+  disabledFeatures: [],
   isLoading: true,
   error: null,
   initialized: false,
@@ -84,6 +90,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
               user: null,
               subscription: null,
               featureFlags: null,
+              disabledFeatures: [],
               isLoading: false,
               initialized: true,
               unauthenticated: true,
@@ -123,6 +130,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
           user,
           subscription: plan,
           featureFlags: data.feature_flags,
+          disabledFeatures: data.disabled_features ?? [],
           isLoading: false,
           error: null,
           initialized: true,

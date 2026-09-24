@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 Neon's point-in-time branch is the recovery mechanism today; there is no
 separate `pg_dump` schedule, and until this document existed no restore had
@@ -81,6 +81,16 @@ below has passed against a branch made the first way.
    the restored branch has the schema and the RLS policies the app expects,
    not just rows.
 
+   That preview is serving a copy of production, real email addresses and
+   all, so decide what it can reach before pointing it at the branch.
+   Scheduled jobs run only on the production deployment, so the preview
+   drains no queue and sends nothing on a timer. A live payment credential
+   on a preview is a configuration finding (`live_credential`) and refuses
+   the boot once `AGI_ENFORCE_PRODUCTION_CONFIG` is on. Outbound email has no
+   environment gate at all: remove `RESEND_API_KEY` from that one preview's
+   environment before the deploy, or an action taken on it, such as a
+   workspace invitation, mails a real recipient.
+
 4. **Check the schema is current**, not just queryable:
 
    ```bash
@@ -107,34 +117,44 @@ the object backup bucket at `erasure-ledger/tombstones.ndjson`. That copy is
 not part of the restore, so it still names every subject erased before the
 recovery point.
 
-Run the replay against the restored branch, on the owner connection:
+Nothing has to be written to run the replay: `/api/cron/purge-deleted-accounts`
+runs it on every call, through `syncErasureLedger`
+(`apps/web/lib/server/erasure-tombstones.ts`). Against the preview that step 3
+pointed at the restored branch, with the object backup variables set on that
+preview so the ledger is readable, call the purge and then the drain that
+carries out the erasures it queues:
 
+```sh
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<that-one-preview-url>/api/cron/purge-deleted-accounts
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<that-one-preview-url>/api/cron/drain-background-jobs
 ```
-replayErasureTombstones(privilegedDb)   // apps/web/lib/server/erasure-tombstones.ts
-```
 
-It reads the ledger, compares it with the restored `erasure_tombstones`, and
-re-inserts a tombstone with a null `erased_at` for every subject the restore
-rolled back. Then:
+What the purge does with the ledger, in order:
 
-- `isSafeToPromote(report)` is false while any subject was re-armed or any
-  erasure is still open. **Do not promote while it is false.** Run
-  `GET /api/cron/purge-deleted-accounts` against the restored branch until the
-  report comes back clean; that cron is what actually deletes the resurrected
-  rows and their objects.
-- Record the run with `recordErasureReplay` so `erasure_ledger_replays` (0264)
-  carries the ledger digest, the counts, and who ran it. Two replays of one
+- It reads the ledger and re-inserts a tombstone with a null `erased_at` for
+  every subject the restore rolled back; `erasureLedger.reArmed` in the
+  response names them.
+- It records that replay in `erasure_ledger_replays` with the ledger digest,
+  the counts and `cron/purge-deleted-accounts` as the actor. Two replays of one
   restore that read different digests mean the ledger changed between them.
-- `ErasureLedgerUnavailableError` means the ledger could not be read, either
-  because the object backup is unconfigured or because the object is gone. It
-  fails closed on purpose: an unreadable ledger and an empty one are
-  indistinguishable, and promoting on the second reading of that ambiguity
-  resurrects every erased account.
-- Call `requeueReplicasAfterRestore()` (`lib/server/object-backup.ts`) once the
-  cron is clean. The restore also rolled `object_backup_replicas` back to a
-  moment when erased objects were still tracked as freshly verified, so without
-  it the hourly reconciliation re-checks the wrong keys for weeks and the
-  erased objects sit in the backup bucket.
+- It marks every row of `object_backup_replicas` due again
+  (`erasureLedger.replicasRequeued`), because the restore also rolled that
+  table back to a moment when erased objects were still tracked as freshly
+  verified; without it the hourly reconciliation re-checks the wrong keys for
+  weeks and the erased objects sit in the backup bucket.
+- The next call queues the re-armed subjects for erasure, and the drain
+  deletes their rows and objects.
+
+**Do not promote until a purge run re-arms nothing and reports `resurrected`
+as 0.** That is the condition `isSafeToPromote` states: no subject re-armed and
+no erasure still open. A failed ledger read shows up as `failed` in the
+response and an `ErasureLedgerUnavailableError` in the log, meaning the object
+backup is unconfigured on that deployment or the ledger object is gone. It fails
+closed on purpose: an unreadable ledger and an empty one are indistinguishable,
+and promoting on the second reading of that ambiguity resurrects every erased
+account.
 
 ## Promotion or rollback decision
 
@@ -155,6 +175,30 @@ decision after that point is one of:
 Never run the in-place restore as the first attempt at a recovery point. The
 disposable-branch-then-verify path exists specifically so a bad recovery
 point is caught before it overwrites the only copy of production.
+
+## After promotion: billing and entitlements
+
+The restored database holds each subscription, plan and credit balance as it
+was at the recovery point; the payment provider holds them as they are now.
+Nothing above compares the two, because a preview cannot: it refuses a live
+payment credential, and the comparison needs one. So the comparison runs on
+production, immediately after the promotion, rather than waiting for its
+schedule:
+
+```sh
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<the-production-deployment>/api/cron/reconcile-billed-plans
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<the-production-deployment>/api/cron/reconcile-credits
+```
+
+`reconcile-billed-plans` names every subscription whose stored plan differs
+from what the provider is charging; `reconcile-credits` compares stored
+subscription state with the provider and alerts a human past its threshold.
+Neither heals a divergence on its own. The restore is not finished until each
+account either reports clean or has been corrected against the provider, and
+the "Data integrity: reconcile before calling it resolved" section of
+`docs/runbooks/incident-response.md` lists the other reconcilers to run.
 
 ## The encryption-key implication
 

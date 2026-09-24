@@ -13,6 +13,7 @@ import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import {
   assertParentInConversation,
   conversationIsUnbranched,
@@ -143,6 +144,9 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
         conversationId,
         messageId: row.id,
         content: row.content,
+        ...(row.metadata?.['artifactDerivation'] === EXPLICIT_ARTIFACT_DERIVATION_POLICY
+          ? { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY }
+          : {}),
       });
     }
 

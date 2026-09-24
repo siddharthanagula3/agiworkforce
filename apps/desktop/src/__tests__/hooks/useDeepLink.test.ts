@@ -10,6 +10,8 @@ describe('useDeepLink parsing', () => {
   it('rejects legacy account-auth callbacks because Desktop sign-in stays in its owned window', () => {
     expect(parseDeepLink('agiworkforce://auth/callback?code=abc')).toBeNull();
     expect(parseDeepLink('https://auth/callback?code=abc')).toBeNull();
+    expect(parseDeepLink('agiworkforce://auth?token=abc')).toBeNull();
+    expect(parseDeepLink('agiworkforce-cloud://auth?token=abc')).toBeNull();
   });
 
   it('accepts validated MCP OAuth callbacks', () => {

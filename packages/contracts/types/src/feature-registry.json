@@ -257,6 +257,321 @@
         "trustBoundary": null,
         "rolloutFlag": null
       }
+    },
+    "chat": {
+      "label": "Chat",
+      "domain": "chat",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "managed_chat",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "history": {
+      "label": "History",
+      "domain": "conversation-history",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "cloud_sync",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "files": {
+      "label": "Files and artifacts",
+      "domain": "files",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "cloud_sync",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "library": {
+      "label": "Library",
+      "domain": "library",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "cloud_sync",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "search": {
+      "label": "Search",
+      "domain": "search",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "cloud_sync",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "study": {
+      "label": "Study",
+      "domain": "learning",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "managed_chat",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "image_generation": {
+      "label": "Image generation",
+      "domain": "image-generation",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "image_generation",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "video_generation": {
+      "label": "Video generation",
+      "domain": "video-generation",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "video_generation",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "voice": {
+      "label": "Voice",
+      "domain": "voice",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "global_voice": {
+      "label": "Global voice",
+      "domain": "voice",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "connectors": {
+      "label": "Connectors",
+      "domain": "connectors",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "mcp": {
+      "label": "MCP",
+      "domain": "mcp",
+      "maturity": "beta",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "governance": {
+        "owner": "apps/web/lib/mcp-tool-executor.ts",
+        "exitCriteria": "Every surface that offers MCP dials, authorizes and lists a server of its own, rather than exposing the page or host it already has as tools.",
+        "killSwitch": "canUseLocalMcp",
+        "dataMigration": "A server registration records the transport it was written against; removing a server archives its registration rather than deleting it, so a workspace keeps the record of what a tool call reached.",
+        "rolloutRing": "mcp",
+        "support": "Answered on the normal support queue; a third party server that misbehaves is referred to whoever operates it, and a failure to connect is a defect.",
+        "userFacing": true
+      },
+      "gates": {
+        "entitlement": "skills_connectors",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "approvals": {
+      "label": "Tool approvals",
+      "domain": "approvals",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "chat_tools",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "terminal": {
+      "label": "Terminal",
+      "domain": "code",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "git": {
+      "label": "Git",
+      "domain": "code",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
+    },
+    "diffs": {
+      "label": "Diffs",
+      "domain": "code",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": null,
+        "rolloutFlag": null
+      }
+    },
+    "cloud_tasks": {
+      "label": "Cloud tasks",
+      "domain": "agents",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": null,
+      "minClientVersion": null,
+      "minBackendVersion": null,
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "managed-cloud",
+        "rolloutFlag": null
+      }
+    },
+    "filesystem": {
+      "label": "Filesystem",
+      "domain": "local-runtime",
+      "maturity": "general_availability",
+      "dependsOn": [],
+      "incompatibleWith": [],
+      "requiresHost": "desktop or command line",
+      "minClientVersion": "MINIMUM_SUPPORTED_RUNTIME_VERSION",
+      "minBackendVersion": "API_CONTRACT_VERSION",
+      "gates": {
+        "entitlement": "developer_surfaces",
+        "policy": null,
+        "permission": null,
+        "trustBoundary": "device",
+        "rolloutFlag": null
+      }
     }
   }
 }

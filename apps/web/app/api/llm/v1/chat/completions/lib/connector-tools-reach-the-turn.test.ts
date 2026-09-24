@@ -69,10 +69,11 @@ vi.mock('@/lib/neon-db', () => ({
 
 /**
  * The connector data the account owns. Everything above this line is the
- * ordinary route harness; `@/lib/user-connector-tools` is deliberately NOT
- * mocked, because the join between a connected connector and the turn's tool
- * catalog is exactly what this file exists to prove. Every other route test
- * stubs that module wholesale, so severing the wiring would fail nothing.
+ * ordinary route harness. The catalog module is wrapped only to count calls;
+ * the real implementation still builds the tool definitions, because the join
+ * between a connected connector and the turn's tool catalog is exactly what
+ * this file exists to prove. Every other route test stubs that module wholesale,
+ * so severing the wiring would fail nothing.
  */
 const connectorData = vi.hoisted(() => ({
   githubInstallations: [] as { installation_id: number; account_login: string }[],
@@ -115,8 +116,13 @@ const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
 const runServiceMocks = vi.hoisted(() => ({ createRun: vi.fn(), findActive: vi.fn() }));
 const workflowMocks = vi.hoisted(() => ({ start: vi.fn(), loadMcpTools: vi.fn() }));
 const toolLoopMocks = vi.hoisted(() => ({ classify: vi.fn() }));
+const connectorCatalogMocks = vi.hoisted(() => ({ load: vi.fn() }));
+const toolPolicyMocks = vi.hoisted(() => ({ loadTurn: vi.fn() }));
 
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: rlsMocks.getUserScopedDb }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getUserScopedDb,
+}));
 vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
   startCloudAgentWorkflowExecution: workflowMocks.start,
 }));
@@ -129,6 +135,31 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal
   ...(await importOriginal<typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop')>()),
   loadMcpToolDefs: workflowMocks.loadMcpTools,
 }));
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/user-connector-tools')>();
+  return {
+    ...actual,
+    loadUserConnectorToolCatalog: (
+      ...args: Parameters<typeof actual.loadUserConnectorToolCatalog>
+    ) => {
+      connectorCatalogMocks.load(...args);
+      return actual.loadUserConnectorToolCatalog(...args);
+    },
+  };
+});
+vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy')
+    >();
+  return {
+    ...actual,
+    loadTurnToolPermissions: (...args: Parameters<typeof actual.loadTurnToolPermissions>) => {
+      toolPolicyMocks.loadTurn(...args);
+      return actual.loadTurnToolPermissions(...args);
+    },
+  };
+});
 
 /**
  * The seam the turn's tool catalog passes through. Capturing it here is what
@@ -222,7 +253,12 @@ function offeredConnectorTools(): ToolDef[] {
   return mcpTools.filter((tool) => tool.serverId === GITHUB_SERVER_ID);
 }
 
-function makeRequest(disabledConnectorIds?: string[]): NextRequest {
+function makeRequest(
+  disabledConnectorIds?: string[],
+  connectorToolsEnabled?: boolean,
+  content = 'open the pull request diff',
+  webSearch = false,
+): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -233,9 +269,13 @@ function makeRequest(disabledConnectorIds?: string[]): NextRequest {
     },
     body: JSON.stringify({
       model: ZHIPU_MODEL_ID,
-      messages: [{ role: 'user', content: 'open the pull request diff' }],
+      messages: [{ role: 'user', content }],
       stream: true,
+      ...(webSearch ? { web_search: true } : {}),
       ...(disabledConnectorIds ? { disabled_connector_ids: disabledConnectorIds } : {}),
+      ...(connectorToolsEnabled === undefined
+        ? {}
+        : { connector_tools_enabled: connectorToolsEnabled }),
     }),
   });
 }
@@ -331,5 +371,27 @@ describe('WEB-CONNECTORS-NO-RUNTIME-EFFECT-01 · connectors reach the turn', () 
     await POST(makeRequest([GITHUB_SERVER_ID]));
 
     expect(offeredConnectorTools()).toEqual([]);
+  });
+
+  it('skips connector discovery and account tool-policy reads after the client confirms none are enabled', async () => {
+    await POST(makeRequest(undefined, false, 'Hello'));
+
+    expect(connectorCatalogMocks.load).not.toHaveBeenCalled();
+    expect(toolPolicyMocks.loadTurn).not.toHaveBeenCalled();
+    expect(offeredConnectorTools()).toEqual([]);
+  });
+
+  it('still loads approval policy when a no-connector turn offers a platform tool', async () => {
+    await POST(makeRequest(undefined, false, 'Search the web for today’s weather', true));
+
+    expect(connectorCatalogMocks.load).not.toHaveBeenCalled();
+    expect(toolPolicyMocks.loadTurn).toHaveBeenCalledWith(
+      expect.anything(),
+      USER_ID,
+      expect.objectContaining({
+        connectorPermissionsRequired: false,
+        toolApprovalPolicyRequired: true,
+      }),
+    );
   });
 });

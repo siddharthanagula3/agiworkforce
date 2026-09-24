@@ -21,6 +21,14 @@ const FIELD_CLASS =
 const DESTRUCTIVE_CLASS =
   'rounded-full border border-destructive/50 px-4 py-2 text-xs font-medium text-danger transition-colors hover:bg-destructive/10 disabled:opacity-50';
 
+function describeClock(deadline: OpenDataRightsRequest['deadline']): string {
+  const days = Math.abs(deadline.daysRemaining);
+  const unit = days === 1 ? 'day' : 'days';
+  if (deadline.overdue) return `${days} ${unit} overdue`;
+  if (deadline.daysRemaining === 0) return 'due today';
+  return `${days} ${unit} left`;
+}
+
 const REQUEST_TYPE_LABEL: Record<DataRightsRequestType, string> = {
   access: 'Access',
   correction: 'Correction',
@@ -128,9 +136,11 @@ export default function PrivacyRequestsPanel() {
           Data rights requests
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Every request still open, oldest first. A signed-in subject deletes their own account data
-          from settings; this queue is what someone with no account, or a request that needs a
-          human, arrives through.
+          Every request still open, closest to its deadline first. A request that does not record
+          where the person is runs on the shorter of the two clocks, one month from receipt, so no
+          queue position depends on assuming the longer one. A signed-in subject deletes their own
+          account data from settings; this queue is what someone with no account, or a request that
+          needs a human, arrives through.
         </p>
       </div>
 
@@ -162,6 +172,7 @@ export default function PrivacyRequestsPanel() {
                 <th className="p-3 font-medium">Contact</th>
                 <th className="p-3 font-medium">Account</th>
                 <th className="p-3 font-medium">Received</th>
+                <th className="p-3 font-medium">Due</th>
                 <th className="p-3 font-medium">Detail</th>
               </tr>
             </thead>
@@ -175,6 +186,24 @@ export default function PrivacyRequestsPanel() {
                   <td className="p-3 font-mono text-xs">{request.userId ?? 'no account'}</td>
                   <td className="p-3 text-xs text-muted-foreground">
                     {formatDateTime(request.createdAt)}
+                  </td>
+                  <td
+                    className="p-3 text-xs"
+                    data-overdue={request.deadline.overdue ? 'true' : 'false'}
+                  >
+                    <span className="text-muted-foreground">
+                      {formatDateTime(request.deadline.dueAt)}
+                    </span>
+                    <br />
+                    <span
+                      className={
+                        request.deadline.overdue
+                          ? 'font-medium text-danger'
+                          : 'text-muted-foreground'
+                      }
+                    >
+                      {describeClock(request.deadline)}
+                    </span>
                   </td>
                   <td className="max-w-sm p-3 text-xs text-muted-foreground">
                     {request.details ?? 'none given'}

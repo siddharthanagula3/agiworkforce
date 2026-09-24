@@ -19,6 +19,7 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
+  type AgentEventApprovalRiskLevel,
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
@@ -89,6 +90,7 @@ import {
   type EditorContextChip,
   type EditorContextSnapshot,
 } from '../../data/composerContext';
+import { searchMentionTargets } from '../../data/mentionSearch';
 import type { ApprovalDecision, ContextAttachmentKind } from '../../protocol/webviewMessages';
 import { approvalToolIdentity, approvalToolLabel } from '../permissions/approvalScope';
 import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
@@ -254,6 +256,7 @@ export type ExtToWebviewMessage =
       payload: { files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
+  | { type: 'sessionBinding'; payload: { epoch: number } }
   | { type: 'activeProject'; payload: { name: string | null } }
   | {
       type: 'recentConversations';
@@ -380,6 +383,8 @@ export type ExtToWebviewMessage =
         summary: string;
         detail: string;
         sessionApproved: boolean;
+        riskLevel?: AgentEventApprovalRiskLevel;
+        reversible?: boolean;
       };
     }
   | {
@@ -591,6 +596,15 @@ export class ChatStateManager {
   };
   private _cancelRequested = false;
   private _conversationEpoch = 0;
+
+  conversationEpoch(): number {
+    return this._conversationEpoch;
+  }
+
+  private _startNewEpoch(): void {
+    this._conversationEpoch++;
+    this._post({ type: 'sessionBinding', payload: { epoch: this._conversationEpoch } });
+  }
   private _resumeAttemptSeq = 0;
   private _turnLifecycleActive = false;
   private _turnLifecycleEpoch: number | undefined;
@@ -780,40 +794,10 @@ export class ChatStateManager {
       case 'fileSearch': {
         const query = (msg as { type: 'fileSearch'; payload: { query: string } }).payload.query;
         try {
-          const files = await vscode.workspace.findFiles(`**/*${query}*`, '**/node_modules/**', 15);
-          const editor = vscode.window.activeTextEditor;
-          const results = files.map((uri) => {
-            const path = vscode.workspace.asRelativePath(uri);
-            const selection =
-              editor !== undefined &&
-              editor.document.uri.toString() === uri.toString() &&
-              !editor.selection.isEmpty
-                ? editor.selection
-                : undefined;
-            const range =
-              selection === undefined
-                ? undefined
-                : {
-                    startLine: selection.start.line,
-                    startCharacter: selection.start.character,
-                    endLine: selection.end.line,
-                    endCharacter: selection.end.character,
-                  };
-            const lineLabel =
-              range === undefined
-                ? ''
-                : range.startLine === range.endLine
-                  ? ` · line ${range.startLine + 1}`
-                  : ` · lines ${range.startLine + 1}-${
-                      range.endCharacter === 0 ? range.endLine : range.endLine + 1
-                    }`;
-            return {
-              path,
-              label: `${path}${lineLabel}`,
-              ...(range === undefined ? {} : { range }),
-            };
+          this._post({
+            type: 'fileSearchResults',
+            payload: { files: await searchMentionTargets(query) },
           });
-          this._post({ type: 'fileSearchResults', payload: { files: results } });
         } catch {
           this._post({ type: 'fileSearchResults', payload: { files: [] } });
         }
@@ -855,7 +839,7 @@ export class ChatStateManager {
 
       case 'clearConversation': {
         this._resumeAttemptSeq++;
-        this._conversationEpoch++;
+        this._startNewEpoch();
         this._dropQueuedSends('Queued follow-up cancelled by Clear Conversation.');
         this._dropInFlightSend('Message cancelled by Clear Conversation.');
         this._dropSteeringSends('Steer cancelled by Clear Conversation.');
@@ -892,7 +876,7 @@ export class ChatStateManager {
 
       case 'newChat': {
         this._resumeAttemptSeq++;
-        this._conversationEpoch++;
+        this._startNewEpoch();
         this._dropQueuedSends('Queued follow-up cancelled by New Chat.');
         this._dropInFlightSend('Message cancelled by New Chat.');
         this._dropSteeringSends('Steer cancelled by New Chat.');
@@ -1652,7 +1636,7 @@ export class ChatStateManager {
         );
       }
       this._activeModel = model;
-      this._conversationEpoch++;
+      this._startNewEpoch();
       this._dropQueuedSends('Queued follow-up cancelled when another session was opened.');
       this._pendingAttachments.splice(0);
       delete this._lastUserTurn;
@@ -1923,6 +1907,11 @@ export class ChatStateManager {
    * The resumed transcript plus what this session sent, for a retry to pick
    * the last user turn out of. Assistant text is not kept here.
    */
+  /** The CLI session this chat is running in, when one has been opened. */
+  activeThreadId(): string | undefined {
+    return this._thread?.id;
+  }
+
   chatTranscript(): readonly ChatTurn[] {
     const loaded: ChatTurn[] = (this._loadedConversation?.messages ?? []).map((message) => ({
       role: message.role,
@@ -1938,7 +1927,7 @@ export class ChatStateManager {
   resetConversation(): void {
     this._resumeAttemptSeq++;
     delete this._lastUserTurn;
-    this._conversationEpoch++;
+    this._startNewEpoch();
     this._dismissedEditorContext.clear();
     this._sessionApprovals.clear();
     this._pendingApprovals.clear();
@@ -1966,7 +1955,7 @@ export class ChatStateManager {
 
   cancelInFlight(): void {
     this._resumeAttemptSeq++;
-    this._conversationEpoch++;
+    this._startNewEpoch();
     this._dropQueuedSends('Queued follow-up cancelled because this chat surface closed.');
     this._dropInFlightSend('Message cancelled because this chat surface closed.');
     this._dropSteeringSends('Steer cancelled because this chat surface closed.');
@@ -2899,6 +2888,8 @@ export class ChatStateManager {
           summary: event.summary,
           detail: event.detail,
           sessionApproved: false,
+          ...(event.riskLevel === undefined ? {} : { riskLevel: event.riskLevel }),
+          ...(event.reversible === undefined ? {} : { reversible: event.reversible }),
         },
       });
       return;

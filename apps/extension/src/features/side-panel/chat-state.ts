@@ -194,6 +194,48 @@ export function trimChatMessages(messages: SidePanelChatMessage[], maximum: numb
   return overflow;
 }
 
+/**
+ * A day is the longest wait this panel repeats. Past it the figure is a
+ * provider's clock skew or a header we misread, and a reader who waits out an
+ * invented number and fails again stops believing the next one.
+ */
+const MAX_STATED_RETRY_AFTER_SECONDS = 86_400;
+
+function counted(value: number, unit: string): string {
+  return `${value} ${unit}${value === 1 ? '' : 's'}`;
+}
+
+export function statedWait(retryAfterSeconds: unknown): string | undefined {
+  if (typeof retryAfterSeconds !== 'number' || !Number.isFinite(retryAfterSeconds))
+    return undefined;
+  const seconds = Math.round(retryAfterSeconds);
+  if (seconds < 1 || seconds > MAX_STATED_RETRY_AFTER_SECONDS) return undefined;
+  if (seconds < 90) return `about ${counted(seconds, 'second')}`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return `about ${counted(minutes, 'minute')}`;
+  return `about ${counted(Math.round(seconds / 3600), 'hour')}`;
+}
+
+export interface StreamFailureDetail {
+  retryAfterSeconds?: number;
+  requestId?: string;
+}
+
+/**
+ * The sentence a failed turn ends on.
+ *
+ * The gateway already inlines a wait whenever a provider supplied one, so a
+ * figure is added only to a sentence that states none, and the id is appended
+ * only when the gateway logged one. Both used to be dropped at the wire, which
+ * left a reader with no idea when the window reopens and support with nothing
+ * to search for.
+ */
+export function streamFailureText(errorText: string, detail: StreamFailureDetail = {}): string {
+  const wait = statedWait(detail.retryAfterSeconds);
+  const withWait = wait && !/\d/.test(errorText) ? `${errorText} Try again in ${wait}.` : errorText;
+  return detail.requestId ? `${withWait} Reference: ${detail.requestId}` : withWait;
+}
+
 export function applyStreamFailure(
   messages: SidePanelChatMessage[],
   streamId: string,

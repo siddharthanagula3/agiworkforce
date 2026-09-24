@@ -15,7 +15,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import { indexMessageArtifacts, scheduleArtifactIndexing } from '../index-artifacts';
-import { deriveArtifacts } from '@agiworkforce/artifacts';
+import {
+  deriveArtifacts,
+  EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+} from '@agiworkforce/artifacts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -141,6 +144,36 @@ describe('indexMessageArtifacts', () => {
     expect(count).toBe(0);
     expect(execute).toHaveBeenCalledTimes(1);
     expect(String(execute.mock.calls[0]?.[0])).toContain('delete from');
+  });
+
+  it('does not index unmarked HTML under the explicit Web policy', async () => {
+    const { db, execute } = makeDb();
+    const count = await indexMessageArtifacts({
+      db,
+      userId: USER_ID,
+      conversationId: CONVERSATION_ID,
+      messageId: MESSAGE_ID,
+      content: '```html\n<script>alert("inert")</script>\n```',
+      artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+    });
+
+    expect(count).toBe(0);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(String(execute.mock.calls[0]?.[0])).toContain('delete from');
+  });
+
+  it('indexes marked HTML under the explicit Web policy', async () => {
+    const { db } = makeDb();
+    const count = await indexMessageArtifacts({
+      db,
+      userId: USER_ID,
+      conversationId: CONVERSATION_ID,
+      messageId: MESSAGE_ID,
+      content: '```html\n<!-- @artifact -->\n<main>Preview</main>\n```',
+      artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+    });
+
+    expect(count).toBe(1);
   });
 });
 

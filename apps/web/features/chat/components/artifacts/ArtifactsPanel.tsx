@@ -45,6 +45,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { ArtifactPrivacyNotice } from '@/features/onboarding/components/ArtifactPrivacyNotice';
 import { useUIStore } from '@shared/stores/layout-store';
 import { TASK_DOCK_ARTIFACTS_LABEL, TASK_DOCK_LABEL } from '../../lib/agi-work';
+import { useOverlayDialog } from '../../hooks/use-overlay-dialog';
 
 const ARTIFACT_CONFLICT_NOTICE =
   'Someone else changed this artifact first, so their version is shown. Your edit is kept as the latest version.';
@@ -221,14 +222,6 @@ function useOverlayLayout(): 'unknown' | 'mobile' | 'desktop' {
   return layout;
 }
 
-function focusableWithin(root: HTMLElement): HTMLElement[] {
-  return Array.from(
-    root.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])',
-    ),
-  ).filter((element) => element.offsetParent !== null || element === document.activeElement);
-}
-
 function readArtifactDeepLink(): string | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -260,7 +253,6 @@ export function ArtifactsPanel() {
   const setPanelWidth = useChatUIStore((s) => s.setArtifactPanelWidth);
   const layout = useOverlayLayout();
   const panelRef = useRef<HTMLDivElement>(null);
-  const restoreFocusRef = useRef<HTMLElement | null>(null);
 
   const conversationMessages = useChatStore((s) =>
     activeConversationId
@@ -409,50 +401,8 @@ export function ArtifactsPanel() {
   }, [deepLinkId, artifactCount]);
 
   const isModalOverlay = layout === 'mobile' && panelOpen;
-
-  useEffect(() => {
-    if (!isModalOverlay) return;
-    const panel = panelRef.current;
-    if (!panel) return;
-
-    restoreFocusRef.current =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const initial = focusableWithin(panel)[0] ?? panel;
-    initial.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        setPanelOpen(false);
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusable = focusableWithin(panel);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        panel.focus();
-        return;
-      }
-      const first = focusable[0]!;
-      const last = focusable[focusable.length - 1]!;
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || active === panel)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    panel.addEventListener('keydown', onKeyDown);
-    return () => {
-      panel.removeEventListener('keydown', onKeyDown);
-      const restore = restoreFocusRef.current;
-      restoreFocusRef.current = null;
-      if (restore && document.contains(restore)) restore.focus();
-    };
-  }, [isModalOverlay, setPanelOpen]);
+  const closeModalOverlay = useCallback(() => setPanelOpen(false), [setPanelOpen]);
+  useOverlayDialog(panelRef, isModalOverlay, closeModalOverlay);
 
   const onResizePointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -490,7 +440,7 @@ export function ArtifactsPanel() {
     <>
       {/* Mobile backdrop */}
       <div
-        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm sm:hidden"
+        className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
         onClick={() => setPanelOpen(false)}
         aria-hidden="true"
       />
@@ -498,6 +448,7 @@ export function ArtifactsPanel() {
       {/* Panel */}
       <div
         ref={panelRef}
+        data-testid="artifacts-panel"
         role={isModalOverlay ? 'dialog' : undefined}
         aria-modal={isModalOverlay ? true : undefined}
         aria-label={isModalOverlay ? 'Artifacts' : undefined}
@@ -506,9 +457,9 @@ export function ArtifactsPanel() {
         className={cn(
           'flex flex-col border-l border-border/30 outline-none',
           'bg-card/95 backdrop-blur-xl',
-          'fixed inset-y-0 right-0 z-40 w-full',
+          'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
           'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:min-w-[280px] sm:shrink',
-          'animate-in slide-in-from-right duration-300',
+          'animate-in slide-in-from-right duration-moved',
         )}
       >
         {/* AUDIT-FIX ART-23: drag handle (desktop only). Also keyboard
@@ -524,7 +475,7 @@ export function ArtifactsPanel() {
             tabIndex={0}
             onPointerDown={onResizePointerDown}
             onKeyDown={onResizeKeyDown}
-            className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
+            className="absolute inset-y-0 -left-1 z-[var(--z-control)] w-2 cursor-col-resize bg-transparent transition-colors hover:bg-primary/30 focus-visible:bg-primary/40 focus-visible:outline-none"
           />
         )}
         {/* Header, slim strip: panel title + count badge + Download all.
@@ -542,7 +493,7 @@ export function ArtifactsPanel() {
             <PanelRightOpen className="h-4 w-4 shrink-0 text-muted-foreground" />
             <h2 className="shrink-0 text-sm font-semibold text-foreground">Artifacts</h2>
             {artifacts.length > 0 && (
-              <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium text-primary">
+              <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
                 {artifacts.length}
               </span>
             )}
@@ -550,7 +501,7 @@ export function ArtifactsPanel() {
                 hidden. Without this the artifacts simply vanish on reload. */}
             {persistenceDegraded && (
               <span
-                className="shrink-0 whitespace-nowrap text-[12px] text-danger"
+                className="shrink-0 whitespace-nowrap text-caption text-danger"
                 title="Browser storage is full, so artifacts are not being saved. They will disappear when this tab is closed."
               >
                 Not saved
@@ -559,7 +510,7 @@ export function ArtifactsPanel() {
             {cloudSyncStatus !== 'idle' && (
               <span
                 className={cn(
-                  'shrink-0 whitespace-nowrap text-[12px]',
+                  'shrink-0 whitespace-nowrap text-caption',
                   cloudSyncStatus === 'error' ? 'text-danger' : 'text-muted-foreground',
                 )}
                 title={cloudSyncStatus === 'error' ? (cloudSyncError ?? undefined) : undefined}
@@ -707,7 +658,7 @@ export function ArtifactsPanel() {
   );
 }
 
-export function ArtifactsToggleButton() {
+export function ArtifactsToggleButton({ onToggle }: { onToggle?: () => void } = {}) {
   const { getConversationArtifacts, panelOpen, togglePanel } = useArtifactsStore();
   const activeConversationId = useChatStore((s) => s.activeConversationId);
 
@@ -718,7 +669,7 @@ export function ArtifactsToggleButton() {
 
   return (
     <button
-      onClick={togglePanel}
+      onClick={onToggle ?? togglePanel}
       className={cn(
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
@@ -731,7 +682,7 @@ export function ArtifactsToggleButton() {
       <Code2 className="h-4 w-4" />
       {/* Badge showing count */}
       {artifacts.length > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {artifacts.length}
         </span>
       )}

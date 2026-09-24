@@ -4,20 +4,13 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePathname } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
-import { Brain, Mic } from 'lucide-react';
 import {
   SettingsModal,
-  SETTINGS_NAV_GROUPS_WEB,
-  SETTINGS_NAV_GROUP_DESKTOP_APP,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_DESKTOP,
   SETTINGS_NAV_GROUP_SETTINGS,
 } from '@agiworkforce/ui';
-import type {
-  SettingsDataAdapter,
-  SettingsNavGroupResolved,
-  SettingsNavItem,
-} from '@agiworkforce/ui';
+import type { SettingsDataAdapter, SettingsNavGroupResolved } from '@agiworkforce/ui';
 import {
   buildSettingsCustomConnectorHash,
   buildSettingsHash,
@@ -54,6 +47,11 @@ import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
+import {
+  HOSTED_SETTINGS_NAV_GROUPS,
+  WEB_SETTINGS_NAV_GROUPS,
+  settingsSectionFromPath,
+} from './web-settings-navigation';
 import { SkillEditorDialog } from '@features/skills/components/SkillEditorDialog';
 
 export { SETTINGS_CONNECTORS } from '@/features/connectors/hooks/use-connectors-settings-adapter';
@@ -65,73 +63,15 @@ export { SETTINGS_CONNECTORS } from '@/features/connectors/hooks/use-connectors-
 function SectionSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6">
-      <div className="h-6 w-48 rounded bg-foreground/10" />
-      <div className="h-4 w-80 rounded bg-foreground/[0.07]" />
+      <div className="h-6 w-48 rounded-compact bg-foreground/10" />
+      <div className="h-4 w-80 rounded-compact bg-foreground/[0.07]" />
       <div className="h-40 w-full rounded-xl bg-foreground/[0.07]" />
     </div>
   );
 }
 
-const SECTION_TO_SEGMENT: Record<string, string> = {
-  general: 'general',
-  account: 'account',
-  team: 'team',
-  security: 'security',
-  safety: 'safety',
-  privacy: 'privacy',
-  archived: 'archived',
-  'deleted-chats': 'deleted-chats',
-  'shared-links': 'shared-links',
-  billing: 'billing',
-  usage: 'usage',
-  capabilities: 'capabilities',
-  connectors: 'connectors',
-  skills: 'skills',
-  plugins: 'plugins',
-  memory: 'memory',
-  notifications: 'notifications',
-  voice: 'voice',
-  reflect: 'reflect',
-  'time-focus': 'time-focus',
-  help: 'help',
-};
-
-const SEGMENT_TO_SECTION: Record<string, string> = Object.fromEntries(
-  Object.entries(SECTION_TO_SEGMENT).map(([k, v]) => [v, k]),
-);
-
-const MEMORY_NAV_ITEM: SettingsNavItem = {
-  key: 'memory',
-  label: 'Memory',
-  icon: Brain,
-  keywords: ['facts', 'remember', 'personalization', 'manage memories'],
-};
-
-const VOICE_NAV_ITEM: SettingsNavItem = {
-  key: 'voice',
-  label: 'Voice',
-  icon: Mic,
-  keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
-};
-
-const VOICE_NAV_ANCHOR = 'notifications';
 const SETTINGS_SECTION_CONNECTORS = 'connectors';
 
-const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map((group) =>
-  group.label === SETTINGS_NAV_GROUP_CUSTOMIZE
-    ? { ...group, items: [...group.items, MEMORY_NAV_ITEM] }
-    : {
-        ...group,
-        items: group.items.flatMap((item) =>
-          item.key === VOICE_NAV_ANCHOR ? [item, VOICE_NAV_ITEM] : [item],
-        ),
-      },
-);
-
-/**
- * The shell's own settings sit between Settings and Customize, and only when
- * there is a shell: a browser has nothing behind that group to configure.
- */
 const NAV_GROUP_LABEL_KEYS: Record<string, string> = {
   [SETTINGS_NAV_GROUP_SETTINGS]: 'nav.groupSettings',
   [SETTINGS_NAV_GROUP_CUSTOMIZE]: 'nav.groupCustomize',
@@ -155,12 +95,6 @@ function translateNavGroups(
     })),
   }));
 }
-
-const HOSTED_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = [
-  ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label !== SETTINGS_NAV_GROUP_CUSTOMIZE),
-  SETTINGS_NAV_GROUP_DESKTOP_APP,
-  ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label === SETTINGS_NAV_GROUP_CUSTOMIZE),
-];
 
 // ---------------------------------------------------------------------------
 // Props
@@ -189,16 +123,7 @@ export function WebSettingsModal({
     [host, t],
   );
 
-  // Derive section from current URL path (deep-link support)
-  const sectionFromPath = (() => {
-    if (!pathname) return null;
-    const match = pathname.match(/^\/settings\/([^/]+)/);
-    if (match?.[1] && SEGMENT_TO_SECTION[match[1]]) return SEGMENT_TO_SECTION[match[1]];
-    if (pathname.startsWith('/connectors')) return 'connectors';
-    if (pathname.startsWith('/skills')) return 'skills';
-    if (pathname.startsWith('/apps')) return 'plugins';
-    return null;
-  })();
+  const sectionFromPath = settingsSectionFromPath(pathname);
 
   const [activeSection, setActiveSection] = useState<string>(sectionFromPath ?? initialSection);
 
@@ -264,7 +189,7 @@ export function WebSettingsModal({
     general: <GeneralSection />,
     account: <AccountSection />,
     team: (
-      <div style={{ display: 'grid', gap: 16 }}>
+      <div style={{ display: 'grid', gap: 'var(--space-4)' }}>
         <WorkspaceConsolePointer />
         <TeamSection />
       </div>

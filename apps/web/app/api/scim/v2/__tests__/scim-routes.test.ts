@@ -949,3 +949,113 @@ describe('SCIM groups', () => {
     await expect(response.json()).resolves.toMatchObject({ totalResults: 1 });
   });
 });
+
+describe('SCIM requests that change nothing still reach the directory log', () => {
+  function eventsOfType(state: FakeScimDbState, eventType: string) {
+    return state.directory_sync_events.filter((row) => row['event_type'] === eventType);
+  }
+
+  it('records a refused write with the reason the identity provider was given', async () => {
+    const { rawToken, state } = await harness();
+    await usersPost(
+      scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
+    );
+
+    const duplicate = await usersPost(
+      scimRequest('/Users', {
+        method: 'POST',
+        token: rawToken,
+        body: userPayload({ userName: 'ADA@example.com' }),
+      }),
+    );
+
+    expect(duplicate.status).toBe(409);
+    const refused = eventsOfType(state, 'sync.rejected');
+    expect(refused).toHaveLength(1);
+    expect(refused[0]).toMatchObject({
+      organization_id: ORG,
+      connection_id: CONNECTION,
+      error: 'User ADA@example.com already exists',
+      raw_payload: {
+        method: 'POST',
+        path: '/api/scim/v2/Users',
+        status: 409,
+        scimType: 'uniqueness',
+      },
+    });
+  });
+
+  it('records a failure on our side without the underlying error or the credential', async () => {
+    const { rawToken, state, adapter } = await harness();
+    state.profiles.push({ id: 'clerk_ada', email: 'ada@example.com' });
+    const writable = adapter as unknown as {
+      execute: (sql: string, params?: unknown[]) => Promise<number>;
+    };
+    const execute = writable.execute.bind(writable);
+    writable.execute = async (sql, params) => {
+      if (sql.replace(/\s+/gu, ' ').toLowerCase().includes('insert into organization_members')) {
+        throw new Error('connection reset by peer at 10.0.0.12:5432');
+      }
+      return execute(sql, params);
+    };
+
+    const response = await usersPost(
+      scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
+    );
+
+    expect(response.status).toBe(500);
+    const failed = eventsOfType(state, 'sync.failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]).toMatchObject({
+      organization_id: ORG,
+      error: 'The request failed on our side',
+      raw_payload: { method: 'POST', path: '/api/scim/v2/Users', status: 500 },
+    });
+    const logged = JSON.stringify(state.directory_sync_events);
+    expect(logged).not.toContain('10.0.0.12');
+    expect(logged).not.toContain('connection reset');
+    expect(logged).not.toContain(rawToken);
+  });
+
+  it('records a request refused because the connection is disabled', async () => {
+    const { rawToken, state } = await harness({ connectionActive: false });
+
+    const response = await usersGet(scimRequest('/Users', { token: rawToken }));
+
+    expect(response.status).toBe(403);
+    expect(eventsOfType(state, 'sync.denied')).toEqual([
+      expect.objectContaining({
+        organization_id: ORG,
+        error: 'This directory sync connection is disabled',
+      }),
+    ]);
+  });
+
+  it('records nothing for a request it cannot attribute to a workspace', async () => {
+    const { state } = await harness();
+
+    const response = await usersPost(
+      scimRequest('/Users', {
+        method: 'POST',
+        token: `scim_${'ab'.repeat(8)}_${'cd'.repeat(24)}`,
+        body: userPayload(),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    expect(state.directory_sync_events).toHaveLength(0);
+  });
+
+  it('records no failure for a request that succeeds', async () => {
+    const { rawToken, state } = await harness();
+
+    const created = await usersPost(
+      scimRequest('/Users', { method: 'POST', token: rawToken, body: userPayload() }),
+    );
+
+    expect(created.status).toBe(201);
+    expect(state.directory_sync_events.map((row) => row['event_type'])).toEqual([
+      'user.provisioned',
+    ]);
+  });
+});

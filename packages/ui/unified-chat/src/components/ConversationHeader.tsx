@@ -69,10 +69,13 @@ export function ConversationHeader({
             if (e.key === 'Escape') setEditing(false);
           }}
           aria-label={t('header.conversationTitle', 'Conversation title')}
-          className="min-w-0 flex-1 rounded border border-[var(--chat-border)] bg-[var(--chat-input-bg)] px-2 py-1 text-sm text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
+          className="min-w-0 flex-1 rounded-compact border border-[var(--chat-border)] bg-[var(--chat-input-bg)] px-2 py-1 text-sm text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
         />
       ) : (
-        <h2 className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--chat-fg)]">
+        <h2
+          title={title}
+          className="min-w-0 flex-1 truncate text-sm font-medium text-[var(--chat-fg)]"
+        >
           {title}
         </h2>
       )}
@@ -157,11 +160,11 @@ function HeaderAction({
       title={label}
       aria-label={label}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-      className="inline-flex items-center gap-1 rounded p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-accent-primary)]"
+      className="inline-flex items-center gap-1 rounded-compact p-1.5 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-fg)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
     >
       <Icon className="h-4 w-4" aria-hidden />
       {badge === undefined ? null : (
-        <span className="text-[12px] font-medium leading-none" aria-hidden>
+        <span className="text-caption font-medium leading-none" aria-hidden>
           {badge}
         </span>
       )}

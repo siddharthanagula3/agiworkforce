@@ -73,7 +73,7 @@ describe('createOpenRouterAdapter', () => {
           });
         }
         return new Response(
-          'data: {"id":"x","choices":[{"index":0,"delta":{"content":"ready"}}]}\n\ndata: [DONE]\n\n',
+          'data: {"id":"x","choices":[{"index":0,"delta":{"content":"ready"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
           { status: 200, headers: { 'content-type': 'text/event-stream' } },
         );
       },

@@ -186,6 +186,7 @@ describe('ComposerInput mobile density', () => {
     for (const token of COMPOSER_INPUT_ROW_CLASS.split(' ')) {
       expect(textarea).toHaveClass(token);
     }
+    expect(textarea).toHaveClass('text-base', 'leading-6');
   });
 
   it('uses the empty-state row on the new-chat surface', () => {
@@ -205,6 +206,7 @@ describe('ComposerInput mobile density', () => {
     await waitFor(() => expect(view.container.querySelector(EDITOR_SELECTOR)).not.toBeNull());
     const root = view.container.querySelector('.composer-editor');
     expect(root).toHaveClass('[&_.ProseMirror]:min-h-[36px]');
+    expect(root).toHaveClass('[&_.ProseMirror]:text-base', '[&_.ProseMirror]:leading-6');
     // Chat (non-empty): 36px at `sm:` too, mirroring the merged one-row rest
     // state; 36 + the card's 8px padding lands on the 52px parity target.
     expect(root).toHaveClass('sm:[&_.ProseMirror]:min-h-[36px]');

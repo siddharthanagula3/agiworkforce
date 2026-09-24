@@ -107,11 +107,11 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         'group flex items-start gap-3 rounded-lg p-3 no-underline',
         'bg-muted/20 hover:bg-muted/40',
         'border border-border/20 hover:border-border/50',
-        'transition-all duration-150',
+        'transition-all duration-quick',
       )}
     >
       {badge !== undefined && (
-        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded bg-primary/10 px-1 text-[12px] font-semibold text-primary">
+        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-compact bg-primary/10 px-1 text-caption font-semibold text-primary">
           {badge}
         </span>
       )}
@@ -135,9 +135,9 @@ function SourceRow({ source, badge }: { source: ResearchSource; badge?: number }
         <h4 className="line-clamp-2 text-[13px] font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
           {displayTitle}
         </h4>
-        {subtitle && <p className="truncate text-[12px] text-muted-foreground">{subtitle}</p>}
+        {subtitle && <p className="truncate text-caption text-muted-foreground">{subtitle}</p>}
         {source.snippet && (
-          <p className="line-clamp-2 text-[12px] leading-relaxed text-muted-foreground">
+          <p className="line-clamp-2 text-caption leading-relaxed text-muted-foreground">
             {source.snippet}
           </p>
         )}
@@ -312,7 +312,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
     <>
       {/* Mobile backdrop */}
       <div
-        className="fixed inset-0 z-30 bg-black/50 backdrop-blur-sm sm:hidden"
+        className="fixed inset-0 z-[var(--z-panel-backdrop)] bg-black/50 backdrop-blur-sm sm:hidden"
         onClick={closePanel}
         aria-hidden="true"
       />
@@ -324,11 +324,11 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
           'flex flex-col border-l border-border/30',
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
-          'fixed inset-y-0 right-0 z-40 w-full',
+          'fixed inset-y-0 right-0 z-[var(--z-panel)] w-full',
           // Desktop: inline panel, same width as ArtifactsPanel
           'sm:relative sm:inset-auto sm:z-auto sm:w-[360px] sm:min-w-[280px] sm:shrink',
           // Slide-in animation
-          'animate-in slide-in-from-right duration-300',
+          'animate-in slide-in-from-right duration-moved',
         )}
         aria-label="Research panel"
         // Only the covering form is a dialog. Beside the conversation this is an
@@ -384,7 +384,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
               </button>
             </div>
             {tab === 'sources' && sourceCount > 0 && (
-              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[12px] font-medium text-primary">
+              <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-caption font-medium text-primary">
                 {sourceCount}
               </span>
             )}
@@ -418,7 +418,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
             {/* Query line (if present) */}
             {query && (
               <div className="border-b border-border/20 px-4 py-2">
-                <div className="inline-flex items-center gap-1.5 rounded bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+                <div className="inline-flex items-center gap-1.5 rounded-compact bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
                   <Search className="h-3 w-3 shrink-0" />
                   <span className="font-mono">{query}</span>
                 </div>
@@ -431,7 +431,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
               <div className="flex-1 space-y-4 overflow-y-auto p-3 [scrollbar-width:thin]">
                 {cited.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <h3 className="px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                       Citations
                     </h3>
                     {cited.map((source, index) => (
@@ -445,7 +445,7 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
                 )}
                 {more.length > 0 && (
                   <div className="space-y-2">
-                    <h3 className="px-1 text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    <h3 className="px-1 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                       More
                     </h3>
                     {more.map((source, index) => (
@@ -466,12 +466,18 @@ export function ResearchPanel({ onAskFollowUp }: ResearchPanelProps) {
 // Toggle button (for chat header)
 // ============================================================================
 
-export function ResearchToggleButton({ count = 0 }: { count?: number }) {
+export function ResearchToggleButton({
+  count = 0,
+  onToggle,
+}: {
+  count?: number;
+  onToggle?: () => void;
+}) {
   const { panelOpen, togglePanel } = useResearchPanelStore();
 
   return (
     <button
-      onClick={togglePanel}
+      onClick={onToggle ?? togglePanel}
       className={cn(
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
@@ -483,7 +489,7 @@ export function ResearchToggleButton({ count = 0 }: { count?: number }) {
     >
       <Globe className="h-4 w-4" />
       {count > 0 && !panelOpen && (
-        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground">
+        <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground">
           {count}
         </span>
       )}

@@ -146,10 +146,12 @@ const managedUsageMocks = vi.hoisted(() => ({
 
 const rlsMocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
+  getVerifiedBearerUserScopedDb: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
+  getVerifiedBearerUserScopedDb: rlsMocks.getVerifiedBearerUserScopedDb,
 }));
 
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -276,7 +278,7 @@ describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => 
     });
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
-    rlsMocks.getUserScopedDb.mockResolvedValue({
+    rlsMocks.getVerifiedBearerUserScopedDb.mockResolvedValue({
       db: { query: vi.fn(async () => []) },
       userId: 'pro-user-id',
     });
@@ -321,7 +323,8 @@ describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => 
     const request = makeRequest('Hello, how are you?');
     const response = await POST(request);
 
-    expect(rlsMocks.getUserScopedDb).toHaveBeenCalledOnce();
+    expect(rlsMocks.getVerifiedBearerUserScopedDb).toHaveBeenCalledOnce();
+    expect(rlsMocks.getUserScopedDb).not.toHaveBeenCalled();
     expect(managedUsageMocks.reserve).toHaveBeenCalledOnce();
     expect(response.status, await response.clone().text()).toBe(200);
 

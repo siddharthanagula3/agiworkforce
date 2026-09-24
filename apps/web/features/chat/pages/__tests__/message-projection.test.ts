@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Message } from '@shared/stores/web-chat-store';
-import { resolveChatAccountDisplay, resolveChatAccountUser, toChatMessage } from '../WebChatPage';
+import { useChatStore, type Message } from '@shared/stores/web-chat-store';
+import {
+  projectChatMessages,
+  resolveChatAccountDisplay,
+  resolveChatAccountUser,
+  toChatMessage,
+} from '../WebChatPage';
 
 describe('WebChatPage message projection', () => {
   it('preserves durable attachments for the transcript after reload', () => {
@@ -79,6 +84,28 @@ describe('WebChatPage message projection', () => {
     expect(toChatMessage(message, 'conversation-id').metadata?.['paywall']).toEqual(
       message.metadata?.paywall,
     );
+  });
+
+  it('reprojects only the patched row in a 500-message transcript', () => {
+    const messages = Array.from({ length: 500 }, (_, index): Message => ({
+      id: `message-${index}`,
+      role: index % 2 === 0 ? 'user' : 'assistant',
+      content: `content-${index}`,
+      createdAt: '2026-09-22T00:00:00.000Z',
+    }));
+    useChatStore.getState().reset();
+    useChatStore.getState().setActiveConversationWithMessages('conv-500', messages);
+    const firstSource = useChatStore.getState().messages;
+    const first = projectChatMessages(firstSource, 'conv-500');
+
+    useChatStore.getState().appendToMessage('message-499', '-next', 'conv-500');
+    const second = projectChatMessages(useChatStore.getState().messages, 'conv-500');
+
+    expect(second.patch).toEqual({ previous: first.messages, index: 499 });
+    expect(second.messages[0]).toBe(first.messages[0]);
+    expect(second.messages[498]).toBe(first.messages[498]);
+    expect(second.messages[499]).not.toBe(first.messages[499]);
+    expect(second.messages[499]?.content).toBe('content-499-next');
   });
 });
 

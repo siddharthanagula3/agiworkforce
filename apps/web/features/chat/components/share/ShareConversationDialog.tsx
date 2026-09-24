@@ -229,7 +229,7 @@ function ShareConversationDialogImpl({
                       value={option.days}
                       checked={expiryDays === option.days}
                       onChange={() => setExpiryDays(option.days)}
-                      className="h-4 w-4 accent-[hsl(var(--primary))]"
+                      className="h-4 w-4 accent-primary"
                     />
                   </label>
                 ))}

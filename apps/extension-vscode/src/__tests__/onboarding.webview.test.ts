@@ -118,8 +118,16 @@ describe('VS Code first-run onboarding', () => {
 
     click('onboardingPermissionDocs');
     click('onboardingPrivacySettings');
-    expect(postMessage).toHaveBeenCalledWith({ type: 'openPermissionDocs' });
-    expect(postMessage).toHaveBeenCalledWith({ type: 'openPrivacySettings' });
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'openPermissionDocs',
+    });
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'openPrivacySettings',
+    });
   });
 
   it('persists completion, hides the intro, and supports host-triggered replay', () => {
@@ -130,7 +138,11 @@ describe('VS Code first-run onboarding', () => {
     expect((document.querySelector('.input-area') as HTMLElement & { inert: boolean }).inert).toBe(
       false,
     );
-    expect(postMessage).toHaveBeenCalledWith({ type: 'completeOnboarding' });
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'completeOnboarding',
+    });
 
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'showOnboarding' } }));
     expect(document.getElementById('onboarding')?.style.display).toBe('flex');

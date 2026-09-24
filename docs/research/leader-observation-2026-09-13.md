@@ -1,8 +1,12 @@
 # Leader observation, 2026-09-13
 
-Status: Current
+Status: Historical snapshot
 Owner: Repository maintainers
 Last updated: 2026-09-13
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. This remains a dated UI
+observation rather than a current architecture requirement.
 
 Observed live through the reference browser on 2026-09-13, signed in, at 1336
 wide. This note records only what differs from or sharpens the 2026-09-04

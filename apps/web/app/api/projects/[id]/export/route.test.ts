@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   authUser: vi.fn(async () => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (): Promise<Response | null> => null),
-  resolveActiveOrganizationId: vi.fn(async () => null),
+  resolveActiveOrganizationId: vi.fn(async (): Promise<string | null> => null),
+  recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -20,6 +21,10 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/cors', () => ({
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/projects', () => ({
   mapProjectRow: (row: Record<string, unknown>) => ({ id: row['id'], name: row['name'] }),
@@ -91,5 +96,34 @@ describe('GET /api/projects/[id]/export', () => {
 
     const res = await call();
     expect(res.headers.get('content-disposition')).toContain('project-export.json');
+  });
+
+  it('records the export on the audit trail, in the workspace that owns the project', async () => {
+    mocks.resolveActiveOrganizationId.mockResolvedValue('99999999-9999-4999-8999-999999999999');
+    mocks.query
+      .mockResolvedValueOnce([{ id: 'proj-1', name: 'Q3' }])
+      .mockResolvedValueOnce([{ file_name: 'a.pdf' }, { file_name: 'b.pdf' }]);
+
+    const res = await call();
+
+    expect(res.status).toBe(200);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        eventType: 'data_exported',
+        organizationId: '99999999-9999-4999-8999-999999999999',
+        detail: { resourceType: 'project', resourceId: 'proj-1', count: 2 },
+      }),
+    );
+  });
+
+  it('records no export for a project the caller does not own', async () => {
+    mocks.query.mockResolvedValueOnce([]);
+
+    const res = await call();
+
+    expect(res.status).toBe(404);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });

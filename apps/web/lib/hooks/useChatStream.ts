@@ -27,6 +27,7 @@ import {
   type StreamSequenceState,
 } from '@agiworkforce/types';
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
 import { toast } from 'sonner';
@@ -124,6 +125,7 @@ import {
 } from '@/lib/chat-project-sources';
 import { getBrowserTimeZone } from '@/lib/client/browser-timezone';
 import { createFrameCoalescedAppender } from '@/lib/client/frame-coalesced-appender';
+import { startChatLatencyTrace, type ChatLatencyTrace } from '@/lib/client/chat-latency';
 import { longestTrailingTagPrefix } from '@/lib/streaming/trailing-tag-prefix';
 import { isFreeTrialErrorCode, useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import type {
@@ -179,6 +181,7 @@ import {
   buildApiMessageContent,
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
+import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
 
@@ -199,10 +202,13 @@ interface SendMessageOptions {
   thinkingEffort?: Effort;
   styleMode?: string;
   styleInstruction?: string;
+  artifactInstruction?: string;
   skillName?: string;
   mcpContext?: McpContextSelection;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
+  /** False only after the first-party client has confirmed that no account connector is enabled. */
+  connectorToolsEnabled?: boolean;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
   research?: boolean;
@@ -410,6 +416,42 @@ function getVisibleErrorMessage(error: unknown): string {
     return networkErrorMessage(error) ?? error.trim();
   }
   return toUserMessage(error, 'An unknown error occurred');
+}
+
+export interface StreamErrorInfo {
+  message: string;
+  code?: string;
+  retryable?: boolean;
+  /** Only ever the figure the provider supplied; never defaulted here. */
+  retryAfterSeconds?: number;
+  requestId?: string;
+}
+
+/**
+ * A mid-stream failure, whichever of the three frames carried it: the legacy
+ * web wire's `x_stream_error` delta, an agent-event envelope, or a bare
+ * string. Read in one place because the fields a reader needs kept arriving on
+ * one of the three only.
+ */
+function readStreamErrorFrame(raw: unknown): StreamErrorInfo | undefined {
+  if (typeof raw === 'string') return raw ? { message: raw } : undefined;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const frame = raw as Record<string, unknown>;
+  const message = frame['message'];
+  if (typeof message !== 'string' || !message) return undefined;
+  const code = frame['code'];
+  const retryable = frame['retryable'];
+  const retryAfterSeconds = frame['retryAfterSeconds'];
+  const requestId = frame['requestId'];
+  return {
+    message,
+    ...(typeof code === 'string' && code ? { code } : {}),
+    ...(typeof retryable === 'boolean' ? { retryable } : {}),
+    ...(typeof retryAfterSeconds === 'number' && Number.isFinite(retryAfterSeconds)
+      ? { retryAfterSeconds }
+      : {}),
+    ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+  };
 }
 
 function buildAssistantErrorContent(message: string, code?: string): string {
@@ -958,6 +1000,7 @@ interface ConsumeStreamContext {
   conversationId: string;
   isTemporaryConversation: boolean;
   getAuthToken: AuthTokenProvider;
+  latencyTrace?: ChatLatencyTrace;
   seedContent?: string;
   seedTools?: MessageToolEntry[];
   /**
@@ -1284,6 +1327,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     conversationId,
     isTemporaryConversation,
     getAuthToken,
+    latencyTrace,
   } = ctx;
 
   const store = useChatStore.getState();
@@ -1347,6 +1391,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         return;
       }
       appendToMessage(messageId, text, conversationId);
+      latencyTrace?.scheduleFirstPaint();
     },
   });
   const setSearching = store.setSearching;
@@ -1396,8 +1441,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     : seedMetadata?.cloudAgentRun;
   let finishReason: string | undefined;
-  let streamErrorInfo: { message: string; code?: string; retryable?: boolean } | undefined =
-    seedMetadata?.streamError;
+  let streamErrorInfo: StreamErrorInfo | undefined = seedMetadata?.streamError;
   const interactiveCards = new Map<string, InteractiveCard>(
     (seedMetadata?.interactiveCards ?? [])
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
@@ -1866,8 +1910,20 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     publishToolTimeline();
   };
 
-  const buildAssistantMetadata = (): MessageMetadata | undefined => {
-    const metadata: MessageMetadata = {};
+  const buildAssistantMetadata = (
+    generatedVideoUrl: string | null,
+  ): MessageMetadata | undefined => {
+    const metadata: MessageMetadata = {
+      artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+    };
+    if (generatedVideoUrl) {
+      metadata.toolType = 'video-generation';
+      metadata.videoStatus = 'completed';
+      metadata.videoUrl = generatedVideoUrl;
+    }
+    if (streamRouteLane) {
+      metadata.routeLane = streamRouteLane;
+    }
     if (movedFromModel) {
       metadata.movedFromModel = movedFromModel;
       if (movedReason) metadata.movedReason = movedReason;
@@ -1986,8 +2042,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   };
 
   const persistAssistant = (streamedContent: string) => {
-    const fullContent = withProviderCitationMarkers(streamedContent);
-    const metadata = buildAssistantMetadata();
+    const deliveredContent = withProviderCitationMarkers(streamedContent);
+    const generatedVideoUrl =
+      freeQuotaSelection(model)?.category === 'video'
+        ? (/^\[View generated video\]\(<(\/api\/files\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})>\)$/iu.exec(
+            deliveredContent,
+          )?.[1] ?? null)
+        : null;
+    const fullContent = generatedVideoUrl ? 'Video generated.' : deliveredContent;
+    const metadata = buildAssistantMetadata(generatedVideoUrl);
     if (fullContent !== streamedContent) {
       updateMessage(assistantMessageId, { content: fullContent }, conversationId);
     }
@@ -1999,6 +2062,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       metadata &&
       ((metadata.tools?.length ?? 0) > 0 ||
         metadata.agentActivity ||
+        metadata.videoUrl ||
         (metadata.generatedFiles?.length ?? 0) > 0 ||
         metadata.searchResults ||
         (metadata.projectSources?.length ?? 0) > 0 ||
@@ -2010,6 +2074,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         metadata.thinkingContent ||
         (metadata.thinkingSegments?.length ?? 0) > 0 ||
         metadata.streamError ||
+        metadata.routeLane ||
         metadata.finishReason === STOPPED_FINISH_REASON),
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
@@ -2098,6 +2163,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       deliveredCharacters += repaired.length;
       unacknowledgedPublicText += repaired;
       coalescedAppends.append('content', assistantMessageId, repaired);
+      latencyTrace?.observeAssistantText(fullAssistantContent);
       return;
     }
 
@@ -2106,6 +2172,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     deliveredCharacters += text.length;
     unacknowledgedPublicText += text;
     coalescedAppends.append('content', assistantMessageId, text);
+    latencyTrace?.observeAssistantText(fullAssistantContent);
   };
 
   const flushContentBuffer = (isFinal = false) => {
@@ -2282,13 +2349,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             }
           }
           if (envelope.event.type === 'error' && !streamErrorInfo) {
-            streamErrorInfo = {
-              message: envelope.event.message,
-              ...(envelope.event.code ? { code: envelope.event.code } : {}),
-              ...(envelope.event.retryable !== undefined
-                ? { retryable: envelope.event.retryable }
-                : {}),
-            };
+            streamErrorInfo = readStreamErrorFrame(envelope.event);
           }
           if (envelope.event.type === 'stop') {
             finishReason =
@@ -2396,6 +2457,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   try {
     while (true) {
       const { done, value } = await reader.read();
+      if (!done && value && value.byteLength > 0) latencyTrace?.markFirstChunk();
       markFirstStreamActivitySeen();
 
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
@@ -2405,6 +2467,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           // A terminator only says the producer is finished. If this client
           // missed an earlier frame, settlement must wait for cursor replay.
           if (sequenceGapSeen) continue;
+          latencyTrace?.markDone();
           flushContentBuffer(true);
           if (inThinkingBlock) {
             closeThinkingSegment();
@@ -2468,13 +2531,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               ).pending;
             }
             if (agentEnvelope.event.type === 'error' && !streamErrorInfo) {
-              streamErrorInfo = {
-                message: agentEnvelope.event.message,
-                ...(agentEnvelope.event.code ? { code: agentEnvelope.event.code } : {}),
-                ...(agentEnvelope.event.retryable !== undefined
-                  ? { retryable: agentEnvelope.event.retryable }
-                  : {}),
-              };
+              streamErrorInfo = readStreamErrorFrame(agentEnvelope.event);
             }
             if (agentEnvelope.event.type === 'stop') {
               finishReason =
@@ -2657,24 +2714,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const streamErrorDelta = parsed.choices?.[0]?.delta?.x_stream_error;
           if (!streamErrorInfo) {
-            if (
-              streamErrorDelta &&
-              typeof streamErrorDelta === 'object' &&
-              typeof streamErrorDelta.message === 'string' &&
-              streamErrorDelta.message
-            ) {
-              streamErrorInfo = {
-                message: streamErrorDelta.message,
-                ...(typeof streamErrorDelta.code === 'string'
-                  ? { code: streamErrorDelta.code }
-                  : {}),
-                ...(typeof streamErrorDelta.retryable === 'boolean'
-                  ? { retryable: streamErrorDelta.retryable }
-                  : {}),
-              };
-            } else if (typeof streamErrorDelta === 'string' && streamErrorDelta) {
-              streamErrorInfo = { message: streamErrorDelta };
-            }
+            streamErrorInfo = readStreamErrorFrame(streamErrorDelta);
           }
 
           // The function budget ended this connection, not the run; follow it in the journal.
@@ -2808,10 +2848,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const errorCode =
               ((searchResultsBlock.content as Record<string, unknown>)['error_code'] as
                 string | undefined) || 'unknown_error';
-            finishTool('web_search', 'failed', `Web search failed: ${errorCode}`);
+            const failure = webSearchFailureSentence(errorCode);
+            finishTool('web_search', 'failed', failure);
             upsertNativeWebSearchEntry({
               status: 'failed',
-              error: `Web search failed: ${errorCode}`,
+              error: failure,
               completedAtMs: Date.now(),
             });
           }
@@ -2998,6 +3039,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   }
 }
 
+/**
+ * The provider's own search error codes, in the reader's words. A code the table
+ * does not know is reported as the search being unavailable, never as the code.
+ */
+const WEB_SEARCH_FAILURE_SENTENCES: Readonly<Record<string, string>> = {
+  too_many_requests: 'Web search is receiving too many requests right now.',
+  max_uses_exceeded: 'Web search reached the most searches allowed for one answer.',
+  query_too_long: 'The search query was too long to run.',
+  invalid_input: 'The search query could not be run.',
+};
+
+export function webSearchFailureSentence(code: string): string {
+  return WEB_SEARCH_FAILURE_SENTENCES[code] ?? 'Web search is unavailable right now.';
+}
+
 export function useChatStream(): UseChatStreamReturn {
   const { getToken } = useSession();
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -3135,6 +3191,7 @@ export function useChatStream(): UseChatStreamReturn {
         setError(LOCAL_TURN_IN_CLOUD_CHAT, conversationId);
         return false;
       }
+      const latencyTrace = localModel ? undefined : startChatLatencyTrace();
       const sendReplay = createSendReplayMetadata({
         webSearchEnabled: options.webSearch,
         thinkingEnabled: options.thinkingEnabled,
@@ -3181,7 +3238,7 @@ export function useChatStream(): UseChatStreamReturn {
       // The row the answer hangs off. It is the user message id until the server
       // hands back a different one, and a tree that kept naming the old id would
       // orphan the answer from the question it belongs to.
-      let turnAnchorId = userMessageId;
+      const turnAnchorId = userMessageId;
       const userMessageParentId = regenerateParentId
         ? undefined
         : resolveUserMessageParentId(conversationId, options.userMessageParentId);
@@ -3192,7 +3249,10 @@ export function useChatStream(): UseChatStreamReturn {
           .getState()
           .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
       );
+      let turnCommittedReported = false;
       const reportTurnCommitted = () => {
+        if (turnCommittedReported) return;
+        turnCommittedReported = true;
         try {
           options.onTurnCommitted?.();
         } catch (callbackError) {
@@ -3232,7 +3292,7 @@ export function useChatStream(): UseChatStreamReturn {
       const abortController = beginConversationRequest(conversationId);
 
       const assistantMessageId = resolveClientMessageId(options.assistantMessageId);
-      let assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
+      const assistantParentId = resolveAssistantParentId(conversationId, turnAnchorId);
       const assistantStartedAtMs = regenerateParentId
         ? Date.now()
         : Math.max(Date.now(), userMessageStartedAtMs + 1);
@@ -3246,6 +3306,7 @@ export function useChatStream(): UseChatStreamReturn {
         isStreaming: true,
         ...(assistantParentId ? { parentId: assistantParentId } : {}),
         metadata: {
+          artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
           ...(options.webSearch ? { webSearchRequested: true } : {}),
           ...(hasExplicitWebSearchIntent(content) ? { webSearchAskedInText: true } : {}),
           agentActivity: startAgentActivityLocally({
@@ -3274,6 +3335,7 @@ export function useChatStream(): UseChatStreamReturn {
 
       const turnConversationId = conversationId;
       const abandonTurn = () => {
+        latencyTrace?.cancel();
         stopStreaming(turnConversationId);
         setLoading(false, turnConversationId);
         deleteMessage(assistantMessageId, turnConversationId);
@@ -3292,7 +3354,10 @@ export function useChatStream(): UseChatStreamReturn {
         }
         if (!realConversationId) {
           abandonTurn();
-          setError('Could not start the conversation.', conversationId);
+          setError(
+            useChatStore.getState().error ?? 'Could not start the conversation.',
+            conversationId,
+          );
           return false;
         }
         if (realConversationId !== conversationId) {
@@ -3319,38 +3384,7 @@ export function useChatStream(): UseChatStreamReturn {
         reportTurnCommitted();
       } else if (regenerateParentId) {
         reportTurnCommitted();
-      } else if (!isTemporaryConversation) {
-        try {
-          const saved = await saveMessageToDb(
-            conversationId,
-            {
-              id: userMessageId,
-              role: 'user',
-              content: content.trim(),
-              metadata: userMetadata,
-              ...(threadsThisWrite ? { parentId: userMessageParentId } : {}),
-            },
-            getAuthToken,
-          );
-          if (saved.id !== userMessageId) {
-            updateMessage(userMessageId, { id: saved.id }, conversationId);
-            turnAnchorId = saved.id;
-            if (threadsThisWrite) {
-              useChatStore.getState().setActiveLeaf(conversationId, saved.id);
-            }
-            if (assistantParentId) {
-              assistantParentId = saved.id;
-              updateMessage(assistantMessageId, { parentId: saved.id }, conversationId);
-            }
-          }
-          reportTurnCommitted();
-        } catch (error) {
-          notifyPersistenceFailure('user', error);
-          abandonTurn();
-          setError('Your message was not saved, so no model was called.', conversationId);
-          return false;
-        }
-      } else {
+      } else if (isTemporaryConversation) {
         reportTurnCommitted();
       }
 
@@ -3373,14 +3407,17 @@ export function useChatStream(): UseChatStreamReturn {
       try {
         if (localModel) {
           connectingTicker.stop();
+          const localMessages = toLocalChatMessages(
+            readConversationMessages(conversationId),
+            assistantMessageId,
+          );
           const outcome = await runLocalTurn({
             conversationId,
             assistantMessageId,
             model: localModel,
-            messages: toLocalChatMessages(
-              readConversationMessages(conversationId),
-              assistantMessageId,
-            ),
+            messages: options.artifactInstruction
+              ? [{ role: 'system', content: options.artifactInstruction }, ...localMessages]
+              : localMessages,
             signal: abortController.signal,
           });
           if (outcome.error) setError(outcome.error, conversationId);
@@ -3399,6 +3436,10 @@ export function useChatStream(): UseChatStreamReturn {
               const settled = settledInteractiveCardTurn(m);
               return settled ? [turn, settled] : [turn];
             });
+
+          if (options.artifactInstruction) {
+            apiMessages.unshift({ role: 'system', content: options.artifactInstruction });
+          }
 
           if (options.styleInstruction) {
             apiMessages.unshift({ role: 'system', content: options.styleInstruction });
@@ -3420,6 +3461,7 @@ export function useChatStream(): UseChatStreamReturn {
               operationId: retriedEmptyTurn ? `${assistantMessageId}-retry` : assistantMessageId,
             }),
             ...hostContext.headers,
+            ...(latencyTrace ? { traceparent: latencyTrace.traceparent } : {}),
           });
           const thinkingState = useThinkingStore.getState();
           const requestedThinking = options.thinkingEnabled ?? thinkingState.enabled;
@@ -3436,14 +3478,32 @@ export function useChatStream(): UseChatStreamReturn {
             : thinkingEffort;
           const sendsEffortWithoutThinking =
             selectedModelMetadata?.reasoning?.control === 'effort_levels';
+          const promotionalOffering = freeQuotaSelection(model);
+          const promotionalMedia =
+            promotionalOffering?.category === 'image' || promotionalOffering?.category === 'video';
+          const requestMessages = promotionalMedia
+            ? apiMessages.filter((message) => message.role === 'user').slice(-1)
+            : promotionalOffering?.quotaProbeProtocol === 'chat'
+              ? normalizePromotionalChatHistory(apiMessages)
+              : apiMessages;
+          latencyTrace?.markFetchIssued();
           const response = await fetch(chatCompletionEndpoint(model), {
             method: 'POST',
             headers,
             body: JSON.stringify({
               model,
-              messages: apiMessages,
+              messages: requestMessages,
               conversation_id: conversationId,
               assistant_message_id: assistantMessageId,
+              ...(assistantParentId ? { assistant_parent_id: assistantParentId } : {}),
+              user_message:
+                !isTemporaryConversation && !regenerateParentId
+                  ? {
+                      id: userMessageId,
+                      metadata: userMetadata,
+                      ...(threadsThisWrite ? { parent_id: userMessageParentId } : {}),
+                    }
+                  : undefined,
               stream: true,
               [INTERACTIVE_CARD_REQUEST_KEY]: WEB_INTERACTIVE_CARD_CAPABILITY,
               temperature: options.temperature,
@@ -3483,6 +3543,7 @@ export function useChatStream(): UseChatStreamReturn {
               disabled_connector_ids: options.disabledConnectorIds?.length
                 ? options.disabledConnectorIds
                 : undefined,
+              connector_tools_enabled: options.connectorToolsEnabled,
               memory_enabled: options.memoryEnabled === false ? false : undefined,
               mcp_context: options.mcpContext
                 ? {
@@ -3526,6 +3587,8 @@ export function useChatStream(): UseChatStreamReturn {
             });
           }
 
+          if (!isTemporaryConversation && !regenerateParentId) reportTurnCommitted();
+
           const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
           if (resolvedModel !== model) {
             updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
@@ -3538,6 +3601,7 @@ export function useChatStream(): UseChatStreamReturn {
             conversationId,
             isTemporaryConversation,
             getAuthToken,
+            ...(latencyTrace ? { latencyTrace } : {}),
             ...(assistantParentId ? { assistantParentId } : {}),
             onRunHandle: (handle) => {
               if (handle) {
@@ -3622,6 +3686,7 @@ export function useChatStream(): UseChatStreamReturn {
           break;
         }
       } catch (error) {
+        latencyTrace?.cancel();
         // CAP-040: a turn interrupted by an expired session was unrecoverable.
         // The composer clears on send, so by the time the 401 came back the
         // user's text survived only as a failed turn in the transcript, sign
@@ -3639,7 +3704,19 @@ export function useChatStream(): UseChatStreamReturn {
           stopStreaming,
           setLoading,
           updateMessage,
-          ...(assistantParentId ? { variantRestore: { previousLeafId: restoreLeafId } } : {}),
+          ...(!regenerateParentId
+            ? {
+                userMessage: {
+                  id: userMessageId,
+                  content,
+                  metadata: userMetadata,
+                  parentId: userMessageParentId,
+                },
+              }
+            : {}),
+          ...(regenerateParentId && branchesFromSibling
+            ? { variantRestore: { previousLeafId: restoreLeafId } }
+            : {}),
         });
       } finally {
         connectingTicker.stop();
@@ -4246,6 +4323,12 @@ interface StreamErrorContext {
   model: string;
   conversationId: string;
   isTemporaryConversation: boolean;
+  userMessage?: {
+    id: string;
+    content: string;
+    metadata?: MessageMetadata;
+    parentId?: string | null;
+  };
   getAuthToken: AuthTokenProvider;
   setError: (message: string | null, conversationId?: string) => void;
   stopStreaming: (conversationId?: string) => void;
@@ -4307,6 +4390,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
           content: currentMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
           model: currentMessage.model ?? model,
           metadata: cancelledMetadata,
+          ...(currentMessage.parentId ? { parentId: currentMessage.parentId } : {}),
         },
         getAuthToken,
       ).catch((err) => notifyPersistenceFailure('assistant', err));
@@ -4317,6 +4401,26 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   }
 
   const errorMessage = getVisibleErrorMessage(error);
+
+  let userMessagePersisted = true;
+  if (!isTemporaryConversation && ctx.userMessage) {
+    try {
+      await saveMessageToDb(
+        conversationId,
+        {
+          id: ctx.userMessage.id,
+          role: 'user',
+          content: ctx.userMessage.content,
+          metadata: ctx.userMessage.metadata,
+          ...(ctx.userMessage.parentId !== undefined ? { parentId: ctx.userMessage.parentId } : {}),
+        },
+        getAuthToken,
+      );
+    } catch (saveError) {
+      userMessagePersisted = false;
+      notifyPersistenceFailure('user', saveError);
+    }
+  }
 
   // Nothing streamed, so consumeAssistantStream persisted nothing and the row
   // only exists on screen. Dropping it here keeps both sides agreeing that the
@@ -4411,7 +4515,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
   );
   setError(errorMessage, conversationId);
 
-  if (!isTemporaryConversation) {
+  if (!isTemporaryConversation && userMessagePersisted) {
     const metadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
     saveMessageToDb(
       conversationId,
@@ -4421,6 +4525,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         content: errorContent,
         model,
         metadata,
+        ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
       },
       getAuthToken,
     )

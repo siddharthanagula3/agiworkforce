@@ -17,6 +17,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   preconditionFailedResponse,
@@ -77,7 +78,7 @@ function withoutVersion({ server_version, ...conversation }: VersionedConversati
 }
 
 async function handleGetConversation(request: NextRequest, context: RouteContext) {
-  const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
+  const rateLimitResponse = await withRateLimit(request, 'chat-conversation-read');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -97,7 +98,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   // to work without them, or every conversation stops opening the moment this
   // ships ahead of the migration.
   const conversationSelect = (withDraft: boolean): string => `
-      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id,${
+      select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id,${
         withDraft ? ' draft, draft_updated_at,' : ''
       } created_at, updated_at,
         server_version::text as server_version,
@@ -197,6 +198,15 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
+  if (body.selectedRouteId !== undefined && !body.model) {
+    throw createError.validation('Select a model together with its provider route');
+  }
+  if (body.selectedRouteId && !isConfiguredManagedModelRoute(body.model!, body.selectedRouteId)) {
+    throw createError.validation('The selected provider route cannot serve this model');
+  }
+  if (body.draftUpdatedAt !== undefined && !Object.prototype.hasOwnProperty.call(body, 'draft')) {
+    throw createError.validation('A draft revision requires a draft');
+  }
 
   /**
    * A draft is written on its own statement, never as part of the conversation
@@ -207,19 +217,28 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
    */
   if (Object.prototype.hasOwnProperty.call(body, 'draft')) {
     const draft = body['draft'];
-    let saved: { id: string } | undefined;
+    let saved: { id: string; draft_updated_at: string | Date | null } | undefined;
     let stored = true;
     try {
-      [saved] = await db.query<{ id: string }>(
+      [saved] = await db.query<{ id: string; draft_updated_at: string | Date | null }>(
         `update web_conversations
             set draft = case when is_temporary then null else $3::text end,
-                draft_updated_at = case when is_temporary then null else now() end
+                draft_updated_at = case when is_temporary then null else greatest(
+                  clock_timestamp(), draft_updated_at + interval '1 microsecond'
+                ) end
           where id = $1
             and user_id = $2
             and organization_id is not distinct from $4
             and deleted_at is null
-          returning id`,
-        [id, userId, draft && draft.length > 0 ? draft : null, organizationId],
+            and draft_updated_at is not distinct from $5::timestamptz
+          returning id, draft_updated_at`,
+        [
+          id,
+          userId,
+          draft && draft.length > 0 ? draft : null,
+          organizationId,
+          body.draftUpdatedAt ?? null,
+        ],
       );
     } catch (error) {
       // Until 0219 is applied there is nowhere to put a draft. The composer's
@@ -228,13 +247,58 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       if (!isUndefinedColumn(error)) throw error;
       stored = false;
     }
-    if (stored && !saved) throw createError.notFound('Conversation not found');
-    if (Object.keys(body).length === 1) return NextResponse.json({ saved: stored });
+    if (stored && !saved) {
+      const [current] = await db.query<{
+        id: string;
+        draft_updated_at: string | Date | null;
+      }>(
+        `select id, draft_updated_at
+           from web_conversations
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+            and deleted_at is null`,
+        [id, userId, organizationId],
+      );
+      if (!current) throw createError.notFound('Conversation not found');
+      return NextResponse.json(
+        {
+          saved: false,
+          conflict: true,
+          current: {
+            draftUpdatedAt: current.draft_updated_at,
+          },
+        },
+        { status: 409 },
+      );
+    }
+    if (Object.keys(body).every((key) => key === 'draft' || key === 'draftUpdatedAt')) {
+      return NextResponse.json({ saved: stored, draftUpdatedAt: saved?.draft_updated_at ?? null });
+    }
   }
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
   if (body['model']) updates['model'] = body['model'];
+  const hasRouteSelectionUpdate =
+    Object.prototype.hasOwnProperty.call(body, 'selectedRouteId') || body.model !== undefined;
+  const [{ supported: routePinColumnReady = false } = { supported: false }] =
+    hasRouteSelectionUpdate
+      ? await db.query<{ supported: boolean }>(
+          `select exists (
+             select 1 from information_schema.columns
+              where table_schema = 'public'
+                and table_name = 'web_conversations'
+                and column_name = 'selected_route_id'
+           ) as supported`,
+        )
+      : [];
+  if (body.selectedRouteId && !routePinColumnReady) {
+    return NextResponse.json(
+      { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
+      { status: 503 },
+    );
+  }
   const hasProjectIdUpdate = Object.prototype.hasOwnProperty.call(body, 'projectId');
   if (hasProjectIdUpdate) updates['projectId'] = body['projectId'];
   const hasPinnedUpdate = Object.prototype.hasOwnProperty.call(body, 'pinned');
@@ -306,6 +370,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       set
         title = coalesce($3, title),
         model = coalesce($4, model),
+        ${routePinColumnReady ? 'selected_route_id = $20::text,' : ''}
         project_id = case when $5::boolean then $6::text else project_id end,
         pinned = case when $7::boolean then $8::boolean else pinned end,
         starred = case when $9::boolean then $10::boolean else starred end,
@@ -318,7 +383,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         and organization_id is not distinct from $15
         and deleted_at is null
         and ($19::bigint is null or server_version = $19::bigint)
-      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+      returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
         server_version::text as server_version
     `,
     [
@@ -344,6 +409,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       // sidebar every time someone looked at the other answer.
       hasActiveLeafUpdate && Object.keys(updates).length === 1,
       expectedVersion,
+      ...(routePinColumnReady ? [body.selectedRouteId ?? null] : []),
     ],
   );
 
@@ -351,7 +417,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     if (expectedVersion !== null) {
       const [current] = await db.query<VersionedConversationRow>(
         `
-          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
+          select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, created_at, updated_at,
             server_version::text as server_version
           from web_conversations
           where id = $1

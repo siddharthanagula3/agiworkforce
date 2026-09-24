@@ -1,9 +1,70 @@
 Status: Active task objective
 Owner: Explicitly bound launch coordinator only
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 This goal applies only to the owner-authorized launch coordinator. Workers retain their bounded assignments.
 Current evidence lives beside this file; start with [PROGRESS.md](PROGRESS.md), not a new audit.
+
+## Owner scope amendment: one surface at a time
+
+Website is the only active implementation and launch surface. Resolve every
+website-applicable current finding, reconcile the website subset of the frozen
+partial cohort through the linked current ledger, and pass the local and release
+gates before starting another surface. The launch includes the public Free
+experience. Paid upgrades remain waitlist/access-code gated until the owner
+changes that policy.
+
+After Website, advance one surface at a time in this order: Mobile, Desktop,
+Chrome, CLI, and VS Code. Run cross-surface connection checks only after the
+individual surfaces involved have passed their own acceptance gates. Do not use
+work on a later surface to improve the apparent completion of the website.
+
+One surface at a time is a release and verification sequence, not permission to
+duplicate domain behavior. AGI has one account and one effective suite
+entitlement. Website, Mobile Cloud, Desktop Cloud, and provenance-eligible
+Chrome Managed Cloud share the canonical account domain: chats/messages,
+memory, projects, files/artifacts, tools/apps, OAuth connection metadata,
+settings, personalization, and subscription state. Desktop Code, CLI, and VS
+Code share the host-owned developer domain: local session identity/transcripts,
+tools/extensions, permissions, repositories/files, and credential references.
+Desktop bridges the two domains but may cross them only through an explicit,
+provenance-preserving handoff.
+
+Context-source contracts, instruction precedence, policy gates, account
+settings, message metadata, entitlement resolution and surface-neutral chat
+behavior belong to their existing shared owners. Repair those owners when the
+website exposes a defect, then keep only storage, permission, transport, cache,
+offline/conflict and native presentation adapters on the surface. A later
+surface must consume the shared owner before it can pass; it must not fork a
+private copy. Local, BYOK and Managed Cloud remain separate trust-boundary
+adapters, so sharing a contract never authorizes sending local sessions,
+credentials or files to the web.
+
+For the website phase, relevant-history acceptance includes both durable account
+memory and opt-in past-chat retrieval. The answer must expose which earlier chats
+informed it and must make retrieval progress or degradation understandable. The
+current shared context contract is the canonical cross-surface behavior, while
+the web database/index loader is only the Managed Cloud adapter. Later phases
+add their adapters to that contract rather than importing the web service.
+
+The future Desktop phase must include voice control for desktop applications and
+operating-system actions. Its design must separate speech recognition, typed
+semantic decisions, deterministic policy and permission checks, explicit
+confirmation, native execution, outcome verification and undo/recovery. Jev may
+be evaluated for bounded intent, target, ambiguity, risk and next-step judgments;
+it is never the authority for permissions or consequential execution.
+The owner also nominated locally run Laya as an alternative decision-model
+candidate if Jev is unsuitable for the retained Tauri implementation. Evaluate
+it during that later surface phase against labeled desktop tasks, packaging and
+resource costs, privacy boundaries, and the existing classifier before any
+adoption. This does not change the public Electron release owner or make a
+classifier responsible for speech recognition or operating-system execution.
+
+Current Jev work is limited to research, evaluation and website-owned pilots that
+clear the gates below. Public reports, social posts and demonstrations are leads,
+not production evidence. Preserve the existing off-by-default response-assessment
+slice and canonical Auto-routing proposal; do not create a parallel router or
+blanket every deterministic operation with a remote model call.
 
 # AGI Workforce - Autonomous Website Launch Preparation, Adaptive QA, Focused Repairs, and Jev Integration
 

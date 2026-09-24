@@ -8,6 +8,7 @@ import { FatalError, RetryableError, getWritable } from 'workflow';
 
 import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { buildApprovalCheckpointRequest } from '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request';
+import type { ProviderStreamShape } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-anthropic';
 import { connectorToolPermissionsFromEntries } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
@@ -188,6 +189,7 @@ const CollectedProviderLineSchema = z
     line: z.string(),
     publicTextDelta: z.string().optional(),
     reasoningDelta: z.string().optional(),
+    toolCallDelta: z.boolean().optional(),
     serverToolStart: ServerToolStartSignalSchema.optional(),
     serverToolResults: z.array(ServerToolResultSignalSchema).optional(),
     searchActivity: z.boolean().optional(),
@@ -220,6 +222,40 @@ const ProviderStreamErrorSchema = z
   })
   .strict();
 
+const ProviderStreamShapeSchema = z
+  .object({
+    chunks: z.number().int().nonnegative(),
+    textChunks: z.number().int().nonnegative(),
+    textChars: z.number().int().nonnegative(),
+    thinkingChunks: z.number().int().nonnegative(),
+    thinkingChars: z.number().int().nonnegative(),
+    toolStarts: z.number().int().nonnegative(),
+    stopChunks: z.number().int().nonnegative(),
+    wireEvents: z.number().int().nonnegative(),
+    upstreamModel: z.string().min(1).optional(),
+    upstreamProvider: z.string().min(1).optional(),
+    upstreamFrameShape: z
+      .object({
+        frames: z.number().int().nonnegative(),
+        contentFrames: z.number().int().nonnegative(),
+        contentChars: z.number().int().nonnegative(),
+        reasoningFrames: z.number().int().nonnegative(),
+        reasoningChars: z.number().int().nonnegative(),
+        reasoningDetailFrames: z.number().int().nonnegative(),
+        reasoningDetailItems: z.number().int().nonnegative(),
+        toolCallFrames: z.number().int().nonnegative(),
+        finishFrames: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const providerStreamShapeSchemaCoversTrace: SameKeys<
+  z.infer<typeof ProviderStreamShapeSchema>,
+  ProviderStreamShape
+> = true;
+void providerStreamShapeSchemaCoversTrace;
+
 const ProviderStepResultSchema = z
   .object({
     lines: z.array(CollectedProviderLineSchema).optional(),
@@ -232,6 +268,7 @@ const ProviderStepResultSchema = z
     thinkingBlocks: z.array(ThinkingBlockSchema),
     canonicalText: z.string(),
     usage: UsageSchema,
+    providerTrace: ProviderStreamShapeSchema.optional(),
   })
   .strict();
 const providerStepResultSchemaCoversStepResult: SameKeys<
@@ -250,6 +287,7 @@ const ToolResultSchema = z
   .object({
     content: z.string(),
     isError: z.boolean(),
+    searchOutcome: z.literal('no_results').optional(),
     unavailable: z.boolean().optional(),
     unavailableFamily: z.literal('execution').optional(),
     interactiveCard: z
@@ -438,7 +476,7 @@ export async function executeCloudAgentWorkflowInvocation(
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         events: checkpoint.events,
       });
@@ -452,7 +490,7 @@ export async function executeCloudAgentWorkflowInvocation(
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         events: checkpoint.events,
@@ -467,7 +505,7 @@ export async function executeCloudAgentWorkflowInvocation(
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         inputRequests: checkpoint.inputRequests,
@@ -484,7 +522,7 @@ export async function executeCloudAgentWorkflowInvocation(
         turnId: checkpoint.turnId,
         nextEventSequence: checkpoint.nextEventSequence,
         completedSteps: checkpoint.completedSteps,
-        request: buildApprovalCheckpointRequest(processed.chatRequest),
+        request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
         messages: checkpoint.messages,
         pendingToolCalls: checkpoint.pendingToolCalls,
         deviceStep: checkpoint.deviceStep,

@@ -20,6 +20,7 @@ import {
   type ProviderState,
 } from './core/providerSetup';
 import { setupCommands } from './core/commandSetup';
+import { markInUse, whenInUse } from './core/startupWork';
 import * as telemetry from './core/telemetry';
 import { installGlobalErrorReporting } from './core/errorReporting';
 import { LocalRuntimeClient } from './integrations/localRuntimeClient';
@@ -63,8 +64,10 @@ export function activate(context: vscode.ExtensionContext): void {
     initModelMetrics(context);
   });
 
-  runBoot('device-registry', () => {
-    context.subscriptions.push(startVscodeHeartbeat(context));
+  whenInUse(() => {
+    runBoot('device-registry', () => {
+      context.subscriptions.push(startVscodeHeartbeat(context));
+    });
   });
 
   let providerState: ProviderState | undefined;
@@ -118,6 +121,7 @@ export function activate(context: vscode.ExtensionContext): void {
     registerContextHandoffUriHandler(() => {
       const provider = chatState?.sidebarProvider;
       if (provider === undefined) return undefined;
+      markInUse('session-restore');
       return {
         prefillComposer: (text: string) => provider.prefillComposer(text),
         reveal: async () => {
@@ -177,22 +181,37 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   if (chatState !== undefined && providerState !== undefined) {
+    const chat = chatState;
+    const providers = providerState;
+    runBoot('chat-panel-restore', () => {
+      context.subscriptions.push(
+        ChatEditorPanel.registerSerializer(
+          context.extensionUri,
+          context.secrets,
+          context,
+          localRuntimes,
+          chat.conversationTreeProvider,
+          providers.diffDecorationProvider,
+          () => markInUse('session-restore'),
+        ),
+      );
+    });
     try {
       setupCommands(context, {
-        sidebarProvider: chatState.sidebarProvider,
-        conversationTreeProvider: chatState.conversationTreeProvider,
-        cloudTasksTreeProvider: chatState.cloudTasksTreeProvider,
-        schedulesTreeProvider: chatState.schedulesTreeProvider,
-        projectsTreeProvider: chatState.projectsTreeProvider,
-        artifactsTreeProvider: chatState.artifactsTreeProvider,
-        artifactContentProvider: chatState.artifactContentProvider,
-        connectorsTreeProvider: chatState.connectorsTreeProvider,
+        sidebarProvider: chat.sidebarProvider,
+        conversationTreeProvider: chat.conversationTreeProvider,
+        cloudTasksTreeProvider: chat.cloudTasksTreeProvider,
+        schedulesTreeProvider: chat.schedulesTreeProvider,
+        projectsTreeProvider: chat.projectsTreeProvider,
+        artifactsTreeProvider: chat.artifactsTreeProvider,
+        artifactContentProvider: chat.artifactContentProvider,
+        connectorsTreeProvider: chat.connectorsTreeProvider,
         localRuntimes,
-        contextPanelProvider: chatState.contextPanelProvider,
-        memoryTreeProvider: chatState.memoryTreeProvider,
-        diffDecorationProvider: providerState.diffDecorationProvider,
-        diagnosticsProvider: providerState.diagnosticsProvider,
-        nativeChatAvailable: chatState.nativeChatAvailable,
+        contextPanelProvider: chat.contextPanelProvider,
+        memoryTreeProvider: chat.memoryTreeProvider,
+        diffDecorationProvider: providers.diffDecorationProvider,
+        diagnosticsProvider: providers.diagnosticsProvider,
+        nativeChatAvailable: chat.nativeChatAvailable,
       });
     } catch (err) {
       reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
@@ -288,7 +307,11 @@ export function activate(context: vscode.ExtensionContext): void {
   void checkInlineCompletionsFirstRun(context);
 
   watchAccountTierInvalidation(context);
-  void refreshAccountTierCache(context).catch(() => {});
+  whenInUse(() => {
+    void refreshAccountTierCache(context).catch(() => {});
+  });
+
+  if (Config.activateOnStartup()) markInUse('startup-setting');
 }
 
 export async function deactivate(): Promise<void> {

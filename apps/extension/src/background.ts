@@ -191,6 +191,7 @@ import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
+import { flushAutomationAuditOutbox } from './features/observability/automationAudit';
 import {
   isCurrentManagedCloudOperation,
   managedCloudOwnerKey,
@@ -4146,6 +4147,7 @@ async function handleMessageAsync(
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
+        runId: lease.runId,
         signal: lease.controller.signal,
         assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
         resolveOwnedCredential: () => assertComputerUseOwnership(lease),
@@ -4163,6 +4165,7 @@ async function handleMessageAsync(
         },
       });
       computerUseRuns.trackCompletion(lease, completion);
+      void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
       void completion.then(
         () => {
           if (!computerUseRuns.finish(lease)) return;
@@ -5014,17 +5017,19 @@ async function handleChatMessage(
 
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
-      const visibleError =
-        result.code === 'quota_exceeded'
-          ? '__QUOTA_EXCEEDED__'
-          : result.code === 'auth_required'
-            ? '__AUTH_REQUIRED__'
-            : result.message;
+      // A spent allowance still needs the account panel refreshed, but the
+      // sentence the gateway wrote says whose limit it is and this one did
+      // not, so the refresh is keyed off the code and the message survives.
+      const visibleError = result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message;
       publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
         error: visibleError,
         errorCode: result.code,
+        ...(result.retryAfterSeconds !== undefined
+          ? { errorRetryAfterSeconds: result.retryAfterSeconds }
+          : {}),
+        ...(result.requestId !== undefined ? { errorRequestId: result.requestId } : {}),
         ...(result.routing ? { routing: result.routing } : {}),
       });
     }
@@ -5036,8 +5041,9 @@ async function handleChatMessage(
     return result;
   } catch (error) {
     const deliveryFailure = await deliverBackgroundResult();
-    const messageText =
-      deliveryFailure ?? (error instanceof Error ? error.message : 'Managed Cloud chat failed.');
+    // Whatever threw here is this extension's own fault, and its words name a
+    // module or a browser API rather than anything a reader can act on.
+    const messageText = deliveryFailure ?? 'AGI Cloud chat failed on this device. Try again.';
     const result = {
       status: 'error',
       code: 'server_error',
@@ -5288,6 +5294,10 @@ async function handleResolveChatApproval(
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
         errorCode: result.code,
+        ...(result.retryAfterSeconds !== undefined
+          ? { errorRetryAfterSeconds: result.retryAfterSeconds }
+          : {}),
+        ...(result.requestId !== undefined ? { errorRequestId: result.requestId } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
     }
@@ -5435,6 +5445,7 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
 
 initialize();
 installBackgroundErrorReporting();
+void flushAutomationAuditOutbox();
 
 // chrome.debugger.onDetach has to be attached in the worker's first turn: a
 // user pressing Cancel on Chrome's debugging bar wakes a worker that would

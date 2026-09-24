@@ -44,7 +44,8 @@ describe('managed chat response must be an event stream', () => {
     expect(error?.message).not.toContain('Malformed response');
   });
 
-  it('reports the actual content type when it is neither HTML nor a stream', async () => {
+  it('names what happened rather than the transport, and logs the type for support', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -58,6 +59,11 @@ describe('managed chat response must be an event stream', () => {
     const chunks = await collect(streamFreeChat([{ role: 'user', content: 'hi' }], 'a-token'));
     const error = chunks.find((c) => c.type === 'error');
     expect(error?.code).toBe('protocol_error');
-    expect(error?.message).toContain('application/json');
+    expect(error?.message).toBe(
+      'AGI Cloud did not return a response stream for this turn. Try again.',
+    );
+    expect(error?.message).not.toContain('application/json');
+    expect(warn).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'application/json');
+    warn.mockRestore();
   });
 });

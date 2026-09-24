@@ -43,7 +43,7 @@ const EMPTY_FORM: CreateFormState = { name: '', sampleText: '', instruction: '' 
 
 const FIELD_LABEL_CLASS = 'block text-xs font-medium text-muted-foreground';
 const FIELD_CLASS =
-  'w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30';
+  'w-full rounded-md border border-border/60 bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-focus-ring/30';
 
 export function StyleSelector() {
   const {
@@ -184,7 +184,7 @@ export function StyleSelector() {
         aria-label="Response style"
         aria-expanded={open}
       >
-        <Palette className="h-3.5 w-3.5" />
+        <Palette className="h-4 w-4" />
         <span className="hidden sm:inline">
           {style === DEFAULT_PRESET_STYLE && length === 'brief'
             ? t('composer.style', { defaultValue: 'Style' })
@@ -208,7 +208,7 @@ export function StyleSelector() {
       >
         <div>
           {/* Preset styles */}
-          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
             {t('composer.responseStyle', { defaultValue: 'Response Style' })}
           </div>
           {STYLES.map((s) => {
@@ -242,7 +242,7 @@ export function StyleSelector() {
 
           {/* Response length · AUDIT-FIX CMP-6/CMP-7. Orthogonal to style: this
               is the verbosity axis the surface previously had no control for. */}
-          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
             Response Length
           </div>
           <div
@@ -273,7 +273,7 @@ export function StyleSelector() {
           <div className="my-2 border-t border-border/40" />
 
           {/* Custom styles section */}
-          <div className="mb-1.5 px-2 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1.5 px-2 py-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
             Custom Styles
           </div>
 
@@ -306,22 +306,22 @@ export function StyleSelector() {
                       type="button"
                       onClick={(e) => handleEdit(e, custom)}
                       className={cn(
-                        'shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
+                        'shrink-0 rounded-compact p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100',
                         isSelected && 'opacity-100',
                       )}
                       aria-label={`Edit ${custom.name}`}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="h-4 w-4" />
                     </button>
                     <button
                       type="button"
                       onClick={(e) => handleDelete(e, custom.id)}
                       className={cn(
-                        'shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-danger',
+                        'shrink-0 rounded-compact p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-danger',
                       )}
                       aria-label={`Delete ${custom.name}`}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-4 w-4" />
                     </button>
                     {isSelected && <div className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
                   </div>
@@ -399,14 +399,14 @@ export function StyleSelector() {
                   disabled={!form.name.trim() || !form.instruction.trim()}
                   className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <Check className="h-3.5 w-3.5" />
+                  <Check className="h-4 w-4" />
                   {editingId ? 'Save changes' : 'Save'}
                 </button>
                 <button
                   onClick={handleCancelCreate}
                   className="flex items-center justify-center gap-1.5 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-4 w-4" />
                   Cancel
                 </button>
               </div>

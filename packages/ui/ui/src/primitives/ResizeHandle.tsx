@@ -92,8 +92,8 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   return (
     <div
       className={cn(
-        'absolute top-0 bottom-0 z-50 w-1 hover:bg-primary/50 cursor-col-resize transition-colors select-none touch-none',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1',
+        'absolute top-0 bottom-0 z-[var(--z-control)] w-1 hover:bg-primary/50 cursor-col-resize transition-colors select-none touch-none',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-offset-1',
         isDragging && 'bg-primary',
         direction === 'right' ? '-right-0.5' : '-left-0.5',
         className,

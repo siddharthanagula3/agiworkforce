@@ -2672,7 +2672,7 @@ fn register_mcp_prompt_commands(registry: &mut CommandRegistry, prompts: &[crate
 fn open_session_picker(app: &mut TuiApp) {
     use crate::tui::widgets::session_picker::{SessionEntry, SessionPickerView};
 
-    let entries = match crate::platform::runtime::session_control::list_managed_sessions() {
+    let entries = match crate::platform::runtime::session_control::list_active_managed_sessions() {
         Ok(summaries) => summaries
             .iter()
             .map(|summary| SessionEntry {
@@ -3487,31 +3487,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(app.config.display())
         }
 
-        "/diff" => {
-            // git writes "fatal: not a git repository" to stderr and exits
-            // non-zero with empty stdout, so reading stdout alone reports a
-            // clean tree for every directory that has no repository in it.
-            match std::process::Command::new("git").args(["diff", "--stat"]).output() {
-                Err(error) => SlashResult::SystemMessage(format!("Could not run git: {error}")),
-                Ok(output) if !output.status.success() => {
-                    let detail = String::from_utf8_lossy(&output.stderr);
-                    let detail = detail.trim();
-                    SlashResult::SystemMessage(if detail.is_empty() {
-                        "git diff failed.".to_string()
-                    } else {
-                        format!("git diff failed: {detail}")
-                    })
-                }
-                Ok(output) => {
-                    let diff_output = String::from_utf8_lossy(&output.stdout).to_string();
-                    if diff_output.trim().is_empty() {
-                        SlashResult::SystemMessage("No changes (working tree clean).".to_string())
-                    } else {
-                        SlashResult::SystemMessage(format!("Git diff:\n{diff_output}"))
-                    }
-                }
-            }
-        }
+        "/diff" => SlashResult::SystemMessage(crate::runtime::git::diff_summary_for_command(arg)),
 
         "/copy" => {
             let Some(target) = crate::claude_parity::CopyTarget::parse(arg) else {

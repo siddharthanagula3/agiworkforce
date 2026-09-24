@@ -46,7 +46,7 @@ export function WorkspaceBillingSummary() {
     return (
       <div
         role="status"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         Loading plan and seats…
       </div>
@@ -55,7 +55,7 @@ export function WorkspaceBillingSummary() {
 
   if (isError) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load your plan
         </p>
@@ -79,7 +79,7 @@ export function WorkspaceBillingSummary() {
 
   if (!organization || !access) {
     return (
-      <div style={{ ...cardStyle, padding: 20 }}>
+      <div style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           No workspace selected
         </p>

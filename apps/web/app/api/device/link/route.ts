@@ -15,6 +15,7 @@ import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 
 async function handleDeviceLink(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -113,7 +114,12 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.internal('Failed to create device authorization code');
     }
 
-    void authUser;
+    await recordAuditEvent({
+      userId: authUser.userId,
+      eventType: 'device_authorization_initiated',
+      request,
+      detail: { resourceType: 'device_authorization', subjectRef: device_id },
+    });
 
     const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 

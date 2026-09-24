@@ -20,6 +20,7 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
 }));
 
 import { POST } from '@/app/api/chat/sync/route';
+import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 
 const CONVERSATION_ID = '0190a000-0000-7000-8000-0000000000cc';
 const ASSISTANT_MESSAGE_ID = '0190a000-0000-7000-8000-0000000000aa';
@@ -38,7 +39,11 @@ function postReq(body: unknown) {
  * statements are answered here so a test can make the two disagree, which is
  * the whole point of reading the row rather than trusting the payload.
  */
-function stubPush(options: { storedContent: string | null; appliedIds?: string[] }) {
+function stubPush(options: {
+  storedContent: string | null;
+  storedMetadata?: Record<string, unknown>;
+  appliedIds?: string[];
+}) {
   const applied = options.appliedIds ?? [ASSISTANT_MESSAGE_ID];
   queryMock.mockImplementation(async (sql: string) => {
     const text = String(sql);
@@ -58,6 +63,7 @@ function stubPush(options: { storedContent: string | null; appliedIds?: string[]
               id: ASSISTANT_MESSAGE_ID,
               conversation_id: CONVERSATION_ID,
               content: options.storedContent,
+              metadata: options.storedMetadata ?? {},
             },
           ];
     }
@@ -97,6 +103,36 @@ describe('POST /api/chat/sync, artifact indexing', () => {
       messageId: ASSISTANT_MESSAGE_ID,
       content: 'synced reply',
     });
+  });
+
+  it('keeps the explicit derivation policy when a Web message syncs back', async () => {
+    stubPush({
+      storedContent: '```html\n<script>alert("inert")</script>\n```',
+      storedMetadata: { artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY },
+    });
+
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        messages: [
+          {
+            id: ASSISTANT_MESSAGE_ID,
+            conversationId: CONVERSATION_ID,
+            role: 'assistant',
+            content: 'ignored payload',
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(scheduleArtifactIndexing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageId: ASSISTANT_MESSAGE_ID,
+        artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+      }),
+    );
   });
 
   it('does not index a user message or a tombstoned assistant message', async () => {

@@ -11,9 +11,35 @@ vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: { getState: mocks.getState },
 }));
 
+import { queryKeys } from '@shared/stores/query-client';
 import { finalizeWorkspaceSwitch, workspaceSwitchDestination } from './workspace-cache-scope';
 
 beforeEach(() => vi.clearAllMocks());
+
+type KeyFactory = (...args: never[]) => readonly unknown[];
+
+function everyCachedKey(): readonly unknown[][] {
+  const keys: readonly unknown[][] = [];
+  const walk = (node: Record<string, unknown>): void => {
+    for (const value of Object.values(node)) {
+      if (typeof value === 'function') {
+        const factory = value as KeyFactory;
+        const args = Array.from({ length: factory.length }, () => 'seeded');
+        let key: readonly unknown[];
+        try {
+          key = factory(...(args as never[]));
+        } catch {
+          key = factory(...(args.map(() => ['seeded']) as never[]));
+        }
+        (keys as unknown[][]).push([...key]);
+      } else if (value && typeof value === 'object') {
+        walk(value as Record<string, unknown>);
+      }
+    }
+  };
+  walk(queryKeys as unknown as Record<string, unknown>);
+  return keys;
+}
 
 describe('finalizeWorkspaceSwitch', () => {
   it.each([
@@ -34,6 +60,18 @@ describe('finalizeWorkspaceSwitch', () => {
     expect(queryClient.getQueryData(['workspace', 'usage-analytics', 30])).toBeUndefined();
     expect(queryClient.getQueryData(['workspace', 'enterprise-contract'])).toBeUndefined();
     expect(navigate).toHaveBeenCalledWith(null);
+  });
+
+  it('leaves no cached answer from the previous workspace behind', async () => {
+    const queryClient = new QueryClient();
+    const keys = everyCachedKey();
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) queryClient.setQueryData(key, { fromPreviousWorkspace: true });
+
+    await finalizeWorkspaceSwitch(queryClient, 'org_c', vi.fn());
+
+    const survivors = keys.filter((key) => queryClient.getQueryData(key) !== undefined);
+    expect(survivors).toEqual([]);
   });
 
   it('cancels old-scope requests before recording the new scope and clearing cached data', async () => {

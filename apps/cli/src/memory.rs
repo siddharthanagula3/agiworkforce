@@ -972,6 +972,40 @@ mod tests {
     }
 
     #[test]
+    fn the_users_own_preferences_reach_every_project_ahead_of_its_memory() {
+        let (_home_dir, home) = tmp_dir();
+        let preferences = home.join(".agiworkforce").join("CLAUDE.md");
+        fs::create_dir_all(preferences.parent().expect("parent")).unwrap();
+        fs::write(&preferences, "Prefer early returns.\n").unwrap();
+
+        let (_alpha_dir, alpha) = tmp_dir();
+        let (_beta_dir, beta) = tmp_dir();
+        let mut prompts = Vec::new();
+        for (project, note) in [(&alpha, "Alpha ships weekly."), (&beta, "Beta is frozen.")] {
+            fs::create_dir_all(project.join(".git")).unwrap();
+            fs::write(project.join("CLAUDE.md"), note).unwrap();
+            let discovered = MemoryManager::new(project);
+            assert!(
+                !discovered.global_path.starts_with(project),
+                "the user's preferences were looked for inside the project"
+            );
+            let manager = MemoryManager {
+                global_path: preferences.clone(),
+                legacy_global_path: home.join(".agi").join("CLAUDE.md"),
+                ..discovered
+            };
+            let prompt = manager.get_context_prompt();
+            let own = prompt.find("Prefer early returns.").expect("preferences");
+            let project_note = prompt.find(note).expect("project memory");
+            assert!(own < project_note, "{prompt}");
+            assert!(prompt.contains("## Global Memory"), "{prompt}");
+            prompts.push(prompt);
+        }
+        assert!(!prompts[0].contains("Beta is frozen."));
+        assert!(!prompts[1].contains("Alpha ships weekly."));
+    }
+
+    #[test]
     fn test_no_local_when_cwd_is_project_root() {
         let (_d, path) = tmp_dir();
         fs::create_dir_all(path.join(".git")).unwrap();

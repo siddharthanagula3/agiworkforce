@@ -23,7 +23,7 @@ function formatUpdatedAt(value: string): string {
 }
 
 const actionButtonStyle = {
-  padding: '6px 12px',
+  padding: 'var(--space-2) var(--space-3)',
   fontSize: 12,
   fontWeight: 600,
   color: 'var(--text-2)',
@@ -108,7 +108,7 @@ export function DeletedChatsSection() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       <div>
         <SettingsSectionLink
           section="privacy"
@@ -129,7 +129,7 @@ export function DeletedChatsSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '10px 0 4px',
+            margin: 'var(--space-3) 0 var(--space-1)',
           }}
         >
           Recently deleted
@@ -164,24 +164,24 @@ export function DeletedChatsSection() {
         }}
       >
         {loading ? (
-          <p style={{ margin: 0, padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+          <p style={{ margin: 0, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}>
             Loading deleted chats…
           </p>
         ) : error ? (
-          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               Deleted chats could not be loaded
             </div>
-            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
               This is not the same as having no deleted chats. Retry above to load them.
             </p>
           </div>
         ) : conversations.length === 0 ? (
-          <div style={{ padding: '32px 20px', textAlign: 'center' }}>
+          <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
             <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
               No deleted chats
             </div>
-            <p style={{ margin: '6px 0 0', color: 'var(--text-3)', fontSize: 12 }}>
+            <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--text-3)', fontSize: 12 }}>
               Chats you delete will appear here so you can put them back.
             </p>
           </div>
@@ -192,12 +192,12 @@ export function DeletedChatsSection() {
               <div
                 key={conversation.id}
                 style={{
-                  padding: '16px 20px',
+                  padding: 'var(--space-4) var(--space-5)',
                   borderTop: index === 0 ? 'none' : '1px solid var(--settings-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  gap: 16,
+                  gap: 'var(--space-4)',
                 }}
               >
                 <div style={{ minWidth: 0 }}>
@@ -213,7 +213,9 @@ export function DeletedChatsSection() {
                   >
                     {conversation.title}
                   </div>
-                  <div style={{ marginTop: 3, color: 'var(--text-3)', fontSize: 12 }}>
+                  <div
+                    style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
+                  >
                     {formatUpdatedAt(conversation.updatedAt)}
                   </div>
                 </div>

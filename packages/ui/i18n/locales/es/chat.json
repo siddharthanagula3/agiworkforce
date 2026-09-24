@@ -65,6 +65,7 @@
     "untitled": "Artefacto publicado",
     "publishedOn": "Publicado el {{date}}",
     "sharedFrom": "Compartido desde AGI",
+    "sharedWithWorkspace": "Compartido con tu espacio de trabajo",
     "renderFailed": "No se pudo mostrar este artefacto: {{error}}",
     "svgUnavailable": "Este SVG no contenía nada que se pudiera mostrar de forma segura."
   },

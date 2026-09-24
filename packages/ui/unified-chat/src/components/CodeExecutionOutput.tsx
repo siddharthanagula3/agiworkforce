@@ -101,7 +101,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
   return (
     <div
       data-testid="code-execution-output"
-      className="mt-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-sm"
+      className="mt-2 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-sm"
     >
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {statusAnnouncement}
@@ -110,7 +110,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-2 rounded-[var(--chat-radius-md)] px-3 py-2 text-left hover:bg-[var(--chat-surface-hover)]"
+        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-[var(--chat-surface-hover)]"
       >
         <Code2 className="h-4 w-4 shrink-0 text-[var(--chat-accent,#8b5cf6)]" aria-hidden />
         <span className="flex-1 font-medium text-[var(--chat-text-primary)]">Code execution</span>
@@ -145,7 +145,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
               <pre
                 data-testid="code-execution-stdout"
                 className={cn(
-                  'max-h-64 overflow-x-auto overflow-y-auto rounded-[var(--chat-radius-sm)]',
+                  'max-h-64 overflow-x-auto overflow-y-auto rounded-sm',
                   'bg-[var(--chat-surface-overlay)] px-3 py-2 font-mono text-xs leading-relaxed',
                   'whitespace-pre-wrap break-words text-[var(--chat-text-primary)]',
                 )}
@@ -161,7 +161,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
               <pre
                 data-testid="code-execution-stderr"
                 className={cn(
-                  'max-h-48 overflow-x-auto overflow-y-auto rounded-[var(--chat-radius-sm)]',
+                  'max-h-48 overflow-x-auto overflow-y-auto rounded-sm',
                   'border border-rose-500/20 bg-rose-500/5 px-3 py-2',
                   'font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-rose-300',
                 )}
@@ -179,7 +179,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
               <img
                 src={image.src}
                 alt={`Code execution output ${index + 1}`}
-                className="max-w-full rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)]"
+                className="max-w-full rounded-sm border border-[var(--chat-border)]"
               />
             </div>
           ))}

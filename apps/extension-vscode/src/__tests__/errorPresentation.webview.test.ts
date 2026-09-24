@@ -80,10 +80,147 @@ describe('presentTurnFailure', () => {
       action: 'retry',
     });
 
-    expect(limited.headline).toBe('DeepSeek is rate limiting this account.');
+    // The limit belongs to the provider's traffic, not to the reader's
+    // account: blaming the account sent readers to check billing that was
+    // fine.
+    expect(limited.headline).toBe(
+      'DeepSeek is taking too many requests right now. Try again in a moment, or switch model.',
+    );
     expect(limited.category).toBe('rate-limit');
     expect(limited.retryable).toBe(true);
     expect(limited.action).toEqual({ kind: 'switch-model', label: 'Switch model' });
+  });
+
+  it('states a wait only when the provider asked for one, and never a figure of its own', () => {
+    const silent = presentTurnFailure({
+      ...base,
+      code: 'provider_rate_limited',
+      retryable: true,
+      action: 'retry',
+    });
+    expect(silent.headline).not.toMatch(/\d/u);
+
+    const asked = presentTurnFailure({
+      ...base,
+      code: 'provider_rate_limited',
+      retryable: true,
+      action: 'retry',
+      retryAfterSeconds: 45,
+    });
+    expect(asked.headline).toBe(
+      'DeepSeek is taking too many requests right now. Try again in about 45 seconds.',
+    );
+
+    expect(
+      presentTurnFailure({
+        ...base,
+        code: 'provider_rate_limited',
+        retryable: true,
+        action: 'retry',
+        retryAfterSeconds: 7_200,
+      }).headline,
+    ).toContain('about 2 hours');
+
+    // Past a day the figure is clock skew, and a reader who waits it out and
+    // fails again stops believing the next one.
+    expect(
+      presentTurnFailure({
+        ...base,
+        code: 'provider_rate_limited',
+        retryable: true,
+        action: 'retry',
+        retryAfterSeconds: 90_000,
+      }).headline,
+    ).not.toMatch(/\d/u);
+  });
+
+  it('quotes the id the host logged, and invents none when there is none', () => {
+    expect(
+      presentTurnFailure({
+        ...base,
+        code: 'provider_unavailable',
+        retryable: true,
+        action: 'retry',
+        requestId: 'req_7f3a',
+      }).headline,
+    ).toBe('DeepSeek could not answer. Reference: req_7f3a');
+
+    expect(
+      presentTurnFailure({
+        ...base,
+        code: 'provider_unavailable',
+        retryable: true,
+        action: 'retry',
+      }).headline,
+    ).not.toContain('Reference');
+  });
+
+  it('tells apart the failures a reader would take a different next step on', () => {
+    const headlines = (
+      [
+        'provider_rate_limited',
+        'free_allowance_exhausted',
+        'usage_limit_reached',
+        'provider_unavailable',
+        'stream_interrupted',
+        'context_window_exceeded',
+        'output_limit_reached',
+        'refused_by_safety',
+        'interrupted',
+      ] as const
+    ).map((code) => presentTurnFailure({ ...base, code, action: 'none' }).headline);
+
+    expect(new Set(headlines).size).toBe(headlines.length);
+    for (const headline of headlines) {
+      expect(headline).not.toBe("AGI couldn't finish the reply.");
+    }
+  });
+
+  it('says a spent free allowance is shared by the plan, not a limit on the reader', () => {
+    const spent = presentTurnFailure({
+      ...base,
+      code: 'free_allowance_exhausted',
+      action: 'none',
+    });
+
+    expect(spent.headline).toBe(
+      "The free model has used up the allowance everyone on the Free plan shares, so this is not a limit on your account. It resets on the provider's schedule.",
+    );
+    expect(spent.retryable).toBe(false);
+    expect(spent.action).toEqual({ kind: 'switch-model', label: 'Switch model' });
+  });
+
+  it('separates a connection that ended part way through from a provider that never answered', () => {
+    expect(
+      presentTurnFailure({ ...base, code: 'stream_interrupted', retryable: true, action: 'retry' })
+        .headline,
+    ).toBe('DeepSeek stopped replying part way through.');
+    expect(
+      presentTurnFailure({
+        ...base,
+        code: 'provider_unavailable',
+        retryable: true,
+        action: 'retry',
+      }).headline,
+    ).toBe('DeepSeek could not answer.');
+  });
+
+  it('never blames the reader for a limit their own account did not set', () => {
+    // A provider throttling its own traffic says nothing about the reader, so
+    // the sentence mentions neither their account nor their plan.
+    expect(
+      presentTurnFailure({ ...base, code: 'provider_rate_limited', action: 'none' }).headline,
+    ).not.toMatch(/your account|your plan/iu);
+    // A shared allowance does mention the account, to say it is not the cause.
+    expect(
+      presentTurnFailure({ ...base, code: 'free_allowance_exhausted', action: 'none' }).headline,
+    ).toContain('not a limit on your account');
+    // The one limit that really is the reader's own says so plainly.
+    expect(
+      presentTurnFailure({ ...base, code: 'usage_limit_reached', action: 'none' }).headline,
+    ).toBe(
+      'You have reached a usage limit on your account. Check your usage to see when it resets.',
+    );
   });
 
   it('offers a model switch beside Retry when the provider cannot answer', () => {
@@ -355,6 +492,8 @@ describe('the chat webview error block', () => {
     postMessage.mockClear();
     button?.click();
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'resolveTurnFailure',
       payload: { kind: 'sign-in-provider', provider: 'deepseek' },
     });

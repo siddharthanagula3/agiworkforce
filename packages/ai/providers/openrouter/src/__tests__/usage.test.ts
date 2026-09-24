@@ -204,7 +204,7 @@ describe('createOpenRouterUsageNormalizer, provider attribution', () => {
     const out = await collect(normalizer.enrichOutput(translateOpenAIStream(normalized)));
     const meta = out.find((c) => c.type === 'response-meta');
     expect(meta && meta.type === 'response-meta' ? meta.provider : undefined).toBe('Anthropic');
-    expect(out.filter((c) => c.type === 'response-meta')).toHaveLength(1);
+    expect(out.filter((c) => c.type === 'response-meta')).toHaveLength(2);
   });
 
   it('emits a synthetic response-meta chunk carrying the provider when it only arrives on the terminal chunk alongside usage', async () => {
@@ -222,7 +222,7 @@ describe('createOpenRouterUsageNormalizer, provider attribution', () => {
     const normalized = normalizer.normalizeSource(fromArray(chunks));
     const out = await collect(normalizer.enrichOutput(translateOpenAIStream(normalized)));
     const metaChunks = out.filter((c) => c.type === 'response-meta');
-    expect(metaChunks).toHaveLength(2);
+    expect(metaChunks).toHaveLength(3);
     const lateMeta = metaChunks[1];
     expect(lateMeta && lateMeta.type === 'response-meta' ? lateMeta.provider : undefined).toBe(
       'Google AI Studio',
@@ -243,5 +243,67 @@ describe('createOpenRouterUsageNormalizer, provider attribution', () => {
     const normalized = normalizer.normalizeSource(fromArray(chunks));
     const out = await collect(normalizer.enrichOutput(translateOpenAIStream(normalized)));
     expect(out.some((c) => c.type === 'response-meta' && c.provider !== undefined)).toBe(false);
+  });
+});
+
+describe('createOpenRouterUsageNormalizer, upstream stream shape', () => {
+  it('reports content-free raw frame counts while translating OpenRouter reasoning', async () => {
+    const chunks: OpenAIChatCompletionChunk[] = [
+      baseChunk({
+        choices: [
+          {
+            index: 0,
+            delta: {
+              reasoning: 'private reasoning',
+              reasoning_details: [{ type: 'reasoning.text', text: 'private details' }],
+            } as never,
+            finish_reason: null,
+          },
+        ],
+      }),
+      baseChunk({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] }),
+    ];
+    const normalizer = createOpenRouterUsageNormalizer();
+    const normalized = normalizer.normalizeSource(fromArray(chunks));
+    const out = await collect(normalizer.enrichOutput(translateOpenAIStream(normalized)));
+    const trace = out.find((chunk) => chunk.type === 'response-meta' && chunk.upstreamFrameShape);
+
+    expect(trace?.upstreamFrameShape).toEqual({
+      frames: 2,
+      contentFrames: 0,
+      contentChars: 0,
+      reasoningFrames: 1,
+      reasoningChars: 17,
+      reasoningDetailFrames: 1,
+      reasoningDetailItems: 1,
+      toolCallFrames: 0,
+      finishFrames: 1,
+    });
+    expect(JSON.stringify(trace)).not.toMatch(/private/u);
+    expect(out).toContainEqual({ type: 'thinking-delta', delta: 'private reasoning' });
+  });
+
+  it('emits the raw frame counts before an unterminated stream error escapes', async () => {
+    const chunks: OpenAIChatCompletionChunk[] = [
+      baseChunk({ choices: [{ index: 0, delta: { content: 'partial' }, finish_reason: null }] }),
+    ];
+    const normalizer = createOpenRouterUsageNormalizer();
+    const out: StreamChunk[] = [];
+
+    await expect(async () => {
+      for await (const chunk of normalizer.enrichOutput(
+        translateOpenAIStream(normalizer.normalizeSource(fromArray(chunks))),
+      )) {
+        out.push(chunk);
+      }
+    }).rejects.toThrow('Stream ended without completing any messages');
+
+    const trace = out.find((chunk) => chunk.type === 'response-meta' && chunk.upstreamFrameShape);
+    expect(trace?.upstreamFrameShape).toMatchObject({
+      frames: 1,
+      contentFrames: 1,
+      contentChars: 7,
+      finishFrames: 0,
+    });
   });
 });

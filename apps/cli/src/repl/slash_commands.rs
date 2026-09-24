@@ -412,7 +412,7 @@ pub(super) async fn handle_slash_command(
             registry::handle_branch(arg, session);
         }
         "/diff" => {
-            registry::handle_diff();
+            registry::handle_diff(arg);
         }
         "/worktree" | "/wt" => {
             output::print_block(&registry::handle_worktree(arg).await);

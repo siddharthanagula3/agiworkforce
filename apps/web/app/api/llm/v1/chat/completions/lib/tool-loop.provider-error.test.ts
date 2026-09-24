@@ -139,7 +139,10 @@ describe('runToolLoop, a provider rejection reaches the user as product copy', (
       runToolLoop(processed, { approvalMode: 'auto', failover: { next } }),
     );
 
-    expect(next).toHaveBeenCalledWith(expect.any(Error), { step: 1 });
+    expect(next).toHaveBeenCalledWith(expect.any(Error), {
+      step: 1,
+      sameRouteRetrySafe: true,
+    });
     expect(output).toContain('Answered.');
     expect(output).not.toContain('x_stream_error');
   });

@@ -22,7 +22,7 @@ function ProgressBar({ value }: { value: number }) {
       aria-valuemax={100}
     >
       <div
-        className="h-full rounded-full bg-[var(--chat-accent-primary)] transition-all duration-300"
+        className="h-full rounded-full bg-[var(--chat-accent-primary)] transition-all duration-moved"
         style={{ width: `${clamped}%` }}
       />
     </div>
@@ -102,7 +102,7 @@ export function VideoGenCard({
               <div
                 className={cn(
                   'absolute right-2 top-2 flex items-center gap-1',
-                  'opacity-0 transition-opacity duration-150',
+                  'opacity-0 transition-opacity duration-quick',
                   'group-hover:opacity-100 group-focus-within:opacity-100',
                   'motion-reduce:opacity-100',
                 )}

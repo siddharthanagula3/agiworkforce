@@ -28,7 +28,7 @@ export function VoiceEntryButton({ onStart, disabled = false, className }: Voice
         className,
       )}
     >
-      <AudioLines className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+      <AudioLines className="h-5 w-5" aria-hidden="true" />
     </button>
   );
 }

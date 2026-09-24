@@ -988,7 +988,7 @@ export function applyUserPatchOperations(
 }
 
 /**
- * Cuts off the live credentials of a member the IdP just removed.
+ * Cuts off the live credentials of each member the IdP just removed.
  *
  * Never throws. An IdP treats a non-2xx as a failed deprovision and retries,
  * which would mean re-running a revoke that already succeeded and, worse, would
@@ -996,11 +996,19 @@ export function applyUserPatchOperations(
  * could not be reached is recorded on the sync event instead, where an
  * administrator reviewing the directory log will see it.
  */
-async function revokeCredentialsAfterScimRemoval(
+export async function revokeCredentialsAfterScimRemoval(
   db: DatabaseAdapter,
   organizationId: string,
-  linkedUserId: string | null,
+  linkedUserId: string | null | readonly string[],
 ): Promise<string[]> {
+  if (typeof linkedUserId !== 'string') {
+    const warnings: string[] = [];
+    for (const userId of linkedUserId ?? []) {
+      const errors = await revokeCredentialsAfterScimRemoval(db, organizationId, userId);
+      warnings.push(...errors.map((error) => `${userId}: ${error}`));
+    }
+    return warnings;
+  }
   if (!linkedUserId) return [];
 
   let errors: string[];
@@ -1044,6 +1052,17 @@ async function revokeCredentialsAfterScimRemoval(
   }
 
   return errors;
+}
+
+export function groupRevocationPayload(
+  revokedUserIds: readonly string[],
+  revocationWarnings: string[],
+) {
+  return {
+    membershipsRevoked: revokedUserIds.length,
+    credentialsRevoked: revokedUserIds.length > 0 && revocationWarnings.length === 0,
+    revocationWarnings,
+  };
 }
 
 export async function patchScimUser(
@@ -1351,12 +1370,14 @@ async function removeGroupMembers(
   }
 }
 
+// Returns the users whose membership this removed. The caller revokes their
+// credentials once its transaction commits, with revokeCredentialsAfterScimRemoval.
 export async function reconcileGroupMembers(
   db: DatabaseAdapter,
   ctx: ScimConnectionContext,
   scimUserIds: string[],
-): Promise<void> {
-  if (scimUserIds.length === 0) return;
+): Promise<string[]> {
+  if (scimUserIds.length === 0) return [];
 
   // getScimUser validated each id before reading it, so keep that ahead of the
   // batched read. Every caller runs inside a transaction, so raising before the
@@ -1375,7 +1396,7 @@ export async function reconcileGroupMembers(
   const present = unique
     .map((id) => byId.get(id))
     .filter((row): row is ScimProvisionedUserRow => Boolean(row));
-  if (present.length === 0) return;
+  if (present.length === 0) return [];
 
   const domains = await listVerifiedDomains(db, ctx.organizationId);
   await linkAccountsBatch(db, ctx, present, domains);
@@ -1414,7 +1435,7 @@ export async function reconcileGroupMembers(
   const grantable = present.filter(
     (row) => row.active && row.linked_user_id && ownsEmailDomain(row.email, domains),
   );
-  if (grantable.length === 0) return;
+  if (grantable.length === 0) return revokedActual;
 
   const roles = await resolveMappedRolesBatch(
     db,
@@ -1486,6 +1507,8 @@ export async function reconcileGroupMembers(
       return recordScimMembershipAudit(ctx, 'scim_membership_granted', linkedUserId, resultingRole);
     }),
   );
+
+  return revokedActual;
 }
 
 function chunkEntries<T>(entries: readonly T[], size: number): T[][] {
@@ -1571,7 +1594,7 @@ export async function createScimGroup(
   ctx: ScimConnectionContext,
   input: ParsedScimGroup,
 ): Promise<ScimGroupRow> {
-  const row = await db.transaction(async (tx) => {
+  const { row, revokedUserIds } = await db.transaction(async (tx) => {
     let rows: ScimGroupRow[];
     try {
       rows = await tx.query<ScimGroupRow>(
@@ -1591,9 +1614,17 @@ export async function createScimGroup(
     if (!created) throw new Error('Failed to create SCIM group: no row returned');
 
     await addGroupMembers(tx, ctx, created.id, input.memberIds);
-    await reconcileGroupMembers(tx, ctx, input.memberIds);
-    return created;
+    return {
+      row: created,
+      revokedUserIds: await reconcileGroupMembers(tx, ctx, input.memberIds),
+    };
   });
+
+  const revocationWarnings = await revokeCredentialsAfterScimRemoval(
+    db,
+    ctx.organizationId,
+    revokedUserIds,
+  );
 
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
@@ -1602,6 +1633,7 @@ export async function createScimGroup(
       scimGroupId: row.id,
       displayName: row.display_name,
       members: input.memberIds.length,
+      ...groupRevocationPayload(revokedUserIds, revocationWarnings),
     },
   });
   await recordScimResourceAudit(
@@ -1626,7 +1658,7 @@ export async function replaceScimGroup(
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
   assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
-  const row = await db.transaction(async (tx) => {
+  const { row, revokedUserIds } = await db.transaction(async (tx) => {
     const previousMembers = await getScimGroupMembers(tx, ctx, groupId);
 
     let rows: ScimGroupRow[];
@@ -1663,14 +1695,23 @@ export async function replaceScimGroup(
     await addGroupMembers(tx, ctx, groupId, input.memberIds);
 
     const affected = new Set([...previousMembers.map((member) => member.id), ...input.memberIds]);
-    await reconcileGroupMembers(tx, ctx, [...affected]);
-    return updated;
+    return { row: updated, revokedUserIds: await reconcileGroupMembers(tx, ctx, [...affected]) };
   });
+
+  const revocationWarnings = await revokeCredentialsAfterScimRemoval(
+    db,
+    ctx.organizationId,
+    revokedUserIds,
+  );
 
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.updated',
-    payload: { scimGroupId: groupId, members: input.memberIds.length },
+    payload: {
+      scimGroupId: groupId,
+      members: input.memberIds.length,
+      ...groupRevocationPayload(revokedUserIds, revocationWarnings),
+    },
   });
   await recordScimResourceAudit(ctx, 'scim_group_updated', 'scim_group', row.id, row.display_name);
 
@@ -1718,7 +1759,7 @@ export async function patchScimGroup(
   if (!existing) throw new ScimError(404, `Group ${groupId} not found`);
   assertVersionMatches(existing.version, expectedVersion, 'Group', groupId);
 
-  const row = await db.transaction(async (tx) => {
+  const { row, revokedUserIds } = await db.transaction(async (tx) => {
     let displayName = existing.display_name;
     let externalId = existing.external_id;
     const affected = new Set<string>();
@@ -1808,14 +1849,23 @@ export async function patchScimGroup(
     const patched = rows[0];
     if (!patched) throw missingOrStale('Group', groupId, expectedVersion);
 
-    await reconcileGroupMembers(tx, ctx, [...affected]);
-    return patched;
+    return { row: patched, revokedUserIds: await reconcileGroupMembers(tx, ctx, [...affected]) };
   });
+
+  const revocationWarnings = await revokeCredentialsAfterScimRemoval(
+    db,
+    ctx.organizationId,
+    revokedUserIds,
+  );
 
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.updated',
-    payload: { scimGroupId: groupId, operations: operations.length },
+    payload: {
+      scimGroupId: groupId,
+      operations: operations.length,
+      ...groupRevocationPayload(revokedUserIds, revocationWarnings),
+    },
   });
   await recordScimResourceAudit(ctx, 'scim_group_updated', 'scim_group', row.id, row.display_name);
 
@@ -1834,23 +1884,33 @@ export async function deleteScimGroup(
 
   const members = await getScimGroupMembers(db, ctx, groupId);
 
-  await db.transaction(async (tx) => {
+  const revokedUserIds = await db.transaction(async (tx) => {
     await tx.execute(
       'delete from scim_groups where id = $1 and connection_id = $2 and organization_id = $3',
       [groupId, ctx.connectionId, ctx.organizationId],
     );
 
-    await reconcileGroupMembers(
+    return reconcileGroupMembers(
       tx,
       ctx,
       members.map((member) => member.id),
     );
   });
 
+  const revocationWarnings = await revokeCredentialsAfterScimRemoval(
+    db,
+    ctx.organizationId,
+    revokedUserIds,
+  );
+
   await touchConnection(db, ctx);
   await recordSyncEvent(db, ctx, {
     eventType: 'group.deprovisioned',
-    payload: { scimGroupId: groupId, members: members.length },
+    payload: {
+      scimGroupId: groupId,
+      members: members.length,
+      ...groupRevocationPayload(revokedUserIds, revocationWarnings),
+    },
   });
   await recordScimResourceAudit(
     ctx,

@@ -57,6 +57,22 @@ export interface DisplayCandidate {
   scaleFactor: number;
 }
 
+/**
+ * The size to ask a capture for. Electron reports a display in points, so a
+ * thumbnail sized from those is half resolution on a Retina screen and the
+ * model reads a blurred one.
+ */
+export function physicalCaptureSize(display: DisplayCandidate): {
+  width: number;
+  height: number;
+} {
+  const scale = display.scaleFactor > 0 ? display.scaleFactor : 1;
+  return {
+    width: Math.round(display.size.width * scale),
+    height: Math.round(display.size.height * scale),
+  };
+}
+
 export function chooseCaptureDisplay<T extends DisplayCandidate>(
   displays: readonly T[],
   options: { requestedId?: number; rememberedId?: number | null; fallback: T },

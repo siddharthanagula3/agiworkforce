@@ -12,6 +12,15 @@
 >
 > **The sections describing OUR build are ours to decide.** Competitor behaviour is a requirement to meet, never code to copy.
 
+> **Freshness amendment, 2026-09-21.** The sourcing limitation above accurately
+> describes this document's 2026-08-26 research pass, but it is no longer the
+> latest competitor baseline. First-party ChatGPT and Claude documentation was
+> re-verified through 2026-09-21 in
+> `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`. Preserve the
+> measured August render facts below; use the September document for current
+> account continuity, work, search, memory, apps/plugins, artifacts, and privacy
+> behavior.
+
 ---
 
 # Editable, Content-Type-Aware Response Render Layer, Implementation Specification
@@ -545,8 +554,7 @@ At submit time:
 
 ```ts
 export type EditScope =
-  | { kind: 'whole' }
-  | { kind: 'span'; start: number; end: number; text: string };
+  { kind: 'whole' } | { kind: 'span'; start: number; end: number; text: string };
 
 function resolveScope(state: EditControllerState): EditScope {
   const s = state.selection;

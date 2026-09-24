@@ -12,6 +12,7 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { logger } from '@/lib/logger';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { chunkDiff, parseUnifiedDiff, type ReviewDiffFile } from './diff';
 import {
   anchorFindings,
@@ -69,12 +70,12 @@ export interface CodeReviewInput {
 function resolveReviewRoute(
   planTier: string,
   preferredModel: string | null | undefined,
-): { provider: string; modelKey: string; providerModelId: string } | null {
+): { dispatchProvider: string; modelKey: string; providerModelId: string } | null {
   const normalized = preferredModel ? normalizeModelId(preferredModel) : null;
   if (normalized) {
     try {
       return {
-        provider: resolveProviderFromModel(normalized),
+        dispatchProvider: resolveProviderFromModel(normalized),
         modelKey: normalized,
         providerModelId: normalized,
       };
@@ -94,7 +95,7 @@ function resolveReviewRoute(
     return null;
   }
   return {
-    provider: route.provider,
+    dispatchProvider: dispatchProviderForSelectedRoute(route),
     modelKey: route.modelKey,
     providerModelId: route.providerModelId,
   };
@@ -114,12 +115,12 @@ async function callReviewModel(
     temperature: 0,
     stream: false,
   });
-  const adapter = buildServerProviderAdapter(route.provider);
+  const adapter = buildServerProviderAdapter(route.dispatchProvider);
   const response = await drainToLlmResponse(
     adapter.stream(request, input.signal ?? AbortSignal.timeout(PROVIDER_TIMEOUT_MS)),
     route.modelKey,
-    (chunk) => toGenericUpstreamError(route.provider, chunk),
-    resolveWireMode(route.provider),
+    (chunk) => toGenericUpstreamError(route.dispatchProvider, chunk),
+    resolveWireMode(route.dispatchProvider),
   );
   return { text: response.content, outputTokens: response.completionTokens };
 }

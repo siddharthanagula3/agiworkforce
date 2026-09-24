@@ -131,6 +131,7 @@ const SECTIONS = [
   '03 · How we use it, and on what basis',
   '04 · Sharing',
   '05 · Retention',
+  { label: 'Security incidents', id: 's-incidents' },
   '06 · What you can change yourself',
   '07 · Your rights, and how to use them',
   '08 · International transfers',
@@ -283,6 +284,37 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         separate private bucket. Images and other non-video files remain in a public R2 bucket:
         normal product responses do not expose its raw URLs, but anyone who obtains an underlying
         storage URL can access that object without signing in.
+        <br />
+        <strong>Location and camera details in pictures:</strong> before a picture you attach in the
+        AGI web, desktop or mobile app leaves your device, AGI removes the location, camera and time
+        details stored inside it, keeping only what is needed to show it the right way up and in the
+        right colours. A picture that cannot be read well enough to do this is not sent. The file
+        name is kept as you gave it.
+      </>
+    ),
+  },
+  {
+    label: 'Voice and audio',
+    value: (
+      <>
+        <strong>Examples:</strong> microphone audio, captured only while you are dictating into the
+        composer or holding a Voice Mode conversation, and the text that comes back from it.
+        <br />
+        <strong>Why, and how it is protected:</strong> turning speech into text, and holding a
+        spoken conversation. Nothing is captured until you start one of the two. Dictation sends the
+        recording to OpenAI&rsquo;s transcription endpoint; Voice Mode opens a realtime session with
+        OpenAI and your microphone audio streams from your browser to that session for as long as it
+        runs. <strong>We do not store the audio.</strong> The dictation route passes the bytes on
+        and keeps none, and a voice session record holds that session&rsquo;s settings and a pointer
+        into the transcript, with no audio in it. The text transcript is kept as ordinary
+        conversation content and follows the conversation rows above. There is no voiceprint,
+        speaker identification or other biometric identifier anywhere in this product, and nothing
+        here infers who is speaking. What OpenAI does with audio it receives is its own published
+        practice, named on{' '}
+        <Link href="/subprocessors" className="agi-ds-link">
+          /subprocessors
+        </Link>
+        , not a promise we can make for it.
       </>
     ),
   },
@@ -430,10 +462,20 @@ const NOT_COLLECTED: readonly { title: string; body: React.ReactNode }[] = [
       <>
         AGI does not train AGI-owned models on customer prompts, responses, or files. In Managed
         Cloud, we send prompts and attached content to the provider serving the model you select and
-        receive its response; for routed models, the request passes through OpenRouter. Those third
-        parties handle that content under their applicable terms and data-use policies; this
-        statement about AGI-owned models is not a promise on their behalf. In BYOK mode, provider
-        handling is governed by your own provider account and terms.
+        receive its response; some models are reached through OpenRouter or through an inference
+        gateway instead of directly, and{' '}
+        <Link href="/subprocessors" className="agi-ds-link">
+          /subprocessors
+        </Link>{' '}
+        names each of those and the condition under which it carries a request. Those third parties
+        handle that content under their applicable terms and data-use policies; this statement about
+        AGI-owned models is not a promise on their behalf. In BYOK mode, provider handling is
+        governed by your own provider account and terms. For Experiential Labs promotional routes,
+        its Free organization setting captures prompts and responses for up to 30 days and its
+        published policy permits using captured content to develop, evaluate and improve its
+        services and hosted models. Its no-training routing setting restricts upstream providers,
+        not this platform capture. Selecting one of those routes sends your content under that
+        provider policy; use another model for content you cannot share on those terms.
       </>
     ),
   },
@@ -1047,7 +1089,44 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-06" labelledBy="agi-privacy-s06-title" rule>
+              <Section id="s-incidents" labelledBy="agi-privacy-incidents-title" rule>
+                <Stack gap="loose">
+                  <h2 className="agi-ds-h2" id="agi-privacy-incidents-title">
+                    Security incidents
+                  </h2>
+                  <Prose>
+                    We keep a written procedure for a personal data breach: who declares one, what
+                    goes into a notification to a regulator, and what an affected person is told. It
+                    runs against a 72-hour clock for notifying a regulator where a law requires one,
+                    which is the same commitment the{' '}
+                    <Link href="/terms" className="agi-ds-link">
+                      terms
+                    </Link>{' '}
+                    make. The safeguards the procedure sits on top of are at{' '}
+                    <Link href="/security" className="agi-ds-link">
+                      /security
+                    </Link>
+                    , including the parts of that posture we have not built.
+                  </Prose>
+                  <Prose>
+                    <strong>How a notice would actually reach you.</strong> There is no
+                    account-lifecycle mail in this product. The only email it can send is support
+                    escalation, scheduled-task notification, and operational alerts to us, and none
+                    of those can reach a list of affected customers. So a notice to you would arrive
+                    as an in-product message and at a dated public address rather than by email,
+                    with direct email only where we hold your address and a person sends it by hand.
+                    Neither that in-product notice nor that public page exists as a built feature
+                    today; they would be put up during the incident. The same statement is in
+                    section 10 of the{' '}
+                    <Link href="/privacy/india" className="agi-ds-link">
+                      India notice
+                    </Link>
+                    .
+                  </Prose>
+                </Stack>
+              </Section>
+
+              <Section id="s-06" labelledBy="agi-privacy-s06-title" rule ground="2">
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s06-title">
                     06 · What you can change yourself
@@ -1062,7 +1141,7 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-07" labelledBy="agi-privacy-s07-title" rule ground="2">
+              <Section id="s-07" labelledBy="agi-privacy-s07-title" rule>
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s07-title">
                     07 · Your rights, and how to use them
@@ -1118,7 +1197,7 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-08" labelledBy="agi-privacy-s08-title" rule>
+              <Section id="s-08" labelledBy="agi-privacy-s08-title" rule ground="2">
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s08-title">
                     08 · International transfers
@@ -1142,7 +1221,7 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-09" labelledBy="agi-privacy-s09-title" rule ground="2">
+              <Section id="s-09" labelledBy="agi-privacy-s09-title" rule>
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s09-title">
                     09 · Children
@@ -1161,7 +1240,7 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-10" labelledBy="agi-privacy-s10-title" rule>
+              <Section id="s-10" labelledBy="agi-privacy-s10-title" rule ground="2">
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s10-title">
                     10 · Changes
@@ -1178,7 +1257,7 @@ export default function PrivacyPage() {
                 </Stack>
               </Section>
 
-              <Section id="s-11" labelledBy="agi-privacy-s11-title" rule ground="2">
+              <Section id="s-11" labelledBy="agi-privacy-s11-title" rule>
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-privacy-s11-title">
                     11 · Contact

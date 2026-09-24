@@ -47,6 +47,9 @@ export interface StreamErrorInfo {
   message: string;
   code?: string;
   retryable?: boolean;
+  // Both are the sender's own statement; a runtime that has neither sends neither.
+  retryAfterSeconds?: number;
+  requestId?: string;
 }
 
 export interface StreamErrorMessageLike {
@@ -79,6 +82,31 @@ export function getStreamErrorMessage(
   }
   if (meta?.finishReason === 'error') return undefined;
   return undefined;
+}
+
+// A reference is an opaque id; anything else is not shown as one.
+const STREAM_ERROR_REFERENCE = /^[A-Za-z0-9._:-]{4,128}$/;
+
+export function getStreamErrorReference(
+  message: StreamErrorMessageLike | undefined | null,
+): string | undefined {
+  const meta = message?.metadata as { streamError?: unknown } | undefined;
+  const streamError = meta?.streamError;
+  if (!streamError || typeof streamError !== 'object') return undefined;
+  const requestId = (streamError as { requestId?: unknown }).requestId;
+  return typeof requestId === 'string' && STREAM_ERROR_REFERENCE.test(requestId)
+    ? requestId
+    : undefined;
+}
+
+/** The failure sentence a reader sees, with the reference support can look up. */
+export function getStreamErrorNotice(
+  message: StreamErrorMessageLike | undefined | null,
+): string | undefined {
+  const sentence = getStreamErrorMessage(message);
+  if (sentence === undefined) return undefined;
+  const reference = getStreamErrorReference(message);
+  return reference ? `${sentence} Reference: ${reference}` : sentence;
 }
 
 export const CONTINUE_GENERATION_INSTRUCTION =

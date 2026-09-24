@@ -29,6 +29,14 @@ export function clearTermsGateMarker(): void {
   }
 }
 
+export function hasCurrentTermsGateMarker(): boolean {
+  try {
+    return window.localStorage.getItem(TERMS_GATE_STORAGE_KEY) === POLICY_LAST_UPDATED.terms;
+  } catch {
+    return false;
+  }
+}
+
 export function TermsGate({
   children,
   blockedMessage = 'Accept the terms above to create an account. Local Mode stays free and needs no account.',
@@ -46,15 +54,7 @@ export function TermsGate({
   const checkboxId = useId();
 
   useEffect(() => {
-    if (restorePreAuthMarker) {
-      try {
-        if (window.localStorage.getItem(TERMS_GATE_STORAGE_KEY) === POLICY_LAST_UPDATED.terms) {
-          setAccepted(true);
-        }
-      } catch (err) {
-        void err;
-      }
-    }
+    if (restorePreAuthMarker && hasCurrentTermsGateMarker()) setAccepted(true);
     setHydrated(true);
   }, [restorePreAuthMarker]);
 
@@ -89,7 +89,7 @@ export function TermsGate({
               href={CANONICAL_POLICY_ROUTES.terms}
               target="_blank"
               rel="noopener noreferrer"
-              className="auth-inline rounded underline underline-offset-2"
+              className="auth-inline rounded-compact underline underline-offset-2"
             >
               Terms of Service
             </Link>
@@ -98,14 +98,14 @@ export function TermsGate({
               href={CANONICAL_POLICY_ROUTES.privacy}
               target="_blank"
               rel="noopener noreferrer"
-              className="auth-inline rounded underline underline-offset-2"
+              className="auth-inline rounded-compact underline underline-offset-2"
             >
               Privacy Policy
             </Link>
             .
           </span>
         </label>
-        <p className="mt-3 pl-7 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-3 ps-7 text-xs leading-relaxed text-muted-foreground">
           Version dated {POLICY_LAST_UPDATED.terms}. Your agreement is recorded with your account.
         </p>
       </div>

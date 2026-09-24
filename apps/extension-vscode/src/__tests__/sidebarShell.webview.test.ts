@@ -66,6 +66,8 @@ describe('the sidebar overflow menu', () => {
     click('[data-surface="projects"]');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSurface',
       payload: { surfaceId: 'projects' },
     });
@@ -80,6 +82,8 @@ describe('the sidebar overflow menu', () => {
 
     expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestSessions',
       payload: { source: 'local' },
     });
@@ -116,6 +120,8 @@ describe('the sidebar overflow menu', () => {
     click('#composerStatusSignIn');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSurface',
       payload: { surfaceId: 'signIn' },
     });
@@ -164,6 +170,45 @@ describe('the sessions sheet', () => {
     ).toEqual(['4m ago', 'Local']);
   });
 
+  it('stays reachable during a conversation and announces loading before rows arrive', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'conversationLoaded',
+      payload: {
+        threadId: 'thread-active',
+        title: 'Active session',
+        trustMode: 'byok',
+        transcriptTruncated: false,
+        messages: [
+          { role: 'user', text: 'Keep working' },
+          { role: 'assistant', text: 'Working' },
+        ],
+      },
+    });
+
+    expect(document.getElementById('emptyState')).toBeNull();
+    click('#sessionsBtn');
+
+    expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
+    expect(document.getElementById('sessionsSheetList')?.getAttribute('aria-busy')).toBe('true');
+    expect(
+      document.getElementById('sessionsSheetList')?.querySelector('[role="status"]')?.textContent,
+    ).toBe('Loading developer sessions…');
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'requestSessions',
+      payload: { source: 'local' },
+    });
+
+    deliver({ type: 'sessionsList', payload: { source: 'local', rows: [] } });
+
+    expect(document.getElementById('sessionsSheetList')?.getAttribute('aria-busy')).toBe('false');
+    expect(document.querySelector('.sessions-sheet-empty')?.textContent).toBe(
+      'No developer sessions in this workspace yet',
+    );
+  });
+
   it('asks the host for cloud chats when the Cloud tab is chosen', () => {
     const postMessage = boot();
     click('#sessionsBtn');
@@ -172,6 +217,8 @@ describe('the sessions sheet', () => {
     click('#sessionsTabCloud');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'requestSessions',
       payload: { source: 'cloud' },
     });
@@ -231,6 +278,8 @@ describe('the sessions sheet', () => {
     click('.sessions-sheet-row');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'openSessionRow',
       payload: { id: 'thread-a', source: 'local' },
     });
@@ -254,7 +303,11 @@ describe('the composer command list', () => {
 
     click('#slashBtn');
 
-    expect(postMessage).toHaveBeenCalledWith({ type: 'requestSlashCommands' });
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'requestSlashCommands',
+    });
     expect(document.querySelector('.slash-menu-empty')?.textContent).toBe('Loading commands…');
 
     deliver({
@@ -301,6 +354,8 @@ describe('the composer command list', () => {
     click('.slash-menu-item');
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/clear' },
     });
@@ -330,6 +385,8 @@ describe('the composer command list', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/model' },
     });
@@ -361,6 +418,8 @@ describe('the composer command list', () => {
     postMessage.mockClear();
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
       type: 'runSlashCommand',
       payload: { name: '/models' },
     });

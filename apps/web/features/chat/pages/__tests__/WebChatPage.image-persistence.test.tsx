@@ -71,8 +71,10 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   ...(await importOriginal()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
+  readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));
 
@@ -309,7 +311,10 @@ vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
 vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
-vi.mock('../../components/ConversationTitleMenu', () => ({ ConversationTitleMenu: () => null }));
+vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../components/ConversationTitleMenu')>()),
+  ConversationTitleMenu: () => null,
+}));
 vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,

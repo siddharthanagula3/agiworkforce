@@ -260,7 +260,7 @@ export function PlacesMapCard({ body, assistantText }: PlacesMapCardProps) {
 
         {selectedPlace && selectedIndex !== null ? (
           <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-40"
+            className="pointer-events-none absolute inset-x-0 top-0 z-[var(--z-panel)]"
             style={{ height: popupBounds, top: -cardMetrics.mapOffsetTop }}
           >
             <div
@@ -286,7 +286,7 @@ export function PlacesMapCard({ body, assistantText }: PlacesMapCardProps) {
         {places.length > 0 ? (
           <ol
             data-testid="places-card-list"
-            className="mb-1 mt-2 flex flex-col gap-2 px-3 sm:absolute sm:right-3 sm:top-3 sm:z-30 sm:mb-0 sm:mt-0 sm:max-h-[calc(100%-1.5rem)] sm:w-64 sm:overflow-y-auto sm:px-0"
+            className="mb-1 mt-2 flex flex-col gap-2 px-3 sm:absolute sm:right-3 sm:top-3 sm:z-[var(--z-panel-backdrop)] sm:mb-0 sm:mt-0 sm:max-h-[calc(100%-1.5rem)] sm:w-64 sm:overflow-y-auto sm:px-0"
           >
             {places.map((place, index) => (
               <li key={place.placeId}>

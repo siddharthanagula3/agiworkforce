@@ -84,6 +84,7 @@ jest.mock('lucide-react-native', () => {
     Lock: iconFactory('lock'),
     Presentation: iconFactory('presentation'),
     ShieldCheck: iconFactory('shield-check'),
+    TriangleAlert: iconFactory('triangle-alert'),
   };
 });
 

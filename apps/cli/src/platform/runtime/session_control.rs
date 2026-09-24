@@ -103,6 +103,16 @@ impl ManagedSessionStore {
         list_managed_sessions_in(&self.base_dir)
     }
 
+    /// What a listing offers to resume. An archived session stays on disk and
+    /// in search; it just stops being offered.
+    pub fn list_active(&self) -> Result<Vec<ManagedSessionSummary>> {
+        Ok(self
+            .list()?
+            .into_iter()
+            .filter(|summary| summary.archived_at.is_none())
+            .collect())
+    }
+
     pub fn resolve(
         &self,
         reference: ManagedSessionReference,
@@ -570,9 +580,9 @@ fn create_managed_session_with_id_in(
     )))
 }
 
-/// List managed sessions stored under the CLI config directory.
-pub fn list_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
-    ManagedSessionStore::user_config()?.list()
+/// The managed sessions a listing offers, archived ones left out.
+pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
+    ManagedSessionStore::user_config()?.list_active()
 }
 
 /// Return the newest managed session, if one exists.
@@ -740,6 +750,7 @@ mod tests {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,
@@ -774,6 +785,7 @@ mod tests {
             file_changes: Vec::new(),
             validations: Vec::new(),
             objective: None,
+            architecture: None,
             archived_at: None,
             permission_mode: None,
             plan_mode: None,

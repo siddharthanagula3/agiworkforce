@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + provider/platform lead
-Last updated: 2026-09-19
+Last updated: 2026-09-22
 
 This document defines how AGI should think about BYOK providers, open-weight models, hosted open-model APIs, and local model runtimes before implementation agents add or rank models.
 
@@ -119,7 +119,11 @@ Developer-surface BYOK should have four clear groups in model/provider setup:
 3. Local runtimes
    - Ollama, LM Studio, llama.cpp, vLLM, TGI, MLX.
 4. AGI Managed Cloud
-   - public alpha, open by default (founder decision 2026-06-27); subscription/entitlement-gated, no waitlist/invite. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only.
+   - Managed Free is available after sign-in (founder decision 2026-06-27).
+     New paid subscriptions and upgrades remain waitlist/access-code gated
+     (founder clarification 2026-09-21). Existing paid entitlements continue to
+     resolve normally. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an
+     incident-response kill-switch only.
 
 The model selector must show:
 

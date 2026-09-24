@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -741,7 +741,8 @@ describe('every encryption key the environment contract demands is one a module 
           /\.(ts|tsx|mts|cts|mjs|cjs|js|rs)$/.test(file) &&
           !file.includes('__tests__/') &&
           !/\.(test|spec)\.[a-z]+$/.test(file) &&
-          file !== 'apps/web/lib/validate-env.ts',
+          file !== 'apps/web/lib/validate-env.ts' &&
+          existsSync(path.join(REPO_ROOT, file)),
       );
   }
 

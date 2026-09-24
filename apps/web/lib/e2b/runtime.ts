@@ -7,13 +7,6 @@
  * create error, op error) fails CLOSED, the router surfaces an explicit error to the
  * model, never a silent no-op and never a provider-native fallback.
  *
- * VERIFICATION NOTE: there is no E2B key in this environment, so the live sandbox
- * round-trip is unverified here, that step is the operator's once `E2B_API_KEY` is
- * set. The binding is typed against @e2b/code-interpreter@2.6.1 (confirmed against the
- * installed package's `dist/index.d.ts`, not assumed from docs/training data) and
- * defensive (optional chaining + try/catch) so an API-shape surprise degrades to
- * fail-closed.
- *
  * Session scope: when an authenticated tenant/user/conversation scope is passed, ONE
  * sandbox + one code-context per language is reused across every execution-tool call in
  * that owned conversation (state persists, variables/imports survive across turns).
@@ -49,9 +42,10 @@ import {
 } from './types';
 import { e2bExecutionEnabled } from './gate';
 import { tracedCodeAction } from '@/lib/observability/code-action-span';
+import { activeSpan } from '@/lib/observability/span';
 
 import { traceSandboxExecutor } from './tracing';
-import type { E2BUnavailableCause } from './unavailability';
+import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
 import {
   harnessCredentialSpecs,
   harnessIsProxyCovered,
@@ -107,10 +101,9 @@ const TRUSTED_CODE_HOSTS = [
  * dimensions (`BILLING_PLAN_PRODUCT_LIMITS.maxSandboxes` / `.sandboxTtlMs`).
  * Plans grant 0–5 slots under the absolute five-per-user safety ceiling.
  *
- * The old implementation granted the same five slots and flat 10-minute
- * lifetime to every tier, including Free. The catalog now denies unsupported
- * tiers, gives Basic fewer slots, and scales lifetime with the plan while
- * preserving that hard ceiling.
+ * Free compute is admitted through a separate platform-funded daily allowance;
+ * paid tiers retain credit-backed reservations. Local and BYOK remain outside
+ * managed sandbox provisioning.
  *
  * Only scoped (authenticated) sandboxes are counted and enforced; ephemeral
  * bare-API sandboxes self-dispose within `E2B_SANDBOX_TIMEOUT_MS`.
@@ -508,12 +501,58 @@ export async function pauseE2BSession(scope: E2BSessionScope): Promise<void> {
   if (!session) return;
   const Sandbox = await importSandbox();
   if (!Sandbox) return;
+  let paused = false;
   try {
     await Sandbox.pause(session.sandboxId);
-  } catch (err) {
-    logger.warn({ err, ...scopeLog(scope) }, '[e2b] pause failed');
+    paused = true;
+  } catch (pauseError) {
+    logger.warn({ err: pauseError, ...scopeLog(scope) }, '[e2b] pause failed; reconciling state');
   }
-  await closeBillableInterval(scope, session, 'pause');
+  if (paused) {
+    await closeBillableInterval(scope, session, 'pause');
+    return;
+  }
+
+  try {
+    const info = await Sandbox.getInfo(session.sandboxId);
+    paused = info.state === 'paused';
+  } catch (infoError) {
+    logger.warn({ err: infoError, ...scopeLog(scope) }, '[e2b] pause state lookup failed');
+  }
+  if (paused) {
+    await closeBillableInterval(scope, session, 'pause');
+    return;
+  }
+
+  try {
+    await Sandbox.pause(session.sandboxId);
+    paused = true;
+  } catch (retryError) {
+    logger.warn({ err: retryError, ...scopeLog(scope) }, '[e2b] pause retry failed');
+  }
+  if (paused) {
+    await closeBillableInterval(scope, session, 'pause');
+    return;
+  }
+
+  try {
+    await Sandbox.kill(session.sandboxId);
+  } catch (killError) {
+    logger.error(
+      { err: killError, sandboxId: session.sandboxId, ...scopeLog(scope) },
+      '[e2b] could not confirm pause or release; keeping the compute interval open',
+    );
+    return;
+  }
+  try {
+    await closeBillableInterval(scope, session, 'kill');
+  } finally {
+    await deleteE2BSession(scope);
+  }
+  logger.warn(
+    { sandboxId: session.sandboxId, ...scopeLog(scope) },
+    '[e2b] released sandbox after repeated pause failure; session state cannot be resumed',
+  );
 }
 
 async function closeBillableInterval(
@@ -522,7 +561,13 @@ async function closeBillableInterval(
   reason: 'pause' | 'kill' | 'reclaim',
 ): Promise<void> {
   const startedAtMs = session.activeSinceMs;
-  if (typeof startedAtMs !== 'number') return;
+  if (typeof startedAtMs !== 'number') {
+    if (reason === 'pause' && session.computeReservation) {
+      const { computeReservation: _settled, ...rest } = session;
+      await saveE2BSession(scope, rest);
+    }
+    return;
+  }
 
   const shape = await templateComputeShape(session.templateId ?? scope.templateId);
   await meterSandboxComputeInterval({
@@ -543,7 +588,7 @@ async function closeBillableInterval(
   });
 
   if (reason === 'pause') {
-    const { activeSinceMs: _closed, ...rest } = session;
+    const { activeSinceMs: _closed, computeReservation: _settled, ...rest } = session;
     await saveE2BSession(scope, rest);
   }
 }
@@ -674,8 +719,15 @@ export const getE2BExecutor = tracedCodeAction(
     scope?: E2BSessionScope,
     onUnavailable?: (cause: E2BUnavailableCause) => void,
   ): Promise<E2BExecutor | null> {
-    const unavailable = (cause: E2BUnavailableCause): null => {
+    // The span is held rather than looked up: a refusal decided inside a nested
+    // span would otherwise settle that one and leave this one ok.
+    const provisionSpan = activeSpan();
+    const refuse = (cause: E2BUnavailableCause): void => {
+      provisionSpan?.refuse(cause, codeExecutionUnavailableMessage(cause));
       onUnavailable?.(cause);
+    };
+    const unavailable = (cause: E2BUnavailableCause): null => {
+      refuse(cause);
       return null;
     };
     if (!e2bExecutionEnabled()) return unavailable('not-configured');
@@ -722,6 +774,18 @@ export const getE2BExecutor = tracedCodeAction(
         );
         return unavailable('no-capacity');
       }
+      if (
+        planTier === 'free' &&
+        scope.templateId &&
+        harnessCredentialSpecs(scope.templateId).length > 0 &&
+        !scope.explicitCredential
+      ) {
+        logger.warn(
+          { userId: scope.userId, template: scope.templateId, ...scopeLog(scope) },
+          '[e2b] refusing managed harness credential for a Free sandbox',
+        );
+        return unavailable('policy');
+      }
     }
 
     const sandboxTimeoutMs = scope
@@ -759,14 +823,17 @@ export const getE2BExecutor = tracedCodeAction(
     }
     const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
 
-    // The account holds the sandbox's whole admitted lifetime before the sandbox
-    // exists, so an account over its quota is refused here rather than after it
-    // has already burned seconds it cannot pay for.
-    let computeReservation: SandboxComputeReservationRecord | undefined;
-    if (scope && planTier !== null) {
+    // Each active interval is admitted before create or reconnect. Pause settles
+    // that interval, so a later resume needs a new hold even for the same sandbox.
+    let computeReservation: SandboxComputeReservationRecord | undefined =
+      existingSession?.activeSinceMs === undefined ? undefined : existingSession.computeReservation;
+    let reservationAdmittedForThisAttempt = false;
+    const holdSandboxLifetime = async (): Promise<E2BUnavailableCause | null> => {
+      const tier = planTier;
+      if (!scope || tier === null || computeReservation) return null;
       const reserved = await reserveSandboxComputeInterval({
         userId: scope.userId,
-        planTier,
+        planTier: tier,
         templateId: template,
         ...(conversationId ? { conversationId } : {}),
         ...(codeSessionId ? { codeSessionId } : {}),
@@ -778,22 +845,27 @@ export const getE2BExecutor = tracedCodeAction(
           { ...scopeLog(scope), code: reserved.error.code, status: reserved.error.status },
           '[e2b] refusing to provision: sandbox compute could not be reserved (fail-closed)',
         );
-        return unavailable(
-          reserved.error.status === 402 || reserved.error.status === 429
+        return reserved.error.code === 'free_sandbox_allowance_exhausted'
+          ? 'free-allowance-exhausted'
+          : reserved.error.status === 402 || reserved.error.status === 429
             ? 'over-quota'
-            : 'no-capacity',
-        );
+            : 'no-capacity';
       }
       computeReservation = reserved.reservation;
-    }
+      reservationAdmittedForThisAttempt = true;
+      return null;
+    };
+    const provisioningRefusal = await holdSandboxLifetime();
+    if (provisioningRefusal) return unavailable(provisioningRefusal);
     const abandonReservation = async (reason: string): Promise<null> => {
-      if (scope && computeReservation) {
+      if (scope && computeReservation && reservationAdmittedForThisAttempt) {
         await releaseSandboxComputeReservation({
           userId: scope.userId,
           reservation: computeReservation,
           reason,
         });
         computeReservation = undefined;
+        reservationAdmittedForThisAttempt = false;
       }
       return null;
     };
@@ -822,7 +894,7 @@ export const getE2BExecutor = tracedCodeAction(
           return sandbox as SandboxInstance;
         } catch (err) {
           logger.warn({ err, template }, '[e2b] sandbox create failed; fail-closed');
-          onUnavailable?.('no-capacity');
+          refuse('provider-error');
           return null;
         }
       };
@@ -847,7 +919,7 @@ export const getE2BExecutor = tracedCodeAction(
               { userId: scope.userId, live, limit, planTier, ...scopeLog(scope) },
               '[e2b] per-user sandbox quota reached; refusing new sandbox (fail-closed)',
             );
-            onUnavailable?.('no-capacity');
+            refuse('no-capacity');
             return null;
           }
         } catch (err) {
@@ -855,7 +927,7 @@ export const getE2BExecutor = tracedCodeAction(
             { err, userId: scope.userId, planTier },
             '[e2b] sandbox quota check failed; refusing new sandbox (fail-closed)',
           );
-          onUnavailable?.('no-capacity');
+          refuse('provider-error');
           return null;
         }
         return create();
@@ -866,7 +938,7 @@ export const getE2BExecutor = tracedCodeAction(
           { userId: scope.userId, ...scopeLog(scope) },
           '[e2b] could not serialise sandbox creation; refusing (fail-closed)',
         );
-        onUnavailable?.('no-capacity');
+        refuse('provider-error');
         return null;
       }
       return guarded.result ?? null;
@@ -875,7 +947,6 @@ export const getE2BExecutor = tracedCodeAction(
     let sandbox: SandboxInstance;
     let sandboxId: string;
     const contexts: Record<string, StoredContext> = { ...(existingSession?.contexts ?? {}) };
-    let activeSinceMs: number | undefined;
 
     if (scope && existingSession) {
       try {
@@ -888,7 +959,14 @@ export const getE2BExecutor = tracedCodeAction(
           { err, sandboxId: existingSession.sandboxId, ...scopeLog(scope) },
           '[e2b] resume failed; releasing the unreachable sandbox before creating a fresh one',
         );
+        // The unreachable sandbox's seconds were just settled against the hold
+        // it was admitted under, so the replacement needs an admission of its
+        // own rather than inheriting a reservation that is already closed.
         await releaseUnreachableSandbox(scope, existingSession);
+        await abandonReservation('sandbox_resume_failed');
+        computeReservation = undefined;
+        const replacementRefusal = await holdSandboxLifetime();
+        if (replacementRefusal) return unavailable(replacementRefusal);
         for (const key of Object.keys(contexts)) delete contexts[key];
         const fresh = await createFresh();
         if (!fresh) return abandonReservation('sandbox_create_failed');
@@ -910,7 +988,7 @@ export const getE2BExecutor = tracedCodeAction(
           { err, userId: scope.userId, codeSessionId, networkAccess: scope.networkAccess },
           '[e2b] code-session network policy could not be enforced; refusing executor',
         );
-        onUnavailable?.('policy');
+        refuse('policy');
         try {
           await Sandbox.pause(sandboxId);
         } catch {
@@ -920,12 +998,13 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
+    const activeSinceMs = Date.now();
     async function persistSession(): Promise<void> {
       if (!scope) return;
       const session: E2BSession = {
         sandboxId,
         contexts,
-        ...(activeSinceMs !== undefined ? { activeSinceMs } : {}),
+        activeSinceMs,
         ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
         ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
         ...(template ? { templateId: template } : {}),
@@ -935,7 +1014,6 @@ export const getE2BExecutor = tracedCodeAction(
       await saveE2BSession(scope, session);
     }
 
-    activeSinceMs = Date.now();
     await persistSession();
 
     async function getContext(language: E2BLanguage): Promise<StoredContext> {
@@ -1176,35 +1254,8 @@ export const getE2BExecutor = tracedCodeAction(
       },
       async pause(): Promise<void> {
         if (!scope) return;
-        const intervalStartedAtMs = activeSinceMs;
-        activeSinceMs = undefined;
-        try {
-          await persistSession();
-        } catch (err) {
-          logger.warn({ err, ...scopeLog(scope) }, '[e2b] persistSession before pause failed');
-        }
-        try {
-          await Sandbox.pause(sandboxId);
-        } catch (err) {
-          logger.warn({ err, ...scopeLog(scope) }, '[e2b] pause (live handle) failed');
-        }
-        if (intervalStartedAtMs !== undefined) {
-          const shape = await templateComputeShape(template);
-          await meterSandboxComputeInterval({
-            userId: scope.userId,
-            sandboxId,
-            ...scopeAttribution(scope),
-            ...(shape.vcpuCount === null ? {} : { vcpuCount: shape.vcpuCount }),
-            ...(shape.memoryGib === null ? {} : { memoryGib: shape.memoryGib }),
-            ...(computeMicrousdPerSecond === undefined
-              ? {}
-              : { snapshotMicrousdPerSecond: computeMicrousdPerSecond }),
-            ...(computeReservation === undefined ? {} : { reservation: computeReservation }),
-            startedAtMs: intervalStartedAtMs,
-            endedAtMs: Date.now(),
-            reason: 'pause',
-          });
-        }
+        await persistSession();
+        await pauseE2BSession(scope);
       },
       async dispose(): Promise<void> {
         if (scope) {

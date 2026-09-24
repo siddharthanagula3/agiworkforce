@@ -183,6 +183,13 @@ fn tool_result_provenance(tool_name: &str, args: &Value) -> ContextProvenance {
             insert_arg(&mut origin, args, "query", "query");
             ("local_workspace", "workspace_data")
         }
+        name if name.starts_with("git_") || name == "list_worktrees" => {
+            origin.insert("git_tool".to_string(), name.to_string());
+            for key in ["rev", "branch", "exclude", "baseline", "paths"] {
+                insert_arg(&mut origin, args, key, key);
+            }
+            ("local_workspace", "workspace_data")
+        }
         "task" => {
             insert_arg(&mut origin, args, "description", "description");
             ("agent_delegate", "agent_output")
@@ -247,6 +254,57 @@ mod tests {
         let shell: Value = serde_json::from_str(&shell).unwrap();
         assert_eq!(shell["provenance"]["source_kind"], "host_execution");
         assert_eq!(shell["provenance"]["origin"]["command"], "cargo test");
+    }
+
+    /// Read-only catalog tools that are filesystem-shaped by name but read the
+    /// session, not the repository, with what they read instead.
+    const SESSION_READS: &[(&str, &str)] = &[("todo_read", "the session's own todo list")];
+
+    /// Every read-only tool that brings repository content into the context
+    /// says where it came from, read off the catalog so a new one is covered
+    /// the moment it is registered.
+    #[test]
+    fn every_workspace_read_carries_where_the_content_came_from() {
+        use agiworkforce_protocol::agent_events::AgentEventToolCategory;
+
+        let reads: Vec<_> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+            .into_iter()
+            .filter(|tool| tool.is_read_only)
+            .filter(|tool| {
+                crate::runtime::tool_catalog::tool_capability(&tool.name)
+                    == AgentEventToolCategory::Filesystem
+            })
+            .filter(|tool| !SESSION_READS.iter().any(|(name, _)| *name == tool.name))
+            .collect();
+        assert!(
+            reads.len() >= 8,
+            "{:?}",
+            reads.iter().map(|t| &t.name).collect::<Vec<_>>()
+        );
+
+        for tool in reads {
+            let properties = tool.input_schema["properties"]
+                .as_object()
+                .cloned()
+                .unwrap_or_default();
+            let args: serde_json::Map<String, Value> = properties
+                .keys()
+                .map(|key| (key.clone(), Value::String(format!("fixture-{key}"))))
+                .collect();
+            let wrapped = wrap_tool_result_for_model(&tool.name, &Value::Object(args), "x", false);
+            let parsed: Value = serde_json::from_str(&wrapped).unwrap();
+            assert_eq!(
+                parsed["provenance"]["source_kind"], "local_workspace",
+                "{} returns repository content with no workspace provenance",
+                tool.name
+            );
+            let origin = parsed["provenance"]["origin"].as_object().expect("origin");
+            assert!(
+                !origin.is_empty(),
+                "{} names nothing about where its content came from",
+                tool.name
+            );
+        }
     }
 
     #[test]

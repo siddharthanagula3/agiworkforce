@@ -6,14 +6,12 @@ import { useSupportAccountContext } from '../hooks/useSupportAccountContext';
 import { useSupportPresence } from '../hooks/useSupportPresence';
 import { handoffReasonForReply, useSupportSession } from '../hooks/useSupportSession';
 import { fetchAvailableActions } from '../lib/support-client';
+import { useDialogKeyboard } from '@agiworkforce/ui';
 import { SupportAccountFacts } from './SupportAccountFacts';
 import { SupportComposer } from './SupportComposer';
 import { SupportHandoffPanel } from './SupportHandoffPanel';
 import { SupportTranscript } from './SupportTranscript';
 import styles from './SupportWidget.module.css';
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 export function SupportPanel({
   surface,
@@ -73,31 +71,13 @@ export function SupportPanel({
     first?.focus();
   }, []);
 
+  useDialogKeyboard({ open: isNarrow, onClose, panelRef });
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isNarrow) {
         event.stopPropagation();
         onClose();
-        return;
-      }
-      if (event.key !== 'Tab' || !isNarrow) return;
-
-      const node = panelRef.current;
-      if (!node) return;
-      const focusable = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (element) => element.offsetParent !== null || element === document.activeElement,
-      );
-      if (focusable.length === 0) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (!first || !last) return;
-
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
       }
     },
     [isNarrow, onClose],

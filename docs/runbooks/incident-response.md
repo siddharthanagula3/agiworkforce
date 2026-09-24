@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-18
+Last updated: 2026-09-21
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -128,11 +128,16 @@ Publish nothing until the impact can be described accurately, then:
 | Probe severity | Overall status | What is broken                                                | Response                                                                        |
 | -------------- | -------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `CRITICAL`     | `unhealthy`    | database unreachable, or no Neon connection string configured | Page now. The platform cannot serve requests.                                   |
+| `CRITICAL`     | `unhealthy`    | the key-value store did not answer one read                   | Page now. Rate limiting and cached reads fail closed, so turns refuse.          |
 | `CRITICAL`     | `probe_failed` | the harness threw, or a dependency hung past the 8s budget    | Page now. Health is unknown, which is not the same as healthy.                  |
 | `WARNING`      | `degraded`     | Stripe unreachable; chat keeps working                        | Billing only. Handle in business hours unless a launch or renewal is in flight. |
+| `WARNING`      | `degraded`     | retrieval index or embedding index absent                     | Search over your own content is blind. Conversations are unaffected.            |
 
 The `degraded` split is deliberate and is asserted by a test: a Stripe outage
-must not page as a whole-platform outage.
+must not page as a whole-platform outage, and a retrieval outage must not
+either. The cache sits on the other side of that line for the opposite reason:
+the product's answer to losing it is to fail closed, so a turn cannot be served
+without it.
 
 ## When the bad thing is the release itself
 
@@ -160,6 +165,54 @@ the build, go to `docs/runbooks/database-backup-restore.md` instead.
    database.
 3. `/status` renders the same checks with a timeout, and is the fastest
    confirmation that the failure is real and not the probe's own network.
+
+### `cache: unhealthy`
+
+The probe read one constant key and the store did not answer within a second.
+The message is always `unavailable`, deliberately: this is a public payload, so
+no host, key name or vendor error text appears in it. The reason is on the log
+line, under `Cache health check failed`.
+
+Read that line first, because the two causes need opposite responses:
+
+- A quota or rate-limit refusal. The store accepted the connection and rejected
+  the command. Check the Upstash dashboard for the request limit before assuming
+  the network; this account has exhausted that quota before, and when it does,
+  chat fails closed with it.
+- A connection or timeout failure. Confirm `UPSTASH_REDIS_REST_URL` and
+  `UPSTASH_REDIS_REST_TOKEN` (or the `KV_REST_API_*` pair) are still set on the
+  Vercel project, then check the vendor's status.
+
+An absent key is not a fault. The probe asks whether the store answers, so an
+empty read is a pass and nothing writes the key.
+
+This pages as `unhealthy` on purpose. Rate limiting and cached reads fail closed,
+so while it is down a turn refuses rather than serving unmetered. Chat is
+affected even though the `chat` check can still read healthy: that check resolves
+a route, it does not serve a turn.
+
+If the store is not configured at all, `environment` reports the missing core
+dependency and the probe issues no command; `key_value` then reads `unconfigured`
+rather than `failing`, which is a deploy configuration failure, not an outage.
+
+### `search: unhealthy` and `vector: unhealthy`
+
+One catalogue query answers for both and they fail apart.
+
+- `index schema missing`: `retrieval_documents` or `retrieval_chunks` is absent.
+  The retrieval migration has not run against this database. Both checks report
+  it, because neither half exists.
+- `full text index missing`: the tables are there and the weighted `tsvector`
+  index is not, so keyword retrieval falls back to a sequential scan.
+- `extension missing`: the `vector` extension is not installed, so every semantic
+  query returns nothing. Full text keeps working, which is why this degrades
+  rather than pages.
+- `embedding index missing`: the extension is present and the cosine index is
+  not. Semantic queries still answer and get slower as the table grows.
+
+None of these blocks a conversation. Confirm against the database, then run the
+retrieval index migration through the normal migration path rather than creating
+an index by hand, so the next environment is not missing it too.
 
 ### `environment: unhealthy`
 
@@ -219,6 +272,37 @@ Like the health probe, an undelivered alert returns **HTTP 500** so the failed
 invocation is visible in the Vercel cron log. The settlement work itself has
 already committed and is idempotent, so that 500 never double-charges anyone.
 
+## Data integrity: reconcile before calling it resolved
+
+An outage ends when the product answers again. A data integrity incident ends
+when the records agree with each other and with the systems outside this
+repository that hold the other half of them, which is a later moment and is
+never assumed. Before an incident that touched stored state is marked
+resolved, run every reconciler whose records it could have touched, against
+the deployment that now serves traffic, and read what each one reports:
+
+| Reconciler                           | What it compares                                                                                    | What it repairs on its own                                      |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `/api/cron/reconcile-credits`        | Stored subscription state against the payment provider; settles the durable credit settlement queue | Settlements; a divergence is reported to a human, not healed    |
+| `/api/cron/reconcile-billed-plans`   | The plan each subscription is stored on against the price the payment provider is charging          | Nothing: a price difference is a decision, not a fault          |
+| `/api/cron/recover-reservations`     | Usage reservations whose turn is gone against the quota they still hold                             | Returns the held quota                                          |
+| `/api/cron/reconcile-provider-costs` | The settled usage ledger against what each provider reports it charged for the same day             | Nothing: each disagreement is named in the run's report         |
+| `/api/cron/purge-deleted-accounts`   | The erasure tombstones in the database against the erasure ledger kept outside it                   | Re-arms a tombstone a restore rolled back, then erases          |
+| `/api/cron/replicate-object-backups` | Tracked backup copies against the primary bucket                                                    | Deletes a backup copy whose primary object is gone              |
+| `/api/cron/drain-background-jobs`    | Job leases against the clock                                                                        | Re-queues a job whose worker died, or dead-letters its last try |
+
+Each is the scheduled route, so running one by hand is the same authenticated
+call the scheduler makes:
+
+```sh
+curl -i -H "Authorization: Bearer $CRON_SECRET" \
+  https://<the-serving-deployment>/api/cron/reconcile-billed-plans
+```
+
+A reconciler that answers **HTTP 500** did not finish, and its silence is not a
+clean result. The incident stays open until every reconciler that applies has
+run clean or its findings are each owned as a follow-up.
+
 ## Postmortem
 
 Every severity 1 and severity 2 incident gets a written postmortem within five
@@ -231,6 +315,29 @@ A postmortem is finished when each follow-up in it exists as a row in
 `docs/agent-context/known-flaws.md` when it is a known behaviour rather than
 work in flight. A follow-up that lives only in the postmortem is a follow-up
 nobody owns, which is the failure mode this rule exists for.
+
+### When the same cause comes back
+
+The template's "Has this happened before" section is answered from the earlier
+postmortems before anything else is written. When an earlier incident failed
+through the same mechanism, the second postmortem is not finished by its
+follow-ups, because the first one's follow-ups are what did not hold. It is
+finished by an architectural review: a decision record under `docs/decisions/`
+that either changes the design that let the same cause through twice, or
+states that the risk is accepted, by whom, and what would reopen it. The
+postmortem cites that record. A third occurrence of a cause whose record
+accepted the risk reopens the record rather than restating it.
+
+## Reading these runbooks when everything is down
+
+Every runbook is a Markdown file in this repository, so every clone carries
+all of them, and none of them needs the product, the repository host or a
+wiki to be read. What each step needs to be carried out is named in the step:
+a console, a credential or a command. Keep a clone on the machine an incident
+is handled from and pull it after each release, because a runbook that changed
+with the release it is recovering from is only current in the new copy.
+`docs/runbooks/release-rollback.md` has the rollback path for the case where
+the CI system is the thing that is down.
 
 ## Verifying the alert path (drill)
 

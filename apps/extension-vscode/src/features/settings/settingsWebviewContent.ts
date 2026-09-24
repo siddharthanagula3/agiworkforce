@@ -1533,6 +1533,28 @@ export function getSettingsWebviewContent(
 
           <div class="card">
             <div class="card-heading">
+              <h3>Startup</h3>
+              <p>Nothing leaves this machine until you open the AGI view, run an AGI command or reopen an AGI chat tab.</p>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-activate-on-startup">Connect when the window opens</label>
+                <span class="setting-description">Register this device and read your plan as soon as VS Code starts, instead of waiting for you to open AGI.</span>
+              </div>
+              <label class="toggle" title="Connect when the window opens">
+                <input
+                  id="setting-activate-on-startup"
+                  data-setting="activateOnStartup"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-heading">
               <h3>Telemetry</h3>
               <p>Extension telemetry remains off unless both VS Code and this setting allow it.</p>
             </div>
@@ -1836,7 +1858,8 @@ ${capabilityAvailabilityRows}
           'agent.mode': 'Agent mode',
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
-          telemetryEndpoint: 'Telemetry endpoint'
+          telemetryEndpoint: 'Telemetry endpoint',
+          activateOnStartup: 'Startup connection'
         };
 
         function setStatus(message, kind) {

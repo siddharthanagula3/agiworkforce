@@ -1610,6 +1610,8 @@
         "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.free_workhorse",
         "replacedBy": null
       },
+      "webSearchToolOfferPolicy": "required_only",
+      "transientSameRouteRetries": 1,
       "residencyRegions": ["us", "eu"],
       "evidenceRefs": []
     },
@@ -37957,7 +37959,11 @@
     "gemini-3.1-flash-tts-preview": { "contextTokens": 8192, "maxOutputTokens": 16384 },
     "openrouter-auto": { "contextTokens": 2000000 },
     "openrouter-auto-beta": { "contextTokens": 2000000 },
-    "openrouter-free": { "contextTokens": 200000 },
+    "openrouter-free": {
+      "contextTokens": 200000,
+      "maxOutputTokens": 8192,
+      "responseBudgetFloorTokens": 1024
+    },
     "gpt-oss-safeguard-20b": { "contextTokens": 131072, "maxOutputTokens": 65536 },
     "qwen-3.6-27b": { "contextTokens": 131072, "maxOutputTokens": 16384 },
     "qwen-3.8-27b": { "contextTokens": 131042, "maxOutputTokens": 16384 },

@@ -1,12 +1,7 @@
 'use client';
 
 import { MODEL_CAPABILITY_FILTERS, hasCapability } from '../lib/model-filters';
-import {
-  accessLabel,
-  creditsPerMillionLabel,
-  statusLabel,
-  tokenCeilingLabel,
-} from '../lib/model-presentation';
+import { accessLabel, statusLabel, tokenCeilingLabel } from '../lib/model-presentation';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 
 const HEAD_CLASS =
@@ -27,14 +22,6 @@ export function ModelCompareTable({ entries, planLabel }: ModelCompareTableProps
     { label: 'Model id', value: (entry) => entry.id },
     { label: 'Context', value: (entry) => tokenCeilingLabel(entry.contextTokens) },
     { label: 'Max output', value: (entry) => tokenCeilingLabel(entry.maxOutputTokens) },
-    {
-      label: 'Input per million',
-      value: (entry) => creditsPerMillionLabel(entry.inputPerMillion),
-    },
-    {
-      label: 'Output per million',
-      value: (entry) => creditsPerMillionLabel(entry.outputPerMillion),
-    },
     { label: 'Access', value: (entry) => accessLabel(entry, planLabel) },
     { label: 'Status', value: (entry) => statusLabel(entry) ?? AVAILABLE_LABEL },
     ...MODEL_CAPABILITY_FILTERS.map((filter) => ({

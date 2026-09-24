@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { Dialog, DialogContent, DialogTitle } from '../Dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogTitle } from '../AlertDialog';
 import { AccessibleDialog } from '../AccessibleDialog';
 import { PromptDialog } from '../PromptDialog';
 
@@ -60,6 +61,29 @@ describe('Dialog', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog.className).not.toContain('animate-in');
     expect(dialog.previousElementSibling?.className).not.toContain('animate-in');
+  });
+
+  it('caps dialogs and alert dialogs to the dynamic viewport', () => {
+    const { unmount } = render(
+      <Dialog open>
+        <DialogContent>
+          <DialogTitle>Settings</DialogTitle>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(screen.getByRole('dialog').className).toContain('max-h-[calc(100dvh-2rem)]');
+    unmount();
+
+    render(
+      <AlertDialog open>
+        <AlertDialogContent>
+          <AlertDialogTitle>Delete account</AlertDialogTitle>
+        </AlertDialogContent>
+      </AlertDialog>,
+    );
+
+    expect(screen.getByRole('alertdialog').className).toContain('max-h-[calc(100dvh-2rem)]');
   });
 
   it('keeps AccessibleDialog title and description registered with Radix', () => {

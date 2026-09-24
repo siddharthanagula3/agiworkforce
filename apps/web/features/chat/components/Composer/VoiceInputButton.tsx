@@ -70,7 +70,7 @@ export function VoiceInputButton({
         }
         aria-pressed={active}
         className={cn(
-          'relative flex h-8 min-h-0 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-150 sm:h-9 sm:w-9',
+          'relative flex h-8 min-h-0 w-8 touch-manipulation items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9',
           'border border-[var(--chat-border-strong)] text-muted-foreground hover:bg-muted/60 hover:text-foreground',
           !isSupported && 'cursor-not-allowed opacity-40',
           disabled && 'cursor-not-allowed opacity-50',
@@ -78,16 +78,16 @@ export function VoiceInputButton({
         onMouseEnter={() => !isSupported && setShowHint(true)}
         onMouseLeave={() => setShowHint(false)}
       >
-        <Mic className="h-4.5 w-4.5 sm:h-5 sm:w-5" aria-hidden="true" />
+        <Mic className="h-5 w-5" aria-hidden="true" />
       </button>
 
       {showHint && (
         <div
           role="tooltip"
           className={cn(
-            'absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2',
+            'absolute bottom-full left-1/2 z-[var(--z-dropdown)] mb-2 -translate-x-1/2',
             'w-max max-w-[220px] rounded-lg border border-border bg-popover px-3 py-2',
-            'text-center text-xs text-popover-foreground shadow-md',
+            'text-center text-xs text-popover-foreground shadow-e2',
           )}
         >
           {t('composer.voiceUnsupportedHint', { defaultValue: LABEL.unsupportedHint })}

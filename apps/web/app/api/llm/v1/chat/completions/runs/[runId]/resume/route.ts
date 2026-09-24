@@ -42,7 +42,7 @@ import {
 } from '@/lib/services/cloud-agent-run-service';
 import { runCloudAgentTurn } from '@/lib/workflows/start-cloud-agent-workflow';
 import { boundDurableTurnStream } from '@/lib/workflows/durable-stream-bounds';
-import { withSseHeartbeat } from '../../../lib/sse-heartbeat';
+import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from '../../../lib/sse-heartbeat';
 import { withStreamEnvelope } from '../../../lib/stream-envelope';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
@@ -299,9 +299,7 @@ async function handlePausedRunResume(
   }
 
   const streamHeaders: Record<string, string> = {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
+    ...SSE_RESPONSE_HEADERS,
     'X-AGI-Tool-Loop': 'resume-paused',
     'X-AGI-Agent-Run-Id': runId,
     'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${encodeURIComponent(runId)}`,

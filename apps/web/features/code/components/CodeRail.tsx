@@ -15,9 +15,9 @@ import {
   PanelLeft,
   Plus,
   Settings,
+  SlidersHorizontal,
   type Icon,
 } from '@agiworkforce/icons';
-import { SlidersHorizontal } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -179,6 +179,37 @@ describe('ranked route selection', () => {
     ]);
   });
 
+  it('pins an explicit provider route without silently failing over', async () => {
+    const decision = await resolveWithRegistry({
+      ...BYOK_REQUEST,
+      requiredRouteId: ALTERNATE_ROUTE_ID,
+    });
+    expect(decision).toMatchObject({
+      status: 'selected',
+      modelKey: SYNTHETIC_MODEL_KEY,
+      routeId: ALTERNATE_ROUTE_ID,
+      fallbacks: [],
+    });
+  });
+
+  it('refuses a pinned route when it is unhealthy or belongs to another model', async () => {
+    const unhealthy = await resolveWithRegistry({
+      ...BYOK_REQUEST,
+      requiredRouteId: DEFAULT_ROUTE_ID,
+      runtimeState: stateWithUnavailableRoute(DEFAULT_ROUTE_ID),
+    });
+    expect(unhealthy).toMatchObject({ status: 'unavailable', code: 'explicit_route_ineligible' });
+
+    const wrongModel = await resolveWithRegistry({
+      ...BYOK_REQUEST,
+      requiredRouteId: 'unknown-provider/other-model',
+    });
+    expect(wrongModel).toMatchObject({
+      status: 'unavailable',
+      code: 'explicit_route_ineligible',
+    });
+  });
+
   it('puts the same-model routes ahead of any model substitution', async () => {
     const aliasRequest: AutoRoutingRequest = {
       selection: REAL_ALIAS_ID,

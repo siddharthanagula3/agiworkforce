@@ -34,7 +34,7 @@ export function ConnectorChecklist({ connectorIds }: { connectorIds: string[] })
             <li key={connectorId} className="agi-ds-ledger-row">
               <span
                 className="agi-ds-ledger-label"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--space-2)' }}
               >
                 {connected ? (
                   <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />

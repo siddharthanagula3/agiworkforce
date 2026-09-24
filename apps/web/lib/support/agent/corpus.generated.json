@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 41,
-  "chunkCount": 215,
+  "chunkCount": 224,
   "documents": [
     {
       "id": "account-security",
@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-09-21",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -52,20 +52,27 @@
         {
           "id": "account-security#3",
           "ordinal": 3,
+          "heading": "If you cannot sign in",
+          "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
+          "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen, then set the authenticator up again in Settings,\n  Security. Each backup code works once.\n- **Running low on backup codes.** Settings, Security generates a new set after\n  you confirm your second factor again, and the new set replaces the old one, so\n  codes you printed earlier stop working.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
+        },
+        {
+          "id": "account-security#4",
+          "ordinal": 4,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
           "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
-          "id": "account-security#4",
-          "ordinal": 4,
+          "id": "account-security#5",
+          "ordinal": 5,
           "heading": "Your identifiers",
           "headingPath": "Passkeys, two-factor and active sessions › Your identifiers",
           "text": "Settings, Account shows your **User ID**, and an **Organization ID** when the\naccount belongs to a workspace. Support asks for these when investigating an\nissue; they identify the account, they are not secrets that grant access."
         },
         {
-          "id": "account-security#5",
-          "ordinal": 5,
+          "id": "account-security#6",
+          "ordinal": 6,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
           "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
@@ -141,7 +148,7 @@
         "work history",
         "deliverables"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-22",
       "source": "content/support/agi-work.md",
       "chunks": [
         {
@@ -163,7 +170,7 @@
           "ordinal": 2,
           "heading": "Approvals during a session",
           "headingPath": "Run a task with AGI Work › Approvals during a session",
-          "text": "What a session may do on its own follows your tool-approval default. On the\ndefault, **Ask before every action**, every connector, plugin and tool action\nwaits for you, reads included. If you switched to **Run read-only actions\nwithout asking**, the session shows a notice saying so: read-only actions run\nwithout asking, and anything that writes, runs code, searches the web, or\nreaches outside AGI, including your connectors, pauses for your approval."
+          "text": "What a session may do on its own follows your Tool Approvals setting. The\nwebsite starts with **Skip approvals** for eligible tools. You can choose\n**Ask before every action** or **Run read-only actions without asking** instead.\nWhen automatic approvals are active, the session shows a notice and a link to\nreview them. Destructive or unknown actions, saved Ask and Deny choices, and\nworkspace restrictions still apply."
         },
         {
           "id": "agi-work#3",
@@ -250,6 +257,8 @@
         "plan",
         "upgrade",
         "downgrade",
+        "waitlist",
+        "access code",
         "cancel",
         "cancel subscription",
         "invoice",
@@ -262,7 +271,7 @@
         "seats",
         "renewal"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-21",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -270,14 +279,14 @@
           "ordinal": 0,
           "heading": "Where billing lives",
           "headingPath": "Plans, upgrading, and cancelling › Where billing lives",
-          "text": "Settings, Billing shows your current plan, when the period ends, your payment\nmethod, your invoices and your credit balance. **Manage billing** opens the\nbilling portal where the card and the subscription itself are changed."
+          "text": "Settings, Billing shows your current plan, when the period renews or ends, your\npayment method and your invoices. **Manage billing** opens the billing portal\nwhere the card and the subscription itself are changed."
         },
         {
           "id": "billing-and-plans#1",
           "ordinal": 1,
           "heading": "Upgrading",
           "headingPath": "Plans, upgrading, and cancelling › Upgrading",
-          "text": "**Upgrade plan** lists the plans available to you and starts checkout. Local\nmode and BYOK are free and need no plan at all. Managed cloud plans differ in\nusage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
+          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
         },
         {
           "id": "billing-and-plans#2",
@@ -412,7 +421,7 @@
         "thinking",
         "response style"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-21",
       "source": "content/support/chat-basics.md",
       "chunks": [
         {
@@ -446,13 +455,20 @@
         {
           "id": "chat-basics#4",
           "ordinal": 4,
+          "heading": "Branch a conversation",
+          "headingPath": "Start, steer and manage a chat › Branch a conversation",
+          "text": "Hover a message and choose **Branch conversation from here**. A new conversation\nopens holding everything up to and including that message, and the chat you\nbranched from stays as it was. **Duplicate as branch** in the conversation title\nmenu does the same from the last message, so it copies the whole thread.\n\nA message that has been branched shows a branch pager, which steps between the\nconversations that share it. While a branch is being created the control reads\n\"Creating branch…\" and cannot be pressed a second time. A message can hold only\nso many branches, and a conversation only so many branch points; past either\nlimit the request is refused and the message says which."
+        },
+        {
+          "id": "chat-basics#5",
+          "ordinal": 5,
           "heading": "Rename, archive and delete",
           "headingPath": "Start, steer and manage a chat › Rename, archive and delete",
           "text": "The conversation title menu renames a chat. Archiving moves it out of the\nsidebar without deleting anything, and Settings holds an **Archived chats** list\nthat restores a chat or moves it to **Recently deleted**. A deleted chat stays\nthere until you restore it; the product does not currently offer permanent chat\ndeletion separately from deleting your account."
         },
         {
-          "id": "chat-basics#5",
-          "ordinal": 5,
+          "id": "chat-basics#6",
+          "ordinal": 6,
           "heading": "When a chat will not load",
           "headingPath": "Start, steer and manage a chat › When a chat will not load",
           "text": "The failure notice says \"Chat could not be displayed\" and offers **Try again**.\nIf the browser is offline it says \"You are offline\" instead. In both cases your\nmessages are already saved, so retrying or opening a different conversation\nloses nothing."
@@ -2018,7 +2034,7 @@
         "call log",
         "reset permissions"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-09-22",
       "source": "content/support/tool-approvals.md",
       "chunks": [
         {
@@ -2026,21 +2042,21 @@
           "ordinal": 0,
           "heading": "The account-wide default",
           "headingPath": "Approvals: what a tool may do without asking › The account-wide default",
-          "text": "Settings carries one **Default approval for tool actions** with two settings:\n\n- **Ask before every action.** Every connector, plugin and tool action waits for\n  your approval, including actions that only read data. This is the default.\n- **Run read-only actions without asking.** Actions that only read data, search\n  the web, fetch a page, or run code in the AGI sandbox run on their own.\n  Anything that writes, deletes, sends, buys, changes credentials, or runs on\n  your own machine still asks, and so does every connector tool AGI does not\n  know.\n\nThe setting syncs to your account, so it holds wherever you are signed in."
+          "text": "Settings carries one **Default approval for tool actions** with three settings:\n\n- **Ask before every action.** Every connector, plugin and tool action waits for\n  your approval, including actions that only read data.\n- **Run read-only actions without asking.** Actions that only read data, search\n  the web, fetch a page, or run code in the AGI sandbox run on their own.\n  Anything that writes, deletes, sends, buys, changes credentials, or runs on\n  your own machine still asks, and so does every connector tool AGI does not\n  know.\n- **Skip approvals.** This is the website default for an unconfigured account.\n  Eligible reads, searches, sandboxed code, and reversible actions run without\n  asking. Destructive or unknown actions still ask. Saved per-tool Ask and Deny\n  choices and workspace restrictions still apply.\n\nYour saved choice syncs to your account. If the website cannot read it, tools\nask rather than assuming automatic approval."
         },
         {
           "id": "tool-approvals#1",
           "ordinal": 1,
           "heading": "Per-tool permissions",
           "headingPath": "Approvals: what a tool may do without asking › Per-tool permissions",
-          "text": "Each connector has a **Tool Permissions** panel that overrides the default for\none tool at a time: **Always run without asking**, **Needs approval each time**,\nor **Never run this tool**. **Reset all to default** clears every override for\nthat connector and asks first."
+          "text": "Each connector has a **Tool Permissions** panel that overrides the default for\none tool at a time: **Always run without asking**, **Needs approval each time**,\nor **Never run this tool**. **Reset all to default** clears every override for\nthat connector and applies the account policy."
         },
         {
           "id": "tool-approvals#2",
           "ordinal": 2,
           "heading": "Approving in the moment",
           "headingPath": "Approvals: what a tool may do without asking › Approving in the moment",
-          "text": "When a tool runs for the first time, AGI asks. Choosing **Always allow** saves\nthat verdict so the same tool can run without prompting again. A temporary chat\nignores saved \"Always allow\" verdicts and asks every time."
+          "text": "When a tool requires approval, choosing **Always allow** saves that verdict so\nthe same tool can run without prompting again. A temporary chat ignores saved\n\"Always allow\" verdicts."
         },
         {
           "id": "tool-approvals#3",
@@ -2076,9 +2092,15 @@
         "retry",
         "upgrade required",
         "unavailable",
-        "contact support"
+        "contact support",
+        "search failed",
+        "search unavailable",
+        "cli login",
+        "agi login",
+        "device code",
+        "extension"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-22",
       "source": "content/support/troubleshooting.md",
       "chunks": [
         {
@@ -2093,7 +2115,7 @@
           "ordinal": 1,
           "heading": "A chat will not load",
           "headingPath": "Troubleshooting: when something does not work › A chat will not load",
-          "text": "\"Chat could not be displayed\" with **Try again** is a render failure; your\nmessages are already saved, so retrying or opening another conversation loses\nnothing. \"You are offline\" means the browser lost its connection: reconnect and\ntry again."
+          "text": "\"Chat could not be displayed\" with **Try again** means the conversation failed\nto render, or, when it adds \"Could not reach the server.\", that the request\nfailed on the way. Either way your messages are already saved, so retrying or\nopening another conversation loses nothing. \"You are offline\" means the browser\nlost its connection: reconnect and try again."
         },
         {
           "id": "troubleshooting#2",
@@ -2107,14 +2129,14 @@
           "ordinal": 3,
           "heading": "A file was not attached",
           "headingPath": "Troubleshooting: when something does not work › A file was not attached",
-          "text": "The composer refuses a file instead of sending your message without it, and says\nwhy: too large, an unreadable type, too many files in one message, or the\nconversation's attachment limit. Convert, split, or paste the contents as text."
+          "text": "The composer refuses a file instead of sending your message without it, and names\nthe file and the reason, such as too large, a type it cannot read, or too many\nfiles. Convert, split, or paste the contents as text."
         },
         {
           "id": "troubleshooting#4",
           "ordinal": 4,
           "heading": "A tool or connector did nothing",
           "headingPath": "Troubleshooting: when something does not work › A tool or connector did nothing",
-          "text": "On the default approval setting every tool action waits for you, so a session\nthat looks stalled may be waiting on an approval. Check the approval prompt, the\nconnector's **Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
+          "text": "Under the website's Skip approvals default, eligible tools run automatically.\nA session may still wait for a destructive or unknown action, a saved Ask choice,\nor a workspace restriction. Check the approval prompt, the connector's\n**Recent calls** log, and its per-tool permissions: a tool set to\n**Never run this tool** is refused by your own setting."
         },
         {
           "id": "troubleshooting#5",
@@ -2140,6 +2162,27 @@
         {
           "id": "troubleshooting#8",
           "ordinal": 8,
+          "heading": "Search did not run",
+          "headingPath": "Troubleshooting: when something does not work › Search did not run",
+          "text": "A web search that could not run shows as a failed search step in the reply, and\nthe answer is written without live results. The model is told the search did\nnot run and why, and is instructed to say which parts it could not confirm, so\ncheck the step before relying on anything time-sensitive. If the composer shows\nsearch as off for the model you picked, that model has no search path here, so\npick one that has.\n\nSearching your own conversations with Cmd/Ctrl+K reports a failed request as\n\"Search failed. Please try again.\" If the search window itself cannot open, it\nshows \"Search unavailable\" instead; close it and open it again.\n\nThe help centre's search tells an index that could not be loaded apart from a\nquery that matched nothing, so \"nothing matched\" really means nothing matched."
+        },
+        {
+          "id": "troubleshooting#9",
+          "ordinal": 9,
+          "heading": "The CLI will not sign in",
+          "headingPath": "Troubleshooting: when something does not work › The CLI will not sign in",
+          "text": "`agi login` with no provider signs in to your AGI account. It shows a link and\na code, opens the link in your browser, and waits while you approve the code\nthere, signed in to the same account. If the wait stops with \"Device code\nexpired. Please run /login again.\" or \"Authorization timed out\", the code was\nnot approved in time: run `agi login` again for a fresh one.\n\n`agi auth-status` lists every credential the CLI holds and how each one\nauthenticates; \"No authentication configured.\" means nothing is stored yet.\n`agi doctor` runs the local preflight checks. The CLI keeps credentials in the\noperating system's credential store, and a credentials file that other accounts\non the machine can read is refused, with the command that fixes it."
+        },
+        {
+          "id": "troubleshooting#10",
+          "ordinal": 10,
+          "heading": "An extension will not connect",
+          "headingPath": "Troubleshooting: when something does not work › An extension will not connect",
+          "text": "Neither the Chrome extension nor the VS Code extension is published yet, so\nthere is no public build to connect. In Chrome, use the web app; in VS Code, use\nthe CLI in the integrated terminal."
+        },
+        {
+          "id": "troubleshooting#11",
+          "ordinal": 11,
           "heading": "Still stuck",
           "headingPath": "Troubleshooting: when something does not work › Still stuck",
           "text": "Email contact@agiworkforce.com. Include your **User ID** from Settings, Account,\nand the **Organization ID** too if the problem is workspace-wide. The support\npage lists the available channels and response commitments."
@@ -2351,9 +2394,15 @@
         "legal hold",
         "retention",
         "api keys",
-        "spend limit"
+        "spend limit",
+        "create workspace",
+        "switch workspace",
+        "leave workspace",
+        "delete workspace",
+        "successor",
+        "owner"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-21",
       "source": "content/support/workspace-administration.md",
       "chunks": [
         {
@@ -2366,27 +2415,55 @@
         {
           "id": "workspace-administration#1",
           "ordinal": 1,
+          "heading": "Creating a workspace",
+          "headingPath": "Administering a workspace › Creating a workspace",
+          "text": "Settings, Workspace is where a workspace is created: give it a name, and a slug\nmade of lowercase letters, numbers and hyphens. Creating one needs a Team or\nEnterprise plan, and on any other plan the page says so in place of the form.\n\nAn account owns one workspace at most. A second attempt is refused with \"You\nalready own a workspace. Switch to it from the account menu.\" Other workspaces\nare joined by invitation. A slug another workspace already uses is refused with\n\"That organization slug is already taken\".\n\nA new workspace starts with the seats you paid for. When the seat count cannot\nbe read, nothing is created: \"Your purchased seats could not be verified. No\norganization was created; please try again.\" A workspace that is created opens\nstraight away, and the app reloads inside it."
+        },
+        {
+          "id": "workspace-administration#2",
+          "ordinal": 2,
+          "heading": "Switching between workspaces",
+          "headingPath": "Administering a workspace › Switching between workspaces",
+          "text": "The account menu lists **Personal**, marked \"Only you\", and under\n**Enterprise** every workspace you belong to, each with your role in it.\nSettings, Workspace offers the same choice as a picker. Only a workspace you are\na member of can be selected; the server refuses any other.\n\nSwitching reloads the app inside the chosen workspace, and work in progress does\nnot come with you. When something would be lost, the switch names it before it\nhappens: an unsent message, a file still uploading, a reply still being written,\na live voice session, a browser or computer action still running, a tool waiting\nfor your approval, or an artifact not yet saved. **Switch anyway** goes ahead;\n**Stay in this workspace** changes nothing. A switch that fails says so and\noffers **Try switching again** rather than leaving you in the old workspace\nwithout a word."
+        },
+        {
+          "id": "workspace-administration#3",
+          "ordinal": 3,
+          "heading": "Leaving a workspace",
+          "headingPath": "Administering a workspace › Leaving a workspace",
+          "text": "Settings, Workspace, **Workspace membership** is where you leave. A member\nchooses **Leave workspace** and confirms, and the change is immediate: your seat\nbecomes available, the device tokens and API keys issued in that workspace are\nrevoked, and any connector you shared with the workspace is unshared. Device\ntokens and API keys from your personal account are left alone. If the workspace\nyou leave is the one you were working in, you are signed out and sign in again\nto carry on.\n\nAn owner leaves by choosing a successor first. **Transfer ownership and leave**\nmakes that member the owner and removes you in one operation, so the workspace\nnever has no owner. An owner who is the only member cannot leave; the workspace\nhas to be deleted instead."
+        },
+        {
+          "id": "workspace-administration#4",
+          "ordinal": 4,
+          "heading": "Deleting a workspace",
+          "headingPath": "Administering a workspace › Deleting a workspace",
+          "text": "Only the owner can delete a workspace. Settings, Workspace, **Delete this\nworkspace** opens the deletion page, where you confirm by typing the\nworkspace's name or its slug. A confirmation that matches neither schedules\nnothing.\n\nNothing is erased on the day you ask. Deletion is scheduled 14 days ahead, and\nthe owner can cancel it from the same page until then; after the scheduled date\na cancellation is refused. A daily job then erases the workspace's\nconversations, projects, files, connectors and API keys for every member. Two\nrecords are kept rather than erased: billing history is anonymised, and the\nworkspace's audit trail stays with its reference to the workspace removed.\n\nA workspace under an active legal hold cannot be scheduled for deletion. The\nrequest is refused and names how many holds are active, and each one has to be\nreleased first. A hold placed after deletion was scheduled stops the erasure\ntoo: the workspace stays scheduled and nothing is erased while the hold lasts."
+        },
+        {
+          "id": "workspace-administration#5",
+          "ordinal": 5,
           "heading": "What members see",
           "headingPath": "Administering a workspace › What members see",
           "text": "Members do not see the console. A member on a workspace-managed plan sees\nread-only billing in their own settings, saying the plan is managed by the\norganization and to contact an administrator to change it."
         },
         {
-          "id": "workspace-administration#2",
-          "ordinal": 2,
+          "id": "workspace-administration#6",
+          "ordinal": 6,
           "heading": "Directory provisioning",
           "headingPath": "Administering a workspace › Directory provisioning",
           "text": "SCIM 2.0 provisioning covers Users and Groups, so accounts and group membership\ncan be created, updated and deprovisioned from your identity provider rather\nthan by hand. Domain verification and single sign-on are configured on the same\npage."
         },
         {
-          "id": "workspace-administration#3",
-          "ordinal": 3,
+          "id": "workspace-administration#7",
+          "ordinal": 7,
           "heading": "Audit and usage",
           "headingPath": "Administering a workspace › Audit and usage",
           "text": "The audit trail records administrative and policy events and can be exported or\nstreamed to a SIEM. Usage analytics attribute managed cloud spend to a member, a\nmodel and a provider, which is what you need to answer \"who spent this\" rather\nthan only \"how much\"."
         },
         {
-          "id": "workspace-administration#4",
-          "ordinal": 4,
+          "id": "workspace-administration#8",
+          "ordinal": 8,
           "heading": "Getting help with a workspace",
           "headingPath": "Administering a workspace › Getting help with a workspace",
           "text": "Support asks for the **Organization ID** before anything workspace-wide. It is\nshown in Settings, Account beside your user ID when the account belongs to a\nworkspace."

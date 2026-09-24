@@ -260,7 +260,7 @@ export function AnchoredComposerMenu({
         visibility: position ? 'visible' : 'hidden',
       }}
       className={cn(
-        'z-[var(--z-popover,350)] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl',
+        'z-[var(--z-popover)] overflow-y-auto overscroll-contain rounded-xl border border-border/60 bg-popover/95 shadow-e3 backdrop-blur-xl',
         className,
       )}
     >

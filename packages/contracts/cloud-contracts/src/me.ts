@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { EffectiveCapabilityDocumentSchema } from './capability-handshake';
+export { CLIENT_VERSION_HEADER } from './header-names';
 
-export const CLIENT_VERSION_HEADER = 'x-agi-client-version';
 export const ME_CLIENT_VERSION_PARAM = 'client_version';
 
 export const MeSubscriptionSourceSchema = z.enum(['none', 'stripe', 'apple', 'google', 'manual']);

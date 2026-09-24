@@ -81,12 +81,15 @@ const finalizeMock = vi.fn(async (..._args: unknown[]) => ({
   actualCostCents: 1,
 }));
 const markStartedMock = vi.fn(async (..._args: unknown[]) => {});
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
-  reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
-  finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
-  markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
-  fingerprintManagedUsageRequest: () => 'hash',
-}));
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
+    finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
+    markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
+  };
+});
 
 const { MEMORY_EXTRACTION_QUOTA_FEATURE, extractAutoMemoryFactsWithModel } =
   await import('../model-memory-extraction');
@@ -141,6 +144,19 @@ describe('extractAutoMemoryFactsWithModel metering', () => {
     expect(finalizeMock).not.toHaveBeenCalled();
   });
 
+  it('keys the reservation on the turn it reads, not on a fresh value', async () => {
+    await extractAutoMemoryFactsWithModel(input());
+    await extractAutoMemoryFactsWithModel(input());
+    await extractAutoMemoryFactsWithModel(input({ requestId: 'request-2' }));
+
+    const keys = reserveMock.mock.calls.map(
+      ([call]) => (call as { idempotencyKey: string }).idempotencyKey,
+    );
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+    expect(keys[0]).toMatch(/^memory-extraction\.[0-9a-f]{48}$/);
+  });
+
   it('releases the reservation when the provider call fails', async () => {
     drainToLlmResponseMock.mockRejectedValueOnce(new Error('upstream anthropic'));
 
@@ -152,5 +168,54 @@ describe('extractAutoMemoryFactsWithModel metering', () => {
       outcome: 'failed',
       actualCostCents: 0,
     });
+  });
+});
+
+describe('extractAutoMemoryFactsWithModel replayed', () => {
+  let ledger: Map<string, { requestHash: string }>;
+
+  beforeEach(() => {
+    ledger = new Map();
+    reserveMock.mockImplementation(async (...args: unknown[]) => {
+      const call = args[0] as { idempotencyKey: string; requestHash: string };
+      const held = ledger.get(call.idempotencyKey);
+      if (held) {
+        throw new Error(
+          held.requestHash === call.requestHash
+            ? 'This idempotency key has already reached a terminal state.'
+            : 'This idempotency key was already used for a different request body.',
+        );
+      }
+      ledger.set(call.idempotencyKey, { requestHash: call.requestHash });
+      return {
+        db: {},
+        userId: 'user-1',
+        idempotencyKey: call.idempotencyKey,
+        requestHash: call.requestHash,
+        leaseToken: 'lease',
+        estimatedCostMicrousd: 500,
+        estimatedCostCents: 1,
+        quotaFeature: 'memory_extraction',
+      };
+    });
+  });
+
+  it('charges one turn once however many times its extraction is replayed', async () => {
+    const first = await extractAutoMemoryFactsWithModel(input());
+    const replay = await extractAutoMemoryFactsWithModel(input());
+
+    expect(first).toEqual(['User lives in Berlin']);
+    expect(ledger.size).toBe(1);
+    expect(drainToLlmResponseMock).toHaveBeenCalledTimes(1);
+    expect(finalizeMock).toHaveBeenCalledTimes(1);
+    expect(replay).toEqual(['pattern fact']);
+  });
+
+  it('gives two turns two reservations', async () => {
+    await extractAutoMemoryFactsWithModel(input());
+    await extractAutoMemoryFactsWithModel(input({ requestId: 'request-2' }));
+
+    expect(ledger.size).toBe(2);
+    expect(drainToLlmResponseMock).toHaveBeenCalledTimes(2);
   });
 });

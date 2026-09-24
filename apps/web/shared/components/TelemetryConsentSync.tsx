@@ -11,16 +11,11 @@ const NAMESPACE = 'privacy';
 /**
  * Brings this device's telemetry-consent mirror in line with the account.
  *
- * The pre-mount Sentry init decision (instrumentation-client.ts) no longer
- * depends on this: the root layout renders the account's real consent onto
- * <html>, read there before hydration, which is what closed
- * WEB-TELEMETRY-CONSENT-NOT-CROSS-DEVICE-01 for a brand-new device's first
- * paint. This component is the remaining defence-in-depth layer, it corrects
- * the localStorage mirror that later hasTelemetryConsent() reads (setUser,
- * event scrubbing) consult for the rest of the session, covering the case
- * where the server-rendered read itself failed closed (DB hiccup) but the
- * account's real answer is reachable a moment later through the ordinary,
- * retried settings fetch.
+ * This is deliberately product-runtime work. Public pages have no signed-in
+ * account consent to read, and must not pay for an authenticated database read
+ * from the root layout. A new signed-in device still starts fail-closed; when
+ * this fetch confirms opt-in, the client initializer starts telemetry for the
+ * current page without requiring a reload.
  *
  * Mounted at the app root so the mirror is corrected on first visit instead of
  * on first visit TO SETTINGS.
@@ -40,10 +35,16 @@ export function TelemetryConsentSync() {
     void fetchPreferenceNamespace<{ shareTelemetry?: boolean }>(NAMESPACE, {})
       .then((stored) => {
         if (cancelled || typeof stored.shareTelemetry !== 'boolean') return;
+        const hadConsent = hasTelemetryConsent();
         // Only write on a genuine difference: setting it every load would churn
         // localStorage on every navigation for no change.
-        if (stored.shareTelemetry !== hasTelemetryConsent()) {
+        if (stored.shareTelemetry !== hadConsent) {
           setTelemetryConsentCache(stored.shareTelemetry);
+        }
+        if (stored.shareTelemetry && !hadConsent) {
+          void import('@/lib/client/initialize-sentry-after-consent')
+            .then(({ initializeSentryAfterConsent }) => initializeSentryAfterConsent())
+            .catch(() => undefined);
         }
       })
       .catch(() => {

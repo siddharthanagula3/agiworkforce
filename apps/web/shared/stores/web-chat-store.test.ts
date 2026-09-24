@@ -6,6 +6,7 @@ import {
   selectIsConversationLoading,
   selectIsConversationStreaming,
   PENDING_CONVERSATION_KEY,
+  readMessageArrayPatch,
 } from './web-chat-store';
 
 const conversationFixture = (id: string) => ({
@@ -230,6 +231,26 @@ describe('chatStore, per-conversation transcript scope', () => {
 
     setActiveConversation('conv-a');
     expect(useChatStore.getState().messages[0]?.content).toBe('A complete');
+  });
+
+  it('patches one indexed row without rebuilding the other 499 message objects', () => {
+    const messages = Array.from({ length: 500 }, (_, index) => ({
+      id: `message-${index}`,
+      role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
+      content: `content-${index}`,
+      createdAt: '2026-09-22T00:00:00.000Z',
+    }));
+    useChatStore.getState().setActiveConversationWithMessages('conv-500', messages);
+    const before = useChatStore.getState().messages;
+
+    useChatStore.getState().appendToMessage('message-499', '-next', 'conv-500');
+
+    const after = useChatStore.getState().messages;
+    expect(readMessageArrayPatch(after)).toEqual({ previous: before, index: 499 });
+    expect(after[0]).toBe(before[0]);
+    expect(after[498]).toBe(before[498]);
+    expect(after[499]).not.toBe(before[499]);
+    expect(after[499]?.content).toBe('content-499-next');
   });
 });
 
