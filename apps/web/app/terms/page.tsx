@@ -58,6 +58,25 @@ const SECTIONS = [
   '20 · Contact',
 ] as const;
 
+const PROVIDER_TERMS = [
+  { name: 'OpenRouter', href: 'https://openrouter.ai/terms' },
+  { name: 'OpenAI', href: 'https://openai.com/policies/service-terms/' },
+  { name: 'Anthropic', href: 'https://www.anthropic.com/legal/commercial-terms' },
+  { name: 'CheaperInference', href: 'https://www.cheaperinference.com/legal/terms' },
+  {
+    name: 'DeepSeek',
+    href: 'https://cdn.deepseek.com/policies/en-US/deepseek-open-platform-terms-of-service.html',
+  },
+  {
+    name: 'Qwen Cloud (Alibaba Cloud Model Studio)',
+    href: 'https://www.alibabacloud.com/help/en/legal/latest/alibaba-cloud-international-website-product-terms-of-service-v-3-8-0',
+  },
+  { name: 'Moonshot AI (Kimi API)', href: 'https://platform.kimi.ai/docs/agreement/modeluse' },
+  { name: 'Z.ai', href: 'https://chat.z.ai/legal-agreement/terms-of-service' },
+  { name: 'MiniMax', href: 'https://platform.minimax.io/protocol/terms-of-service' },
+  { name: 'Experiential Labs', href: 'https://platform.experientiallabs.ai/terms' },
+] as const;
+
 const GENERAL_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Order of precedence',
@@ -378,6 +397,42 @@ export default function TermsPage() {
                       /subprocessors
                     </Link>
                     .
+                  </Prose>
+                  <Prose>
+                    <strong>Provider terms to review.</strong> The following links lead to the
+                    providers&rsquo; current published API or platform terms. They do not mean every
+                    provider handles every request. Check the provider and route shown for the model
+                    you select; a gateway and the serving provider may both handle your content. If
+                    you use BYOK, your own provider account and its terms also apply.
+                  </Prose>
+                  <ul className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                    {PROVIDER_TERMS.map(({ name, href }) => (
+                      <li key={name}>
+                        <a href={href} className="agi-ds-link">
+                          {name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                  <Prose>
+                    <strong>Experiential Labs promotional routes.</strong> If you select a free
+                    Experiential Labs model, your prompt and the model response pass through
+                    Experiential Labs and its serving model provider. On the Experiential Labs Free
+                    organization plan, prompt and response capture is on by default. Its published
+                    policy says captured content is kept for up to 30 days and may be used to
+                    develop, evaluate and improve its services and hosted models. Its no-training
+                    routing setting restricts which upstream providers may serve a request; it does
+                    not turn off Experiential Labs&rsquo; own content capture. The provider&rsquo;s
+                    private mode requires an eligible paid or grandfathered organization. See our{' '}
+                    <Link href="/privacy" className="agi-ds-link">
+                      privacy policy
+                    </Link>{' '}
+                    and its{' '}
+                    <a href="https://platform.experientiallabs.ai/privacy" className="agi-ds-link">
+                      current platform privacy policy
+                    </a>
+                    . Do not select this route for content you cannot allow that provider to handle
+                    under those terms.
                   </Prose>
                   <Prose>
                     <strong>Feedback.</strong> If you send us suggestions or feedback, we may use

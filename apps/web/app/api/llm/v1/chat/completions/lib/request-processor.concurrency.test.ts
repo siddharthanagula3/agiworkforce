@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   customInstructions: vi.fn(),
   scopedQuery: vi.fn(),
   reserveManagedUsage: vi.fn(),
+  persistMessage: vi.fn(),
 }));
 
 vi.mock('@/lib/server/rls-db', () => ({
@@ -47,6 +48,10 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
     await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>();
   return { ...actual, reserveManagedUsageRequest: mocks.reserveManagedUsage };
 });
+
+vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
+  persistConversationMessage: mocks.persistMessage,
+}));
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/free-trial-service')>();
@@ -126,12 +131,14 @@ beforeEach(() => {
   mocks.customInstructions.mockReset();
   mocks.scopedQuery.mockReset();
   mocks.reserveManagedUsage.mockReset();
+  mocks.persistMessage.mockReset();
 
   mocks.enforceSafety.mockResolvedValue({ enabled: false, allowed: true });
   mocks.hydrate.mockResolvedValue(undefined);
   mocks.loadPolicy.mockResolvedValue(DISABLED_POLICY);
   mocks.customInstructions.mockResolvedValue(null);
   mocks.scopedQuery.mockResolvedValue([]);
+  mocks.persistMessage.mockResolvedValue({ id: '00000000-0000-4000-8000-000000000002' });
 });
 
 describe('processRequest preflight concurrency', () => {
@@ -291,5 +298,74 @@ describe('processRequest preflight concurrency', () => {
 
     expect(result.ok).toBe(true);
     expect(getBalance).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('durable user-turn admission', () => {
+  const conversationId = '00000000-0000-4000-8000-000000000001';
+  const userMessageId = '00000000-0000-4000-8000-000000000002';
+
+  beforeEach(() => {
+    mocks.scopedQuery.mockImplementation(async (sql: string) => {
+      if (sql.includes('from web_conversations')) {
+        return [{ id: conversationId, project_id: null, is_temporary: false }];
+      }
+      return [];
+    });
+  });
+
+  it('persists the exact client turn before returning a dispatchable request', async () => {
+    const result = await processRequest(
+      chatRequest('durable-admission-1', {
+        conversation_id: conversationId,
+        user_message: { id: userMessageId, metadata: {} },
+      }),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(mocks.persistMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: expect.objectContaining({ conversationId, userId: 'user-free' }),
+        message: expect.objectContaining({
+          id: userMessageId,
+          role: 'user',
+          content: 'Hello there',
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ ok: true, userMessageId });
+  });
+
+  it('fails closed before returning a provider request when persistence fails', async () => {
+    mocks.persistMessage.mockRejectedValueOnce(new Error('database unavailable'));
+
+    const result = await processRequest(
+      chatRequest('durable-admission-2', {
+        conversation_id: conversationId,
+        user_message: { id: userMessageId, metadata: {} },
+      }),
+      {
+        ok: true,
+        userId: 'user-free',
+        token: 'session-token',
+        subscription: freeSubscription,
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.response.status).toBe(503);
+      await expect(result.response.json()).resolves.toMatchObject({
+        error: {
+          code: 'user_message_persistence_failed',
+          message: expect.stringMatching(/No model request was sent/u),
+        },
+      });
+    }
   });
 });

@@ -123,6 +123,8 @@ describe('applyCacheScope', () => {
   it('drops workspace content without clearing account model preferences', async () => {
     await applyCacheScope({ accountId: 'user_1', workspaceId: null });
     localStorage.setItem('agi-composer-draft:v1:conversation-a', 'personal draft');
+    localStorage.setItem('agi-composer-draft:v2:tab-a:conversation-a', 'current draft');
+    sessionStorage.setItem('agi-composer-draft:document-owner', '{"current":"tab-a","previous":[]}');
     localStorage.setItem('agi-model-picker-favourites', MODEL_PREFERENCES);
     localStorage.setItem('agi.sidebar.unreadConversationIds', '["conversation-a"]');
     localStorage.setItem('agi:steps-card:conversation-a:member-a', '{"expanded":true}');
@@ -136,6 +138,8 @@ describe('applyCacheScope', () => {
 
     expect(localStorage.getItem(SCOPE_KEY)).toBe('user_1/org_a');
     expect(localStorage.getItem('agi-composer-draft:v1:conversation-a')).toBeNull();
+    expect(localStorage.getItem('agi-composer-draft:v2:tab-a:conversation-a')).toBeNull();
+    expect(sessionStorage.getItem('agi-composer-draft:document-owner')).toBeNull();
     expect(localStorage.getItem('agi.sidebar.unreadConversationIds')).toBeNull();
     expect(localStorage.getItem('agi:steps-card:conversation-a:member-a')).toBeNull();
     expect(localStorage.getItem('agi.workspace-policy.user_1')).toBeNull();

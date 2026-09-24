@@ -46,7 +46,7 @@ export function contextBudgetTokens(contextWindow: number, maxOutputTokens: numb
 }
 
 export type ModelCompatibilityCode =
-  'unknown_model' | 'context_overflow' | 'no_vision' | 'no_tools';
+  'unknown_model' | 'context_overflow' | 'no_vision' | 'no_tools' | 'no_attachments';
 
 export interface ModelCompatibilityFinding {
   code: ModelCompatibilityCode;
@@ -58,6 +58,9 @@ export interface ModelCompatibilityRequest {
   messages: readonly ContextSizedMessage[];
   /** The turn sends at least one image, so the model has to read images. */
   hasImages: boolean;
+  hasAttachments?: boolean;
+  hasNonImageAttachments?: boolean;
+  historicalAttachments?: boolean;
   /** The turn has web search, connectors, code execution or another tool armed. */
   needsTools: boolean;
   /** What the tool controls are called in this state, for the copy. */
@@ -94,12 +97,23 @@ export function evaluateModelCompatibility(
       modelId: modelId!,
       modelName: offering.displayName,
       findings: [
-        ...(request.hasImages
+        ...(request.hasAttachments &&
+        (!offering.quotaChatImageInput || request.hasNonImageAttachments)
+          ? [
+              {
+                code: 'no_attachments' as const,
+                message: offering.quotaChatImageInput
+                  ? 'This free model accepts images only. Remove other files or use Free Auto.'
+                  : 'This free model accepts text only. Remove attached files or use Free Auto.',
+              },
+            ]
+          : []),
+        ...(request.historicalAttachments
           ? [
               {
                 code: 'no_vision' as const,
                 message:
-                  'QwenCloud free models accept text only. Remove attached images before sending.',
+                  'Earlier attachments will not be sent to this promotional free model. Use Free Auto if your next answer depends on them.',
               },
             ]
           : []),
@@ -107,7 +121,7 @@ export function evaluateModelCompatibility(
           ? [
               {
                 code: 'no_tools' as const,
-                message: 'Turn off tools to use a QwenCloud free model.',
+                message: 'Turn off tools to use this free model.',
               },
             ]
           : []),

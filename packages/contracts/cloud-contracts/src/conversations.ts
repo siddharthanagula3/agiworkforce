@@ -68,6 +68,7 @@ export const ManagedCloudConversationWireSchema = z.object({
   organization_id: z.string().uuid().nullable().optional(),
   title: z.string().nullable(),
   model: z.string().nullable(),
+  selected_route_id: z.string().nullable().optional(),
   project_id: z.string().nullable(),
   pinned: z.boolean(),
   starred: z.boolean(),
@@ -119,6 +120,7 @@ export const ManagedCloudCreateConversationRequestSchema = z.object({
   id: z.string().uuid().optional(),
   title: z.string().max(500).optional().default('New conversation'),
   model: z.string().min(1).optional().default(MANAGED_CLOUD_DEFAULT_MODEL_SELECTION),
+  selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   isTemporary: z.boolean().optional().default(false),
 });
@@ -129,6 +131,7 @@ export type ManagedCloudCreateConversationRequest = z.input<
 export const ManagedCloudUpdateConversationRequestSchema = z.object({
   title: z.string().max(500).optional(),
   model: z.string().min(1).optional(),
+  selectedRouteId: z.string().min(1).max(256).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
   starred: z.boolean().optional(),
@@ -140,7 +143,7 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
    * version; `draftUpdatedAt` is the clock two devices settle on.
    */
   draft: z.string().max(MANAGED_CLOUD_MAX_DRAFT_LENGTH).nullable().optional(),
-  draftUpdatedAt: z.string().datetime().optional(),
+  draftUpdatedAt: z.string().datetime().nullable().optional(),
   // Three-way, matching resolveParentId in the messages route's thread lib:
   // absent leaves the recorded leaf alone, a uuid names the variant being read,
   // and an explicit null returns the conversation to its linear reading, the
@@ -314,6 +317,7 @@ export interface ManagedCloudConversation {
   organizationId?: string | null;
   title: string;
   model?: string;
+  selectedRouteId?: string | null;
   projectId: string | null;
   pinned: boolean;
   starred: boolean;
@@ -347,6 +351,7 @@ export function normalizeManagedCloudConversation(
     ...(wire.organization_id !== undefined ? { organizationId: wire.organization_id } : {}),
     title: wire.title ?? 'Untitled',
     ...(wire.model ? { model: wire.model } : {}),
+    ...(wire.selected_route_id !== undefined ? { selectedRouteId: wire.selected_route_id } : {}),
     projectId: wire.project_id,
     pinned: wire.pinned,
     starred: wire.starred,

@@ -81,6 +81,10 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
   }
 
   if (!connection.is_active) {
+    await recordSyncEvent(db, ctx, {
+      eventType: 'sync.denied',
+      error: 'This directory sync connection is disabled',
+    });
     throw new ScimError(403, 'This directory sync connection is disabled', 'mutability');
   }
 

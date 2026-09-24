@@ -1996,14 +1996,11 @@ export function useWorkspaceAudit(
   return useQuery<AuditPageResult | null, Error>({
     queryKey: [...ORG_AUDIT_QUERY_KEY, query],
     queryFn: async (): Promise<AuditPageResult | null> => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-
       const params = auditQueryToParams(query);
       params.set('facets', 'true');
 
       const res = await fetch(`/api/settings/organization/audit?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'same-origin',
       });
 
       if (res.status === 403) return null;

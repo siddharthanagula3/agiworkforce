@@ -1,8 +1,12 @@
 # claude.ai and chatgpt.com settings, directory, composer and sidebar reference (observed 2026-09-07)
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-07
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. Preserve the settings and
+directory observations below as September 7 evidence.
 
 Every statement here was observed first hand on 2026-09-07 in the founder's signed-in Chrome sessions (claude.ai on Max, chatgpt.com on Plus), driven through Playwright over the live browser. Every menu, tab, dropdown, dialog and detail view named below was opened and read; nothing was installed, toggled, removed or submitted. Account values (names, emails, ids, card digits, addresses, session locations, memory contents) were seen and are deliberately not recorded. This file extends `leader-ui-reference-2026-09-04.md` and `claude-ai-ui-reference-2026-09-03.md`; where they differ, this file is newer. Section 5 compares each surface with our web app as it is in code today (`apps/web`, `packages/ui`) and section 6 is the build order.
 

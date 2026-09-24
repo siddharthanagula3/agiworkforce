@@ -10,6 +10,7 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   lookupSemanticResponseCache,
   recordSemanticCacheHit,
@@ -81,6 +82,7 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   }
 
   const routeInfo = { provider: route.provider, modelKey: route.modelKey };
+  const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const prompt = resolvePrompt(SUPPORT_SYSTEM_PROMPT_ID);
   const system = buildSupportSystemPrompt();
   const cacheFields: SemanticCacheKeyFields = {
@@ -112,7 +114,7 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     stream: false,
   });
 
-  const wireMode = resolveWireMode(route.provider);
+  const wireMode = resolveWireMode(dispatchProvider);
 
   const cached = await lookupSemanticResponseCache(cacheFields, SUPPORT_CACHE_SAFETY);
   if (cached.outcome === 'hit' && cached.entry) {
@@ -131,9 +133,9 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
 
   try {
     const response = await drainToLlmResponse(
-      adapterStream(route.provider, chatRequest, input.signal),
+      adapterStream(dispatchProvider, chatRequest, input.signal),
       route.modelKey,
-      (chunk) => toGenericUpstreamError(route.provider, chunk),
+      (chunk) => toGenericUpstreamError(dispatchProvider, chunk),
       wireMode,
     );
     const usage = {

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-19
+Last updated: 2026-09-22
 
 The canonical, tool-neutral operating contract for every coding agent in this repository.
 `CLAUDE.md` is a thin adapter and may not weaken it. Path-scoped rules live in
@@ -71,19 +71,12 @@ An inline model-ID literal fails ESLint `no-restricted-syntax` in TS/JS and
 require editing a consumer.
 
 **Which generation of a family is live is owned by
-`packages/ai/model-registry/catalog/model-families.json`, not by the routing
-tables.** Provider defaults, provider task routing, canonicalization targets,
-tier lists, and Auto routing slots reference a family slot (`family:<provider>/<family>`)
-that resolves at compile time to that slot's active model. A newer release in an
-existing family is a one-record promotion, never a sweep through the routing
-tables. `pnpm models:families` evaluates every slot against the promotion gates
-(provider availability, family and tier identity, lifecycle, capability
-coverage, and cost/context/benchmark regression thresholds);
-`pnpm models:families:promote --slot <id> --apply` promotes and verifies, and
-`pnpm models:families:rollback --slot <id> --apply` restores the retained
-predecessor. A preview model never takes a stable slot, a higher version number
-alone never qualifies, and each promotion retains the previous model, a bounded
-fallback chain, and its gate evidence.
+`packages/ai/model-registry/catalog/model-families.json`, not routing tables.**
+Defaults and routing reference a `family:<provider>/<family>` slot. Run
+`pnpm models:families`; promote or roll back with the corresponding
+`models:families:* --slot <id> --apply` command. A version number alone never
+qualifies, preview never takes a stable slot, and promotion keeps the prior
+model, a bounded fallback chain, and gate evidence.
 
 Keep documentation availability separate from account, region, and route
 availability. Do not describe web search, memory, MCP, sandboxing, code
@@ -97,8 +90,10 @@ Enforced by: `check:model-id-literals`, `check:model-catalog`, `sync:models:chec
 
 Polyglot monorepo: pnpm workspaces (`apps/*`, `packages/*/*`,
 `packages/ai/providers/*`, `services/*`, `infrastructure/*`) under Turborepo,
-plus a Cargo workspace (`apps/desktop/src-tauri`, `apps/cli`, `crates/*`). Six
-surfaces sit on one contract layer. See `ARCHITECTURE.md` for the map.
+plus a Cargo workspace (`apps/desktop/src-tauri`, `apps/cli`, `crates/*`). Seven
+application implementations map to six product surfaces because Electron is
+the public Desktop and Tauri is retained internal code. All share one contract
+layer; see `ARCHITECTURE.md`.
 
 The parts you cannot infer from one file:
 
@@ -173,14 +168,19 @@ recovered, not "are you sure". `useConfirmAction` in `@agiworkforce/ui` is
 that surface; a mutation fired straight from `onClick` is a defect regardless
 of how obvious the button's label seems.
 
-## 10. Research
+## 10. Current-competitor product policy
 
-Claude, ChatGPT, Gemini and other products are legitimate references. Verify
-current behavior before any competitor-sensitive decision, and never copy
-branding or proprietary layouts. The same applies to Apple, Google Play,
-Microsoft, Chrome Web Store, and VS Code Marketplace policy: check the current
-rule, and date the finding. Dated research belongs in `docs/research/`; it does
-not silently become architecture.
+- Read `docs/product/competitive-guidance.md` before material product or
+  engineering choices. Refresh official sources and authorized UIs; record dates,
+  rollout/plan/platform limits and documented/observed/inferred/unknown status.
+- ChatGPT and Claude are primary; Perplexity, Gemini, Manus and xAI/Grok are
+  additional references. Compare code, make the smallest shared/native change,
+  record deviations, and test success, failure and permissions in affected apps.
+  Keep one design system; never invent stacks, copy proprietary layouts or
+  migrate working architecture on unsupported inference.
+- The September 21, 2026 baseline and 192 points are inventory, not blanket
+  authority or authorization to purchase, install, message, publish, deploy,
+  mutate production or schedule jobs. Dated evidence lives in `docs/research/`.
 
 ## 11. Documentation
 

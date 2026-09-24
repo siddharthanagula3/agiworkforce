@@ -76,7 +76,7 @@ export function PublishedArtifactView({
             className="underline-offset-2 hover:underline"
           >
             {audience === 'organization'
-              ? t('artifactPublish.sharedWithWorkspace', 'Shared with your workspace')
+              ? t('artifactPublish.sharedWithWorkspace')
               : t('artifactPublish.sharedFrom', 'Shared from AGI')}
           </Link>
         </p>

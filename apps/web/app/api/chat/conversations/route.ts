@@ -15,6 +15,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { buildCloudChatSessionLabel } from '@/lib/services/chat-session-label-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 
 const PAGE_SORT_COLUMN = 'page_sort_key';
 // Pinned-first then newest-first, as one fixed-width text key: lexicographic
@@ -104,7 +105,7 @@ async function handleGetConversations(request: NextRequest) {
         : db.query<ChatConversationRow & { page_sort_key: string }>(
             `
           select * from (
-            select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
+            select id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at,
               (case when pinned then '1' else '0' end)
                 || to_char(updated_at at time zone 'utc', ${PAGE_SORT_KEY_FORMAT}) as ${PAGE_SORT_COLUMN},
               ${CONVERSATION_WORK_MODE_SELECT}
@@ -189,6 +190,9 @@ async function handleCreateConversation(request: NextRequest) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
+  if (body.selectedRouteId && !isConfiguredManagedModelRoute(body.model, body.selectedRouteId)) {
+    throw createError.validation('The selected provider route cannot serve this model');
+  }
 
   if (body.projectId) {
     let ownedProject: { id: string } | undefined;
@@ -210,19 +214,25 @@ async function handleCreateConversation(request: NextRequest) {
   }
 
   try {
+    const pinColumn = body.selectedRouteId ? ', selected_route_id' : '';
+    const pinValue = body.selectedRouteId ? ', $8' : '';
+    const pinUpdate = body.selectedRouteId
+      ? 'selected_route_id = excluded.selected_route_id,'
+      : '';
     const [conversation] = await db.query<ChatConversationRow>(
       `
         insert into web_conversations
-          (id, user_id, organization_id, title, model, project_id, is_temporary)
-        values (coalesce($5::uuid, gen_random_uuid()), $1, $7, $2, $3, $4, $6)
+          (id, user_id, organization_id, title, model, project_id, is_temporary${pinColumn})
+        values (coalesce($5::uuid, gen_random_uuid()), $1, $7, $2, $3, $4, $6${pinValue})
         on conflict (id) do update set
           title = excluded.title,
           model = excluded.model,
+          ${pinUpdate}
           project_id = excluded.project_id,
           updated_at = now()
         where web_conversations.user_id = $1
           and web_conversations.organization_id is not distinct from $7
-        returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+        returning id, organization_id, title, model, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
         userId,
@@ -232,6 +242,7 @@ async function handleCreateConversation(request: NextRequest) {
         body.id ?? null,
         body.isTemporary ?? false,
         organizationId,
+        ...(body.selectedRouteId ? [body.selectedRouteId] : []),
       ],
     );
     if (!conversation) {
@@ -250,6 +261,17 @@ async function handleCreateConversation(request: NextRequest) {
 
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {
+    if (
+      body.selectedRouteId &&
+      typeof error === 'object' &&
+      error !== null &&
+      (error as { code?: string }).code === '42703'
+    ) {
+      return NextResponse.json(
+        { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
+        { status: 503 },
+      );
+    }
     logger.error({ error, userId }, 'Failed to create conversation');
     throw createError.internal('Failed to create conversation');
   }

@@ -9,6 +9,8 @@ import {
   hasArtifacts,
   removeArtifactBlocks,
   extractTrailingUnclosedBlock,
+  artifactInclusionForPolicy,
+  EXPLICIT_ARTIFACT_DERIVATION_POLICY,
 } from '../artifact-derivation';
 
 const HTML = '```html\n<!DOCTYPE html><html><body><h1>Hi</h1></body></html>\n```';
@@ -123,6 +125,22 @@ describe('inclusion policy', () => {
     expect(arts).toHaveLength(1);
     expect(arts[0]!.language).toBe('python');
   });
+
+  it("'explicit-renderable' keeps marked previews and leaves an unmarked HTML example inert", () => {
+    const inert = '```html\n<script>alert("inert")</script>\n```';
+    const preview = '```html\n<!-- @artifact -->\n<main>Preview me</main>\n```';
+    const arts = deriveArtifacts(`${inert}\n\n${preview}`, {
+      conversationId: 'c',
+      messageId: 'm',
+      include: 'explicit-renderable',
+    });
+
+    expect(arts).toHaveLength(1);
+    expect(arts[0]!.content).toContain('Preview me');
+    expect(artifactInclusionForPolicy(EXPLICIT_ARTIFACT_DERIVATION_POLICY)).toBe(
+      'explicit-renderable',
+    );
+  });
 });
 
 describe('classification helpers', () => {
@@ -176,6 +194,23 @@ describe('hasArtifacts + removeArtifactBlocks', () => {
     const body = 'A\n\n```bash\nls -la\n```\n\nB';
     const cleaned = removeArtifactBlocks(body, [{ content: 'unrelated', language: 'html' }]);
     expect(cleaned).toContain('ls -la');
+  });
+
+  it('removes only marked artifacts under the explicit policy', () => {
+    const inert = '```html\n<script>alert("inert")</script>\n```';
+    const preview = '```html\n<!-- @artifact -->\n<main>Preview me</main>\n```';
+    const body = `Before\n\n${inert}\n\n${preview}\n\nAfter`;
+    const arts = deriveArtifacts(body, {
+      conversationId: 'c',
+      messageId: 'm',
+      include: 'explicit-renderable',
+    });
+    const cleaned = removeArtifactBlocks(body, arts, { include: 'explicit-renderable' });
+
+    expect(cleaned).toContain('<script>alert("inert")</script>');
+    expect(cleaned).not.toContain('Preview me');
+    expect(cleaned).toContain('Before');
+    expect(cleaned).toContain('After');
   });
 });
 

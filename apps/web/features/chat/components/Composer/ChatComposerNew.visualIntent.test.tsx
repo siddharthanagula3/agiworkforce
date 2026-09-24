@@ -76,7 +76,7 @@ beforeEach(() => {
 });
 
 describe('image mode routes a structured visual to Artifacts, not to a raster model', () => {
-  it('sends a flowchart request as a chat turn carrying the Mermaid directive', () => {
+  it('keeps the authored prompt visible and carries the Mermaid directive as hidden metadata', () => {
     const onSend = vi.fn<OnSend>();
     const onGenerateImage = vi.fn<OnGenerateImage>();
     renderInImageMode({ onSend, onGenerateImage });
@@ -85,7 +85,9 @@ describe('image mode routes a structured visual to Artifacts, not to a raster mo
 
     expect(onGenerateImage).not.toHaveBeenCalled();
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(String(onSend.mock.calls[0]?.[0])).toContain('```mermaid');
+    expect(onSend.mock.calls[0]?.[0]).toBe('a flowchart of our onboarding steps');
+    expect(onSend.mock.calls[0]?.[3]?.artifactInstruction).toContain('```mermaid');
+    expect(onSend.mock.calls[0]?.[3]?.artifactInstruction).toContain('%% @artifact');
   });
 
   it('still reaches the raster model for a photographic request', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getSelectableModels } from '@agiworkforce/types';
+import { getProviderOfferings, getSelectableModels } from '@agiworkforce/types';
 import {
   contextBudgetTokens,
   estimateConversationTokens,
@@ -53,6 +53,64 @@ describe('estimateConversationTokens', () => {
 });
 
 describe('evaluateModelCompatibility', () => {
+  it('describes promotional route limits without naming the wrong provider', () => {
+    const experiential = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.provider === 'experientiallabs' && offering.category === 'chat',
+    );
+    expect(experiential).toBeDefined();
+
+    const result = evaluateModelCompatibility(
+      experiential![0],
+      request({ hasImages: true, historicalAttachments: true, needsTools: true }),
+    );
+    expect(result.findings).toEqual([
+      {
+        code: 'no_vision',
+        message:
+          'Earlier attachments will not be sent to this promotional free model. Use Free Auto if your next answer depends on them.',
+      },
+      { code: 'no_tools', message: 'Turn off tools to use this free model.' },
+    ]);
+  });
+
+  it('warns about any staged file before switching to a text-only free promotion', () => {
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat' && !offering.quotaChatImageInput,
+    );
+    expect(promotional).toBeDefined();
+    const result = evaluateModelCompatibility(promotional![0], request({ hasAttachments: true }));
+    expect(result.findings).toEqual([
+      {
+        code: 'no_attachments',
+        message: 'This free model accepts text only. Remove attached files or use Free Auto.',
+      },
+    ]);
+  });
+
+  it('accepts images but rejects other files for a vision-capable free promotion', () => {
+    const promotional = Object.entries(getProviderOfferings()).find(
+      ([, offering]) => offering.quotaProbeProtocol === 'chat' && offering.quotaChatImageInput,
+    );
+    expect(promotional).toBeDefined();
+    expect(
+      evaluateModelCompatibility(
+        promotional![0],
+        request({ hasImages: true, hasAttachments: true }),
+      ).findings,
+    ).toEqual([]);
+    expect(
+      evaluateModelCompatibility(
+        promotional![0],
+        request({ hasImages: true, hasAttachments: true, hasNonImageAttachments: true }),
+      ).findings,
+    ).toEqual([
+      {
+        code: 'no_attachments',
+        message: 'This free model accepts images only. Remove other files or use Free Auto.',
+      },
+    ]);
+  });
+
   it('finds nothing wrong with a short conversation on a live model', () => {
     const result = evaluateModelCompatibility(
       anyModel.id,

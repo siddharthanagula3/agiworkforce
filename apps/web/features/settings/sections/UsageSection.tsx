@@ -68,9 +68,14 @@ function UsageBar({
   unknown?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 'var(--space-2)',
+        }}
       >
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
         {/*
@@ -98,9 +103,9 @@ function UsageBar({
         className="h-2"
         indicatorClassName={
           getUsageUrgency(percent) === 'critical'
-            ? 'bg-[var(--chat-danger,#dc2626)]'
+            ? 'bg-[var(--chat-destructive)]'
             : getUsageUrgency(percent) === 'warning'
-              ? 'bg-[var(--chat-warning,#d97706)]'
+              ? 'bg-[var(--chat-warning)]'
               : 'bg-[var(--chat-accent-primary)]'
         }
         style={{ background: 'var(--chat-border-strong)' }}
@@ -250,7 +255,7 @@ function HistoryRows({
   labelFor?: (key: string) => string;
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{caption}</span>
       {rows.map((row) => (
         <div
@@ -259,7 +264,7 @@ function HistoryRows({
             display: 'flex',
             alignItems: 'baseline',
             justifyContent: 'space-between',
-            gap: 12,
+            gap: 'var(--space-3)',
             fontSize: 12,
             color: 'var(--text-3)',
           }}
@@ -302,32 +307,47 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
         overflow: 'hidden',
       }}
     >
-      <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--settings-border)' }}>
+      <div
+        style={{
+          padding: 'var(--space-4) var(--space-5)',
+          borderBottom: '1px solid var(--settings-border)',
+        }}
+      >
         <span
           id="usage-history-heading"
           style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}
         >
           Where your usage went
         </span>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '4px 0 0' }}>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
           Settled usage from the last 30 days. Turns still settling are not counted yet.
         </p>
       </div>
 
-      <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div
+        style={{
+          padding: 'var(--space-5)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-5)',
+        }}
+      >
         {loading && (
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading usage history…</span>
         )}
 
         {error && !loading && (
-          <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div
+            role="alert"
+            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+          >
             <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{error}</span>
             <button
               type="button"
               onClick={reload}
               style={{
                 alignSelf: 'flex-start',
-                padding: '4px 8px',
+                padding: 'var(--space-1) var(--space-2)',
                 background: 'transparent',
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
@@ -417,7 +437,7 @@ export function UsageSection() {
   }, [lastUpdatedAt, loading, stale]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1
           style={{
@@ -425,7 +445,7 @@ export function UsageSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Usage
@@ -444,7 +464,7 @@ export function UsageSection() {
             border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
-            padding: 14,
+            padding: 'var(--space-4)',
             color: 'var(--text-2)',
             fontSize: 13,
           }}
@@ -463,7 +483,7 @@ export function UsageSection() {
       >
         <div
           style={{
-            padding: '14px 20px',
+            padding: 'var(--space-4) var(--space-5)',
             borderBottom: '1px solid var(--settings-border)',
           }}
         >
@@ -471,18 +491,25 @@ export function UsageSection() {
             {isFreePlan ? 'Upgrade for higher capacity' : 'Plan usage limits'}
           </span>
           {!isFreePlan && planAllowanceLine && (
-            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
               {planAllowanceLine}
             </p>
           )}
           {!isFreePlan && credits && credits.purchased.remaining !== null && (
-            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '2px 0 0' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
               {`Purchased credits: ${formatCredits(credits.purchased.remaining)} remaining, separate from your plan allowance.`}
             </p>
           )}
         </div>
 
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <div
+          style={{
+            padding: 'var(--space-5)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--space-5)',
+          }}
+        >
           {/*
             Labels, remaining-phrasing and reset wording all come from the shared
             vocabulary in @agiworkforce/types. These four buckets are the same
@@ -563,12 +590,12 @@ export function UsageSection() {
         {!isFreePlan && (
           <div
             style={{
-              padding: '12px 20px',
+              padding: 'var(--space-3) var(--space-5)',
               borderTop: '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              gap: 8,
+              gap: 'var(--space-2)',
             }}
           >
             <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -582,8 +609,8 @@ export function UsageSection() {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 4,
-                padding: '4px 8px',
+                gap: 'var(--space-1)',
+                padding: 'var(--space-1) var(--space-2)',
                 background: 'transparent',
                 border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
@@ -605,8 +632,8 @@ export function UsageSection() {
 
       {/*
         A contract-priced workspace reads its usage in the workspace console,
-        where the same rows are grouped per member. Free states its usage as a
-        meter and a reset time only, so a credit figure never appears for it.
+        where the same rows are grouped per member. Free has no account usage
+        allowance or history, so neither meters nor credit figures appear.
       */}
       <UsageHistorySection
         enabled={usage !== null && !isFreePlan && !isContractPricedPlan(usage.plan_tier)}

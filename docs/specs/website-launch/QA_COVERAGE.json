@@ -215,8 +215,8 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "Two Browser navigation runs terminated Next dev with esbuild fatal deadlock and produced ERR_CONNECTION_REFUSED; exact stack and reproduction are recorded in QA_ISSUES.md.",
-      "progress": "confirmed twice; no repair attempted"
+      "evidence": "Two earlier Browser navigation runs lost Next dev and showed an esbuild fatal-deadlock signature before ERR_CONNECTION_REFUSED. QA_ISSUES.md records the symptom but not a full stack, exact route sequence, or parent-process exit cause.",
+      "progress": "Current signed-out localhost runtime survived /pricing, /enterprise, /help, /web, and /chat navigation; the same Next PID and esbuild child remained alive and /status returned 200. Root cause and signed-in route stability remain unverified; no source repair claimed."
     },
     {
       "id": "ENTERPRISE-AUDIT-AUTH",
@@ -226,7 +226,7 @@
       "actionable": true,
       "dependencies": [],
       "evidence": "Signed-in owner receives The audit trail could not be loaded; Browser console records Authentication required while adjacent protected workspace pages load.",
-      "progress": "confirmed once after fresh runtime restart; no repair attempted"
+      "progress": "Root cause traced to the audit hook sending a Clerk session token as an API-key bearer. The same-origin interactive request now uses the session cookie; 39 focused tests, Web typecheck and targeted lint passed. Signed-in owner browser acceptance and release validation remain pending."
     },
     {
       "id": "ENTERPRISE-POLICY-CONSISTENCY",
@@ -251,12 +251,12 @@
     {
       "id": "STATUS-EXECUTION-SIGNAL",
       "behavior": "Hosted status accurately distinguishes route availability from usable inference",
-      "status": "pending",
+      "status": "passed",
       "boundary": "local",
-      "actionable": true,
+      "actionable": false,
       "dependencies": [],
-      "evidence": "Status reports Operational from routing/configuration probes and explicitly does not send a model request. Historical saved provider failure does not establish current outage. Review signal scope and current health before selecting a correction.",
-      "progress": "signal-coverage gap confirmed; no repair attempted"
+      "evidence": "PROGRESS.md#2026-09-22-hosted-status-signal-scope; original failure remains in QA_ISSUES.md. The local /status AX tree displayed Hosted checks, Chat routing, and the explicit inference limitation above the detailed rows.",
+      "limitations": "No active inference probe was added. Usable Free-chat inference, production status and deployment remain separate unverified gates."
     },
     {
       "id": "RESPONSIVE-CHAT-NAV-WORK",
@@ -265,8 +265,8 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "At390px primary drawer actions have negative x positions; at360px model/reasoning labels overlap; at768px the Work dock clips/overlaps composer content and leaves truncated text after closing.",
-      "progress": "confirmed by Browser screenshots and geometry; no repair attempted"
+      "evidence": "Historical Browser screenshots showed primary drawer actions at negative x at 390px, model/reasoning labels overlapping at 360px, and a Work dock clipping/overlapping the composer at 768px. A current signed-in Chromium run on localhost:3100 finds New chat, AGI Code and Search fully within both 390px and 320px drawer viewports; the composer and Work dock have not yet been reverified.",
+      "progress": "The primary drawer regression is now covered by a passing signed-in browser test at 390px and 320px. Case remains pending for the 360px composer and 768px Work dock."
     },
     {
       "id": "ENTERPRISE-USAGE-BILLING-PRESENTATION",
@@ -291,12 +291,12 @@
     {
       "id": "PROJECTS-SEARCH-ACCESSIBILITY",
       "behavior": "Projects search exposes a stable accessible name",
-      "status": "pending",
+      "status": "passed",
       "boundary": "local",
-      "actionable": true,
+      "actionable": false,
       "dependencies": [],
-      "evidence": "Projects search input has no label, aria-label, name or id and is an unnamed search text field in the accessibility tree.",
-      "progress": "confirmed by DOM and Browser accessibility tree"
+      "evidence": "The shared ProjectGallery searchbox regression failed with an empty accessible name before the patch and passed with aria-label=Search projects. The ProjectGallery and Web Projects-page suites passed 19 tests; shared typecheck, targeted lint and formatting passed.",
+      "limitations": "The localhost Browser session was signed out and redirected /chat/projects to /login, so the signed-in live accessibility tree was not rechecked. This is a local candidate, not deployment evidence."
     },
     {
       "id": "JEV-PILOT-ELIGIBILITY",
@@ -359,7 +359,8 @@
       "actionable": false,
       "boundary": "localhost browser with remote free-quota inference",
       "evidence": "evidence/qwen-free-quota.json#browserCapabilityExperiments",
-      "limitations": "Four browser submissions. Speech/embedding/ranking remain disabled. Two separate rendering findings tracked in ACTIVE_ISSUES.md."
+      "limitations": "Four historical browser submissions. Speech/embedding/ranking remain disabled. The angle-text and free-route provenance findings discovered by this run are closed with current evidence in PROGRESS.md.",
+      "progress": "Free-route lane now persists through both assistant-turn writers and rehydrates after reload without labeling messages that carry no explicit lane evidence."
     },
     {
       "id": "CHAT-PACK-MD01",
@@ -390,12 +391,13 @@
     },
     {
       "id": "CHAT-PACK-TB02",
-      "behavior": "All numeric values correct. Copied source specified right alignment with |-------------:|, but numeric cells displayed left-aligned. Shared th/td components discard alignment props.",
-      "status": "failed",
-      "actionable": true,
-      "boundary": "localhost in-app Browser; protected remote provider quota",
-      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
-      "packStatus": "FAIL"
+      "behavior": "GFM table headers and cells preserve left, center and right alignment while remaining readable in the mobile-width scroll region.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "local shared renderer tests and localhost wide/mobile browser geometry",
+      "evidence": "PROGRESS.md#2026-09-21-markdown-table-alignment-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS",
+      "limitations": "Current local candidate only; not proof of deployment or every provider-generated table."
     },
     {
       "id": "CHAT-PACK-CD01",
@@ -426,12 +428,13 @@
     },
     {
       "id": "CHAT-PACK-SA01",
-      "behavior": "Requested inert fenced HTML was promoted into an artifact preview. Script-disabled warning appeared; no JS dialog observed. Source tab retained the script text. Script execution safety is not proven solely by absence of a dialog. User prompt markup also disappeared visually, matching existing angle-text defect.",
-      "status": "failed",
-      "actionable": true,
-      "boundary": "localhost in-app Browser; protected remote provider quota",
-      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
-      "packStatus": "FAIL"
+      "behavior": "An unmarked fenced HTML script example stays visible and inert instead of opening an artifact; only an explicit marked artifact opens the sandboxed preview.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "local artifact/render tests and authenticated localhost Free-model browser check with reload",
+      "evidence": "PROGRESS.md#2026-09-22-inert-html-code-and-explicit-artifact-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS",
+      "limitations": "The specific inert-fence and explicit-artifact flows passed locally; this does not prove all generated HTML safe or production deployment."
     },
     {
       "id": "CHAT-PACK-VI12",
@@ -480,12 +483,12 @@
     },
     {
       "id": "CHAT-PACK-PL06",
-      "behavior": "After generation and reload, Library > Images settled to Your library is empty. Free-generated poster persists in chat but is not indexed as a Library image.",
-      "status": "pending",
-      "actionable": true,
-      "boundary": "localhost in-app Browser; protected remote provider quota",
-      "evidence": "evidence/qwen-free-quota.json#qaPackBrowserBatch",
-      "packStatus": "GAP"
+      "behavior": "Free generated media is copied from the provider URL into owner-scoped private storage, catalogued in Library and returned to chat through an authenticated same-origin URL.",
+      "status": "passed",
+      "actionable": false,
+      "boundary": "localhost synthetic private-media ingestion plus route/catalog/persistence tests; no additional provider generation",
+      "evidence": "PROGRESS.md#2026-09-22-free-generated-media-library-closure; historical failure remains in evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "packStatus": "PASS"
     },
     {
       "id": "CHAT-PACK-U001",

@@ -1,8 +1,12 @@
 # OmniRoute learnings: cost reduction and free-inference techniques
 
-Status: Current
+Status: Dated external research
 Owner: Fable (architect)
 Last updated: 2026-09-05
+
+This is a September 5 extraction from the named upstream revision, not a current
+statement about that project or AGI's implementation. Re-fetch the upstream and
+verify licenses, behavior, and policy before adopting a conclusion.
 
 Read-only extraction from the local clone at `/Users/siddhartha/Desktop/omni-router`
 (MIT licence, copyright 2026 diegosouzapw, upstream

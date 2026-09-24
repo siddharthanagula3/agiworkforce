@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { buildMetadata } from '@/lib/seo/metadata';
+import ProductRuntimeProviders from '../ProductRuntimeProviders';
 
 export const metadata = buildMetadata({
   title: 'Apps | Everything AGI connects to',
@@ -8,5 +9,5 @@ export const metadata = buildMetadata({
 });
 
 export default function AppsLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <ProductRuntimeProviders>{children}</ProductRuntimeProviders>;
 }

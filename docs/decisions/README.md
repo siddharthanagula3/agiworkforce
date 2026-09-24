@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-09-19
-Last updated: 2026-09-19
+Last reviewed: 2026-09-22
+Last updated: 2026-09-22
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -42,7 +42,15 @@ Archived source material:
 4. Normal synced app chat is shared by Web, Mobile Cloud, and the public Electron Desktop. Chrome remains cloud-only and keeps `chrome.storage.local` authoritative, but every conversation whose turns all carry Managed Cloud provenance automatically mirrors into the same signed-in account conversation store so it is available on Web, Mobile Cloud, and Desktop. Unknown-provenance or any Local/BYOK turn fails closed and permanently disqualifies that Chrome conversation. CLI and VS Code remain local/workspace/task scoped unless the user explicitly hands off selected, redacted context. D-2026-09-15-04 supersedes the earlier two-Desktop-shell language.
    Evidence: `docs/product/suite.md`, `docs/architecture/trust-boundaries.md`, `apps/extension/docs/threat-model.md`.
 
-5. Mobile v1 ships as Local + Cloud; Mobile does not expose BYOK (see `docs/product/definition.md` surface roles, updated 2026-07-08; the earlier "Local + explicit BYOK" mobile wording was stale). Managed Cloud / AGI Compute Credits / subscriptions are in public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. Ledgering, payment rails, fraud, refund, chargeback, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated, and Local/BYOK are never silently routed into managed cloud. (Updated 2026-06-27: superseded the prior "remain waitlist or private beta until ... verified" wording.)
+5. Mobile v1 ships as Local + Cloud; Mobile does not expose BYOK. Managed Free
+   is public alpha and enabled after sign-in (founder decision 2026-06-27).
+   Paid upgrades remain waitlist/access-code gated (founder clarification
+   2026-09-21), while existing paid entitlements continue to resolve across the
+   suite. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response
+   kill-switch only. Ledgering and abuse controls keep pace with Free usage;
+   payment, fraud, refund, chargeback, and provider-term evidence gate opening
+   self-serve paid acquisition. Local/BYOK are never silently routed into
+   managed cloud.
    Evidence: `docs/product/commercial.md`, `docs/product/suite.md` (the profit-first enterprise-readiness doc was retired in `906fe5cda`; git history only).
 
 6. Local to BYOK is a fork, not a silent transfer or mode flip. The original Local thread remains local forever. The required flow is context selection, secret redaction, payload preview, provider label, and explicit consent.
@@ -87,17 +95,116 @@ Archived source material:
 19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/architecture/byok-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and developer-surface model-selector grouping. The public Electron Desktop accepts no provider key.
     Evidence: `docs/architecture/byok-provider-strategy.md`, `packages/contracts/types/src/models.json`, `docs/architecture/provider-routing.md`.
 
-20. Surface completion ordering (updated 2026-08-05, founder decision, supersedes both the 2026-07-11 serial order "Mobile, Website, Desktop, CLI, Chrome, VS Code" and the 2026-08-01 "Desktop to zero first" note): the six surfaces are completed shortest-remaining-work-first, estimate remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six are at zero. The routing substrate (registry dated pricing + cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins. D-2026-09-15-04 later made Electron the sole public Desktop; retained Tauri work is not part of the public Desktop completion claim. The mobile README's 2026-08-06 target date no longer implies mobile-first ordering.
-    Evidence: `docs/work/implementation-status.md` (2026-08-05 founder decisions section), `audit/capability-gaps.csv` (CAP-045..CAP-047), apps/mobile/README.md.
+20. Surface completion ordering (updated 2026-09-21, founder decision): work
+    proceeds one platform at a time in this order: Website, Mobile, Desktop,
+    Chrome, CLI, VS Code. The active platform must pass its release gates before
+    the next begins, except for shared-contract work required by the active
+    platform. Connection verification follows each surface pass. This
+    supersedes the 2026-08-05 shortest-remaining-work-first order, the
+    2026-08-01 Desktop-first note, the 2026-07-11 Mobile-first sequence, and the
+    2026-08-09 cross-surface capability exception. The routing substrate remains
+    shared prerequisite work. D-2026-09-15-04 makes Electron the sole public
+    Desktop; retained Tauri work is not part of the public Desktop completion
+    claim.
+    Evidence: `docs/product/definition.md`, `docs/product/requirements.md`,
+    `docs/specs/website-launch/AGENT_GOAL.md`.
 
 21. BYOK tool orchestration defaults to Native First when BYOK is active and the selected provider/model supports native tools, but only with visible provider/model/tool labels, retention/cost disclosure, and consent for risky payloads. Native First never applies to Local mode.
     Evidence: `docs/product/requirements.md`, `docs/architecture/byok-provider-strategy.md`.
 
-22. Managed-Cloud pricing/metering reconciliation (founder decision, 2026-07-11, supersedes the 2026-06-30 ladder wherever it was cited as Free/Basic $8/Pro/Max/Enterprise with no Team and no top-ups). Subscriptions are globally available (founder, 2026-08-05): USD is the global default currency with founder-set INR amounts for India, and additional Stripe currency options may be added without changing availability. No market is excluded. The subscription ladder is Free / Basic ($7/mo USD globally, ₹399/mo in India, Stripe-purchasable on Web today as the live primary path; Mobile adds IAP per Apple 3.1.1 when StoreKit MS-5 ships with real store products, after which Web keeps Stripe. Updated 2026-08-05, superseding the earlier "IAP-first / Stripe dormant" wording) / Pro ($20/mo, $200/yr) / Max ($100/mo and $200/mo, monthly-only) / Team ($25/seat/mo, $240/seat/yr, founder-confirmed 2026-08-05, superseding both the earlier $30/$299 figure and the 2026-08-04 Pro-pinned $20 working-tree value; reinstated as a real, separate per-seat tier between Max and Enterprise, not "served by Enterprise"; yearly checkout wiring is a tracked web Class-1 item) / Enterprise (custom). Metering is token/value-based (a micro-dollar ledger, never flat prompt counts), displayed to users as credits everywhere except at actual Stripe checkout; internal ledgering stays cents/micro-dollars. Credit top-ups are enabled for active paid Stripe tiers: opt-in and off by default, 50 public top-up units per $1, whole-dollar purchases with a $10 minimum and ordinary $100 self-serve cap, and 12-month balance expiry. This 2026-08-11 founder decision supersedes the former per-tier payout-parity rule and the prior no-top-ups policy. No discount anchors of any kind (no strikethroughs, no "% off," no "was $X"); flat prices, with real annual options on Pro/Team framed honestly. Web search is a server-side tool offered wherever a model supports tool-calling and a deployment has search available; the `capabilities.search` flag in `models.json` denotes provider-native grounding only, a narrower and separate concept from server-offered search. E2B code-execution is enabled-by-decision for production (staged behind `AGI_E2B_EXECUTION` plus a key; activates when the branch ships; unsetting the flag is the kill-switch). Sonnet 5 is billed to users at the founder-selected standard $3/$15 per MTok regardless of Anthropic's introductory provider pricing (reaffirmed 2026-08-05, restoring the 2026-07-15/2026-07-18 catalog pins after a slice briefly reversed them): provider intro/promo windows are provider-cost facts, never product prices; the catalog's dated-pricing mechanism exists for real product price changes only. This Sonnet 5 pin is retired 2026-09-03 by founder instruction. Anthropic reclassified $2/$10 per MTok as its permanent standard price and cancelled the scheduled increase to $3/$15, so the provider-cost-versus-product-price premise no longer holds. Sonnet 5 now bills users at $2/$10 per MTok with cache read $0.20, 5m write $2.50, and 1h write $4.00, tracking Anthropic's published rate.
+22. Managed-Cloud pricing/metering reconciliation (founder decision,
+    2026-07-11, with the acquisition clarification of 2026-09-21): the billing
+    catalog and checkout infrastructure define supported plans, currencies,
+    proration, top-ups, and accounting, but they do not by themselves open
+    purchasing. Free access is available after sign-in; new paid subscriptions
+    and upgrades remain waitlist/access-code gated until the founder opens
+    self-serve acquisition. Existing paid entitlements remain valid across all
+    six surfaces. Current prices and model costs come from executable catalogs,
+    not this decision prose. Metering is value-based; user-facing usage follows
+    the shared percentage/reset-time contract except where an actual purchase
+    must show its denomination. Web search and code execution remain separately
+    capability-, deployment-, policy-, and trust-gated.
     Evidence: `docs/product/definition.md` (billing plan table), `packages/contracts/types/src/billing-catalog.ts`, `apps/web/lib/pricing.ts` (the originally cited tier-metering plan, unit-economics doc, and products README were retired in `906fe5cda`; git history only. Team $25/$240 confirmed by founder 2026-08-05). Sonnet 5 retirement: `packages/ai/model-registry/catalog/models.curation.json` (the Anthropic default-model entry's costOverride field), `packages/ai/model-registry/tests/catalog-policy.test.mjs`.
 
 23. Routing thesis (founder, 2026-08-05): Different model, provider, reasoning-effort, tool-harness, and deployment configurations occupy different points on the quality–cost–latency frontier. AGI Workforce selects and governs the cheapest configuration that meets a measurable task-specific quality threshold. Implementation contract: routing selects an ExecutionPlan (model snapshot, provider endpoint, reasoning effort, service tier, execution location, harness version, cache policy, verifier, fallback policy, budget, approval policy), never a bare model name; quality thresholds are task-family-specific and measured (CPST plus the eval corpus, per the design doc); hard constraints, trust mode, capability, tier entitlement, latency lane, tenant policy, filter candidates before any cost ranking; auto-routing stays explicit and explainable per Decision #10.
     Evidence: `docs/architecture/execution-plan-contract.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `docs/work/implementation-status.md` (2026-08-05 founder decisions section).
+
+24. Ecosystem continuity (founder clarification 2026-09-21): one account and
+    one effective entitlement span all six surfaces. Web, Mobile Cloud, Desktop
+    Cloud, and eligible Chrome Managed Cloud share the Account Cloud objects.
+    Desktop Code, CLI, and VS Code share host-owned local sessions, tools,
+    permissions, files, and credential references. Desktop bridges the two only
+    through an explicit, provenance-preserving, secret-scanned handoff. The
+    product takes capability/workflow references from ChatGPT and Claude but
+    does not copy their branding, layouts, assets, or private implementation.
+    Evidence: `docs/product/definition.md`,
+    `docs/product/experience-contract.md`,
+    `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`.
+
+25. Web v1 keeps a strict per-request nonce CSP and accepts dynamic rendering
+    as its security cost. Do not replace the nonce with `unsafe-inline`, weaken
+    the policy to regain static generation, or change the production bundler
+    solely for this optimization. The current Next.js 16.3.5 CSP guide says
+    nonce CSP requires dynamic rendering and identifies experimental App
+    Router SRI as the static alternative. The guide no longer carries the
+    older webpack-only restriction, and the installed Next config accepts the
+    SRI option, but SRI remains experimental and does not handle dynamically
+    generated scripts. Revisit when the path is stable and a production
+    measurement shows that server rendering is material; any migration must
+    preserve strict script/style enforcement and pass production CSP,
+    hydration, identity, analytics-consent and public-route cache tests.
+    Evidence: `apps/web/proxy.ts`, `apps/web/app/layout.tsx`, installed
+    `next@16.3.5` documentation and schema, and the [official Next.js CSP
+    guide](https://nextjs.org/docs/app/guides/content-security-policy), reviewed
+    2026-09-22.
+
+26. Web v1 support is the help centre, signed-in tickets and direct email to
+    `contact@agiworkforce.com`. The dormant AI assistant and live-handoff widget
+    are not launch scope and must not mount or enter a public bundle merely
+    because their source exists. The signed-in account menu exposes the direct
+    mail channel in two clicks; Free through Max promise no response time.
+    Shipping the widget later requires complete endpoints, safe abstention for
+    prices, plan entitlements and account state, configured staff notification
+    and fallback email, and an exercised operator handoff. Code can verify the
+    route and address but not that a person watches the inbox, so confirmed
+    monitoring remains a founder-operated Web launch gate.
+    Evidence: `apps/web/shared/components/layout/AccountMenuItems.tsx`,
+    `apps/web/e2e/support-entry.spec.ts`, `docs/runbooks/support-operations.md`
+    and `docs/work/founder-assistance.md`.
+
+27. Web v1 retains the provider-first-chunk peek on direct adapter responses.
+    It preserves provider HTTP status and lets managed failover rotate before
+    response headers are committed. The standard managed-chat workflow already
+    opens its durable response independently of visible model text, and three
+    zero-cost OpenRouter Free Auto localhost samples on 2026-09-22 measured
+    fetch-to-first-chunk at 6,135 ms with cold development compilation, then
+    1,124 ms and 813 ms warm. The two warm samples reached the first-paint proxy
+    at 2,635 ms and 2,016 ms. That evidence does not justify replacing real
+    HTTP/provider errors with in-band SSE errors. Revisit only with deployed
+    intermediary timeout evidence or a production-like SLO breach; retain the
+    direct-path failure and failover semantics in any alternative.
+    Evidence: `apps/web/e2e/chat-live-latency.spec.ts`,
+    `apps/web/lib/client/chat-latency.ts`,
+    `apps/web/app/api/llm/v1/chat/completions/route.ts` and WEB-053 in
+    `WEB_PUBLIC_RELEASE_AUDIT.md`.
+
+28. Plain managed chat gives the durable workflow 500 ms to produce its first
+    event. If that opening budget expires, the route cancels the durable start
+    before beginning the inline fallback and opens the shared cooldown. It must
+    not race durable and inline provider execution: doing so can duplicate tool
+    effects, usage settlement and provider spend. AGI Work keeps its durable
+    execution contract and is not converted into an inline turn by this chat
+    latency budget. The browser stream contract disables intermediary buffering
+    and emits a heartbeat every 2 seconds; arrived content is held for at most
+    one animation frame, never paced for presentation. Authenticated localhost
+    evidence on 2026-09-22 measured the durable first event at 26 ms, route
+    response at 331 ms, browser fetch-to-first-chunk at 375 ms and completion at
+    2,137 ms on a zero-cost OpenRouter Free Auto turn.
+    Evidence: `apps/web/lib/workflows/durable-stream-liveness.ts`,
+    `apps/web/app/api/llm/v1/chat/completions/lib/sse-heartbeat.ts`,
+    `apps/web/lib/client/frame-coalesced-appender.ts`,
+    `apps/web/e2e/chat-live-latency.spec.ts` and WEB-100 to WEB-102 in
+    `WEB_PUBLIC_RELEASE_AUDIT.md`.
 
 ## Outdated Or Historical
 

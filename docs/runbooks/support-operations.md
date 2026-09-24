@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 How a support request reaches a person, how it is prioritised, escalated and
 answered, and what support may say. Written for whoever answers support, and
@@ -18,13 +18,13 @@ entitlement from memory: it links the page that carries it.
 
 ## 1. Channels, and whether a person reads them
 
-| Channel                           | Who can use it              | Who reads it                                           | State today                                                                             |
-| --------------------------------- | --------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles         | Always on; keyword retrieval with no model call                                         |
-| Email, `contact@agiworkforce.com` | Anyone                      | A person                                               | The published channel on `/support` and `/contact`                                      |
-| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations | Off unless `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED` is `1`                                  |
-| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                      | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback    |
-| Ticket, in Settings, Help         | Signed-in accounts          | A platform operator, in /operator#support              | Stored; the support inbox is emailed when one is raised; replies show in Settings, Help |
+| Channel                           | Who can use it              | Who reads it                                             | State today                                                                              |
+| --------------------------------- | --------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Help centre and its search        | Anyone                      | Nobody; it answers from the published articles           | Always on; keyword retrieval with no model call                                          |
+| Email, `contact@agiworkforce.com` | Anyone                      | An owner-designated person, once monitoring is confirmed | The Web v1 published channel; monitoring is an external launch gate                      |
+| Support assistant                 | Anyone, signed in or not    | Nobody; it answers from the help corpus with citations   | Not in Web v1 launch scope; off unless a later verified release enables the feature flag |
+| Live handoff to a person          | Anyone the assistant serves | A platform operator who is online                        | Off unless `AGI_SUPPORT_LIVE_HANDOFF_ENABLED` is truthy; otherwise an email fallback     |
+| Ticket, in Settings, Help         | Signed-in accounts          | A platform operator, in /operator#support                | Stored; the support inbox is emailed when one is raised; replies show in Settings, Help  |
 
 Sources: `apps/web/app/support/page.tsx`,
 `apps/web/features/support/components/SupportWidgetMount.tsx`,

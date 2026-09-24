@@ -249,10 +249,17 @@ describe('billing catalog', () => {
       const tools = tiers.map((tier) => getPlanMaxConnectorTools(tier) ?? Number.MAX_SAFE_INTEGER);
       const tasks = tiers.map((tier) => getPlanMaxScheduledTasks(tier) ?? Number.MAX_SAFE_INTEGER);
 
-      for (const series of [turns, ttls, tools, tasks]) {
+      for (const series of [turns, tools, tasks]) {
         for (let index = 1; index < series.length; index += 1) {
           expect(series[index]!).toBeGreaterThan(series[index - 1]!);
         }
+      }
+
+      expect(sandboxes[0]).toBe(1);
+      expect(ttls[0]).toBeGreaterThan(0);
+      expect(ttls[1]).toBeGreaterThanOrEqual(ttls[0]!);
+      for (let index = 2; index < ttls.length; index += 1) {
+        expect(ttls[index]!).toBeGreaterThan(ttls[index - 1]!);
       }
 
       for (let index = 1; index < sandboxes.length; index += 1) {

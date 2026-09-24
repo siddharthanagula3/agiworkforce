@@ -20,6 +20,7 @@ export interface FollowUpSuggestionsProps {
    * search or the generation failed.
    */
   suggestions?: readonly string[];
+  searchUnavailable?: boolean;
   className?: string;
 }
 
@@ -326,18 +327,29 @@ export function FollowUpSuggestions({
   isUserTyping = false,
   messageCount = 0,
   suggestions,
+  searchUnavailable = false,
   className,
 }: FollowUpSuggestionsProps) {
   const followUps = useMemo(
-    () =>
-      suggestions && suggestions.length > 0
-        ? suggestions.slice(0, 3).map((text, index) => ({
-            id: `followup-generated-${index}`,
-            text,
-            type: 'deeper' as FollowUpType,
-          }))
-        : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent),
-    [suggestions, lastAssistantContent, messageCount, lastUserContent],
+    () => {
+      const candidates =
+        suggestions && suggestions.length > 0
+          ? suggestions.slice(0, 3).map((text, index) => ({
+              id: `followup-generated-${index}`,
+              text,
+              type: 'deeper' as FollowUpType,
+            }))
+          : deriveFollowUps(lastAssistantContent, messageCount, lastUserContent);
+      return searchUnavailable
+        ? candidates.filter(
+            ({ text }) =>
+              !/\b(?:search|browse)\b.{0,24}\b(?:web|online)\b|\b(?:web|online)\b.{0,24}\b(?:search|browse)\b/i.test(
+                text,
+              ),
+          )
+        : candidates;
+    },
+    [suggestions, lastAssistantContent, messageCount, lastUserContent, searchUnavailable],
   );
   const [dismissed, setDismissed] = useState(false);
 
@@ -354,7 +366,7 @@ export function FollowUpSuggestions({
         exit={{ opacity: 0, y: -4, transition: { duration: 0.15 } }}
         className={cn(
           'flex flex-wrap items-center gap-2 pt-2 pb-1',
-          'transition-opacity duration-200',
+          'transition-opacity duration-quick',
           isUserTyping && 'pointer-events-none opacity-0',
           className,
         )}
@@ -374,14 +386,14 @@ export function FollowUpSuggestions({
                 'pointer-coarse:min-h-11',
                 'border border-border/40 bg-card/50 backdrop-blur-sm',
                 'text-xs font-medium text-muted-foreground',
-                'transition-all duration-150',
+                'transition-all duration-quick',
                 'hover:border-primary/30 hover:bg-primary/5 hover:text-foreground hover:shadow-sm',
                 'active:scale-[0.97]',
               )}
             >
               <Icon className="h-3 w-3 shrink-0 opacity-60" />
               <span>{fu.text}</span>
-              <ArrowRight className="h-3 w-3 opacity-0 transition-opacity duration-150 group-hover/pill:opacity-100" />
+              <ArrowRight className="h-3 w-3 opacity-0 transition-opacity duration-quick group-hover/pill:opacity-100" />
             </motion.button>
           );
         })}
@@ -392,7 +404,7 @@ export function FollowUpSuggestions({
             'inline-flex items-center gap-1 rounded-full px-2.5 py-1.5',
             'pointer-coarse:min-h-11',
             'text-xs text-muted-foreground',
-            'transition-colors duration-150',
+            'transition-colors duration-quick',
             'hover:text-muted-foreground hover:bg-muted/50',
           )}
           aria-label="Hide suggestions"

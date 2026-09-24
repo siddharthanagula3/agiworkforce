@@ -1,14 +1,14 @@
 'use client';
 
 import { toUserMessage } from '@/lib/user-error-message';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   DesktopRuntimeError,
   type BrowserPairingState,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserCommand } from '@agiworkforce/types';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, useDialogKeyboard } from '@agiworkforce/ui';
 import {
   capturePairedBrowser,
   clickInPairedBrowser,
@@ -153,6 +153,7 @@ async function runAction(
  * and the extension's own approved-sites list. None of them lives here.
  */
 export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDialogProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const [pairing, setPairing] = useState<BrowserPairingState | null>(null);
   const [action, setAction] = useState<BrowserCommand>('browser_read_page');
   const [values, setValues] = useState<Record<Field, string>>({ selector: '', text: '', url: '' });
@@ -169,14 +170,7 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
       .catch((cause: unknown) => setError(messageFor(cause)));
   }, [open]);
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onClose]);
+  useDialogKeyboard({ open, onClose, panelRef });
 
   const selected = ACTIONS.find((entry) => entry.command === action) ?? DEFAULT_ACTION;
   const ready = selected.fields.every((field) => values[field].trim() !== '');
@@ -205,10 +199,11 @@ export function BrowserToolsDialog({ open, onClose, onAttach }: BrowserToolsDial
 
   return createPortal(
     <div
+      ref={panelRef}
       role="dialog"
       aria-modal="true"
       aria-label={TITLE}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/40 p-4"
       onClick={onClose}
     >
       <div

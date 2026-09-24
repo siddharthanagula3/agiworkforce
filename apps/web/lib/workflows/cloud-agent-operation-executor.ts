@@ -1,6 +1,7 @@
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ZodType } from 'zod';
 import { FatalError, RetryableError } from 'workflow';
+import { classifyError, toStreamErrorClassification } from '@agiworkforce/provider-runtime';
 
 import { logger } from '@/lib/logger';
 import { authorizeCloudAgentOperation } from '@/lib/services/cloud-agent-budget';
@@ -49,6 +50,7 @@ function classificationFields(error: unknown): Record<string, unknown> {
     code?: unknown;
     type?: unknown;
     retryAfterSeconds?: unknown;
+    classification?: unknown;
   };
   const status =
     typeof source.status === 'number'
@@ -62,6 +64,9 @@ function classificationFields(error: unknown): Record<string, unknown> {
     ...(typeof source.type === 'string' ? { type: source.type } : {}),
     ...(typeof source.retryAfterSeconds === 'number'
       ? { retryAfterSeconds: source.retryAfterSeconds }
+      : {}),
+    ...(source.classification && typeof source.classification === 'object'
+      ? { classification: toStreamErrorClassification(classifyError(error)) }
       : {}),
   };
 }

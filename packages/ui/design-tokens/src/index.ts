@@ -223,8 +223,11 @@ export const agiCoolPalette = {
  * in apps/web/shared/components/__tests__/theme-contrast.test.ts.
  */
 export const agiRadii = {
+  detail: '2px',
+  compact: '4px',
   sm: '6px',
   md: '8px',
+  menu: '10px',
   lg: '12px',
   xl: '16px',
   '2xl': '24px',
@@ -233,8 +236,11 @@ export const agiRadii = {
 } as const;
 
 export const agiRadiiVar = {
+  detail: '--corner-detail',
+  compact: '--corner-compact',
   sm: '--corner-control',
   md: '--corner-field',
+  menu: '--corner-menu',
   lg: '--corner-surface',
   xl: '--corner-panel',
   '2xl': '--corner-overlay',

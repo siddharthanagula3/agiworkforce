@@ -64,7 +64,22 @@ it('answers a Free account in production, offering nothing until the setting is 
   expect(status).toBe(200);
   expect(body.issuer).toBe('QwenCloud');
   expect(body.models.length).toBeGreaterThan(0);
+  expect(body.models.every((model) => model.category === 'chat')).toBe(true);
   expect(ready(body)).toEqual([]);
+});
+
+it('does not advertise promotional image or video generation to a Free account', async () => {
+  await writeQuotaAttestation(mocks.store!, {
+    sourceUrl: 'https://home.qwencloud.com/benefits',
+    checkedAtMs: Date.now() - 60_000,
+    credentialSha256: credentialSha256(API_KEY),
+    quotaOnlyOfferings: 'all',
+    attestedBy: 'fixture-operator',
+  });
+  const { body } = await catalogue();
+
+  expect(body.models.length).toBeGreaterThan(0);
+  expect(body.models.every((model) => model.category === 'chat')).toBe(true);
 });
 
 it('lists attested models as ready and a spent one as exhausted for every account', async () => {
@@ -94,8 +109,25 @@ it('offers nothing when the deployment has no shared state store', async () => {
   expect(ready(body)).toEqual([]);
 });
 
-it('keeps the list to the plan the free models belong to', async () => {
+it('keeps promotional chat offerings exclusive to Free accounts', async () => {
   mocks.plan.mockResolvedValue('pro');
+  const { status, body } = await catalogue();
+  expect(status).toBe(200);
+  expect(body.models.length).toBeGreaterThan(0);
+  expect(body.models.every((model) => model.category === 'image')).toBe(true);
+});
+
+it('lists eligible image and video offerings for a video-entitled paid tier', async () => {
+  mocks.plan.mockResolvedValue('max_15x');
+  const { status, body } = await catalogue();
+  expect(status).toBe(200);
+  expect(body.models.some((model) => model.category === 'image')).toBe(true);
+  expect(body.models.some((model) => model.category === 'video')).toBe(true);
+  expect(body.models.every((model) => ['image', 'video'].includes(model.category))).toBe(true);
+});
+
+it('keeps promotional media unavailable to a paid tier without generation access', async () => {
+  mocks.plan.mockResolvedValue('basic');
   const response = await GET(new NextRequest('https://agiworkforce.com/api/models/free-quota'));
   expect(response.status).toBe(403);
 });

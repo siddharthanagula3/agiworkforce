@@ -170,6 +170,45 @@ describe('the sessions sheet', () => {
     ).toEqual(['4m ago', 'Local']);
   });
 
+  it('stays reachable during a conversation and announces loading before rows arrive', () => {
+    const postMessage = boot();
+    deliver({
+      type: 'conversationLoaded',
+      payload: {
+        threadId: 'thread-active',
+        title: 'Active session',
+        trustMode: 'byok',
+        transcriptTruncated: false,
+        messages: [
+          { role: 'user', text: 'Keep working' },
+          { role: 'assistant', text: 'Working' },
+        ],
+      },
+    });
+
+    expect(document.getElementById('emptyState')).toBeNull();
+    click('#sessionsBtn');
+
+    expect(document.getElementById('sessionsSheet')?.hidden).toBe(false);
+    expect(document.getElementById('sessionsSheetList')?.getAttribute('aria-busy')).toBe('true');
+    expect(
+      document.getElementById('sessionsSheetList')?.querySelector('[role="status"]')?.textContent,
+    ).toBe('Loading developer sessions…');
+    expect(postMessage).toHaveBeenCalledWith({
+      origin: 'chat',
+      epoch: 0,
+      type: 'requestSessions',
+      payload: { source: 'local' },
+    });
+
+    deliver({ type: 'sessionsList', payload: { source: 'local', rows: [] } });
+
+    expect(document.getElementById('sessionsSheetList')?.getAttribute('aria-busy')).toBe('false');
+    expect(document.querySelector('.sessions-sheet-empty')?.textContent).toBe(
+      'No developer sessions in this workspace yet',
+    );
+  });
+
   it('asks the host for cloud chats when the Cloud tab is chosen', () => {
     const postMessage = boot();
     click('#sessionsBtn');

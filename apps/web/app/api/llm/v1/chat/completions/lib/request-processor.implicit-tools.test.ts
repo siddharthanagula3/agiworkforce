@@ -7,7 +7,11 @@ import {
   type RoutingTaskType,
 } from '@agiworkforce/types';
 
-import { resolveRequiredSearchEnforcement } from '@/lib/web-search/required-search';
+import {
+  resolveRequiredSearchEnforcement,
+  resolveWebSearchRequirement,
+  shouldOfferWebSearchForTurn,
+} from '@/lib/web-search/required-search';
 import { resolveRequiredExecutionEnforcement } from '@/lib/code-execution/required-execution';
 import {
   EXECUTE_CODE_TOOL,
@@ -188,6 +192,18 @@ describe('implicit managed-tool intent', () => {
     expect(chatRequest.web_fetch).toBeUndefined();
   });
 
+  it('respects an explicit request not to open a supplied URL', () => {
+    const chatRequest = request();
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt: 'Do not open this URL: https://example.com/report. Summarize my note instead.',
+      taskType: 'general',
+      planTier: 'free',
+    });
+
+    expect(chatRequest.web_fetch).toBeUndefined();
+  });
+
   it('turns web search on when the user asks for a search in the message text', () => {
     const chatRequest = request();
 
@@ -222,6 +238,34 @@ describe('implicit managed-tool intent', () => {
     });
 
     expect(chatRequest.web_search).toBe(false);
+  });
+
+  it('does not offer either ambient Free tool when the user says not to use them', () => {
+    const prompt = 'Now reply with exactly FOLLOWUP_FREE_OK. Do not search the web or run code.';
+    const chatRequest = request({ web_search: true, web_fetch: true });
+
+    applyImplicitManagedToolIntent()(chatRequest, {
+      prompt,
+      taskType: 'research',
+      planTier: 'free',
+    });
+
+    const requirement = resolveWebSearchRequirement({
+      webSearchEnabled: chatRequest.web_search,
+      agiWorkRun: false,
+      researchTask: true,
+      userMessage: prompt,
+    });
+    expect(requirement.required).toBe(false);
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: chatRequest.web_search,
+        requirement,
+        modelPolicy: 'required_only',
+        surface: 'web',
+      }),
+    ).toBe(false);
+    expect(chatRequest.code_execution).toBeUndefined();
   });
 
   it('does not implicitly activate streaming-only tools on a non-streaming request', () => {

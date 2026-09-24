@@ -55,8 +55,7 @@ export function ProvenanceFooter({
   const routing = message.routing;
   const isAuto = routing?.source === 'auto';
   const metadata = message.metadata as
-    | { movedFromModel?: string; movedReason?: string }
-    | undefined;
+    { movedFromModel?: string; movedReason?: string } | undefined;
   const escalation = resolveModelEscalation({
     movedFromModelId: metadata?.movedFromModel ?? null,
     movedReason: metadata?.movedReason ?? null,
@@ -69,7 +68,7 @@ export function ProvenanceFooter({
 
   return (
     <div
-      className="mt-1 flex flex-col gap-0.5 text-[12px] leading-tight"
+      className="mt-1 flex flex-col gap-0.5 text-caption leading-tight"
       style={{ color: 'var(--chat-text-muted)' }}
       data-component="provenance-footer"
     >
@@ -103,7 +102,7 @@ export function ProvenanceFooter({
             <button
               type="button"
               onClick={() => onPinModel(routing)}
-              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] transition-colors hover:bg-[var(--chat-surface-hover)]"
+              className="ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-caption transition-colors hover:bg-[var(--chat-surface-hover)]"
               style={{
                 borderColor: 'var(--chat-border)',
                 color: 'var(--chat-text-secondary)',

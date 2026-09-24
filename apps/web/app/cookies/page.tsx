@@ -50,7 +50,7 @@ const COOKIES: CookieRow[] = [
     purpose:
       'Keeps you signed in and lets server routes identify you. Without these you cannot use an account.',
     duration: 'Session and short-lived refresh cookies, managed by the provider.',
-    source: 'app/layout.tsx (ClerkProvider)',
+    source: 'lib/identity/provider.tsx (ClerkProvider)',
   },
   {
     name: '__Host-anon-session-id',
@@ -99,14 +99,6 @@ interface StorageRow {
 }
 
 const STORAGE: StorageRow[] = [
-  {
-    key: 'agi_secure_key',
-    store: 'Local storage',
-    holds:
-      'A marker that a browser-held encryption key exists for this session. Not the key itself: the key material is non-extractable and held by the browser.',
-    clearedBy: 'Clearing site data.',
-    source: 'shared/lib/security.ts',
-  },
   {
     key: 'cookie-consent',
     store: 'Local storage',

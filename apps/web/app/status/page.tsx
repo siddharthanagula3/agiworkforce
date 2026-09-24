@@ -25,27 +25,28 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { statusMirrorUrl } from '@/lib/server/incident/out-of-band';
 
 export const metadata = buildMetadata({
-  title: 'Status: a live, honestly scoped health signal',
+  title: 'Status: hosted dependency and route checks',
   description:
-    "A health signal for AGI's hosted services, re-checked every minute, with an explicit statement of what the check does and does not cover.",
+    "Dependency and route-readiness checks for AGI's hosted services, re-checked every minute. A passing check does not verify a model response.",
   path: '/status',
 });
 
 type HealthState = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
 const HEALTH_LABEL: Record<HealthState, string> = {
-  healthy: 'Operational',
-  degraded: 'Degraded',
-  unhealthy: 'Disruption detected',
-  unknown: 'Live check unavailable',
+  healthy: 'Checks passing',
+  degraded: 'Some checks failing',
+  unhealthy: 'Core check failing',
+  unknown: 'Checks unavailable',
 };
 
 const HEALTH_NOTE: Record<HealthState, string> = {
-  healthy: 'Every check below passed on the most recent run.',
+  healthy:
+    'Every listed check passed on the most recent run. Model inference and a user chat turn were not tested.',
   degraded:
-    'Core serving passed, but at least one capability or dependency below did not. Read the rows: they name which one.',
+    'Core checks passed, but at least one capability or dependency below did not. Read the rows: they name which one.',
   unhealthy:
-    'A core check failed on the most recent run. The hosted platform cannot serve normally.',
+    'A core check failed on the most recent run. Hosted service availability may be affected.',
   unknown:
     'We could not complete the most recent health check. If you are seeing errors, email us.',
 };
@@ -131,7 +132,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   },
   {
     key: 'chat',
-    label: 'Chat',
+    label: 'Chat routing',
     what: 'The default managed chat route resolves to a live model, at least one provider behind it is configured, and the router has not marked every one of them degraded. It does not send a message through the model.',
   },
   {
@@ -141,7 +142,7 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
   },
   {
     key: 'voice',
-    label: 'Voice',
+    label: 'Voice routing',
     what: 'The default managed voice route resolves to a live model with a configured, non-degraded provider behind it. It does not open a voice session.',
   },
   {
@@ -152,12 +153,13 @@ const COVERED: { key: CoveredKey; label: string; what: string }[] = [
 ];
 
 const HERO_FACT_LABEL = {
-  platform: 'Hosted platform',
+  platform: 'Hosted checks',
   checked: 'Checked',
   scope: 'Checks in scope',
 } as const;
 
 const NOT_COVERED = [
+  'A completed model response or answer quality',
   'Authentication (Clerk)',
   'Object storage (Cloudflare R2)',
   'The API gateway',
@@ -182,8 +184,8 @@ export default async function StatusPage() {
         <PageHero
           id="agi-status-title"
           eyebrow="Status"
-          title="One signal, honestly checked."
-          lede="A real health check against the hosted services at most once a minute, with the time it ran and what it does not cover. Local and BYOK work runs on your device and never depends on our servers."
+          title="What our hosted checks can tell you."
+          lede="Dependency and route checks run at most once a minute, with the time they ran and what they cover. A passing result does not verify that a model returns a usable answer. Local and BYOK work runs on your device and never depends on our servers."
           ctas={[]}
         />
 
@@ -217,7 +219,7 @@ export default async function StatusPage() {
               caption="Live signal"
               rows={[
                 {
-                  label: 'Hosted platform',
+                  label: 'Hosted checks',
                   value: `${HEALTH_LABEL[health.state]} · checked ${checkedLabel}`,
                 },
                 ...(checks

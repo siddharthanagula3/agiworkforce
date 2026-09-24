@@ -9,6 +9,7 @@ import {
   nativeSearchToolName,
   resolveRequiredSearchEnforcement,
   resolveWebSearchRequirement,
+  shouldOfferWebSearchForTurn,
   substituteGatedWebSearchTool,
 } from './required-search';
 
@@ -70,6 +71,17 @@ describe('resolveWebSearchRequirement', () => {
     ).toEqual({ required: true, source: 'research_task' });
   });
 
+  it('lets an explicit no-search instruction override inferred research and recency', () => {
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        webSearchEnabled: true,
+        researchTask: true,
+        userMessage: 'Do not search the web; answer from what you know about the latest release.',
+      }),
+    ).toEqual({ required: false, source: null });
+  });
+
   it('leaves an ordinary turn alone', () => {
     expect(resolveWebSearchRequirement({ ...base, userMessage: 'rewrite this paragraph' })).toEqual(
       { required: false, source: null },
@@ -119,6 +131,71 @@ describe('resolveWebSearchRequirement', () => {
       'web_search.required': false,
       'web_search.source': 'none',
     });
+  });
+});
+
+describe('shouldOfferWebSearchForTurn', () => {
+  const optional = { required: false, source: null } as const;
+  const required = { required: true, source: 'explicit_intent' } as const;
+
+  it('keeps an optional search tool off the free router on website chat', () => {
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: true,
+        requirement: optional,
+        modelPolicy: 'required_only',
+        surface: 'web',
+      }),
+    ).toBe(false);
+  });
+
+  it('offers search when the same website turn requires it', () => {
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: true,
+        requirement: required,
+        modelPolicy: 'required_only',
+        surface: 'web',
+      }),
+    ).toBe(true);
+  });
+
+  it('withholds even optional website search when the user explicitly refuses it', () => {
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: true,
+        requirement: optional,
+        modelPolicy: undefined,
+        surface: 'web',
+        userOptOut: true,
+      }),
+    ).toBe(false);
+  });
+
+  it('preserves optional search for other models and API clients', () => {
+    for (const input of [
+      { modelPolicy: undefined, surface: 'web' },
+      { modelPolicy: 'required_only' as const, surface: 'api' },
+    ]) {
+      expect(
+        shouldOfferWebSearchForTurn({
+          webSearchEnabled: true,
+          requirement: optional,
+          ...input,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('respects an explicit search opt-out', () => {
+    expect(
+      shouldOfferWebSearchForTurn({
+        webSearchEnabled: false,
+        requirement: required,
+        modelPolicy: 'required_only',
+        surface: 'web',
+      }),
+    ).toBe(false);
   });
 });
 

@@ -9,6 +9,7 @@ import {
 } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
+import type { SearchAllowance } from './search-allowance';
 import { countUserFeatureUnitsSince } from '@/lib/services/cogs-ledger-service';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { isFreePlanTier } from '@/lib/services/free-trial-service';
@@ -94,6 +95,50 @@ export interface SearchBudgetInput {
   now?: Date;
 }
 
+async function readSearchCallCount(input: {
+  userId: string;
+  db?: DatabaseAdapter;
+  now?: Date;
+}): Promise<number | null> {
+  const since = new Date(
+    (input.now ?? new Date()).getTime() - SEARCH_BOUND_WINDOW_DAYS * MILLISECONDS_PER_DAY,
+  );
+  try {
+    const used = await countUserFeatureUnitsSince(
+      input.userId,
+      SEARCH_RATE_CARD_FEATURES,
+      since,
+      input.db,
+    );
+    if (Number.isFinite(used) && used >= 0) return used;
+    logger.error(
+      { event: 'search_budget_count_invalid', used, userId: input.userId },
+      '[web-search] search call count was invalid',
+    );
+  } catch (error) {
+    logger.error(
+      { event: 'search_budget_count_unreadable', error, userId: input.userId },
+      '[web-search] search call count could not be read',
+    );
+  }
+  return null;
+}
+
+export async function readSearchAllowance(
+  input: Pick<SearchBudgetInput, 'userId' | 'planTier' | 'db' | 'now'>,
+): Promise<SearchAllowance> {
+  if (!isFreePlanTier(input.planTier)) return { status: 'paid' };
+  const limit = FREE_PLAN_MONTHLY_SEARCH_CALLS;
+  const used = await readSearchCallCount(input);
+  if (used === null) return { status: 'unknown', limit, windowDays: SEARCH_BOUND_WINDOW_DAYS };
+  return {
+    status: used >= limit ? 'exhausted' : 'available',
+    used,
+    limit,
+    windowDays: SEARCH_BOUND_WINDOW_DAYS,
+  };
+}
+
 /**
  * Whether this search call is included, charged, or refused, before it runs.
  * A count that cannot be read fails OPEN as included: a metering outage must
@@ -107,25 +152,8 @@ export async function resolveSearchBudget(input: SearchBudgetInput): Promise<Sea
     return { outcome: 'charge', feature: input.feature, chargeMicrousd, chargeCents };
   }
 
-  const since = new Date(
-    (input.now ?? new Date()).getTime() - SEARCH_BOUND_WINDOW_DAYS * MILLISECONDS_PER_DAY,
-  );
-
-  let used: number;
-  try {
-    used = await countUserFeatureUnitsSince(
-      input.userId,
-      SEARCH_RATE_CARD_FEATURES,
-      since,
-      input.db,
-    );
-  } catch (error) {
-    logger.error(
-      { event: 'search_budget_count_unreadable', error, userId: input.userId },
-      '[web-search] search call count could not be read; treating this call as included',
-    );
-    return { outcome: 'included' };
-  }
+  const used = await readSearchCallCount(input);
+  if (used === null) return { outcome: 'included' };
 
   if (used < includedMonthlySearchCalls(input.planTier)) return { outcome: 'included' };
   if (isFreePlanTier(input.planTier)) return { outcome: 'blocked', reason: 'plan_bound' };

@@ -2,9 +2,12 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
+import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
+import { regenerateModelOptions as selectableRegenerateModelOptions } from '../lib/regenerate-model-options';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
@@ -15,6 +18,7 @@ import { useConversations } from '@/lib/hooks/useConversations';
 import {
   managedCloudConversationPath,
   managedCloudMessagePath,
+  type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
 // GOV-19: remaining managed quota, shared with Settings > Usage.
 import {
@@ -49,6 +53,7 @@ import {
   DEFAULT_COMPOSER_TOGGLES,
   AGI_WORK_MODE,
   parkUnsentDraft,
+  readMessageArrayPatch,
 } from '@shared/stores/web-chat-store';
 import {
   EMPTY_VARIANT_INFO,
@@ -70,6 +75,7 @@ import { useNotificationStore } from '@shared/stores/notification-store';
 import { useMediaStore } from '@shared/stores/media-store';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { useUIStore } from '@shared/stores/layout-store';
+import { useShellLayout } from '@shared/components/layout/app-shell-layout';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { resolveNewChatTemporary } from '@/lib/temporary-chat-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -151,6 +157,7 @@ import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptReco
 import {
   ChatComposerNew,
   SEND_GUARD_BLOCKED,
+  type ComposerAttachmentUploadAttempt,
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
@@ -174,6 +181,7 @@ import {
 import {
   conversationDeleteConfirm,
   conversationHref,
+  conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
 } from '@shared/components/layout/sidebar-session-actions';
@@ -206,6 +214,14 @@ import {
 import { hasWorkSession, taskDockRunKey } from '../components/work-session/taskDockSummary';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
+import { useResearchPanelStore } from '../stores/research-panel-store';
+import {
+  CLOSED_SECONDARY_PANELS,
+  resolveChatSidebarMode,
+  resolveSecondaryPanel,
+  type SecondaryPanel,
+  type SecondaryPanelFlags,
+} from './web-chat-layout';
 import { ChatConversationBoundary } from '../components/ChatConversationBoundary';
 import type {
   ResearchPlanDecision,
@@ -270,6 +286,7 @@ import {
 } from '@/lib/hooks/useMediaGeneration';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
+import { explicitlyRequestsArtifact } from '@features/chat/lib/visual-intent';
 import {
   IMAGE_MODELS,
   resolveImageGenerationRequestOptions,
@@ -317,14 +334,24 @@ type SendMeta = {
   styleMode?: string;
   /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
   styleInstruction?: string;
+  /** Hidden output contract for an explicitly requested structured artifact. */
+  artifactInstruction?: string;
   /** Exact server-catalog skill name. */
   skillName?: string;
   mcpContext?: McpContextSelection;
   disabledConnectorIds?: string[];
+  connectorToolsEnabled?: boolean;
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
+  /** Exact promotional media offering selected for this generation turn. */
+  modelOverrideId?: string;
+};
+
+type AttachmentUploadAttempt = ComposerAttachmentUploadAttempt & {
+  meta?: SendMeta;
+  ownerConversationId: string | null;
 };
 
 type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'status'> & {
@@ -395,7 +422,7 @@ const NOTIF_BANNER_STORAGE_KEY = 'agi.chat-notif-banner.resolved';
 
 const VOICE_LIBRARY_NAV_ID = 'library';
 const VOICE_CONNECTORS_SETTINGS_SECTION = 'connectors';
-const VOICE_FOCUS_FADE_CLASS = 'pointer-events-none opacity-0 transition-opacity duration-300';
+const VOICE_FOCUS_FADE_CLASS = 'pointer-events-none opacity-0 transition-opacity duration-moved';
 
 function readNotifBannerResolved(): boolean {
   if (typeof window === 'undefined') return false;
@@ -513,12 +540,13 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     inputTokens !== undefined || outputTokens !== undefined
       ? (inputTokens ?? 0) + (outputTokens ?? 0)
       : undefined;
+  const routeLane = readRouteLane(m.routeLane) ?? readPersistedRouteLane(m.metadata);
 
   const metadata: Record<string, unknown> | undefined =
     m.metadata ||
     m.model ||
     m.fallbackReason ||
-    m.routeLane ||
+    routeLane ||
     m.requestedModel ||
     m.secretRedactionCount ||
     m.turnDetachable !== undefined ||
@@ -527,7 +555,7 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
           ...m.metadata,
           model: m.model ?? m.metadata?.model,
           ...(m.fallbackReason ? { fallbackReason: m.fallbackReason } : {}),
-          ...(m.routeLane ? { routeLane: m.routeLane } : {}),
+          ...(routeLane ? { routeLane } : {}),
           ...(m.requestedModel ? { requestedModel: m.requestedModel } : {}),
           ...(m.turnDetachable !== undefined ? { turnDetachable: m.turnDetachable } : {}),
           ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
@@ -554,6 +582,55 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     attachments: m.attachments,
     metadata,
   };
+}
+
+export interface ChatMessageProjection {
+  messages: ChatMessage[];
+  patch: { previous: readonly ChatMessage[]; index: number } | null;
+}
+
+const chatMessageProjections = new WeakMap<
+  readonly Message[],
+  Map<string, ChatMessageProjection>
+>();
+
+export function projectChatMessages(
+  source: readonly Message[],
+  conversationId: string,
+): ChatMessageProjection {
+  const cached = chatMessageProjections.get(source)?.get(conversationId);
+  if (cached) return cached;
+
+  const sourcePatch = readMessageArrayPatch(source);
+  const previousProjection = sourcePatch
+    ? chatMessageProjections.get(sourcePatch.previous)?.get(conversationId)
+    : undefined;
+  let projection: ChatMessageProjection;
+
+  if (
+    sourcePatch &&
+    previousProjection &&
+    sourcePatch.index >= 0 &&
+    sourcePatch.index < source.length &&
+    previousProjection.messages.length === source.length
+  ) {
+    const messages = previousProjection.messages.slice();
+    messages[sourcePatch.index] = toChatMessage(source[sourcePatch.index]!, conversationId);
+    projection = {
+      messages,
+      patch: { previous: previousProjection.messages, index: sourcePatch.index },
+    };
+  } else {
+    projection = {
+      messages: source.map((message) => toChatMessage(message, conversationId)),
+      patch: null,
+    };
+  }
+
+  const byConversation = chatMessageProjections.get(source) ?? new Map();
+  byConversation.set(conversationId, projection);
+  chatMessageProjections.set(source, byConversation);
+  return projection;
 }
 
 export function toChatSession(conversation: Conversation, messageCount: number): ChatSession {
@@ -786,6 +863,7 @@ function findHighlightableMessageElement(messageId: string): HTMLElement | null 
 }
 
 interface WebChatPageProps {
+  compact?: boolean;
   /**
    * Set only by `/chat/page.tsx` reading the `x-agi-pathname` header the proxy
    * stamps on its /agi-work rewrite (see apps/web/proxy.ts). A query param
@@ -796,7 +874,7 @@ interface WebChatPageProps {
   initialWorkMode?: ComposerWorkMode;
 }
 
-export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
+export default function WebChatPage({ compact = false, initialWorkMode }: WebChatPageProps) {
   useArtifactCloudSync();
 
   const { confirm: confirmDestructive, dialog: destructiveConfirmDialog } = useConfirmAction();
@@ -810,27 +888,21 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const params = useParams();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  const surfaceRootHref = compact ? QUICK_ASK_PATH : NEW_CHAT_PATH;
+  const surfaceConversationHref = useCallback(
+    (conversationId: string) => `${surfaceRootHref}/${conversationId}`,
+    [surfaceRootHref],
+  );
   const urlConversationId = params?.['sessionId'] as string | undefined;
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
   const openSearchParam = searchParams?.get('search') ?? null;
+  const openShareParam = searchParams?.get('share') ?? null;
   const starterPromptParam = searchParams?.get('starterPrompt') ?? null;
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
-  // Below the mobile breakpoint the rail leaves the flow entirely, so the
-  // composer never gets squeezed into a few px of width on a phone-sized
-  // viewport. Tracked separately from the user's manual collapse toggle so
-  // widening the window back out restores whatever the user had chosen.
-  const [isNarrowViewport, setIsNarrowViewport] = useState(false);
-  useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
-    const mql = window.matchMedia('(max-width: 768px)');
-    const update = () => setIsNarrowViewport(mql.matches);
-    update();
-    mql.addEventListener('change', update);
-    return () => mql.removeEventListener('change', update);
-  }, []);
+  const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
   const workSessionPanelOpen = useUIStore((state) => state.taskDockOpen);
@@ -841,6 +913,68 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   // needs the artifact panel's own flag. Subscribed on the vanilla store with a
   // selector: `useArtifactsStore` re-renders this page on every artifact write.
   const artifactPanelOpen = useZustandStore(_sharedArtifactStore, (state) => state.panelOpen);
+  const researchPanelOpen = useResearchPanelStore((state) => state.panelOpen);
+  const [activeSecondaryPanel, setActiveSecondaryPanel] = useState<SecondaryPanel | null>(null);
+  const previousSecondaryPanels = useRef<SecondaryPanelFlags>(CLOSED_SECONDARY_PANELS);
+  const secondaryPanelFlags = useMemo<SecondaryPanelFlags>(
+    () => ({
+      work: workSessionPanelOpen,
+      research: researchPanelOpen,
+      artifacts: artifactPanelOpen,
+    }),
+    [artifactPanelOpen, researchPanelOpen, workSessionPanelOpen],
+  );
+
+  useEffect(() => {
+    const next = resolveSecondaryPanel(
+      activeSecondaryPanel,
+      previousSecondaryPanels.current,
+      secondaryPanelFlags,
+    );
+    previousSecondaryPanels.current = secondaryPanelFlags;
+    if (next !== activeSecondaryPanel) setActiveSecondaryPanel(next);
+    if (next !== 'work' && workSessionPanelOpen) setWorkSessionPanelOpen(false);
+    if (next !== 'research' && researchPanelOpen) {
+      useResearchPanelStore.getState().closePanel();
+    }
+    if (next !== 'artifacts' && artifactPanelOpen) {
+      _sharedArtifactStore.getState().setPanelOpen(false);
+    }
+  }, [
+    activeSecondaryPanel,
+    artifactPanelOpen,
+    researchPanelOpen,
+    secondaryPanelFlags,
+    setWorkSessionPanelOpen,
+    workSessionPanelOpen,
+  ]);
+
+  const toggleSecondaryPanel = useCallback(
+    (panel: SecondaryPanel) => {
+      const isOpen = secondaryPanelFlags[panel] && activeSecondaryPanel === panel;
+      setActiveSecondaryPanel(isOpen ? null : panel);
+      setWorkSessionPanelOpen(!isOpen && panel === 'work');
+      if (!isOpen && panel === 'research') useResearchPanelStore.getState().togglePanel();
+      else if (researchPanelOpen) useResearchPanelStore.getState().closePanel();
+      if (!isOpen && panel === 'artifacts') _sharedArtifactStore.getState().togglePanel();
+      else if (artifactPanelOpen) _sharedArtifactStore.getState().setPanelOpen(false);
+    },
+    [
+      activeSecondaryPanel,
+      artifactPanelOpen,
+      researchPanelOpen,
+      secondaryPanelFlags,
+      setWorkSessionPanelOpen,
+    ],
+  );
+
+  const chatSidebarMode = resolveChatSidebarMode(shellLayout, activeSecondaryPanel !== null);
+  const isNarrowViewport = chatSidebarMode === 'drawer';
+  const sidebarUsesOverlay = chatSidebarMode !== 'persistent';
+
+  useEffect(() => {
+    if (!sidebarUsesOverlay) setMobileNavOpen(false);
+  }, [sidebarUsesOverlay]);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -977,7 +1111,41 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
+  const [attachmentUploadAttempts, setAttachmentUploadAttempts] = useState<
+    AttachmentUploadAttempt[]
+  >([]);
   const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
+
+  const updateAttachmentUploadStatus = useCallback(
+    (attemptId: string, status: ManagedCloudChatAttachmentUploadStatus) => {
+      setAttachmentUploadAttempts((current) =>
+        current.map((attempt) => {
+          if (attempt.id !== attemptId || !attempt.statuses[status.index]) return attempt;
+          const statuses = [...attempt.statuses];
+          statuses[status.index] = {
+            phase: status.phase,
+            ...(status.error ? { error: status.error } : {}),
+          };
+          return { ...attempt, statuses };
+        }),
+      );
+    },
+    [],
+  );
+
+  const failAttachmentUploadAttempt = useCallback((attemptId: string, error: string) => {
+    setAttachmentUploadAttempts((current) =>
+      current.map((attempt) => {
+        if (attempt.id !== attemptId) return attempt;
+        if (attempt.statuses.some((status) => status.phase === 'failed')) return attempt;
+        const index = attempt.statuses.findIndex((status) => status.phase !== 'complete');
+        if (index < 0) return attempt;
+        const statuses = [...attempt.statuses];
+        statuses[index] = { phase: 'failed', error };
+        return { ...attempt, statuses };
+      }),
+    );
+  }, []);
 
   useEffect(() => {
     if (urlConversationId) return;
@@ -1015,6 +1183,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
 
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
@@ -1098,6 +1267,17 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   }, [openSearchParam, searchParams, router, pathname]);
 
   useEffect(() => {
+    if (openShareParam !== 'true' || !urlConversationId) return;
+    setShareDialogOpen(true);
+    const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
+    next.delete('share');
+    const qs = next.toString();
+    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? conversationHref(urlConversationId)), {
+      scroll: false,
+    });
+  }, [openShareParam, pathname, router, searchParams, urlConversationId]);
+
+  useEffect(() => {
     if (!settingsSectionParam) return;
     const section = resolveWebSettingsSection(settingsSectionParam, isDesktopHost());
     if (section === null) return;
@@ -1126,6 +1306,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
    * A's Stop button in B's composer.
    */
   const displayedConversationId = urlConversationId ?? bareChatSessionId;
+  const attachmentUploadAttempt =
+    attachmentUploadAttempts.find(
+      (attempt) => attempt.ownerConversationId === displayedConversationId,
+    ) ?? null;
   const displayedImageTranscriptRecoveries = useMemo(
     () =>
       Object.values(imageTranscriptRecoveries).filter(
@@ -1208,8 +1392,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
    * what `getWorstUsagePercent` (used by the sidebar widget) has to discard.
    */
   const usageWarning = useMemo(
-    () => selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
-    [managedUsageSummary],
+    () =>
+      !subscription?.tier || isFreeBillingPlanTier(subscription.tier)
+        ? null
+        : selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
+    [managedUsageSummary, subscription?.tier],
   );
   const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
   const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
@@ -1471,7 +1658,6 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   const temporaryChatActive = displayedConversation
     ? Boolean(displayedConversation.isTemporary)
     : resolveNewChatTemporary(pendingTemporaryChat, newChatsTemporary);
-  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
@@ -1610,14 +1796,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               const reason = getConversationLoadError();
               setBareChatSessionId(null);
               setActiveConversation(null);
-              router.replace('/chat');
+              router.replace(surfaceRootHref);
               toast.error(
                 reason || "Couldn't load this conversation. Check your connection and try again.",
                 {
                   id: `conversation-unavailable-${urlConversationId}`,
                   action: {
                     label: 'Retry',
-                    onClick: () => router.push(`/chat/${urlConversationId}`),
+                    onClick: () => router.push(surfaceConversationHref(urlConversationId)),
                   },
                 },
               );
@@ -1636,6 +1822,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     loadConversation,
     router,
     setActiveConversation,
+    surfaceConversationHref,
+    surfaceRootHref,
     urlConversationId,
   ]);
 
@@ -1655,6 +1843,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         assistantMessageId?: string;
         /** Fires before provider egress once the exact user turn is durable. */
         onTurnCommitted?: () => void;
+        attachmentUploadAttemptId?: string;
       } = {},
     ): Promise<boolean> => {
       // Double-submit guard (Finding 7): bails out synchronously if a send is
@@ -1717,6 +1906,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       let targetConversationId =
         options.conversationId || urlConversationId || bareChatSessionId || null;
       let resolvedUserMessageId: string | null = options.userMessageId ?? null;
+      let attachmentsUploaded = false;
       // Nothing reached a model, so the text is the user's again. Parking it on
       // the conversation it was written for is what survives the create →
       // navigate remount that puts a different composer instance on screen.
@@ -1731,7 +1921,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           );
         if (!survived) {
           parkUnsentDraft(targetConversationId, content);
-          if (options.attachments?.length) setRestoredAttachments(options.attachments);
+          if (options.attachments?.length && attachmentsUploaded) {
+            setRestoredAttachments(options.attachments);
+          } else if (options.attachments?.length && !options.attachmentUploadAttemptId) {
+            setRestoredAttachments(options.attachments);
+          }
         }
         return false;
       };
@@ -1749,8 +1943,22 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           setBareChatSessionId((current) => (current === clientConvId ? null : current));
         }
         targetConversationId = null;
+        if (options.attachmentUploadAttemptId) {
+          setAttachmentUploadAttempts((current) =>
+            current.map((attempt) =>
+              attempt.id === options.attachmentUploadAttemptId
+                ? { ...attempt, ownerConversationId: null }
+                : attempt,
+            ),
+          );
+        }
       };
       try {
+        const mediaOverride = freeQuotaSelection(options.meta?.modelOverrideId);
+        const modelForTurn =
+          mediaOverride?.category === 'image' || mediaOverride?.category === 'video'
+            ? options.meta!.modelOverrideId!
+            : activeModelId;
         // Project scope for a NEW conversation: the composer's send meta is the
         // value the user saw at submit time; fall back to the shared store for
         // sends that do not originate from the composer picker flow.
@@ -1784,6 +1992,15 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           if (!urlConversationId) setBareChatSessionId(clientConvId);
         }
         targetConversationId = convId;
+        if (options.attachmentUploadAttemptId) {
+          setAttachmentUploadAttempts((current) =>
+            current.map((attempt) =>
+              attempt.id === options.attachmentUploadAttemptId
+                ? { ...attempt, ownerConversationId: convId }
+                : attempt,
+            ),
+          );
+        }
 
         const ensureConversationId = clientConvId
           ? async (): Promise<string | null> => {
@@ -1794,10 +2011,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               resolvedFreshConvId = c.id;
               adoptPendingComposerToggles(c.id);
               if (!urlConversationId) setBareChatSessionId(c.id);
-              // Navigate to the canonical /chat/[id] URL after the first message
-              // so the conversation is bookmarkable and survives a page refresh.
-              // Use replace so the empty /chat entry is removed from history.
-              router.replace(`/chat/${c.id}`);
+              // Keep the conversation bookmarkable after the first message and
+              // preserve whichever chat surface created it.
+              router.replace(surfaceConversationHref(c.id));
               return c.id;
             }
           : undefined;
@@ -1806,8 +2022,20 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           ? await uploadChatAttachments(options.attachments, {
               ...(existingConvId ? { conversationId: existingConvId } : {}),
               temporary: temporaryIntent,
+              ...(options.attachmentUploadAttemptId
+                ? {
+                    onStatus: (status) =>
+                      updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
+                  }
+                : {}),
             })
           : undefined;
+        attachmentsUploaded = Boolean(options.attachments?.length);
+        if (options.attachmentUploadAttemptId) {
+          setAttachmentUploadAttempts((current) =>
+            current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
+          );
+        }
 
         // AUDIT-FIX STR-22: `onTurnCommitted` fires as soon as the replacement
         // user turn is DURABLE (its row saved), not at stream end. The
@@ -1817,7 +2045,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         // stale answer.
         const doSend = (replacementTurnCommitted?: () => void) =>
           sendMessage(content, {
-            model: activeModelId,
+            model: modelForTurn,
             userMessageId: resolvedUserMessageId ?? undefined,
             assistantMessageId: options.assistantMessageId,
             conversationId: convId,
@@ -1839,9 +2067,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             research: options.meta?.researchEnabled,
             styleMode: options.meta?.styleMode,
             styleInstruction: options.meta?.styleInstruction,
+            artifactInstruction: options.meta?.artifactInstruction,
             skillName: options.meta?.skillName,
             mcpContext: options.meta?.mcpContext,
             disabledConnectorIds: options.meta?.disabledConnectorIds,
+            connectorToolsEnabled: options.meta?.connectorToolsEnabled,
             memoryEnabled: options.meta?.memoryEnabled,
           });
 
@@ -1876,6 +2106,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         return true;
       } catch (error) {
         const message = toUserMessage(error, 'Could not attach the selected files.');
+        if (options.attachmentUploadAttemptId && !attachmentsUploaded) {
+          failAttachmentUploadAttempt(options.attachmentUploadAttemptId, message);
+        }
         setChatError(message, targetConversationId ?? undefined);
         toast.error(message);
         releaseUnresolvedPlaceholder();
@@ -1890,6 +2123,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     },
     [
       urlConversationId,
+      surfaceConversationHref,
       bareChatSessionId,
       createConversation,
       setActiveConversation,
@@ -1903,7 +2137,48 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       router,
       setChatError,
       claimSendWindow,
+      failAttachmentUploadAttempt,
+      updateAttachmentUploadStatus,
     ],
+  );
+
+  const handleRetryAttachmentUpload = useCallback(
+    (_index: number) => {
+      const attempt = attachmentUploadAttempt;
+      if (!attempt || !attempt.statuses.some((status) => status.phase === 'failed')) return;
+      setAttachmentUploadAttempts((current) =>
+        current.map((candidate) =>
+          candidate.id === attempt.id
+            ? { ...candidate, statuses: candidate.files.map(() => ({ phase: 'preparing' })) }
+            : candidate,
+        ),
+      );
+      setComposerClearSignal((value) => value + 1);
+      void sendContent(attempt.content, {
+        ...(attempt.ownerConversationId ? { conversationId: attempt.ownerConversationId } : {}),
+        attachments: attempt.files,
+        meta: attempt.meta,
+        attachmentUploadAttemptId: attempt.id,
+      });
+    },
+    [attachmentUploadAttempt, sendContent],
+  );
+
+  const handleRemoveAttachmentUpload = useCallback(
+    (index: number) => {
+      if (
+        !attachmentUploadAttempt ||
+        !attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')
+      ) {
+        return;
+      }
+      const remaining = attachmentUploadAttempt.files.filter((_, fileIndex) => fileIndex !== index);
+      setAttachmentUploadAttempts((current) =>
+        current.filter((attempt) => attempt.id !== attachmentUploadAttempt.id),
+      );
+      setRestoredAttachments(remaining.length > 0 ? remaining : null);
+    },
+    [attachmentUploadAttempt],
   );
 
   // The project-detail composer is itself a Send control, not a prefill
@@ -2221,7 +2496,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
-              router.replace(`/chat/${fresh.id}`);
+              router.replace(surfaceConversationHref(fresh.id));
             }
           }
           if (!convId) return;
@@ -2273,6 +2548,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     },
     [
       displayedConversationId,
+      surfaceConversationHref,
       urlConversationId,
       createConversation,
       activeModelId,
@@ -2759,7 +3035,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             if (fresh) {
               convId = fresh.id;
               if (!urlConversationId) setBareChatSessionId(fresh.id);
-              router.replace(`/chat/${fresh.id}`);
+              router.replace(surfaceConversationHref(fresh.id));
             }
           }
           if (!convId) return;
@@ -3003,6 +3279,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     },
     [
       displayedConversationId,
+      surfaceConversationHref,
       urlConversationId,
       createConversation,
       activeModelId,
@@ -3110,8 +3387,13 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       skillId?: string,
       meta?: SendMeta,
     ): false | typeof SEND_GUARD_BLOCKED | void => {
-      const resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
-      let outgoingContent = content;
+      let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
+      const outgoingContent = content;
+      const mediaOverride = freeQuotaSelection(resolvedMeta?.modelOverrideId);
+      const targetModelId =
+        mediaOverride?.category === 'image' || mediaOverride?.category === 'video'
+          ? resolvedMeta!.modelOverrideId!
+          : activeModelId;
 
       // Natural-language image requests use the existing media harness even
       // when the user has not manually toggled Image mode. This interception
@@ -3119,15 +3401,19 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       // provider media endpoints, not text-chat adapters. A diagram, chart or
       // vector is not raster work: it stays a chat turn the Artifacts system
       // renders, rather than a picture of a diagram.
+      const localTaskType = classifyTaskLocally(content, []).type;
+      const hasExplicitArtifactDestination = explicitlyRequestsArtifact(content);
       if (
-        !freeQuotaSelection(activeModelId) &&
         !attachments?.length &&
-        classifyTaskLocally(content, []).type === 'image_generation'
+        (localTaskType === 'image_generation' || hasExplicitArtifactDestination)
       ) {
         const visualRoute = routeVisualRequest({ prompt: content, hasSourceImage: false });
         if (visualRoute.destination === 'artifact') {
-          outgoingContent = visualRoute.prompt;
-        } else {
+          resolvedMeta = {
+            ...resolvedMeta,
+            artifactInstruction: visualRoute.target.directive,
+          };
+        } else if (!freeQuotaSelection(targetModelId)) {
           const defaultImageModel = IMAGE_MODELS[0];
           if (defaultImageModel) {
             handleGenerateImage(content, {
@@ -3143,7 +3429,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         sourceConversationId: displayedConversationId,
         conversation: displayedConversation,
         messages: displayedMessages,
-        targetModelId: activeModelId,
+        targetModelId,
         outgoingContent,
         startCeremony: (request) => {
           setPendingByokHandoff({
@@ -3164,7 +3450,30 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           // is already set by the time this synchronous call returns -- long
           // before the returned promise itself settles. `void` here is
           // discarding the eventual resolution, not this synchronous decision.
-          void sendContent(outgoingContent, { attachments, meta: resolvedMeta });
+          const attachmentUploadAttemptId = attachments?.length ? crypto.randomUUID() : undefined;
+          if (attachmentUploadAttemptId && attachments) {
+            setAttachmentUploadAttempts((current) => [
+              ...current,
+              {
+                id: attachmentUploadAttemptId,
+                content: outgoingContent,
+                files: attachments,
+                statuses: attachments.map(() => ({ phase: 'preparing' })),
+                meta: resolvedMeta,
+                ownerConversationId: displayedConversationId,
+              },
+            ]);
+          }
+          void sendContent(outgoingContent, {
+            attachments,
+            meta: resolvedMeta,
+            attachmentUploadAttemptId,
+          });
+          if (lastSendGuardBlockedRef.current && attachmentUploadAttemptId) {
+            setAttachmentUploadAttempts((current) =>
+              current.filter((attempt) => attempt.id !== attachmentUploadAttemptId),
+            );
+          }
         },
       });
 
@@ -3318,7 +3627,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       // a safe target.
       addMessage(systemMessage, fork.id);
       setBareChatSessionId(fork.id);
-      router.push('/chat');
+      router.push(surfaceRootHref);
       setComposerClearSignal((value) => value + 1);
       setPendingByokHandoff(null);
       setSelectedHandoffContextIds([]);
@@ -3348,11 +3657,15 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     router,
     activeModelId,
     sendContent,
+    surfaceRootHref,
     claimSendWindow,
     updateConversation,
   ]);
 
   const handleNewChat = useCallback(() => {
+    setAttachmentUploadAttempts((current) =>
+      current.filter((attempt) => attempt.ownerConversationId !== displayedConversationId),
+    );
     useChatStore.getState().setPendingTemporaryChat(null);
     setActiveConversation(null);
     setBareChatSessionId(null);
@@ -3367,8 +3680,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     // Global "New chat" starts unscoped. Project-scoped new chats go through
     // the sidebar project row (/chat?projectId=...) or the composer picker.
     setActiveProject(null);
-    router.push('/chat');
-  }, [router, setActiveConversation, setActiveProject]);
+    router.push(surfaceRootHref);
+  }, [displayedConversationId, router, setActiveConversation, setActiveProject, surfaceRootHref]);
 
   const handleToggleSidebar = useCallback(
     () => setSidebarCollapsed(!sidebarCollapsed),
@@ -3392,13 +3705,11 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
 
   const handleSelectSession = useCallback(
     (id: string) => {
-      // Navigate to the canonical /chat/[id] URL so the conversation is
-      // bookmarkable and survives a page refresh. The routeInitializedRef
-      // effect will load the conversation from the URL param when the new
-      // route renders (avoiding a double-load when already active).
-      router.push(`/chat/${id}`);
+      // The routeInitializedRef effect loads the conversation from the URL
+      // param when the new route renders, avoiding a double-load here.
+      router.push(surfaceConversationHref(id));
     },
-    [router],
+    [router, surfaceConversationHref],
   );
 
   const handleDeleteSession = useCallback(
@@ -3412,7 +3723,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           if (id === displayedConversationId) {
             setBareChatSessionId(null);
             setActiveConversation(null);
-            router.push('/chat');
+            router.push(surfaceRootHref);
           }
         },
       });
@@ -3424,6 +3735,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       displayedConversationId,
       router,
       setActiveConversation,
+      surfaceRootHref,
     ],
   );
 
@@ -3894,15 +4206,12 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [conversations, updateConversation],
   );
 
-  // Share from the sidebar dropdown. If the target is not the active
-  // conversation, navigate to it first; the user can then share via the
-  // header share button or re-open the dropdown.
   const handleShareSession = useCallback(
     (id: string) => {
       if (id === displayedConversationId) {
         setShareDialogOpen(true);
       } else {
-        router.push(conversationHref(id));
+        router.push(conversationShareHref(id));
       }
     },
     [displayedConversationId, router],
@@ -4204,7 +4513,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             if (!created) return null;
             adoptPendingComposerToggles(created.id);
             if (!urlConversationId) setBareChatSessionId(created.id);
-            router.replace(`/chat/${created.id}`);
+            router.replace(surfaceConversationHref(created.id));
             return created.id;
           },
         });
@@ -4253,6 +4562,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       urlConversationId,
       setBareChatSessionId,
       router,
+      surfaceConversationHref,
       deleteMessage,
       isTrialExhausted,
       handleOpenUpgradeDialog,
@@ -4263,11 +4573,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   );
 
   const regenerateModelOptions = useMemo(
-    () =>
-      availableModels
-        .filter((model) => resolveSelectableModelId(model.id) === model.id)
-        .map(({ id, name }) => ({ id, name })),
-    [availableModels],
+    () => selectableRegenerateModelOptions(availableModels, isWebsiteFreeTrial),
+    [availableModels, isWebsiteFreeTrial],
   );
 
   const handleRegenerateWithModel = useCallback(
@@ -4307,7 +4614,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     onFocusComposer: handleFocusComposer,
     onCopyLastMessage: handleCopyLastMessage,
     onRegenerateLastMessage: handleRegenerateLastMessage,
-    onToggleArtifacts: () => _sharedArtifactStore.getState().togglePanel(),
+    onToggleArtifacts: () => toggleSecondaryPanel('artifacts'),
   });
 
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);
@@ -4575,13 +4882,14 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     [displayedConversationId, getToken, setChatError, updateMessage],
   );
 
-  const chatMessages = useMemo(
+  const chatMessageProjection = useMemo(
     () =>
       displayedConversationId
-        ? displayedMessages.map((m) => toChatMessage(m, displayedConversationId))
-        : [],
+        ? projectChatMessages(displayedMessages, displayedConversationId)
+        : ({ messages: [], patch: null } satisfies ChatMessageProjection),
     [displayedMessages, displayedConversationId],
   );
+  const chatMessages = chatMessageProjection.messages;
   const exportSession = useMemo(
     () =>
       displayedConversation ? toChatSession(displayedConversation, chatMessages.length) : null,
@@ -4653,7 +4961,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     adoptPendingComposerToggles(created.id);
     if (!urlConversationId) setBareChatSessionId(created.id);
     keepVoiceSessionAcrossNavigation();
-    router.replace(`/chat/${created.id}`);
+    router.replace(surfaceConversationHref(created.id));
     return created.id;
   }, [
     displayedConversationId,
@@ -4664,6 +4972,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     adoptPendingComposerToggles,
     urlConversationId,
     router,
+    surfaceConversationHref,
   ]);
 
   const handleVoiceTranscript = useCallback(
@@ -4880,7 +5189,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             aria-label={`Account menu for ${displayName}`}
             aria-busy={isAccountLoading}
             disabled={isAccountLoading}
-            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-70"
+            className="flex w-full items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
           >
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
               {userInitial}
@@ -4894,7 +5203,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 />
               </div>
               {!isAccountLoading && user?.email && (
-                <p className="truncate text-[12px] text-muted-foreground">{user.email}</p>
+                <p className="truncate text-caption text-muted-foreground">{user.email}</p>
               )}
             </div>
             <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -4918,7 +5227,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                 aria-label={`Account menu for ${displayName}`}
                 aria-busy={isAccountLoading}
                 disabled={isAccountLoading}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-wait disabled:opacity-70"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:cursor-wait disabled:opacity-70"
               >
                 {userInitial}
               </button>
@@ -4986,7 +5295,10 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
     getSessionHref: (session: SidebarSession) => conversationHref(session.id),
     // GOV-19: the two props the shared Sidebar's usage widget needs.
-    showUsageWidget: managedUsageSummary !== null,
+    showUsageWidget:
+      currentTier !== undefined &&
+      !isFreeBillingPlanTier(currentTier) &&
+      managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,
     onOpenUsage: handleSidebarOpenUsage,
     onSelect: handleSidebarSelect,
@@ -5009,14 +5321,17 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
   };
 
   // The shell ends where the consent banner begins rather than running under
-  // it. The banner is fixed at z-50 and its card takes pointer events, so
+  // it. The banner is fixed at z-[var(--z-dropdown)] and its card takes pointer events, so
   // anything in that strip was unreachable until it was answered: measured at
   // 1440x900, the account menu sat at y=826 and the token-budget row at y=792,
   // both inside a card spanning y=737-900, and the account menu is how you
   // reach settings, billing and sign-out. WebAppShell carries the same
   // treatment; /chat has its own shell and needed it separately.
   return (
-    <div className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+    <div
+      data-chat-surface={compact ? 'quick-ask' : 'full'}
+      className="fixed inset-x-0 top-0 bottom-[var(--agi-consent-inset,0px)] flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
+    >
       {/* Dialogs lifted from ChatSidebar to the page level */}
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}
@@ -5029,9 +5344,17 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
         shortcuts={KEYBOARD_SHORTCUT_DOCS}
       />
 
-      {!isNarrowViewport && <Sidebar {...sharedSidebarProps} collapsed={sidebarCollapsed} />}
+      {!compact && chatSidebarMode !== 'drawer' && (
+        <Sidebar
+          {...sharedSidebarProps}
+          collapsed={chatSidebarMode === 'rail' ? true : sidebarCollapsed}
+          onToggleCollapse={
+            chatSidebarMode === 'rail' ? () => setMobileNavOpen(true) : handleToggleSidebar
+          }
+        />
+      )}
 
-      {isNarrowViewport && (
+      {!compact && sidebarUsesOverlay && (
         <Sheet open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
           <SheetContent
             id={MOBILE_NAV_DRAWER_ID}
@@ -5055,8 +5378,8 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
       {/* Main area + artifact workbench */}
       <div
         className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
-        aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
-        inert={isNarrowViewport && mobileNavOpen ? true : undefined}
+        aria-hidden={sidebarUsesOverlay && mobileNavOpen ? true : undefined}
+        inert={sidebarUsesOverlay && mobileNavOpen ? true : undefined}
       >
         <div
           id="main-content"
@@ -5064,167 +5387,175 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
           tabIndex={-1}
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
         >
-          <div
-            data-app-header=""
-            className={cn(
-              'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
-              isEmptyChat
-                ? 'border-b border-transparent'
-                : 'border-b border-[var(--chat-border-subtle)]',
-            )}
-          >
-            {/* Title left, actions right, the arrangement both leaders use. The
+          {!compact && (
+            <div
+              data-app-header=""
+              className={cn(
+                'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                isEmptyChat
+                  ? 'border-b border-transparent'
+                  : 'border-b border-[var(--chat-border-subtle)]',
+              )}
+            >
+              {/* Title left, actions right, the arrangement both leaders use. The
                 chevron menu carries the row actions (rename, move, share,
                 print, export, branch, delete); Share keeps its own control in
                 the trailing cluster beside the drawer toggles. */}
-            <div className="flex min-w-0 flex-1 items-center gap-1">
-              {isNarrowViewport && (
-                <Button
-                  ref={mobileNavTriggerRef}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setMobileNavOpen(true)}
-                  aria-label={t('chat:openNavigation')}
-                  aria-expanded={mobileNavOpen}
-                  aria-controls={MOBILE_NAV_DRAWER_ID}
-                  className="-ml-1 h-8 w-8 shrink-0 p-0"
-                >
-                  <Menu className="h-5 w-5" aria-hidden="true" />
-                </Button>
-              )}
-              {voiceModeActive && <VoiceHeaderLabel />}
-              {!voiceModeActive && temporaryChatActive && !hasMessages && (
-                <div
-                  className="flex min-w-0 shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
-                  title={t('chat:header.temporaryChatRetentionNote')}
-                >
-                  <EyeOff
-                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                  <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
-                  <span className="hidden truncate text-[12px] font-normal text-muted-foreground sm:inline">
-                    · {t('chat:header.temporaryChatRetentionNote')}
-                  </span>
-                </div>
-              )}
-              {!voiceModeActive && temporaryChatActive && hasMessages && (
-                <span
-                  className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
-                  role="status"
-                  title={t('chat:header.temporaryChatRetentionNote')}
-                >
-                  <EyeOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                  <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
-                </span>
-              )}
-              {!voiceModeActive &&
-                !temporaryChatActive &&
-                !hasMessages &&
-                isConversationTranscriptPending && <ConversationTitlePlaceholder />}
-              {!voiceModeActive &&
-                hasMessages &&
-                activeConversationTitle &&
-                activeConversationTitle !== NEW_CHAT_TITLE &&
-                displayedConversationId && (
-                  <ConversationTitleMenu
-                    title={activeConversationTitle}
-                    agiWork={isAgiWorkConversation}
-                    projects={sidebarProjects}
-                    onRename={(next) => handleRenameSession(displayedConversationId, next)}
-                    onMoveToProject={(projectId) =>
-                      handleMoveToProjectSession(displayedConversationId, projectId)
-                    }
-                    archived={displayedConversation?.isArchived ?? false}
-                    onArchiveToggle={() => handleArchiveSession(displayedConversationId)}
-                    onDelete={() => void handleDeleteSession(displayedConversationId)}
-                    // Ctrl+P alone could never work here: the transcript is
-                    // virtualized, so the browser would print only the rows in
-                    // the DOM and the result would look complete.
-                    onPrint={() => void printConversation()}
-                    onExport={() => setExportDialogOpen(true)}
-                    onShare={() => setShareDialogOpen(true)}
-                    // Conversation-level fork. The branch API and its hook were
-                    // already live for per-message branching; only this entry
-                    // point was missing. Branching from the LAST message
-                    // duplicates the whole thread.
-                    onFork={
-                      displayedMessages.length > 0
-                        ? () => {
-                            const last = displayedMessages[displayedMessages.length - 1];
-                            if (last?.id) void createBranch(last.id);
-                          }
-                        : undefined
-                    }
-                  />
+              <div className="flex min-w-0 flex-1 items-center gap-1">
+                {isNarrowViewport && (
+                  <Button
+                    ref={mobileNavTriggerRef}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileNavOpen(true)}
+                    aria-label={t('chat:openNavigation')}
+                    aria-expanded={mobileNavOpen}
+                    aria-controls={MOBILE_NAV_DRAWER_ID}
+                    className="-ml-1 h-8 w-8 shrink-0 p-0"
+                  >
+                    <Menu className="h-5 w-5" aria-hidden="true" />
+                  </Button>
                 )}
-            </div>
+                {voiceModeActive && <VoiceHeaderLabel />}
+                {!voiceModeActive && temporaryChatActive && !hasMessages && (
+                  <div
+                    className="flex min-w-0 shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
+                    title={t('chat:header.temporaryChatRetentionNote')}
+                  >
+                    <EyeOff
+                      className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
+                    <span className="hidden truncate text-caption font-normal text-muted-foreground sm:inline">
+                      · {t('chat:header.temporaryChatRetentionNote')}
+                    </span>
+                  </div>
+                )}
+                {!voiceModeActive && temporaryChatActive && hasMessages && (
+                  <span
+                    className="flex shrink-0 items-center gap-1.5 text-[13px] font-medium text-foreground"
+                    role="status"
+                    title={t('chat:header.temporaryChatRetentionNote')}
+                  >
+                    <EyeOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+                    <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
+                  </span>
+                )}
+                {!voiceModeActive &&
+                  !temporaryChatActive &&
+                  !hasMessages &&
+                  isConversationTranscriptPending && <ConversationTitlePlaceholder />}
+                {!voiceModeActive &&
+                  hasMessages &&
+                  activeConversationTitle &&
+                  activeConversationTitle !== NEW_CHAT_TITLE &&
+                  displayedConversationId && (
+                    <ConversationTitleMenu
+                      title={activeConversationTitle}
+                      agiWork={isAgiWorkConversation}
+                      projects={sidebarProjects}
+                      onRename={(next) => handleRenameSession(displayedConversationId, next)}
+                      onMoveToProject={(projectId) =>
+                        handleMoveToProjectSession(displayedConversationId, projectId)
+                      }
+                      archived={displayedConversation?.isArchived ?? false}
+                      onArchiveToggle={() => handleArchiveSession(displayedConversationId)}
+                      onDelete={() => void handleDeleteSession(displayedConversationId)}
+                      // Ctrl+P alone could never work here: the transcript is
+                      // virtualized, so the browser would print only the rows in
+                      // the DOM and the result would look complete.
+                      onPrint={() => void printConversation()}
+                      onExport={() => setExportDialogOpen(true)}
+                      onShare={() => setShareDialogOpen(true)}
+                      // Conversation-level fork. The branch API and its hook were
+                      // already live for per-message branching; only this entry
+                      // point was missing. Branching from the LAST message
+                      // duplicates the whole thread.
+                      onFork={
+                        displayedMessages.length > 0
+                          ? () => {
+                              const last = displayedMessages[displayedMessages.length - 1];
+                              if (last?.id) void createBranch(last.id);
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
+              </div>
 
-            {/*
+              {/*
               Four fixed controls beside the title left it 24px of a 255px name
               at 320px - one character and an ellipsis. The panel toggles
               collapse behind one control on a phone, and Share keeps its home
               in the title menu; they keep their own state and labels, so
               nothing is lost but the width.
             */}
-            <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
-              {hasMessages && (
-                <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+                {hasMessages && (
+                  <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-9 w-9 p-0"
+                      aria-label={t('chat:openPanels', 'Panels')}
+                    >
+                      <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="flex w-auto flex-row gap-1.5 p-1.5">
+                    {hasMessages && showWorkSession && (
+                      <WorkSessionToggleButton
+                        messages={displayedMessages}
+                        open={workSessionPanelOpen}
+                        onToggle={() => toggleSecondaryPanel('work')}
+                        agiWork={isAgiWorkConversation}
+                      />
+                    )}
+                    <ResearchToggleButton
+                      count={researchSourceCount}
+                      onToggle={() => toggleSecondaryPanel('research')}
+                    />
+                    <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+                {hasMessages && (
+                  <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
+                )}
+                {hasMessages && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-9 w-9 p-0"
-                    aria-label={t('chat:openPanels', 'Panels')}
+                    onClick={() => setShareDialogOpen(true)}
+                    className="gap-1.5"
+                    aria-label={t('chat:shareConversation')}
                   >
-                    <PanelsTopLeft className="h-4 w-4" aria-hidden="true" />
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    <span className="text-xs">{t('common:share')}</span>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="flex w-auto flex-row gap-1.5 p-1.5">
-                  {hasMessages && showWorkSession && (
-                    <WorkSessionToggleButton
-                      messages={displayedMessages}
-                      open={workSessionPanelOpen}
-                      onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
-                      agiWork={isAgiWorkConversation}
-                    />
-                  )}
-                  <ResearchToggleButton count={researchSourceCount} />
-                  <ArtifactsToggleButton />
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-
-            <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
-              {hasMessages && (
-                <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
-              )}
-              {hasMessages && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShareDialogOpen(true)}
-                  className="gap-1.5"
-                  aria-label={t('chat:shareConversation')}
-                >
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                  <span className="text-xs">{t('common:share')}</span>
-                </Button>
-              )}
-              {hasMessages && showWorkSession && (
-                <WorkSessionToggleButton
-                  messages={displayedMessages}
-                  open={workSessionPanelOpen}
-                  onToggle={() => setWorkSessionPanelOpen(!workSessionPanelOpen)}
-                  agiWork={isAgiWorkConversation}
+                )}
+                {hasMessages && showWorkSession && (
+                  <WorkSessionToggleButton
+                    messages={displayedMessages}
+                    open={workSessionPanelOpen}
+                    onToggle={() => toggleSecondaryPanel('work')}
+                    agiWork={isAgiWorkConversation}
+                  />
+                )}
+                <ResearchToggleButton
+                  count={researchSourceCount}
+                  onToggle={() => toggleSecondaryPanel('research')}
                 />
-              )}
-              <ResearchToggleButton count={researchSourceCount} />
-              <ArtifactsToggleButton />
+                <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* A render failure inside the transcript used to reach the route
               boundary, which replaces the page and takes the sidebar and the
@@ -5318,7 +5649,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
-                  {!voiceModeActive && <GreetingBanner />}
+                  {!compact && !voiceModeActive && <GreetingBanner />}
                   <div className="mx-auto w-full max-w-3xl px-4">
                     {usageBanner}
                     {unavailableModelNotice}
@@ -5348,6 +5679,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         clearSignal={composerClearSignal}
                         droppedFiles={restoredAttachments}
                         onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                        attachmentUploadAttempt={attachmentUploadAttempt}
+                        onRetryAttachmentUpload={handleRetryAttachmentUpload}
+                        onRemoveAttachmentUpload={handleRemoveAttachmentUpload}
                         emptyState
                         attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
@@ -5382,6 +5716,7 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                       <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                         <ChatMessageList
                           messages={chatMessages}
+                          transcriptPatch={chatMessageProjection.patch}
                           currentTier={currentTier}
                           conversationId={displayedConversationId}
                           isLoading={isLoading && !isStreaming}
@@ -5453,6 +5788,9 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
                         clearSignal={composerClearSignal}
                         droppedFiles={restoredAttachments}
                         onDroppedFilesConsumed={handleRestoredAttachmentsConsumed}
+                        attachmentUploadAttempt={attachmentUploadAttempt}
+                        onRetryAttachmentUpload={handleRetryAttachmentUpload}
+                        onRemoveAttachmentUpload={handleRemoveAttachmentUpload}
                         attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                         sendPreviewPresentation={sendPreviewPresentation}
                         onUpgradeRequest={handleOpenUpgradeDialog}
@@ -5475,23 +5813,25 @@ export default function WebChatPage({ initialWorkMode }: WebChatPageProps) {
             )}
           </ChatConversationBoundary>
         </div>
-        {showWorkSession && (
+        {!compact && showWorkSession && activeSecondaryPanel === 'work' && (
           <WorkSessionPanel
             messages={displayedMessages}
-            open={workSessionPanelOpen && !artifactPanelOpen}
+            open={workSessionPanelOpen}
             onClose={() => setWorkSessionPanelOpen(false)}
             agiWork={isAgiWorkConversation}
           />
         )}
-        {voiceModeActive && (
+        {!compact && voiceModeActive && (
           <VoiceActivityPanel
             open={Boolean(voiceActivityMessageId)}
             activity={voiceActivity}
             onClose={() => setVoiceActivityMessageId(null)}
           />
         )}
-        <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
-        <ArtifactsPanel />
+        {!compact && activeSecondaryPanel === 'research' && (
+          <ResearchPanel {...(isStreaming ? {} : { onAskFollowUp: handleResearchFollowUp })} />
+        )}
+        {!compact && activeSecondaryPanel === 'artifacts' && <ArtifactsPanel />}
       </div>
       <CreateProjectDialog
         open={createProjectOpen}

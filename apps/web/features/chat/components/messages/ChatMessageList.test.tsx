@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
-import { ChatMessageList, groupMessages } from './ChatMessageList';
+import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
+import { getSelectableModels } from '@agiworkforce/types';
 
 const ttsMock = vi.hoisted(() => {
   const state = { isSpeaking: false };
@@ -14,6 +15,18 @@ const ttsMock = vi.hoisted(() => {
   });
   return { state, speak, stop };
 });
+
+const DEFAULT_INNER_HEIGHT = window.innerHeight;
+
+class FakeVisualViewport extends EventTarget {
+  height = 844;
+  offsetTop = 0;
+
+  cover(keyboardHeight: number) {
+    this.height = 844 - keyboardHeight;
+    this.dispatchEvent(new Event('resize'));
+  }
+}
 
 beforeEach(() => {
   window.HTMLElement.prototype.scrollTo = vi.fn(function (
@@ -32,6 +45,14 @@ beforeEach(() => {
   ttsMock.state.isSpeaking = false;
   ttsMock.speak.mockClear();
   ttsMock.stop.mockClear();
+});
+
+afterEach(() => {
+  Object.defineProperty(window, 'visualViewport', { value: undefined, configurable: true });
+  Object.defineProperty(window, 'innerHeight', {
+    value: DEFAULT_INNER_HEIGHT,
+    configurable: true,
+  });
 });
 
 vi.mock('framer-motion', () => ({
@@ -224,6 +245,27 @@ describe('groupMessages()', () => {
     const groups = groupMessages(msgs);
     expect(groups[0]!.firstId).toBe('first');
   });
+
+  it('rebuilds only the patched group in a 500-message transcript', () => {
+    const messages = Array.from({ length: 500 }, (_, index) =>
+      makeMessage({
+        id: `message-${index}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `content-${index}`,
+      }),
+    );
+    const groups = groupMessages(messages);
+    const nextMessages = messages.slice();
+    nextMessages[499] = { ...messages[499]!, content: 'updated' };
+
+    const nextGroups = patchMessageGroups(nextMessages, { previous: messages, index: 499 }, groups);
+
+    expect(nextGroups).toHaveLength(500);
+    expect(nextGroups[0]).toBe(groups[0]);
+    expect(nextGroups[498]).toBe(groups[498]);
+    expect(nextGroups[499]).not.toBe(groups[499]);
+    expect(nextGroups[499]?.messages[0]?.content).toBe('updated');
+  });
 });
 
 describe('ChatMessageList rendering', () => {
@@ -277,6 +319,53 @@ describe('ChatMessageList rendering', () => {
       'max-w-3xl',
       'px-4',
     );
+  });
+
+  it('does not suggest another web search after the last turn could not search', () => {
+    render(
+      <ChatMessageList
+        messages={[
+          makeMessage({ id: 'u1', role: 'user', content: 'Search for the official source' }),
+          makeMessage({
+            id: 'a1',
+            role: 'assistant',
+            content: 'I could not run web search, so this answer is based on existing context.',
+            metadata: {
+              followUpSuggestions: ['Search the web to verify', 'Explain the existing context'],
+              agentActivity: {
+                schemaVersion: 1,
+                sessionId: 'conv-1',
+                turnId: 'a1',
+                lastSequence: 0,
+                status: 'completed',
+                startedAtMs: 1,
+                updatedAtMs: 2,
+                entries: [
+                  {
+                    kind: 'tool',
+                    id: 'search-1',
+                    toolCallId: 'search-1',
+                    name: 'web_search',
+                    category: 'web-search',
+                    summary:
+                      'Web search unavailable: 20 included searches used in the last 30 days.',
+                    status: 'failed',
+                    unavailable: true,
+                    startedAtMs: 1,
+                    completedAtMs: 2,
+                  },
+                ],
+              },
+            },
+          }),
+        ]}
+        onSendMessage={vi.fn()}
+        enableFollowUpSuggestions
+      />,
+    );
+
+    expect(screen.queryByText('Search the web to verify')).not.toBeInTheDocument();
+    expect(screen.getByText('Explain the existing context')).toBeInTheDocument();
   });
 
   it('marks only the last assistant message as the latest turn', () => {
@@ -396,6 +485,23 @@ describe('ChatMessageList rendering', () => {
   it('has aria role="log" on the scroll container', () => {
     render(<ChatMessageList messages={messages} />);
     expect(screen.getByRole('log')).toBeInTheDocument();
+  });
+
+  it('keeps the pinned transcript above an overlaying mobile keyboard', () => {
+    const viewport = new FakeVisualViewport();
+    Object.defineProperty(window, 'visualViewport', { value: viewport, configurable: true });
+    Object.defineProperty(window, 'innerHeight', { value: 844, configurable: true });
+    render(<ChatMessageList messages={messages} />);
+    const scrollTo = vi.mocked(window.HTMLElement.prototype.scrollTo);
+    scrollTo.mockClear();
+
+    act(() => viewport.cover(336));
+
+    const transcript = screen.getByTestId('chat-message-list');
+    expect(transcript).toHaveAttribute('data-soft-keyboard-inset', '336');
+    expect(transcript).toHaveStyle({ height: 'calc(100% - 336px)' });
+    expect(screen.getByRole('log')).toHaveStyle({ height: '100%' });
+    expect(scrollTo).toHaveBeenCalled();
   });
 
   it('silences the scroll container as a live region and reports busy state', () => {
@@ -1364,6 +1470,33 @@ describe('ChatMessageList stream error notice', () => {
     );
     expect(switchModelButton()).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
+  });
+
+  it('does not offer an incompatible model switch after a Free image turn fails', () => {
+    const messages = streamErrorCodeThread('provider_overloaded');
+    messages[0]!.attachments = [{ id: 'image-1', name: 'chart.png', type: 'image/png' }];
+    messages[1]!.model = getSelectableModels()[0]!.id;
+
+    const { rerender } = render(
+      <ChatMessageList
+        messages={messages}
+        currentTier="free"
+        regenerateModelOptions={[]}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(switchModelButton()).not.toBeInTheDocument();
+    expect(retryButton()).toBeInTheDocument();
+
+    rerender(
+      <ChatMessageList
+        messages={messages}
+        currentTier="pro"
+        regenerateModelOptions={[]}
+        onRegenerate={vi.fn()}
+      />,
+    );
+    expect(switchModelButton()).toBeInTheDocument();
   });
 
   it('renders taxonomy copy instead of a provider payload, whatever the producer sent', () => {

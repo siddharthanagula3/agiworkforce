@@ -1,8 +1,12 @@
 # Data transfer, caching and system design review (2026-09-04)
 
-Status: Current
+Status: Historical repository snapshot
 Owner: Founder
 Last updated: 2026-09-04
+
+This file records the September 4 incident and source review. Re-check every
+path and open recommendation against the current tree before acting; current
+architecture and open defects live in their canonical docs and ledgers.
 
 Written by the orchestrating model after the production Neon project exhausted its 5 GB monthly network transfer in three days. Every claim below was read from the code on this date; file paths are given so the reader can verify.
 

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
 import { toSidebarSessions } from '../sidebar-session-rows';
-import { conversationHref } from '../sidebar-session-actions';
+import { conversationHref, conversationShareHref } from '../sidebar-session-actions';
 import { projectHref, projectNewChatHref } from '../sidebar-project-actions';
 
 const webRoot = join(__dirname, '..', '..', '..', '..');
@@ -57,6 +57,13 @@ describe('one application shell', () => {
     expect(conversationHref('a b')).toBe('/chat/a%20b');
     expect(projectHref('a b')).toBe('/chat/projects/a%20b');
     expect(projectNewChatHref('a b')).toBe('/chat?projectId=a%20b');
+  });
+
+  it('sends Share from either shell to the selected conversation with its intent intact', () => {
+    for (const source of [appShell, chatShell]) {
+      expect(source).toContain('conversationShareHref(id)');
+    }
+    expect(conversationShareHref('a b')).toBe('/chat/a%20b?share=true');
   });
 });
 

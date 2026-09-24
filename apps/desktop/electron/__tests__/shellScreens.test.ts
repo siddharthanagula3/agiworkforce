@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { crashScreen, offlineScreen, shellScreenUrl } from '../shellScreens';
+import {
+  crashScreen,
+  offlineScreen,
+  retryUrlAfterFailedLoad,
+  shellScreenUrl,
+} from '../shellScreens';
 
 function decode(url: string): string {
   return decodeURIComponent(url.replace(/^data:text\/html;charset=utf-8,/, ''));
@@ -48,6 +53,21 @@ describe('the page the shell draws when it cannot show the app', () => {
       shellScreenUrl(offlineScreen(-106), 'https://agiworkforce.com/chat?x=1', false),
     );
     expect(html).toContain('location.href="https://agiworkforce.com/chat?x=1"');
+  });
+
+  it('retries the route that failed instead of resetting the window to chat', () => {
+    expect(
+      retryUrlAfterFailedLoad(
+        'https://agiworkforce.com/chat/projects/project-1?tab=files',
+        'https://agiworkforce.com/chat',
+      ),
+    ).toBe('https://agiworkforce.com/chat/projects/project-1?tab=files');
+  });
+
+  it('falls back to the entry route when the failed URL is outside the app origin', () => {
+    expect(
+      retryUrlAfterFailedLoad('https://example.com/phishing', 'https://agiworkforce.com/chat'),
+    ).toBe('https://agiworkforce.com/chat');
   });
 
   it('closes no tag a screen title could open', () => {

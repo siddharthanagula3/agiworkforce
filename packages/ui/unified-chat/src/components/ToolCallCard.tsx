@@ -43,6 +43,7 @@ export interface ToolCallCardProps {
   expired?: boolean;
   onResend?: (id: string) => void;
   showCopyAction?: boolean;
+  completionLabel?: string;
   footer?: ReactNode;
   className?: string;
 }
@@ -183,16 +184,16 @@ function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
   return (
     <div
       data-testid="tool-file-diff"
-      className="rounded border border-white/8 bg-black/20 overflow-hidden"
+      className="rounded-compact border border-white/8 bg-black/20 overflow-hidden"
     >
       <div className="flex items-center gap-2 px-2 py-1 border-b border-white/8">
-        <span className="flex-1 truncate font-mono text-[12px] text-muted-foreground">
+        <span className="flex-1 truncate font-mono text-caption text-muted-foreground">
           {filePath ?? 'diff'}
         </span>
-        <span className="font-mono text-[12px] text-green-500">+{additions}</span>
-        <span className="font-mono text-[12px] text-red-500">-{deletions}</span>
+        <span className="font-mono text-caption text-green-500">+{additions}</span>
+        <span className="font-mono text-caption text-red-500">-{deletions}</span>
       </div>
-      <div className="max-h-48 overflow-auto font-mono text-[12px] leading-snug">
+      <div className="max-h-48 overflow-auto font-mono text-caption leading-snug">
         {visible.map((line, index) => (
           <div
             key={index}
@@ -240,7 +241,7 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
           type="button"
           aria-label={copied ? 'Code copied' : 'Copy code'}
           onClick={handleCopy}
-          className="h-6 gap-1 px-1.5 text-[12px] flex items-center rounded text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          className="h-6 gap-1 px-1.5 text-caption flex items-center rounded-compact text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
           {copied ? (
             <Check className="h-2.5 w-2.5" aria-hidden="true" />
@@ -352,6 +353,7 @@ const ToolCallCardComponent = ({
   expired = false,
   onResend,
   showCopyAction = true,
+  completionLabel,
   footer,
   className,
 }: ToolCallCardProps) => {
@@ -417,7 +419,7 @@ const ToolCallCardComponent = ({
     error ? (
       <div className="space-y-2 -m-4 p-2">
         {showDeviceWait && (
-          <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
+          <div className="flex items-center gap-2 p-2 rounded-compact bg-muted/50 border border-border">
             <AlertCircle className="h-3.5 w-3.5 text-warning-text flex-shrink-0" />
             <p className="flex-1 text-xs text-muted-foreground">
               {deviceStep?.onThisDevice
@@ -428,7 +430,7 @@ const ToolCallCardComponent = ({
               <button
                 type="button"
                 onClick={() => onCancel(id)}
-                className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
+                className="h-6 px-2 text-xs font-medium rounded-compact border border-border bg-background hover:bg-muted transition-colors"
               >
                 Cancel
               </button>
@@ -437,7 +439,7 @@ const ToolCallCardComponent = ({
         )}
 
         {showExpiredDevice && (
-          <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
+          <div className="flex items-center gap-2 p-2 rounded-compact bg-muted/50 border border-border">
             <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             <p className="flex-1 text-xs text-muted-foreground">
               {`This step waited too long for ${deviceStep?.deviceName ?? 'your desktop'}. Ask again on that device.`}
@@ -446,7 +448,7 @@ const ToolCallCardComponent = ({
         )}
 
         {showExpiredApproval && (
-          <div className="flex items-center gap-2 p-2 rounded bg-muted/50 border border-border">
+          <div className="flex items-center gap-2 p-2 rounded-compact bg-muted/50 border border-border">
             <AlertCircle className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
             <p className="flex-1 text-xs text-muted-foreground">
               This approval request expired or is no longer active.
@@ -456,7 +458,7 @@ const ToolCallCardComponent = ({
               <button
                 type="button"
                 onClick={() => onResend(id)}
-                className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
+                className="h-6 px-2 text-xs font-medium rounded-compact border border-border bg-background hover:bg-muted transition-colors"
               >
                 Resend
               </button>
@@ -465,7 +467,7 @@ const ToolCallCardComponent = ({
         )}
 
         {showApprovalPrompt && (
-          <div className="flex items-center gap-2 p-2 rounded bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
+          <div className="flex items-center gap-2 p-2 rounded-compact bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
             <AlertCircle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
             <p className="flex-1 text-xs text-yellow-900 dark:text-yellow-100">
               This tool requires approval before execution.
@@ -475,7 +477,7 @@ const ToolCallCardComponent = ({
                 <button
                   type="button"
                   onClick={() => onApprove(id)}
-                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded bg-green-700 hover:bg-green-800 text-white transition-colors"
+                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded-compact bg-green-700 hover:bg-green-800 text-white transition-colors"
                 >
                   <Play className="h-2.5 w-2.5" />
                   {TOOL_APPROVAL_ACTION_LABELS.allow}
@@ -485,7 +487,7 @@ const ToolCallCardComponent = ({
                 <button
                   type="button"
                   onClick={() => onReject(id)}
-                  className="h-6 px-2 text-xs font-medium rounded border border-border bg-background hover:bg-muted transition-colors"
+                  className="h-6 px-2 text-xs font-medium rounded-compact border border-border bg-background hover:bg-muted transition-colors"
                 >
                   {TOOL_APPROVAL_ACTION_LABELS.deny}
                 </button>
@@ -496,7 +498,7 @@ const ToolCallCardComponent = ({
 
         {showParameters && (hasArgs || commandText) && (
           <div>
-            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Request
             </p>
             {codeBlock ? (
@@ -504,11 +506,11 @@ const ToolCallCardComponent = ({
             ) : requestDiff ? (
               <FileDiffBlock {...requestDiff} />
             ) : commandText ? (
-              <pre className="font-mono text-[12px] leading-snug p-2 rounded bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
+              <pre className="font-mono text-caption leading-snug p-2 rounded-compact bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
                 {commandText}
               </pre>
             ) : (
-              <pre className="overflow-auto max-h-40 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
+              <pre className="overflow-auto max-h-40 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
                 {JSON.stringify(args, null, 2)}
               </pre>
             )}
@@ -517,13 +519,13 @@ const ToolCallCardComponent = ({
 
         {result && (
           <div>
-            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Response
             </p>
             {resultDiff ? (
               <FileDiffBlock {...resultDiff} />
             ) : (
-              <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
+              <pre className="overflow-auto max-h-48 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed scrollbar-thin">
                 {result}
               </pre>
             )}
@@ -532,10 +534,10 @@ const ToolCallCardComponent = ({
 
         {displayError && (
           <div>
-            <p className="text-[12px] uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
+            <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
-            <pre className="overflow-auto max-h-48 rounded bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
+            <pre className="overflow-auto max-h-48 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
               {displayError}
             </pre>
           </div>
@@ -568,48 +570,51 @@ const ToolCallCardComponent = ({
           errorMessage={status === 'error' ? error : undefined}
           body={body}
           defaultOpen={showApprovalPrompt || showExpiredApproval}
-        />
-
-        {(canCancel || showCopyAction) && (
-          <div
-            className={cn(
-              'pointer-events-none absolute right-1 top-1 flex items-center gap-1.5',
-              'opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-hover:pointer-events-auto',
-              'group-focus-within:opacity-100 group-focus-within:pointer-events-auto',
-              canCancel && 'opacity-100 pointer-events-auto',
-            )}
-          >
-            {canCancel && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Cancel"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCancel!(id);
-                }}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <XIcon className="h-3 w-3" />
-              </Button>
-            )}
-            {showCopyAction && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label={copied ? 'Copied' : 'Copy'}
-                onClick={handleCopy}
-                className="h-6 w-6 text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                {copied ? (
-                  <Check className="h-3 w-3 text-green-500" />
-                ) : (
-                  <Copy className="h-3 w-3" />
+          completionLabel={completionLabel}
+          trailingAction={
+            canCancel || showCopyAction ? (
+              <div
+                className={cn(
+                  'pointer-events-none flex items-center gap-1.5 opacity-0 transition-opacity duration-quick',
+                  'group-hover:pointer-events-auto group-hover:opacity-100',
+                  'group-focus-within:pointer-events-auto group-focus-within:opacity-100',
+                  '[@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100',
+                  canCancel && 'pointer-events-auto opacity-100',
                 )}
-              </Button>
-            )}
-          </div>
-        )}
+              >
+                {canCancel && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Cancel"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancel!(id);
+                    }}
+                    className="h-6 w-6 text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11"
+                  >
+                    <XIcon className="h-3 w-3" />
+                  </Button>
+                )}
+                {showCopyAction && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={copied ? 'Copied' : 'Copy'}
+                    onClick={handleCopy}
+                    className="h-6 w-6 text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11"
+                  >
+                    {copied ? (
+                      <Check className="h-3 w-3 text-green-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </Button>
+                )}
+              </div>
+            ) : undefined
+          }
+        />
       </div>
 
       {footer}

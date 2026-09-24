@@ -189,7 +189,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-medium',
+          'inline-flex items-center gap-0.5 rounded-compact px-1.5 py-0.5 text-caption font-medium',
           'bg-[var(--chat-info)]/15 text-[var(--chat-info)]',
           className,
         )}
@@ -203,7 +203,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
     return (
       <span
         className={cn(
-          'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-medium',
+          'inline-flex items-center gap-0.5 rounded-compact px-1.5 py-0.5 text-caption font-medium',
           'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]',
           className,
         )}
@@ -216,7 +216,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[12px] font-medium',
+        'inline-flex items-center gap-0.5 rounded-compact px-1.5 py-0.5 text-caption font-medium',
         'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
         className,
       )}
@@ -260,9 +260,9 @@ function ThinkingToggle({ enabled, enabledEffort, onChange }: ThinkingToggleProp
         onChange(!enabled);
       }}
       className={cn(
-        'flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5',
-        'text-[12px] font-medium transition-colors',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--chat-accent-secondary)]',
+        'flex shrink-0 items-center gap-0.5 rounded-compact px-1 py-0.5',
+        'text-caption font-medium transition-colors',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--chat-focus-ring)]',
         enabled
           ? 'bg-[var(--chat-accent-primary)]/10 text-[var(--chat-accent-primary-text)]'
           : 'text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-secondary)]',
@@ -313,7 +313,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
             </span>
             <span
               className={cn(
-                'shrink-0 rounded px-1.5 py-0.5 text-[12px] font-semibold uppercase tracking-wide',
+                'shrink-0 rounded-compact px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide',
                 isSelected
                   ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary-text)]'
                   : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
@@ -326,17 +326,17 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
           {isSelected && routedModel ? (
             <div className="mt-0.5 flex items-center gap-1">
               <Sparkles size={9} className="shrink-0 text-[var(--chat-accent-primary-text)]" />
-              <span className="text-[12px] text-[var(--chat-accent-primary-text)]">
+              <span className="text-caption text-[var(--chat-accent-primary-text)]">
                 {routedModel.name}
               </span>
               {taskLabel && (
-                <span className="rounded bg-[var(--chat-accent-primary)]/10 px-1 py-px text-[12px] font-medium text-[var(--chat-accent-primary-text)]">
+                <span className="rounded-compact bg-[var(--chat-accent-primary)]/10 px-1 py-px text-caption font-medium text-[var(--chat-accent-primary-text)]">
                   {taskLabel}
                 </span>
               )}
             </div>
           ) : (
-            <p className="mt-0.5 text-[12px] text-[var(--chat-text-muted)]">
+            <p className="mt-0.5 text-caption text-[var(--chat-text-muted)]">
               Routes to the best model for each task
             </p>
           )}
@@ -573,9 +573,9 @@ export function ModelSelector({
           disabled={disabled}
           className={cn(
             'inline-flex items-center gap-1 rounded-lg px-2.5 py-1',
-            'text-xs text-[var(--chat-text-secondary)] transition-colors duration-150',
+            'text-xs text-[var(--chat-text-secondary)] transition-colors duration-quick',
             'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
             'data-[state=open]:bg-[var(--chat-surface-hover)] data-[state=open]:text-[var(--chat-text-primary)]',
             disabled && 'cursor-not-allowed opacity-50',
             className,
@@ -596,16 +596,16 @@ export function ModelSelector({
           align="end"
           sideOffset={6}
           className={cn(
-            'z-50 w-80 overflow-hidden rounded-xl shadow-lg',
+            'z-[var(--z-dropdown)] w-80 overflow-hidden rounded-xl shadow-lg',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
           )}
         >
           {/* Provider count badge, surfaces differentiator */}
           <div className="flex items-center justify-between border-b border-[var(--chat-border)] px-3 py-2">
-            <span className="text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+            <span className="text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
               {t('selector.model', 'Model')}
             </span>
-            <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[12px] font-semibold text-[var(--chat-accent-primary-text)]">
+            <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-caption font-semibold text-[var(--chat-accent-primary-text)]">
               {executionMode === 'local_only'
                 ? t('selector.local', 'Local')
                 : executionMode === 'byok'
@@ -760,10 +760,10 @@ export function ModelSelector({
                     type="button"
                     onClick={() => toggleGroup(providerKey)}
                     aria-expanded={!isCollapsed}
-                    className="flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left transition-colors hover:bg-[var(--chat-surface-hover)]"
+                    className="flex w-full items-center gap-1.5 rounded-compact px-2 py-1.5 text-left transition-colors hover:bg-[var(--chat-surface-hover)]"
                   >
                     <ProviderLogo providerKey={providerKey} size={14} />
-                    <p className="flex-1 text-[12px] font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
+                    <p className="flex-1 text-caption font-semibold uppercase tracking-wider text-[var(--chat-text-muted)]">
                       {label}
                     </p>
                     <ChevronRight
@@ -832,12 +832,12 @@ export function ModelSelector({
                                     {m.name}
                                   </span>
                                   {m.isLocal && (
-                                    <span className="shrink-0 rounded px-1 py-0.5 text-[12px] font-semibold uppercase tracking-wide bg-[var(--chat-info)]/15 text-[var(--chat-info)]">
+                                    <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-info)]/15 text-[var(--chat-info)]">
                                       local
                                     </span>
                                   )}
                                   {!isSelectable && (
-                                    <span className="shrink-0 rounded px-1 py-0.5 text-[12px] font-semibold uppercase tracking-wide bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]">
+                                    <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]">
                                       {m.availability === 'coming_soon'
                                         ? t('selector.comingSoon', 'Coming soon')
                                         : t('selector.unavailable', 'Unavailable')}
@@ -848,7 +848,7 @@ export function ModelSelector({
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
                                   <span
                                     className={cn(
-                                      'text-[12px] font-medium',
+                                      'text-caption font-medium',
                                       isSelected
                                         ? 'text-[var(--chat-accent-primary-text)]'
                                         : 'text-[var(--chat-text-muted)]',
@@ -860,13 +860,13 @@ export function ModelSelector({
                                   </span>
                                   {capability && (
                                     <>
-                                      <span className="text-[var(--chat-text-muted)] text-[12px]">
+                                      <span className="text-[var(--chat-text-muted)] text-caption">
                                         ·
                                       </span>
                                       <TierBadge tier={m.tier} />
                                     </>
                                   )}
-                                  <span className="text-[12px] text-[var(--chat-text-muted)]">
+                                  <span className="text-caption text-[var(--chat-text-muted)]">
                                     {formatContext(m.contextWindow)} ctx
                                   </span>
                                 </div>
@@ -883,7 +883,7 @@ export function ModelSelector({
                           </Popover.Close>
 
                           {isSelected && reasoningIsMandatory && (
-                            <span className="self-center pr-1 text-[12px] font-semibold uppercase tracking-wide text-[var(--chat-accent-primary-text)]">
+                            <span className="self-center pr-1 text-caption font-semibold uppercase tracking-wide text-[var(--chat-accent-primary-text)]">
                               always
                             </span>
                           )}
@@ -916,7 +916,7 @@ export function ModelSelector({
                   className={cn(
                     'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm',
                     'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-                    'transition-colors duration-150',
+                    'transition-colors duration-quick',
                   )}
                 >
                   <Settings size={13} />

@@ -40,58 +40,116 @@ export function stripTrailingSourceList(markdown: string): string {
   return block ? lines.slice(0, block.bodyEnd).join('\n').trimEnd() : markdown;
 }
 
-const NUMBERED_SOURCE_ENTRY =
-  /(?:\[(\d{1,3})\]|(?:^|\s)(\d{1,3})[.)])[^\S\n]*<?(https?:\/\/[^\s<>)\]]+)/g;
-const BODY_MARKER = /(?<!\])\[(\d{1,3})\](?![([:])/g;
+const BODY_MARKER = /(?<!\[)\[(\d{1,3})\](?![(:]|\[(?!\d{1,3}\]))/g;
 const FENCE_LINE = /^\s{0,3}(`{3,}|~{3,})/;
+const NUMBERED_SOURCE_LINE = /^\s*(?:[-*]\s*)?(?:\[(\d{1,3})\]:?|(\d{1,3})[.)])\s+/;
+const SOURCE_URL = /https?:\/\/[^\s<>)\]]+/g;
+const SOURCE_HEADING_END = /\b(?:sources|references|citations|works cited|urls|links)\s*:?$/i;
 
-/**
- * A model that writes its own bibliography numbers it by the order it wrote the
- * claims, which is not the order the sources were delivered in, so `[2]` opens
- * whatever happens to sit second in the list rather than the page the sentence
- * came from. The bibliography itself says which URL the model meant, so the
- * markers are remapped onto delivered positions before the tail is stripped.
- *
- * All-or-nothing: one entry that names a page the turn never delivered leaves
- * every marker alone, because a partial remap would silently move the markers
- * it did understand away from the ones it did not.
- */
-export function renumberCitationMarkersFromTrailingList(
+interface NumberedSourceLine {
+  declared: number;
+  text: string;
+}
+
+function numberedSourceLines(lines: readonly string[]): NumberedSourceLine[] {
+  const entries: NumberedSourceLine[] = [];
+  let insideFence = false;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    if (FENCE_LINE.test(line)) {
+      insideFence = !insideFence;
+      continue;
+    }
+    if (insideFence) continue;
+    const heading = line
+      .trim()
+      .replace(/^#{1,6}\s*/, '')
+      .replaceAll('**', '')
+      .replaceAll('__', '')
+      .trim();
+    if (heading.length > 120 || !SOURCE_HEADING_END.test(heading)) continue;
+
+    const sectionEntries: NumberedSourceLine[] = [];
+    for (let next = index + 1; next < lines.length; next += 1) {
+      const candidate = lines[next]?.trim() ?? '';
+      if (!candidate) continue;
+      if (FENCE_LINE.test(candidate)) break;
+      const match = NUMBERED_SOURCE_LINE.exec(candidate);
+      if (!match) break;
+      sectionEntries.push({
+        declared: Number(match[1] ?? match[2]),
+        text: candidate,
+      });
+    }
+    entries.push(...sectionEntries);
+  }
+
+  return entries;
+}
+
+function mapNumberedSources(
+  entries: readonly NumberedSourceLine[],
+  citations: readonly { url: string }[],
+): Map<number, number> | null {
+  const mapping = new Map<number, number>();
+  for (const entry of entries) {
+    const urls = [...entry.text.matchAll(SOURCE_URL)].map((match) =>
+      (match[0] ?? '').replace(/[.,;]+$/, ''),
+    );
+    if (urls.length !== 1) return null;
+    const resolved = findCitationIndexForUrl(urls[0]!, citations);
+    if (resolved === undefined) return null;
+    if (mapping.has(entry.declared) && mapping.get(entry.declared) !== resolved) return null;
+    mapping.set(entry.declared, resolved);
+  }
+  return mapping;
+}
+
+export interface ReconciledCitationMarkers {
+  markdown: string;
+  canLinkNumericCitations: boolean;
+}
+
+export function reconcileCitationMarkersFromSourceList(
   markdown: string,
   citations: readonly { url: string }[],
-): string {
-  if (citations.length === 0) return markdown;
+): ReconciledCitationMarkers {
+  if (citations.length === 0) return { markdown, canLinkNumericCitations: true };
   const lines = markdown.split('\n');
-  const block = findTrailingSourceBlock(lines);
-  if (!block) return markdown;
+  const entries = numberedSourceLines(lines);
+  if (entries.length === 0) return { markdown, canLinkNumericCitations: true };
 
-  const mapping = new Map<number, number>();
-  for (const entry of block.entries) {
-    for (const match of entry.matchAll(NUMBERED_SOURCE_ENTRY)) {
-      const declared = Number(match[1] ?? match[2]);
-      const resolved = findCitationIndexForUrl(match[3]!, citations);
-      if (!Number.isInteger(declared) || resolved === undefined) return markdown;
-      if ((mapping.get(declared) ?? resolved) !== resolved) return markdown;
-      mapping.set(declared, resolved);
-    }
-  }
-  if (mapping.size === 0) return markdown;
-  if ([...mapping].every(([declared, resolved]) => declared === resolved)) return markdown;
+  const mapping = mapNumberedSources(entries, citations);
+  if (!mapping) return { markdown, canLinkNumericCitations: false };
 
   let insideFence = false;
-  const body = lines.slice(0, block.bodyEnd).map((line) => {
+  let hasUnmappedMarker = false;
+  const rewritten = lines.map((line) => {
     if (FENCE_LINE.test(line)) {
       insideFence = !insideFence;
       return line;
     }
     if (insideFence) return line;
-    return line.replace(BODY_MARKER, (whole, declared: string) => {
-      const mapped = mapping.get(Number(declared));
-      return mapped === undefined ? whole : `[${mapped}]`;
-    });
+    return line
+      .split(/(`+[^`]*`+)/)
+      .map((part) => {
+        if (part.startsWith('`')) return part;
+        return part.replace(BODY_MARKER, (whole, declared: string) => {
+          const mapped = mapping.get(Number(declared));
+          if (mapped === undefined) {
+            hasUnmappedMarker = true;
+            return whole;
+          }
+          return `[${mapped}]`;
+        });
+      })
+      .join('');
   });
 
-  return [...body, ...lines.slice(block.bodyEnd)].join('\n');
+  return hasUnmappedMarker
+    ? { markdown, canLinkNumericCitations: false }
+    : { markdown: rewritten.join('\n'), canLinkNumericCitations: true };
 }
 
 function isSourceListOnly(rest: string[]): boolean {

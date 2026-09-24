@@ -31,12 +31,7 @@ import {
 import { cn } from '../lib/utils';
 
 export type InlineToolCallStatus =
-  | 'pending'
-  | 'running'
-  | 'awaiting-approval'
-  | 'success'
-  | 'error'
-  | 'partial';
+  'pending' | 'running' | 'awaiting-approval' | 'success' | 'error' | 'partial';
 
 export type InlineToolIconStyle = 'lucide' | 'badge';
 
@@ -73,6 +68,8 @@ export interface InlineToolCallProps {
   iconStyle?: InlineToolIconStyle;
   iconLetter?: string;
   resultLabel?: string;
+  completionLabel?: string;
+  trailingAction?: ReactNode;
 }
 
 const ICON_BY_KIND: Record<Exclude<InlineToolKind, 'auto'>, ComponentType<LucideProps>> = {
@@ -183,7 +180,7 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
   }
   return (
     <span
-      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-[12px] font-semibold select-none"
+      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-caption font-semibold select-none"
       aria-hidden="true"
       data-badge-kind="letter"
       data-badge-letter={config.letter}
@@ -287,6 +284,8 @@ export function InlineToolCall({
   iconStyle = 'lucide',
   iconLetter,
   resultLabel = 'Result',
+  completionLabel,
+  trailingAction,
 }: InlineToolCallProps) {
   const isControlled = open !== undefined;
   const [internalOpen, setInternalOpen] = useState<boolean>(defaultOpen);
@@ -318,12 +317,12 @@ export function InlineToolCall({
 
   if (isBadge) {
     const badgeConfig = resolveBadgeConfig(kind, label, iconLetter);
-    const showResultLabel = status === 'success' && !body;
+    const showResultLabel = status === 'success' && !body && !completionLabel;
 
     return (
       <div
         className={cn(
-          'inline-tool-call inline-tool-call--badge flex flex-col',
+          'inline-tool-call inline-tool-call--badge grid grid-cols-[minmax(0,1fr)_auto] items-center',
           effectiveOpen && 'inline-tool-call--open',
           className,
         )}
@@ -336,16 +335,16 @@ export function InlineToolCall({
           tabIndex={isExpandable ? 0 : undefined}
           aria-expanded={isExpandable ? effectiveOpen : undefined}
           aria-controls={isExpandable ? bodyId : undefined}
-          aria-label={`${label}${suffix ? `, ${suffix}` : ''}`}
+          aria-label={`${label}${suffix ? `, ${suffix}` : ''}${status === 'success' && completionLabel ? `, ${completionLabel}` : ''}`}
           onClick={isExpandable ? toggle : undefined}
           onKeyDown={onKeyDown}
           className={cn(
-            'inline-tool-call__bar flex items-center gap-2 select-none',
+            'inline-tool-call__bar flex min-w-0 touch-manipulation items-center gap-2 select-none',
             status === 'error' ? 'min-h-7 py-1' : 'h-7',
-            'px-1 rounded-md',
+            'px-1 rounded-md pointer-coarse:min-h-11',
             isExpandable &&
-              'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))]',
-            'transition-colors duration-100',
+              'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
+            'transition-colors duration-instant',
           )}
         >
           <BadgeIcon config={badgeConfig} />
@@ -384,6 +383,11 @@ export function InlineToolCall({
               {suffix}
             </span>
           ) : null}
+          {status === 'success' && completionLabel ? (
+            <span className="shrink-0 text-xs text-[color:var(--chat-text-muted,#8b8680)]">
+              {completionLabel}
+            </span>
+          ) : null}
           <StatusIndicator status={status} />
           {isExpandable ? (
             <ChevronRight
@@ -391,7 +395,7 @@ export function InlineToolCall({
               strokeWidth={2}
               className={cn(
                 'inline-tool-call__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
-                'transition-transform duration-150',
+                'transition-transform duration-quick',
                 effectiveOpen && 'rotate-90',
               )}
               aria-hidden="true"
@@ -399,10 +403,16 @@ export function InlineToolCall({
           ) : null}
         </div>
 
+        {trailingAction ? (
+          <div className="inline-tool-call__action flex shrink-0 items-center pl-1">
+            {trailingAction}
+          </div>
+        ) : null}
+
         {/* "Result" sub-label below the bar in badge mode (Claude parity) */}
         {showResultLabel ? (
           <span
-            className="inline-tool-call__result-label ml-8 text-[12px] font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
+            className="inline-tool-call__result-label col-span-2 ml-8 text-caption font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
             data-result-label=""
           >
             {resultLabel}
@@ -415,7 +425,7 @@ export function InlineToolCall({
             role="region"
             aria-label={`${label} details`}
             className={cn(
-              'inline-tool-call__body',
+              'inline-tool-call__body col-span-2',
               'bg-[color:var(--chat-code-bg,rgba(0,0,0,0.04))]',
               'border border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
               'rounded-lg p-4',
@@ -455,7 +465,7 @@ export function InlineToolCall({
           'h-8 px-1 rounded-md',
           isExpandable &&
             'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))]',
-          'transition-colors duration-100',
+          'transition-colors duration-instant',
         )}
       >
         <Icon
@@ -493,7 +503,7 @@ export function InlineToolCall({
             strokeWidth={2}
             className={cn(
               'inline-tool-call__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
-              'transition-transform duration-150',
+              'transition-transform duration-quick',
               effectiveOpen && 'rotate-90',
             )}
             aria-hidden="true"

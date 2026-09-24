@@ -1179,7 +1179,7 @@ if (__AgiApp) {
           // (no --z-modal theme key), so it compiled to nothing and the fullscreen
           // overlay sat at z-index:auto - header, composer and toasts painted over
           // it. Use the repo's established form (see ui/src/primitives/Dialog.tsx).
-          isFullscreen && 'fixed inset-0 z-[var(--z-modal,300)]',
+          isFullscreen && 'fixed inset-0 z-[var(--z-modal)]',
           className,
         )}
       >
@@ -1207,7 +1207,7 @@ if (__AgiApp) {
                   type="button"
                   onClick={() => setActiveTab('preview')}
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded transition-colors',
+                    'flex h-6 w-6 items-center justify-center rounded-compact transition-colors',
                     activeTab === 'preview'
                       ? 'bg-primary/15 text-primary'
                       : 'text-muted-foreground hover:text-foreground',
@@ -1221,7 +1221,7 @@ if (__AgiApp) {
                   type="button"
                   onClick={() => setActiveTab('code')}
                   className={cn(
-                    'flex h-6 w-6 items-center justify-center rounded transition-colors',
+                    'flex h-6 w-6 items-center justify-center rounded-compact transition-colors',
                     activeTab === 'code'
                       ? 'bg-primary/15 text-primary'
                       : 'text-muted-foreground hover:text-foreground',
@@ -1260,7 +1260,7 @@ if (__AgiApp) {
                   type="button"
                   onClick={() => setViewedVersionIndex(Math.max(0, shownVersionIndex - 1))}
                   disabled={shownVersionIndex <= 0}
-                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
                   aria-label="Previous version"
                   title="Previous version"
                 >
@@ -1278,7 +1278,7 @@ if (__AgiApp) {
                     setViewedVersionIndex(Math.min(versionCount - 1, shownVersionIndex + 1))
                   }
                   disabled={shownVersionIndex >= versionCount - 1}
-                  className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+                  className="flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
                   aria-label="Next version"
                   title="Next version"
                 >
@@ -1317,7 +1317,7 @@ if (__AgiApp) {
                         },
                       });
                     }}
-                    className="flex h-6 items-center justify-center rounded px-1.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    className="flex h-6 items-center justify-center rounded-compact px-1.5 text-caption font-medium text-muted-foreground transition-colors hover:text-foreground"
                     aria-label={`Restore version ${shownVersionIndex + 1}`}
                     title={`Restore v${shownVersionIndex + 1} as the latest version`}
                     data-testid="artifact-restore-version"
@@ -1753,7 +1753,7 @@ if (__AgiApp) {
               }
             />
             {generatedFileSummary.localOnly && (
-              <p className="mt-2 text-[12px] text-muted-foreground">
+              <p className="mt-2 text-caption text-muted-foreground">
                 Local file. Web shares a reference only; it is not uploaded.
               </p>
             )}
@@ -1891,7 +1891,7 @@ if (__AgiApp) {
         // AUDIT-FIX ART-13: `z-modal` compiled to nothing (no such Tailwind v4
         // utility here), leaving the fullscreen card at z-index:auto under the
         // chrome. Matches ui/src/primitives/Dialog.tsx.
-        isFullscreen && 'fixed inset-0 z-[var(--z-modal,300)] rounded-none',
+        isFullscreen && 'fixed inset-0 z-[var(--z-modal)] rounded-none',
         className,
       )}
     >
@@ -1910,17 +1910,17 @@ if (__AgiApp) {
             </span>
           </div>
           {artifact.type && (
-            <span className="shrink-0 rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            <span className="shrink-0 rounded-compact bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
               {artifact.type}
             </span>
           )}
           {hasGeneratedFileManifest && (
             <>
-              <span className="hidden shrink-0 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline">
+              <span className="hidden shrink-0 rounded-compact bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline">
                 {generatedFileSummary.statusLabel}
               </span>
               {generatedFileSummary.privacyShortLabel && (
-                <span className="hidden shrink-0 items-center gap-1 rounded bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline-flex">
+                <span className="hidden shrink-0 items-center gap-1 rounded-compact bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground @[28rem]:inline-flex">
                   <Shield className="h-3 w-3" />
                   {generatedFileSummary.privacyShortLabel}
                 </span>
@@ -2094,7 +2094,7 @@ if (__AgiApp) {
             }
           />
           {generatedFileSummary.localOnly && (
-            <p className="mt-2 text-[12px] text-muted-foreground">
+            <p className="mt-2 text-caption text-muted-foreground">
               Local file. Web shares a reference only; it is not uploaded.
             </p>
           )}

@@ -32,6 +32,8 @@ import { v5 as uuidv5 } from 'uuid';
 import type { SharedArtifact, SharedArtifactType } from '@agiworkforce/types';
 
 export const DERIVED_ARTIFACT_NAMESPACE = '5f6c1e8a-2b3d-4c5e-8f9a-0b1c2d3e4f50';
+export const EXPLICIT_ARTIFACT_DERIVATION_POLICY = 'explicit-v1' as const;
+export type ArtifactDerivationPolicy = typeof EXPLICIT_ARTIFACT_DERIVATION_POLICY;
 
 export interface DerivedCodeBlock {
   language: string;
@@ -86,6 +88,21 @@ export function isRenderableArtifact(language: string, content: string): boolean
     content.includes('<!-- @artifact -->') ||
     content.includes('# @artifact')
   );
+}
+
+const EXPLICIT_ARTIFACT_MARKERS = [
+  '// @artifact',
+  '<!-- @artifact -->',
+  '# @artifact',
+  '%% @artifact',
+] as const;
+
+export function hasExplicitArtifactMarker(content: string): boolean {
+  return EXPLICIT_ARTIFACT_MARKERS.some((marker) => content.includes(marker));
+}
+
+export function isExplicitlyRenderableArtifact(language: string, content: string): boolean {
+  return isRenderableArtifact(language, content) && hasExplicitArtifactMarker(content);
 }
 
 export function detectArtifactType(language: string, content: string): SharedArtifactType {
@@ -206,7 +223,15 @@ export function extractTrailingUnclosedBlock(
   };
 }
 
-export type ArtifactInclusion = 'renderable' | 'code' | ((block: DerivedCodeBlock) => boolean);
+export type ArtifactInclusion =
+  | 'renderable'
+  | 'explicit-renderable'
+  | 'code'
+  | ((block: DerivedCodeBlock) => boolean);
+
+export function artifactInclusionForPolicy(policy: unknown): ArtifactInclusion {
+  return policy === EXPLICIT_ARTIFACT_DERIVATION_POLICY ? 'explicit-renderable' : 'renderable';
+}
 
 export interface DeriveArtifactsOptions {
   conversationId?: string;
@@ -224,6 +249,9 @@ function blockIncluded(
 ): boolean {
   if (typeof include === 'function') return include(block);
   if (include === 'code') return block.lineCount >= minCodeLines;
+  if (include === 'explicit-renderable') {
+    return isExplicitlyRenderableArtifact(block.language, block.content);
+  }
   return isRenderableArtifact(block.language, block.content);
 }
 
@@ -268,6 +296,7 @@ export function hasArtifacts(markdown: string, options: DeriveArtifactsOptions =
 export function removeArtifactBlocks(
   markdown: string,
   artifacts: ReadonlyArray<Pick<SharedArtifact, 'content' | 'language'>>,
+  options: Pick<DeriveArtifactsOptions, 'include' | 'minCodeLines'> = {},
 ): string {
   if (artifacts.length === 0) return markdown.trim();
   const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
@@ -276,7 +305,10 @@ export function removeArtifactBlocks(
   let cleaned = markdown;
   for (let i = blocks.length - 1; i >= 0; i -= 1) {
     const block = blocks[i]!;
-    if (wanted.has(norm(block.content)) || isRenderableArtifact(block.language, block.content)) {
+    if (
+      wanted.has(norm(block.content)) ||
+      blockIncluded(block, options.include ?? 'renderable', options.minCodeLines ?? 4)
+    ) {
       cleaned = cleaned.slice(0, block.startIndex) + cleaned.slice(block.endIndex);
     }
   }

@@ -209,7 +209,7 @@ export function WorkspaceEnterpriseContract({
     return (
       <div
         className="flex items-center gap-2"
-        style={{ ...cardStyle, padding: 20, color: 'var(--text-3)', fontSize: 13 }}
+        style={{ ...cardStyle, padding: 'var(--space-5)', color: 'var(--text-3)', fontSize: 13 }}
       >
         <Spinner size="sm" aria-label="Loading the enterprise contract" />
         Loading the enterprise contract…
@@ -219,7 +219,7 @@ export function WorkspaceEnterpriseContract({
 
   if (isError) {
     return (
-      <div role="alert" style={{ ...cardStyle, padding: 20 }}>
+      <div role="alert" style={{ ...cardStyle, padding: 'var(--space-5)' }}>
         <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
           We could not load the enterprise contract
         </p>

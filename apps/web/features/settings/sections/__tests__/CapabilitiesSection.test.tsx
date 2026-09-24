@@ -69,5 +69,15 @@ describe('CapabilitiesSection', () => {
     expect(failure).toHaveTextContent('Save failed: storage unavailable');
     expect(failure).toHaveStyle({ color: 'var(--settings-destructive-text)' });
     expect(screen.queryByRole('status')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try saving again' }));
+
+    await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(2));
+    expect(savePreferenceNamespace).toHaveBeenLastCalledWith(
+      'capabilities',
+      { cloudCodeExecution: false },
+      expect.objectContaining({ merge: true }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
   });
 });

@@ -175,7 +175,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
         >
           <span
             className={cn(
-              'relative z-10 shrink-0',
+              'relative z-[var(--z-control)] shrink-0',
               getColorClasses(displayAction.type).icon,
               ACTIVE_TYPES.includes(displayAction.type) && 'animate-pulse',
             )}
@@ -185,7 +185,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
 
           <span
             className={cn(
-              'relative z-10 max-w-[200px] truncate text-xs font-medium',
+              'relative z-[var(--z-control)] max-w-[200px] truncate text-xs font-medium',
               getColorClasses(displayAction.type).text,
             )}
           >
@@ -193,7 +193,7 @@ export function CurrentActionBadge({ className }: CurrentActionBadgeProps) {
           </span>
 
           {displayAction.currentStep !== undefined && displayAction.totalSteps !== undefined && (
-            <span className="relative z-10 text-xs tabular-nums text-muted-foreground">
+            <span className="relative z-[var(--z-control)] text-xs tabular-nums text-muted-foreground">
               {displayAction.currentStep}/{displayAction.totalSteps}
             </span>
           )}

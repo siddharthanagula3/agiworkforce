@@ -49,10 +49,15 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 import { runToolLoop } from './tool-loop';
-import { buildServingRouteId } from './tool-loop-anthropic';
+import {
+  buildServingRouteId,
+  chunksToOpenAiSse,
+  type ToolLoopStepSink,
+} from './tool-loop-anthropic';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
 import { setRouteRegistryPricingLookup } from '@/lib/services/llm-cost-calculator';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
+import { logger } from '@/lib/logger';
 import type { ProcessedRequest } from './request-processor';
 
 const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
@@ -102,6 +107,112 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
+describe('provider stream shape', () => {
+  it('records metadata and counts without retaining response content', async () => {
+    const sink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+    const chunks = fakeAdapterStream([
+      { type: 'response-meta', model: ANTHROPIC_MODEL, provider: 'upstream-route' },
+      { type: 'thinking-delta', delta: 'private reasoning' },
+      { type: 'text-delta', delta: 'private answer' },
+      { type: 'stop', reason: 'end_turn' },
+    ])() as AsyncIterable<StreamChunk>;
+
+    await new Response(
+      chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, 'openai-passthrough', sink),
+    ).text();
+
+    expect(sink.providerTrace).toEqual({
+      chunks: 4,
+      textChunks: 1,
+      textChars: 14,
+      thinkingChunks: 1,
+      thinkingChars: 17,
+      toolStarts: 0,
+      stopChunks: 1,
+      wireEvents: expect.any(Number),
+      upstreamModel: ANTHROPIC_MODEL,
+      upstreamProvider: 'upstream-route',
+    });
+    expect(JSON.stringify(sink.providerTrace)).not.toMatch(/private reasoning|private answer/u);
+  });
+
+  it('omits upstream metadata that is not a route identifier', async () => {
+    const sink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+    const chunks = fakeAdapterStream([
+      { type: 'response-meta', model: 'private answer with spaces', provider: 'private data' },
+      { type: 'stop', reason: 'end_turn' },
+    ])() as AsyncIterable<StreamChunk>;
+
+    await new Response(
+      chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, 'openai-passthrough', sink),
+    ).text();
+
+    expect(sink.providerTrace?.upstreamModel).toBeUndefined();
+    expect(sink.providerTrace?.upstreamProvider).toBeUndefined();
+    expect(JSON.stringify(sink.providerTrace)).not.toMatch(/private/u);
+  });
+
+  it('retains only upstream frame counts in the provider trace', async () => {
+    const sink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+    const chunks = fakeAdapterStream([
+      { type: 'response-meta', model: ANTHROPIC_MODEL },
+      { type: 'stop', reason: 'end_turn' },
+      {
+        type: 'response-meta',
+        upstreamFrameShape: {
+          frames: 2,
+          contentFrames: 0,
+          contentChars: 0,
+          reasoningFrames: 1,
+          reasoningChars: 17,
+          reasoningDetailFrames: 1,
+          reasoningDetailItems: 1,
+          toolCallFrames: 0,
+          finishFrames: 1,
+        },
+      },
+    ])() as AsyncIterable<StreamChunk>;
+
+    const wire = await new Response(
+      chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, 'openai-passthrough', sink),
+    ).text();
+
+    expect(sink.providerTrace?.upstreamFrameShape).toMatchObject({
+      frames: 2,
+      reasoningFrames: 1,
+      contentFrames: 0,
+    });
+    expect(wire).not.toContain('upstreamFrameShape');
+  });
+
+  it('keeps adapter error classification in the server-only sink, not the public wire', async () => {
+    const sink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
+    const classification = {
+      category: 'server_overload',
+      code: 'overloaded_503',
+      retryable: true,
+      fallbackable: true,
+      status: 503,
+    };
+    const chunks = fakeAdapterStream([
+      {
+        type: 'error',
+        message: 'Upstream at capacity',
+        code: '503',
+        classification,
+      },
+    ])() as AsyncIterable<StreamChunk>;
+
+    const wire = await new Response(
+      chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, 'openai-passthrough', sink),
+    ).text();
+
+    expect(sink.providerErrorClassification).toEqual(classification);
+    expect(wire).toContain('x_stream_error');
+    expect(wire).not.toContain('classification');
+  });
+});
+
 describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
   beforeEach(() => {
     mockAnthropicStream.mockReset();
@@ -112,6 +223,34 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
 
   afterEach(() => {
     setRouteRegistryPricingLookup(null);
+  });
+
+  it('logs only the provider stream shape when an adapter returns no answer', async () => {
+    mockAnthropicStream.mockImplementationOnce(
+      fakeAdapterStream([
+        { type: 'response-meta', model: ANTHROPIC_MODEL, provider: 'upstream-route' },
+        { type: 'stop', reason: 'end_turn' },
+      ]),
+    );
+    const warn = vi.spyOn(logger, 'warn');
+
+    try {
+      await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto' }));
+      expect(warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'llm_empty_provider_trace',
+          providerTrace: expect.objectContaining({
+            chunks: 2,
+            textChunks: 0,
+            upstreamModel: ANTHROPIC_MODEL,
+            upstreamProvider: 'upstream-route',
+          }),
+        }),
+        '[tool-loop] empty provider step stream shape',
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('extracts and executes two vendor-indexed tool calls from a single Anthropic step', async () => {

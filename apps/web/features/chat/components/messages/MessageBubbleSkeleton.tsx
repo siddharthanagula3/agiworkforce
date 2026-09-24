@@ -44,7 +44,7 @@ export function MessageBubbleSkeleton({
                   key={index}
                   animation={animation}
                   className={cn(
-                    'h-4 rounded',
+                    'h-4 rounded-compact',
                     index === lines - 1
                       ? lineWidths[Math.min(index, lineWidths.length - 1)]
                       : 'w-full',

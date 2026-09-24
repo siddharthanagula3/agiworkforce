@@ -129,6 +129,7 @@
     "capability-handshake",
     "chat-attachments",
     "client-handshake",
+    "client-request",
     "cloud-agent-runs",
     "connectors",
     "conversations",

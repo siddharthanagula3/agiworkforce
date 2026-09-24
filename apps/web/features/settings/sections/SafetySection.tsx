@@ -63,7 +63,7 @@ export function SafetySection() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       <div>
         <h1
           style={{
@@ -71,7 +71,7 @@ export function SafetySection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Safety
@@ -82,7 +82,7 @@ export function SafetySection() {
         <p
           role={error ? 'alert' : 'status'}
           style={{
-            margin: '8px 0 0',
+            margin: 'var(--space-2) 0 0',
             color: error ? 'var(--chat-accent-primary-text)' : 'var(--text-3)',
             fontSize: 12,
           }}
@@ -107,11 +107,11 @@ export function SafetySection() {
       >
         <div
           style={{
-            padding: '16px 20px',
+            padding: 'var(--space-4) var(--space-5)',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
-            gap: 16,
+            gap: 'var(--space-4)',
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -121,7 +121,7 @@ export function SafetySection() {
             <p
               style={{
                 maxWidth: 520,
-                margin: '5px 0 0',
+                margin: 'var(--space-1) 0 0',
                 color: 'var(--text-3)',
                 fontSize: 12,
                 lineHeight: 1.55,
@@ -141,7 +141,7 @@ export function SafetySection() {
         </div>
         <div
           style={{
-            padding: '12px 20px',
+            padding: 'var(--space-3) var(--space-5)',
             borderTop: '1px solid var(--settings-border)',
             color: 'var(--text-3)',
             fontSize: 12,

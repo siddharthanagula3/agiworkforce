@@ -43,7 +43,7 @@ function CapabilityGroup({
               key={`${title}:${item.name}`}
               title={itemHint(item)}
               onClick={() => onSelect(item)}
-              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground hover:text-foreground"
+              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-caption text-muted-foreground hover:text-foreground"
             >
               {item.name}
             </button>
@@ -51,7 +51,7 @@ function CapabilityGroup({
             <span
               key={`${title}:${item.name}`}
               title={itemHint(item)}
-              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-[12px] text-muted-foreground"
+              className="max-w-full truncate rounded-md bg-muted px-2 py-1 text-caption text-muted-foreground"
             >
               {item.name}
             </span>
@@ -109,7 +109,7 @@ export function ConnectorCapabilitiesPanel({
     catalog.apps.length === 0;
   return (
     <div className="space-y-2" aria-label="Live MCP capabilities">
-      <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
         <span className="rounded-full border border-border px-2 py-0.5">
           {catalog.protocolEra === 'modern' ? 'MCP 2026 stateless' : 'Legacy adapter'}
         </span>
@@ -192,7 +192,7 @@ export function ConnectorCapabilitiesPanel({
           {catalog.prompts
             .find((prompt) => prompt.name === pendingPromptName)
             ?.arguments.map((argument) => (
-              <label key={argument.name} className="block text-[12px] text-muted-foreground">
+              <label key={argument.name} className="block text-caption text-muted-foreground">
                 {argument.name}
                 <input
                   required={argument.required === true}
@@ -225,12 +225,12 @@ export function ConnectorCapabilitiesPanel({
         </form>
       ) : null}
       {catalog.resources.length > 0 || catalog.prompts.length > 0 ? (
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           Select a resource or prompt to attach it to your next chat turn.
         </p>
       ) : null}
       {catalog.discoveryErrors.length > 0 ? (
-        <p className="text-[12px] text-muted-foreground">
+        <p className="text-caption text-muted-foreground">
           {PARTIAL_DISCOVERY_PREFIX}{' '}
           {[...new Set(catalog.discoveryErrors.map((entry) => entry.capability))].join(', ')}.
           <button

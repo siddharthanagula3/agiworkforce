@@ -115,8 +115,8 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
           <DialogTitle>{isEditing ? 'Edit command' : 'New custom command'}</DialogTitle>
           <DialogDescription>
             Custom commands appear in the slash menu when you type{' '}
-            <code className="rounded bg-muted px-1 text-xs">/</code> in the chat composer. Use{' '}
-            <code className="rounded bg-muted px-1 text-xs">{INPUT_TOKEN}</code> in your template to
+            <code className="rounded-compact bg-muted px-1 text-xs">/</code> in the chat composer. Use{' '}
+            <code className="rounded-compact bg-muted px-1 text-xs">{INPUT_TOKEN}</code> in your template to
             insert what you type after the command; without it, whatever you type is appended to the
             end.
           </DialogDescription>
@@ -188,7 +188,7 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
             <Label htmlFor="cmd-template" className="text-sm">
               Template{' '}
               <span className="text-muted-foreground text-xs">
-                (use <code className="rounded bg-muted px-1">{INPUT_TOKEN}</code> for user text)
+                (use <code className="rounded-compact bg-muted px-1">{INPUT_TOKEN}</code> for user text)
               </span>
             </Label>
             <Textarea

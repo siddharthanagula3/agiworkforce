@@ -28,12 +28,16 @@ function headerCountry(request: Request): string | null {
   return COUNTRY_PATTERN.test(country) ? country : null;
 }
 
-function requestClientVersion(request: Request): string | null {
-  const raw =
-    request.headers.get(CLIENT_VERSION_HEADER) ??
-    new URL(request.url).searchParams.get(ME_CLIENT_VERSION_PARAM) ??
-    '';
+export function normalizeClientVersion(raw: string): string | null {
   return CLIENT_VERSION_PATTERN.exec(raw.trim())?.[0] ?? null;
+}
+
+function requestClientVersion(request: Request): string | null {
+  return normalizeClientVersion(
+    request.headers.get(CLIENT_VERSION_HEADER) ??
+      new URL(request.url).searchParams.get(ME_CLIENT_VERSION_PARAM) ??
+      '',
+  );
 }
 
 export function buildFlagSubject(request: Request, facts: FlagSubjectFacts): FlagSubject {

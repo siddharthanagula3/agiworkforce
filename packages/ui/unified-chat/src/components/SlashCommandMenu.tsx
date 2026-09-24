@@ -60,7 +60,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.15 }}
-          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-[hsl(var(--popover))] border border-[hsl(var(--border))] shadow-lg overflow-hidden z-50"
+          className="absolute bottom-full left-0 right-0 mb-2 rounded-xl bg-popover border border-border shadow-lg overflow-hidden z-[var(--z-dropdown)]"
           role="listbox"
           aria-label="Slash command suggestions"
         >
@@ -79,8 +79,8 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                   aria-selected={index === selectedIndex}
                   data-active={index === selectedIndex || undefined}
                   className={cn(
-                    'w-full text-left px-4 py-3 transition-colors border-b border-[hsl(var(--border))]/50 last:border-b-0',
-                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-[hsl(var(--accent))]',
+                    'w-full text-left px-4 py-3 transition-colors border-b border-border/50 last:border-b-0',
+                    index === selectedIndex ? 'bg-primary/10' : 'hover:bg-accent',
                   )}
                 >
                   <div className="flex items-center gap-3">
@@ -99,19 +99,19 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                         </code>
                         <span
                           title={suggestion.description}
-                          className="truncate text-xs text-[hsl(var(--muted-foreground))]"
+                          className="truncate text-xs text-muted-foreground"
                         >
                           {suggestion.description}
                         </span>
                       </div>
                       {suggestion.example && (
-                        <div className="truncate text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                        <div className="truncate text-xs text-muted-foreground mt-1">
                           {suggestion.example}
                         </div>
                       )}
                     </div>
                     {suggestion.isSkill && (
-                      <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[12px] font-medium text-amber-400">
+                      <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-caption font-medium text-amber-400">
                         skill
                       </span>
                     )}
@@ -128,7 +128,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
                   aria-label={segment.label}
                   key={`${segment.label}-${segmentIndex}`}
                 >
-                  <div className="px-4 pb-1 pt-3 text-[12px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                  <div className="px-4 pb-1 pt-3 text-caption font-semibold uppercase tracking-wide text-muted-foreground">
                     {segment.label}
                   </div>
                   {rows}
@@ -136,7 +136,7 @@ export const SlashCommandMenu: React.FC<SlashCommandMenuProps> = ({
               );
             })}
           </div>
-          <div className="px-4 py-2 bg-[hsl(var(--muted))] border-t border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
+          <div className="px-4 py-2 bg-muted border-t border-border text-xs text-muted-foreground">
             Use arrow keys to navigate, Enter to select, Esc to close
           </div>
         </motion.div>

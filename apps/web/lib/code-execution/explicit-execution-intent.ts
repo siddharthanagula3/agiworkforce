@@ -140,6 +140,8 @@ const RUN_DIRECTIVE_PATTERN = buildPhrasePattern(RUN_DIRECTIVE_PHRASES);
 const COMPUTATION_VERB_PATTERN = buildPhrasePattern(COMPUTATION_VERB_PHRASES);
 const RUNTIME_SUBJECT_PATTERN = buildPhrasePattern(RUNTIME_SUBJECT_PHRASES);
 const EXPLANATION_FRAME_PATTERN = buildPhrasePattern(EXPLANATION_FRAME_PHRASES);
+const EXECUTION_OPT_OUT_PATTERN =
+  /\b(?:do\s+not|don't|dont|never|avoid|without|no)\s+(?:(?:search(?:\s+the)?\s+web|web\s+search)\s+(?:or|and)\s+)?(?:actually\s+)?(?:run|running|execute|executing|use|using)\s+(?:(?:the|this|that|any|your|some)\s+)?(?:code|script|program|python|javascript|sandbox|tool)\b/iu;
 
 const FENCED_CODE_PATTERN = /```[\s\S]*?(?:```|$)/g;
 const INLINE_CODE_PATTERN = /`[^`\n]*`/g;
@@ -196,6 +198,7 @@ export function detectExplicitCodeExecutionIntent(
   text: string,
 ): ExplicitExecutionIntentSignal | null {
   if (!text) return null;
+  if (hasExplicitCodeExecutionOptOut(text)) return null;
   const request = requestTextOnly(text);
   const explanationAt = matchIndex(EXPLANATION_FRAME_PATTERN, request);
 
@@ -207,6 +210,10 @@ export function detectExplicitCodeExecutionIntent(
   const verbAt = matchIndex(COMPUTATION_VERB_PATTERN, request);
   if (verbAt < 0 || !RUNTIME_SUBJECT_PATTERN.test(request)) return null;
   return explanationAt >= 0 && explanationAt < verbAt ? null : 'computation';
+}
+
+export function hasExplicitCodeExecutionOptOut(text: string): boolean {
+  return EXECUTION_OPT_OUT_PATTERN.test(text);
 }
 
 export function hasExplicitCodeExecutionIntent(text: string): boolean {

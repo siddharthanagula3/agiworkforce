@@ -1,8 +1,11 @@
 # AGI Workforce chat surface measurements (observed 2026-09-04)
 
-Status: Current
+Status: Historical repository snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-04
+
+These measurements describe the recorded September 4 build and viewport only.
+They do not describe the current Web implementation or release readiness.
 
 Every number below was read from the live DOM of `http://localhost:3100`, signed in
 through the QA identity, light theme, Chromium via Playwright, viewport 1543x900

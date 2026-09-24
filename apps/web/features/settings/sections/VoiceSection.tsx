@@ -27,7 +27,7 @@ export function VoiceSection() {
     : DEFAULT_LANGUAGE_CODE;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div>
         <h1
           style={{
@@ -35,7 +35,7 @@ export function VoiceSection() {
             fontSize: 24,
             fontWeight: 500,
             color: 'var(--text-1)',
-            margin: '0 0 4px',
+            margin: '0 0 var(--space-1)',
           }}
         >
           Voice
@@ -51,14 +51,14 @@ export function VoiceSection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
             borderBottom: '1px solid var(--settings-border)',
           }}
         >
           <div>
             <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Dictation</div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Turn speech into composer text with the microphone button. Review the transcript
               before sending.
             </div>
@@ -73,7 +73,7 @@ export function VoiceSection() {
               flexShrink: 0,
               width: 44,
               height: 24,
-              borderRadius: 999,
+              borderRadius: 'var(--corner-pill)',
               border: 'none',
               cursor: 'pointer',
               background: dictationEnabled
@@ -102,8 +102,8 @@ export function VoiceSection() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: 16,
-            padding: '14px 0',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-4) 0',
           }}
         >
           <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Language</div>
@@ -119,7 +119,7 @@ export function VoiceSection() {
               background: 'var(--bg-base)',
               color: 'var(--text-1)',
               fontSize: 13,
-              padding: '0 8px',
+              padding: '0 var(--space-2)',
               opacity: dictationEnabled ? 1 : 0.6,
             }}
           >

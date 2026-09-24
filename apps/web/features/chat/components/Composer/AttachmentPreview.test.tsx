@@ -81,3 +81,41 @@ describe('AttachmentPreview · where the files are going', () => {
     expect(screen.getByRole('button', { name: 'Remove diagram.png' })).toBeTruthy();
   });
 });
+
+describe('AttachmentPreview · upload lifecycle', () => {
+  const preview: AttachmentPreviewData = {
+    file: new File(['notes'], 'notes.txt', { type: 'text/plain' }),
+    url: 'blob:upload-notes',
+    type: 'document',
+  };
+
+  it('announces an indeterminate phase instead of a made-up percentage', () => {
+    render(
+      <AttachmentPreview
+        previews={[preview]}
+        statuses={[{ phase: 'uploading' }]}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    const progress = screen.getByRole('progressbar', { name: 'Uploading notes.txt' });
+    expect(progress).toHaveAttribute('aria-valuetext', 'Uploading…');
+    expect(progress).not.toHaveAttribute('aria-valuenow');
+  });
+
+  it('keeps a failed file in place and retries it from its chip', () => {
+    const onRetry = vi.fn();
+    render(
+      <AttachmentPreview
+        previews={[preview]}
+        statuses={[{ phase: 'failed', error: 'Storage unavailable' }]}
+        onRetry={onRetry}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Upload failed');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry upload for notes.txt' }));
+    expect(onRetry).toHaveBeenCalledWith(0);
+  });
+});

@@ -17,7 +17,7 @@ export const AUTH_LABEL_CLASS = 'block text-center text-sm font-medium text-text
 export const AUTH_MUTED_LINE_CLASS = 'text-base text-text-muted';
 export const AUTH_ERROR_CLASS = 'mt-2 text-center text-sm text-danger-text';
 export const AUTH_HINT_CLASS = 'mt-2 text-center text-sm text-text-muted';
-export const AUTH_LINK_CLASS = 'auth-inline rounded text-accent-text underline underline-offset-4';
+export const AUTH_LINK_CLASS = 'auth-inline rounded-compact text-accent-text underline underline-offset-4';
 export const AUTH_INPUT_CLASS = `auth-field ${CONTROL_SIZE} ${HAIRLINE} px-5 text-center text-base text-text-primary placeholder:text-text-muted`;
 export const AUTH_PRIMARY_BUTTON_CLASS = `${CONTROL} mt-8 inline-flex items-center justify-center gap-2 bg-action-primary text-base font-medium text-action-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`;
 export const AUTH_PROVIDER_BUTTON_CLASS = `${CONTROL} ${HAIRLINE} inline-flex items-center justify-center gap-2 text-base text-text-primary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50`;
@@ -27,12 +27,12 @@ export const AUTH_DIVIDER_LABEL_CLASS =
   'text-[0.8125rem] font-semibold uppercase tracking-wide text-text-muted';
 export const AUTH_SWITCH_CLASS = 'mt-6.5 text-center text-base text-text-muted';
 export const AUTH_QUIET_BUTTON_CLASS =
-  'auth-inline rounded text-base text-accent-text underline-offset-4 hover:underline disabled:opacity-50';
-export const AUTH_COUNTDOWN_CLASS = 'rounded text-base text-text-muted';
+  'auth-inline rounded-compact text-base text-accent-text underline-offset-4 hover:underline disabled:opacity-50';
+export const AUTH_COUNTDOWN_CLASS = 'rounded-compact text-base text-text-muted';
 export const AUTH_FOOTER_CLASS =
   'mt-18 flex items-center justify-center gap-3 text-sm text-text-muted';
 export const AUTH_FOOTER_LINK_CLASS =
-  'auth-inline rounded text-text-muted underline-offset-4 hover:underline';
+  'auth-inline rounded-compact text-text-muted underline-offset-4 hover:underline';
 export const AUTH_FOOTER_SENTENCE_CLASS =
   'mt-18 text-balance text-center text-sm leading-relaxed text-text-muted';
 export const AUTH_STEP_LINKS_CLASS = 'mt-6 flex flex-col items-center gap-3';

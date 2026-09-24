@@ -169,6 +169,12 @@ export function useAttachments(options: UseAttachmentsOptions = {}): UseAttachme
           break;
         }
 
+        if (file.size === 0) {
+          onError?.(`"${file.name}" is empty. Add content to the file and attach it again.`);
+          rejected.push({ filename: file.name, reason: 'empty' });
+          continue;
+        }
+
         if (file.size > maxFileSize) {
           onError?.(
             `"${file.name}" is too large (${formatFileSize(file.size)}). Maximum is ${formatFileSize(maxFileSize)}.`,

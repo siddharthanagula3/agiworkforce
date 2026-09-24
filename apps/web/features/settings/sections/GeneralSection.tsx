@@ -31,7 +31,12 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { settingsService } from '@/features/settings/services/user-preferences';
-import { EFFORT_LABEL, IMAGE_ATTACHMENT_MIME_TYPES, MAX_AVATAR_BYTES } from '@agiworkforce/types';
+import {
+  EFFORT_LABEL,
+  IMAGE_ATTACHMENT_MIME_TYPES,
+  MAX_AVATAR_BYTES,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
   WORK_DESCRIPTIONS,
@@ -481,7 +486,7 @@ export function GeneralSection() {
                 className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xl font-semibold uppercase tracking-wide text-white"
                 style={{
                   background:
-                    'linear-gradient(135deg, var(--chat-accent-primary, #c8892a) 0%, var(--chat-accent-secondary, #21808d) 100%)',
+                    'linear-gradient(135deg, var(--chat-accent-primary) 0%, var(--chat-accent-secondary) 100%)',
                 }}
               >
                 {avatarInitials}
@@ -767,7 +772,7 @@ export function GeneralSection() {
               className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
               style={{ fontFamily: 'inherit' }}
             />
-            <span className="text-right text-[12px] text-muted-foreground">
+            <span className="text-right text-caption text-muted-foreground">
               {instructions.length} / 2000
             </span>
           </div>
@@ -965,6 +970,7 @@ function ReasoningEffortRow() {
     const { gated } = splitEffortsByEntitlement(getModelReasoning(selectedModelId), tier);
     return new Set<string>(gated);
   }, [billingReady, selectedModelId, tier]);
+  const freePlan = isFreeBillingPlanTier(tier);
 
   return (
     <Row
@@ -974,9 +980,13 @@ function ReasoningEffortRow() {
         // ceiling really is 16x. It is a CEILING, not a spend: the model may
         // use far less on an easy question, and saying "costs 16x more" would
         // be a claim the billing data would contradict.
-        gatedEfforts.size > 0
-          ? 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster. Levels above your plan need one with manual model selection.'
-          : 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster.'
+        freePlan && gatedEfforts.size > 0
+          ? 'Higher effort lets a reply think up to 16x longer. Levels above your plan need one with manual model selection.'
+          : freePlan
+            ? 'Higher effort lets a reply think up to 16x longer.'
+            : gatedEfforts.size > 0
+              ? 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster. Levels above your plan need one with manual model selection.'
+              : 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster.'
       }
     >
       <select
@@ -1379,7 +1389,7 @@ function Row({
     <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
         <span className="text-sm text-foreground">{label}</span>
-        {hint && <span className="text-[12px] text-muted-foreground">{hint}</span>}
+        {hint && <span className="text-caption text-muted-foreground">{hint}</span>}
       </span>
       {children}
     </div>
@@ -1401,7 +1411,7 @@ function FieldRow({
     <div className="flex flex-col items-stretch gap-2 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[13px] font-medium text-foreground">{label}</span>
-        {helper && <span className="text-[12px] text-muted-foreground">{helper}</span>}
+        {helper && <span className="text-caption text-muted-foreground">{helper}</span>}
       </label>
       <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{children}</div>
     </div>

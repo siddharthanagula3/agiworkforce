@@ -89,7 +89,7 @@ function EnforcementBadge({ enforcement }: { enforcement: PostureEnforcement }) 
   return (
     <span
       title={title}
-      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-[12px] font-medium uppercase tracking-[0.08em]"
+      className="shrink-0 rounded-sm border px-1.5 py-0.5 text-caption font-medium uppercase tracking-[0.08em]"
       style={{
         // `--settings-destructive-foreground` is the colour to put ON a
         // destructive background, not a destructive text colour: it resolves
@@ -161,9 +161,9 @@ function SkeletonCard() {
         style={{ borderColor: 'var(--settings-border)', background: 'var(--bg-hover)' }}
       />
       <div className="flex flex-col gap-3 p-5">
-        <div className="h-4 w-1/3 rounded" style={{ background: 'var(--bg-hover)' }} />
-        <div className="h-3 w-2/3 rounded" style={{ background: 'var(--bg-hover)' }} />
-        <div className="h-3 w-1/2 rounded" style={{ background: 'var(--bg-hover)' }} />
+        <div className="h-4 w-1/3 rounded-compact" style={{ background: 'var(--bg-hover)' }} />
+        <div className="h-3 w-2/3 rounded-compact" style={{ background: 'var(--bg-hover)' }} />
+        <div className="h-3 w-1/2 rounded-compact" style={{ background: 'var(--bg-hover)' }} />
       </div>
     </div>
   );

@@ -26,6 +26,11 @@ const mocks = vi.hoisted(() => ({
   begin: vi.fn(),
   settle: vi.fn(),
   fetch: vi.fn(),
+  download: vi.fn(),
+  persist: vi.fn(),
+  persistUser: vi.fn(),
+  moderateMedia: vi.fn(),
+  hydrate: vi.fn(),
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
@@ -70,6 +75,31 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
 vi.mock('@/lib/services/managed-content-safety-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/managed-content-safety-service')>()),
   enforceManagedContentSafetyPreference: vi.fn(async () => ({ enabled: false, allowed: true })),
+}));
+vi.mock('@/lib/moderation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/moderation')>()),
+  moderateGeneratedMedia: mocks.moderateMedia,
+}));
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/media-storage')>()),
+  bytesFromUrl: mocks.download,
+  isGeneratedMediaStorageConfigured: () => true,
+}));
+vi.mock('@/lib/server/generated-file-persist', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/generated-file-persist')>()),
+  persistGeneratedFileBytes: mocks.persist,
+}));
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration')
+    >()),
+    hydrateChatAttachments: mocks.hydrate,
+  }),
+);
+vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
+  persistConversationMessage: mocks.persistUser,
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/secret-handling-gate', async (importOriginal) => ({
   ...(await importOriginal<
@@ -120,6 +150,39 @@ const [model, second] = inventory.entries
   })
   .map((entry) => entry.offeringKey);
 const modelName = getProviderOfferings()[model!]!.displayName;
+const visionModel = inventory.entries.find((entry) => {
+  const offering = getProviderOfferings()[entry.offeringKey]!;
+  return (
+    entry.quotaOnlyObserved &&
+    entry.providerStatus === 'active' &&
+    (entry.expiresOn ?? '9999') > today &&
+    offering.quotaProbeProtocol === 'chat' &&
+    offering.quotaChatImageInput === true &&
+    !sharesManagedRoute(offering)
+  );
+})!.offeringKey;
+const imageModel = inventory.entries.find((entry) => {
+  const offering = getProviderOfferings()[entry.offeringKey]!;
+  return (
+    entry.quotaOnlyObserved &&
+    entry.providerStatus === 'active' &&
+    (entry.expiresOn ?? '9999') > today &&
+    offering.quotaProbeProtocol === 'image-sync' &&
+    !sharesManagedRoute(offering)
+  );
+})!.offeringKey;
+const videoModel = inventory.entries.find((entry) => {
+  const offering = getProviderOfferings()[entry.offeringKey]!;
+  return (
+    entry.quotaOnlyObserved &&
+    entry.providerStatus === 'active' &&
+    (entry.expiresOn ?? '9999') > today &&
+    offering.quotaProbeProtocol === 'video-async' &&
+    !sharesManagedRoute(offering)
+  );
+})!.offeringKey;
+const MEDIA_ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
+const PROVIDER_ARTIFACT_URL = 'https://provider.example/generated/poster.png';
 
 function sse(...events: string[]): Response {
   return new Response(events.map((event) => `data: ${event}\n\n`).join(''), {
@@ -171,6 +234,43 @@ beforeEach(async () => {
   mocks.retention.mockResolvedValue({ required: false });
   mocks.plan.mockResolvedValue('free');
   mocks.egress.mockResolvedValue(null);
+  mocks.download.mockResolvedValue({
+    data: Buffer.from('generated-image'),
+    contentType: 'image/png',
+  });
+  mocks.moderateMedia.mockResolvedValue({
+    allowed: true,
+    contentSha256: 'a'.repeat(64),
+  });
+  mocks.persist.mockResolvedValue({
+    ok: true,
+    version: 1,
+    parentFileId: null,
+    file: {
+      id: MEDIA_ASSET_ID,
+      file_name: 'free-generated-image.png',
+      mime_type: 'image/png',
+      uri: `/api/files/${MEDIA_ASSET_ID}`,
+      byte_count: 15,
+      kind: 'image',
+      checksum_sha256: 'a'.repeat(64),
+      surface: 'file',
+      previewable: true,
+    },
+  });
+  mocks.persistUser.mockReset().mockResolvedValue({ id: 'persisted-user' });
+  mocks.hydrate.mockReset().mockImplementation(async (messages) => {
+    const latest = messages.at(-1);
+    if (latest && Array.isArray(latest.content)) {
+      latest.content = latest.content.map((part: { type: string; file?: { asset_id: string } }) =>
+        part.type === 'file'
+          ? { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } }
+          : part,
+      );
+      return [{ filename: 'image.png', mimeType: 'image/png', base64: 'aW1hZ2U=' }];
+    }
+    return [];
+  });
   mocks.begin.mockImplementation(async ({ userId, requestId }) => ({
     ok: true,
     reservation: { kind: 'free_trial', userId, requestId, reservedMicrousd: 25_000 },
@@ -185,6 +285,50 @@ afterEach(() => {
 });
 
 describe('Qwen free quota turns on the Free plan', () => {
+  it('persists a threaded user turn before requesting free inference', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const response = await post({
+      user_message: {
+        id: '72d14f7e-0b3d-40c7-952d-987e841033c5',
+        metadata: {},
+        parent_id: '82d14f7e-0b3d-40c7-952d-987e841033c5',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(mocks.persistUser).toHaveBeenCalledWith({
+      db: expect.anything(),
+      scope: {
+        conversationId: '52d14f7e-0b3d-40c7-952d-987e841033c5',
+        userId: 'fixture-user',
+        organizationId: null,
+      },
+      message: {
+        id: '72d14f7e-0b3d-40c7-952d-987e841033c5',
+        role: 'user',
+        content: 'Hello',
+        metadata: {},
+        parentId: '82d14f7e-0b3d-40c7-952d-987e841033c5',
+      },
+    });
+    expect(mocks.persistUser.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.stream.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('does not call the provider when a Free user turn cannot be saved', async () => {
+    mocks.persistUser.mockRejectedValueOnce(new Error('database unavailable'));
+    const response = await post({
+      user_message: { id: '72d14f7e-0b3d-40c7-952d-987e841033c5', metadata: {} },
+    });
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({
+      error: { code: 'user_message_persistence_failed' },
+    });
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
   it('serves a ready model with the platform key under managed trust, metered at zero cost', async () => {
     mocks.stream.mockResolvedValue(
       sse(
@@ -205,9 +349,8 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(mocks.egress).toHaveBeenCalledWith(
       expect.objectContaining({ mode: 'managed', routeKeyAttribution: 'platform-key' }),
     );
-    expect(mocks.settle).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'completed', model, measuredCostDollars: 0 }),
-    );
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
     expect((await sharedState()).used.get(model!)).toBe(15);
   });
 
@@ -223,6 +366,89 @@ describe('Qwen free quota turns on the Free plan', () => {
     );
     await (await post()).text();
     expect((await sharedState()).used.get(model!)).toBe(42);
+  });
+
+  it('sends a user-owned image to a vision-capable free chat model without paid inference', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({
+          choices: [{ index: 0, delta: { content: 'A small image' }, finish_reason: null }],
+        }),
+        '[DONE]',
+      ),
+    );
+    const response = await post(
+      {
+        model: visionModel,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Describe this image' },
+              { type: 'file', file: { asset_id: MEDIA_ASSET_ID } },
+            ],
+          },
+        ],
+      },
+      'vision-image-turn',
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('A small image');
+    expect(mocks.hydrate).toHaveBeenCalledOnce();
+    expect(mocks.stream.mock.calls[0]![3].messages[0].content).toEqual([
+      { type: 'text', text: 'Describe this image' },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
+    ]);
+    expect(mocks.otherProvider).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-image attachment even if hydration turns it into image parts', async () => {
+    mocks.hydrate.mockImplementationOnce(async (messages) => {
+      messages.at(-1).content = [
+        { type: 'image_url', image_url: { url: 'data:image/png;base64,aW1hZ2U=' } },
+      ];
+      return [{ filename: 'scan.pdf', mimeType: 'application/pdf', base64: 'cGRm' }];
+    });
+    const response = await post(
+      {
+        model: visionModel,
+        messages: [
+          { role: 'user', content: [{ type: 'file', file: { asset_id: MEDIA_ASSET_ID } }] },
+        ],
+      },
+      'vision-pdf-turn',
+    );
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('free_quota_file_unsupported');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('settles a completed free turn even if the provider leaves its stream open after done', async () => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          new TextEncoder().encode(
+            [
+              `data: ${JSON.stringify({ choices: [{ delta: { content: 'Hello' }, finish_reason: 'stop' }] })}`,
+              `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 12, completion_tokens: 3, total_tokens: 15 } })}`,
+              'data: [DONE]',
+              '',
+            ].join('\n\n'),
+          ),
+        );
+      },
+      cancel,
+    });
+    mocks.stream.mockResolvedValue(new Response(body));
+
+    const response = await post();
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).toContain('"content":"Hello"');
+    expect(text.match(/data: \[DONE\]/g)).toHaveLength(1);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect((await sharedState()).used.get(model!)).toBe(15);
   });
 
   it('offers nothing when the allowance meter cannot be read', async () => {
@@ -241,7 +467,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(503);
     expect((await response.json()).error.code).toBe('free_quota_unavailable');
     expect(mocks.stream).not.toHaveBeenCalled();
-    expect(mocks.settle).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+    expect(mocks.settle).not.toHaveBeenCalled();
   });
 
   it('refuses every model without a provider call until the setting is attested', async () => {
@@ -255,13 +481,14 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(mocks.begin).not.toHaveBeenCalled();
   });
 
-  it('keeps the Free plan usage limit in force', async () => {
+  it('does not apply an account-level Free plan usage limit', async () => {
     mocks.begin.mockResolvedValue({ ok: false, code: 'budget_reached' });
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
     const response = await post();
-    expect(response.status).toBe(429);
-    expect((await response.json()).error.code).toBe('free_trial_token_budget_reached');
-    expect(mocks.stream).not.toHaveBeenCalled();
-    expect((await sharedState()).used.get(model!)).toBe(0);
+    expect(response.status).toBe(200);
+    await response.text();
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.stream).toHaveBeenCalledOnce();
   });
 
   it('refuses a plan the free models are not mapped to', async () => {
@@ -270,6 +497,62 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(403);
     expect((await response.json()).error.code).toBe('model_not_available');
     expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('allows a paid image entitlement to use a promotional image without entering paid inference', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+
+    const response = await post({ model: imageModel }, 'paid-image-turn');
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(`/api/files/${MEDIA_ASSET_ID}`);
+    expect(mocks.media).toHaveBeenCalledOnce();
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.begin).not.toHaveBeenCalled();
+    expect(mocks.settle).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['image', imageModel],
+    ['video', videoModel],
+  ])(
+    'refuses promotional %s generation on a Free plan before provider dispatch',
+    async (_kind, selectedModel) => {
+      const response = await post({ model: selectedModel }, `free-${_kind}-turn`);
+
+      expect(response.status).toBe(403);
+      expect((await response.json()).error.code).toBe('model_not_available');
+      expect(mocks.media).not.toHaveBeenCalled();
+      expect(mocks.stream).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses promotional video on Pro before any provider request', async () => {
+    mocks.plan.mockResolvedValue('pro');
+
+    const response = await post({ model: videoModel }, 'pro-video-turn');
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('model_not_available');
+    expect(mocks.media).not.toHaveBeenCalled();
+  });
+
+  it('allows promotional video on a video-entitled plan without paid inference', async () => {
+    mocks.plan.mockResolvedValue('max_15x');
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+    mocks.download.mockResolvedValue({
+      data: Buffer.from('generated-video'),
+      contentType: 'video/mp4',
+    });
+
+    const response = await post({ model: videoModel }, 'max-video-turn');
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain(`/api/files/${MEDIA_ASSET_ID}`);
+    expect(mocks.media).toHaveBeenCalledOnce();
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.begin).not.toHaveBeenCalled();
   });
 
   it('names the provider and the model, not the account, when the free allowance is spent', async () => {
@@ -346,7 +629,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(text).toContain('free_quota_exhausted');
     expect(text).not.toContain('raw provider sentence');
     expect((await sharedState()).holds.get(model!)).toBe('exhausted');
-    expect(mocks.settle).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+    expect(mocks.settle).not.toHaveBeenCalled();
   });
 
   it('says the reply stopped when the provider stream ends early, and keeps the reservation', async () => {
@@ -357,8 +640,36 @@ describe('Qwen free quota turns on the Free plan', () => {
     );
     const text = await (await post()).text();
     expect(text).toContain('stream_interrupted');
-    expect(mocks.settle).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'failed' }));
+    expect(mocks.settle).not.toHaveBeenCalled();
     expect((await sharedState()).used.get(model!)).toBeGreaterThan(0);
+  });
+
+  it('turns a clean but empty free provider stream into a visible error', async () => {
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+    const text = await (await post()).text();
+    expect(text).toContain('free_model_empty_response');
+    expect(text).toContain('choose another free model');
+    expect(text.match(/data: \[DONE\]/g)).toHaveLength(1);
+  });
+
+  it('does not trust an upstream x_stream_error message', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({
+          choices: [
+            {
+              delta: {
+                x_stream_error: { message: 'private provider diagnostic', code: 'upstream' },
+              },
+            },
+          ],
+        }),
+        '[DONE]',
+      ),
+    );
+    const text = await (await post()).text();
+    expect(text).toContain('provider_unreachable');
+    expect(text).not.toContain('private provider diagnostic');
   });
 
   it('fits the reply to what is left of the shared allowance and refuses a turn that cannot fit', async () => {
@@ -388,8 +699,45 @@ describe('Qwen free quota turns on the Free plan', () => {
   });
 
   it('refuses tools and attachments before any provider call', async () => {
-    expect((await post({ web_search: true })).status).toBe(400);
+    const search = await post({ web_search: true });
+    expect(search.status).toBe(400);
+    expect((await search.json()).error.code).toBe('free_quota_search_unsupported');
     expect((await post({ messages: [{ role: 'user', content: [] }] })).status).toBe(400);
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('does not send an explicit web-search request to a text-only free offering', async () => {
+    const response = await post({
+      messages: [
+        { role: 'user', content: 'Search the web for the official IANA page and cite it.' },
+      ],
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatchObject({
+      code: 'free_quota_search_unsupported',
+      message: expect.stringContaining('search-capable Free model'),
+    });
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('refuses an explicit URL-fetch request before the promotional provider call', async () => {
+    const response = await post({
+      messages: [{ role: 'user', content: 'Summarize https://www.iana.org/help/example-domains.' }],
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error.code).toBe('free_quota_search_unsupported');
+    expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('does not let a text-only free offering fabricate a requested code-execution result', async () => {
+    const response = await post({
+      messages: [{ role: 'user', content: 'Run Python to calculate 17 * 19.' }],
+    });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toMatchObject({
+      code: 'free_quota_code_unsupported',
+      message: expect.stringContaining('Free Auto'),
+    });
     expect(mocks.stream).not.toHaveBeenCalled();
   });
 
@@ -399,6 +747,75 @@ describe('Qwen free quota turns on the Free plan', () => {
     expect(response.status).toBe(403);
     expect((await response.json()).error.code).toBe('organization_policy');
     expect(mocks.stream).not.toHaveBeenCalled();
+  });
+
+  it('stores a zero-cost image for an entitled paid user as an owner-scoped Library asset', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+
+    const response = await post({
+      model: imageModel,
+      messages: [{ role: 'user', content: 'Create a HELLO QA poster' }],
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(mocks.download).toHaveBeenCalledWith(PROVIDER_ARTIFACT_URL);
+    expect(mocks.moderateMedia).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'fixture-user',
+        media: 'image',
+        mimeType: 'image/png',
+      }),
+    );
+    expect(mocks.persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'fixture-user',
+        organizationId: null,
+        conversationId: '52d14f7e-0b3d-40c7-952d-987e841033c5',
+        origin: 'free_quota',
+        model: imageModel,
+        extraMetadata: expect.objectContaining({
+          freeQuotaOffering: imageModel,
+          aiAct: expect.objectContaining({ kind: 'image' }),
+        }),
+      }),
+      expect.objectContaining({ query: mocks.query }),
+    );
+    expect(body).toContain(`/api/files/${MEDIA_ASSET_ID}`);
+    expect(body).not.toContain(PROVIDER_ARTIFACT_URL);
+  });
+
+  it('never exposes the provider URL when generated image persistence fails', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+    mocks.persist.mockResolvedValue({ ok: false, reason: 'storage_error' });
+
+    const response = await post({ model: imageModel });
+    const body = await response.text();
+
+    expect(response.status).toBe(502);
+    expect(body).toContain('stream_interrupted');
+    expect(body).not.toContain(PROVIDER_ARTIFACT_URL);
+  });
+
+  it('withholds a blocked generated image before persistence', async () => {
+    mocks.plan.mockResolvedValue('pro');
+    mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
+    mocks.moderateMedia.mockResolvedValue({
+      allowed: false,
+      refusal: 'Generated media withheld.',
+      reason: 'output_classifier',
+      categories: ['likeness'],
+      ruleIds: ['managed-image.output.classifier'],
+      contentSha256: 'b'.repeat(64),
+    });
+
+    const response = await post({ model: imageModel });
+
+    expect(response.status).toBe(422);
+    expect((await response.json()).error.message).toBe('Generated media withheld.');
+    expect(mocks.persist).not.toHaveBeenCalled();
   });
 });
 

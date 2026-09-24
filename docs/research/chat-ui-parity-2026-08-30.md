@@ -1,8 +1,12 @@
 # Chat UI parity: chatgpt.com and claude.ai, measured
 
-Status: Current
+Status: Historical snapshot
 Owner: Repository maintainers
 Last updated: 2026-09-01
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. The dimensions below remain a
+dated visual measurement, not a current product contract.
 
 Measured directly in the browser on 2026-08-30 against the signed-in products,
 not recalled from training data. Every number below came from

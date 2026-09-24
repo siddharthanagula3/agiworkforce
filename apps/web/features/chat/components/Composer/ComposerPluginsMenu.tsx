@@ -165,7 +165,7 @@ export function ComposerPluginsMenu({
             className={cn(ROW_CLASS, ROW_BUTTON_CLASS)}
           >
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground">
-              <Plug aria-hidden className="h-3.5 w-3.5" />
+              <Plug aria-hidden className="h-4 w-4" />
             </span>
             <span className="min-w-0 flex-1 truncate">{COMPOSER_CONNECTORS_CONNECT_LABEL}</span>
             <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />

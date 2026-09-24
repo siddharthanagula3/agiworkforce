@@ -1,8 +1,12 @@
 # chatgpt.com and claude.ai chat surface measurements (observed 2026-09-04)
 
-Status: Current
+Status: Historical snapshot
 Owner: Product (founder) and the parity agents
 Last updated: 2026-09-04
+
+Superseded for current competitor behavior on 2026-09-21 by
+`chatgpt-claude-ecosystem-delta-2026-09-21.md`. The measurements remain valid
+for the recorded viewport and date, not as current leader dimensions.
 
 Every number below was read from the live DOM of the founder's signed-in sessions (ChatGPT Plus, Claude Max, dark theme, Chrome on macOS, viewport 1543 wide, device pixel ratio 2) with one probe script run through the browser extension on 2026-09-04. Values are computed styles and bounding rectangles in CSS pixels. Rows marked OBSERVED were read directly. Rows marked INFERRED carry the confidence of the inference. Nothing here is a copy of either product's source; it is what the rendered page reports.
 
@@ -41,21 +45,21 @@ All OBSERVED.
 
 ## 3. Composer
 
-| Measure             | ChatGPT (home)                                                                 | ChatGPT (in chat)                                                           | Claude (home)                                                                                                          | Claude (in chat)                                    |
+| Measure | ChatGPT (home) | ChatGPT (in chat) | Claude (home) | Claude (in chat) |
 | ------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- | ------- | ----------------------------- |
-| Card width          | 768                                                                            | 768                                                                         | 640                                                                                                                    | 768                                                 |
-| Card height at rest | 52                                                                             | 52                                                                          | 110 (two rows)                                                                                                         | 48 (one row, tools collapse into the right cluster) |
-| Card radius         | 28px (full pill at one line)                                                   | 28px                                                                        | 14px                                                                                                                   | 14px                                                |
-| Card background     | rgb(33,33,33)                                                                  | same                                                                        | rgb(32,32,31)                                                                                                          | same                                                |
-| Card edge           | inset ring white 20% 1px, no shadow                                            | same                                                                        | inset ring white 20% 1px plus 0 4px 20px black 7.5%                                                                    | same                                                |
-| Card padding        | 0 (controls carry their own 8px inset)                                         | 0                                                                           | 8px                                                                                                                    | 8px                                                 |
-| Text                | 16px/26px                                                                      | 16px/26px                                                                   | 16px/22px                                                                                                              | 16px/22px                                           |
-| Placeholder         | "Ask ChatGPT" (Chat), "Work on anything" (Work), "Follow up" while a turn runs |                                                                             | "How can I help you today?"                                                                                            | "Write a message…"                                  |
-| Left control        | plus, 36px round, icon 20                                                      | same                                                                        | plus, 32px, radius 8                                                                                                   | same                                                |
-| Right cluster       | effort pill 78x36 ("High"), dictation 36, voice 36 white round                 | while streaming: effort, dictation, Stop 36 white round with a square glyph | model label, mic with chevron 32px, send 32px                                                                          | mic 32, chevron, send                               |
-| Mode toggle         | at the top of the page (Chat                                                   | Work)                                                                       |                                                                                                                        | inside the card, second row (Chat                   | Cowork) | not shown in an existing chat |
-| Footer line         | "ChatGPT can make mistakes. Check important info." centred 12px above the card |                                                                             | "Claude is AI and can make mistakes. Please double-check responses." left, model and effort right, 12px under the card |                                                     |
-| Scroll to bottom    | 36px round floating button above the composer with a 20px arrow                |                                                                             | 36px round, icon 20                                                                                                    |                                                     |
+| Card width | 768 | 768 | 640 | 768 |
+| Card height at rest | 52 | 52 | 110 (two rows) | 48 (one row, tools collapse into the right cluster) |
+| Card radius | 28px (full pill at one line) | 28px | 14px | 14px |
+| Card background | rgb(33,33,33) | same | rgb(32,32,31) | same |
+| Card edge | inset ring white 20% 1px, no shadow | same | inset ring white 20% 1px plus 0 4px 20px black 7.5% | same |
+| Card padding | 0 (controls carry their own 8px inset) | 0 | 8px | 8px |
+| Text | 16px/26px | 16px/26px | 16px/22px | 16px/22px |
+| Placeholder | "Ask ChatGPT" (Chat), "Work on anything" (Work), "Follow up" while a turn runs | | "How can I help you today?" | "Write a message…" |
+| Left control | plus, 36px round, icon 20 | same | plus, 32px, radius 8 | same |
+| Right cluster | effort pill 78x36 ("High"), dictation 36, voice 36 white round | while streaming: effort, dictation, Stop 36 white round with a square glyph | model label, mic with chevron 32px, send 32px | mic 32, chevron, send |
+| Mode toggle | at the top of the page (Chat | Work) | | inside the card, second row (Chat | Cowork) | not shown in an existing chat |
+| Footer line | "ChatGPT can make mistakes. Check important info." centred 12px above the card | | "Claude is AI and can make mistakes. Please double-check responses." left, model and effort right, 12px under the card | |
+| Scroll to bottom | 36px round floating button above the composer with a 20px arrow | | 36px round, icon 20 | |
 
 All OBSERVED. INFERRED, HIGH: both grow the textbox to a maximum of roughly eight lines before it scrolls internally (seen on earlier sessions, not measured today).
 

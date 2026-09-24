@@ -30,7 +30,7 @@
   gap: 6px;
   height: 32px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--corner-field);
   border: 1px solid var(--chat-border);
   background: var(--chat-surface-elevated);
   color: var(--chat-text-primary);
@@ -72,7 +72,7 @@
 
 .cell {
   border: 1px solid var(--chat-border);
-  border-radius: 10px;
+  border-radius: var(--corner-menu);
   overflow: hidden;
   background: var(--chat-surface-elevated);
 }
@@ -98,7 +98,7 @@
 
 .languageSelect {
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
   border: 1px solid var(--chat-border);
   background: var(--chat-bg);
   color: var(--chat-text-secondary);
@@ -118,7 +118,7 @@
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
   border: 1px solid var(--chat-border);
   background: var(--chat-bg);
   color: var(--chat-text-secondary);
@@ -183,12 +183,12 @@
 
 .outputImage {
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
 }
 
 .outputTable {
   overflow-x: auto;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
   background: var(--chat-surface-elevated);
   color: var(--chat-text-primary);
   padding: 8px;
@@ -243,7 +243,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
   border: 1px solid var(--chat-border);
   background: var(--chat-bg);
 }
@@ -269,7 +269,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--corner-control);
   color: var(--chat-text-secondary);
 }
 

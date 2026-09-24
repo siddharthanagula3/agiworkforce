@@ -18,7 +18,7 @@ import {
   DURABLE_STREAM_OPEN_FRAME,
 } from '../durable-stream-liveness';
 
-const DEFAULT_BUDGET_MS = 2_000;
+const DEFAULT_BUDGET_MS = 500;
 const TINY_BUDGET_MS = 20;
 const OUTLIVES_BUDGET_MS = 200;
 const CONFIGURED_BUDGET_MS = 750;
@@ -154,7 +154,7 @@ describe('durable first-event budget', () => {
 
   afterEach(() => vi.unstubAllEnvs());
 
-  it('defaults the budget to two seconds', () => {
+  it('defaults the durable-open budget to half a second', () => {
     expect(resolveDurableFirstEventBudgetMs()).toBe(DEFAULT_BUDGET_MS);
   });
 

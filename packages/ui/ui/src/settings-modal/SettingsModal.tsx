@@ -526,7 +526,7 @@ function AddCustomConnectorForm({
       <div>
         <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
           Add custom connector
-          <span className="rounded-full bg-accent px-2 py-0.5 text-[12px] font-semibold uppercase tracking-wider text-accent-foreground">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-caption font-semibold uppercase tracking-wider text-accent-foreground">
             Beta
           </span>
         </h2>
@@ -580,12 +580,12 @@ function AddCustomConnectorForm({
           )}
         />
         {jsonImportError && (
-          <p role="alert" className="text-[12px] text-danger">
+          <p role="alert" className="text-caption text-danger">
             {jsonImportError}
           </p>
         )}
         {jsonImportNote && (
-          <p role="status" className="text-[12px] text-amber-600 dark:text-amber-500">
+          <p role="status" className="text-caption text-amber-600 dark:text-amber-500">
             {jsonImportNote}
           </p>
         )}
@@ -594,7 +594,7 @@ function AddCustomConnectorForm({
           onClick={handleImportJsonConfig}
           disabled={jsonConfigText.trim().length === 0}
           className={cn(
-            'w-fit rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+            'w-fit rounded-lg border border-border px-2.5 py-1 text-caption font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
             FOCUS_RING,
           )}
         >
@@ -652,7 +652,7 @@ function AddCustomConnectorForm({
             data-bwignore
             className={inputClass}
           />
-          <span className="text-[12px] text-muted-foreground">
+          <span className="text-caption text-muted-foreground">
             Sent only to this MCP server and never shown again.
           </span>
         </label>
@@ -672,7 +672,7 @@ function AddCustomConnectorForm({
           className={inputClass}
         />
         {trimmedUrl.length > 0 && !urlValid && (
-          <span id="custom-connector-url-error" className="text-[12px] text-danger">
+          <span id="custom-connector-url-error" className="text-caption text-danger">
             Enter a valid https:// URL.
           </span>
         )}
@@ -961,7 +961,7 @@ function ConnectorsPanel({
             <section aria-labelledby="connector-suggestions" className="flex flex-col gap-2">
               <h3
                 id="connector-suggestions"
-                className="text-[12px] uppercase tracking-wider text-muted-foreground"
+                className="text-caption uppercase tracking-wider text-muted-foreground"
               >
                 Suggested for {workRole}
               </h3>
@@ -975,7 +975,7 @@ function ConnectorsPanel({
                   >
                     <span
                       aria-hidden="true"
-                      className="flex h-5 w-5 items-center justify-center rounded text-[12px] font-semibold"
+                      className="flex h-5 w-5 items-center justify-center rounded-compact text-caption font-semibold"
                       style={{ background: connector.iconBg, color: connector.iconText }}
                     >
                       {connector.name.slice(0, 1).toUpperCase()}
@@ -1095,7 +1095,7 @@ function ConnectorsPanel({
             <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
               <table className="w-full table-fixed border-collapse text-left">
                 <thead>
-                  <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
+                  <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                     <th scope="col" className="w-[62%] px-3 py-2 font-semibold sm:w-[46%]">
                       Connector
                     </th>
@@ -1150,7 +1150,7 @@ function ConnectorsPanel({
                                 {connector.category}
                               </p>
                               {rowError && (
-                                <p role="alert" className="mt-0.5 text-[12px] text-danger">
+                                <p role="alert" className="mt-0.5 text-caption text-danger">
                                   {rowError}
                                 </p>
                               )}
@@ -1272,7 +1272,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
-              <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                 <th
                   scope="col"
                   className={cn(
@@ -1383,7 +1383,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         </div>
                       ) : null}
                       {skill.error ? (
-                        <p role="alert" className="mt-1 text-right text-[12px] text-danger">
+                        <p role="alert" className="mt-1 text-right text-caption text-danger">
                           {skill.error}
                         </p>
                       ) : null}
@@ -1522,7 +1522,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
         <div className="overflow-x-auto overscroll-contain rounded-lg border border-border/80">
           <table className="w-full table-fixed border-collapse text-left">
             <thead>
-              <tr className="border-b border-border/60 text-[12px] uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border/60 text-caption uppercase tracking-wider text-muted-foreground">
                 <th
                   scope="col"
                   className={cn(
@@ -1566,14 +1566,14 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         {plugin.installable === false ? (
                           <span
                             title="No longer available on this surface: installed, but the server does not run it."
-                            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[12px] font-semibold text-muted-foreground"
+                            className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-caption font-semibold text-muted-foreground"
                           >
                             {plugin.statusLabel ?? 'Unavailable'}
                           </span>
                         ) : (
                           <span
                             className={cn(
-                              'shrink-0 rounded-full px-2 py-0.5 text-[12px] font-semibold',
+                              'shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold',
                               plugin.enabled
                                 ? 'bg-primary/15 text-primary'
                                 : 'bg-muted text-muted-foreground',
@@ -1640,7 +1640,7 @@ function PluginsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
                         ) : null}
                       </div>
                       {plugin.error ? (
-                        <p role="alert" className="mt-1 text-right text-[12px] text-danger">
+                        <p role="alert" className="mt-1 text-right text-caption text-danger">
                           {plugin.error}
                         </p>
                       ) : null}
@@ -1745,7 +1745,7 @@ function NavButton({
         <span
           className={cn(
             'ml-auto flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5',
-            'bg-destructive text-[12px] font-semibold leading-none text-destructive-foreground',
+            'bg-destructive text-caption font-semibold leading-none text-destructive-foreground',
           )}
           // The count alone ("2") tells a screen-reader user nothing about what
           // needs attention, so the caller supplies the sentence.
@@ -2018,7 +2018,7 @@ export function SettingsModal({
         onPointerDownOutside={(event) => event.preventDefault()}
         onInteractOutside={(event) => event.preventDefault()}
         onEscapeKeyDown={keepOpenForMenuEscape}
-        className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-2xl md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl"
+        className="flex h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-border/60 bg-background p-0 shadow-e4 md:h-[min(94vh,680px)] md:w-[min(96vw,860px)] md:flex-row md:rounded-xl"
       >
         <nav
           aria-label={t('modal.navigation', 'Settings navigation')}
@@ -2051,7 +2051,7 @@ export function SettingsModal({
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-top"
               className={cn(
-                'pointer-events-none sticky left-0 top-0 z-10 -mb-6 hidden h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity md:block',
+                'pointer-events-none sticky left-0 top-0 z-[var(--z-control)] -mb-6 hidden h-6 w-full bg-gradient-to-b from-background to-transparent transition-opacity md:block',
                 canScrollUp ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -2066,7 +2066,7 @@ export function SettingsModal({
                     {group.label && (
                       <div
                         data-testid={NAV_GROUP_LABEL_TESTID}
-                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-[12px] font-semibold uppercase tracking-wider text-muted-foreground md:block"
+                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground md:block"
                       >
                         {group.label}
                       </div>
@@ -2110,7 +2110,7 @@ export function SettingsModal({
               aria-hidden="true"
               data-testid="settings-nav-scroll-fade-bottom"
               className={cn(
-                'pointer-events-none sticky bottom-0 left-0 z-10 -mt-6 hidden h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity md:block',
+                'pointer-events-none sticky bottom-0 left-0 z-[var(--z-control)] -mt-6 hidden h-6 w-full bg-gradient-to-t from-background to-transparent transition-opacity md:block',
                 canScrollDown ? 'opacity-100' : 'opacity-0',
               )}
             />
@@ -2118,8 +2118,8 @@ export function SettingsModal({
         </nav>
 
         {/* Right pane */}
-        <main
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-5 pt-10 [scrollbar-gutter:stable] sm:px-6 sm:pb-6 md:mt-14 md:px-8 md:pb-8 md:pt-0"
+        <section
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain px-gutter-compact pb-5 pt-10 [scrollbar-gutter:stable] sm:px-gutter-regular sm:pb-6 md:mt-14 md:px-gutter-wide md:pb-8 md:pt-0"
           id="settings-pane"
           tabIndex={-1}
         >
@@ -2129,7 +2129,7 @@ export function SettingsModal({
           <div ref={paneRef} className="mx-auto w-full max-w-[672px]">
             {renderSection()}
           </div>
-        </main>
+        </section>
       </DialogContent>
     </Dialog>
   );

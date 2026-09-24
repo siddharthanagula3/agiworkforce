@@ -55,11 +55,13 @@ describe('AgentPermissionsPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('leads with the default the gate actually applies', () => {
+  it('leads with the website default the gate actually applies', () => {
     render(<AgentPermissionsPage />);
 
     expect(
-      screen.getByRole('heading', { name: 'By default, the agent asks.' }),
+      screen.getByRole('heading', {
+        name: 'On the website, eligible tools run automatically by default.',
+      }),
     ).toBeInTheDocument();
     expect(screen.queryByText(/execute without a prompt/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/runs in\s+automatic approval mode/i)).not.toBeInTheDocument();

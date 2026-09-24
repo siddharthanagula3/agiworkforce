@@ -1,10 +1,18 @@
 # AGI Workforce Mobile Public Release Audit
 
-Status: Current, unresolved register for the mobile surface
+Status: Paused unresolved register; historical evidence current through 2026-09-14
 Owner: Mobile lead
-Last updated: 2026-09-14
+Last updated: 2026-09-21
 Scope: `apps/mobile` (Expo SDK 57, React Native 0.86.2, Expo Router 57) on iOS
 and Android, measured against the current ChatGPT and Claude mobile apps.
+
+Mobile implementation is paused while Website is the active release surface.
+When the founder advances the sequence, re-verify every competitor claim against
+`docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`, re-run the
+instrumented audit against the then-current tree, and preserve this document's
+September 14 evidence. Mobile is next after Website and must consume the Account
+Cloud contracts rather than create private chat, memory, project, OAuth, file,
+or entitlement owners.
 
 This is the one canonical mobile release audit. It lives in `docs/work/`
 because that is the row `AGENTS.md` §11 assigns to release readiness, and

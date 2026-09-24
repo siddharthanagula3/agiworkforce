@@ -86,6 +86,25 @@ describe('desktop cloud update contract', () => {
     expect(result.currentVersion).toBe('1.2.0');
   });
 
+  it('tells the feed which build is asking, so a hold on one version reaches it', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => releaseResponse('1.3.0'));
+
+    await checkDesktopCloudUpdate('1.2.0', 'arm64', fetchMock as unknown as typeof fetch);
+
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(new Headers(init?.headers).get('x-agi-client-version')).toBe('1.2.0');
+  });
+
+  it('reports a held update as unavailable rather than as the app being up to date', async () => {
+    const held = vi.fn(async () =>
+      Response.json({ error: { code: 'UPDATES_HELD' } }, { status: 503 }),
+    );
+
+    await expect(checkDesktopCloudUpdate('1.2.0', 'arm64', held as typeof fetch)).rejects.toThrow(
+      /unavailable \(503\)/i,
+    );
+  });
+
   it('treats an unavailable or malformed release response as an error, not up to date', async () => {
     const unavailable = vi.fn(async () => new Response(null, { status: 503 }));
     const malformed = vi.fn(async () => Response.json({ version: '1.3.0' }));

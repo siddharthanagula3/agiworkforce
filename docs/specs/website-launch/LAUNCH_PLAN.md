@@ -1,21 +1,36 @@
 # Website launch plan
 
-Status: Planned; implementation has not started for this batch
+Status: Active implementation and verification
 Owner: Website launch coordinator
-Last updated: 2026-09-19
+Last updated: 2026-09-21
 
 ## Objective and boundaries
 
-Make the existing localhost website dependable for its defined launch scope: public discovery,
-sign-in, explicit Luna chat, saved work, projects/files, appropriate tools and approvals, account
-controls, plan limits, billing visibility and Enterprise administration. This is a planning-only
-checkpoint requested by the owner. Do not begin application repairs during this turn.
+Make the existing website dependable for its defined launch scope: public discovery, sign-in,
+Free-user chat and work, saved work, projects/files, appropriate tools and approvals, account
+controls, plan limits, billing visibility and Enterprise administration. Implementation and
+verification are in progress. Paid upgrades remain waitlist/access-code gated.
 
-Use the actual repository and the in-app Browser. Preserve uncommitted work. No production
-configuration, migrations, deployment, commits, pushes or merges. Native apps, CLI/extension behavior
-and full competitor parity remain outside this website task. Only explicit Luna may be used for
-in-product inference; no image/video generation. Missing required website behavior must receive an
-explicit disposition, not be dismissed as outside scope.
+Use the actual repository and the in-app Browser. Preserve uncommitted work. Do not change production
+configuration or deploy without separate authorization. Native apps, CLI and extension behavior and
+full competitor parity remain outside this website phase. Later work proceeds one surface at a time:
+Mobile, Desktop, Chrome, CLI and VS Code, followed by cross-surface connection checks. Missing required
+website behavior must receive an explicit disposition, not be dismissed as outside scope.
+
+The sequence is surface-focused, not architecture-forked. One account and effective suite
+entitlement span every surface. Web, Mobile Cloud, Desktop Cloud and eligible Chrome Cloud share
+the account domain for chats, memory, projects, files/artifacts, tools/apps, OAuth connection
+metadata, settings and subscription state. Desktop Code, CLI and VS Code share a host-owned local
+developer domain for sessions, tools/extensions, permissions, repositories/files and credential
+references. Desktop participates in both without implicitly merging them.
+
+Shared contracts, context ordering, policy, account settings, entitlement resolution, message
+metadata and surface-neutral chat behavior are changed at their canonical package owners.
+Website-specific database/index access, native local stores, permissions, transport, offline caches
+and conflict resolution stay behind adapters because Local, BYOK and Managed Cloud are different
+trust boundaries. A later surface reuses the shared owner and proves convergence, revocation,
+deletion, account switching, offline recovery and explicit handoff; it does not receive a copied
+implementation.
 
 ## Evidence baseline and corrections
 

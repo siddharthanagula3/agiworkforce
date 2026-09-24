@@ -9,9 +9,12 @@
 //! silently matching nothing.
 //! The render shows `/name, description` rows with `❯ ` bolding the cursor row.
 
-use super::i18n::{keys, t};
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
+
+const POPUP_TITLE: &str = "Commands";
+const POPUP_EMPTY: &str = "(no matching commands)";
+const POPUP_HINT: &str = "Type to filter   ↑↓ navigate   Enter select   Esc cancel";
 
 #[derive(Debug, Clone)]
 pub struct RegistryCommand {
@@ -141,13 +144,13 @@ impl CommandPopup {
 
 impl InteractiveView for CommandPopup {
     fn render(&self) -> String {
-        let mut out = popup_header(t(keys::COMMAND_POPUP_TITLE));
+        let mut out = popup_header(POPUP_TITLE);
         out.push_str(&popup_row(&format!("  /{}", self.filter)));
         out.push_str(&popup_row(&"─".repeat(POPUP_INNER_WIDTH - 1)));
 
         let items = self.filtered();
         if items.is_empty() {
-            out.push_str(&popup_row(&format!(" {}", t(keys::COMMAND_POPUP_EMPTY))));
+            out.push_str(&popup_row(&format!(" {POPUP_EMPTY}")));
         } else {
             for (i, cmd) in items.iter().enumerate() {
                 let cursor = if i == self.state.cursor() {
@@ -163,7 +166,7 @@ impl InteractiveView for CommandPopup {
         }
 
         out.push_str(&popup_row(""));
-        out.push_str(&popup_row(&format!(" {}", t(keys::COMMAND_POPUP_HINT))));
+        out.push_str(&popup_row(&format!(" {POPUP_HINT}")));
         out.push_str(&format!("└{}┘\n", "─".repeat(POPUP_BORDER_WIDTH)));
         out
     }
@@ -215,7 +218,7 @@ impl InteractiveView for CommandPopup {
     }
 
     fn title(&self) -> Option<&str> {
-        Some(t(keys::COMMAND_POPUP_TITLE))
+        Some(POPUP_TITLE)
     }
 }
 
@@ -435,41 +438,28 @@ mod tests {
     const POPUP_OUTER_WIDTH: usize = POPUP_BORDER_WIDTH + 2;
 
     #[test]
-    fn chrome_is_translated_and_the_box_stays_rectangular() {
+    fn chrome_keeps_the_box_rectangular() {
         let popup = make_popup();
-        for (locale, title, hint_fragment) in [
-            ("es", "Comandos", "Escribe para filtrar"),
-            // Japanese is the width test: the title is half the characters and
-            // twice the columns of the English one.
-            ("ja", "コマンド", "入力して絞り込み"),
-        ] {
-            let text = super::super::i18n::with_locale(locale, || popup.render());
-            assert!(
-                text.contains(&format!("┌─ {title} ─")),
-                "{locale}: expected the translated title inlaid in the top border:\n{text}"
+        let text = popup.render();
+        assert!(text.contains("┌─ Commands ─"));
+        assert!(text.contains("Type to filter"));
+        for line in text.lines() {
+            assert_eq!(
+                display_width(line),
+                POPUP_OUTER_WIDTH,
+                "row breaks the border: {line:?}"
             );
-            assert!(
-                text.contains(hint_fragment),
-                "{locale}: expected the translated hint bar:\n{text}"
-            );
-            for line in text.lines() {
-                assert_eq!(
-                    display_width(line),
-                    POPUP_OUTER_WIDTH,
-                    "{locale}: row breaks the border: {line:?}"
-                );
-            }
         }
     }
 
     #[test]
-    fn empty_state_is_translated() {
+    fn empty_state_is_visible() {
         let mut popup = make_popup();
         popup.handle_key(KeyAction::Char('z')); // matches nothing
-        let text = super::super::i18n::with_locale("fr", || popup.render());
+        let text = popup.render();
         assert!(
-            text.contains("(aucune commande correspondante)"),
-            "expected the translated empty state:\n{text}"
+            text.contains(POPUP_EMPTY),
+            "expected the empty state:\n{text}"
         );
     }
 }

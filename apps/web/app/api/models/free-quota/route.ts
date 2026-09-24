@@ -10,6 +10,7 @@ import {
   buildFreeQuotaCatalogue,
   freeQuotaContextFor,
   freeQuotaPlanAllows,
+  freeQuotaPlanAllowsOffering,
   resolveFreeQuotaDecisions,
 } from '@/lib/server/free-quota-catalogue';
 
@@ -23,18 +24,34 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const scoped = await getUserScopedDb(request, { resolveOrganization: false });
   await assertAccountActive(scoped.userId);
   const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
-  if (!freeQuotaPlanAllows(planTier)) {
+  const freePlan = freeQuotaPlanAllows(planTier);
+  if (
+    !freePlan &&
+    !freeQuotaPlanAllowsOffering(planTier, 'image') &&
+    !freeQuotaPlanAllowsOffering(planTier, 'video')
+  ) {
     return NextResponse.json(
-      { error: 'Free allowance models are part of the Free plan.' },
+      { error: 'No promotional models are available on this plan.' },
       { status: 403, headers: NO_STORE },
     );
   }
   const decisions = await resolveFreeQuotaDecisions(
     freeQuotaContextFor({ url: request.url, userId: scoped.userId }),
   );
-  return NextResponse.json(decisions ? buildFreeQuotaCatalogue(decisions) : null, {
-    headers: NO_STORE,
-  });
+  const catalogue = decisions ? buildFreeQuotaCatalogue(decisions) : null;
+  return NextResponse.json(
+    catalogue
+      ? {
+          ...catalogue,
+          models: catalogue.models.filter((model) =>
+            freeQuotaPlanAllowsOffering(planTier, model.category),
+          ),
+        }
+      : null,
+    {
+      headers: NO_STORE,
+    },
+  );
 }
 
 export const GET = withErrorHandler(handleGet);

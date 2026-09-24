@@ -14,12 +14,12 @@ const HERO_DEPTH_PX = 28;
 const FRAME_DEPTH_PX = 12;
 const SURFACE_DECK_LABEL = 'The six surfaces';
 
-export interface FlagshipCta {
+export interface LandingCta {
   href: string;
   label: string;
 }
 
-function CtaButton({ cta, kind }: { cta: FlagshipCta; kind: 'primary' | 'secondary' | 'ghost' }) {
+function CtaButton({ cta, kind }: { cta: LandingCta; kind: 'primary' | 'secondary' | 'ghost' }) {
   return (
     <Link href={cta.href} className={`agi-fl-cta agi-fl-cta--${kind}`}>
       {cta.label}
@@ -39,34 +39,38 @@ export interface FlagshipAnnouncement {
   href: string;
 }
 
-export function FlagshipHero({
+export function LandingHero({
   eyebrow,
   brand,
+  titleLines,
+  em,
   lede,
   ctas,
   ctas2,
+  modeRibbon,
   visual,
   announcement,
 }: {
   eyebrow: string;
   brand: string;
+  titleLines: string[];
+  em: string;
   lede?: string;
-  ctas: FlagshipCta[];
-  ctas2?: FlagshipCta[];
+  ctas: LandingCta[];
+  ctas2?: LandingCta[];
+  modeRibbon: string[];
   visual: ReactNode;
   announcement?: FlagshipAnnouncement;
 }) {
   return (
-    <section className="agi-fl-hero" aria-labelledby="agi-fl-hero-title">
+    <section className="agi-fl-hero agi-fl-hero--flagship" aria-labelledby="agi-fl-hero-title">
       <div className="agi-fl-hero-backdrop" aria-hidden="true" />
       <div className="agi-fl-hero-split">
         <div className="agi-fl-hero-copy">
           <div className="agi-fl-hero-brand-wrap">
             <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel="AGI logo" />
             <div className="agi-fl-hero-brand-text">
-              <h1 id="agi-fl-hero-title" className="agi-fl-hero-brand">
-                {brand}
-              </h1>
+              <p className="agi-fl-hero-brand">{brand}</p>
               <p className="agi-fl-h1--single agi-fl-hero-brand-sub">{eyebrow}</p>
             </div>
           </div>
@@ -79,7 +83,39 @@ export function FlagshipHero({
               </span>
             </Link>
           ) : null}
+          {titleLines.length === 0 ? (
+            <h1 id="agi-fl-hero-title" className="sr-only">
+              {brand}
+            </h1>
+          ) : (
+            <h1 id="agi-fl-hero-title" className="agi-fl-h1">
+              {titleLines.map((line, index) => {
+                const emphasisIndex = line.indexOf(em);
+                return (
+                  <span key={line} className="agi-fl-h1-line">
+                    {index > 0 ? ' ' : null}
+                    {emphasisIndex >= 0 ? (
+                      <>
+                        {line.slice(0, emphasisIndex)}
+                        <em className="agi-fl-h1-em">{em}</em>
+                        {line.slice(emphasisIndex + em.length)}
+                      </>
+                    ) : (
+                      line
+                    )}
+                  </span>
+                );
+              })}
+            </h1>
+          )}
           {lede ? <p className="agi-fl-lede">{lede}</p> : null}
+          {modeRibbon.length > 0 && (
+            <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
+              {modeRibbon.map((mode) => (
+                <li key={mode}>{mode}</li>
+              ))}
+            </ul>
+          )}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
               <CtaButton key={cta.label} cta={cta} kind={ctaKind(i)} />
@@ -101,7 +137,7 @@ export function FlagshipHero({
   );
 }
 
-export function SurfaceTicker({ words }: { words: string[] }) {
+export function LandingSurfaceTicker({ words }: { words: string[] }) {
   const repeated = [...Array(TICKER_REPEATS)].flatMap(() => words);
 
   const row = (key: string) => (
@@ -146,7 +182,7 @@ export interface SurfaceIndexItem {
   visual?: ReactNode;
 }
 
-export function SurfaceIndex({
+export function LandingSurfaceIndex({
   eyebrow,
   title,
   lede,
@@ -219,10 +255,10 @@ export interface TrustModeCard {
   title: string;
   body: string;
   points: string[];
-  cta: FlagshipCta;
+  cta: LandingCta;
 }
 
-export function TrustTriptych({
+export function LandingTrustTriptych({
   eyebrow,
   title,
   lede,
@@ -268,7 +304,7 @@ export interface CapabilityItem {
   href: string;
 }
 
-export function CapabilityGrid({
+export function LandingCapabilityGrid({
   eyebrow,
   title,
   items,
@@ -305,7 +341,7 @@ export function CapabilityGrid({
   );
 }
 
-export function DevBand({
+export function LandingDevBand({
   eyebrow,
   title,
   body,
@@ -315,7 +351,7 @@ export function DevBand({
   eyebrow: string;
   title: string;
   body: string;
-  ctas: FlagshipCta[];
+  ctas: LandingCta[];
   visual: ReactNode;
 }) {
   const titleId = `agi-fl-dev-title-${eyebrow
@@ -343,7 +379,7 @@ export function DevBand({
   );
 }
 
-export function FinalCta({
+export function LandingFinalCta({
   eyebrow,
   title,
   body,
@@ -352,7 +388,7 @@ export function FinalCta({
   eyebrow: string;
   title: string;
   body: string;
-  ctas: FlagshipCta[];
+  ctas: LandingCta[];
 }) {
   return (
     <section className="agi-fl-final" aria-labelledby="agi-fl-final-title">
@@ -405,7 +441,7 @@ export function LatestBlock({
   eyebrow: string;
   title: string;
   entries: LatestEntry[];
-  more: FlagshipCta;
+  more: LandingCta;
 }) {
   return (
     <section className="agi-fl-section agi-fl-latest" aria-labelledby="agi-fl-latest-title">
@@ -437,7 +473,7 @@ export interface StartCard {
   title: string;
   body: string;
   points: string[];
-  cta: FlagshipCta;
+  cta: LandingCta;
 }
 
 export function StartCards({

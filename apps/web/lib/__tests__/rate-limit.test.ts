@@ -108,6 +108,53 @@ describe('rate-limit in-memory bucketing', () => {
     expect(msg.limit).toBe(20);
     expect(msg.remaining).toBe(19);
   });
+
+  it('does not let chat read traffic consume the conversation mutation budget', async () => {
+    const { checkRateLimit, resolveTierRateLimit } = await import('../rate-limit');
+    const id = 'user:chat-read-isolation';
+    const readLimit = resolveTierRateLimit('chat-conversation-read');
+
+    expect(readLimit).toBeGreaterThan(resolveTierRateLimit('chat-conversation'));
+    for (let i = 0; i < readLimit; i++) {
+      expect((await checkRateLimit(req, 'chat-conversation-read', id)).success).toBe(true);
+    }
+    expect((await checkRateLimit(req, 'chat-conversation-read', id)).success).toBe(false);
+
+    const creation = await checkRateLimit(req, 'chat-conversation', id);
+    expect(creation.success).toBe(true);
+    expect(creation.remaining).toBe(creation.limit - 1);
+  });
+});
+
+describe('chat read rate-limit wiring', () => {
+  it('routes conversation detail, branch list and sync pull to the read bucket', () => {
+    for (const [path, handlerName] of [
+      ['app/api/chat/conversations/[id]/route.ts', 'handleGetConversation'],
+      ['app/api/chat/conversations/[id]/branches/route.ts', 'handleGet'],
+      ['app/api/chat/sync/route.ts', 'handlePull'],
+    ] as const) {
+      const source = readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
+      const handler = source.split(`async function ${handlerName}`)[1];
+      expect(handler).toBeDefined();
+      expect(/withRateLimit\(request, '([^']+)'\)/.exec(handler!)?.[1]).toBe(
+        'chat-conversation-read',
+      );
+    }
+  });
+
+  it('keeps conversation writes in the mutation bucket', () => {
+    for (const [path, handlerName] of [
+      ['app/api/chat/conversations/[id]/route.ts', 'handleUpdateConversation'],
+      ['app/api/chat/conversations/[id]/route.ts', 'handleDeleteConversation'],
+      ['app/api/chat/conversations/[id]/branches/route.ts', 'handleCreate'],
+      ['app/api/chat/sync/route.ts', 'handlePush'],
+    ] as const) {
+      const source = readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8');
+      const handler = source.split(`async function ${handlerName}`)[1];
+      expect(handler).toBeDefined();
+      expect(/withRateLimit\(request, '([^']+)'\)/.exec(handler!)?.[1]).toBe('chat-conversation');
+    }
+  });
 });
 
 describe('tier-aware ceilings', () => {

@@ -8,11 +8,11 @@ export function SidebarWordmark() {
     <Link
       href="/chat"
       aria-label="AGI Workforce home"
-      className="flex items-center gap-2 rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="flex items-center gap-2 rounded-md px-1 py-0.5 outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
     >
       <AgiMark size={20} />
       <span
-        className="text-[15px] font-medium leading-none tracking-tight text-[hsl(var(--foreground))]"
+        className="text-[15px] font-medium leading-none tracking-tight text-foreground"
         style={{ fontFamily: "var(--font-newsreader), Georgia, 'Times New Roman', serif" }}
       >
         AGI Workforce

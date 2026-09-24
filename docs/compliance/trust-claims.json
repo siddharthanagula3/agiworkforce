@@ -1,0 +1,923 @@
+{
+  "note": "The review record behind every row of the public trust ledger. Each row names its owner, the paths that make it true, the executable proof that would fail if it stopped being true, the date it was last checked against that proof and a digest of the text that was checked. scripts/check-trust-claims.mjs enumerates the ledgers the pages declare and fails on a row with no entry, an entry whose row is gone, text that changed after its review, a date the page and this file disagree on, a review older than the cadence, or a proof that has moved. The workflow is in docs/compliance/README.md.",
+  "reviewCadenceDays": 90,
+  "owners": ["Founder", "Legal/compliance", "Security", "Platform lead", "Release engineering"],
+  "pages": ["apps/web/app/trust/page.tsx"],
+  "jurisdictionRequired": ["apps/web/app/trust/page.tsx#COMPLIANCE"],
+  "unprovenCeiling": 5,
+  "claims": [
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Business continuity and disaster recovery",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "97087decf92e6fda",
+      "implementation": [
+        "docs/runbooks/business-continuity.md",
+        ".github/workflows/db-restore-drill.yml"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "names an evidence document for each row that has one, and says so where none exists"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "says both, and never that no restore test is scheduled at all"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Database backup and restore",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "022f134d34588ae2",
+      "implementation": [
+        "docs/runbooks/database-backup-restore.md",
+        "scripts/db-restore-drill.mjs",
+        "scripts/db-restore-drill-logical.mjs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "names an evidence document for each row that has one, and says so where none exists"
+        }
+      ],
+      "external": "What Neon actually retains is the provider's configuration, read from its console, not from this repository."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Production access",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "4e196db5af64ecd6",
+      "implementation": ["docs/runbooks/break-glass-production-access.md"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/support-access-grants-migration.test.ts",
+          "name": "chains each entry to the one before it and refuses a malformed digest"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/support-access-grants-migration.test.ts",
+          "name": "lets the workspace read its own grants and its own trail"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Incident handling",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "b3d41921d6d88621",
+      "implementation": [
+        "docs/runbooks/incident-response.md",
+        "docs/runbooks/incident-postmortem-template.md"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "names an evidence document for each row that has one, and says so where none exists"
+        }
+      ],
+      "external": "Whether a severity 1 has ever been declared is an operational record kept outside the repository."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Personal data breach",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "df9f3df16fcc07dd",
+      "implementation": ["docs/runbooks/personal-data-breach.md"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "names an evidence document for each row that has one, and says so where none exists"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Security mechanisms",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "bd6b01713fa00c15",
+      "implementation": ["docs/security/security.md", "docs/security/security-claims.json"],
+      "proof": [{ "kind": "guard", "file": "scripts/check-security-claims.mjs" }]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "EVIDENCE",
+      "label": "Audit reports",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": null,
+      "digest": "44aa2977026ba353",
+      "implementation": ["apps/web/app/enterprise/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        }
+      ],
+      "external": "That no audit, certificate or penetration test report exists is a fact about the company; the test holds every page to that answer."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "SOC 2",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "258b74a2e46dbe33",
+      "jurisdiction": "None: an AICPA attestation standard, not a law of any jurisdiction",
+      "scope": "The company and every product surface",
+      "implementation": ["apps/web/app/enterprise/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "asserts no audit or certification programme, which does not exist"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "states SOC 2 as not held, in the same terms /trust uses"
+        }
+      ],
+      "external": "Whether an auditor is engaged is a fact outside the repository; the tests hold every public page to the same answer."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "ISO 27001",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "33dd564170ea98cf",
+      "jurisdiction": "None: an ISO/IEC certification standard, not a law of any jurisdiction",
+      "scope": "The company and every product surface",
+      "implementation": ["apps/web/app/enterprise/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "asserts no audit or certification programme, which does not exist"
+        }
+      ],
+      "external": "Whether a certification body is engaged is a fact outside the repository; the tests hold every public page to the same answer."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "HIPAA",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "2d31f5e3faf9a984",
+      "jurisdiction": "United States (HIPAA)",
+      "scope": "Managed Cloud and every hosted surface; the DPA excludes records subject to HIPAA",
+      "implementation": ["apps/web/app/dpa/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        }
+      ],
+      "external": "That no business associate agreement is signed is a contracting fact outside the repository."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "Third-party penetration test",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "e9deb570e4f0693c",
+      "jurisdiction": "None: a commercial assurance, not a legal obligation",
+      "scope": "The company and every product surface",
+      "implementation": ["apps/web/app/security/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "claims no certification AGI does not hold"
+        }
+      ],
+      "external": "That no testing firm has been engaged is a fact outside the repository; the test holds every public page to that answer."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "GDPR: data subject rights",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-19",
+      "digest": "b5510665ecf9794e",
+      "jurisdiction": "European Union, EEA and United Kingdom (GDPR and UK GDPR)",
+      "scope": "Every account on the hosted service, wherever the account holder is",
+      "implementation": [
+        "apps/web/app/api/user/export/route.ts",
+        "apps/web/lib/server/account-erasure.ts#USER_SCOPED_TABLES"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/security/__tests__/trust-surface-claims.test.ts",
+          "name": "publishes the real USER_SCOPED_TABLES length on /security and /trust"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/security/__tests__/trust-surface-claims.test.ts",
+          "name": "keeps the daily account, media and temporary-chat times tied to vercel.json"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/export/__tests__/export-matches-erasure-inventory.test.ts",
+          "name": "reads or deliberately withholds each user-scoped table"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "GDPR: Article 27 EU representative",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "e337a069bd12d9ee",
+      "jurisdiction": "European Union (GDPR Article 27)",
+      "scope": "The company as a controller outside the Union",
+      "implementation": ["apps/web/app/legal/eu-representative/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/legal-policy-set.test.ts",
+          "name": "has a page for every canonical policy route"
+        }
+      ],
+      "external": "Appointing a representative is a founder decision; whether production refuses EEA traffic depends on AGI_BLOCK_EEA_TRAFFIC in apps/web/lib/eu-access.ts, a deployment value this file does not read."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "CCPA / CPRA: access and deletion",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "71b251333e90fcac",
+      "jurisdiction": "California, United States (CCPA as amended by CPRA)",
+      "scope": "Every account on the hosted service",
+      "implementation": [
+        "apps/web/app/api/user/export/route.ts",
+        "apps/web/lib/server/account-erasure.ts#USER_SCOPED_TABLES"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/export/__tests__/export-matches-erasure-inventory.test.ts",
+          "name": "reads or deliberately withholds each user-scoped table"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "tombstones before erasing, settles the tombstone, then deletes the identity and profile"
+        }
+      ],
+      "external": "Whether any processing counts as a sale or share under the CPRA is a legal reading of the analytics configuration, not something a test decides."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "Subprocessor transparency",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "df2e961d101f27ba",
+      "jurisdiction": "European Union and United Kingdom (DPA Annex III), and any contract that incorporates the DPA",
+      "scope": "Managed Cloud and the hosted web service",
+      "implementation": ["apps/web/app/subprocessors/page.tsx"],
+      "proof": [
+        { "kind": "guard", "file": "scripts/check-subprocessor-coverage.mjs" },
+        {
+          "kind": "test",
+          "file": "apps/web/app/subprocessors/page.test.tsx",
+          "name": "renders every recipient the page declares, so the list a guard reads is the list a reader sees"
+        }
+      ],
+      "external": "The guard enumerates inference recipients from the model registry; recipients outside inference are listed by hand, and production credentials decide which listed routes carry traffic."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): notice under s.5",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "fa26e00ad80df5a6",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "Data principals in India using any hosted surface",
+      "implementation": ["apps/web/app/privacy/india/page.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/legal-policy-set.test.ts",
+          "name": "has a page for every canonical policy route"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/dpa-dpdp-annex.test.ts",
+          "name": "keeps the India surfaces reachable from the DPA"
+        }
+      ],
+      "external": "Whether the notice satisfies s.5 is a legal reading, and Indian counsel has not reviewed it."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): consent under s.6",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "3fdda4cc9876f9b5",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "Consent recorded on the hosted web service",
+      "implementation": [
+        "apps/web/lib/server/consent-records.ts",
+        "apps/web/app/privacy/requests/ConsentCentre.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/dpdp-consent-migration.test.ts",
+          "name": "grants only select and insert (necessary, and by itself not sufficient)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/dpdp-consent-migration.test.ts",
+          "name": "stores a notice revision and a surface with every decision"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/privacy/__tests__/consent-centre-analytics.test.tsx",
+          "name": "stops analytics in the same open tab when consent is withdrawn"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): data principal rights (ss.11–14)",
+      "owner": "Legal/compliance",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "db45645e6d73f2f1",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "Data principals in India, with or without an account",
+      "implementation": ["apps/web/app/api/privacy/requests/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/dpdp-consent-migration.test.ts",
+          "name": "constrains the request type to the rights the product can actually action"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/dpdp-consent-migration.test.ts",
+          "name": "gives every request a unique, quotable reference"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/privacy/requests/route.test.ts",
+          "name": "does not lose a recorded request when the alert throws"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): grievance redressal under s.13",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "a75b42668d79377e",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "Data principals in India",
+      "implementation": ["apps/web/lib/legal-constants.ts#GRIEVANCE_OFFICER_DESIGNATE"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/legal-constants.grievance.test.tsx",
+          "name": "publishes the role account while no individual is designated"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/legal-constants.grievance.test.tsx",
+          "name": "points the footer grievance route at the provisioned mailbox"
+        }
+      ],
+      "external": "Designating a named officer is a founder decision."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): verifiable parental consent under s.9",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "71f51a46ef36feae",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "The web surface and the mobile apps",
+      "implementation": [
+        "apps/mobile/src/features/auth/services/ageGate.ts#confirmAgeGate",
+        "apps/mobile/services/dsarExport.ts#storage.clearAll"
+      ],
+      "proof": [],
+      "reason": "Clearable by the child through the in-app wipe of all local data, which empties the store the age record lives in; no test pins that path, and the web's lack of any age gate is an absence no test enumerates."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): notice languages under s.6(4)",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "e441224eb630fbc1",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "The India notice at /privacy/india",
+      "implementation": ["apps/web/app/privacy/india/page.tsx"],
+      "proof": [],
+      "reason": "Which languages the notice is published in is a commissioning decision; no translated notice exists for a test to read."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): Significant Data Fiduciary obligations",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "f0e54d8984ed3d49",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "The company as a data fiduciary",
+      "implementation": ["apps/web/app/privacy/india/page.tsx"],
+      "proof": [],
+      "reason": "Significant Data Fiduciary status is a Central Government notification, which no code in this repository can observe."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "COMPLIANCE",
+      "label": "DPDP (India): data residency",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-14",
+      "digest": "acb8b9749904a4bf",
+      "jurisdiction": "India (Digital Personal Data Protection Act, 2023)",
+      "scope": "Every hosted store",
+      "implementation": ["apps/web/app/subprocessors/page.tsx"],
+      "proof": [],
+      "reason": "The hosting region is set in the Vercel and Neon project configuration, outside the repository, and no test reads it."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Local mode isolation",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-19",
+      "digest": "43ed742b7ba046bc",
+      "implementation": [
+        "apps/desktop/electron/runtime/dispatcher.ts",
+        "apps/desktop/electron/config.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "anchors the claim to the cloud-only runtime gate, not to a shared premise in prose"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "keeps privacy, terms, and trust copy on the executable CLI and Electron contract"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Desktop credential storage",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-19",
+      "digest": "b33ca82518027c24",
+      "implementation": ["apps/desktop/electron/secretStore.ts#isEncryptionAvailable"],
+      "proof": [],
+      "reason": "setSecret in apps/desktop/electron/secretStore.ts throws when operating-system encryption is unavailable, and no test exercises that refusal yet."
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "CLI provider-key storage",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-19",
+      "digest": "85a73ceefda68b69",
+      "implementation": ["apps/cli/src/auth.rs"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "names the provider argument and the store the key lands in"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Transport security",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "74f3b40691d65e75",
+      "implementation": ["apps/web/next.config.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security-headers.test.ts",
+          "name": "declares the full security-header set on every route"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security-headers.test.ts",
+          "name": "locks down a restrictive Permissions-Policy (camera/geolocation/payment denied)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security-headers.test.ts",
+          "name": "applies the security headers to every route (source /:path*)"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Content Security Policy",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "d46e2e7d5d4476b9",
+      "implementation": ["apps/web/proxy.ts#buildCspWithNonce"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "refuses inline script everywhere and permits inline style, the documented exemption"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/proxy-response-headers.test.ts",
+          "name": "gives each blocked request its own nonce rather than a shared one"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security-headers.test.ts",
+          "name": "keeps the PDF frame exception narrow and query-gated"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Artifact sandboxing",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "3f65f6753c5a675b",
+      "implementation": ["infrastructure/sandbox/vercel.json"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security-headers.test.ts",
+          "name": "keeps the sandbox cross-origin and unable to make network connections"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security/iframe-sandbox-regression.test.ts",
+          "name": "only the dedicated cross-origin renderer combines allow-scripts and allow-same-origin"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Database row-level isolation",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "d25e0b85115de159",
+      "implementation": ["apps/web/app/api"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
+          "name": "states the measured number of RLS-bound routes"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
+          "name": "states the measured number still on the owner connection"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/rls-coverage-claim.test.ts",
+          "name": "states the measured number of routes excluded for touching no database"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Authentication and CSRF",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "786c49188e254120",
+      "implementation": ["apps/web/proxy.ts", "apps/web/lib/csrf.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/legal-surface-claims.test.ts",
+          "name": "names the protected route-group count the proxy matcher enforces"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/csrf-rotation.test.ts",
+          "name": "rejects a CSRF_SECRET shorter than 32 bytes"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/csrf-rotation.test.ts",
+          "name": "accepts tokens signed with the previous secret during the rotation window"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/security/csrf-coverage.test.ts",
+          "name": "every cookie-authenticated mutating route verifies a CSRF token"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Rate limiting",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "3c69714b2eb16617",
+      "implementation": ["apps/web/lib/rate-limit.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "enforces a per-endpoint limit (chat-message: 20/min)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "defaults to fail-closed wherever Redis is configured"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "fails open, because refusing a reconnect strands a run that is still going"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Egress and SSRF controls",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "a740100bd23ad6e2",
+      "implementation": ["apps/web/lib/egress-policy.ts#isInternalHostname"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/egress-policy.test.ts",
+          "name": "blocks IMDS even if hostname were somehow allowlisted (defense in depth)"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/egress-policy.test.ts",
+          "name": "blocks IPv4-embedded IPv6 to internal target"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/organization/mcp/__tests__/route.test.ts",
+          "name": "refuses an endpoint that is not https"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Security event logging",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "b754daca1937fce4",
+      "implementation": [
+        "apps/web/lib/services/connector-call-log-service.ts#recordConnectorCallOutcome"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/legal-surface-claims.test.ts",
+          "name": "names the security event-type count the audit module declares"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/legal-surface-claims.test.ts",
+          "name": "accounts for the two event types that are not failures"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "keeps the connector call log to the connector, the tool, the time and the outcome"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "is written from the connector tool path alone, so built-in tool calls never reach it"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Account erasure",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "f09b91ccb3831c08",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "classifies every user-scoped table in the schema"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "names the tables that refused when the erasure is incomplete"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/security/__tests__/trust-surface-claims.test.ts",
+          "name": "keeps the daily account, media and temporary-chat times tied to vercel.json"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Release signing",
+      "owner": "Release engineering",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "4e737d1685e587e7",
+      "implementation": [
+        ".github/workflows/release-desktop-cloud.yml",
+        "apps/desktop/electron-builder.yml"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "signs and notarizes each Mac architecture and verifies both before anything is uploaded"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "builds the desktop app for no platform but macOS, so the row claims no Windows signing"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Managed Cloud maturity",
+      "owner": "Founder",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-08-05",
+      "digest": "61fed71722fd8149",
+      "implementation": ["apps/web/lib/managed-compute-gate.ts", "apps/web/lib/e2b/gate.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/security/__tests__/trust-surface-claims.test.ts",
+          "name": "calls Managed Cloud a public alpha"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/e2b/__tests__/gate.test.ts",
+          "name": "e2bProvisioningReady"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Production access governance",
+      "owner": "Security",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-17",
+      "digest": "c2042cd83f8ed493",
+      "implementation": [
+        "docs/runbooks/break-glass-production-access.md",
+        "apps/web/app/api/admin/support-access/route.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/support-access-grants-migration.test.ts",
+          "name": "cannot record a grant approved by the operator who asked for it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/support-access-grants-migration.test.ts",
+          "name": "caps a grant window in the schema, not only in the code path in front of it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/support-access-grants-migration.test.ts",
+          "name": "chains each entry to the one before it and refuses a malformed digest"
+        }
+      ]
+    },
+    {
+      "page": "apps/web/app/trust/page.tsx",
+      "ledger": "POSTURE",
+      "label": "Business continuity evidence",
+      "owner": "Platform lead",
+      "reviewedOn": "2026-09-21",
+      "asOf": "2026-09-21",
+      "digest": "741aba94feebe803",
+      "implementation": [
+        "docs/runbooks/business-continuity.md",
+        ".github/workflows/db-restore-drill.yml"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/compliance-claim-honesty.test.ts",
+          "name": "points the continuity row at a summary that exists"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "runs the host-neutral drill on a weekly schedule"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/trust/posture-claims.test.ts",
+          "name": "runs the point-in-time drill against the real database from no workflow"
+        }
+      ]
+    }
+  ]
+}

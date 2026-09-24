@@ -63,6 +63,22 @@ describe('MarkdownContent citation links', () => {
     expect(screen.queryByText('[1]')).toBeNull();
   });
 
+  it('leaves uncertain numeric markers unlinked without disabling explicit source links', () => {
+    render(
+      <MarkdownContent
+        content={`Uncertain [1]. See [Framework pricing](${FRAME_WORK_URL}).`}
+        citations={CITATIONS}
+        linkifyNumericCitations={false}
+      />,
+    );
+
+    expect(screen.getByText(/Uncertain \[1\]/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /^Source 1:/ })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Framework pricing' }).getAttribute('href')).toBe(
+      FRAME_WORK_URL,
+    );
+  });
+
   it('keeps prose link text when the href is an exact cited url', () => {
     render(
       <MarkdownContent
@@ -121,5 +137,57 @@ describe('MarkdownContent task lists', () => {
     expect(openBox?.className).toContain('border-[var(--chat-text-muted)]');
     expect(checkedBox?.className).toContain('border-[var(--chat-text-muted)]');
     expect(openBox?.querySelector('svg')).toBeNull();
+  });
+});
+
+describe('MarkdownContent table alignment', () => {
+  it('preserves left, center, and right alignment on headers and cells', () => {
+    const markdown = [
+      '| Label | Status | Amount |',
+      '| :--- | :---: | ---: |',
+      '| Alpha | Ready | 1,234 |',
+    ].join('\n');
+
+    const { container } = render(<MarkdownContent content={markdown} />);
+
+    const headers = Array.from(container.querySelectorAll('th'));
+    const cells = Array.from(container.querySelectorAll('td'));
+    expect(headers.map((header) => header.className)).toEqual([
+      expect.stringContaining('text-left'),
+      expect.stringContaining('text-center'),
+      expect.stringContaining('text-right'),
+    ]);
+    expect(cells.map((cell) => cell.className)).toEqual([
+      expect.stringContaining('text-left'),
+      expect.stringContaining('text-center'),
+      expect.stringContaining('text-right'),
+    ]);
+    expect(cells[2]?.textContent).toBe('1,234');
+    const region = screen.getByRole('region', { name: 'Table' });
+    expect(region.className).toContain('overflow-x-auto');
+    expect(region.querySelector('table')).not.toBeNull();
+  });
+});
+
+describe('MarkdownContent literal HTML', () => {
+  it('keeps an angle-bracket placeholder visible as text', () => {
+    const { container } = render(
+      <MarkdownContent content={'**Result:** FINAL=<number>'} literalHtml />,
+    );
+
+    expect(container.textContent).toContain('Result: FINAL=<number>');
+    expect(container.querySelector('number')).toBeNull();
+    expect(container.querySelector('strong')?.textContent).toBe('Result:');
+  });
+
+  it('shows hostile markup literally without creating executable elements', () => {
+    const hostile = '<script>window.__xss=1</script><img src=x onerror="window.__xss=1">';
+    const { container } = render(<MarkdownContent content={hostile} literalHtml />);
+
+    expect(container.textContent).toContain(hostile);
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.innerHTML).toContain('&lt;script&gt;');
+    expect(container.innerHTML).toContain('&lt;img');
   });
 });

@@ -16,12 +16,12 @@ repository at all; the release process records that, and this document never cla
 A `Present` cell has been located, not exercised: no cell here was produced by running the
 feature on that surface.
 
-Seven surfaces ship one product, and until this file existed nobody could answer 'is Projects in the CLI' without reading the CLI. A cell says where that feature's code is on that surface and names the two files that show it is reached: the entry point and whatever imports, declares or routes to it. It says nothing about whether a user can get it. A generous cell is worse than an empty one, so a cell the tree does not settle is unverified and says what would settle it.
+Seven technical surfaces implement one product across two continuity domains: Account Cloud for eligible consumer clients and Host Developer for Desktop Code, CLI, and VS Code. Until this file existed nobody could answer 'is Projects in the CLI' without reading the CLI. A cell says where that feature's code exists and names the files that show it is reached; it does not claim public availability, shared identity, synchronization, entitlement, or release. Retained internal Tauri reachability therefore does not make a feature part of the public Electron Desktop. A generous cell is worse than an empty one, so a cell the tree does not settle is unverified and says what would settle it.
 
 ## Surfaces
 
 - **web**: The Next.js application. Its API routes are a separate surface below. Release: a release workflow for this surface exists at `.github/workflows/deploy-production.yml`. Whether it has ever run is not in this tree.
-- **desktop**: The Electron and Tauri shell with its own renderer under apps/desktop/src. Release: a release workflow for this surface exists at `.github/workflows/release-desktop.yml`. Whether it has ever run is not in this tree.
+- **desktop**: The public Electron product plus retained internal Tauri code. A present cell may describe internal Tauri reachability and is not by itself a public Desktop claim. Release: a release workflow for this surface exists at `.github/workflows/release-desktop-cloud.yml`. Whether it has ever run is not in this tree.
 - **mobile**: The React Native application under apps/mobile. Release: a release workflow for this surface exists at `.github/workflows/release-mobile.yml`. Whether it has ever run is not in this tree.
 - **cli**: The Rust binary under apps/cli. Release: a release workflow for this surface exists at `.github/workflows/release-cli.yml`. Whether it has ever run is not in this tree.
 - **vscode**: The editor extension under apps/extension-vscode. Release: a release workflow for this surface exists at `.github/workflows/release-vscode-extension.yml`. Whether it has ever run is not in this tree.

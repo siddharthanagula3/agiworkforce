@@ -17,7 +17,7 @@ const cardStyle = {
 } as const;
 
 const headerStyle = {
-  padding: '14px 20px',
+  padding: 'var(--space-4) var(--space-5)',
   borderBottom: '1px solid var(--settings-border)',
 } as const;
 
@@ -28,7 +28,7 @@ const controlStyle = {
   background: 'var(--bg-base)',
   color: 'var(--text-1)',
   fontSize: 12,
-  padding: '4px 8px',
+  padding: 'var(--space-1) var(--space-2)',
 } as const;
 
 const OUTCOMES = ['', 'success', 'failure', 'denied'] as const;
@@ -55,7 +55,7 @@ function OutcomeChip({ outcome }: { outcome: AuditEventView['outcome'] }) {
         color: tone.fg,
         border: `1px solid ${tone.bd}`,
         borderRadius: 'var(--radius-sm)',
-        padding: '2px 6px',
+        padding: 'var(--space-1) var(--space-2)',
         whiteSpace: 'nowrap',
       }}
     >
@@ -88,7 +88,7 @@ export function WorkspaceAuditSection() {
   if (result.isLoading) {
     return (
       <section style={cardStyle}>
-        <div style={{ padding: 20, fontSize: 13, color: 'var(--text-3)' }}>
+        <div style={{ padding: 'var(--space-5)', fontSize: 13, color: 'var(--text-3)' }}>
           Loading the audit trail…
         </div>
       </section>
@@ -98,7 +98,7 @@ export function WorkspaceAuditSection() {
   if (result.isError) {
     return (
       <section style={cardStyle}>
-        <div style={{ padding: 20, display: 'grid', gap: 10 }}>
+        <div style={{ padding: 'var(--space-5)', display: 'grid', gap: 'var(--space-3)' }}>
           <div style={{ fontSize: 13, color: 'var(--text-1)' }}>
             The audit trail could not be loaded.
           </div>
@@ -122,15 +122,17 @@ export function WorkspaceAuditSection() {
 
   return (
     <section style={cardStyle}>
-      <header style={{ ...headerStyle, display: 'flex', alignItems: 'center', gap: 12 }}>
+      <header
+        style={{ ...headerStyle, display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}
+      >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <ScrollText size={15} aria-hidden="true" />
             <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
               Audit trail
             </h3>
           </div>
-          <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+          <p style={{ margin: 'var(--space-2) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
             Administrative and identity events for this workspace. Append-only, entries cannot be
             edited or removed, including by an owner. Exporting is itself recorded here.
           </p>
@@ -142,7 +144,7 @@ export function WorkspaceAuditSection() {
             ...controlStyle,
             display: 'inline-flex',
             alignItems: 'center',
-            gap: 6,
+            gap: 'var(--space-2)',
             textDecoration: 'none',
             flex: 'none',
           }}
@@ -156,8 +158,8 @@ export function WorkspaceAuditSection() {
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 8,
-          padding: '10px 20px',
+          gap: 'var(--space-2)',
+          padding: 'var(--space-3) var(--space-5)',
           borderBottom: '1px solid var(--settings-border)',
         }}
       >
@@ -213,8 +215,8 @@ export function WorkspaceAuditSection() {
       </div>
 
       {events.length === 0 ? (
-        <div style={{ padding: '28px 20px', textAlign: 'center' }}>
-          <div style={{ fontSize: 13, color: 'var(--text-1)', marginBottom: 4 }}>
+        <div style={{ padding: 'var(--space-6) var(--space-5)', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: 'var(--text-1)', marginBottom: 'var(--space-1)' }}>
             {filtered ? 'No events match these filters' : 'No events recorded yet'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -233,7 +235,7 @@ export function WorkspaceAuditSection() {
                     key={h}
                     style={{
                       textAlign: 'left',
-                      padding: '8px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       fontSize: 12,
                       letterSpacing: '0.08em',
                       textTransform: 'uppercase',
@@ -253,7 +255,7 @@ export function WorkspaceAuditSection() {
                 <tr key={event.id}>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       color: 'var(--text-2)',
                       whiteSpace: 'nowrap',
                       borderBottom: '1px solid var(--settings-border)',
@@ -264,7 +266,7 @@ export function WorkspaceAuditSection() {
                   </td>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       color: 'var(--text-2)',
                       borderBottom: '1px solid var(--settings-border)',
                       maxWidth: 180,
@@ -278,7 +280,7 @@ export function WorkspaceAuditSection() {
                   </td>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       color: 'var(--text-1)',
                       borderBottom: '1px solid var(--settings-border)',
                       whiteSpace: 'nowrap',
@@ -288,7 +290,7 @@ export function WorkspaceAuditSection() {
                   </td>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       color: 'var(--text-2)',
                       borderBottom: '1px solid var(--settings-border)',
                       whiteSpace: 'nowrap',
@@ -298,7 +300,7 @@ export function WorkspaceAuditSection() {
                   </td>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       color: 'var(--text-3)',
                       borderBottom: '1px solid var(--settings-border)',
                       whiteSpace: 'nowrap',
@@ -308,7 +310,7 @@ export function WorkspaceAuditSection() {
                   </td>
                   <td
                     style={{
-                      padding: '9px 20px',
+                      padding: 'var(--space-2) var(--space-5)',
                       borderBottom: '1px solid var(--settings-border)',
                     }}
                   >
@@ -322,7 +324,9 @@ export function WorkspaceAuditSection() {
       )}
 
       {data.nextCursor ? (
-        <div style={{ padding: '10px 20px', fontSize: 12, color: 'var(--text-3)' }}>
+        <div
+          style={{ padding: 'var(--space-3) var(--space-5)', fontSize: 12, color: 'var(--text-3)' }}
+        >
           Showing the most recent {events.length}. Export for the full range.
         </div>
       ) : null}

@@ -1,13 +1,14 @@
 'use client';
 
-import { useSession } from '@/lib/identity/client';
+import { useCompletedSignUpForCurrentSession, useSession } from '@/lib/identity/client';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
-import { clearTermsGateMarker } from '../TermsGate';
+import { buildLoginCompleteUrl } from '@/features/auth/authRoutes';
+import { clearTermsGateMarker, hasCurrentTermsGateMarker } from '../TermsGate';
 
 export function ContinueWithCurrentTerms({ redirectTo }: { redirectTo: string }) {
   const router = useRouter();
@@ -28,6 +29,7 @@ export function RecordTermsAcceptance({
   surface?: 'web-signup' | 'web-login';
 }) {
   const { isLoaded, isSignedIn } = useSession();
+  const completedSignUp = useCompletedSignUpForCurrentSession();
   const router = useRouter();
   const [failure, setFailure] = useState<'none' | 'retryable' | 'outdated'>('none');
   const attempted = useRef(false);
@@ -54,15 +56,35 @@ export function RecordTermsAcceptance({
   }, [redirectTo, router, surface]);
 
   useEffect(() => {
-    if (!isLoaded || attempted.current) return;
+    if (!isLoaded || (surface === 'web-signup' && !completedSignUp.isLoaded) || attempted.current)
+      return;
     attempted.current = true;
     if (!isSignedIn) {
       clearTermsGateMarker();
       router.replace(redirectTo);
       return;
     }
+    if (
+      surface === 'web-signup' &&
+      (!hasCurrentTermsGateMarker() || !completedSignUp.isCurrentSession)
+    ) {
+      clearTermsGateMarker();
+      router.replace(
+        buildLoginCompleteUrl({ redirectTo, desktopSurface: false, authRetry: false }),
+      );
+      return;
+    }
     void record();
-  }, [isLoaded, isSignedIn, record, redirectTo, router]);
+  }, [
+    completedSignUp.isCurrentSession,
+    completedSignUp.isLoaded,
+    isLoaded,
+    isSignedIn,
+    record,
+    redirectTo,
+    router,
+    surface,
+  ]);
 
   if (failure === 'outdated') {
     return (

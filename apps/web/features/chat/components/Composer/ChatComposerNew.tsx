@@ -41,13 +41,13 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ComposerFooter } from './ComposerFooter';
-import { freeQuotaSelection } from '../../lib/free-quota-selection';
+import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { VoiceEntryButton } from './VoiceEntryButton';
 import { DictationStrip } from './DictationStrip';
-import { useDictation } from '@features/chat/hooks/use-dictation';
+import { dictationSwitchedOffReason, useDictation } from '@features/chat/hooks/use-dictation';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 import {
   DesktopRuntimeError,
@@ -64,16 +64,19 @@ import {
   useLocalModelSelection,
 } from '@/features/desktop-host';
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
-import { AttachmentPreview } from './AttachmentPreview';
+import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
 import { ComposerFilesMenu } from './ComposerFilesMenu';
 import { ComposerPluginsMenu } from './ComposerPluginsMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { chatDraftRefusalNotes } from '@features/chat/lib/attachment-metadata';
+import { preloadTranscriptMarkdown } from '@features/chat/lib/preload-transcript-markdown';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
+import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
+import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
 import {
   useChatStore,
   DEFAULT_COMPOSER_TOGGLES,
@@ -105,10 +108,12 @@ import {
   canUseBillingPlanCapability,
   getModels,
   isExecutableVideoModel,
+  isFreeBillingPlanTier,
   normalizeBillingPlanTier,
   type CloudWorkMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
+import { hasExplicitWebFetchIntent, hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { isWebSearchAvailable } from '@/lib/web-search-support';
 import {
   isMemoryCapabilityEnabled,
@@ -120,6 +125,7 @@ import {
   matchMentionQuery,
   pastedCodeFence,
   useCapability,
+  useOnlineStatus,
 } from '@agiworkforce/unified-chat';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/composer-editor';
 import type {
@@ -134,6 +140,10 @@ import {
   parkPendingDraft,
   restorablePendingDraft,
 } from '@features/chat/lib/pending-composer-draft';
+import {
+  clearPendingDraftClear,
+  markPendingDraftClear,
+} from '@features/chat/lib/pending-draft-clear';
 import {
   claimReloadedPendingDraft,
   clearPersistedDraft,
@@ -290,7 +300,7 @@ const CONNECTOR_MARK_FALLBACK_BG = 'from-muted to-muted';
 const WORK_BAR_ITEM_CLASS =
   'flex h-7 shrink-0 items-center gap-1 rounded-full px-1.5 text-xs font-medium sm:h-8 sm:px-2 sm:text-sm text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50';
 const WORK_BAR_ITEM_ACTIVE_CLASS = 'text-foreground';
-const WORK_BAR_GLYPH_CLASS = 'h-3.5 w-3.5 shrink-0';
+const WORK_BAR_GLYPH_CLASS = 'h-4 w-4 shrink-0';
 
 // One shared empty array for "this conversation has no disabled connectors",
 // so the store selector returns a stable reference and cannot loop under
@@ -314,6 +324,8 @@ export interface ComposerSendMeta {
   researchEnabled?: boolean;
   /** Resolved Response-Style instruction (preset or custom) from StyleSelector. */
   styleInstruction?: string;
+  /** Hidden output contract for an explicitly requested structured artifact. */
+  artifactInstruction?: string;
   /** Exact server-catalog skill name; the server resolves and loads its body. */
   skillName?: string;
   /** Explicit user-selected MCP Prompt/Resources for this one turn. */
@@ -322,8 +334,19 @@ export interface ComposerSendMeta {
   agiWorkGoal?: AgiWorkGoalInput;
   /** Connector ids switched off for this conversation; their tools are not offered to the model. */
   disabledConnectorIds?: string[];
+  /** Whether at least one account connector remains enabled after the connector list has loaded. */
+  connectorToolsEnabled?: boolean;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
+  /** Exact promotional media offering for this turn; never applied to text chat by default. */
+  modelOverrideId?: string;
+}
+
+export interface ComposerAttachmentUploadAttempt {
+  id: string;
+  content: string;
+  files: File[];
+  statuses: AttachmentUploadVisualStatus[];
 }
 
 interface ChatComposerProps {
@@ -361,6 +384,9 @@ interface ChatComposerProps {
   droppedFiles?: File[] | null;
   /** Callback fired after droppedFiles have been consumed and added to attachments. */
   onDroppedFilesConsumed?: () => void;
+  attachmentUploadAttempt?: ComposerAttachmentUploadAttempt | null;
+  onRetryAttachmentUpload?: (index: number) => void;
+  onRemoveAttachmentUpload?: (index: number) => void;
   /** Fires when the input transitions between empty and non-empty (debounced 500ms on clear). */
   onTypingChange?: (isTyping: boolean) => void;
   /** Called when the user clicks the stop button. */
@@ -524,8 +550,8 @@ const FOCUS_AFTER_TRANSCRIPT_MS = 50;
 const COMPOSER_AUTO_HEIGHT = 'auto';
 const COMPOSER_MAX_HEIGHT_PX = 240;
 /**
- * An existing chat's one-row rest state: 36px content row + the card's 8px
- * top/bottom padding lands on the 52px rest-height parity target at 1543px.
+ * An existing chat's one-row rest state: 36px content row + the card's 12px
+ * top/bottom padding and border lands inside the 48-52px parity range.
  */
 const COMPOSER_RESTING_HEIGHT_PX = 36;
 /** The home composer's own row, its second row (mode toggle) sits below it. */
@@ -558,6 +584,10 @@ const SEND_REASON = {
   unavailable: 'Sending is unavailable right now.',
   modelUnavailable: 'The selected model is unavailable, so this message cannot be sent.',
   attachmentConflict: 'This attachment cannot be sent with the mode that is on.',
+  promotionalToolConflict: 'This free model cannot use the requested tool. Choose Free Auto first.',
+  searchAllowanceChecking: 'Checking whether Free web search is available for this account.',
+  searchAllowanceExhausted: 'This Free account has reached its web-search allowance.',
+  offline: 'You are offline. Your draft is saved here and can be sent after you reconnect.',
 } as const;
 
 /**
@@ -643,6 +673,9 @@ const ChatComposerNewComponent = ({
   onPrefillConsumed,
   droppedFiles,
   onDroppedFilesConsumed,
+  attachmentUploadAttempt,
+  onRetryAttachmentUpload,
+  onRemoveAttachmentUpload,
   onTypingChange,
   onStop,
   onEditLastMessage,
@@ -660,6 +693,7 @@ const ChatComposerNewComponent = ({
   onSetTemporaryChat,
   suppressAutoFocus = false,
 }: ChatComposerProps) => {
+  const online = useOnlineStatus();
   const isTurnActive = isLoading || isGenerating;
   const [message, setMessage] = useState('');
   /**
@@ -718,6 +752,7 @@ const ChatComposerNewComponent = ({
   const setDraftContent = useChatStore((state) => state.setDraftContent);
   const clearDraftContent = useChatStore((state) => state.clearDraftContent);
   const parkedDraft = useChatStore(selectDraftContent(conversationId));
+  const seenParkedDraftRef = useRef(parkedDraft);
   const parkedSends = useChatStore(selectParkedSends);
   const clearParkedSend = useChatStore((state) => state.clearParkedSend);
   const parkedSend = useMemo(() => firstParkedSend(parkedSends), [parkedSends]);
@@ -740,6 +775,26 @@ const ChatComposerNewComponent = ({
   } = useAttachments({
     onError: (message) => setLocalNotice(message),
   });
+  const uploadAttemptId = attachmentUploadAttempt?.id;
+  const uploadAttemptFiles = attachmentUploadAttempt?.files;
+  const [uploadAttemptPreviews, setUploadAttemptPreviews] = useState<
+    import('@features/chat/hooks/use-attachments').AttachmentPreview[]
+  >([]);
+  useEffect(() => {
+    if (!uploadAttemptId || !uploadAttemptFiles?.length) {
+      setUploadAttemptPreviews([]);
+      return;
+    }
+    const next = uploadAttemptFiles.map((file) => ({
+      file,
+      url: URL.createObjectURL(file),
+      type: file.type.startsWith('image/') ? ('image' as const) : ('document' as const),
+    }));
+    setUploadAttemptPreviews(next);
+    return () => {
+      for (const preview of next) URL.revokeObjectURL(preview.url);
+    };
+  }, [uploadAttemptFiles, uploadAttemptId]);
   const softKeyboardInset = useSoftKeyboardInset();
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   // The Connectors row's own submenu (list of connected connectors, each with
@@ -758,6 +813,7 @@ const ChatComposerNewComponent = ({
     customNames: connectorCustomNames,
     toolConnectorIds,
     loading: connectorsLoading,
+    error: connectorsError,
   } = useConnectors();
   // AUDIT-FIX CMP-8: user-defined commands are read here so `template` is
   // actually applied (it was previously never read by any composer code).
@@ -810,6 +866,7 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const subscriptionTier = useBillingStore((s) => normalizeBillingPlanTier(s.subscription?.tier));
+  const billingUserId = useBillingStore((s) => s.user?.id ?? null);
   const entitlementTier = isFreeTrial ? normalizeBillingPlanTier(null) : subscriptionTier;
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
   const billingPolicyError = useBillingStore((s) => s.error);
@@ -968,6 +1025,7 @@ const ChatComposerNewComponent = ({
   // Image generation mode state (imageMode itself is per-conversation, above)
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
+  const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
   /**
@@ -985,19 +1043,62 @@ const ChatComposerNewComponent = ({
     admissionFor: mediaAdmissionFor,
     retry: retryMediaAvailability,
   } = useMediaModelAvailability();
+  const {
+    models: promotionalMediaModels,
+    issuer: promotionalMediaIssuer,
+    status: promotionalMediaStatus,
+    retry: retryPromotionalMedia,
+  } = usePromotionalMediaModels(canUseImageGeneration || canUseVideoGeneration);
+  const mediaModelsReady =
+    mediaAvailabilityStatus === 'ready' ||
+    ((canUseImageGeneration || canUseVideoGeneration) && promotionalMediaStatus === 'ready');
+  const mediaModelsSettled =
+    mediaAvailabilityStatus !== 'loading' && promotionalMediaStatus !== 'loading';
   const availableImageModels = useMemo(
-    () =>
-      mediaAvailabilityStatus === 'ready'
-        ? IMAGE_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled')
-        : [],
-    [mediaAdmissionFor, mediaAvailabilityStatus],
+    () => [
+      ...promotionalMediaModels
+        .filter((model) => model.category === 'image')
+        .map((model) => ({
+          id: model.key,
+          label: model.displayName,
+          source: 'promotional' as const,
+        })),
+      ...(mediaAvailabilityStatus === 'ready'
+        ? IMAGE_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
+            (model) => ({ ...model, source: 'paid' as const }),
+          )
+        : []),
+    ],
+    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
   );
   const availableVideoModels = useMemo(
-    () =>
-      mediaAvailabilityStatus === 'ready'
-        ? VIDEO_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled')
-        : [],
-    [mediaAdmissionFor, mediaAvailabilityStatus],
+    () => [
+      ...promotionalMediaModels
+        .filter((model) => model.category === 'video')
+        .map((model) => ({
+          id: model.key,
+          label: model.displayName,
+          source: 'promotional' as const,
+        })),
+      ...(mediaAvailabilityStatus === 'ready'
+        ? VIDEO_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
+            (model) => ({ ...model, source: 'paid' as const }),
+          )
+        : []),
+    ],
+    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
+  );
+  const selectedImageIsPromotional = availableImageModels.some(
+    (model) => model.id === imageModelId && model.source === 'promotional',
+  );
+  const selectedVideoIsPromotional = availableVideoModels.some(
+    (model) => model.id === videoModelId && model.source === 'promotional',
+  );
+  const selectedPromotionalImage = promotionalMediaModels.find(
+    (model) => model.key === imageModelId && model.category === 'image',
+  );
+  const selectedPromotionalVideo = promotionalMediaModels.find(
+    (model) => model.key === videoModelId && model.category === 'video',
   );
   const imageAspectOptions = useMemo(
     () => getImageAspectOptionsForModel(imageModelId),
@@ -1008,7 +1109,8 @@ const ChatComposerNewComponent = ({
    * availability endpoint, so a second model on the same image API lights these
    * controls up without a line changing here.
    */
-  const imageModelSupportsEdit = mediaAdmissionFor(imageModelId)?.supports_edit === true;
+  const imageModelSupportsEdit =
+    !selectedImageIsPromotional && mediaAdmissionFor(imageModelId)?.supports_edit === true;
   const imageSourceFile = imageMode ? attachments[0] : undefined;
   const imageMaskFile = imageMode ? attachments[1] : undefined;
   const imageOperationOptions = useMemo(
@@ -1033,7 +1135,6 @@ const ChatComposerNewComponent = ({
     : 'auto';
 
   // Video generation mode state (videoMode itself is per-conversation, above).
-  const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showVideoModelMenu, setShowVideoModelMenu] = useState(false);
   const [videoAspectRatio, setVideoAspectRatio] = useState<string>('16:9');
   const [videoResolution, setVideoResolution] = useState<string>('720p');
@@ -1065,25 +1166,29 @@ const ChatComposerNewComponent = ({
   // durable storage. Once the server handshake resolves, keep each selection
   // on an admitted model or an honest empty state.
   useEffect(() => {
-    if (mediaAvailabilityStatus !== 'ready') return;
+    if (!mediaModelsSettled) return;
     if (!availableImageModels.some((model) => model.id === imageModelId)) {
       setImageModelId(availableImageModels[0]?.id ?? '');
       setImageAspectRatio('auto');
     }
-  }, [availableImageModels, imageModelId, mediaAvailabilityStatus]);
+  }, [availableImageModels, imageModelId, mediaModelsSettled]);
 
   useEffect(() => {
-    if (mediaAvailabilityStatus !== 'ready') return;
+    if (!mediaModelsSettled) return;
     if (!availableVideoModels.some((model) => model.id === videoModelId)) {
       setVideoModelId(availableVideoModels[0]?.id ?? '');
     }
-  }, [availableVideoModels, mediaAvailabilityStatus, videoModelId]);
+  }, [availableVideoModels, mediaModelsSettled, videoModelId]);
 
   // Capability gating: enable/disable composer affordances based on the SELECTED
   // model's capabilities so a user never sends an input the model can't handle
   // (e.g. an image to a text-only model, or web search to a no-search model).
   const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
-  const freeQuotaSelected = Boolean(freeQuotaSelection(composerSelectedModelId));
+  const selectedFreeOffering = freeQuotaSelection(composerSelectedModelId);
+  const freeQuotaSelected = Boolean(selectedFreeOffering);
+  const promotionalTextOnlyChat = selectedFreeOffering?.quotaProbeProtocol === 'chat';
+  const promotionalVisionChat =
+    promotionalTextOnlyChat && selectedFreeOffering?.quotaChatImageInput === true;
   const trialExhausted = !freeQuotaSelected && isFreeTrial && (freeTrial?.limitReached ?? false);
   useEffect(() => {
     if (freeQuotaSelected && (imageMode || videoMode)) {
@@ -1091,11 +1196,29 @@ const ChatComposerNewComponent = ({
     }
   }, [freeQuotaSelected, imageMode, videoMode, setComposerToggles]);
   const setComposerSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+  const selectCompatibleModel = useCallback(
+    async (modelId: string): Promise<boolean> => {
+      if (!onModelChange) {
+        setComposerSelectedModelId(modelId);
+        return true;
+      }
+      try {
+        const saved = await onModelChange(modelId);
+        if (!saved) setLocalNotice('Could not save this conversation’s model. Try again.');
+        return saved;
+      } catch {
+        setLocalNotice('Could not save this conversation’s model. Try again.');
+        return false;
+      }
+    },
+    [onModelChange, setComposerSelectedModelId],
+  );
   const isAutoSelected = isAutoModeModelId(composerSelectedModelId);
   const selectedModelMeta = getModelMetadata(composerSelectedModelId);
   const selectedModelCaps = selectedModelMeta?.capabilities;
   const modelSupportsVision = selectedModelCaps?.vision ?? false;
-  const modelCanAcceptImages = isAutoModeModelId(composerSelectedModelId) || modelSupportsVision;
+  const modelCanAcceptImages =
+    isAutoModeModelId(composerSelectedModelId) || modelSupportsVision || promotionalVisionChat;
   /**
    * AUDIT-FIX CMP-27: the conflict check used to be `type.startsWith('image/')`
    * only, while the file input accepts the FULL chat-attachment allowlist. A
@@ -1112,7 +1235,14 @@ const ChatComposerNewComponent = ({
   const hasDocumentAttachments = binaryAttachments.some((file) => file.type === 'application/pdf');
   // Image mode answers to the image model's edit support, not to the chat
   // model's vision flag, so an attached picture there is never a conflict here.
-  const hasAttachmentConflict = !imageMode && binaryAttachments.length > 0 && !modelCanAcceptImages;
+  const promotionalAttachmentConflict =
+    !imageMode &&
+    !videoMode &&
+    promotionalTextOnlyChat &&
+    attachments.some((file) => !promotionalVisionChat || !isChatImageMimeType(file.type));
+  const hasAttachmentConflict =
+    promotionalAttachmentConflict ||
+    (!imageMode && binaryAttachments.length > 0 && !modelCanAcceptImages);
   const attachmentConflictKind: 'image' | 'document' | 'mixed' =
     hasImageAttachments && hasDocumentAttachments
       ? 'mixed'
@@ -1124,7 +1254,10 @@ const ChatComposerNewComponent = ({
   // Image mode takes an attachment now, as the picture an edit works from, so
   // the attach rows close only for video and for an image model that cannot
   // read a source image.
-  const attachmentsUnavailable = videoMode || (imageMode && !imageModelSupportsEdit);
+  const attachmentsUnavailable =
+    videoMode ||
+    (imageMode && !imageModelSupportsEdit) ||
+    (promotionalTextOnlyChat && !promotionalVisionChat);
   const mediaAttachmentConflict = videoMode && attachments.length > 0;
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
@@ -1139,16 +1272,19 @@ const ChatComposerNewComponent = ({
   // capability row until the server resolves the turn. The configured generic
   // backend is the route-independent guarantee that every Auto candidate can
   // still receive the platform web_search tool.
-  const modelSupportsSearch = isAutoModeModelId(composerSelectedModelId)
-    ? genericWebSearchConfigured
-    : isWebSearchAvailable({
-        provider: selectedModelMeta?.provider,
-        modelSupportsNativeSearch: selectedModelCaps?.search,
-        modelSupportsTools: selectedModelCaps?.tools,
-        genericBackendConfigured: genericWebSearchConfigured,
-      });
+  const modelSupportsSearch =
+    !promotionalTextOnlyChat &&
+    (isAutoModeModelId(composerSelectedModelId)
+      ? genericWebSearchConfigured
+      : isWebSearchAvailable({
+          provider: selectedModelMeta?.provider,
+          modelSupportsNativeSearch: selectedModelCaps?.search,
+          modelSupportsTools: selectedModelCaps?.tools,
+          genericBackendConfigured: genericWebSearchConfigured,
+        }));
   const researchAvailableForModel =
-    isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow);
+    !promotionalTextOnlyChat &&
+    (isAutoSelected || modelSupportsResearch(selectedModelCaps, selectedModelMeta?.contextWindow));
   const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
   const deploymentCodeExecution = useBillingStore((s) => s.featureFlags?.code_execution ?? false);
   // Whether this model can run code is a registry capability
@@ -1159,10 +1295,32 @@ const ChatComposerNewComponent = ({
   // previously hardcoded three-provider list, so that allowlist here hid the
   // control for a model the server would have honored.
   const modelSupportsCodeExecution =
-    isAutoSelected ||
-    (selectedModelCaps?.codeExecution ?? false) ||
-    ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution);
-  const modelSupportsOfficeCreation = isAutoSelected || (selectedModelCaps?.tools ?? false);
+    !promotionalTextOnlyChat &&
+    (isAutoSelected ||
+      (selectedModelCaps?.codeExecution ?? false) ||
+      ((selectedModelCaps?.tools ?? false) && deploymentCodeExecution));
+  const modelSupportsOfficeCreation =
+    !promotionalTextOnlyChat && (isAutoSelected || (selectedModelCaps?.tools ?? false));
+  const promotionalToolConflict = promotionalChatToolConflict(composerSelectedModelId, message, {
+    webSearchEnabled,
+    codeExecutionEnabled,
+    needsTools: Boolean(
+      selectedSkillName || selectedMcpContext || officeCreationEnabled || researchEnabled,
+    ),
+  });
+  const explicitSearchRequest =
+    hasExplicitWebSearchIntent(message) || hasExplicitWebFetchIntent(message);
+  const checkFreeSearchAllowance =
+    isFreeBillingPlanTier(entitlementTier) &&
+    explicitSearchRequest &&
+    (modelSupportsSearch || promotionalToolConflict === 'web_search');
+  const { allowance: searchAllowance, retry: retrySearchAllowance } = useSearchAllowance(
+    checkFreeSearchAllowance,
+    billingUserId,
+  );
+  const searchAllowanceBlocksSend =
+    checkFreeSearchAllowance &&
+    (searchAllowance.status === 'checking' || searchAllowance.status === 'exhausted');
 
   // Managed Web search is ambient (ChatGPT automatic-search behavior). Keep it
   // on whenever the selected model/deployment has an honest search path, and
@@ -1215,7 +1373,7 @@ const ChatComposerNewComponent = ({
   // tier. Do not leave a persisted media mode active once the no-store server
   // handshake proves that it has no executable model.
   useEffect(() => {
-    if (mediaAvailabilityStatus !== 'ready') return;
+    if (!mediaModelsSettled) return;
     if (imageMode && (!hostCanGenerateImage || availableImageModels.length === 0)) {
       setComposerToggles({ imageMode: false });
     }
@@ -1228,7 +1386,7 @@ const ChatComposerNewComponent = ({
     imageMode,
     hostCanGenerateImage,
     hostCanGenerateVideo,
-    mediaAvailabilityStatus,
+    mediaModelsSettled,
     setComposerToggles,
     videoMode,
   ]);
@@ -1236,6 +1394,9 @@ const ChatComposerNewComponent = ({
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const dictationEnabled = useSettingsStore((s) => s.dictationEnabled);
+  const dictationSwitchedOff = useBillingStore((s) =>
+    dictationSwitchedOffReason(s.disabledFeatures),
+  );
   const setPendingTemporaryChat = useChatStore((s) => s.setPendingTemporaryChat);
   const isIncognito = useChatStore((s) => {
     const id = s.activeConversationId;
@@ -1524,6 +1685,7 @@ const ChatComposerNewComponent = ({
     // draft that reappears when the user returns to this conversation.
     clearDraftContent(conversationId);
     clearPersistedDraft(conversationId ?? null);
+    if (conversationId && !isIncognito) markPendingDraftClear(conversationId);
     if (!conversationId) clearPendingDraft();
     // The blocked send this composer was holding has now left, by a send or by
     // an explicit clear. Releasing it by fingerprint is what makes the handback
@@ -1552,7 +1714,14 @@ const ChatComposerNewComponent = ({
     if (textareaRef.current) {
       textareaRef.current.style.height = COMPOSER_AUTO_HEIGHT;
     }
-  }, [clearAttachments, clearDraftContent, clearParkedSend, conversationId, setComposerToggles]);
+  }, [
+    clearAttachments,
+    clearDraftContent,
+    clearParkedSend,
+    conversationId,
+    isIncognito,
+    setComposerToggles,
+  ]);
 
   /**
    * A temporary chat has no history row to come back to, so walking away from
@@ -1617,10 +1786,30 @@ const ChatComposerNewComponent = ({
         addFiles(images);
         return;
       }
+      if (promotionalTextOnlyChat) {
+        if (!promotionalVisionChat) {
+          setLocalNotice('This free model accepts text only. Choose Free Auto to attach files.');
+          return;
+        }
+        const images = files.filter((file) => isChatImageMimeType(file.type));
+        if (images.length === 0) {
+          setLocalNotice(
+            'This free model accepts images, but not this file type. Choose Free Auto for other files.',
+          );
+          return;
+        }
+        setLocalNotice(
+          images.length < files.length
+            ? 'Only images were attached. This free model cannot read the other file types.'
+            : null,
+        );
+        addFiles(images);
+        return;
+      }
       setLocalNotice(null);
       addFiles(files);
     },
-    [addFiles, imageMode, videoMode],
+    [addFiles, imageMode, promotionalTextOnlyChat, promotionalVisionChat, videoMode],
   );
 
   const handleFileDrop = useCallback(
@@ -1898,17 +2087,22 @@ const ChatComposerNewComponent = ({
       }
       return;
     }
-    if (mediaAvailabilityStatus !== 'ready') {
+    if (!mediaModelsReady) {
       setLocalNotice(
         mediaAvailabilityStatus === 'error'
           ? (mediaAvailabilityError ?? 'Could not check image model availability.')
           : 'Checking image model availability…',
       );
       if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+      if (promotionalMediaStatus === 'error') retryPromotionalMedia();
       return;
     }
     if (availableImageModels.length === 0) {
-      setLocalNotice('This deployment is not ready for image generation.');
+      setLocalNotice(
+        mediaModelsSettled
+          ? 'This deployment is not ready for image generation.'
+          : 'Checking image model availability…',
+      );
       return;
     }
     if (!canUseImageGeneration) {
@@ -1922,10 +2116,14 @@ const ChatComposerNewComponent = ({
     billingPolicyReady,
     billingPolicyError,
     refreshBillingPolicy,
+    mediaModelsReady,
     mediaAvailabilityStatus,
+    promotionalMediaStatus,
     mediaAvailabilityError,
     retryMediaAvailability,
+    retryPromotionalMedia,
     availableImageModels,
+    mediaModelsSettled,
     canUseImageGeneration,
     onUpgradeRequest,
     setImageMode,
@@ -1943,17 +2141,22 @@ const ChatComposerNewComponent = ({
       }
       return;
     }
-    if (mediaAvailabilityStatus !== 'ready') {
+    if (!mediaModelsReady) {
       setLocalNotice(
         mediaAvailabilityStatus === 'error'
           ? (mediaAvailabilityError ?? 'Could not check video model availability.')
           : 'Checking video model availability…',
       );
       if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+      if (promotionalMediaStatus === 'error') retryPromotionalMedia();
       return;
     }
     if (availableVideoModels.length === 0) {
-      setLocalNotice('This deployment is not ready for video generation.');
+      setLocalNotice(
+        mediaModelsSettled
+          ? 'This deployment is not ready for video generation.'
+          : 'Checking video model availability…',
+      );
       return;
     }
     if (!canUseVideoGeneration) {
@@ -1967,10 +2170,14 @@ const ChatComposerNewComponent = ({
     billingPolicyReady,
     billingPolicyError,
     refreshBillingPolicy,
+    mediaModelsReady,
     mediaAvailabilityStatus,
+    promotionalMediaStatus,
     mediaAvailabilityError,
     retryMediaAvailability,
+    retryPromotionalMedia,
     availableVideoModels,
+    mediaModelsSettled,
     canUseVideoGeneration,
     onUpgradeRequest,
     setVideoMode,
@@ -2046,12 +2253,39 @@ const ChatComposerNewComponent = ({
     return false;
   }, []);
 
+  const handleUserDraftEdit = useCallback(
+    (value: string) => {
+      const restoredFingerprint = restoredParkedSendRef.current;
+      if (restoredFingerprint && value !== messageRef.current) {
+        restoredParkedSendRef.current = null;
+        clearParkedSend(restoredFingerprint);
+      }
+      if (!value.trim() && messageRef.current.trim()) {
+        clearDraftContent(conversationId);
+        clearPersistedDraft(conversationId ?? null);
+        if (conversationId && !isIncognito) markPendingDraftClear(conversationId);
+      } else if (value.trim() && conversationId && !isIncognito) {
+        clearPendingDraftClear(conversationId);
+        seenParkedDraftRef.current = value;
+        setDraftContent(value, conversationId);
+      }
+      messageRef.current = value;
+      setMessage(value);
+      setLocalNotice((current) =>
+        current === RESTORED_DRAFT_NOTICE || current === RESTORED_BLOCKED_SEND_NOTICE
+          ? null
+          : current,
+      );
+    },
+    [clearDraftContent, clearParkedSend, conversationId, isIncognito, setDraftContent],
+  );
+
   // Handle input change: detect @mention and /command.
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value;
       const cursorPos = e.target.selectionStart || 0;
-      setMessage(value);
+      handleUserDraftEdit(value);
 
       if (syncSlashMenu(value)) {
         setShowMentions(false);
@@ -2068,7 +2302,7 @@ const ChatComposerNewComponent = ({
       }
       setShowMentions(false);
     },
-    [syncSlashMenu],
+    [handleUserDraftEdit, syncSlashMenu],
   );
 
   /**
@@ -2078,10 +2312,10 @@ const ChatComposerNewComponent = ({
    */
   const handleComposerTextChange = useCallback(
     (value: string) => {
-      setMessage(value);
+      handleUserDraftEdit(value);
       syncSlashMenu(value);
     },
-    [syncSlashMenu],
+    [handleUserDraftEdit, syncSlashMenu],
   );
 
   const mentionMatches = useCallback(
@@ -2294,7 +2528,7 @@ const ChatComposerNewComponent = ({
               notice: 'Image generation is not available from this chat.',
             };
           }
-          if (mediaAvailabilityStatus !== 'ready' || availableImageModels.length === 0) {
+          if (!mediaModelsReady || availableImageModels.length === 0) {
             return {
               status: 'unavailable',
               notice:
@@ -2334,6 +2568,7 @@ const ChatComposerNewComponent = ({
       canUseImageGeneration,
       composerSelectedModelId,
       hostCanGenerateImage,
+      mediaModelsReady,
       mediaAvailabilityStatus,
       mediaAvailabilityError,
       availableImageModels.length,
@@ -2424,6 +2659,23 @@ const ChatComposerNewComponent = ({
     onStop?.();
   }, [onStop]);
 
+  const handleRetryAttachmentUpload = useCallback(
+    (index: number) => {
+      if (!attachmentUploadAttempt || !onRetryAttachmentUpload) return;
+      const currentDraft = messageRef.current.trim();
+      if (
+        attachments.length > 0 ||
+        (currentDraft && currentDraft !== attachmentUploadAttempt.content.trim())
+      ) {
+        setLocalNotice('This draft changed. Send it normally to use the updated text and files.');
+        return;
+      }
+      setSendPendingFlag(true);
+      onRetryAttachmentUpload(index);
+    },
+    [attachmentUploadAttempt, attachments.length, onRetryAttachmentUpload],
+  );
+
   const pendingSlashCommand = useMemo(() => {
     const parsed = splitSlashCommand(message);
     if (!parsed) return null;
@@ -2450,8 +2702,14 @@ const ChatComposerNewComponent = ({
 
   const handleSubmit = useCallback(() => {
     if (!message.trim() && attachments.length === 0) return;
+    if (online === false) {
+      setLocalNotice(SEND_REASON.offline);
+      return;
+    }
     if (disabled) return;
     if (hasAttachmentConflict) return;
+    if (promotionalToolConflict) return;
+    if (searchAllowanceBlocksSend) return;
     if (localAttachmentConflict) return;
     if (attachmentPreparing) {
       deferredSendRef.current = true;
@@ -2481,6 +2739,7 @@ const ChatComposerNewComponent = ({
     let sendCodeExecutionEnabled = codeExecutionEnabled;
     let sendThinkingEnabled = thinkingEnabled;
     let sendImageMode = imageMode;
+    let artifactInstruction: string | undefined;
     if (pendingSlashCommand) {
       const outcome = resolveSlashCommand(
         pendingSlashCommand.commandId,
@@ -2514,6 +2773,23 @@ const ChatComposerNewComponent = ({
 
     if (freeQuotaSelected) sendImageMode = false;
 
+    const sendPromotionalMedia = (prompt: string, modelId: string) => {
+      setSendPendingFlag(true);
+      const result = onSend(prompt, undefined, undefined, {
+        workMode: 'chat',
+        projectId: pickerActiveProjectId,
+        modelOverrideId: modelId,
+        webSearchEnabled: false,
+        codeExecutionEnabled: false,
+      });
+      if (result === SEND_GUARD_BLOCKED) return;
+      if (result === false) {
+        setSendPendingFlag(false);
+        return;
+      }
+      clearComposerState();
+    };
+
     if (sendImageMode && outgoingContent.trim()) {
       // A diagram, chart or vector is structured text the Artifacts system
       // renders exactly; a raster model draws an unreadable picture of one.
@@ -2522,7 +2798,7 @@ const ChatComposerNewComponent = ({
         hasSourceImage: attachments.length > 0,
       });
       if (visualRoute.destination === 'artifact') {
-        outgoingContent = visualRoute.prompt;
+        artifactInstruction = visualRoute.target.directive;
         sendImageMode = false;
       }
     }
@@ -2531,12 +2807,22 @@ const ChatComposerNewComponent = ({
       if (isTurnActive) return;
       const prompt = outgoingContent.trim();
       if (!prompt) return;
+      if (selectedImageIsPromotional) {
+        if (attachments.length > 0) {
+          setLocalNotice(
+            'This promotional image model creates a new image from text. Remove the attached files, or choose an editing model.',
+          );
+          return;
+        }
+        sendPromotionalMedia(prompt, imageModelId);
+        return;
+      }
       if (!onGenerateImage) {
         setLocalNotice('Image generation is not available from this composer.');
         return;
       }
       if (
-        mediaAvailabilityStatus !== 'ready' ||
+        !mediaModelsReady ||
         !imageModelId ||
         mediaAdmissionFor(imageModelId)?.state !== 'enabled'
       ) {
@@ -2610,12 +2896,16 @@ const ChatComposerNewComponent = ({
       }
       const prompt = outgoingContent.trim();
       if (!prompt) return;
+      if (selectedVideoIsPromotional) {
+        sendPromotionalMedia(prompt, videoModelId);
+        return;
+      }
       if (!onGenerateVideo) {
         setLocalNotice('Video generation is not available from this composer.');
         return;
       }
       if (
-        mediaAvailabilityStatus !== 'ready' ||
+        !mediaModelsReady ||
         !videoModelId ||
         mediaAdmissionFor(videoModelId)?.state !== 'enabled'
       ) {
@@ -2677,9 +2967,16 @@ const ChatComposerNewComponent = ({
         // now composed from the single style store plus the new length axis and
         // is never empty, so out-of-the-box turns finally carry real guidance.
         styleInstruction: getStyleInstruction(responseStyle, activeCustomStyleId, responseLength),
+        artifactInstruction,
         skillName: selectedSkillName ?? undefined,
         mcpContext: selectedMcpContext ?? undefined,
         disabledConnectorIds: disabledConnectorIds.length > 0 ? disabledConnectorIds : undefined,
+        connectorToolsEnabled:
+          connectorsLoading || connectorsError
+            ? undefined
+            : connectedConnectorOptions.some(
+                (connector) => !disabledConnectorIds.includes(connector.toolId),
+              ),
         memoryEnabled: memoryEnabledForChat,
         // CAP-048: attach the structured goal on an AGI Work send. The objective
         // is the composed message; the optional scope fields ride alongside.
@@ -2738,23 +3035,31 @@ const ChatComposerNewComponent = ({
     selectedSkillName,
     selectedMcpContext,
     disabledConnectorIds,
+    connectedConnectorOptions,
+    connectorsLoading,
+    connectorsError,
     memoryEnabledForChat,
     isTurnActive,
     disabled,
     hasAttachmentConflict,
+    promotionalToolConflict,
+    searchAllowanceBlocksSend,
     localAttachmentConflict,
     attachmentPreparing,
     trialExhausted,
     freeQuotaSelected,
     onUpgradeRequest,
     imageMode,
+    selectedImageIsPromotional,
     effectiveImageAspectRatio,
     imageModelId,
     mediaAdmissionFor,
     mediaAvailabilityError,
     mediaAvailabilityStatus,
+    mediaModelsReady,
     onGenerateImage,
     videoMode,
+    selectedVideoIsPromotional,
     videoModelId,
     effectiveVideoAspectRatio,
     effectiveVideoResolution,
@@ -2787,6 +3092,7 @@ const ChatComposerNewComponent = ({
     writeComposerMessage,
     activeToolLabels,
     usageBlock,
+    online,
   ]);
 
   useEffect(() => {
@@ -2817,6 +3123,14 @@ const ChatComposerNewComponent = ({
   const persistedDraftOwnerRef = useRef<string | null>(conversationId ?? null);
   const persistedDraftHydratedRef = useRef(false);
   const claimedReloadedDraftRef = useRef('');
+  const claimedArrivalDraftRef = useRef<{
+    owner: string | null;
+    content: string;
+  } | null>(null);
+  const pendingDraftCleanupRef = useRef<{
+    owner: string | null;
+    cancelled: boolean;
+  } | null>(null);
   useEffect(() => {
     if (!persistedDraftHydratedRef.current) {
       persistedDraftHydratedRef.current = true;
@@ -2853,6 +3167,12 @@ const ChatComposerNewComponent = ({
    * user typed rather than on the way out.
    */
   useEffect(() => {
+    const owner = conversationId ?? null;
+    const pendingCleanup = pendingDraftCleanupRef.current;
+    if (pendingCleanup?.owner === owner) {
+      pendingCleanup.cancelled = true;
+      pendingDraftCleanupRef.current = null;
+    }
     const parked = useChatStore.getState().getDraftContent(conversationId);
     // A saved conversation owns its draft outright. The unsaved surface does
     // not. Its slot is shared by every new chat, so it is only the same draft
@@ -2865,23 +3185,32 @@ const ChatComposerNewComponent = ({
       // still this composer's to restore.
       claimedReloadedDraftRef.current = claimReloadedPendingDraft();
     }
-    writeComposerMessage(
-      conversationId
-        ? parked || readPersistedDraft(conversationId)
-        : restorablePendingDraft(parked) || claimedReloadedDraftRef.current,
-    );
+    if (claimedArrivalDraftRef.current?.owner !== owner) {
+      claimedArrivalDraftRef.current = {
+        owner,
+        content: conversationId
+          ? parked || readPersistedDraft(conversationId)
+          : restorablePendingDraft(parked) || claimedReloadedDraftRef.current,
+      };
+    }
+    writeComposerMessage(claimedArrivalDraftRef.current.content);
     return () => {
       const outgoing = messageRef.current;
-      if (outgoing.trim()) {
-        setDraftContent(outgoing, conversationId);
-      } else {
-        clearDraftContent(conversationId);
-      }
-      // Only ever park text, never the absence of it. The new chat the user
-      // opened in between leaves this surface empty on its way out, and
-      // parking that would wipe the draft the step back is coming for. A sent
-      // draft is discarded explicitly instead, in clearComposerState.
+      // The unsaved surface has no stable conversation owner. Its history
+      // draft therefore belongs only to the navigation-aware session slot:
+      // putting it in the generic conversation map would make the next New
+      // chat inherit it as soon as this deferred cleanup runs.
       if (!conversationId && outgoing.trim()) parkPendingDraft(outgoing);
+      const cleanup = { owner, cancelled: false };
+      pendingDraftCleanupRef.current = cleanup;
+      queueMicrotask(() => {
+        if (cleanup.cancelled || !conversationId) return;
+        if (outgoing.trim()) {
+          setDraftContent(outgoing, conversationId);
+        } else {
+          clearDraftContent(conversationId);
+        }
+      });
     };
   }, [conversationId, setDraftContent, clearDraftContent, writeComposerMessage]);
 
@@ -2922,7 +3251,6 @@ const ChatComposerNewComponent = ({
    * handback is held against the conversation it was written for and applied
    * the moment the composer is empty again.
    */
-  const seenParkedDraftRef = useRef(parkedDraft);
   const deferredHandbackRef = useRef<{ conversationId: string | null; content: string } | null>(
     null,
   );
@@ -3219,8 +3547,12 @@ const ChatComposerNewComponent = ({
 
   const composerDisabled = disabled || trialExhausted || Boolean(usageBlock);
   const selectedMediaModelUnavailable =
-    (imageMode && mediaAdmissionFor(imageModelId)?.state !== 'enabled') ||
-    (videoMode && mediaAdmissionFor(videoModelId)?.state !== 'enabled');
+    (imageMode &&
+      !selectedImageIsPromotional &&
+      mediaAdmissionFor(imageModelId)?.state !== 'enabled') ||
+    (videoMode &&
+      !selectedVideoIsPromotional &&
+      mediaAdmissionFor(videoModelId)?.state !== 'enabled');
 
   // AUDIT-FIX CMP-32: length feedback against the real contract ceiling.
   const messageLength = message.length;
@@ -3230,6 +3562,7 @@ const ChatComposerNewComponent = ({
   const sendButtonMode = isTurnActive ? 'stop' : 'send';
 
   const sendDisabledReason = useMemo(() => {
+    if (online === false) return SEND_REASON.offline;
     if (usageBlock) return usageBlock.reason || SEND_REASON.usageBlocked;
     if (trialExhausted) return SEND_REASON.trialExhausted;
     if (disabled) return SEND_REASON.unavailable;
@@ -3237,6 +3570,11 @@ const ChatComposerNewComponent = ({
     if (mediaAttachmentConflict || hasAttachmentConflict || localAttachmentConflict) {
       return SEND_REASON.attachmentConflict;
     }
+    if (searchAllowance.status === 'checking' && checkFreeSearchAllowance)
+      return SEND_REASON.searchAllowanceChecking;
+    if (searchAllowance.status === 'exhausted' && checkFreeSearchAllowance)
+      return SEND_REASON.searchAllowanceExhausted;
+    if (promotionalToolConflict) return SEND_REASON.promotionalToolConflict;
     return undefined;
   }, [
     usageBlock,
@@ -3246,6 +3584,10 @@ const ChatComposerNewComponent = ({
     mediaAttachmentConflict,
     hasAttachmentConflict,
     localAttachmentConflict,
+    promotionalToolConflict,
+    checkFreeSearchAllowance,
+    searchAllowance.status,
+    online,
   ]);
 
   /**
@@ -3283,7 +3625,7 @@ const ChatComposerNewComponent = ({
   // keyboard on a browser that does not resize the layout viewport for it.
   return (
     <div
-      className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-20 bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
+      className="chat-composer-container relative w-full pb-4 safe-area-bottom-additive sticky bottom-0 z-[var(--z-content-sticky)] bg-[var(--chat-bg)] backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none"
       style={
         softKeyboardInset > 0 ? { transform: `translateY(-${softKeyboardInset}px)` } : undefined
       }
@@ -3333,7 +3675,7 @@ const ChatComposerNewComponent = ({
             className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setPastedTextUndo(null)}
           >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -3365,7 +3707,7 @@ const ChatComposerNewComponent = ({
             className="ml-auto text-muted-foreground transition-colors hover:text-foreground focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => setPastedCodeUndo(null)}
           >
-            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       )}
@@ -3378,7 +3720,7 @@ const ChatComposerNewComponent = ({
               className="flex items-center gap-2 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
               data-testid="queued-followup"
             >
-              <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="min-w-0 flex-1 truncate">
                 {queuedFollowUps.length > 1
                   ? `${QUEUED_ROW_LEAD} ${index + 1} of ${queuedFollowUps.length}: `
@@ -3394,7 +3736,7 @@ const ChatComposerNewComponent = ({
               <button
                 type="button"
                 onClick={() => editQueuedMessage(queued.id)}
-                className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Edit queued message: ${queued.preview}`}
               >
                 Edit
@@ -3402,7 +3744,7 @@ const ChatComposerNewComponent = ({
               <button
                 type="button"
                 onClick={() => cancelQueuedMessage(queued.id)}
-                className="shrink-0 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="shrink-0 rounded-compact px-1.5 py-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                 aria-label={`Cancel queued message: ${queued.preview}`}
               >
                 Cancel
@@ -3462,7 +3804,7 @@ const ChatComposerNewComponent = ({
               className="rounded-full p-0.5 hover:bg-emerald-500/20"
               aria-label={`Remove ${selectedSkillName} skill`}
             >
-              <X className="h-2.5 w-2.5" />
+              <X className="h-4 w-4" />
             </button>
           </span>
         </div>
@@ -3489,7 +3831,7 @@ const ChatComposerNewComponent = ({
             className="rounded-full p-1 text-muted-foreground hover:bg-muted"
             aria-label="Remove selected connector context"
           >
-            <X className="h-3 w-3" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       )}
@@ -3501,7 +3843,7 @@ const ChatComposerNewComponent = ({
       {!projectPicker && canUseWorkingDirectory && folderName && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-warning-fill/40 bg-warning-fill/10 px-2.5 py-1 text-xs text-warning-text">
-            <FolderOpen className="h-3 w-3 shrink-0" />
+            <FolderOpen className="h-4 w-4 shrink-0" />
             {folderName}
             <button
               type="button"
@@ -3509,13 +3851,26 @@ const ChatComposerNewComponent = ({
               className="rounded-full p-0.5 hover:bg-warning-fill/20"
               aria-label="Clear working folder"
             >
-              <X className="h-2.5 w-2.5" />
+              <X className="h-4 w-4" />
             </button>
           </span>
         </div>
       )}
 
       {/* Attachments */}
+      {attachmentUploadAttempt && uploadAttemptPreviews.length > 0 ? (
+        <AttachmentPreview
+          previews={uploadAttemptPreviews}
+          statuses={attachmentUploadAttempt.statuses}
+          onRetry={handleRetryAttachmentUpload}
+          onRemove={onRemoveAttachmentUpload ?? (() => undefined)}
+          disableRemove={
+            !attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')
+          }
+          className="mb-2"
+          privacyShortLabel={attachmentPrivacyShortLabel}
+        />
+      ) : null}
       <AttachmentPreview
         previews={previews}
         onRemove={removeFile}
@@ -3587,28 +3942,100 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
+      {checkFreeSearchAllowance && searchAllowance.status === 'exhausted' && (
+        <div
+          role="alert"
+          className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm text-foreground"
+        >
+          Your Free plan has used its {searchAllowance.limit} web searches in the last{' '}
+          {searchAllowance.windowDays} days. You can keep chatting without web search or try again
+          when an earlier search leaves that rolling window.
+          {promotionalToolConflict === 'web_search' &&
+            ' This model cannot search; choose Free Auto when search is available again.'}
+        </div>
+      )}
+
+      {checkFreeSearchAllowance && searchAllowance.status === 'checking' && (
+        <p role="status" className="mb-2 px-2 text-xs text-muted-foreground">
+          Checking Free web-search availability…
+        </p>
+      )}
+
+      {checkFreeSearchAllowance &&
+        (searchAllowance.status === 'unknown' || searchAllowance.status === 'unavailable') && (
+          <div
+            role="status"
+            className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm text-foreground"
+          >
+            Search availability could not be checked. You can try sending, but search may be
+            unavailable.{' '}
+            <button
+              type="button"
+              onClick={retrySearchAllowance}
+              className="ml-2 font-medium text-primary underline underline-offset-2"
+            >
+              Check again
+            </button>
+          </div>
+        )}
+
+      {promotionalToolConflict &&
+        !hasAttachmentConflict &&
+        !(
+          promotionalToolConflict === 'web_search' &&
+          (searchAllowance.status === 'checking' || searchAllowance.status === 'exhausted')
+        ) && (
+          <div
+            role="alert"
+            className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
+          >
+            <p className="text-foreground">
+              {promotionalToolConflict === 'web_search'
+                ? 'This free model cannot search the web or open pages.'
+                : promotionalToolConflict === 'code_execution'
+                  ? 'This free model cannot run code in the sandbox.'
+                  : 'This free model cannot use the selected tools.'}{' '}
+              Use Free Auto for this request. Your draft will stay here until you send it.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const autoModelId = getAllowedAutoModesForTier(subscriptionTier)[0];
+                if (autoModelId) void selectCompatibleModel(autoModelId);
+              }}
+              className="mt-2 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+            >
+              Use Free Auto
+            </button>
+          </div>
+        )}
+
       {hasAttachmentConflict && (
         <div
           role="alert"
           className="mb-2 rounded-xl border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm"
         >
           <p className="text-foreground">
-            {attachmentConflictKind === 'image'
-              ? "The selected model can't read the attached image. Switch to Auto, choose an image-capable model, or remove the image."
-              : attachmentConflictKind === 'document'
-                ? "The selected model can't read the attached document. Switch to Auto, choose a document-capable model, or remove the file."
-                : "The selected model can't read the attached image and document. Switch to Auto, choose a multimodal model, or remove the files."}
+            {promotionalAttachmentConflict
+              ? promotionalVisionChat
+                ? 'This free model accepts images only. Switch to Free Auto for other files, or remove the attachment.'
+                : 'This free model accepts text only. Switch to Free Auto to send files, or remove the attachment.'
+              : attachmentConflictKind === 'image'
+                ? "The selected model can't read the attached image. Switch to Auto, choose an image-capable model, or remove the image."
+                : attachmentConflictKind === 'document'
+                  ? "The selected model can't read the attached document. Switch to Auto, choose a document-capable model, or remove the file."
+                  : "The selected model can't read the attached image and document. Switch to Auto, choose a multimodal model, or remove the files."}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
                 const autoModelId = getAllowedAutoModesForTier(subscriptionTier)[0];
-                if (autoModelId) setComposerSelectedModelId(autoModelId);
+                if (autoModelId) void selectCompatibleModel(autoModelId);
               }}
               className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
             >
-              Use Auto
+              {promotionalAttachmentConflict ? 'Use Free Auto' : 'Use Auto'}
             </button>
             <button
               type="button"
@@ -3620,15 +4047,17 @@ const ChatComposerNewComponent = ({
             >
               Remove attachments
             </button>
-            <button
-              type="button"
-              onClick={() => setShowCompatibleModels((open) => !open)}
-              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
-            >
-              Choose a compatible model
-            </button>
+            {!promotionalAttachmentConflict && (
+              <button
+                type="button"
+                onClick={() => setShowCompatibleModels((open) => !open)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium"
+              >
+                Choose a compatible model
+              </button>
+            )}
           </div>
-          {showCompatibleModels && (
+          {showCompatibleModels && !promotionalAttachmentConflict && (
             <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-border bg-popover p-1">
               {/* AUDIT-FIX CMP-28: an empty bordered box with no message was
                   rendered when the user's tier has no multimodal model. Say
@@ -3653,8 +4082,9 @@ const ChatComposerNewComponent = ({
                   type="button"
                   aria-label={`Use ${model.name}`}
                   onClick={() => {
-                    setComposerSelectedModelId(model.id);
-                    setShowCompatibleModels(false);
+                    void selectCompatibleModel(model.id).then((saved) => {
+                      if (saved) setShowCompatibleModels(false);
+                    });
                   }}
                   className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted"
                 >
@@ -3670,10 +4100,12 @@ const ChatComposerNewComponent = ({
           state (rest, empty, focus): a shadow only ever appears on focus. */}
       <div
         id="chat-composer"
+        onFocusCapture={() => void preloadTranscriptMarkdown()}
+        onPointerDown={() => void preloadTranscriptMarkdown()}
         className={cn(
-          'relative z-10 rounded-2xl border bg-[var(--chat-input-bg)] backdrop-blur-sm transition-all duration-200',
+          'relative z-[var(--z-control)] rounded-2xl border bg-[var(--chat-input-bg)] transition-all duration-quick',
           isFocused
-            ? 'border-[var(--chat-border-strong)] shadow-md ring-2 ring-[var(--chat-focus-ring)]'
+            ? 'border-[var(--chat-border-strong)] shadow-e2 ring-2 ring-[var(--chat-focus-ring)]'
             : 'border-[var(--chat-border-strong)] shadow-none',
         )}
       >
@@ -3686,9 +4118,7 @@ const ChatComposerNewComponent = ({
             onSkillSelect={handleSkillSelect}
             skills={availableSkills}
             imageCommandAvailable={
-              hostCanGenerateImage &&
-              mediaAvailabilityStatus === 'ready' &&
-              availableImageModels.length > 0
+              hostCanGenerateImage && mediaModelsReady && availableImageModels.length > 0
             }
             codeCommandAvailable={modelSupportsCodeExecution}
             onClose={() => setShowSlashMenu(false)}
@@ -3715,7 +4145,7 @@ const ChatComposerNewComponent = ({
           className="w-72"
         >
           <div className="p-1.5" role="listbox" aria-label="Mentions">
-            <div className="mb-1.5 px-3 py-1 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="mb-1.5 px-3 py-1 text-caption font-medium uppercase tracking-wider text-muted-foreground">
               Skills
             </div>
             {skillsLoading ? (
@@ -3741,7 +4171,7 @@ const ChatComposerNewComponent = ({
                   )}
                 >
                   <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <span className="text-[12px] font-bold">
+                    <span className="text-caption font-bold">
                       {skill.name.substring(0, 2).toUpperCase()}
                     </span>
                   </div>
@@ -3757,7 +4187,7 @@ const ChatComposerNewComponent = ({
 
             {projectScopeSelectable && (
               <>
-                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-[12px] font-medium uppercase tracking-wider text-muted-foreground">
+                <div className="mb-1.5 mt-2 border-t border-border/40 px-3 pt-2 text-caption font-medium uppercase tracking-wider text-muted-foreground">
                   Projects
                 </div>
                 {filteredMentionProjects.length === 0 ? (
@@ -3793,15 +4223,14 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            'flex flex-col gap-1.5 p-1.5 sm:gap-2 sm:p-3',
-            emptyState && 'px-3 py-1.5 sm:px-5 sm:py-3',
+            'flex flex-col gap-1.5 p-1.5',
+            emptyState && 'px-space-3 py-1.5 sm:gap-2 sm:px-5 sm:py-space-3',
           )}
         >
-          {/* Rest-state row: one line (plus, textbox, right cluster) while the
-              composer is wide enough. items-end keeps the plus/model/mic/send
-              controls pinned to the textbox's last line as it autosizes
-              taller; below the container's narrow width the textbox takes a
-              row of its own and the controls drop under it.
+          {/* Rest-state row: an existing chat keeps plus, textbox and the right
+              cluster on one line. The home composer keeps its separate control
+              row. items-end pins the controls to the textbox's last line as it
+              autosizes taller.
 
               `flex-row` is load-bearing, not decoration: globals.css turns
               every `[class*='composer']` into a column below 641px, so any
@@ -3828,6 +4257,7 @@ const ChatComposerNewComponent = ({
           <div
             className={cn(
               'chat-composer-row min-w-0 flex-row items-end gap-1 sm:gap-2',
+              emptyState ? 'flex-wrap' : 'flex-nowrap',
               dictation.isActive ? 'hidden' : 'flex',
             )}
           >
@@ -3836,8 +4266,8 @@ const ChatComposerNewComponent = ({
             <div
               ref={composerRowRef}
               className={cn(
-                'chat-composer-field relative min-w-0 flex-1 min-h-[36px]',
-                emptyState ? 'sm:min-h-[40px]' : 'sm:min-h-[52px]',
+                'chat-composer-field relative -order-1 min-h-[36px] min-w-0 flex-1',
+                emptyState ? 'basis-full sm:min-h-[40px]' : 'basis-0 sm:min-h-[36px]',
               )}
             >
               <ComposerInput
@@ -3882,7 +4312,7 @@ const ChatComposerNewComponent = ({
                   id="composer-char-counter"
                   role="status"
                   className={cn(
-                    'absolute bottom-0 right-2 z-20 text-[12px] tabular-nums',
+                    'absolute bottom-0 right-2 z-[var(--z-content-sticky)] text-caption tabular-nums',
                     charCounterExceeded ? 'text-danger' : 'text-muted-foreground',
                   )}
                 >
@@ -3893,12 +4323,21 @@ const ChatComposerNewComponent = ({
               )}
             </div>
 
-            {/* `flex-nowrap` is load-bearing: the field owns the first line, so
-                these controls must share one line rather than wrapping a third
-                row onto a phone. `chat-composer-leading-end` carries the auto
-                right margin that pushes the rest to the right edge. */}
-            <div className="chat-composer-controls flex w-full min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2">
-              <div className="chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2">
+            {/* The controls flatten into the active-chat row so the leading
+                cluster sits before the field and the remaining controls sit
+                after it. The home composer keeps this wrapper as its second row. */}
+            <div
+              className={cn(
+                'chat-composer-controls min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2',
+                emptyState ? 'flex w-full' : 'contents',
+              )}
+            >
+              <div
+                className={cn(
+                  'chat-composer-leading-end flex shrink-0 flex-row items-center gap-1 sm:gap-2',
+                  emptyState ? 'mr-auto' : 'order-[-2]',
+                )}
+              >
                 {/* + Overflow Menu Button */}
                 <div className="relative shrink-0" ref={overflowRef}>
                   <button
@@ -3935,7 +4374,7 @@ const ChatComposerNewComponent = ({
                     {hasOverflowActive && (
                       <span
                         aria-hidden="true"
-                        className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[12px] font-bold text-primary-foreground"
+                        className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-caption font-bold text-primary-foreground"
                       >
                         {overflowActiveCount}
                       </span>
@@ -3981,10 +4420,17 @@ const ChatComposerNewComponent = ({
                     }}
                     mediaModeActive={mediaModeActive}
                     attachmentsUnavailable={attachmentsUnavailable}
+                    attachmentUnavailableTitle={
+                      promotionalTextOnlyChat && !promotionalVisionChat
+                        ? 'This free model accepts text only. Choose Free Auto to attach files.'
+                        : undefined
+                    }
                     mediaModeNoun={mediaModeNoun}
                     billingPolicyReady={billingPolicyReady}
                     billingPolicyError={Boolean(billingPolicyError)}
-                    mediaAvailabilityStatus={mediaAvailabilityStatus}
+                    mediaAvailabilityStatus={
+                      mediaModelsReady ? 'ready' : mediaModelsSettled ? 'error' : 'loading'
+                    }
                     hostCanGenerateImage={hostCanGenerateImage}
                     imageModelsAvailable={availableImageModels.length > 0}
                     canUseImageGeneration={canUseImageGeneration}
@@ -4119,7 +4565,7 @@ const ChatComposerNewComponent = ({
                           className={cn(
                             'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-2.5',
                             workMode === mode
-                              ? 'bg-background text-foreground shadow-sm'
+                              ? 'bg-background text-foreground shadow-e1'
                               : 'text-muted-foreground hover:text-foreground',
                             (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                           )}
@@ -4146,7 +4592,7 @@ const ChatComposerNewComponent = ({
                   title="Memory is off for this conversation. This turn neither reads nor saves account memories."
                   className="inline-flex shrink-0 items-center self-center text-[var(--chat-text-muted)]"
                 >
-                  <Brain className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Brain className="h-4 w-4" aria-hidden="true" />
                   <span className="sr-only">Memory off</span>
                 </span>
               )}
@@ -4158,9 +4604,9 @@ const ChatComposerNewComponent = ({
                     .map((option) => option.label)
                     .join(', ')}`}
                   title={overflowActiveOptions.map((option) => option.label).join(', ')}
-                  className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-[12px] font-medium text-[var(--chat-accent-primary-text)]"
+                  className="flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-[var(--chat-accent-primary)]/25 bg-[var(--chat-accent-primary)]/10 px-2 text-caption font-medium text-[var(--chat-accent-primary-text)]"
                 >
-                  <PrimaryOverflowIcon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  <PrimaryOverflowIcon aria-hidden="true" className="h-4 w-4 shrink-0" />
                   <span className="hidden max-w-24 truncate sm:inline">
                     {primaryOverflowActive.label}
                   </span>
@@ -4187,57 +4633,68 @@ const ChatComposerNewComponent = ({
                     aria-label="Exit image generation mode"
                     title="Click to exit image generation mode"
                   >
-                    <ImageIcon className="h-3.5 w-3.5" />
+                    <ImageIcon className="h-4 w-4" />
                     <span>Image</span>
-                    <X className="h-3 w-3 opacity-60" />
+                    <X className="h-4 w-4 opacity-60" />
                   </button>
 
                   {/* Aspect ratio selector */}
-                  <div className="relative">
-                    <button
-                      ref={imageAspectTriggerRef}
-                      type="button"
-                      onClick={() => {
-                        setShowImageAspectMenu((p) => !p);
-                        setShowImageModelMenu(false);
-                      }}
-                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
-                      aria-label="Select aspect ratio"
-                    >
-                      {imageAspectOptions.find((option) => option.id === effectiveImageAspectRatio)
-                        ?.label ?? 'Auto'}
-                      <ChevronDown className="h-3 w-3" />
-                    </button>
-                    <AnchoredComposerMenu
-                      anchorRef={imageAspectTriggerRef}
-                      open={showImageAspectMenu}
-                      label="Image aspect ratio"
-                      onRequestClose={() => setShowImageAspectMenu(false)}
-                      className="w-44 p-1"
-                    >
-                      {imageAspectOptions.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => {
-                            setImageAspectRatio(opt.id);
-                            setShowImageAspectMenu(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
-                            effectiveImageAspectRatio === opt.id
-                              ? 'bg-primary/10 text-primary'
-                              : 'hover:bg-muted/60',
-                          )}
-                        >
-                          <span className="flex-1 text-left">{opt.label}</span>
-                          {effectiveImageAspectRatio === opt.id && (
-                            <Check className="h-3 w-3 shrink-0 text-primary" />
-                          )}
-                        </button>
-                      ))}
-                    </AnchoredComposerMenu>
-                  </div>
+                  {!selectedImageIsPromotional && (
+                    <div className="relative">
+                      <button
+                        ref={imageAspectTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowImageAspectMenu((p) => !p);
+                          setShowImageModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="Select aspect ratio"
+                      >
+                        {imageAspectOptions.find(
+                          (option) => option.id === effectiveImageAspectRatio,
+                        )?.label ?? 'Auto'}
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={imageAspectTriggerRef}
+                        open={showImageAspectMenu}
+                        label="Image aspect ratio"
+                        onRequestClose={() => setShowImageAspectMenu(false)}
+                        className="w-44 p-1"
+                      >
+                        {imageAspectOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setImageAspectRatio(opt.id);
+                              setShowImageAspectMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveImageAspectRatio === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {effectiveImageAspectRatio === opt.id && (
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+
+                  {selectedPromotionalImage && (
+                    <span className="text-xs text-muted-foreground">
+                      Free quota ·{' '}
+                      {selectedPromotionalImage.outputSize?.replace('*', ' × ') ??
+                        'provider default'}
+                    </span>
+                  )}
 
                   {imageSourceFile && imageModelSupportsEdit && (
                     <div className="relative">
@@ -4257,7 +4714,7 @@ const ChatComposerNewComponent = ({
                             (option) => option.id === effectiveImageOperation,
                           )?.label
                         }
-                        <ChevronDown className="h-3 w-3" />
+                        <ChevronDown className="h-4 w-4" />
                       </button>
                       <AnchoredComposerMenu
                         anchorRef={imageOperationTriggerRef}
@@ -4286,7 +4743,7 @@ const ChatComposerNewComponent = ({
                               <span className="block text-muted-foreground">{option.hint}</span>
                             </span>
                             {effectiveImageOperation === option.id && (
-                              <Check className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
+                              <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                             )}
                           </button>
                         ))}
@@ -4344,15 +4801,15 @@ const ChatComposerNewComponent = ({
                     aria-label="Exit video generation mode"
                     title="Click to exit video generation mode"
                   >
-                    <Video className="h-3.5 w-3.5" />
+                    <Video className="h-4 w-4" />
                     <span>Video</span>
-                    <X className="h-3 w-3 opacity-60" />
+                    <X className="h-4 w-4 opacity-60" />
                   </button>
 
                   {/* Aspect ratio. Options come from the model's published
                     `videoGeneration.outputSizes`, so a model that offers only
                     landscape shows one entry rather than a lie. */}
-                  {videoAspectOptions.length > 1 && (
+                  {!selectedVideoIsPromotional && videoAspectOptions.length > 1 && (
                     <div className="relative">
                       <button
                         ref={videoAspectTriggerRef}
@@ -4366,7 +4823,7 @@ const ChatComposerNewComponent = ({
                         aria-label="Select video aspect ratio"
                       >
                         {effectiveVideoAspectRatio}
-                        <ChevronDown className="h-3 w-3" />
+                        <ChevronDown className="h-4 w-4" />
                       </button>
                       <AnchoredComposerMenu
                         anchorRef={videoAspectTriggerRef}
@@ -4392,7 +4849,7 @@ const ChatComposerNewComponent = ({
                           >
                             <span className="flex-1 text-left">{opt.label}</span>
                             {effectiveVideoAspectRatio === opt.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
                           </button>
                         ))}
@@ -4404,7 +4861,7 @@ const ChatComposerNewComponent = ({
                     independent, a resolution can exist in landscape and not in
                     portrait. Durations a quality restricts are surfaced inline
                     so the 8s-only rule is visible BEFORE a failed send. */}
-                  {videoQualityOptions.length > 1 && (
+                  {!selectedVideoIsPromotional && videoQualityOptions.length > 1 && (
                     <div className="relative">
                       <button
                         ref={videoQualityTriggerRef}
@@ -4419,7 +4876,7 @@ const ChatComposerNewComponent = ({
                       >
                         {videoQualityOptions.find((o) => o.id === effectiveVideoResolution)
                           ?.label ?? effectiveVideoResolution}
-                        <ChevronDown className="h-3 w-3" />
+                        <ChevronDown className="h-4 w-4" />
                       </button>
                       <AnchoredComposerMenu
                         anchorRef={videoQualityTriggerRef}
@@ -4445,17 +4902,27 @@ const ChatComposerNewComponent = ({
                           >
                             <span className="flex-1 text-left">{opt.label}</span>
                             {opt.durationSecs && (
-                              <span className="shrink-0 text-[12px] text-muted-foreground">
+                              <span className="shrink-0 text-caption text-muted-foreground">
                                 {opt.durationSecs.join('/')}s only
                               </span>
                             )}
                             {effectiveVideoResolution === opt.id && (
-                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
                           </button>
                         ))}
                       </AnchoredComposerMenu>
                     </div>
+                  )}
+                  {selectedPromotionalVideo && (
+                    <span className="text-xs text-muted-foreground">
+                      Free quota ·{' '}
+                      {selectedPromotionalVideo.outputSize?.replace('*', ' × ') ??
+                        'provider default'}
+                      {selectedPromotionalVideo.durationSeconds !== undefined
+                        ? ` · ${selectedPromotionalVideo.durationSeconds}s`
+                        : ''}
+                    </span>
                   )}
                 </div>
               )}
@@ -4483,6 +4950,7 @@ const ChatComposerNewComponent = ({
                   showModelSelector
                   lockModelSelector={false}
                   showStyleSelector={!isFreeTrial}
+                  pendingAttachmentCount={attachments.length}
                   onUpgradeRequest={onUpgradeRequest}
                   onModelChange={onModelChange}
                 />
@@ -4506,11 +4974,11 @@ const ChatComposerNewComponent = ({
                       the honest label says exactly that. */}
                     <span className="max-w-[120px] truncate">
                       {availableImageModels.find((m) => m.id === imageModelId)?.label ??
-                        (mediaAvailabilityStatus === 'loading'
+                        (!mediaModelsSettled
                           ? 'Checking image models…'
                           : 'No image model available')}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-4 w-4 shrink-0" />
                   </button>
                   <AnchoredComposerMenu
                     anchorRef={imageModelTriggerRef}
@@ -4520,10 +4988,12 @@ const ChatComposerNewComponent = ({
                     align="end"
                     className="w-52 p-1"
                   >
-                    {availableImageModels.map((m) => (
+                    {availableImageModels.map((m, index) => (
                       <button
                         key={m.id}
                         type="button"
+                        aria-label={m.label}
+                        aria-describedby={`image-model-route-${index}`}
                         onClick={() => {
                           setImageModelId(m.id);
                           if (!isImageAspectRatioSupported(m.id, imageAspectRatio)) {
@@ -4538,9 +5008,19 @@ const ChatComposerNewComponent = ({
                             : 'hover:bg-muted/60',
                         )}
                       >
-                        <span className="flex-1 text-left">{m.label}</span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block truncate">{m.label}</span>
+                          <span
+                            id={`image-model-route-${index}`}
+                            className="block text-[11px] text-muted-foreground"
+                          >
+                            {m.source === 'promotional'
+                              ? `Free · ${promotionalMediaIssuer ?? 'provider'} quota`
+                              : `Paid · ${m.provider}`}
+                          </span>
+                        </span>
                         {imageModelId === m.id && (
-                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                          <Check className="h-4 w-4 shrink-0 text-primary" />
                         )}
                       </button>
                     ))}
@@ -4553,7 +5033,16 @@ const ChatComposerNewComponent = ({
                         Retry model availability
                       </button>
                     )}
-                    {mediaAvailabilityStatus === 'ready' && availableImageModels.length === 0 && (
+                    {promotionalMediaStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryPromotionalMedia}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry free model availability
+                      </button>
+                    )}
+                    {mediaModelsSettled && availableImageModels.length === 0 && (
                       <p className="px-3 py-2 text-xs text-muted-foreground">
                         This deployment is not ready for image generation.
                       </p>
@@ -4582,11 +5071,11 @@ const ChatComposerNewComponent = ({
                       model that cannot run. */}
                     <span className="max-w-[120px] truncate">
                       {availableVideoModels.find((m) => m.id === videoModelId)?.label ??
-                        (mediaAvailabilityStatus === 'loading'
+                        (!mediaModelsSettled
                           ? 'Checking video models…'
                           : 'No video model available')}
                     </span>
-                    <ChevronDown className="h-3 w-3 shrink-0" />
+                    <ChevronDown className="h-4 w-4 shrink-0" />
                   </button>
                   <AnchoredComposerMenu
                     anchorRef={videoModelTriggerRef}
@@ -4596,10 +5085,12 @@ const ChatComposerNewComponent = ({
                     align="end"
                     className="w-52 p-1"
                   >
-                    {availableVideoModels.map((m) => (
+                    {availableVideoModels.map((m, index) => (
                       <button
                         key={m.id}
                         type="button"
+                        aria-label={m.label}
+                        aria-describedby={`video-model-route-${index}`}
                         onClick={() => {
                           setVideoModelId(m.id);
                           setShowVideoModelMenu(false);
@@ -4611,9 +5102,19 @@ const ChatComposerNewComponent = ({
                             : 'hover:bg-muted/60',
                         )}
                       >
-                        <span className="flex-1 text-left">{m.label}</span>
+                        <span className="min-w-0 flex-1 text-left">
+                          <span className="block truncate">{m.label}</span>
+                          <span
+                            id={`video-model-route-${index}`}
+                            className="block text-[11px] text-muted-foreground"
+                          >
+                            {m.source === 'promotional'
+                              ? `Free · ${promotionalMediaIssuer ?? 'provider'} quota`
+                              : `Paid · ${m.provider}`}
+                          </span>
+                        </span>
                         {videoModelId === m.id && (
-                          <Check className="h-3 w-3 shrink-0 text-primary" />
+                          <Check className="h-4 w-4 shrink-0 text-primary" />
                         )}
                       </button>
                     ))}
@@ -4626,7 +5127,16 @@ const ChatComposerNewComponent = ({
                         Retry model availability
                       </button>
                     )}
-                    {mediaAvailabilityStatus === 'ready' && availableVideoModels.length === 0 && (
+                    {promotionalMediaStatus === 'error' && (
+                      <button
+                        type="button"
+                        onClick={retryPromotionalMedia}
+                        className="w-full rounded-lg px-3 py-2 text-left text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                      >
+                        Retry free model availability
+                      </button>
+                    )}
+                    {mediaModelsSettled && availableVideoModels.length === 0 && (
                       <p className="px-3 py-2 text-xs text-muted-foreground">
                         This deployment is not ready for video generation.
                       </p>
@@ -4643,9 +5153,10 @@ const ChatComposerNewComponent = ({
                 <VoiceInputButton
                   onStart={startDictation}
                   active={dictation.isActive}
-                  disabled={composerDisabled || !dictationEnabled}
+                  disabled={composerDisabled || !dictationEnabled || dictationSwitchedOff !== null}
                   disabledReason={
-                    !dictationEnabled ? 'Dictation is off in Voice settings' : undefined
+                    dictationSwitchedOff ??
+                    (!dictationEnabled ? 'Dictation is off in Voice settings' : undefined)
                   }
                 />
               </div>
@@ -4663,7 +5174,10 @@ const ChatComposerNewComponent = ({
                   disabled={
                     composerDisabled ||
                     (sendButtonMode !== 'stop' &&
-                      (hasAttachmentConflict ||
+                      (online === false ||
+                        hasAttachmentConflict ||
+                        Boolean(promotionalToolConflict) ||
+                        searchAllowanceBlocksSend ||
                         mediaAttachmentConflict ||
                         localAttachmentConflict ||
                         selectedMediaModelUnavailable))
@@ -4679,7 +5193,7 @@ const ChatComposerNewComponent = ({
           {/* AUDIT-FIX CMP-9: a typed command is applied on send, so say so
               before the user presses Enter. */}
           {pendingSlashCommand && pendingSlashOutcome && (
-            <p className="px-2 text-[12px] text-muted-foreground" role="status">
+            <p className="px-2 text-caption text-muted-foreground" role="status">
               {pendingSlashOutcome.status === 'unavailable' ? (
                 pendingSlashOutcome.notice
               ) : (
@@ -4699,7 +5213,7 @@ const ChatComposerNewComponent = ({
           type="file"
           multiple
           accept={getAcceptAttribute()}
-          disabled={composerDisabled}
+          disabled={composerDisabled || (promotionalTextOnlyChat && !promotionalVisionChat)}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
@@ -4774,7 +5288,7 @@ const ChatComposerNewComponent = ({
                   className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   aria-label="Clear project or folder selection"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-4 w-4" />
                 </button>
               )}
 
@@ -4853,12 +5367,12 @@ const ChatComposerNewComponent = ({
                   title={pickerHasSelection ? pickerLabel : undefined}
                 >
                   {pickerFolderName ? (
-                    <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                    <FolderOpen className="h-4 w-4 shrink-0" />
                   ) : (
-                    <Folder className="h-3.5 w-3.5 shrink-0" />
+                    <Folder className="h-4 w-4 shrink-0" />
                   )}
                   <span className="max-w-[220px] truncate">{pickerLabel}</span>
-                  <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                  <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
                 </button>
                 {pickerHasSelection && (
                   <button
@@ -4867,7 +5381,7 @@ const ChatComposerNewComponent = ({
                     className="mr-1.5 shrink-0 rounded-full p-0.5 hover:bg-[var(--chat-accent-primary)]/20"
                     aria-label="Clear project or folder selection"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -4906,7 +5420,7 @@ const ChatComposerNewComponent = ({
                 >
                   <span className="min-w-0 flex-1 truncate text-left">{project.name}</span>
                   {projectPicker.activeProjectId === project.id && (
-                    <Check className="h-3.5 w-3.5 shrink-0 text-foreground" />
+                    <Check className="h-4 w-4 shrink-0 text-foreground" />
                   )}
                 </button>
               ))}
@@ -4956,7 +5470,7 @@ const ChatComposerNewComponent = ({
             >
               <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="flex-1 text-left">View all projects</span>
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </button>
           </AnchoredComposerMenu>
         </div>
@@ -4970,20 +5484,20 @@ const ChatComposerNewComponent = ({
           <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-muted/30 p-2.5">
             <div className="flex items-center justify-between">
               <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <ListChecks className="h-3.5 w-3.5" />
+                <ListChecks className="h-4 w-4" />
                 {tAgiWork('agiWork.compose.constraintsLabel')} ·{' '}
                 {tAgiWork('agiWork.compose.deliverableLabel')}
               </span>
               <button
                 type="button"
                 onClick={() => setAgiWorkFieldsOpen(false)}
-                className="rounded-md px-1.5 py-0.5 text-[12px] text-muted-foreground hover:bg-muted/60 hover:text-foreground"
+                className="rounded-md px-1.5 py-0.5 text-caption text-muted-foreground hover:bg-muted/60 hover:text-foreground"
               >
                 {tAgiWork('agiWork.compose.scopeHide')}
               </button>
             </div>
             <label className="flex flex-col gap-1">
-              <span className="text-[12px] font-medium text-muted-foreground">
+              <span className="text-caption font-medium text-muted-foreground">
                 {tAgiWork('agiWork.compose.constraintsLabel')}
               </span>
               <input
@@ -4996,7 +5510,7 @@ const ChatComposerNewComponent = ({
               />
             </label>
             <label className="flex flex-col gap-1">
-              <span className="text-[12px] font-medium text-muted-foreground">
+              <span className="text-caption font-medium text-muted-foreground">
                 {tAgiWork('agiWork.compose.deliverableLabel')}
               </span>
               <input
@@ -5029,6 +5543,9 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onPrefillConsumed === next.onPrefillConsumed &&
     prev.droppedFiles === next.droppedFiles &&
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
+    prev.attachmentUploadAttempt === next.attachmentUploadAttempt &&
+    prev.onRetryAttachmentUpload === next.onRetryAttachmentUpload &&
+    prev.onRemoveAttachmentUpload === next.onRemoveAttachmentUpload &&
     prev.onTypingChange === next.onTypingChange &&
     prev.onStop === next.onStop &&
     prev.onEnterVoiceMode === next.onEnterVoiceMode &&
