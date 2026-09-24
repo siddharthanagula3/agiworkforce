@@ -1,0 +1,5192 @@
+{
+  "generatedAt": "2026-09-20T07:31:46.618Z",
+  "live": true,
+  "model": "jev-1.13.0",
+  "inputPrice": 0.042,
+  "fixtureSha256": "080c2e328fc2f1cdf3f8d945441c3091b9047f4f0903db98695f273f549ad60e",
+  "policySha256": "b75b4ff8cc2b1f7e4b1ab4610f21775f9a2a5257fede747feef5b36a24810a1d",
+  "provenance": "Synthetic prompts only; first five skill cases adapted from packages/tools/skills/src/__tests__/relevance.test.ts. Labels are author-assigned, not independent human review. No customer traces.",
+  "limitations": "Development set, author labels, two repetitions are not independent cases. No threshold tuning or held-out quality claim. No downstream generation or production traffic. Classifier timing is not end-to-end latency. SDK retries disabled; no cached responses.",
+  "config": {
+    "mode": "enabled",
+    "timeoutMs": 3000,
+    "maxRetries": 0,
+    "maxRequestBytes": 16000,
+    "maxQuestions": 16,
+    "maxConcurrent": 1,
+    "sampleRate": 1,
+    "confidence": 0.85,
+    "fitProbability": 0.85,
+    "repetitions": 2
+  },
+  "summary": {
+    "skills": {
+      "cases": 40,
+      "uniqueCases": 20,
+      "providerOrValidationFailures": 0,
+      "unmeteredFailures": 0,
+      "agreement": 0.65,
+      "gainedCases": [
+        "skill-11",
+        "skill-13",
+        "skill-14",
+        "skill-19",
+        "skill-20",
+        "skill-11",
+        "skill-13",
+        "skill-14",
+        "skill-19",
+        "skill-20"
+      ],
+      "lostCases": [],
+      "confidenceBins": [
+        {
+          "lower": 0,
+          "upper": 0.5,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.8,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.01,
+          "count": 40,
+          "accuracy": 1
+        }
+      ],
+      "baselineAccuracy": 0.65,
+      "candidateAccuracy": 1,
+      "gatedAccuracy": 0.9,
+      "fallbackRate": 0.25,
+      "baselineP50Ms": 0.029416999999739346,
+      "decisionP50Ms": 163.93766600000004,
+      "decisionP95Ms": 281.838792,
+      "decisionP99Ms": 375.09925000000004,
+      "totalMeasuredUsd": 0.0015416520000000001,
+      "addedUsdPer1000": 0.0385413,
+      "addedUsdPerMillion": 38.5413,
+      "existingClassifierModelCalls": 0,
+      "candidateCallsPerRequest": 1,
+      "downstreamCallsAvoided": 0,
+      "endToEndLatency": null,
+      "downstreamCostDelta": null,
+      "contextTokenSavings": null
+    },
+    "intent": {
+      "cases": 40,
+      "uniqueCases": 20,
+      "providerOrValidationFailures": 0,
+      "unmeteredFailures": 0,
+      "agreement": 0.75,
+      "gainedCases": [
+        "intent-01",
+        "intent-14",
+        "intent-15",
+        "intent-16",
+        "intent-19",
+        "intent-01",
+        "intent-14",
+        "intent-15",
+        "intent-16",
+        "intent-19"
+      ],
+      "lostCases": [],
+      "confidenceBins": [
+        {
+          "lower": 0,
+          "upper": 0.5,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.5,
+          "upper": 0.8,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.8,
+          "upper": 0.9,
+          "count": 0,
+          "accuracy": null
+        },
+        {
+          "lower": 0.9,
+          "upper": 1.01,
+          "count": 40,
+          "accuracy": 1
+        }
+      ],
+      "baselineAccuracy": 0.75,
+      "candidateAccuracy": 1,
+      "gatedAccuracy": 1,
+      "fallbackRate": 0,
+      "baselineP50Ms": 0.011042000000088592,
+      "decisionP50Ms": 184.81908400000066,
+      "decisionP95Ms": 315.73041700000067,
+      "decisionP99Ms": 356.48345900000095,
+      "totalMeasuredUsd": 0.0010552920000000002,
+      "addedUsdPer1000": 0.026382300000000008,
+      "addedUsdPerMillion": 26.382300000000008,
+      "existingClassifierModelCalls": 0,
+      "candidateCallsPerRequest": 1,
+      "downstreamCallsAvoided": 0,
+      "endToEndLatency": null,
+      "downstreamCostDelta": null,
+      "contextTokenSavings": null
+    }
+  },
+  "rows": [
+    {
+      "id": "skill-01",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "code-review",
+      "baseline": "code-review",
+      "prediction": "code-review",
+      "gated": "code-review",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.15737500000000182,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.31
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.59
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.11
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_0",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_3": 0,
+                "candidate_5": 0,
+                "none": 0.01,
+                "candidate_0": 0.99,
+                "candidate_4": 0,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 375.09925000000004
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-02",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "data-analysis",
+      "baseline": "data-analysis",
+      "prediction": "data-analysis",
+      "gated": "data-analysis",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.04174999999997908,
+      "confidence": 0.98,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.2
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.81
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.11
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.17
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_1",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_4": 0,
+                "candidate_3": 0,
+                "candidate_5": 0,
+                "none": 0.02,
+                "candidate_1": 0.98,
+                "candidate_0": 0
+              }
+            }
+          },
+          "inputTokens": 919,
+          "outputTokens": 188
+        },
+        "latencyMs": 250.45341599999995
+      },
+      "inputUsd": 0.000038598
+    },
+    {
+      "id": "skill-03",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "document-creation",
+      "baseline": "document-creation",
+      "prediction": "document-creation",
+      "gated": "document-creation",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.050583999999957996,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.28
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_2",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_1": 0,
+                "candidate_2": 1,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "none": 0,
+                "candidate_5": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 143.77708299999995
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-04",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "frontend-design-review",
+      "baseline": "frontend-design-review",
+      "prediction": "frontend-design-review",
+      "gated": "frontend-design-review",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.035959000000048036,
+      "confidence": 1,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.22
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.23
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.84
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.27
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_3",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_1": 0,
+                "candidate_5": 0,
+                "none": 0,
+                "candidate_2": 0,
+                "candidate_0": 0,
+                "candidate_3": 1,
+                "candidate_4": 0
+              }
+            }
+          },
+          "inputTokens": 916,
+          "outputTokens": 188
+        },
+        "latencyMs": 177.83508399999994
+      },
+      "inputUsd": 0.000038472
+    },
+    {
+      "id": "skill-05",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "systematic-debugging",
+      "baseline": "systematic-debugging",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.031207999999878666,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.71
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.57
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.94
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.39
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_4": 1,
+                "candidate_0": 0,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "none": 0,
+                "candidate_5": 0,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 150.94708300000002
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-06",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "skill-creator",
+      "baseline": "skill-creator",
+      "prediction": "skill-creator",
+      "gated": "skill-creator",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.03779199999985394,
+      "confidence": 0.99,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.58
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.56
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.32
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.41
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.58
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.78
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_5",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_5": 0.99,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "candidate_1": 0,
+                "none": 0.01,
+                "candidate_4": 0,
+                "candidate_0": 0
+              }
+            }
+          },
+          "inputTokens": 917,
+          "outputTokens": 188
+        },
+        "latencyMs": 138.9792500000001
+      },
+      "inputUsd": 0.000038514000000000004
+    },
+    {
+      "id": "skill-07",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.024999999999863576,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_5": 0.01,
+                "candidate_0": 0,
+                "none": 0.98,
+                "candidate_1": 0.01,
+                "candidate_3": 0,
+                "candidate_4": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 163.93766600000004
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-08",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02549999999996544,
+      "confidence": 0.9,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.9,
+              "probabilities": {
+                "candidate_3": 0,
+                "candidate_5": 0,
+                "none": 0.92,
+                "candidate_2": 0.08,
+                "candidate_0": 0,
+                "candidate_1": 0,
+                "candidate_4": 0
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 196.37270799999988
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-09",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.023541999999906693,
+      "confidence": 0.99,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_5": 0,
+                "none": 1,
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_1": 0,
+                "candidate_3": 0
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 117.60166700000013
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-10",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02874999999994543,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.24
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.24
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.19
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.26
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.18
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.26
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_1": 0,
+                "none": 1,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_5": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 908,
+          "outputTokens": 186
+        },
+        "latencyMs": 131.902875
+      },
+      "inputUsd": 0.000038136
+    },
+    {
+      "id": "skill-11",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "systematic-debugging",
+      "baseline": "none",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02620899999988069,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.65
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.3
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_3": 0,
+                "candidate_5": 0,
+                "none": 0,
+                "candidate_2": 0,
+                "candidate_0": 0,
+                "candidate_1": 0,
+                "candidate_4": 1
+              }
+            }
+          },
+          "inputTokens": 918,
+          "outputTokens": 188
+        },
+        "latencyMs": 176.59091700000022
+      },
+      "inputUsd": 0.000038556
+    },
+    {
+      "id": "skill-12",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "data-analysis",
+      "baseline": "none",
+      "prediction": "data-analysis",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": false,
+      "baselineMs": 0.02629099999967366,
+      "confidence": 0.91,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.78
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_1",
+              "confidence": 0.91,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_1": 0.93,
+                "candidate_3": 0,
+                "none": 0.07,
+                "candidate_2": 0,
+                "candidate_5": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 232.28262499999983
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-13",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "document-creation",
+      "baseline": "none",
+      "prediction": "document-creation",
+      "gated": "document-creation",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.03733299999976225,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.25
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.9
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_2",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 1,
+                "candidate_0": 0,
+                "candidate_3": 0,
+                "candidate_4": 0,
+                "candidate_5": 0,
+                "candidate_1": 0,
+                "none": 0
+              }
+            }
+          },
+          "inputTokens": 919,
+          "outputTokens": 188
+        },
+        "latencyMs": 164.87562500000013
+      },
+      "inputUsd": 0.000038598
+    },
+    {
+      "id": "skill-14",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "code-review",
+      "baseline": "none",
+      "prediction": "code-review",
+      "gated": "code-review",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.026957999999922322,
+      "confidence": 0.99,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.89
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.28
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.39
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.65
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_0",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_1": 0,
+                "candidate_2": 0,
+                "candidate_5": 0,
+                "candidate_0": 1,
+                "candidate_4": 0,
+                "none": 0,
+                "candidate_3": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 155.31170900000006
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-15",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "frontend-design-review",
+      "baseline": "none",
+      "prediction": "frontend-design-review",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": false,
+      "baselineMs": 0.06408300000020972,
+      "confidence": 1,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.8
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.24
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_3",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 0,
+                "none": 0,
+                "candidate_1": 0,
+                "candidate_3": 1,
+                "candidate_5": 0,
+                "candidate_0": 0,
+                "candidate_4": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 160.44320900000002
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-16",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.023250000000189175,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "none": 0.99,
+                "candidate_5": 0.01,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 913,
+          "outputTokens": 186
+        },
+        "latencyMs": 139.83695800000032
+      },
+      "inputUsd": 0.000038346
+    },
+    {
+      "id": "skill-17",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.04037500000004002,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_3": 0,
+                "none": 1,
+                "candidate_1": 0,
+                "candidate_5": 0,
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 913,
+          "outputTokens": 186
+        },
+        "latencyMs": 236.26416699999982
+      },
+      "inputUsd": 0.000038346
+    },
+    {
+      "id": "skill-18",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02599999999983993,
+      "confidence": 0.93,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.16
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.12
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.12
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.12
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.93,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_2": 0,
+                "candidate_0": 0.04,
+                "candidate_5": 0,
+                "candidate_1": 0.02,
+                "candidate_3": 0,
+                "none": 0.94
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 186
+        },
+        "latencyMs": 281.838792
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-19",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "none",
+      "baseline": "code-review",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.037333000000217,
+      "confidence": 0.99,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_4": 0,
+                "none": 0.99,
+                "candidate_1": 0,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "candidate_5": 0,
+                "candidate_0": 0.01
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 186
+        },
+        "latencyMs": 123.73174999999992
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-20",
+      "area": "skills",
+      "repetition": 0,
+      "expected": "systematic-debugging",
+      "baseline": "none",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.08958399999983158,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.69
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.15
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_4": 1,
+                "candidate_1": 0,
+                "none": 0,
+                "candidate_5": 0,
+                "candidate_3": 0,
+                "candidate_0": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 197.82112499999994
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "intent-01",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.8086669999997866,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 1,
+                "general": 0,
+                "simple_chat": 0,
+                "agentic": 0,
+                "reasoning": 0,
+                "creative_writing": 0,
+                "image_generation": 0,
+                "research": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.3,
+              "confidence": 0.7,
+              "probabilities": {
+                "0": 0,
+                "1": 0.71,
+                "2": 0.29,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 631,
+          "outputTokens": 131
+        },
+        "latencyMs": 283.4504160000006
+      },
+      "inputUsd": 0.000026502
+    },
+    {
+      "id": "intent-02",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "coding",
+      "baseline": "coding",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.31154200000037235,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 1,
+                "general": 0,
+                "reasoning": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 0,
+                "research": 0,
+                "simple_chat": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.44,
+              "confidence": 0.44,
+              "probabilities": {
+                "0": 0.06,
+                "1": 0.44,
+                "2": 0.5,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.1
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 131
+        },
+        "latencyMs": 160.56895900000018
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-03",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.11316699999952107,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "image_generation": 0,
+                "research": 0,
+                "reasoning": 1,
+                "general": 0,
+                "creative_writing": 0,
+                "simple_chat": 0,
+                "coding": 0,
+                "agentic": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.66,
+              "confidence": 0.45,
+              "probabilities": {
+                "0": 0,
+                "1": 0.44,
+                "2": 0.45,
+                "3": 0.11
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 133
+        },
+        "latencyMs": 214.98904200000015
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-04",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.031833000000005995,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "agentic": 0,
+                "reasoning": 1,
+                "coding": 0,
+                "research": 0,
+                "creative_writing": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 2,
+              "confidence": 0.84,
+              "probabilities": {
+                "0": 0,
+                "1": 0.07,
+                "2": 0.85,
+                "3": 0.08
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.05
+            }
+          },
+          "inputTokens": 628,
+          "outputTokens": 133
+        },
+        "latencyMs": 113.69991699999991
+      },
+      "inputUsd": 0.000026376
+    },
+    {
+      "id": "intent-05",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "research",
+      "baseline": "research",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.23795800000061718,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 1,
+              "probabilities": {
+                "creative_writing": 0,
+                "research": 1,
+                "simple_chat": 0,
+                "reasoning": 0,
+                "general": 0,
+                "coding": 0,
+                "agentic": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.53,
+              "confidence": 0.53,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.46,
+                "2": 0.53,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.97
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.94
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 242.54362500000025
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-06",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "research",
+      "baseline": "research",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.01574999999957072,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 0.98,
+              "probabilities": {
+                "research": 0.98,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "agentic": 0,
+                "general": 0.02,
+                "coding": 0,
+                "creative_writing": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.68,
+              "confidence": 0.32,
+              "probabilities": {
+                "0": 0.44,
+                "1": 0.43,
+                "2": 0.13,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.98
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.6
+            }
+          },
+          "inputTokens": 625,
+          "outputTokens": 131
+        },
+        "latencyMs": 219.5404580000004
+      },
+      "inputUsd": 0.00002625
+    },
+    {
+      "id": "intent-07",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "creative_writing",
+      "baseline": "creative_writing",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.24074999999993452,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "reasoning": 0,
+                "image_generation": 0,
+                "research": 0,
+                "creative_writing": 1,
+                "general": 0,
+                "simple_chat": 0,
+                "agentic": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.98,
+              "confidence": 0.97,
+              "probabilities": {
+                "0": 0.02,
+                "1": 0.98,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 624,
+          "outputTokens": 134
+        },
+        "latencyMs": 217.6956250000003
+      },
+      "inputUsd": 0.000026208
+    },
+    {
+      "id": "intent-08",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "creative_writing",
+      "baseline": "creative_writing",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.020833000000493485,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "agentic": 0,
+                "research": 0,
+                "creative_writing": 1,
+                "general": 0,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "coding": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.74,
+              "confidence": 0.74,
+              "probabilities": {
+                "0": 0.26,
+                "1": 0.74,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.17
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.05
+            }
+          },
+          "inputTokens": 626,
+          "outputTokens": 134
+        },
+        "latencyMs": 344.31524999999965
+      },
+      "inputUsd": 0.000026292000000000002
+    },
+    {
+      "id": "intent-09",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "image_generation",
+      "baseline": "image_generation",
+      "prediction": "image_generation",
+      "gated": "image_generation",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.005541000000448548,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "image_generation",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "simple_chat": 0,
+                "research": 0,
+                "creative_writing": 0,
+                "reasoning": 0,
+                "agentic": 0,
+                "coding": 0,
+                "image_generation": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.91,
+              "confidence": 0.88,
+              "probabilities": {
+                "0": 0.11,
+                "1": 0.88,
+                "2": 0.01,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.89
+            }
+          },
+          "inputTokens": 626,
+          "outputTokens": 132
+        },
+        "latencyMs": 169.44212499999958
+      },
+      "inputUsd": 0.000026292000000000002
+    },
+    {
+      "id": "intent-10",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "agentic",
+      "baseline": "agentic",
+      "prediction": "agentic",
+      "gated": "agentic",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.021707999999307503,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "agentic",
+              "confidence": 1,
+              "probabilities": {
+                "research": 0,
+                "coding": 0,
+                "agentic": 1,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "image_generation": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 2.48,
+              "confidence": 0.51,
+              "probabilities": {
+                "0": 0,
+                "1": 0,
+                "2": 0.52,
+                "3": 0.48
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.76
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.61
+            }
+          },
+          "inputTokens": 628,
+          "outputTokens": 132
+        },
+        "latencyMs": 193.57833299999947
+      },
+      "inputUsd": 0.000026376
+    },
+    {
+      "id": "intent-11",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "simple_chat",
+      "baseline": "simple_chat",
+      "prediction": "simple_chat",
+      "gated": "simple_chat",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.08445800000026793,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "simple_chat",
+              "confidence": 1,
+              "probabilities": {
+                "research": 0,
+                "creative_writing": 0,
+                "image_generation": 0,
+                "reasoning": 0,
+                "coding": 0,
+                "general": 0,
+                "agentic": 0,
+                "simple_chat": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0,
+              "confidence": 1,
+              "probabilities": {
+                "0": 1,
+                "1": 0,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 620,
+          "outputTokens": 132
+        },
+        "latencyMs": 196.38604199999918
+      },
+      "inputUsd": 0.00002604
+    },
+    {
+      "id": "intent-12",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "simple_chat",
+      "baseline": "simple_chat",
+      "prediction": "simple_chat",
+      "gated": "simple_chat",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.020333999999820662,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "simple_chat",
+              "confidence": 1,
+              "probabilities": {
+                "research": 0,
+                "coding": 0,
+                "agentic": 0,
+                "reasoning": 0,
+                "simple_chat": 1,
+                "creative_writing": 0,
+                "general": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0,
+              "confidence": 1,
+              "probabilities": {
+                "0": 1,
+                "1": 0,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.18
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 621,
+          "outputTokens": 132
+        },
+        "latencyMs": 160.07191599999987
+      },
+      "inputUsd": 0.000026082000000000002
+    },
+    {
+      "id": "intent-13",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "general",
+      "baseline": "general",
+      "prediction": "general",
+      "gated": "general",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.027749999999286956,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "general",
+              "confidence": 1,
+              "probabilities": {
+                "general": 1,
+                "research": 0,
+                "creative_writing": 0,
+                "agentic": 0,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "coding": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.26,
+              "confidence": 0.71,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.72,
+                "2": 0.27,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 635,
+          "outputTokens": 131
+        },
+        "latencyMs": 145.87029200000052
+      },
+      "inputUsd": 0.00002667
+    },
+    {
+      "id": "intent-14",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.019833000000289758,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "reasoning": 0,
+                "simple_chat": 0,
+                "agentic": 0,
+                "research": 0,
+                "image_generation": 0,
+                "general": 0,
+                "coding": 1,
+                "creative_writing": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.78,
+              "confidence": 0.78,
+              "probabilities": {
+                "0": 0,
+                "1": 0.22,
+                "2": 0.78,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.13
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 131
+        },
+        "latencyMs": 134.0179589999998
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-15",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "research",
+      "baseline": "simple_chat",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02116699999987759,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 1,
+              "probabilities": {
+                "image_generation": 0,
+                "simple_chat": 0,
+                "agentic": 0,
+                "general": 0,
+                "creative_writing": 0,
+                "coding": 0,
+                "research": 1,
+                "reasoning": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.38,
+              "confidence": 0.56,
+              "probabilities": {
+                "0": 0.03,
+                "1": 0.57,
+                "2": 0.4,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.98
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.87
+            }
+          },
+          "inputTokens": 634,
+          "outputTokens": 131
+        },
+        "latencyMs": 156.63991600000008
+      },
+      "inputUsd": 0.000026628
+    },
+    {
+      "id": "intent-16",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02179100000012113,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "research": 0,
+                "creative_writing": 0,
+                "agentic": 0,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "coding": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.03,
+              "confidence": 0.96,
+              "probabilities": {
+                "0": 0,
+                "1": 0.97,
+                "2": 0.03,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 219.42124999999942
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-17",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "general",
+      "baseline": "general",
+      "prediction": "general",
+      "gated": "general",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02066700000068522,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "general",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "image_generation": 0,
+                "agentic": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "reasoning": 0,
+                "general": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.57,
+              "confidence": 0.57,
+              "probabilities": {
+                "0": 0.43,
+                "1": 0.57,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.15
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 633,
+          "outputTokens": 131
+        },
+        "latencyMs": 169.7616250000001
+      },
+      "inputUsd": 0.000026586000000000003
+    },
+    {
+      "id": "intent-18",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "coding",
+      "baseline": "coding",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.014874999999847205,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "reasoning": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 0,
+                "general": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "coding": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.09,
+              "confidence": 0.9,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.89,
+                "2": 0.1,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.06
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 212.24083299999984
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-19",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "creative_writing",
+      "baseline": "simple_chat",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.011042000000088592,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "simple_chat": 0,
+                "research": 0,
+                "coding": 0,
+                "agentic": 0,
+                "creative_writing": 1,
+                "image_generation": 0,
+                "reasoning": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.15,
+              "confidence": 0.85,
+              "probabilities": {
+                "0": 0,
+                "1": 0.85,
+                "2": 0.15,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 629,
+          "outputTokens": 134
+        },
+        "latencyMs": 287.68816700000025
+      },
+      "inputUsd": 0.000026418000000000004
+    },
+    {
+      "id": "intent-20",
+      "area": "intent",
+      "repetition": 0,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.0070420000001831795,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "reasoning": 1,
+                "agentic": 0,
+                "creative_writing": 0,
+                "image_generation": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.94,
+              "confidence": 0.64,
+              "probabilities": {
+                "0": 0,
+                "1": 0.2,
+                "2": 0.65,
+                "3": 0.15
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 632,
+          "outputTokens": 133
+        },
+        "latencyMs": 189.74154199999975
+      },
+      "inputUsd": 0.000026544000000000002
+    },
+    {
+      "id": "skill-01",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "code-review",
+      "baseline": "code-review",
+      "prediction": "code-review",
+      "gated": "code-review",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.046291999999994005,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.91
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.32
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.62
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_0",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_0": 0.99,
+                "candidate_3": 0,
+                "candidate_1": 0,
+                "candidate_5": 0,
+                "none": 0.01,
+                "candidate_4": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 197.70383299999958
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-02",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "data-analysis",
+      "baseline": "data-analysis",
+      "prediction": "data-analysis",
+      "gated": "data-analysis",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.06750000000010914,
+      "confidence": 0.97,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.21
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.82
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.15
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.11
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.17
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_1",
+              "confidence": 0.97,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_5": 0,
+                "candidate_1": 0.98,
+                "none": 0.02,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 919,
+          "outputTokens": 188
+        },
+        "latencyMs": 162.9071249999988
+      },
+      "inputUsd": 0.000038598
+    },
+    {
+      "id": "skill-03",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "document-creation",
+      "baseline": "document-creation",
+      "prediction": "document-creation",
+      "gated": "document-creation",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.04745800000091549,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.27
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.91
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_2",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 1,
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_5": 0,
+                "candidate_3": 0,
+                "none": 0,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 151.59241600000132
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-04",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "frontend-design-review",
+      "baseline": "frontend-design-review",
+      "prediction": "frontend-design-review",
+      "gated": "frontend-design-review",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.04387500000120781,
+      "confidence": 1,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.25
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.22
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.84
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.25
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_3",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_5": 0,
+                "none": 0,
+                "candidate_3": 1,
+                "candidate_1": 0,
+                "candidate_0": 0,
+                "candidate_4": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 916,
+          "outputTokens": 188
+        },
+        "latencyMs": 157.64108300000044
+      },
+      "inputUsd": 0.000038472
+    },
+    {
+      "id": "skill-05",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "systematic-debugging",
+      "baseline": "systematic-debugging",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.029416999999739346,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.69
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.5
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.12
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.93
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.33
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_1": 0,
+                "candidate_3": 0,
+                "none": 0,
+                "candidate_5": 0,
+                "candidate_0": 0,
+                "candidate_4": 1,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 121.93208300000151
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-06",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "skill-creator",
+      "baseline": "skill-creator",
+      "prediction": "skill-creator",
+      "gated": "skill-creator",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.030959000001530512,
+      "confidence": 0.99,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.59
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.52
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.34
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.35
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.6
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.78
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_5",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_1": 0,
+                "none": 0.01,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_5": 0.99,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 917,
+          "outputTokens": 188
+        },
+        "latencyMs": 173.74141699999927
+      },
+      "inputUsd": 0.000038514000000000004
+    },
+    {
+      "id": "skill-07",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.024832999999489402,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.98,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "none": 0.98,
+                "candidate_5": 0.01,
+                "candidate_1": 0.01
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 154.09887499999968
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-08",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02654199999960838,
+      "confidence": 0.91,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.91,
+              "probabilities": {
+                "none": 0.92,
+                "candidate_4": 0,
+                "candidate_5": 0,
+                "candidate_1": 0,
+                "candidate_2": 0.08,
+                "candidate_0": 0,
+                "candidate_3": 0
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 148.0497919999998
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-09",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.024957999999969616,
+      "confidence": 0.99,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.99,
+              "probabilities": {
+                "candidate_1": 0,
+                "candidate_5": 0,
+                "candidate_4": 0,
+                "none": 1,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 914,
+          "outputTokens": 186
+        },
+        "latencyMs": 143.02420800000073
+      },
+      "inputUsd": 0.000038388000000000006
+    },
+    {
+      "id": "skill-10",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.11137500000040745,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.24
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.23
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.2
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.26
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.19
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.28
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_4": 0,
+                "candidate_0": 0,
+                "candidate_5": 0,
+                "candidate_3": 0,
+                "none": 1,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 908,
+          "outputTokens": 186
+        },
+        "latencyMs": 169.71641600000112
+      },
+      "inputUsd": 0.000038136
+    },
+    {
+      "id": "skill-11",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "systematic-debugging",
+      "baseline": "none",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.027625000000625732,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.67
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.3
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_5": 0,
+                "candidate_2": 0,
+                "candidate_3": 0,
+                "candidate_1": 0,
+                "candidate_0": 0,
+                "candidate_4": 1,
+                "none": 0
+              }
+            }
+          },
+          "inputTokens": 918,
+          "outputTokens": 188
+        },
+        "latencyMs": 126.93962499999907
+      },
+      "inputUsd": 0.000038556
+    },
+    {
+      "id": "skill-12",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "data-analysis",
+      "baseline": "none",
+      "prediction": "data-analysis",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": false,
+      "baselineMs": 0.028750000001309672,
+      "confidence": 0.93,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.79
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_1",
+              "confidence": 0.93,
+              "probabilities": {
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "candidate_5": 0,
+                "candidate_1": 0.94,
+                "none": 0.06,
+                "candidate_4": 0,
+                "candidate_0": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 172.76508300000023
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-13",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "document-creation",
+      "baseline": "none",
+      "prediction": "document-creation",
+      "gated": "document-creation",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.07704199999898265,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.25
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.9
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_2",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_1": 0,
+                "candidate_5": 0,
+                "candidate_4": 0,
+                "none": 0,
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_2": 1
+              }
+            }
+          },
+          "inputTokens": 919,
+          "outputTokens": 188
+        },
+        "latencyMs": 203.59470900000088
+      },
+      "inputUsd": 0.000038598
+    },
+    {
+      "id": "skill-14",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "code-review",
+      "baseline": "none",
+      "prediction": "code-review",
+      "gated": "code-review",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.028707999999824096,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.88
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.26
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.39
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.63
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_0",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_4": 0,
+                "candidate_5": 0,
+                "candidate_1": 0,
+                "none": 0,
+                "candidate_0": 1,
+                "candidate_3": 0,
+                "candidate_2": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 179.5309589999997
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-15",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "frontend-design-review",
+      "baseline": "none",
+      "prediction": "frontend-design-review",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": false,
+      "baselineMs": 0.02820900000006077,
+      "confidence": 1,
+      "fallback": true,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.1
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.8
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.23
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_3",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_5": 0,
+                "candidate_1": 0,
+                "none": 0,
+                "candidate_3": 1,
+                "candidate_2": 0,
+                "candidate_4": 0,
+                "candidate_0": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 188
+        },
+        "latencyMs": 177.7688330000001
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-16",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02479200000016135,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.98,
+              "probabilities": {
+                "none": 0.99,
+                "candidate_0": 0,
+                "candidate_3": 0,
+                "candidate_1": 0,
+                "candidate_5": 0.01,
+                "candidate_2": 0,
+                "candidate_4": 0
+              }
+            }
+          },
+          "inputTokens": 913,
+          "outputTokens": 186
+        },
+        "latencyMs": 134.2826669999995
+      },
+      "inputUsd": 0.000038346
+    },
+    {
+      "id": "skill-17",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.19683299999996962,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_0": 0,
+                "candidate_1": 0,
+                "candidate_3": 0,
+                "none": 1,
+                "candidate_4": 0,
+                "candidate_5": 0
+              }
+            }
+          },
+          "inputTokens": 913,
+          "outputTokens": 186
+        },
+        "latencyMs": 274.46954200000073
+      },
+      "inputUsd": 0.000038346
+    },
+    {
+      "id": "skill-18",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "none",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02770799999962037,
+      "confidence": 0.93,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.11
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.15
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.11
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.93,
+              "probabilities": {
+                "candidate_2": 0,
+                "candidate_4": 0,
+                "candidate_5": 0,
+                "candidate_3": 0,
+                "none": 0.94,
+                "candidate_1": 0.02,
+                "candidate_0": 0.04
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 186
+        },
+        "latencyMs": 267.36462500000016
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "skill-19",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "none",
+      "baseline": "code-review",
+      "prediction": "none",
+      "gated": "none",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.03279199999997218,
+      "confidence": 0.99,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.12
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.09
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "none",
+              "confidence": 0.99,
+              "probabilities": {
+                "none": 0.99,
+                "candidate_1": 0,
+                "candidate_0": 0.01,
+                "candidate_3": 0,
+                "candidate_2": 0,
+                "candidate_4": 0,
+                "candidate_5": 0
+              }
+            }
+          },
+          "inputTokens": 920,
+          "outputTokens": 186
+        },
+        "latencyMs": 306.08470900000066
+      },
+      "inputUsd": 0.00003864
+    },
+    {
+      "id": "skill-20",
+      "area": "skills",
+      "repetition": 1,
+      "expected": "systematic-debugging",
+      "baseline": "none",
+      "prediction": "systematic-debugging",
+      "gated": "systematic-debugging",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.02641600000060862,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "fits_0": {
+              "kind": "boolean",
+              "probability": 0.7
+            },
+            "fits_1": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "fits_2": {
+              "kind": "boolean",
+              "probability": 0.03
+            },
+            "fits_3": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "fits_4": {
+              "kind": "boolean",
+              "probability": 0.92
+            },
+            "fits_5": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "candidate": {
+              "kind": "choice",
+              "value": "candidate_4",
+              "confidence": 1,
+              "probabilities": {
+                "candidate_3": 0,
+                "candidate_0": 0,
+                "candidate_4": 1,
+                "candidate_2": 0,
+                "none": 0,
+                "candidate_5": 0,
+                "candidate_1": 0
+              }
+            }
+          },
+          "inputTokens": 922,
+          "outputTokens": 188
+        },
+        "latencyMs": 158.68075000000135
+      },
+      "inputUsd": 0.000038724000000000004
+    },
+    {
+      "id": "intent-01",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.010334000000511878,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "reasoning": 0,
+                "agentic": 0,
+                "creative_writing": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "research": 0,
+                "coding": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.3,
+              "confidence": 0.7,
+              "probabilities": {
+                "0": 0,
+                "1": 0.7,
+                "2": 0.3,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 631,
+          "outputTokens": 131
+        },
+        "latencyMs": 202.77454200000102
+      },
+      "inputUsd": 0.000026502
+    },
+    {
+      "id": "intent-02",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "coding",
+      "baseline": "coding",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.005708000000595348,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "coding": 1,
+                "image_generation": 0,
+                "agentic": 0,
+                "general": 0,
+                "research": 0,
+                "reasoning": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.44,
+              "confidence": 0.44,
+              "probabilities": {
+                "0": 0.06,
+                "1": 0.45,
+                "2": 0.49,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.13
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.11
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 131
+        },
+        "latencyMs": 356.48345900000095
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-03",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.011042000000088592,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "simple_chat": 0,
+                "reasoning": 1,
+                "research": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.63,
+              "confidence": 0.36,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.46,
+                "2": 0.44,
+                "3": 0.09
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 133
+        },
+        "latencyMs": 165.17795800000022
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-04",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.006459000000177184,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "image_generation": 0,
+                "simple_chat": 0,
+                "agentic": 0,
+                "general": 0,
+                "creative_writing": 0,
+                "coding": 0,
+                "research": 0,
+                "reasoning": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 2,
+              "confidence": 0.82,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.08,
+                "2": 0.82,
+                "3": 0.09
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.05
+            }
+          },
+          "inputTokens": 628,
+          "outputTokens": 133
+        },
+        "latencyMs": 156.257791
+      },
+      "inputUsd": 0.000026376
+    },
+    {
+      "id": "intent-05",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "research",
+      "baseline": "research",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.007999999999810825,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "general": 0,
+                "reasoning": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 0,
+                "research": 1,
+                "simple_chat": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.53,
+              "confidence": 0.53,
+              "probabilities": {
+                "0": 0.01,
+                "1": 0.45,
+                "2": 0.54,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.97
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.94
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 142.67374999999993
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-06",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "research",
+      "baseline": "research",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.007083000000420725,
+      "confidence": 0.98,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 0.98,
+              "probabilities": {
+                "creative_writing": 0,
+                "research": 0.98,
+                "simple_chat": 0,
+                "reasoning": 0,
+                "general": 0.02,
+                "coding": 0,
+                "agentic": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.68,
+              "confidence": 0.32,
+              "probabilities": {
+                "0": 0.45,
+                "1": 0.43,
+                "2": 0.12,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.97
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.63
+            }
+          },
+          "inputTokens": 625,
+          "outputTokens": 131
+        },
+        "latencyMs": 140.01237500000025
+      },
+      "inputUsd": 0.00002625
+    },
+    {
+      "id": "intent-07",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "creative_writing",
+      "baseline": "creative_writing",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.0071250000000873115,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "reasoning": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 1,
+                "general": 0,
+                "research": 0,
+                "coding": 0,
+                "simple_chat": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.99,
+              "confidence": 0.98,
+              "probabilities": {
+                "0": 0.02,
+                "1": 0.98,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 624,
+          "outputTokens": 134
+        },
+        "latencyMs": 129.25104199999987
+      },
+      "inputUsd": 0.000026208
+    },
+    {
+      "id": "intent-08",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "creative_writing",
+      "baseline": "creative_writing",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.010333000000173342,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "agentic": 0,
+                "creative_writing": 1,
+                "image_generation": 0,
+                "general": 0,
+                "coding": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "reasoning": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.79,
+              "confidence": 0.79,
+              "probabilities": {
+                "0": 0.21,
+                "1": 0.79,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.18
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.05
+            }
+          },
+          "inputTokens": 626,
+          "outputTokens": 134
+        },
+        "latencyMs": 191.5680420000008
+      },
+      "inputUsd": 0.000026292000000000002
+    },
+    {
+      "id": "intent-09",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "image_generation",
+      "baseline": "image_generation",
+      "prediction": "image_generation",
+      "gated": "image_generation",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.003666999999040854,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "image_generation",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 0,
+                "research": 0,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "image_generation": 1,
+                "agentic": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.88,
+              "confidence": 0.85,
+              "probabilities": {
+                "0": 0.13,
+                "1": 0.86,
+                "2": 0.01,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.08
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.89
+            }
+          },
+          "inputTokens": 626,
+          "outputTokens": 132
+        },
+        "latencyMs": 229.20308400000067
+      },
+      "inputUsd": 0.000026292000000000002
+    },
+    {
+      "id": "intent-10",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "agentic",
+      "baseline": "agentic",
+      "prediction": "agentic",
+      "gated": "agentic",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.007625000000189175,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "agentic",
+              "confidence": 1,
+              "probabilities": {
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "coding": 0,
+                "image_generation": 0,
+                "agentic": 1,
+                "research": 0,
+                "general": 0,
+                "reasoning": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 2.48,
+              "confidence": 0.51,
+              "probabilities": {
+                "0": 0,
+                "1": 0,
+                "2": 0.51,
+                "3": 0.49
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.77
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.65
+            }
+          },
+          "inputTokens": 628,
+          "outputTokens": 132
+        },
+        "latencyMs": 315.73041700000067
+      },
+      "inputUsd": 0.000026376
+    },
+    {
+      "id": "intent-11",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "simple_chat",
+      "baseline": "simple_chat",
+      "prediction": "simple_chat",
+      "gated": "simple_chat",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.013915999999881024,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "simple_chat",
+              "confidence": 1,
+              "probabilities": {
+                "reasoning": 0,
+                "research": 0,
+                "simple_chat": 1,
+                "creative_writing": 0,
+                "general": 0,
+                "coding": 0,
+                "agentic": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0,
+              "confidence": 1,
+              "probabilities": {
+                "0": 1,
+                "1": 0,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 620,
+          "outputTokens": 132
+        },
+        "latencyMs": 197.45416699999987
+      },
+      "inputUsd": 0.00002604
+    },
+    {
+      "id": "intent-12",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "simple_chat",
+      "baseline": "simple_chat",
+      "prediction": "simple_chat",
+      "gated": "simple_chat",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.009000000000014552,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "simple_chat",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "coding": 0,
+                "reasoning": 0,
+                "simple_chat": 1,
+                "research": 0,
+                "agentic": 0,
+                "image_generation": 0,
+                "creative_writing": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0,
+              "confidence": 1,
+              "probabilities": {
+                "0": 1,
+                "1": 0,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.18
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 621,
+          "outputTokens": 132
+        },
+        "latencyMs": 135.97941700000047
+      },
+      "inputUsd": 0.000026082000000000002
+    },
+    {
+      "id": "intent-13",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "general",
+      "baseline": "general",
+      "prediction": "general",
+      "gated": "general",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.007666000001336215,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "general",
+              "confidence": 1,
+              "probabilities": {
+                "image_generation": 0,
+                "agentic": 0,
+                "general": 1,
+                "reasoning": 0,
+                "simple_chat": 0,
+                "coding": 0,
+                "creative_writing": 0,
+                "research": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.26,
+              "confidence": 0.7,
+              "probabilities": {
+                "0": 0.02,
+                "1": 0.7,
+                "2": 0.28,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.07
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 635,
+          "outputTokens": 131
+        },
+        "latencyMs": 166.36120800000026
+      },
+      "inputUsd": 0.00002667
+    },
+    {
+      "id": "intent-14",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.010458000000653556,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "research": 0,
+                "coding": 1,
+                "reasoning": 0,
+                "agentic": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "general": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.73,
+              "confidence": 0.73,
+              "probabilities": {
+                "0": 0,
+                "1": 0.27,
+                "2": 0.73,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.13
+            }
+          },
+          "inputTokens": 627,
+          "outputTokens": 131
+        },
+        "latencyMs": 128.36316700000134
+      },
+      "inputUsd": 0.000026334000000000002
+    },
+    {
+      "id": "intent-15",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "research",
+      "baseline": "simple_chat",
+      "prediction": "research",
+      "gated": "research",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.012790999999197084,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "research",
+              "confidence": 1,
+              "probabilities": {
+                "general": 0,
+                "reasoning": 0,
+                "coding": 0,
+                "creative_writing": 0,
+                "research": 1,
+                "agentic": 0,
+                "simple_chat": 0,
+                "image_generation": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.35,
+              "confidence": 0.59,
+              "probabilities": {
+                "0": 0.03,
+                "1": 0.59,
+                "2": 0.38,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.98
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.86
+            }
+          },
+          "inputTokens": 634,
+          "outputTokens": 131
+        },
+        "latencyMs": 156.726666999999
+      },
+      "inputUsd": 0.000026628
+    },
+    {
+      "id": "intent-16",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "coding",
+      "baseline": "simple_chat",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.010458000000653556,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 1,
+                "reasoning": 0,
+                "image_generation": 0,
+                "research": 0,
+                "creative_writing": 0,
+                "general": 0,
+                "simple_chat": 0,
+                "agentic": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.03,
+              "confidence": 0.96,
+              "probabilities": {
+                "0": 0,
+                "1": 0.96,
+                "2": 0.04,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.06
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.04
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 184.81908400000066
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-17",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "general",
+      "baseline": "general",
+      "prediction": "general",
+      "gated": "general",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.009334000000308151,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "general",
+              "confidence": 1,
+              "probabilities": {
+                "creative_writing": 0,
+                "research": 0,
+                "coding": 0,
+                "agentic": 0,
+                "simple_chat": 0,
+                "image_generation": 0,
+                "reasoning": 0,
+                "general": 1
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 0.57,
+              "confidence": 0.57,
+              "probabilities": {
+                "0": 0.43,
+                "1": 0.57,
+                "2": 0,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.14
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.03
+            }
+          },
+          "inputTokens": 633,
+          "outputTokens": 131
+        },
+        "latencyMs": 155.54049999999916
+      },
+      "inputUsd": 0.000026586000000000003
+    },
+    {
+      "id": "intent-18",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "coding",
+      "baseline": "coding",
+      "prediction": "coding",
+      "gated": "coding",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.004917000000205007,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "coding",
+              "confidence": 1,
+              "probabilities": {
+                "coding": 1,
+                "image_generation": 0,
+                "agentic": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "reasoning": 0,
+                "general": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.09,
+              "confidence": 0.9,
+              "probabilities": {
+                "0": 0,
+                "1": 0.91,
+                "2": 0.09,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.05
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.06
+            }
+          },
+          "inputTokens": 630,
+          "outputTokens": 131
+        },
+        "latencyMs": 108.14962500000001
+      },
+      "inputUsd": 0.00002646
+    },
+    {
+      "id": "intent-19",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "creative_writing",
+      "baseline": "simple_chat",
+      "prediction": "creative_writing",
+      "gated": "creative_writing",
+      "baselineCorrect": false,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.0150420000009035,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "creative_writing",
+              "confidence": 1,
+              "probabilities": {
+                "image_generation": 0,
+                "creative_writing": 1,
+                "research": 0,
+                "agentic": 0,
+                "reasoning": 0,
+                "coding": 0,
+                "general": 0,
+                "simple_chat": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.14,
+              "confidence": 0.85,
+              "probabilities": {
+                "0": 0,
+                "1": 0.86,
+                "2": 0.14,
+                "3": 0
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.04
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 629,
+          "outputTokens": 134
+        },
+        "latencyMs": 198.01416700000118
+      },
+      "inputUsd": 0.000026418000000000004
+    },
+    {
+      "id": "intent-20",
+      "area": "intent",
+      "repetition": 1,
+      "expected": "reasoning",
+      "baseline": "reasoning",
+      "prediction": "reasoning",
+      "gated": "reasoning",
+      "baselineCorrect": true,
+      "candidateCorrect": true,
+      "gatedCorrect": true,
+      "baselineMs": 0.009541999999783002,
+      "confidence": 1,
+      "fallback": false,
+      "outcome": {
+        "status": "accepted",
+        "result": {
+          "model": "jev-1.13.0",
+          "answers": {
+            "intent": {
+              "kind": "choice",
+              "value": "reasoning",
+              "confidence": 1,
+              "probabilities": {
+                "agentic": 0,
+                "general": 0,
+                "reasoning": 1,
+                "image_generation": 0,
+                "research": 0,
+                "simple_chat": 0,
+                "creative_writing": 0,
+                "coding": 0
+              }
+            },
+            "complexity": {
+              "kind": "score",
+              "value": 1.93,
+              "confidence": 0.65,
+              "probabilities": {
+                "0": 0,
+                "1": 0.21,
+                "2": 0.65,
+                "3": 0.14
+              }
+            },
+            "current_information": {
+              "kind": "boolean",
+              "probability": 0.02
+            },
+            "external_action": {
+              "kind": "boolean",
+              "probability": 0.02
+            }
+          },
+          "inputTokens": 632,
+          "outputTokens": 133
+        },
+        "latencyMs": 270.6149580000001
+      },
+      "inputUsd": 0.000026544000000000002
+    }
+  ]
+}

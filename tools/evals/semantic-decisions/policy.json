@@ -1,0 +1,12 @@
+{
+  "mode": "enabled",
+  "timeoutMs": 3000,
+  "maxRetries": 0,
+  "maxRequestBytes": 16000,
+  "maxQuestions": 16,
+  "maxConcurrent": 1,
+  "sampleRate": 1,
+  "confidence": 0.85,
+  "fitProbability": 0.85,
+  "repetitions": 2
+}
