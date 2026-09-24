@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "baseUrl": "../../../..",
+    "paths": {
+      "server-only": ["tools/evals/semantic-decisions/suites/server-only-noop.ts"],
+      "@/*": ["apps/web/*"],
+      "@features/*": ["apps/web/features/*"],
+      "@shared/*": ["apps/web/shared/*"]
+    }
+  }
+}

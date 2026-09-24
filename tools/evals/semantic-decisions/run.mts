@@ -46,6 +46,7 @@ const inputPrice = live ? Number(required('JEV_EVAL_INPUT_USD_PER_MILLION')) : 0
 if (!Number.isFinite(inputPrice) || inputPrice < 0) throw new Error('Invalid evaluation price');
 const run = live
   ? createDecisionEvaluator({
+      kind: 'eval_harness',
       policy: () => ({ ...config, model }),
       provider: createTypeSafeDecisionProvider({
         apiKey: required('TYPESAFE_API_KEY'),
@@ -120,7 +121,7 @@ for (let repetition = 0; repetition < config.repetitions; repetition += 1) {
     let outcome: DecisionOutcome | undefined;
     if (run)
       outcome = await run(request, {
-        trustMode: 'managed_cloud',
+        trustMode: 'managed',
         providerAllowed: true,
         cohort: 0,
       });

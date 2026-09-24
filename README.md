@@ -5,7 +5,7 @@
 
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 
-AGI Workforce unifies 22 catalog providers (including local runtimes) into one
+AGI Workforce unifies 23 catalog providers (including local runtimes) into one
 product spanning **Mobile**, **Web**, **Desktop**, **CLI**, **Chrome
 Extension**, and **VS Code Extension**. One account and one effective
 entitlement span the suite. Managed Free is available after sign-in; new paid
@@ -37,13 +37,13 @@ a unified chat protocol.
 
 ## Key features
 
-- **Multi-provider model routing**: Catalog of 401 models across 22 providers:
+- **Multi-provider model routing**: Catalog of 401 models across 23 providers:
   AGI managed cloud, OpenAI, Anthropic, Google, xAI, DeepSeek, Qwen, Moonshot,
-  MiniMax, Perplexity, ZhipuAI, Runway, OpenRouter, NVIDIA NIM, Groq,
-  Cloudflare Workers AI, Vercel AI Gateway, AWS Bedrock, and the local
-  runtimes Ollama, LM Studio, llama.cpp, and vLLM. Counts and provider names
-  come from `packages/contracts/types/src/models.json`; `pnpm check:readme-facts`
-  fails when this section drifts from it.
+  MiniMax, Perplexity, ZhipuAI, Runway, OpenRouter, Experiential Labs,
+  NVIDIA NIM, Groq, Cloudflare Workers AI, Vercel AI Gateway, AWS Bedrock, and
+  the local runtimes Ollama, LM Studio, llama.cpp, and vLLM. Counts and
+  provider names come from `packages/contracts/types/src/models.json`;
+  `pnpm check:readme-facts` fails when this section drifts from it.
 - **Local-first privacy and BYOK**: the released CLI runs local models through
   Ollama or LM Studio and sends BYOK requests straight to a user's own provider
   account. The public Electron Desktop is managed-cloud-only; Mobile and VS

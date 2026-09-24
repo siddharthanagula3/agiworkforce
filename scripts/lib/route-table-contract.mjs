@@ -50,13 +50,16 @@ function sqlRelationReferences(sql) {
 
   const relations = new Set();
   const pattern =
-    /\b(from|join|insert\s+into|update|delete\s+from)\s+(?:only\s+)?(?:public\.)?"?([a-z_][a-z0-9_]*)"?/gi;
+    /\b(from|join|insert\s+into|update|delete\s+from)\s+(?:only\s+)?(?:(public|information_schema|pg_catalog)\.)?"?([a-z_][a-z0-9_]*)"?/gi;
   for (const match of sql.matchAll(pattern)) {
     const operation = match[1].toLowerCase().replace(/\s+/g, ' ');
-    const relation = match[2].toLowerCase();
+    const schema = match[2]?.toLowerCase();
+    const relation = match[3].toLowerCase();
     const prefix = sql.slice(Math.max(0, (match.index ?? 0) - 24), match.index ?? 0);
     const remainder = sql.slice((match.index ?? 0) + match[0].length);
     if (
+      schema === 'information_schema' ||
+      schema === 'pg_catalog' ||
       (operation === 'from' && /\bdistinct\s*$/i.test(prefix)) ||
       (operation === 'update' && /\b(?:do|for|for\s+no\s+key)\s*$/i.test(prefix)) ||
       ((operation === 'from' || operation === 'join') && remainder.match(/^\s*\(/)) ||

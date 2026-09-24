@@ -1,0 +1,466 @@
+{
+  "labeller": "label-c",
+  "labels": {
+    "er-001": {
+      "label": 12,
+      "certainty": "high"
+    },
+    "er-002": {
+      "label": 6,
+      "certainty": "high"
+    },
+    "er-003": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-004": {
+      "label": 10,
+      "certainty": "high"
+    },
+    "er-005": {
+      "label": 11,
+      "certainty": "high"
+    },
+    "er-006": {
+      "label": 13,
+      "certainty": "high"
+    },
+    "er-007": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-008": {
+      "label": "none",
+      "certainty": "high"
+    },
+    "er-009": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "Two Create account/Create an account links exist (nav [7], body CTA [17] tied to New here?), both leading to /signup; nothing in the plain description disambiguates which one is meant."
+    },
+    "er-010": {
+      "label": 23,
+      "certainty": "high"
+    },
+    "er-011": {
+      "label": 9,
+      "certainty": "high"
+    },
+    "er-012": {
+      "label": 12,
+      "certainty": "high"
+    },
+    "er-013": {
+      "label": 12,
+      "certainty": "high"
+    },
+    "er-014": {
+      "label": 4,
+      "certainty": "high"
+    },
+    "er-015": {
+      "label": 6,
+      "certainty": "high"
+    },
+    "er-016": {
+      "label": 5,
+      "certainty": "high"
+    },
+    "er-017": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-018": {
+      "label": 7,
+      "certainty": "high"
+    },
+    "er-019": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-020": {
+      "label": 17,
+      "certainty": "high"
+    },
+    "er-021": {
+      "label": 22,
+      "certainty": "high"
+    },
+    "er-022": {
+      "label": 25,
+      "certainty": "high"
+    },
+    "er-023": {
+      "label": 34,
+      "certainty": "high"
+    },
+    "er-024": {
+      "label": 35,
+      "certainty": "high"
+    },
+    "er-025": {
+      "label": 30,
+      "certainty": "high"
+    },
+    "er-026": {
+      "label": 33,
+      "certainty": "high"
+    },
+    "er-027": {
+      "label": 27,
+      "certainty": "high"
+    },
+    "er-028": {
+      "label": 34,
+      "certainty": "high"
+    },
+    "er-029": {
+      "label": 2,
+      "certainty": "high"
+    },
+    "er-030": {
+      "label": 19,
+      "certainty": "high"
+    },
+    "er-031": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-032": {
+      "label": 33,
+      "certainty": "high"
+    },
+    "er-033": {
+      "label": 6,
+      "certainty": "high"
+    },
+    "er-034": {
+      "label": 10,
+      "certainty": "high"
+    },
+    "er-035": {
+      "label": 20,
+      "certainty": "high"
+    },
+    "er-036": {
+      "label": 15,
+      "certainty": "high"
+    },
+    "er-037": {
+      "label": 5,
+      "certainty": "high"
+    },
+    "er-038": {
+      "label": 32,
+      "certainty": "high"
+    },
+    "er-039": {
+      "label": 24,
+      "certainty": "high"
+    },
+    "er-040": {
+      "label": 11,
+      "certainty": "high"
+    },
+    "er-041": {
+      "label": 35,
+      "certainty": "high"
+    },
+    "er-042": {
+      "label": 41,
+      "certainty": "high"
+    },
+    "er-043": {
+      "label": 40,
+      "certainty": "high"
+    },
+    "er-044": {
+      "label": 26,
+      "certainty": "high"
+    },
+    "er-045": {
+      "label": 13,
+      "certainty": "high"
+    },
+    "er-046": {
+      "label": 17,
+      "certainty": "high"
+    },
+    "er-047": {
+      "label": 28,
+      "certainty": "high"
+    },
+    "er-048": {
+      "label": 23,
+      "certainty": "high"
+    },
+    "er-049": {
+      "label": 18,
+      "certainty": "high"
+    },
+    "er-050": {
+      "label": 20,
+      "certainty": "high"
+    },
+    "er-051": {
+      "label": 33,
+      "certainty": "high"
+    },
+    "er-052": {
+      "label": 34,
+      "certainty": "high"
+    },
+    "er-053": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-054": {
+      "label": 39,
+      "certainty": "high"
+    },
+    "er-055": {
+      "label": "none",
+      "certainty": "high"
+    },
+    "er-056": {
+      "label": 41,
+      "certainty": "high"
+    },
+    "er-057": {
+      "label": 10,
+      "certainty": "medium",
+      "note": "'Attach my CV' most naturally targets the visible 'Choose file' button for the CV field [10]; the underlying file input [9] is a defensible alternative click target for the same action."
+    },
+    "er-058": {
+      "label": 12,
+      "certainty": "high"
+    },
+    "er-059": {
+      "label": 14,
+      "certainty": "high"
+    },
+    "er-060": {
+      "label": 13,
+      "certainty": "high"
+    },
+    "er-061": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-062": {
+      "label": 22,
+      "certainty": "high"
+    },
+    "er-063": {
+      "label": 34,
+      "certainty": "high"
+    },
+    "er-064": {
+      "label": 33,
+      "certainty": "high"
+    },
+    "er-065": {
+      "label": 21,
+      "certainty": "high"
+    },
+    "er-066": {
+      "label": 29,
+      "certainty": "high"
+    },
+    "er-067": {
+      "label": 19,
+      "certainty": "high"
+    },
+    "er-068": {
+      "label": "none",
+      "certainty": "high"
+    },
+    "er-069": {
+      "label": "ambiguous",
+      "certainty": "medium",
+      "note": "Two file uploads exist (CV [9]/[10] and cover letter [11]/[12]) and 'the file upload' names neither; CV is the required, primary one but cover letter is a defensible reading too."
+    },
+    "er-070": {
+      "label": 33,
+      "certainty": "high"
+    },
+    "er-071": {
+      "label": 39,
+      "certainty": "high"
+    },
+    "er-072": {
+      "label": 56,
+      "certainty": "high"
+    },
+    "er-073": {
+      "label": 11,
+      "certainty": "high"
+    },
+    "er-074": {
+      "label": 45,
+      "certainty": "high"
+    },
+    "er-075": {
+      "label": 53,
+      "certainty": "medium",
+      "note": "No action verb is given; taken as referring to the order-id link for her second order (row 7, ORD-2217)."
+    },
+    "er-076": {
+      "label": 36,
+      "certainty": "high"
+    },
+    "er-077": {
+      "label": 9,
+      "certainty": "high"
+    },
+    "er-078": {
+      "label": 91,
+      "certainty": "high"
+    },
+    "er-079": {
+      "label": 89,
+      "certainty": "high"
+    },
+    "er-080": {
+      "label": 87,
+      "certainty": "high"
+    },
+    "er-081": {
+      "label": 15,
+      "certainty": "high"
+    },
+    "er-082": {
+      "label": 73,
+      "certainty": "high"
+    },
+    "er-083": {
+      "label": 6,
+      "certainty": "high"
+    },
+    "er-084": {
+      "label": 51,
+      "certainty": "high"
+    },
+    "er-085": {
+      "label": "ambiguous",
+      "certainty": "high",
+      "note": "Priya Nair has two orders, row 1 (ORD-2211, delete=21) and row 7 (ORD-2217, delete=57); nothing disambiguates which, and deleting the wrong one destroys a different order."
+    },
+    "er-086": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-087": {
+      "label": 9,
+      "certainty": "high"
+    },
+    "er-088": {
+      "label": 7,
+      "certainty": "high"
+    },
+    "er-089": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-090": {
+      "label": 27,
+      "certainty": "high"
+    },
+    "er-091": {
+      "label": 29,
+      "certainty": "high"
+    },
+    "er-092": {
+      "label": 24,
+      "certainty": "high"
+    },
+    "er-093": {
+      "label": 37,
+      "certainty": "high"
+    },
+    "er-094": {
+      "label": 4,
+      "certainty": "high"
+    },
+    "er-095": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-096": {
+      "label": "none",
+      "certainty": "high"
+    },
+    "er-097": {
+      "label": 23,
+      "certainty": "high"
+    },
+    "er-098": {
+      "label": 10,
+      "certainty": "high"
+    },
+    "er-099": {
+      "label": 19,
+      "certainty": "high"
+    },
+    "er-100": {
+      "label": 5,
+      "certainty": "high"
+    },
+    "er-101": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-102": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-103": {
+      "label": 15,
+      "certainty": "high"
+    },
+    "er-104": {
+      "label": 5,
+      "certainty": "high"
+    },
+    "er-105": {
+      "label": 22,
+      "certainty": "high"
+    },
+    "er-106": {
+      "label": 19,
+      "certainty": "high"
+    },
+    "er-107": {
+      "label": 16,
+      "certainty": "high"
+    },
+    "er-108": {
+      "label": 11,
+      "certainty": "high"
+    },
+    "er-109": {
+      "label": 10,
+      "certainty": "high"
+    },
+    "er-110": {
+      "label": 34,
+      "certainty": "high"
+    },
+    "er-111": {
+      "label": 8,
+      "certainty": "high"
+    },
+    "er-112": {
+      "label": 11,
+      "certainty": "high"
+    },
+    "er-113": {
+      "label": 29,
+      "certainty": "high"
+    },
+    "er-114": {
+      "label": "none",
+      "certainty": "high"
+    }
+  }
+}

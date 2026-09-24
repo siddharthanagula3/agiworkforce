@@ -1,0 +1,247 @@
+{
+  "labeller": "label-d",
+  "labels": {
+    "ts-001": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-002": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-003": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-004": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-005": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-006": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-007": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-008": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-009": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-010": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-011": {
+      "label": { "task_family": "general_chat", "complexity4": 2 },
+      "certainty": "medium",
+      "note": "Could be read as extended_thinking (an open problem) rather than an opinion; I treated it as asking for an honest characterization, not a proof."
+    },
+    "ts-012": {
+      "label": { "task_family": "extended_thinking", "complexity4": 2 },
+      "certainty": "high"
+    },
+    "ts-013": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-014": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-015": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-016": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    },
+    "ts-017": {
+      "label": { "task_family": "deep_research", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-018": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    },
+    "ts-019": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-020": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 2 },
+      "certainty": "high"
+    },
+    "ts-021": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 2 },
+      "certainty": "high"
+    },
+    "ts-022": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-023": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-024": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-025": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-026": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-027": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-028": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-029": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-030": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-031": {
+      "label": { "task_family": "agentic_work", "complexity4": 3 },
+      "certainty": "medium",
+      "note": "Could be deep_research (multi-vendor investigation ending in a written comparison); I chose agentic_work for the explicit multi-agent coordination framing."
+    },
+    "ts-032": { "label": { "task_family": "agentic_work", "complexity4": 3 }, "certainty": "high" },
+    "ts-033": { "label": { "task_family": "agentic_work", "complexity4": 2 }, "certainty": "high" },
+    "ts-034": { "label": { "task_family": "agentic_work", "complexity4": 2 }, "certainty": "high" },
+    "ts-035": {
+      "label": { "task_family": "document_authoring", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-036": { "label": { "task_family": "simple_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-037": { "label": { "task_family": "simple_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-038": { "label": { "task_family": "simple_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-039": { "label": { "task_family": "simple_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-040": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-041": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-042": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-043": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-044": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-045": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-046": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-047": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-048": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-049": {
+      "label": { "task_family": "caller_tool_loop", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "Assumes a notes-search tool is available to the caller; could instead be general_chat if the assistant has no such tool and must answer from conversation alone."
+    },
+    "ts-050": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-051": { "label": { "task_family": "general_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-052": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-053": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-054": {
+      "label": { "task_family": "document_authoring", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-055": { "label": { "task_family": "general_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-056": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-057": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-058": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-059": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-060": {
+      "label": { "task_family": "general_chat", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "The message has no task content of its own (it refers to an unspecified prior task); classified as general_chat by elimination since it is a directive, not a social exchange."
+    },
+    "ts-061": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-062": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "'Skip the sources' could mean skip citations only (still needs current info) or skip searching entirely like ts-055; I read it as the former."
+    },
+    "ts-063": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-064": {
+      "label": { "task_family": "extended_thinking", "complexity4": 2 },
+      "certainty": "high"
+    },
+    "ts-065": {
+      "label": { "task_family": "extended_thinking", "complexity4": 2 },
+      "certainty": "high"
+    },
+    "ts-066": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-067": {
+      "label": { "task_family": "general_chat", "complexity4": 2 },
+      "certainty": "medium",
+      "note": "Underspecified without the linked issue it refers to; treated as a general debugging/code request."
+    },
+    "ts-068": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-069": {
+      "label": { "task_family": "general_chat", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "Could be document_authoring if the assistant is expected to redesign the chart artifact itself; read as advisory prose instead since no chart data is supplied."
+    },
+    "ts-070": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-071": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    },
+    "ts-072": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-073": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-074": {
+      "label": { "task_family": "deep_research", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-075": { "label": { "task_family": "simple_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-076": {
+      "label": { "task_family": "general_chat", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "The referenced function's code is not actually included in the message; complexity estimated for a generic null-condition analysis."
+    },
+    "ts-077": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    },
+    "ts-078": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-079": {
+      "label": { "task_family": "general_chat", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "The stack trace is referenced as pasted below but is not actually present in the input; complexity estimated for a generic log-diagnosis task."
+    },
+    "ts-080": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-081": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    },
+    "ts-082": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-083": {
+      "label": { "task_family": "general_chat", "complexity4": 2 },
+      "certainty": "medium",
+      "note": "The CSV is referenced but not included in the input; complexity estimated assuming a small aggregate-and-compare task."
+    },
+    "ts-084": { "label": { "task_family": "general_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-085": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-086": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-087": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-088": { "label": { "task_family": "general_chat", "complexity4": 0 }, "certainty": "high" },
+    "ts-089": {
+      "label": { "task_family": "extended_thinking", "complexity4": 3 },
+      "certainty": "high"
+    },
+    "ts-090": {
+      "label": { "task_family": "extended_thinking", "complexity4": 2 },
+      "certainty": "medium",
+      "note": "The long incident narrative could instead be read as testing long_context; I judged the dominant difficulty as weighing which clue is causally relevant, not the size of the material."
+    },
+    "ts-091": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 1 },
+      "certainty": "high"
+    },
+    "ts-092": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-093": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-094": { "label": { "task_family": "general_chat", "complexity4": 2 }, "certainty": "high" },
+    "ts-095": {
+      "label": { "task_family": "ambiguous", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "Could be general_chat (explain from existing knowledge), web_grounded_answer (one current lookup), or deep_research (a survey of current expert opinion); no single reading dominates."
+    },
+    "ts-096": {
+      "label": { "task_family": "general_chat", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "Could be a simple self-documenting-code request or a harder self-referential/quine-style program; family is general_chat either way but complexity is uncertain."
+    },
+    "ts-097": {
+      "label": { "task_family": "ambiguous", "complexity4": 1 },
+      "certainty": "medium",
+      "note": "'Check this' on a pasted SQL query could mean review it for correctness (general_chat) or actually run it and check the output (code_execution)."
+    },
+    "ts-098": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-099": { "label": { "task_family": "agentic_work", "complexity4": 3 }, "certainty": "high" },
+    "ts-100": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-101": { "label": { "task_family": "general_chat", "complexity4": 1 }, "certainty": "high" },
+    "ts-102": {
+      "label": { "task_family": "web_grounded_answer", "complexity4": 0 },
+      "certainty": "high"
+    }
+  }
+}

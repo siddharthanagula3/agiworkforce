@@ -223,7 +223,6 @@ describe('Dark mode color tokens', () => {
         '--destructive',
         '--border',
         '--input',
-        '--ring',
       ];
 
       const darkBlockMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/);
@@ -233,6 +232,9 @@ describe('Dark mode color tokens', () => {
         const value = darkVar(varName);
         expect(value, `${varName} should be defined in dark mode`).not.toBeNull();
       }
+
+      expect(cssContent).toContain('--color-ring: var(--focus-ring)');
+      expect(darkVar('--focus-ring')).not.toBeNull();
     });
 
     it('dark mode defines all sidebar color variables', () => {

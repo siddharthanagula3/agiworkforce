@@ -5,13 +5,13 @@
 use super::list_selection_view::ListSelectionView;
 use super::model_picker::{self, ModelPickerState};
 use super::screen_renderers::{
-    SandboxMode, UsageSummary, render_keybindings, render_mcp_list, render_sandbox, render_skills,
-    render_usage,
+    render_keybindings, render_mcp_list, render_sandbox, render_skills, render_usage, SandboxMode,
+    UsageSummary,
 };
 use crate::model_catalog::Model;
-use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
+use ratatui::Terminal;
 
 // ---------------------------------------------------------------------------
 // Helper: render the model picker overlay to a string via TestBackend.

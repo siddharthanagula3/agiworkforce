@@ -34,6 +34,16 @@ export const ALLOWED_MANAGED_PROVIDER_HOSTS: ReadonlySet<string> = new Set([
   ...REGISTRY_DECLARED_PROVIDER_HOSTS,
 ]);
 
+/**
+ * The decision transport is not a model provider, so it is declared apart:
+ * widening one allowlist must never widen the other.
+ */
+export const ALLOWED_DECISION_TRANSPORT_HOSTS: ReadonlySet<string> = new Set([
+  'api.typesafe.ai',
+  'localhost',
+  '127.0.0.1',
+]);
+
 export interface ValidateBaseUrlOptions {
   allowedHosts: ReadonlySet<string> | readonly string[];
   allowInsecureHosts?: readonly string[];

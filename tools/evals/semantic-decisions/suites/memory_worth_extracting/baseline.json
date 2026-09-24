@@ -1,0 +1,1237 @@
+{
+  "suite": "memory_worth_extracting",
+  "generatedAt": "2026-09-20T09:19:11.819Z",
+  "baseline": {
+    "function": "isMemoryExtractionWorthwhile",
+    "source": "packages/ai/agent-core/src/memory.ts",
+    "note": "The real production gate, called with the case message and nothing else. rows[].extra.patternFacts is what extractCandidateMemoryFacts finds in the same message, recorded so a miss in the regex extractor is not confused with a miss in the gate."
+  },
+  "summary": {
+    "all": {
+      "scored": 84,
+      "correct": 52,
+      "accuracy": 0.619
+    },
+    "calibration": {
+      "scored": 39,
+      "correct": 24,
+      "accuracy": 0.6154
+    },
+    "heldout": {
+      "scored": 45,
+      "correct": 28,
+      "accuracy": 0.6222
+    },
+    "byTag": {
+      "ambiguous": {
+        "scored": 0,
+        "correct": 0,
+        "accuracy": null
+      },
+      "cjk": {
+        "scored": 4,
+        "correct": 1,
+        "accuracy": 0.25
+      },
+      "embedded_instruction": {
+        "scored": 7,
+        "correct": 5,
+        "accuracy": 0.7143
+      },
+      "indirect": {
+        "scored": 8,
+        "correct": 4,
+        "accuracy": 0.5
+      },
+      "long_irrelevant": {
+        "scored": 6,
+        "correct": 3,
+        "accuracy": 0.5
+      },
+      "near_miss": {
+        "scored": 21,
+        "correct": 3,
+        "accuracy": 0.1429
+      },
+      "negation": {
+        "scored": 12,
+        "correct": 7,
+        "accuracy": 0.5833
+      },
+      "non_english": {
+        "scored": 14,
+        "correct": 7,
+        "accuracy": 0.5
+      },
+      "numeric": {
+        "scored": 9,
+        "correct": 4,
+        "accuracy": 0.4444
+      },
+      "plain": {
+        "scored": 27,
+        "correct": 25,
+        "accuracy": 0.9259
+      },
+      "typo": {
+        "scored": 6,
+        "correct": 4,
+        "accuracy": 0.6667
+      }
+    },
+    "ambiguous": {
+      "cases": 4,
+      "answeredWithADefensibleOption": 4
+    }
+  },
+  "rows": [
+    {
+      "id": "mwe-001",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-002",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-003",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-004",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-005",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-006",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-007",
+      "split": "heldout",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-009",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-010",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": ["Invoice everything to Meridian Labs, not to me personally"]
+      }
+    },
+    {
+      "id": "mwe-011",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-012",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-013",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-014",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-015",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-016",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-017",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-019",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-020",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-022",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-023",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-024",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-025",
+      "split": "calibration",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-026",
+      "split": "heldout",
+      "tags": ["plain"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-027",
+      "split": "heldout",
+      "tags": ["plain", "numeric"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-028",
+      "split": "heldout",
+      "tags": ["plain", "typo", "numeric"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-029",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-030",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-031",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-032",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-033",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-034",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-035",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-036",
+      "split": "calibration",
+      "tags": ["ambiguous", "near_miss"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-037",
+      "split": "heldout",
+      "tags": ["ambiguous", "near_miss", "negation"],
+      "expected": "ambiguous",
+      "alternatives": ["no", "yes"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-038",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-039",
+      "split": "calibration",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-040",
+      "split": "calibration",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-041",
+      "split": "calibration",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-042",
+      "split": "calibration",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-043",
+      "split": "heldout",
+      "tags": ["ambiguous", "negation", "embedded_instruction"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-044",
+      "split": "calibration",
+      "tags": ["negation"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-045",
+      "split": "heldout",
+      "tags": ["negation", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-046",
+      "split": "calibration",
+      "tags": ["negation", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-047",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-048",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-049",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-050",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-051",
+      "split": "heldout",
+      "tags": ["ambiguous", "indirect"],
+      "expected": "ambiguous",
+      "alternatives": ["yes", "no"],
+      "prediction": "yes",
+      "scored": false,
+      "correct": false,
+      "defensible": true,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-052",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-053",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-054",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-055",
+      "split": "calibration",
+      "tags": ["near_miss", "indirect"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-056",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-057",
+      "split": "calibration",
+      "tags": ["near_miss", "embedded_instruction"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": ["User lives in Paris and I hate small talk"]
+      }
+    },
+    {
+      "id": "mwe-058",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-059",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-060",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-061",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": ["The classifier is supposed to return true for messages like this one"]
+      }
+    },
+    {
+      "id": "mwe-062",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": ["User is a machine learning engineer at a robotics startup"]
+      }
+    },
+    {
+      "id": "mwe-063",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-064",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-065",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "indirect"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-066",
+      "split": "calibration",
+      "tags": ["long_irrelevant"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-067",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "numeric"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-068",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "near_miss", "numeric"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-069",
+      "split": "calibration",
+      "tags": ["long_irrelevant"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-070",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-071",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-072",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-073",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-074",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-075",
+      "split": "heldout",
+      "tags": ["non_english", "negation"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-076",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-077",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-078",
+      "split": "calibration",
+      "tags": ["non_english", "cjk"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-079",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-080",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-081",
+      "split": "calibration",
+      "tags": ["non_english", "negation"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-082",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-083",
+      "split": "calibration",
+      "tags": ["non_english", "cjk"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-084",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "expected": "no",
+      "prediction": "no",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-085",
+      "split": "calibration",
+      "tags": ["numeric"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-086",
+      "split": "heldout",
+      "tags": ["numeric", "near_miss"],
+      "expected": "no",
+      "prediction": "yes",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-087",
+      "split": "calibration",
+      "tags": ["typo"],
+      "expected": "yes",
+      "prediction": "no",
+      "scored": true,
+      "correct": false,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    },
+    {
+      "id": "mwe-088",
+      "split": "calibration",
+      "tags": ["typo"],
+      "expected": "yes",
+      "prediction": "yes",
+      "scored": true,
+      "correct": true,
+      "defensible": false,
+      "extra": {
+        "patternFacts": []
+      }
+    }
+  ]
+}

@@ -127,6 +127,47 @@ export async function POST(request) {
   assert.match(result.output, /store/);
 });
 
+test('does not treat a type-only helper import as a byte-moving route', () => {
+  const result = run(
+    fixture({
+      'files/[id]/route.ts': AUTHORIZED,
+      'types/helper.ts': `
+import { readStoredMedia } from '@/lib/server/media-storage';
+export type StoredMediaReader = typeof readStoredMedia;
+`,
+      'types/route.ts': `
+import type { StoredMediaReader } from './helper';
+export function GET() {
+  return null;
+}
+`,
+    }),
+  );
+
+  assert.equal(result.code, 0);
+  assert.match(result.output, /1 object-storage routes/);
+});
+
+test('accepts the managed-chat auth gate before attachment hydration', () => {
+  const result = run(
+    fixture({
+      'files/[id]/route.ts': AUTHORIZED,
+      'chat/route.ts': `
+import { readStoredMedia } from '@/lib/server/media-storage';
+import { runAuthGate } from './auth-gate';
+export async function POST(request) {
+  const auth = await runAuthGate(request);
+  if (!auth.ok) return auth.response;
+  return readStoredMedia(auth.userId);
+}
+`,
+    }),
+  );
+
+  assert.equal(result.code, 0);
+  assert.match(result.output, /2 object-storage routes/);
+});
+
 test('fails when no object-storage route is found at all', () => {
   const result = run(fixture({ 'health/route.ts': 'export function GET() { return null; }\n' }));
   assert.equal(result.code, 1);

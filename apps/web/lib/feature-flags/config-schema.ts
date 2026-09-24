@@ -17,11 +17,19 @@ import {
   FlagVariantSchema,
   type FlagDefinitionInput,
 } from './flag-definition';
+import {
+  DECISION_FLAG_PREFIX,
+  DECISION_KILL_FLAG_KEY,
+  DECISION_VARIANTS,
+  isDecisionFlagKey,
+} from './decision-flags';
 import { ROLLOUT_FLAG_PREFIX, parseRolloutRingFlagKey } from './rollout-rings';
 import { ROUTING_FLAG_KEYS, ROUTING_FLAG_PREFIX, canaryCohortFlagKey } from './routing-flags';
 
 export const FLAG_NAMESPACE_IDS = [
   'capability',
+  'decision_kill',
+  'decision',
   'experiment',
   'model',
   'provider',
@@ -95,6 +103,26 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
     killSwitch: true,
     keys: CAPABILITY_KEYS,
   },
+  // Ahead of `decision.`: flagNamespaceClaimingPrefix takes the first prefix a
+  // key carries, and the kill-switch key also starts with that one.
+  {
+    id: 'decision_kill',
+    prefix: DECISION_KILL_FLAG_KEY,
+    reader: 'lib/feature-flags/decision-flags (decisionFlagMode)',
+    variants: [...GATE_VARIANTS],
+    defaultVariant: FLAG_OFF_VARIANT,
+    killSwitch: false,
+    keys: [DECISION_KILL_FLAG_KEY],
+  },
+  {
+    id: 'decision',
+    prefix: DECISION_FLAG_PREFIX,
+    reader: 'lib/feature-flags/decision-flags (decisionFlagKey)',
+    variants: [...DECISION_VARIANTS],
+    defaultVariant: FLAG_OFF_VARIANT,
+    killSwitch: false,
+    keys: null,
+  },
   {
     id: 'experiment',
     prefix: EXPERIMENT_FLAG_PREFIX,
@@ -154,6 +182,8 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
 
 const OPEN_KEY_TESTS: Readonly<Record<FlagNamespaceId, (key: string) => boolean>> = {
   capability: () => false,
+  decision_kill: () => false,
+  decision: isDecisionFlagKey,
   experiment: (key) => parseExperimentFlagKey(key) !== null,
   model: (key) => slugSuffixOf(key, MODEL_FLAG_PREFIX),
   provider: (key) => slugSuffixOf(key, PROVIDER_FLAG_PREFIX),

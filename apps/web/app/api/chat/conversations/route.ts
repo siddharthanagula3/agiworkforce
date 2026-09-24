@@ -214,11 +214,25 @@ async function handleCreateConversation(request: NextRequest) {
   }
 
   try {
-    const pinColumn = body.selectedRouteId ? ', selected_route_id' : '';
-    const pinValue = body.selectedRouteId ? ', $8' : '';
-    const pinUpdate = body.selectedRouteId
-      ? 'selected_route_id = excluded.selected_route_id,'
-      : '';
+    const [{ supported: routePinColumnReady = false } = { supported: false }] = body.selectedRouteId
+      ? await db.query<{ supported: boolean }>(
+          `select exists (
+             select 1 from information_schema.columns
+              where table_schema = 'public'
+                and table_name = 'web_conversations'
+                and column_name = 'selected_route_id'
+           ) as supported`,
+        )
+      : [];
+    if (body.selectedRouteId && !routePinColumnReady) {
+      return NextResponse.json(
+        { error: { code: 'route_pin_not_ready', message: 'Provider pins are not ready yet.' } },
+        { status: 503 },
+      );
+    }
+    const pinColumn = routePinColumnReady ? ', selected_route_id' : '';
+    const pinValue = routePinColumnReady ? ', $8' : '';
+    const pinUpdate = routePinColumnReady ? 'selected_route_id = excluded.selected_route_id,' : '';
     const [conversation] = await db.query<ChatConversationRow>(
       `
         insert into web_conversations
@@ -242,7 +256,7 @@ async function handleCreateConversation(request: NextRequest) {
         body.id ?? null,
         body.isTemporary ?? false,
         organizationId,
-        ...(body.selectedRouteId ? [body.selectedRouteId] : []),
+        ...(routePinColumnReady ? [body.selectedRouteId] : []),
       ],
     );
     if (!conversation) {

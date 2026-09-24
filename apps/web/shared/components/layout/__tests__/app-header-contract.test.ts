@@ -206,8 +206,9 @@ describe('every app header is one fixed row above the content it heads', () => {
   it('lets a window drag band leave the flow only behind the page and hidden from assistive tech', () => {
     const offenders = bands.filter(
       (site) =>
-        !site.tokens.always.some((token) => /^-z-\d+$/.test(token)) ||
-        allTokens(site.tokens).some((token) => token === 'sticky'),
+        !site.tokens.always.some(
+          (token) => /^-z-\d+$/.test(token) || token === 'z-[var(--z-behind)]',
+        ) || allTokens(site.tokens).some((token) => token === 'sticky'),
     );
     expect(offenders.map(label)).toEqual([]);
   });

@@ -1,0 +1,467 @@
+{
+  "suite": "element_resolution",
+  "rule": "two blind labellers must agree",
+  "labels": {
+    "er-001": {
+      "label": "12",
+      "scored": true
+    },
+    "er-002": {
+      "label": "6",
+      "scored": true
+    },
+    "er-003": {
+      "label": "8",
+      "scored": true
+    },
+    "er-004": {
+      "label": "10",
+      "scored": true
+    },
+    "er-005": {
+      "label": "11",
+      "scored": true
+    },
+    "er-006": {
+      "label": "13",
+      "scored": true
+    },
+    "er-007": {
+      "label": "16",
+      "scored": true
+    },
+    "er-008": {
+      "label": "none",
+      "scored": true
+    },
+    "er-009": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "er-010": {
+      "label": "23",
+      "scored": true
+    },
+    "er-011": {
+      "label": "9",
+      "scored": true
+    },
+    "er-012": {
+      "label": "12",
+      "scored": true
+    },
+    "er-013": {
+      "label": "12",
+      "scored": true
+    },
+    "er-014": {
+      "label": "4",
+      "scored": true
+    },
+    "er-015": {
+      "label": "6",
+      "scored": true
+    },
+    "er-016": {
+      "label": "5",
+      "scored": true
+    },
+    "er-017": {
+      "label": "8",
+      "scored": true
+    },
+    "er-018": {
+      "label": "7",
+      "scored": true
+    },
+    "er-019": {
+      "label": "16",
+      "scored": true
+    },
+    "er-020": {
+      "label": "17",
+      "scored": true
+    },
+    "er-021": {
+      "label": "22",
+      "scored": true
+    },
+    "er-022": {
+      "label": "25",
+      "scored": true
+    },
+    "er-023": {
+      "label": "34",
+      "scored": true
+    },
+    "er-024": {
+      "label": "35",
+      "scored": true
+    },
+    "er-025": {
+      "label": "30",
+      "scored": true
+    },
+    "er-026": {
+      "label": "33",
+      "scored": true
+    },
+    "er-027": {
+      "label": "27",
+      "scored": true
+    },
+    "er-028": {
+      "label": "34",
+      "scored": true
+    },
+    "er-029": {
+      "label": "2",
+      "scored": true
+    },
+    "er-030": {
+      "label": "19",
+      "scored": true
+    },
+    "er-031": {
+      "label": "16",
+      "scored": true
+    },
+    "er-032": {
+      "label": "33",
+      "scored": true
+    },
+    "er-033": {
+      "label": "6",
+      "scored": true
+    },
+    "er-034": {
+      "label": "10",
+      "scored": true
+    },
+    "er-035": {
+      "label": "20",
+      "scored": true
+    },
+    "er-036": {
+      "label": "15",
+      "scored": true
+    },
+    "er-037": {
+      "label": "5",
+      "scored": true
+    },
+    "er-038": {
+      "label": "32",
+      "scored": true
+    },
+    "er-039": {
+      "label": "24",
+      "scored": true
+    },
+    "er-040": {
+      "label": "11",
+      "scored": true
+    },
+    "er-041": {
+      "label": "35",
+      "scored": true
+    },
+    "er-042": {
+      "label": "41",
+      "scored": true
+    },
+    "er-043": {
+      "label": "40",
+      "scored": true
+    },
+    "er-044": {
+      "label": "26",
+      "scored": true
+    },
+    "er-045": {
+      "label": "13",
+      "scored": true
+    },
+    "er-046": {
+      "label": "17",
+      "scored": true
+    },
+    "er-047": {
+      "label": "28",
+      "scored": true
+    },
+    "er-048": {
+      "label": "23",
+      "scored": true
+    },
+    "er-049": {
+      "label": "18",
+      "scored": true
+    },
+    "er-050": {
+      "label": "20",
+      "scored": true
+    },
+    "er-051": {
+      "label": "33",
+      "scored": true
+    },
+    "er-052": {
+      "label": "34",
+      "scored": true
+    },
+    "er-053": {
+      "label": "8",
+      "scored": true
+    },
+    "er-054": {
+      "label": "39",
+      "scored": true
+    },
+    "er-055": {
+      "label": "none",
+      "scored": true
+    },
+    "er-056": {
+      "label": "41",
+      "scored": true
+    },
+    "er-057": {
+      "label": null,
+      "scored": false,
+      "why": "contested",
+      "votes": ["9", "10"]
+    },
+    "er-058": {
+      "label": "12",
+      "scored": true
+    },
+    "er-059": {
+      "label": "14",
+      "scored": true
+    },
+    "er-060": {
+      "label": "13",
+      "scored": true
+    },
+    "er-061": {
+      "label": "16",
+      "scored": true
+    },
+    "er-062": {
+      "label": "22",
+      "scored": true
+    },
+    "er-063": {
+      "label": "34",
+      "scored": true
+    },
+    "er-064": {
+      "label": "33",
+      "scored": true
+    },
+    "er-065": {
+      "label": "21",
+      "scored": true
+    },
+    "er-066": {
+      "label": "29",
+      "scored": true
+    },
+    "er-067": {
+      "label": "19",
+      "scored": true
+    },
+    "er-068": {
+      "label": "none",
+      "scored": true
+    },
+    "er-069": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "er-070": {
+      "label": "33",
+      "scored": true
+    },
+    "er-071": {
+      "label": "39",
+      "scored": true
+    },
+    "er-072": {
+      "label": "56",
+      "scored": true
+    },
+    "er-073": {
+      "label": "11",
+      "scored": true
+    },
+    "er-074": {
+      "label": "45",
+      "scored": true
+    },
+    "er-075": {
+      "label": "53",
+      "scored": true
+    },
+    "er-076": {
+      "label": "36",
+      "scored": true
+    },
+    "er-077": {
+      "label": "9",
+      "scored": true
+    },
+    "er-078": {
+      "label": "91",
+      "scored": true
+    },
+    "er-079": {
+      "label": "89",
+      "scored": true
+    },
+    "er-080": {
+      "label": "87",
+      "scored": true
+    },
+    "er-081": {
+      "label": "15",
+      "scored": true
+    },
+    "er-082": {
+      "label": "73",
+      "scored": true
+    },
+    "er-083": {
+      "label": "6",
+      "scored": true
+    },
+    "er-084": {
+      "label": "51",
+      "scored": true
+    },
+    "er-085": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "er-086": {
+      "label": "16",
+      "scored": true
+    },
+    "er-087": {
+      "label": "9",
+      "scored": true
+    },
+    "er-088": {
+      "label": "7",
+      "scored": true
+    },
+    "er-089": {
+      "label": "8",
+      "scored": true
+    },
+    "er-090": {
+      "label": "27",
+      "scored": true
+    },
+    "er-091": {
+      "label": "29",
+      "scored": true
+    },
+    "er-092": {
+      "label": "24",
+      "scored": true
+    },
+    "er-093": {
+      "label": "37",
+      "scored": true
+    },
+    "er-094": {
+      "label": "4",
+      "scored": true
+    },
+    "er-095": {
+      "label": "8",
+      "scored": true
+    },
+    "er-096": {
+      "label": "none",
+      "scored": true
+    },
+    "er-097": {
+      "label": "23",
+      "scored": true
+    },
+    "er-098": {
+      "label": "10",
+      "scored": true
+    },
+    "er-099": {
+      "label": "19",
+      "scored": true
+    },
+    "er-100": {
+      "label": "5",
+      "scored": true
+    },
+    "er-101": {
+      "label": "16",
+      "scored": true
+    },
+    "er-102": {
+      "label": "16",
+      "scored": true
+    },
+    "er-103": {
+      "label": "15",
+      "scored": true
+    },
+    "er-104": {
+      "label": "5",
+      "scored": true
+    },
+    "er-105": {
+      "label": "22",
+      "scored": true
+    },
+    "er-106": {
+      "label": "19",
+      "scored": true
+    },
+    "er-107": {
+      "label": "16",
+      "scored": true
+    },
+    "er-108": {
+      "label": "11",
+      "scored": true
+    },
+    "er-109": {
+      "label": "10",
+      "scored": true
+    },
+    "er-110": {
+      "label": "34",
+      "scored": true
+    },
+    "er-111": {
+      "label": "8",
+      "scored": true
+    },
+    "er-112": {
+      "label": "11",
+      "scored": true
+    },
+    "er-113": {
+      "label": "29",
+      "scored": true
+    },
+    "er-114": {
+      "label": "none",
+      "scored": true
+    }
+  }
+}

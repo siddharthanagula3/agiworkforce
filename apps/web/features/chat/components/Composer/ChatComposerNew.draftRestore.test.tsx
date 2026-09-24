@@ -137,6 +137,7 @@ beforeEach(() => {
   useChatStore.setState({
     draftsByConversation: {},
     draftContent: '',
+    deferredUnsentDraftsByConversation: {},
     composerTogglesByConversation: {},
     activeConversationId: null,
   });

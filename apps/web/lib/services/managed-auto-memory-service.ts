@@ -4,7 +4,10 @@ import { after } from 'next/server';
 import type { NextRequest } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
+import { isMemoryExtractionWorthwhile } from '@agiworkforce/agent-core';
+
 import { logger } from '@/lib/logger';
+import { runWorthExtractingShadow } from '@/lib/services/semantic-decisions/consumers/memory-worth-extracting';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   extractAutoMemoryFactsWithModel,
@@ -168,6 +171,26 @@ export async function recordManagedAutoMemoryTurn(
         );
       }
       await persistTurnCandidates(params, candidates);
+      // Shadow only, on the same deferred path the extraction already uses, so
+      // it adds no user-visible latency and changes no gate.
+      if (params.processed.decisionScope) {
+        await runWorthExtractingShadow({
+          scope: params.processed.decisionScope,
+          derive: () => {
+            const message = params.processed.autoMemorySourceText ?? '';
+            // The gate is re-read rather than assumed: reaching here means the
+            // extractor was called, and the gate is checked inside it.
+            const regexGate = isMemoryExtractionWorthwhile(message);
+            return {
+              message,
+              regexGate,
+              // Only meaningful when the gate opened; otherwise no extraction
+              // ran and `candidates` are the pattern fallback, not a model result.
+              extractionFoundFact: regexGate ? candidates.length > 0 : null,
+            };
+          },
+        }).catch(() => undefined);
+      }
     })().catch((error: unknown) => {
       logger.warn(
         { error, userId: params.userId, requestId: params.processed.requestId },

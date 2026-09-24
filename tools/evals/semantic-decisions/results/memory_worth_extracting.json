@@ -1,0 +1,2139 @@
+{
+  "runDate": "2026-09-20",
+  "live": true,
+  "scoredFromRecordedRun": true,
+  "model": "jev-1.13.0",
+  "usdPerMillionInputTokens": 0.042,
+  "gitSha": "420e825fa60a2da17e60185d01c737fe05f16772",
+  "concurrency": 4,
+  "timeoutMs": 60000,
+  "sdkRetries": 0,
+  "suite": "memory_worth_extracting",
+  "objective": "minimise (4 x false negatives + false positives) per scored calibration case, per the suite README asymmetry",
+  "questionVersion": 1,
+  "fixtureSha256": "dffbbb5956408fd58a0c9406b67dd227069ad0080d1824c47aebe4158f2b8fa7",
+  "budget": {
+    "timeoutMs": 2000,
+    "maxRequestBytes": 8000,
+    "maxQuestions": 2,
+    "maxConcurrent": 4
+  },
+  "chosen": {
+    "extractAbove": 0.35,
+    "useAnswerAboveConfidence": 0
+  },
+  "sweep": {
+    "extractAbove": [
+      {
+        "threshold": 0,
+        "objective": -0.4473684210526316
+      },
+      {
+        "threshold": 0.05,
+        "objective": -0.39473684210526316
+      },
+      {
+        "threshold": 0.1,
+        "objective": -0.2631578947368421
+      },
+      {
+        "threshold": 0.15,
+        "objective": -0.21052631578947367
+      },
+      {
+        "threshold": 0.2,
+        "objective": -0.18421052631578946
+      },
+      {
+        "threshold": 0.25,
+        "objective": -0.13157894736842105
+      },
+      {
+        "threshold": 0.3,
+        "objective": -0.10526315789473684
+      },
+      {
+        "threshold": 0.35,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.4,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.45,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.5,
+        "objective": -0.15789473684210525
+      },
+      {
+        "threshold": 0.55,
+        "objective": -0.15789473684210525
+      },
+      {
+        "threshold": 0.6,
+        "objective": -0.13157894736842105
+      },
+      {
+        "threshold": 0.65,
+        "objective": -0.21052631578947367
+      },
+      {
+        "threshold": 0.7,
+        "objective": -0.21052631578947367
+      },
+      {
+        "threshold": 0.75,
+        "objective": -0.3157894736842105
+      },
+      {
+        "threshold": 0.8,
+        "objective": -0.3157894736842105
+      },
+      {
+        "threshold": 0.85,
+        "objective": -0.7368421052631579
+      },
+      {
+        "threshold": 0.9,
+        "objective": -1.6842105263157894
+      },
+      {
+        "threshold": 0.95,
+        "objective": -2.210526315789474
+      },
+      {
+        "threshold": 1,
+        "objective": -2.210526315789474
+      }
+    ],
+    "confidenceGate": [
+      {
+        "threshold": 0,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.1,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.2,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.3,
+        "objective": -0.07894736842105263
+      },
+      {
+        "threshold": 0.4,
+        "objective": -0.10526315789473684
+      },
+      {
+        "threshold": 0.5,
+        "objective": -0.10526315789473684
+      },
+      {
+        "threshold": 0.6,
+        "objective": -0.15789473684210525
+      },
+      {
+        "threshold": 0.7,
+        "objective": -0.21052631578947367
+      },
+      {
+        "threshold": 0.8,
+        "objective": -0.3157894736842105
+      },
+      {
+        "threshold": 0.9,
+        "objective": -0.6842105263157895
+      },
+      {
+        "threshold": 1,
+        "objective": -0.6842105263157895
+      }
+    ]
+  },
+  "production": {
+    "all": {
+      "scored": 83,
+      "truePositives": 31,
+      "falsePositives": 20,
+      "trueNegatives": 21,
+      "falseNegatives": 11,
+      "accuracy": 0.6265,
+      "precision": 0.6078,
+      "recall": 0.7381,
+      "f1": 0.6667,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 38,
+      "truePositives": 17,
+      "falsePositives": 10,
+      "trueNegatives": 7,
+      "falseNegatives": 4,
+      "accuracy": 0.6316,
+      "precision": 0.6296,
+      "recall": 0.8095,
+      "f1": 0.7083,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 45,
+      "truePositives": 14,
+      "falsePositives": 10,
+      "trueNegatives": 14,
+      "falseNegatives": 7,
+      "accuracy": 0.6222,
+      "precision": 0.5833,
+      "recall": 0.6667,
+      "f1": 0.6222,
+      "fallbackRate": 0
+    }
+  },
+  "ungated": {
+    "all": {
+      "scored": 83,
+      "truePositives": 42,
+      "falsePositives": 4,
+      "trueNegatives": 37,
+      "falseNegatives": 0,
+      "accuracy": 0.9518,
+      "precision": 0.913,
+      "recall": 1,
+      "f1": 0.9545,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 38,
+      "truePositives": 21,
+      "falsePositives": 3,
+      "trueNegatives": 14,
+      "falseNegatives": 0,
+      "accuracy": 0.9211,
+      "precision": 0.875,
+      "recall": 1,
+      "f1": 0.9333,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 45,
+      "truePositives": 21,
+      "falsePositives": 1,
+      "trueNegatives": 23,
+      "falseNegatives": 0,
+      "accuracy": 0.9778,
+      "precision": 0.9545,
+      "recall": 1,
+      "f1": 0.9767,
+      "fallbackRate": 0
+    }
+  },
+  "gated": {
+    "all": {
+      "scored": 83,
+      "truePositives": 42,
+      "falsePositives": 4,
+      "trueNegatives": 37,
+      "falseNegatives": 0,
+      "accuracy": 0.9518,
+      "precision": 0.913,
+      "recall": 1,
+      "f1": 0.9545,
+      "fallbackRate": 0
+    },
+    "calibration": {
+      "scored": 38,
+      "truePositives": 21,
+      "falsePositives": 3,
+      "trueNegatives": 14,
+      "falseNegatives": 0,
+      "accuracy": 0.9211,
+      "precision": 0.875,
+      "recall": 1,
+      "f1": 0.9333,
+      "fallbackRate": 0
+    },
+    "heldout": {
+      "scored": 45,
+      "truePositives": 21,
+      "falsePositives": 1,
+      "trueNegatives": 23,
+      "falseNegatives": 0,
+      "accuracy": 0.9778,
+      "precision": 0.9545,
+      "recall": 1,
+      "f1": 0.9767,
+      "fallbackRate": 0
+    }
+  },
+  "reliability": [
+    {
+      "lower": 0,
+      "upper": 0.2,
+      "count": 7,
+      "observedAccuracy": 0.5714
+    },
+    {
+      "lower": 0.2,
+      "upper": 0.4,
+      "count": 3,
+      "observedAccuracy": 0.6667
+    },
+    {
+      "lower": 0.4,
+      "upper": 0.6,
+      "count": 12,
+      "observedAccuracy": 1
+    },
+    {
+      "lower": 0.6,
+      "upper": 0.8,
+      "count": 34,
+      "observedAccuracy": 1
+    },
+    {
+      "lower": 0.8,
+      "upper": 1,
+      "count": 27,
+      "observedAccuracy": 1
+    }
+  ],
+  "byTag": {
+    "ambiguous": {
+      "scored": 0,
+      "truePositives": 0,
+      "falsePositives": 0,
+      "trueNegatives": 0,
+      "falseNegatives": 0,
+      "accuracy": null,
+      "precision": null,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "cjk": {
+      "scored": 4,
+      "truePositives": 3,
+      "falsePositives": 0,
+      "trueNegatives": 1,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "embedded_instruction": {
+      "scored": 7,
+      "truePositives": 2,
+      "falsePositives": 1,
+      "trueNegatives": 4,
+      "falseNegatives": 0,
+      "accuracy": 0.8571,
+      "precision": 0.6667,
+      "recall": 1,
+      "f1": 0.8,
+      "fallbackRate": 0
+    },
+    "indirect": {
+      "scored": 7,
+      "truePositives": 6,
+      "falsePositives": 0,
+      "trueNegatives": 1,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "long_irrelevant": {
+      "scored": 6,
+      "truePositives": 3,
+      "falsePositives": 1,
+      "trueNegatives": 2,
+      "falseNegatives": 0,
+      "accuracy": 0.8333,
+      "precision": 0.75,
+      "recall": 1,
+      "f1": 0.8571,
+      "fallbackRate": 0
+    },
+    "near_miss": {
+      "scored": 21,
+      "truePositives": 0,
+      "falsePositives": 4,
+      "trueNegatives": 17,
+      "falseNegatives": 0,
+      "accuracy": 0.8095,
+      "precision": 0,
+      "recall": null,
+      "f1": null,
+      "fallbackRate": 0
+    },
+    "negation": {
+      "scored": 12,
+      "truePositives": 10,
+      "falsePositives": 0,
+      "trueNegatives": 2,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "non_english": {
+      "scored": 14,
+      "truePositives": 8,
+      "falsePositives": 0,
+      "trueNegatives": 6,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "numeric": {
+      "scored": 9,
+      "truePositives": 2,
+      "falsePositives": 0,
+      "trueNegatives": 7,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "plain": {
+      "scored": 27,
+      "truePositives": 15,
+      "falsePositives": 0,
+      "trueNegatives": 12,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    },
+    "typo": {
+      "scored": 6,
+      "truePositives": 5,
+      "falsePositives": 0,
+      "trueNegatives": 1,
+      "falseNegatives": 0,
+      "accuracy": 1,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1,
+      "fallbackRate": 0
+    }
+  },
+  "cost": {
+    "cases": 88,
+    "answered": 88,
+    "p50Ms": 164.55924999999843,
+    "p95Ms": 228.61737500000163,
+    "p99Ms": 387.91825000000244,
+    "meanInputTokens": 417.9,
+    "totalInputTokens": 36772,
+    "totalOutputTokens": 1936,
+    "usdPer1000Decisions": 0.01755,
+    "usdPerMillionDecisions": 17.55,
+    "totalUsd": 0.001544
+  },
+  "errors": {
+    "providerErrors": 0,
+    "invalidResponses": 0,
+    "timeouts": 0,
+    "aborted": 0,
+    "capacity": 0,
+    "otherFallbacks": 0,
+    "retries": 0,
+    "rateLimited": 0,
+    "overBudget": 0,
+    "decidedByCode": 0,
+    "skipped": 0
+  },
+  "rows": [
+    {
+      "id": "mwe-001",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 164.15120799999931,
+      "inputTokens": 400,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 706,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "mwe-002",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 189.3445840000004,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.88
+        }
+      }
+    },
+    {
+      "id": "mwe-003",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.49270799999977,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 722,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.88
+        }
+      }
+    },
+    {
+      "id": "mwe-004",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 117.21637499999997,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 746,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.82
+        }
+      }
+    },
+    {
+      "id": "mwe-005",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 162.0594170000004,
+      "inputTokens": 407,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 738,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.78
+        }
+      }
+    },
+    {
+      "id": "mwe-006",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 171.42462499999965,
+      "inputTokens": 419,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 779,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.93
+        }
+      }
+    },
+    {
+      "id": "mwe-007",
+      "split": "heldout",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 160.40279100000043,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 713,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.92
+        }
+      }
+    },
+    {
+      "id": "mwe-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 180.02612500000032,
+      "inputTokens": 413,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 748,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "mwe-009",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 138.624917000001,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 736,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "mwe-010",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 200.08458299999984,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 764,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.57
+        }
+      }
+    },
+    {
+      "id": "mwe-011",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 150.4002079999991,
+      "inputTokens": 410,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 739,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "mwe-012",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 213.72129200000018,
+      "inputTokens": 404,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 727,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.83
+        }
+      }
+    },
+    {
+      "id": "mwe-013",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 137.2786670000005,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 739,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.83
+        }
+      }
+    },
+    {
+      "id": "mwe-014",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 144.90183300000172,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 749,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "mwe-015",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 167.6436250000006,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 723,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.74
+        }
+      }
+    },
+    {
+      "id": "mwe-016",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 201.17725000000064,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 737,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.93
+        }
+      }
+    },
+    {
+      "id": "mwe-017",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 171.93508299999849,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 738,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "mwe-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 175.5410840000004,
+      "inputTokens": 399,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 703,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.08
+        }
+      }
+    },
+    {
+      "id": "mwe-019",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 140.05395899999894,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 753,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "mwe-020",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 197.2150410000013,
+      "inputTokens": 410,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 743,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.12
+        }
+      }
+    },
+    {
+      "id": "mwe-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 164.55924999999843,
+      "inputTokens": 396,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 686,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "mwe-022",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 191.3407500000012,
+      "inputTokens": 404,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 737,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "mwe-023",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.3932909999985,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 757,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.09
+        }
+      }
+    },
+    {
+      "id": "mwe-024",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 114.53370899999936,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "mwe-025",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 199.17320800000016,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 738,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.09
+        }
+      }
+    },
+    {
+      "id": "mwe-026",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 115.14470799999981,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 735,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.11
+        }
+      }
+    },
+    {
+      "id": "mwe-027",
+      "split": "heldout",
+      "tags": ["plain", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 166.50537500000064,
+      "inputTokens": 421,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 736,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "mwe-028",
+      "split": "heldout",
+      "tags": ["plain", "typo", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 133.22199999999975,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 710,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.03
+        }
+      }
+    },
+    {
+      "id": "mwe-029",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 157.87633300000016,
+      "inputTokens": 414,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 758,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.09
+        }
+      }
+    },
+    {
+      "id": "mwe-030",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 131.8150829999995,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.45
+        }
+      }
+    },
+    {
+      "id": "mwe-031",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 174.19083300000057,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 749,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.22
+        }
+      }
+    },
+    {
+      "id": "mwe-032",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 188.5180419999997,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.15
+        }
+      }
+    },
+    {
+      "id": "mwe-033",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 183.59679200000028,
+      "inputTokens": 404,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 717,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "mwe-034",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 169.90945900000042,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 750,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.2
+        }
+      }
+    },
+    {
+      "id": "mwe-035",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 195.32137500000135,
+      "inputTokens": 405,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.22
+        }
+      }
+    },
+    {
+      "id": "mwe-036",
+      "split": "calibration",
+      "tags": ["ambiguous", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 139.7699589999993,
+      "inputTokens": 401,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 706,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "mwe-037",
+      "split": "heldout",
+      "tags": ["ambiguous", "near_miss", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 170.09637499999917,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 729,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.76
+        }
+      }
+    },
+    {
+      "id": "mwe-038",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 208.074208,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 773,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "mwe-039",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 186.08108399999946,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 741,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "mwe-040",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 146.85883400000057,
+      "inputTokens": 401,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 709,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.84
+        }
+      }
+    },
+    {
+      "id": "mwe-041",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 257.6302909999995,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 744,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "mwe-042",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.4959170000002,
+      "inputTokens": 407,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 732,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "mwe-043",
+      "split": "heldout",
+      "tags": ["ambiguous", "negation", "embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 152.29454100000112,
+      "inputTokens": 410,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 733,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.8
+        }
+      }
+    },
+    {
+      "id": "mwe-044",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 179.04591699999946,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 736,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.83
+        }
+      }
+    },
+    {
+      "id": "mwe-045",
+      "split": "heldout",
+      "tags": ["negation", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 135.73450000000048,
+      "inputTokens": 413,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 760,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.19
+        }
+      }
+    },
+    {
+      "id": "mwe-046",
+      "split": "calibration",
+      "tags": ["negation", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 196.7207500000004,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 750,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.24
+        }
+      }
+    },
+    {
+      "id": "mwe-047",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 123.84879200000069,
+      "inputTokens": 415,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 760,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.46
+        }
+      }
+    },
+    {
+      "id": "mwe-048",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 228.61737500000163,
+      "inputTokens": 410,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 754,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.47
+        }
+      }
+    },
+    {
+      "id": "mwe-049",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 118.79145900000003,
+      "inputTokens": 413,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 768,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.73
+        }
+      }
+    },
+    {
+      "id": "mwe-050",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 191.99274999999943,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 761,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.82
+        }
+      }
+    },
+    {
+      "id": "mwe-051",
+      "split": "heldout",
+      "tags": ["ambiguous", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.18924999999945,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 760,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.37
+        }
+      }
+    },
+    {
+      "id": "mwe-052",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.63524999999936,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 736,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.41
+        }
+      }
+    },
+    {
+      "id": "mwe-053",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 125.04862499999945,
+      "inputTokens": 407,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 745,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.2
+        }
+      }
+    },
+    {
+      "id": "mwe-054",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 184.95154199999888,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 748,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.07
+        }
+      }
+    },
+    {
+      "id": "mwe-055",
+      "split": "calibration",
+      "tags": ["near_miss", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 188.37433299999975,
+      "inputTokens": 418,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 774,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.2
+        }
+      }
+    },
+    {
+      "id": "mwe-056",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 213.23675000000003,
+      "inputTokens": 419,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 770,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.63
+        }
+      }
+    },
+    {
+      "id": "mwe-057",
+      "split": "calibration",
+      "tags": ["near_miss", "embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 181.51520799999707,
+      "inputTokens": 420,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 787,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.59
+        }
+      }
+    },
+    {
+      "id": "mwe-058",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 193.4955829999999,
+      "inputTokens": 415,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 769,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.33
+        }
+      }
+    },
+    {
+      "id": "mwe-059",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 139.20037500000035,
+      "inputTokens": 409,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 748,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.05
+        }
+      }
+    },
+    {
+      "id": "mwe-060",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 150.4718329999996,
+      "inputTokens": 425,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 806,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.17
+        }
+      }
+    },
+    {
+      "id": "mwe-061",
+      "split": "heldout",
+      "tags": ["embedded_instruction", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 165.5292499999996,
+      "inputTokens": 410,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 767,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.09
+        }
+      }
+    },
+    {
+      "id": "mwe-062",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 173.78637499999968,
+      "inputTokens": 416,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 792,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.77
+        }
+      }
+    },
+    {
+      "id": "mwe-063",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 129.69466699999975,
+      "inputTokens": 416,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 782,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.89
+        }
+      }
+    },
+    {
+      "id": "mwe-064",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 179.4375,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 741,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.1
+        }
+      }
+    },
+    {
+      "id": "mwe-065",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 130.622583999997,
+      "inputTokens": 560,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1384,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.92
+        }
+      }
+    },
+    {
+      "id": "mwe-066",
+      "split": "calibration",
+      "tags": ["long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 193.30295800000022,
+      "inputTokens": 557,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1369,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.19
+        }
+      }
+    },
+    {
+      "id": "mwe-067",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 156.6637499999997,
+      "inputTokens": 504,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1159,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.87
+        }
+      }
+    },
+    {
+      "id": "mwe-068",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 130.77579199999673,
+      "inputTokens": 542,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1290,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.25
+        }
+      }
+    },
+    {
+      "id": "mwe-069",
+      "split": "calibration",
+      "tags": ["long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 166.4799579999999,
+      "inputTokens": 518,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1229,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    },
+    {
+      "id": "mwe-070",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 232.35354200000074,
+      "inputTokens": 507,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 1215,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.41
+        }
+      }
+    },
+    {
+      "id": "mwe-071",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 182.88754100000006,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 739,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.89
+        }
+      }
+    },
+    {
+      "id": "mwe-072",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 144.5960840000007,
+      "inputTokens": 406,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 728,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.12
+        }
+      }
+    },
+    {
+      "id": "mwe-073",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 229.04824999999983,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 735,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "mwe-074",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 193.69274999999834,
+      "inputTokens": 404,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 717,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.16
+        }
+      }
+    },
+    {
+      "id": "mwe-075",
+      "split": "heldout",
+      "tags": ["non_english", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 116.13204100000075,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 740,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.94
+        }
+      }
+    },
+    {
+      "id": "mwe-076",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 146.87408399999913,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 737,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.14
+        }
+      }
+    },
+    {
+      "id": "mwe-077",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.14841700000034,
+      "inputTokens": 425,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 774,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.83
+        }
+      }
+    },
+    {
+      "id": "mwe-078",
+      "split": "calibration",
+      "tags": ["non_english", "cjk"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 387.91825000000244,
+      "inputTokens": 412,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 735,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.06
+        }
+      }
+    },
+    {
+      "id": "mwe-079",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.29420800000298,
+      "inputTokens": 413,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 738,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.94
+        }
+      }
+    },
+    {
+      "id": "mwe-080",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 114.02262500000143,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 745,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "mwe-081",
+      "split": "calibration",
+      "tags": ["non_english", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.80287499999758,
+      "inputTokens": 428,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 804,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.94
+        }
+      }
+    },
+    {
+      "id": "mwe-082",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 170.6437079999996,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 755,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.12
+        }
+      }
+    },
+    {
+      "id": "mwe-083",
+      "split": "calibration",
+      "tags": ["non_english", "cjk"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.0443750000013,
+      "inputTokens": 411,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 752,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.91
+        }
+      }
+    },
+    {
+      "id": "mwe-084",
+      "split": "heldout",
+      "tags": ["non_english", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 164.31324999999924,
+      "inputTokens": 404,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 728,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.22
+        }
+      }
+    },
+    {
+      "id": "mwe-085",
+      "split": "calibration",
+      "tags": ["numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.76654199999757,
+      "inputTokens": 403,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 709,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.61
+        }
+      }
+    },
+    {
+      "id": "mwe-086",
+      "split": "heldout",
+      "tags": ["numeric", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 128.91775000000052,
+      "inputTokens": 408,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 745,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.11
+        }
+      }
+    },
+    {
+      "id": "mwe-087",
+      "split": "calibration",
+      "tags": ["typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 153.91300000000047,
+      "inputTokens": 397,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 692,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "id": "mwe-088",
+      "split": "calibration",
+      "tags": ["typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 139.84741699999722,
+      "inputTokens": 403,
+      "outputTokens": 22,
+      "questionCount": 1,
+      "requestBytes": 716,
+      "codeAnswer": null,
+      "answers": {
+        "durable_fact": {
+          "kind": "boolean",
+          "probability": 0.86
+        }
+      }
+    }
+  ]
+}

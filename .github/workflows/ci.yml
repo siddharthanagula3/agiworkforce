@@ -1180,6 +1180,7 @@ jobs:
             marketing-stage-contrast.spec.ts \
             public-auth-clean.spec.ts \
             qa-14-public-route-contrast.spec.ts \
+            quick-ask-entry.spec.ts \
             release-notes.spec.ts \
             --project=chromium --workers=2 --retries=1 --global-timeout=1500000
 

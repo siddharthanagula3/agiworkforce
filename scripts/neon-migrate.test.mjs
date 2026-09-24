@@ -272,6 +272,8 @@ test('route-table extraction reads query builders and SQL while excluding CTE al
     db.from('direct_table').select('*');
     db.query('with selected as (select * from source_table) select * from selected');
     db.execute('insert into target_table (id) values ($1)');
+    db.query('select column_name from information_schema.columns where table_name = $1');
+    db.query('select relname from pg_catalog.pg_class where relname = $1');
   `);
   assert.deepEqual([...references.keys()].sort(), ['direct_table', 'source_table', 'target_table']);
 });

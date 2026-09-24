@@ -137,6 +137,9 @@ import { CHAT_TURN_PHASE, CHAT_TURN_SPAN } from './lib/turn-phases';
 import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { recordManagedAutoMemoryTurn } from '@/lib/services/managed-auto-memory-service';
+import { scheduleToolShortlistShadow } from '@/lib/services/semantic-decisions/consumers/tool-shortlist';
+import { lastUserTurnText } from './lib/tool-loop';
+import { toolShortlistShadowInput } from './lib/tool-shortlist-shadow';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 
 /** Current Vercel Hobby maximum for the request-scoped managed agent stream. */
@@ -741,6 +744,18 @@ async function dispatchChatCompletions(
     const connectorTools = connectorCatalog.tools;
     const mcpTools = [...operatorTools, ...connectorTools];
 
+    // Shadow only: the lexical shortlist below still builds the turn, and a
+    // tool it defers stays one load_connector_tools call away either way.
+    if (processed.decisionScope && mcpTools.length > 0) {
+      scheduleToolShortlistShadow(
+        toolShortlistShadowInput({
+          scope: processed.decisionScope,
+          tools: mcpTools,
+          turnText: () => lastUserTurnText(processed.chatRequest?.messages),
+        }),
+      );
+    }
+
     // A provider-native search runs inside the provider's own turn, so it never
     // reaches the tool loop as a call and cannot be gated there. When the
     // account's policy will not auto-approve a search, swap it for our own
@@ -981,7 +996,10 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
+            request: buildApprovalCheckpointRequest(
+              processed.chatRequest,
+              processed.callerToolFields,
+            ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             events: checkpoint.events,
@@ -1001,7 +1019,10 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
+            request: buildApprovalCheckpointRequest(
+              processed.chatRequest,
+              processed.callerToolFields,
+            ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             inputRequests: checkpoint.inputRequests,
@@ -1018,7 +1039,10 @@ async function dispatchChatCompletions(
             turnId: checkpoint.turnId,
             nextEventSequence: checkpoint.nextEventSequence,
             completedSteps: checkpoint.completedSteps,
-            request: buildApprovalCheckpointRequest(processed.chatRequest, processed.callerToolFields),
+            request: buildApprovalCheckpointRequest(
+              processed.chatRequest,
+              processed.callerToolFields,
+            ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
             deviceStep: checkpoint.deviceStep,

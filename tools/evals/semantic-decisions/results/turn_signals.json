@@ -1,0 +1,6575 @@
+{
+  "runDate": "2026-09-20",
+  "live": true,
+  "scoredFromRecordedRun": true,
+  "model": "jev-1.13.0",
+  "usdPerMillionInputTokens": 0.042,
+  "gitSha": "420e825fa60a2da17e60185d01c737fe05f16772",
+  "concurrency": 4,
+  "timeoutMs": 60000,
+  "sdkRetries": 0,
+  "suite": "turn_signals",
+  "objective": "accuracy per field on calibration; this kind gates nothing today, so each boolean threshold is chosen for accuracy alone and the family and complexity answers are scored ungated",
+  "questionVersion": 1,
+  "fixtureSha256": "f767cd9dcaebf59e766756800688352fd0bd1668cb8d736b65ce71d2fa107fae",
+  "budget": {
+    "timeoutMs": 2000,
+    "maxRequestBytes": 16000,
+    "maxQuestions": 8,
+    "maxConcurrent": 4
+  },
+  "chosen": {},
+  "sweep": null,
+  "production": {
+    "task_family": {
+      "all": {
+        "scored": 88,
+        "correct": 47,
+        "accuracy": 0.5341,
+        "accuracyWhenUsed": 0.5341,
+        "escalationRate": 0
+      },
+      "calibration": {
+        "scored": 32,
+        "correct": 19,
+        "accuracy": 0.5938,
+        "accuracyWhenUsed": 0.5938,
+        "escalationRate": 0
+      },
+      "heldout": {
+        "scored": 56,
+        "correct": 28,
+        "accuracy": 0.5,
+        "accuracyWhenUsed": 0.5,
+        "escalationRate": 0
+      }
+    },
+    "needs_current_info": {
+      "all": {
+        "scored": 98,
+        "truePositives": 4,
+        "falsePositives": 4,
+        "trueNegatives": 77,
+        "falseNegatives": 13,
+        "accuracy": 0.8265,
+        "precision": 0.5,
+        "recall": 0.2353,
+        "f1": 0.32,
+        "fallbackRate": 0
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 1,
+        "falsePositives": 3,
+        "trueNegatives": 28,
+        "falseNegatives": 5,
+        "accuracy": 0.7838,
+        "precision": 0.25,
+        "recall": 0.1667,
+        "f1": 0.2,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 61,
+        "truePositives": 3,
+        "falsePositives": 1,
+        "trueNegatives": 49,
+        "falseNegatives": 8,
+        "accuracy": 0.8525,
+        "precision": 0.75,
+        "recall": 0.2727,
+        "f1": 0.4,
+        "fallbackRate": 0
+      }
+    },
+    "needs_external_tools": {
+      "all": {
+        "scored": 99,
+        "truePositives": 3,
+        "falsePositives": 7,
+        "trueNegatives": 64,
+        "falseNegatives": 25,
+        "accuracy": 0.6768,
+        "precision": 0.3,
+        "recall": 0.1071,
+        "f1": 0.1579,
+        "fallbackRate": 0
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 1,
+        "falsePositives": 3,
+        "trueNegatives": 25,
+        "falseNegatives": 8,
+        "accuracy": 0.7027,
+        "precision": 0.25,
+        "recall": 0.1111,
+        "f1": 0.1538,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 62,
+        "truePositives": 2,
+        "falsePositives": 4,
+        "trueNegatives": 39,
+        "falseNegatives": 17,
+        "accuracy": 0.6613,
+        "precision": 0.3333,
+        "recall": 0.1053,
+        "f1": 0.16,
+        "fallbackRate": 0
+      }
+    },
+    "needs_code": {
+      "all": {
+        "scored": 97,
+        "truePositives": 0,
+        "falsePositives": 1,
+        "trueNegatives": 94,
+        "falseNegatives": 2,
+        "accuracy": 0.9691,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 0,
+        "falsePositives": 0,
+        "trueNegatives": 36,
+        "falseNegatives": 1,
+        "accuracy": 0.973,
+        "precision": null,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 60,
+        "truePositives": 0,
+        "falsePositives": 1,
+        "trueNegatives": 58,
+        "falseNegatives": 1,
+        "accuracy": 0.9667,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0
+      }
+    }
+  },
+  "ungated": {
+    "task_family": {
+      "all": {
+        "scored": 88,
+        "correct": 65,
+        "accuracy": 0.7386,
+        "accuracyWhenUsed": 0.7471,
+        "escalationRate": 0.0098
+      },
+      "calibration": {
+        "scored": 32,
+        "correct": 26,
+        "accuracy": 0.8125,
+        "accuracyWhenUsed": 0.8125,
+        "escalationRate": 0
+      },
+      "heldout": {
+        "scored": 56,
+        "correct": 39,
+        "accuracy": 0.6964,
+        "accuracyWhenUsed": 0.7091,
+        "escalationRate": 0.0159
+      }
+    },
+    "complexity4": {
+      "all": {
+        "scored": 102,
+        "correct": 82,
+        "accuracy": 0.8039,
+        "accuracyWhenUsed": 0.8119,
+        "escalationRate": 0.0098
+      },
+      "calibration": {
+        "scored": 39,
+        "correct": 37,
+        "accuracy": 0.9487,
+        "accuracyWhenUsed": 0.9487,
+        "escalationRate": 0
+      },
+      "heldout": {
+        "scored": 63,
+        "correct": 45,
+        "accuracy": 0.7143,
+        "accuracyWhenUsed": 0.7258,
+        "escalationRate": 0.0159
+      }
+    },
+    "needs_current_info": {
+      "all": {
+        "scored": 98,
+        "truePositives": 17,
+        "falsePositives": 4,
+        "trueNegatives": 77,
+        "falseNegatives": 0,
+        "accuracy": 0.9592,
+        "precision": 0.8095,
+        "recall": 1,
+        "f1": 0.8947,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 6,
+        "falsePositives": 2,
+        "trueNegatives": 29,
+        "falseNegatives": 0,
+        "accuracy": 0.9459,
+        "precision": 0.75,
+        "recall": 1,
+        "f1": 0.8571,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 61,
+        "truePositives": 11,
+        "falsePositives": 2,
+        "trueNegatives": 48,
+        "falseNegatives": 0,
+        "accuracy": 0.9672,
+        "precision": 0.8462,
+        "recall": 1,
+        "f1": 0.9167,
+        "fallbackRate": 0.0159
+      }
+    },
+    "needs_external_tools": {
+      "all": {
+        "scored": 99,
+        "truePositives": 18,
+        "falsePositives": 5,
+        "trueNegatives": 66,
+        "falseNegatives": 10,
+        "accuracy": 0.8485,
+        "precision": 0.7826,
+        "recall": 0.6429,
+        "f1": 0.7059,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 5,
+        "falsePositives": 3,
+        "trueNegatives": 25,
+        "falseNegatives": 4,
+        "accuracy": 0.8108,
+        "precision": 0.625,
+        "recall": 0.5556,
+        "f1": 0.5882,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 62,
+        "truePositives": 13,
+        "falsePositives": 2,
+        "trueNegatives": 41,
+        "falseNegatives": 6,
+        "accuracy": 0.871,
+        "precision": 0.8667,
+        "recall": 0.6842,
+        "f1": 0.7647,
+        "fallbackRate": 0.0159
+      }
+    },
+    "needs_code": {
+      "all": {
+        "scored": 97,
+        "truePositives": 0,
+        "falsePositives": 2,
+        "trueNegatives": 93,
+        "falseNegatives": 2,
+        "accuracy": 0.9588,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 0,
+        "falsePositives": 0,
+        "trueNegatives": 36,
+        "falseNegatives": 1,
+        "accuracy": 0.973,
+        "precision": null,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 60,
+        "truePositives": 0,
+        "falsePositives": 2,
+        "trueNegatives": 57,
+        "falseNegatives": 1,
+        "accuracy": 0.95,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0.0159
+      }
+    }
+  },
+  "gated": {
+    "needs_current_info": {
+      "chosenThreshold": 0.45,
+      "all": {
+        "scored": 98,
+        "truePositives": 17,
+        "falsePositives": 4,
+        "trueNegatives": 77,
+        "falseNegatives": 0,
+        "accuracy": 0.9592,
+        "precision": 0.8095,
+        "recall": 1,
+        "f1": 0.8947,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 6,
+        "falsePositives": 2,
+        "trueNegatives": 29,
+        "falseNegatives": 0,
+        "accuracy": 0.9459,
+        "precision": 0.75,
+        "recall": 1,
+        "f1": 0.8571,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 61,
+        "truePositives": 11,
+        "falsePositives": 2,
+        "trueNegatives": 48,
+        "falseNegatives": 0,
+        "accuracy": 0.9672,
+        "precision": 0.8462,
+        "recall": 1,
+        "f1": 0.9167,
+        "fallbackRate": 0.0159
+      }
+    },
+    "needs_external_tools": {
+      "chosenThreshold": 0.2,
+      "all": {
+        "scored": 99,
+        "truePositives": 18,
+        "falsePositives": 5,
+        "trueNegatives": 66,
+        "falseNegatives": 10,
+        "accuracy": 0.8485,
+        "precision": 0.7826,
+        "recall": 0.6429,
+        "f1": 0.7059,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 5,
+        "falsePositives": 3,
+        "trueNegatives": 25,
+        "falseNegatives": 4,
+        "accuracy": 0.8108,
+        "precision": 0.625,
+        "recall": 0.5556,
+        "f1": 0.5882,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 62,
+        "truePositives": 13,
+        "falsePositives": 2,
+        "trueNegatives": 41,
+        "falseNegatives": 6,
+        "accuracy": 0.871,
+        "precision": 0.8667,
+        "recall": 0.6842,
+        "f1": 0.7647,
+        "fallbackRate": 0.0159
+      }
+    },
+    "needs_code": {
+      "chosenThreshold": 0.95,
+      "all": {
+        "scored": 97,
+        "truePositives": 0,
+        "falsePositives": 2,
+        "trueNegatives": 93,
+        "falseNegatives": 2,
+        "accuracy": 0.9588,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0.0098
+      },
+      "calibration": {
+        "scored": 37,
+        "truePositives": 0,
+        "falsePositives": 0,
+        "trueNegatives": 36,
+        "falseNegatives": 1,
+        "accuracy": 0.973,
+        "precision": null,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0
+      },
+      "heldout": {
+        "scored": 60,
+        "truePositives": 0,
+        "falsePositives": 2,
+        "trueNegatives": 57,
+        "falseNegatives": 1,
+        "accuracy": 0.95,
+        "precision": 0,
+        "recall": 0,
+        "f1": null,
+        "fallbackRate": 0.0159
+      }
+    }
+  },
+  "reliability": {
+    "task_family": [
+      {
+        "lower": 0,
+        "upper": 0.2,
+        "count": 0,
+        "observedAccuracy": null
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.4,
+        "count": 3,
+        "observedAccuracy": 0
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.6,
+        "count": 8,
+        "observedAccuracy": 0.25
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.8,
+        "count": 12,
+        "observedAccuracy": 0.4167
+      },
+      {
+        "lower": 0.8,
+        "upper": 1,
+        "count": 64,
+        "observedAccuracy": 0.9063
+      }
+    ],
+    "complexity4": [
+      {
+        "lower": 0,
+        "upper": 0.2,
+        "count": 4,
+        "observedAccuracy": 0.5
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.4,
+        "count": 4,
+        "observedAccuracy": 0.75
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.6,
+        "count": 24,
+        "observedAccuracy": 0.75
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.8,
+        "count": 36,
+        "observedAccuracy": 0.8056
+      },
+      {
+        "lower": 0.8,
+        "upper": 1,
+        "count": 33,
+        "observedAccuracy": 0.9091
+      }
+    ],
+    "needs_current_info": [
+      {
+        "lower": 0,
+        "upper": 0.2,
+        "count": 4,
+        "observedAccuracy": 0.5
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.4,
+        "count": 4,
+        "observedAccuracy": 1
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.6,
+        "count": 13,
+        "observedAccuracy": 0.8462
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.8,
+        "count": 11,
+        "observedAccuracy": 1
+      },
+      {
+        "lower": 0.8,
+        "upper": 1,
+        "count": 65,
+        "observedAccuracy": 1
+      }
+    ],
+    "needs_external_tools": [
+      {
+        "lower": 0,
+        "upper": 0.2,
+        "count": 7,
+        "observedAccuracy": 0.8571
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.4,
+        "count": 3,
+        "observedAccuracy": 0.6667
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.6,
+        "count": 6,
+        "observedAccuracy": 0.5
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.8,
+        "count": 15,
+        "observedAccuracy": 0.9333
+      },
+      {
+        "lower": 0.8,
+        "upper": 1,
+        "count": 67,
+        "observedAccuracy": 0.8806
+      }
+    ],
+    "needs_code": [
+      {
+        "lower": 0,
+        "upper": 0.2,
+        "count": 10,
+        "observedAccuracy": 0.9
+      },
+      {
+        "lower": 0.2,
+        "upper": 0.4,
+        "count": 2,
+        "observedAccuracy": 1
+      },
+      {
+        "lower": 0.4,
+        "upper": 0.6,
+        "count": 11,
+        "observedAccuracy": 1
+      },
+      {
+        "lower": 0.6,
+        "upper": 0.8,
+        "count": 15,
+        "observedAccuracy": 1
+      },
+      {
+        "lower": 0.8,
+        "upper": 1,
+        "count": 58,
+        "observedAccuracy": 0.9483
+      }
+    ]
+  },
+  "byTag": {
+    "task_family": {
+      "ambiguous": {
+        "scored": 2,
+        "correct": 2,
+        "accuracy": 1,
+        "accuracyWhenUsed": 1,
+        "escalationRate": 0
+      },
+      "cjk": {
+        "scored": 4,
+        "correct": 4,
+        "accuracy": 1,
+        "accuracyWhenUsed": 1,
+        "escalationRate": 0
+      },
+      "embedded_instruction": {
+        "scored": 6,
+        "correct": 4,
+        "accuracy": 0.6667,
+        "accuracyWhenUsed": 0.6667,
+        "escalationRate": 0
+      },
+      "indirect": {
+        "scored": 12,
+        "correct": 8,
+        "accuracy": 0.6667,
+        "accuracyWhenUsed": 0.6667,
+        "escalationRate": 0
+      },
+      "long_irrelevant": {
+        "scored": 3,
+        "correct": 2,
+        "accuracy": 0.6667,
+        "accuracyWhenUsed": 0.6667,
+        "escalationRate": 0
+      },
+      "near_miss": {
+        "scored": 9,
+        "correct": 7,
+        "accuracy": 0.7778,
+        "accuracyWhenUsed": 0.7778,
+        "escalationRate": 0
+      },
+      "negation": {
+        "scored": 13,
+        "correct": 10,
+        "accuracy": 0.7692,
+        "accuracyWhenUsed": 0.7692,
+        "escalationRate": 0
+      },
+      "non_english": {
+        "scored": 12,
+        "correct": 10,
+        "accuracy": 0.8333,
+        "accuracyWhenUsed": 0.8333,
+        "escalationRate": 0
+      },
+      "numeric": {
+        "scored": 8,
+        "correct": 5,
+        "accuracy": 0.625,
+        "accuracyWhenUsed": 0.625,
+        "escalationRate": 0
+      },
+      "plain": {
+        "scored": 41,
+        "correct": 30,
+        "accuracy": 0.7317,
+        "accuracyWhenUsed": 0.75,
+        "escalationRate": 0.0238
+      },
+      "typo": {
+        "scored": 8,
+        "correct": 7,
+        "accuracy": 0.875,
+        "accuracyWhenUsed": 0.875,
+        "escalationRate": 0
+      }
+    },
+    "complexity4": {
+      "ambiguous": {
+        "scored": 4,
+        "correct": 4,
+        "accuracy": 1,
+        "accuracyWhenUsed": 1,
+        "escalationRate": 0
+      },
+      "cjk": {
+        "scored": 4,
+        "correct": 2,
+        "accuracy": 0.5,
+        "accuracyWhenUsed": 0.5,
+        "escalationRate": 0
+      },
+      "embedded_instruction": {
+        "scored": 6,
+        "correct": 5,
+        "accuracy": 0.8333,
+        "accuracyWhenUsed": 0.8333,
+        "escalationRate": 0
+      },
+      "indirect": {
+        "scored": 16,
+        "correct": 10,
+        "accuracy": 0.625,
+        "accuracyWhenUsed": 0.625,
+        "escalationRate": 0
+      },
+      "long_irrelevant": {
+        "scored": 5,
+        "correct": 4,
+        "accuracy": 0.8,
+        "accuracyWhenUsed": 0.8,
+        "escalationRate": 0
+      },
+      "near_miss": {
+        "scored": 12,
+        "correct": 10,
+        "accuracy": 0.8333,
+        "accuracyWhenUsed": 0.8333,
+        "escalationRate": 0
+      },
+      "negation": {
+        "scored": 15,
+        "correct": 14,
+        "accuracy": 0.9333,
+        "accuracyWhenUsed": 0.9333,
+        "escalationRate": 0
+      },
+      "non_english": {
+        "scored": 14,
+        "correct": 12,
+        "accuracy": 0.8571,
+        "accuracyWhenUsed": 0.8571,
+        "escalationRate": 0
+      },
+      "numeric": {
+        "scored": 15,
+        "correct": 11,
+        "accuracy": 0.7333,
+        "accuracyWhenUsed": 0.7333,
+        "escalationRate": 0
+      },
+      "plain": {
+        "scored": 42,
+        "correct": 33,
+        "accuracy": 0.7857,
+        "accuracyWhenUsed": 0.8049,
+        "escalationRate": 0.0238
+      },
+      "typo": {
+        "scored": 8,
+        "correct": 7,
+        "accuracy": 0.875,
+        "accuracyWhenUsed": 0.875,
+        "escalationRate": 0
+      }
+    }
+  },
+  "extra": {
+    "unscoredPerField": {
+      "needs_current_info": 4,
+      "needs_external_tools": 3,
+      "needs_code": 5,
+      "task_family": 14,
+      "complexity4": 0
+    },
+    "complexityExactAgreement": 60,
+    "familyVocabularyBridge": "the production classifier answers in RoutingTaskType and the labels in TaskFamily; the baseline column counts a case right when the produced type is in TASK_FAMILY_INTENDED_TASK_TYPES for the labelled family"
+  },
+  "cost": {
+    "cases": 102,
+    "answered": 101,
+    "p50Ms": 183.6244160000001,
+    "p95Ms": 330.119958,
+    "p99Ms": 406.08666700000003,
+    "meanInputTokens": 1145,
+    "totalInputTokens": 115645,
+    "totalOutputTokens": 20611,
+    "usdPer1000Decisions": 0.04809,
+    "usdPerMillionDecisions": 48.09,
+    "totalUsd": 0.004857
+  },
+  "errors": {
+    "providerErrors": 0,
+    "invalidResponses": 1,
+    "timeouts": 0,
+    "aborted": 0,
+    "capacity": 0,
+    "otherFallbacks": 0,
+    "retries": 0,
+    "rateLimited": 0,
+    "overBudget": 0,
+    "decidedByCode": 0,
+    "skipped": 0
+  },
+  "rows": [
+    {
+      "id": "ts-001",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 358.870042,
+      "inputTokens": 1137,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3930,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.54,
+          "probabilities": {
+            "vision": 0,
+            "deep_research": 0,
+            "screen_automation": 0,
+            "agentic_work": 0.57,
+            "simple_chat": 0,
+            "code_execution": 0.06,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0.09,
+            "caller_tool_loop": 0,
+            "document_authoring": 0.18,
+            "long_context": 0,
+            "general_chat": 0.1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.94
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.71,
+          "confidence": 0.66,
+          "probabilities": {
+            "0": 0,
+            "1": 0.3,
+            "2": 0.67,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-002",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 324.61783399999996,
+      "inputTokens": 1142,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3948,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "general_chat": 0.98,
+            "web_grounded_answer": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "extended_thinking": 0.02,
+            "deep_research": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "long_context": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.49
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.2,
+          "confidence": 0.67,
+          "probabilities": {
+            "0": 0.06,
+            "1": 0.68,
+            "2": 0.25,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-003",
+      "split": "heldout",
+      "tags": ["plain", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 399.27033399999993,
+      "inputTokens": 1152,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4016,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.93,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "extended_thinking": 0.06,
+            "long_context": 0,
+            "document_authoring": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "simple_chat": 0,
+            "general_chat": 0.94,
+            "code_execution": 0,
+            "vision": 0,
+            "agentic_work": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.12
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.47
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.88,
+          "confidence": 0.74,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.17,
+            "2": 0.75,
+            "3": 0.07
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-004",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 330.119958,
+      "inputTokens": 1138,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3952,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.6,
+          "probabilities": {
+            "agentic_work": 0.04,
+            "document_authoring": 0.21,
+            "general_chat": 0.63,
+            "code_execution": 0.06,
+            "vision": 0,
+            "extended_thinking": 0.06,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.3
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.91
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.19,
+          "confidence": 0.76,
+          "probabilities": {
+            "0": 0.03,
+            "1": 0.76,
+            "2": 0.2,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-005",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 322.768417,
+      "inputTokens": 1137,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3960,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.59,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "agentic_work": 0.62,
+            "screen_automation": 0,
+            "long_context": 0.01,
+            "extended_thinking": 0.15,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0.05,
+            "document_authoring": 0.05,
+            "general_chat": 0.12,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.95
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.75,
+          "confidence": 0.67,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.27,
+            "2": 0.6799999999999999,
+            "3": 0.04
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-006",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 201.39808299999993,
+      "inputTokens": 1132,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3943,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.98,
+          "probabilities": {
+            "deep_research": 0,
+            "long_context": 0,
+            "vision": 0,
+            "agentic_work": 0.98,
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "document_authoring": 0.01,
+            "code_execution": 0.01,
+            "extended_thinking": 0,
+            "general_chat": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.31
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.04,
+          "confidence": 0.91,
+          "probabilities": {
+            "0": 0,
+            "1": 0.02,
+            "2": 0.92,
+            "3": 0.06
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-007",
+      "split": "heldout",
+      "tags": ["plain", "typo", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 232.63250000000005,
+      "inputTokens": 1140,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3946,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.85,
+          "probabilities": {
+            "screen_automation": 0,
+            "deep_research": 0,
+            "general_chat": 0.87,
+            "document_authoring": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "agentic_work": 0.01,
+            "long_context": 0,
+            "extended_thinking": 0.12,
+            "vision": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.21
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.49
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.02,
+          "confidence": 0.8,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.06,
+            "2": 0.8099999999999999,
+            "3": 0.11
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-008",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 135.38012500000002,
+      "inputTokens": 1135,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3922,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.91,
+          "probabilities": {
+            "simple_chat": 0,
+            "general_chat": 0.92,
+            "long_context": 0,
+            "vision": 0,
+            "agentic_work": 0,
+            "extended_thinking": 0.08,
+            "deep_research": 0,
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.99,
+          "confidence": 0.99,
+          "probabilities": {
+            "0": 0,
+            "1": 0,
+            "2": 0.01,
+            "3": 0.99
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-009",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 118.96270800000002,
+      "inputTokens": 1137,
+      "outputTokens": 205,
+      "questionCount": 5,
+      "requestBytes": 3958,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "extended_thinking",
+          "confidence": 0.88,
+          "probabilities": {
+            "long_context": 0,
+            "general_chat": 0.1,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0.89,
+            "agentic_work": 0.01,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2,
+          "confidence": 0.77,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.1,
+            "2": 0.77,
+            "3": 0.12
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-010",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 130.89429100000007,
+      "inputTokens": 1135,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3939,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.85,
+          "probabilities": {
+            "deep_research": 0,
+            "agentic_work": 0.06,
+            "screen_automation": 0,
+            "long_context": 0,
+            "extended_thinking": 0.08,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0,
+            "document_authoring": 0,
+            "general_chat": 0.86,
+            "vision": 0,
+            "web_grounded_answer": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.87,
+          "confidence": 0.87,
+          "probabilities": {
+            "0": 0,
+            "1": 0.01,
+            "2": 0.11,
+            "3": 0.88
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-011",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 164.22224999999992,
+      "inputTokens": 1140,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3960,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "deep_research": 0,
+            "web_grounded_answer": 0.01,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0,
+            "screen_automation": 0,
+            "general_chat": 0.99
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.41
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.59,
+          "confidence": 0.41,
+          "probabilities": {
+            "0": 0.6,
+            "1": 0.27,
+            "2": 0.09,
+            "3": 0.04
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-012",
+      "split": "calibration",
+      "tags": ["plain", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 113.16187500000001,
+      "inputTokens": 1157,
+      "outputTokens": 205,
+      "questionCount": 5,
+      "requestBytes": 3989,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "extended_thinking",
+          "confidence": 0.58,
+          "probabilities": {
+            "general_chat": 0.03,
+            "web_grounded_answer": 0.32,
+            "document_authoring": 0,
+            "vision": 0,
+            "extended_thinking": 0.63,
+            "deep_research": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "agentic_work": 0.02,
+            "long_context": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.6
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.04,
+          "confidence": 0.83,
+          "probabilities": {
+            "0": 0,
+            "1": 0.06,
+            "2": 0.84,
+            "3": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-013",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 216.78429200000005,
+      "inputTokens": 1145,
+      "outputTokens": 205,
+      "questionCount": 5,
+      "requestBytes": 3999,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "extended_thinking",
+          "confidence": 0.83,
+          "probabilities": {
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0.14,
+            "simple_chat": 0,
+            "document_authoring": 0,
+            "web_grounded_answer": 0,
+            "agentic_work": 0.01,
+            "extended_thinking": 0.85,
+            "vision": 0,
+            "code_execution": 0,
+            "deep_research": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.28
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.5,
+          "confidence": 0.5,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.01,
+            "2": 0.46,
+            "3": 0.52
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-014",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 219.04475000000002,
+      "inputTokens": 1137,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3952,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.97,
+          "probabilities": {
+            "deep_research": 0,
+            "agentic_work": 0,
+            "screen_automation": 0,
+            "long_context": 0,
+            "extended_thinking": 0,
+            "simple_chat": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0.02,
+            "vision": 0,
+            "web_grounded_answer": 0.98
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.97
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.15,
+          "confidence": 0.51,
+          "probabilities": {
+            "0": 0.17,
+            "1": 0.52,
+            "2": 0.31,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-015",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 116.42849999999999,
+      "inputTokens": 1132,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3942,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 1,
+          "probabilities": {
+            "code_execution": 0,
+            "vision": 0,
+            "web_grounded_answer": 1,
+            "general_chat": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "deep_research": 0,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "agentic_work": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.97
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.2
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.27
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.55,
+          "confidence": 0.52,
+          "probabilities": {
+            "0": 0.07,
+            "1": 0.32,
+            "2": 0.6,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-016",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 180.5542499999999,
+      "inputTokens": 1125,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3911,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.99,
+          "probabilities": {
+            "vision": 0,
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 1,
+            "caller_tool_loop": 0,
+            "code_execution": 0,
+            "document_authoring": 0,
+            "deep_research": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.97
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.44,
+          "confidence": 0.56,
+          "probabilities": {
+            "0": 0.7,
+            "1": 0.18,
+            "2": 0.12,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-017",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.97833300000002,
+      "inputTokens": 1133,
+      "outputTokens": 205,
+      "questionCount": 5,
+      "requestBytes": 3951,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "deep_research",
+          "confidence": 0.95,
+          "probabilities": {
+            "simple_chat": 0,
+            "long_context": 0,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "agentic_work": 0.02,
+            "deep_research": 0.95,
+            "general_chat": 0,
+            "web_grounded_answer": 0.03,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "document_authoring": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.41
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.74,
+          "confidence": 0.72,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.25,
+            "2": 0.73,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-018",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 207.70183299999985,
+      "inputTokens": 1129,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3908,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 1,
+          "probabilities": {
+            "screen_automation": 0,
+            "deep_research": 0,
+            "general_chat": 0,
+            "document_authoring": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 1,
+            "long_context": 0,
+            "vision": 0,
+            "extended_thinking": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.99
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.5
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.7,
+          "confidence": 0.5,
+          "probabilities": {
+            "0": 0.4,
+            "1": 0.5,
+            "2": 0.1,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-019",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 179.36254200000008,
+      "inputTokens": 1139,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3951,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.95,
+          "probabilities": {
+            "web_grounded_answer": 0.95,
+            "simple_chat": 0,
+            "document_authoring": 0,
+            "long_context": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "code_execution": 0,
+            "deep_research": 0.02,
+            "general_chat": 0,
+            "agentic_work": 0.03,
+            "vision": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.56
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.48
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.99,
+          "confidence": 0.88,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.05,
+            "2": 0.89,
+            "3": 0.05
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-020",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 205.84950000000003,
+      "inputTokens": 1129,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3932,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.87,
+          "probabilities": {
+            "vision": 0,
+            "general_chat": 0.01,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "web_grounded_answer": 0.89,
+            "simple_chat": 0,
+            "long_context": 0,
+            "agentic_work": 0.1,
+            "code_execution": 0,
+            "document_authoring": 0,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.97
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.22
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.11
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.01,
+          "confidence": 0.92,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.01,
+            "2": 0.93,
+            "3": 0.04
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-021",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.63091600000007,
+      "inputTokens": 1140,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3944,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.99,
+          "probabilities": {
+            "screen_automation": 0,
+            "deep_research": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 1,
+            "document_authoring": 0,
+            "general_chat": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "vision": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.37
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.59
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.27
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.9,
+          "confidence": 0.89,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.08,
+            "2": 0.89,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-022",
+      "split": "heldout",
+      "tags": ["plain", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 165.1233749999999,
+      "inputTokens": 1127,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3914,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "document_authoring": 0,
+            "long_context": 0,
+            "extended_thinking": 0.01,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "general_chat": 0.99,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.42,
+          "confidence": 0.57,
+          "probabilities": {
+            "0": 0,
+            "1": 0.64,
+            "2": 0.29,
+            "3": 0.07
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-023",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 215.66695800000002,
+      "inputTokens": 1135,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3939,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.7,
+          "probabilities": {
+            "deep_research": 0,
+            "general_chat": 0.27,
+            "agentic_work": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "document_authoring": 0.73
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.23,
+          "confidence": 0.73,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.74,
+            "2": 0.22,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-024",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 167.07008299999984,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3935,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "code_execution": 0,
+            "general_chat": 0.99,
+            "long_context": 0,
+            "vision": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "document_authoring": 0.01,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.49,
+          "confidence": 0.5,
+          "probabilities": {
+            "0": 0,
+            "1": 0.54,
+            "2": 0.43,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-025",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 122.76462500000002,
+      "inputTokens": 1132,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3924,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.49,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "document_authoring": 0.54,
+            "caller_tool_loop": 0,
+            "agentic_work": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "general_chat": 0.46,
+            "deep_research": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.56
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.97,
+          "confidence": 0.82,
+          "probabilities": {
+            "0": 0.1,
+            "1": 0.83,
+            "2": 0.07,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-026",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 174.5016250000001,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3939,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "code_execution": 0,
+            "long_context": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "document_authoring": 0.01,
+            "simple_chat": 0,
+            "deep_research": 0,
+            "general_chat": 0.99,
+            "vision": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.29,
+          "confidence": 0.67,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.68,
+            "2": 0.3,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-027",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "fallback",
+      "reason": "invalid_response",
+      "latencyMs": 232.2857080000001,
+      "inputTokens": null,
+      "outputTokens": null,
+      "questionCount": 5,
+      "requestBytes": 3930,
+      "codeAnswer": null,
+      "answers": {}
+    },
+    {
+      "id": "ts-028",
+      "split": "heldout",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.33529099999987,
+      "inputTokens": 1133,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3930,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.27,
+          "probabilities": {
+            "vision": 0.08,
+            "document_authoring": 0.33,
+            "long_context": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0.01,
+            "web_grounded_answer": 0,
+            "simple_chat": 0,
+            "general_chat": 0.24,
+            "screen_automation": 0,
+            "agentic_work": 0.34
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.16,
+          "confidence": 0.8,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.82,
+            "2": 0.15,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-029",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 210.93383299999982,
+      "inputTokens": 1129,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3908,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.45,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "general_chat": 0.29,
+            "vision": 0.18,
+            "code_execution": 0,
+            "long_context": 0,
+            "agentic_work": 0.02,
+            "deep_research": 0,
+            "document_authoring": 0.51,
+            "web_grounded_answer": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.08,
+          "confidence": 0.74,
+          "probabilities": {
+            "0": 0.09,
+            "1": 0.74,
+            "2": 0.16,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-030",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 158.70579199999997,
+      "inputTokens": 1131,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3932,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.31,
+          "probabilities": {
+            "screen_automation": 0,
+            "code_execution": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "document_authoring": 0.38,
+            "general_chat": 0.23,
+            "vision": 0.25,
+            "extended_thinking": 0,
+            "agentic_work": 0.12,
+            "deep_research": 0,
+            "caller_tool_loop": 0.02
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.11
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.04,
+          "confidence": 0.88,
+          "probabilities": {
+            "0": 0.04,
+            "1": 0.88,
+            "2": 0.08,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-031",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 190.34287499999982,
+      "inputTokens": 1135,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3962,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.84,
+          "probabilities": {
+            "deep_research": 0.13,
+            "web_grounded_answer": 0,
+            "document_authoring": 0.02,
+            "long_context": 0,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "agentic_work": 0.85,
+            "vision": 0,
+            "extended_thinking": 0,
+            "code_execution": 0,
+            "screen_automation": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.32
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.25,
+          "confidence": 0.75,
+          "probabilities": {
+            "0": 0,
+            "1": 0,
+            "2": 0.75,
+            "3": 0.25
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-032",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 201.4465419999999,
+      "inputTokens": 1139,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3968,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 1,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "document_authoring": 0,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "agentic_work": 1,
+            "code_execution": 0,
+            "general_chat": 0,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.48
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.91
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.09,
+          "confidence": 0.88,
+          "probabilities": {
+            "0": 0,
+            "1": 0.01,
+            "2": 0.89,
+            "3": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-033",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 196.43612499999995,
+      "inputTokens": 1139,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3950,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.82,
+          "probabilities": {
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "agentic_work": 0.84,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "long_context": 0,
+            "document_authoring": 0.16,
+            "deep_research": 0,
+            "web_grounded_answer": 0,
+            "code_execution": 0,
+            "general_chat": 0,
+            "simple_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.64
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.43
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.12
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.14,
+          "confidence": 0.85,
+          "probabilities": {
+            "0": 0,
+            "1": 0,
+            "2": 0.86,
+            "3": 0.14
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-034",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 201.42404199999987,
+      "inputTokens": 1135,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3954,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.97,
+          "probabilities": {
+            "deep_research": 0,
+            "long_context": 0,
+            "vision": 0,
+            "agentic_work": 0.97,
+            "web_grounded_answer": 0,
+            "code_execution": 0.02,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0,
+            "general_chat": 0,
+            "caller_tool_loop": 0.01
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.74
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.8
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.7
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.29,
+          "confidence": 0.62,
+          "probabilities": {
+            "0": 0,
+            "1": 0.04,
+            "2": 0.62,
+            "3": 0.34
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-035",
+      "split": "calibration",
+      "tags": ["plain", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 213.67158399999994,
+      "inputTokens": 1134,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3938,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.99,
+          "probabilities": {
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0,
+            "simple_chat": 0,
+            "document_authoring": 0.99,
+            "web_grounded_answer": 0,
+            "agentic_work": 0.01,
+            "extended_thinking": 0,
+            "vision": 0,
+            "code_execution": 0,
+            "deep_research": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.72
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.83
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.55
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.85,
+          "confidence": 0.84,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.12,
+            "2": 0.85,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-036",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 123.03562499999975,
+      "inputTokens": 1118,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3864,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "simple_chat",
+          "confidence": 1,
+          "probabilities": {
+            "general_chat": 0,
+            "document_authoring": 0,
+            "screen_automation": 0,
+            "vision": 0,
+            "agentic_work": 0,
+            "extended_thinking": 0,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "simple_chat": 1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.19
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.1
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0,
+          "confidence": 1,
+          "probabilities": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-037",
+      "split": "calibration",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 170.25316599999996,
+      "inputTokens": 1123,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3886,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "simple_chat",
+          "confidence": 1,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "simple_chat": 1,
+            "agentic_work": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "code_execution": 0,
+            "document_authoring": 0,
+            "web_grounded_answer": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.23
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.2
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.03,
+          "confidence": 0.97,
+          "probabilities": {
+            "0": 0.97,
+            "1": 0.02,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-038",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 227.13233300000002,
+      "inputTokens": 1125,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3895,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "simple_chat",
+          "confidence": 1,
+          "probabilities": {
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0,
+            "simple_chat": 1,
+            "agentic_work": 0,
+            "web_grounded_answer": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0,
+            "vision": 0,
+            "code_execution": 0,
+            "deep_research": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.15
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0,
+          "confidence": 1,
+          "probabilities": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-039",
+      "split": "calibration",
+      "tags": ["plain", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 165.45699999999988,
+      "inputTokens": 1123,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3880,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "simple_chat",
+          "confidence": 1,
+          "probabilities": {
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "simple_chat": 1,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "web_grounded_answer": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.21
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.26
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.01,
+          "confidence": 0.99,
+          "probabilities": {
+            "0": 0.99,
+            "1": 0.01,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-040",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 173.817,
+      "inputTokens": 1141,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3992,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "screen_automation": 0,
+            "deep_research": 0,
+            "general_chat": 1,
+            "document_authoring": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "agentic_work": 0,
+            "long_context": 0,
+            "vision": 0,
+            "extended_thinking": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.36,
+          "confidence": 0.61,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.62,
+            "2": 0.37,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-041",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 135.2958749999998,
+      "inputTokens": 1128,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3916,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "vision": 0,
+            "document_authoring": 0,
+            "long_context": 0,
+            "agentic_work": 0,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "simple_chat": 0,
+            "general_chat": 1,
+            "screen_automation": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.37,
+          "confidence": 0.63,
+          "probabilities": {
+            "0": 0.64,
+            "1": 0.35,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-042",
+      "split": "heldout",
+      "tags": ["plain"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 182.6635000000001,
+      "inputTokens": 1137,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3947,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "code_execution": 0,
+            "agentic_work": 0,
+            "vision": 0,
+            "deep_research": 0,
+            "general_chat": 1,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "document_authoring": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.21,
+          "confidence": 0.79,
+          "probabilities": {
+            "0": 0.79,
+            "1": 0.21,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-043",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.17824999999993,
+      "inputTokens": 1140,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3955,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "general_chat": 1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.49,
+          "confidence": 0.47,
+          "probabilities": {
+            "0": 0.03,
+            "1": 0.45,
+            "2": 0.51,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-044",
+      "split": "calibration",
+      "tags": ["plain", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 184.63933300000008,
+      "inputTokens": 1132,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3914,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "deep_research": 0,
+            "long_context": 0,
+            "vision": 0,
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0.01,
+            "general_chat": 0.99,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.17,
+          "confidence": 0.76,
+          "probabilities": {
+            "0": 0.03,
+            "1": 0.77,
+            "2": 0.2,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-045",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 183.6244160000001,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3922,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "general_chat": 1,
+            "screen_automation": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.7,
+          "confidence": 0.69,
+          "probabilities": {
+            "0": 0.31,
+            "1": 0.6799999999999999,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-046",
+      "split": "calibration",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 176.9342499999998,
+      "inputTokens": 1127,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3909,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "deep_research": 0,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "simple_chat": 0,
+            "document_authoring": 0.01,
+            "screen_automation": 0,
+            "general_chat": 0.99
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.23
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.98,
+          "confidence": 0.92,
+          "probabilities": {
+            "0": 0.05,
+            "1": 0.92,
+            "2": 0.03,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-047",
+      "split": "heldout",
+      "tags": ["near_miss", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 163.2824169999999,
+      "inputTokens": 1132,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3929,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.47,
+          "probabilities": {
+            "vision": 0,
+            "document_authoring": 0.53,
+            "long_context": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0.01,
+            "deep_research": 0,
+            "agentic_work": 0.04,
+            "web_grounded_answer": 0,
+            "code_execution": 0,
+            "general_chat": 0.42,
+            "screen_automation": 0,
+            "simple_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.17
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.25,
+          "confidence": 0.59,
+          "probabilities": {
+            "0": 0.08,
+            "1": 0.62,
+            "2": 0.28,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-048",
+      "split": "calibration",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 192.3215839999998,
+      "inputTokens": 1146,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3956,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "long_context": 0,
+            "general_chat": 0.99,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 0.01,
+            "simple_chat": 0,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.25
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.62,
+          "confidence": 0.52,
+          "probabilities": {
+            "0": 0.43,
+            "1": 0.52,
+            "2": 0.05,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-049",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 198.48491599999988,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3928,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "long_context",
+          "confidence": 0.43,
+          "probabilities": {
+            "web_grounded_answer": 0.03,
+            "screen_automation": 0.14,
+            "extended_thinking": 0,
+            "long_context": 0.48,
+            "deep_research": 0,
+            "document_authoring": 0,
+            "caller_tool_loop": 0.05,
+            "simple_chat": 0,
+            "general_chat": 0.02,
+            "vision": 0,
+            "code_execution": 0,
+            "agentic_work": 0.28
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.15
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.72
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.17
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.22,
+          "confidence": 0.61,
+          "probabilities": {
+            "0": 0.08,
+            "1": 0.63,
+            "2": 0.28,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-050",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 203.43174999999974,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3928,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.57,
+          "probabilities": {
+            "web_grounded_answer": 0.01,
+            "extended_thinking": 0,
+            "document_authoring": 0,
+            "long_context": 0.36,
+            "simple_chat": 0.01,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "general_chat": 0.61,
+            "vision": 0.01,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.23
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.25
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.11,
+          "confidence": 0.1,
+          "probabilities": {
+            "0": 0.31,
+            "1": 0.28,
+            "2": 0.39999999999999997,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-051",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 220.70604200000025,
+      "inputTokens": 1131,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3908,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.9,
+          "probabilities": {
+            "extended_thinking": 0.02,
+            "document_authoring": 0,
+            "agentic_work": 0.03,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "long_context": 0,
+            "screen_automation": 0,
+            "deep_research": 0,
+            "web_grounded_answer": 0,
+            "code_execution": 0.02,
+            "general_chat": 0.92,
+            "simple_chat": 0.01
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1,
+          "confidence": 0.97,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.97,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-052",
+      "split": "heldout",
+      "tags": ["near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 207.08566700000029,
+      "inputTokens": 1166,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4023,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.58,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "code_execution": 0.01,
+            "long_context": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "document_authoring": 0,
+            "general_chat": 0.63,
+            "vision": 0,
+            "extended_thinking": 0.27,
+            "agentic_work": 0.09,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.39
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.25
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.96,
+          "confidence": 0.95,
+          "probabilities": {
+            "0": 0,
+            "1": 0.04,
+            "2": 0.96,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-053",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 261.21974999999975,
+      "inputTokens": 1129,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3908,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "general_chat": 1,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "simple_chat": 0,
+            "long_context": 0,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "vision": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.41
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.16
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.68
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.18,
+          "confidence": 0.42,
+          "probabilities": {
+            "0": 0.2,
+            "1": 0.45,
+            "2": 0.33,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-054",
+      "split": "heldout",
+      "tags": ["near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 346.33579199999986,
+      "inputTokens": 1129,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3914,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 1,
+          "probabilities": {
+            "deep_research": 0,
+            "web_grounded_answer": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 1,
+            "vision": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.27
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.81
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.45
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.29,
+          "confidence": 0.53,
+          "probabilities": {
+            "0": 0.09,
+            "1": 0.53,
+            "2": 0.37,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-055",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 177.3868339999999,
+      "inputTokens": 1139,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3956,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "deep_research": 0,
+            "extended_thinking": 0,
+            "web_grounded_answer": 0.01,
+            "long_context": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "screen_automation": 0,
+            "general_chat": 0.99
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.04,
+          "confidence": 0.96,
+          "probabilities": {
+            "0": 0.97,
+            "1": 0.02,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-056",
+      "split": "calibration",
+      "tags": ["negation", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 148.41937499999995,
+      "inputTokens": 1133,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3946,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "document_authoring": 0,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "web_grounded_answer": 0,
+            "simple_chat": 0,
+            "long_context": 0,
+            "general_chat": 0.99,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "vision": 0,
+            "extended_thinking": 0.01
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.71
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.9,
+          "confidence": 0.83,
+          "probabilities": {
+            "0": 0.04,
+            "1": 0.06,
+            "2": 0.87,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-057",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 144.39804099999992,
+      "inputTokens": 1133,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3927,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.61,
+          "probabilities": {
+            "simple_chat": 0.01,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "code_execution": 0.03,
+            "agentic_work": 0.02,
+            "vision": 0.03,
+            "deep_research": 0,
+            "general_chat": 0.65,
+            "web_grounded_answer": 0.01,
+            "long_context": 0,
+            "document_authoring": 0.25
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.92
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.27,
+          "confidence": 0.52,
+          "probabilities": {
+            "0": 0.1,
+            "1": 0.55,
+            "2": 0.32,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-058",
+      "split": "heldout",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 311.85149999999976,
+      "inputTokens": 1139,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3957,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.77,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "vision": 0,
+            "general_chat": 0.8,
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "long_context": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0.2,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.75,
+          "confidence": 0.59,
+          "probabilities": {
+            "0": 0.04,
+            "1": 0.24,
+            "2": 0.64,
+            "3": 0.08
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-059",
+      "split": "heldout",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 294.4947920000004,
+      "inputTokens": 1134,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3933,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "deep_research": 0,
+            "document_authoring": 0,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "general_chat": 1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.89,
+          "confidence": 0.62,
+          "probabilities": {
+            "0": 0.25,
+            "1": 0.62,
+            "2": 0.13,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-060",
+      "split": "calibration",
+      "tags": ["negation", "near_miss"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 224.2533330000001,
+      "inputTokens": 1133,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3929,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.53,
+          "probabilities": {
+            "general_chat": 0.34,
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "code_execution": 0,
+            "simple_chat": 0.08,
+            "caller_tool_loop": 0,
+            "agentic_work": 0.58,
+            "long_context": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.26
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.26
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.84,
+          "confidence": 0.16,
+          "probabilities": {
+            "0": 0.53,
+            "1": 0.19,
+            "2": 0.19,
+            "3": 0.09
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-061",
+      "split": "heldout",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 406.08666700000003,
+      "inputTokens": 1141,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3973,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 1,
+          "probabilities": {
+            "long_context": 0,
+            "general_chat": 1,
+            "simple_chat": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.1,
+          "confidence": 0.77,
+          "probabilities": {
+            "0": 0.06,
+            "1": 0.78,
+            "2": 0.16,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-062",
+      "split": "calibration",
+      "tags": ["negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 311.13941699999987,
+      "inputTokens": 1134,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3931,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.73,
+          "probabilities": {
+            "deep_research": 0,
+            "web_grounded_answer": 0.75,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "screen_automation": 0,
+            "general_chat": 0.25
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.89
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.88,
+          "confidence": 0.52,
+          "probabilities": {
+            "0": 0.3,
+            "1": 0.53,
+            "2": 0.17,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-063",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 257.0658749999998,
+      "inputTokens": 1133,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3920,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.74,
+          "probabilities": {
+            "vision": 0,
+            "general_chat": 0.23,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0.77,
+            "code_execution": 0,
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.78,
+          "confidence": 0.57,
+          "probabilities": {
+            "0": 0.08,
+            "1": 0.17,
+            "2": 0.64,
+            "3": 0.11
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-064",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 448.79612499999985,
+      "inputTokens": 1136,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3950,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.7,
+          "probabilities": {
+            "vision": 0,
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0.74,
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "long_context": 0.2,
+            "document_authoring": 0,
+            "extended_thinking": 0.01,
+            "simple_chat": 0.05,
+            "agentic_work": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.33
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.22
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.82,
+          "confidence": 0.18,
+          "probabilities": {
+            "0": 0.5,
+            "1": 0.22,
+            "2": 0.24,
+            "3": 0.04
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-065",
+      "split": "heldout",
+      "tags": ["indirect", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 185.60466600000018,
+      "inputTokens": 1140,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3967,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.84,
+          "probabilities": {
+            "document_authoring": 0,
+            "code_execution": 0,
+            "extended_thinking": 0.04,
+            "screen_automation": 0.01,
+            "simple_chat": 0.04,
+            "agentic_work": 0.04,
+            "web_grounded_answer": 0,
+            "general_chat": 0.85,
+            "deep_research": 0,
+            "vision": 0.01,
+            "long_context": 0.01,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.2
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.27
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.4,
+          "confidence": 0.21,
+          "probabilities": {
+            "0": 0.3,
+            "1": 0.1,
+            "2": 0.5,
+            "3": 0.1
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-066",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 183.5576659999997,
+      "inputTokens": 1151,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3984,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.81,
+          "probabilities": {
+            "code_execution": 0,
+            "general_chat": 0.14,
+            "long_context": 0.01,
+            "vision": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 0.84,
+            "simple_chat": 0,
+            "extended_thinking": 0.01,
+            "caller_tool_loop": 0,
+            "deep_research": 0,
+            "document_authoring": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.76
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.09
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.19
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.71,
+          "confidence": 0.47,
+          "probabilities": {
+            "0": 0.12,
+            "1": 0.17,
+            "2": 0.59,
+            "3": 0.12
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-067",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 136.70633399999997,
+      "inputTokens": 1139,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3946,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.48,
+          "probabilities": {
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "general_chat": 0.53,
+            "simple_chat": 0.46,
+            "agentic_work": 0,
+            "web_grounded_answer": 0.01,
+            "document_authoring": 0,
+            "extended_thinking": 0,
+            "vision": 0,
+            "code_execution": 0,
+            "deep_research": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.28
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.4
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.82,
+          "confidence": 0.18,
+          "probabilities": {
+            "0": 0.56,
+            "1": 0.1,
+            "2": 0.31,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-068",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 192.27879200000007,
+      "inputTokens": 1136,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3936,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "code_execution": 0,
+            "general_chat": 1,
+            "vision": 0,
+            "web_grounded_answer": 0,
+            "agentic_work": 0,
+            "extended_thinking": 0,
+            "caller_tool_loop": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "deep_research": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.27
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.25
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.5,
+          "confidence": 0.44,
+          "probabilities": {
+            "0": 0.1,
+            "1": 0.33,
+            "2": 0.54,
+            "3": 0.03
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-069",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 116.93895800000018,
+      "inputTokens": 1138,
+      "outputTokens": 206,
+      "questionCount": 5,
+      "requestBytes": 3956,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "document_authoring",
+          "confidence": 0.79,
+          "probabilities": {
+            "document_authoring": 0.8200000000000001,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "screen_automation": 0,
+            "agentic_work": 0.01,
+            "web_grounded_answer": 0,
+            "general_chat": 0.12,
+            "simple_chat": 0,
+            "vision": 0.04,
+            "long_context": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.11
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.89,
+          "confidence": 0.65,
+          "probabilities": {
+            "0": 0.05,
+            "1": 0.13,
+            "2": 0.7,
+            "3": 0.12
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-070",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 158.34504199999992,
+      "inputTokens": 1141,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3952,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.8,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "agentic_work": 0.12,
+            "screen_automation": 0,
+            "long_context": 0,
+            "extended_thinking": 0.01,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0.01,
+            "document_authoring": 0.03,
+            "general_chat": 0.8200000000000001,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.92
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.3,
+          "confidence": 0.68,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.68,
+            "2": 0.31,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-071",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.65258300000005,
+      "inputTokens": 1129,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3911,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 1,
+          "probabilities": {
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "extended_thinking": 0,
+            "code_execution": 0,
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "general_chat": 0,
+            "web_grounded_answer": 1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.99
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.26
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.16,
+          "confidence": 0.84,
+          "probabilities": {
+            "0": 0.85,
+            "1": 0.14,
+            "2": 0.01,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-072",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 198.11595800000032,
+      "inputTokens": 1137,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3932,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "code_execution": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "vision": 0,
+            "general_chat": 1
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.39,
+          "confidence": 0.6,
+          "probabilities": {
+            "0": 0,
+            "1": 0.68,
+            "2": 0.24,
+            "3": 0.08
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-073",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 229.8003749999998,
+      "inputTokens": 1143,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3962,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.93,
+          "probabilities": {
+            "simple_chat": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "extended_thinking": 0.06,
+            "code_execution": 0,
+            "agentic_work": 0,
+            "long_context": 0,
+            "general_chat": 0.94,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.24
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.46
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.99,
+          "confidence": 0.73,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.12,
+            "2": 0.74,
+            "3": 0.13
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-074",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 133.62045799999987,
+      "inputTokens": 1136,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3939,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.79,
+          "probabilities": {
+            "deep_research": 0.19,
+            "web_grounded_answer": 0.81,
+            "document_authoring": 0,
+            "long_context": 0,
+            "simple_chat": 0,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.97
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.2
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.72,
+          "confidence": 0.68,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.26,
+            "2": 0.7,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-075",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 190.0107079999998,
+      "inputTokens": 1123,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3886,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "simple_chat",
+          "confidence": 1,
+          "probabilities": {
+            "vision": 0,
+            "document_authoring": 0,
+            "long_context": 0,
+            "simple_chat": 1,
+            "extended_thinking": 0,
+            "deep_research": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0,
+            "general_chat": 0,
+            "screen_automation": 0,
+            "web_grounded_answer": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0,
+          "confidence": 1,
+          "probabilities": {
+            "0": 1,
+            "1": 0,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-076",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 123.28570899999977,
+      "inputTokens": 1149,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3957,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "deep_research": 0,
+            "general_chat": 1,
+            "agentic_work": 0,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "document_authoring": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.09
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.68
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.65,
+          "confidence": 0.49,
+          "probabilities": {
+            "0": 0.09,
+            "1": 0.25,
+            "2": 0.58,
+            "3": 0.08
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-077",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 162.18004099999962,
+      "inputTokens": 1130,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3900,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 1,
+          "probabilities": {
+            "document_authoring": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "deep_research": 0,
+            "agentic_work": 0,
+            "screen_automation": 0,
+            "general_chat": 0,
+            "web_grounded_answer": 1,
+            "extended_thinking": 0,
+            "vision": 0,
+            "long_context": 0,
+            "caller_tool_loop": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.99
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.59
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.17
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.46,
+          "confidence": 0.54,
+          "probabilities": {
+            "0": 0.57,
+            "1": 0.4,
+            "2": 0.03,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-078",
+      "split": "heldout",
+      "tags": ["non_english", "cjk", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 151.8363330000002,
+      "inputTokens": 1141,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3930,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.98,
+          "probabilities": {
+            "agentic_work": 0,
+            "deep_research": 0,
+            "extended_thinking": 0,
+            "general_chat": 0.98,
+            "long_context": 0,
+            "simple_chat": 0,
+            "document_authoring": 0.02,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.18,
+          "confidence": 0.73,
+          "probabilities": {
+            "0": 0.04,
+            "1": 0.75,
+            "2": 0.2,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-079",
+      "split": "heldout",
+      "tags": ["non_english", "cjk"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 188.33016700000007,
+      "inputTokens": 1144,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3949,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.74,
+          "probabilities": {
+            "agentic_work": 0.01,
+            "general_chat": 0.77,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "vision": 0.01,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0.04,
+            "long_context": 0.17,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.56
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.76,
+          "confidence": 0.72,
+          "probabilities": {
+            "0": 0.03,
+            "1": 0.2,
+            "2": 0.75,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-080",
+      "split": "heldout",
+      "tags": ["non_english", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 154.51258399999915,
+      "inputTokens": 1138,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3927,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.99,
+          "probabilities": {
+            "agentic_work": 0,
+            "general_chat": 0.99,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0.01,
+            "long_context": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.96,
+          "confidence": 0.96,
+          "probabilities": {
+            "0": 0,
+            "1": 0.01,
+            "2": 0.02,
+            "3": 0.97
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-081",
+      "split": "calibration",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 161.51708400000007,
+      "inputTokens": 1145,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3949,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.97,
+          "probabilities": {
+            "web_grounded_answer": 0.98,
+            "deep_research": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "screen_automation": 0.02,
+            "simple_chat": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "general_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.98
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.84
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.15
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.08,
+          "confidence": 0.65,
+          "probabilities": {
+            "0": 0.13,
+            "1": 0.66,
+            "2": 0.21,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-082",
+      "split": "heldout",
+      "tags": ["non_english"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 220.2686249999997,
+      "inputTokens": 1149,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3952,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.81,
+          "probabilities": {
+            "deep_research": 0,
+            "code_execution": 0,
+            "general_chat": 0.83,
+            "document_authoring": 0.17,
+            "long_context": 0,
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "agentic_work": 0,
+            "simple_chat": 0,
+            "vision": 0,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.14
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.88,
+          "confidence": 0.87,
+          "probabilities": {
+            "0": 0.12,
+            "1": 0.88,
+            "2": 0,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-083",
+      "split": "calibration",
+      "tags": ["non_english", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 179.89341699999932,
+      "inputTokens": 1158,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4018,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "long_context",
+          "confidence": 0.29,
+          "probabilities": {
+            "vision": 0.01,
+            "caller_tool_loop": 0,
+            "long_context": 0.36,
+            "deep_research": 0,
+            "simple_chat": 0,
+            "agentic_work": 0.34,
+            "extended_thinking": 0,
+            "screen_automation": 0,
+            "code_execution": 0.22,
+            "document_authoring": 0.01,
+            "general_chat": 0.06,
+            "web_grounded_answer": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.17
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.45
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.95,
+          "confidence": 0.95,
+          "probabilities": {
+            "0": 0,
+            "1": 0.04,
+            "2": 0.96,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-084",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 227.58125000000018,
+      "inputTokens": 1133,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3931,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.87,
+          "probabilities": {
+            "agentic_work": 0,
+            "general_chat": 0.88,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0.08,
+            "vision": 0,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "code_execution": 0,
+            "simple_chat": 0.04,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.1
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.18,
+          "confidence": 0.82,
+          "probabilities": {
+            "0": 0.85,
+            "1": 0.13,
+            "2": 0.02,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-085",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 155.29249999999956,
+      "inputTokens": 1138,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3954,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.97,
+          "probabilities": {
+            "screen_automation": 0,
+            "general_chat": 0.97,
+            "long_context": 0,
+            "vision": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0.02,
+            "simple_chat": 0,
+            "web_grounded_answer": 0,
+            "code_execution": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0.01,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.17,
+          "confidence": 0.8,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.81,
+            "2": 0.17,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-086",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.9370830000007,
+      "inputTokens": 1135,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3946,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.89,
+          "probabilities": {
+            "long_context": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "web_grounded_answer": 0.1,
+            "screen_automation": 0,
+            "document_authoring": 0,
+            "general_chat": 0.9,
+            "caller_tool_loop": 0,
+            "vision": 0,
+            "deep_research": 0,
+            "code_execution": 0,
+            "simple_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.1
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.86,
+          "confidence": 0.69,
+          "probabilities": {
+            "0": 0.22,
+            "1": 0.7,
+            "2": 0.08,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-087",
+      "split": "heldout",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 208.01195899999948,
+      "inputTokens": 1139,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3974,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.39,
+          "probabilities": {
+            "deep_research": 0,
+            "code_execution": 0.23,
+            "general_chat": 0.22,
+            "document_authoring": 0.05,
+            "long_context": 0.02,
+            "screen_automation": 0,
+            "caller_tool_loop": 0,
+            "agentic_work": 0.45,
+            "simple_chat": 0,
+            "vision": 0,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0.03
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.13
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.92
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.78,
+          "confidence": 0.6,
+          "probabilities": {
+            "0": 0.04,
+            "1": 0.22,
+            "2": 0.65,
+            "3": 0.09
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-088",
+      "split": "calibration",
+      "tags": ["embedded_instruction", "negation"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 165.09512499999983,
+      "inputTokens": 1139,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3962,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.82,
+          "probabilities": {
+            "screen_automation": 0,
+            "deep_research": 0,
+            "extended_thinking": 0,
+            "simple_chat": 0.13,
+            "vision": 0,
+            "general_chat": 0.84,
+            "code_execution": 0,
+            "long_context": 0,
+            "agentic_work": 0,
+            "caller_tool_loop": 0,
+            "document_authoring": 0,
+            "web_grounded_answer": 0.03
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.34,
+          "confidence": 0.66,
+          "probabilities": {
+            "0": 0.73,
+            "1": 0.21,
+            "2": 0.04,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-089",
+      "split": "calibration",
+      "tags": ["embedded_instruction"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 122.28525000000081,
+      "inputTokens": 1144,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3979,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.78,
+          "probabilities": {
+            "code_execution": 0,
+            "vision": 0,
+            "web_grounded_answer": 0,
+            "extended_thinking": 0.06,
+            "screen_automation": 0,
+            "agentic_work": 0.02,
+            "long_context": 0,
+            "deep_research": 0,
+            "general_chat": 0.8,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "simple_chat": 0.12
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.63,
+          "confidence": 0.63,
+          "probabilities": {
+            "0": 0.06,
+            "1": 0.07,
+            "2": 0.07,
+            "3": 0.8
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-090",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 187.94474999999966,
+      "inputTokens": 1294,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4598,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.81,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "document_authoring": 0,
+            "extended_thinking": 0.15,
+            "long_context": 0.01,
+            "simple_chat": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "agentic_work": 0.01,
+            "general_chat": 0.83,
+            "code_execution": 0,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.12
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.75,
+          "confidence": 0.72,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.23,
+            "2": 0.74,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-091",
+      "split": "heldout",
+      "tags": ["long_irrelevant"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 147.04712500000005,
+      "inputTokens": 1229,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 4345,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.99,
+          "probabilities": {
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "screen_automation": 0,
+            "vision": 0,
+            "web_grounded_answer": 0.99,
+            "general_chat": 0,
+            "extended_thinking": 0.01,
+            "long_context": 0,
+            "code_execution": 0,
+            "simple_chat": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.96
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.31
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.03,
+          "confidence": 0.3,
+          "probabilities": {
+            "0": 0.33,
+            "1": 0.4,
+            "2": 0.18,
+            "3": 0.09
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-092",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "near_miss", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 185.96829100000014,
+      "inputTokens": 1266,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4368,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.92,
+          "probabilities": {
+            "vision": 0,
+            "caller_tool_loop": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "simple_chat": 0,
+            "screen_automation": 0,
+            "extended_thinking": 0.02,
+            "agentic_work": 0,
+            "code_execution": 0,
+            "document_authoring": 0.04,
+            "web_grounded_answer": 0,
+            "general_chat": 0.93
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.08
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.18
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.1
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.68,
+          "confidence": 0.59,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.35,
+            "2": 0.59,
+            "3": 0.05
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-093",
+      "split": "heldout",
+      "tags": ["long_irrelevant", "numeric"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 238.10216599999967,
+      "inputTokens": 1351,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4299,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.44,
+          "probabilities": {
+            "long_context": 0.14,
+            "simple_chat": 0,
+            "vision": 0,
+            "extended_thinking": 0.22,
+            "code_execution": 0.05,
+            "agentic_work": 0.1,
+            "document_authoring": 0,
+            "general_chat": 0.49,
+            "caller_tool_loop": 0,
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.1
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2,
+          "confidence": 0.98,
+          "probabilities": {
+            "0": 0,
+            "1": 0.01,
+            "2": 0.98,
+            "3": 0.01
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-094",
+      "split": "calibration",
+      "tags": ["long_irrelevant", "numeric", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 137.4064589999998,
+      "inputTokens": 1339,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4478,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.47,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "extended_thinking": 0.08,
+            "agentic_work": 0.01,
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "deep_research": 0,
+            "general_chat": 0.51,
+            "vision": 0,
+            "simple_chat": 0.01,
+            "document_authoring": 0,
+            "long_context": 0.39,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.09
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.04
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.98,
+          "confidence": 0.87,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.04,
+            "2": 0.88,
+            "3": 0.06
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-095",
+      "split": "heldout",
+      "tags": ["ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 174.1061669999999,
+      "inputTokens": 1129,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3918,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.87,
+          "probabilities": {
+            "agentic_work": 0,
+            "document_authoring": 0,
+            "vision": 0,
+            "extended_thinking": 0,
+            "general_chat": 0.88,
+            "screen_automation": 0,
+            "simple_chat": 0,
+            "web_grounded_answer": 0.12,
+            "long_context": 0,
+            "deep_research": 0,
+            "caller_tool_loop": 0,
+            "code_execution": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.74
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.01,
+          "confidence": 0.7,
+          "probabilities": {
+            "0": 0.15,
+            "1": 0.7,
+            "2": 0.15,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-096",
+      "split": "calibration",
+      "tags": ["ambiguous"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 142.06233299999985,
+      "inputTokens": 1124,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3899,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.61,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "vision": 0,
+            "document_authoring": 0.12,
+            "caller_tool_loop": 0,
+            "general_chat": 0.65,
+            "simple_chat": 0,
+            "agentic_work": 0.07,
+            "extended_thinking": 0.01,
+            "long_context": 0,
+            "code_execution": 0.15,
+            "deep_research": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.17
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.83
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 0.98,
+          "confidence": 0.82,
+          "probabilities": {
+            "0": 0.1,
+            "1": 0.83,
+            "2": 0.07,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-097",
+      "split": "calibration",
+      "tags": ["ambiguous", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 178.37645799999973,
+      "inputTokens": 1179,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4097,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.63,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "simple_chat": 0.02,
+            "screen_automation": 0,
+            "long_context": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0.01,
+            "caller_tool_loop": 0,
+            "code_execution": 0.28,
+            "document_authoring": 0,
+            "general_chat": 0.68,
+            "vision": 0,
+            "deep_research": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.19
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.21
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.58
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.42,
+          "confidence": 0.39,
+          "probabilities": {
+            "0": 0.13,
+            "1": 0.32,
+            "2": 0.53,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-098",
+      "split": "calibration",
+      "tags": ["ambiguous", "indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 190.31737500000054,
+      "inputTokens": 1171,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 4109,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.87,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "general_chat": 0.88,
+            "long_context": 0,
+            "simple_chat": 0.01,
+            "web_grounded_answer": 0,
+            "document_authoring": 0.1,
+            "deep_research": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0.01,
+            "vision": 0,
+            "screen_automation": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.06
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.09
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.19,
+          "confidence": 0.69,
+          "probabilities": {
+            "0": 0.06,
+            "1": 0.69,
+            "2": 0.25,
+            "3": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-099",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 126.71779200000037,
+      "inputTokens": 1146,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 4011,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.94,
+          "probabilities": {
+            "caller_tool_loop": 0,
+            "extended_thinking": 0,
+            "agentic_work": 0.95,
+            "web_grounded_answer": 0,
+            "screen_automation": 0,
+            "deep_research": 0.04,
+            "general_chat": 0,
+            "vision": 0,
+            "simple_chat": 0,
+            "document_authoring": 0.01,
+            "code_execution": 0,
+            "long_context": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.92
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.4
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.2
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 2.27,
+          "confidence": 0.63,
+          "probabilities": {
+            "0": 0.02,
+            "1": 0.01,
+            "2": 0.65,
+            "3": 0.32
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-100",
+      "split": "heldout",
+      "tags": ["indirect", "typo"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 201.04258300000038,
+      "inputTokens": 1138,
+      "outputTokens": 203,
+      "questionCount": 5,
+      "requestBytes": 3974,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "general_chat",
+          "confidence": 0.94,
+          "probabilities": {
+            "screen_automation": 0,
+            "agentic_work": 0,
+            "document_authoring": 0.05,
+            "caller_tool_loop": 0,
+            "general_chat": 0.95,
+            "simple_chat": 0,
+            "code_execution": 0,
+            "extended_thinking": 0,
+            "long_context": 0,
+            "vision": 0,
+            "deep_research": 0,
+            "web_grounded_answer": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.02
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.47,
+          "confidence": 0.51,
+          "probabilities": {
+            "0": 0.01,
+            "1": 0.53,
+            "2": 0.44,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-101",
+      "split": "heldout",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 192.26695800000016,
+      "inputTokens": 1148,
+      "outputTokens": 204,
+      "questionCount": 5,
+      "requestBytes": 3986,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "agentic_work",
+          "confidence": 0.65,
+          "probabilities": {
+            "web_grounded_answer": 0,
+            "deep_research": 0,
+            "agentic_work": 0.68,
+            "caller_tool_loop": 0,
+            "document_authoring": 0.01,
+            "code_execution": 0.05,
+            "screen_automation": 0,
+            "simple_chat": 0.05,
+            "extended_thinking": 0.04,
+            "long_context": 0,
+            "vision": 0,
+            "general_chat": 0.17
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.07
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.9
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.53,
+          "confidence": 0.49,
+          "probabilities": {
+            "0": 0.06,
+            "1": 0.37,
+            "2": 0.55,
+            "3": 0.02
+          }
+        }
+      }
+    },
+    {
+      "id": "ts-102",
+      "split": "calibration",
+      "tags": ["indirect"],
+      "status": "answered",
+      "reason": null,
+      "latencyMs": 259.34962500000074,
+      "inputTokens": 1139,
+      "outputTokens": 207,
+      "questionCount": 5,
+      "requestBytes": 3981,
+      "codeAnswer": null,
+      "answers": {
+        "task_family": {
+          "kind": "choice",
+          "value": "web_grounded_answer",
+          "confidence": 0.98,
+          "probabilities": {
+            "code_execution": 0,
+            "vision": 0,
+            "web_grounded_answer": 0.98,
+            "extended_thinking": 0,
+            "agentic_work": 0,
+            "screen_automation": 0,
+            "long_context": 0,
+            "deep_research": 0,
+            "general_chat": 0.02,
+            "document_authoring": 0,
+            "caller_tool_loop": 0,
+            "simple_chat": 0
+          }
+        },
+        "needs_current_information": {
+          "kind": "boolean",
+          "probability": 0.62
+        },
+        "needs_external_tools": {
+          "kind": "boolean",
+          "probability": 0.03
+        },
+        "needs_code_understanding": {
+          "kind": "boolean",
+          "probability": 0.05
+        },
+        "semantic_complexity": {
+          "kind": "score",
+          "value": 1.36,
+          "confidence": 0.35,
+          "probabilities": {
+            "0": 0.15,
+            "1": 0.35,
+            "2": 0.5,
+            "3": 0
+          }
+        }
+      }
+    }
+  ]
+}

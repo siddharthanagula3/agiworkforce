@@ -1,0 +1,607 @@
+{
+  "suite": "connector_tool_shortlist",
+  "rule": "two blind labellers must agree",
+  "labels": {
+    "ct-001": {
+      "label": {
+        "core": ["mcp__gmail__search_threads"],
+        "optional": ["mcp__gmail__get_thread"]
+      },
+      "scored": true
+    },
+    "ct-002": {
+      "label": {
+        "core": ["mcp__google-calendar__suggest_time"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-003": {
+      "label": {
+        "core": ["mcp__google-calendar__list_events"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-004": {
+      "label": {
+        "core": ["mcp__google-calendar__respond_to_event", "mcp__google-calendar__search_events"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-005": {
+      "label": {
+        "core": ["mcp__gmail__create_draft", "mcp__gmail__search_threads"],
+        "optional": ["mcp__gmail__get_thread"]
+      },
+      "scored": true
+    },
+    "ct-006": {
+      "label": {
+        "core": ["mcp__google-drive__search_files"],
+        "optional": ["mcp__notion__notion-search"]
+      },
+      "scored": true
+    },
+    "ct-007": {
+      "label": {
+        "core": ["mcp__google-drive__read_file_content", "mcp__google-drive__search_files"],
+        "optional": ["mcp__notion__notion-fetch", "mcp__notion__notion-search"]
+      },
+      "scored": true
+    },
+    "ct-008": {
+      "label": {
+        "core": ["mcp__google-drive__get_file_permissions", "mcp__google-drive__search_files"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-009": {
+      "label": {
+        "core": ["mcp__notion__notion-create-pages", "mcp__notion__notion-search"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-010": {
+      "label": {
+        "core": ["mcp__notion__notion-search"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-011": {
+      "label": {
+        "core": ["mcp__notion__notion-search", "mcp__notion__notion-update-page"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-012": {
+      "label": {
+        "core": ["mcp__asana__search_tasks"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-013": {
+      "label": {
+        "core": ["mcp__asana__create_tasks"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-014": {
+      "label": {
+        "core": ["mcp__jira__getJiraIssue"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-015": {
+      "label": {
+        "core": ["mcp__jira__searchJiraIssuesUsingJql"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-016": {
+      "label": {
+        "core": ["mcp__jira__createJiraIssue"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-017": {
+      "label": {
+        "core": ["mcp__stripe__stripe_analytics"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-018": {
+      "label": {
+        "core": ["mcp__stripe__stripe_api_read", "mcp__stripe__stripe_api_search"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-019": {
+      "label": {
+        "core": ["mcp__stripe__stripe_api_write"],
+        "optional": ["mcp__stripe__stripe_api_read"]
+      },
+      "scored": true
+    },
+    "ct-020": {
+      "label": {
+        "core": ["mcp__stripe__get_balance_summary"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-021": {
+      "label": {
+        "core": ["mcp__vercel__list_deployments"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-022": {
+      "label": {
+        "core": ["mcp__vercel__get_deployment_build_logs", "mcp__vercel__list_deployments"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-023": {
+      "label": {
+        "core": ["mcp__vercel__get_runtime_errors"],
+        "optional": ["mcp__vercel__list_deployments"]
+      },
+      "scored": true
+    },
+    "ct-024": {
+      "label": {
+        "core": ["mcp__vercel__get_web_analytics"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-025": {
+      "label": {
+        "core": ["mcp__vercel__search_vercel_documentation"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-026": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "ct-027": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-028": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-029": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-030": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-031": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-032": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-033": {
+      "label": {
+        "core": [
+          "mcp__asana__create_tasks",
+          "mcp__google-drive__read_file_content",
+          "mcp__google-drive__search_files"
+        ],
+        "optional": ["mcp__notion__notion-fetch", "mcp__notion__notion-search"]
+      },
+      "scored": true
+    },
+    "ct-034": {
+      "label": {
+        "core": [],
+        "optional": ["mcp__gmail__create_draft", "mcp__jira__getJiraIssue"]
+      },
+      "scored": true
+    },
+    "ct-035": {
+      "label": {
+        "core": ["mcp__notion__notion-create-pages", "mcp__stripe__stripe_analytics"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-036": {
+      "label": {
+        "core": ["mcp__google-calendar__suggest_time", "mcp__jira__searchJiraIssuesUsingJql"],
+        "optional": ["mcp__google-calendar__create_event", "mcp__jira__getJiraIssue"]
+      },
+      "scored": true
+    },
+    "ct-037": {
+      "label": {
+        "core": [
+          "mcp__jira__createJiraIssue",
+          "mcp__vercel__get_deployment_build_logs",
+          "mcp__vercel__list_deployments"
+        ],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-038": {
+      "label": {
+        "core": ["mcp__gmail__search_threads", "mcp__stripe__stripe_api_search"],
+        "optional": ["mcp__gmail__get_thread"]
+      },
+      "scored": true
+    },
+    "ct-039": {
+      "label": {
+        "core": [
+          "mcp__google-drive__get_file_permissions",
+          "mcp__google-drive__search_files",
+          "mcp__notion__notion-search",
+          "mcp__notion__notion-update-page"
+        ],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-040": {
+      "label": {
+        "core": ["mcp__gmail__search_threads", "mcp__vercel__get_runtime_errors"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-041": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-042": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-043": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-044": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-045": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-046": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "ct-047": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-048": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-049": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-050": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-051": {
+      "label": {
+        "core": ["mcp__gmail__get_thread", "mcp__gmail__search_threads"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-052": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-053": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-054": {
+      "label": {
+        "core": ["mcp__vercel__get_runtime_errors"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-055": {
+      "label": {
+        "core": ["mcp__google-drive__search_files"],
+        "optional": [
+          "mcp__google-drive__read_file_content",
+          "mcp__notion__notion-fetch",
+          "mcp__notion__notion-search"
+        ]
+      },
+      "scored": true
+    },
+    "ct-056": {
+      "label": {
+        "core": ["mcp__google-calendar__list_events"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-057": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "ct-058": {
+      "label": {
+        "core": ["mcp__vercel__list_deployments"],
+        "optional": ["mcp__vercel__get_runtime_errors"]
+      },
+      "scored": true
+    },
+    "ct-059": {
+      "label": {
+        "core": ["mcp__stripe__stripe_api_search"],
+        "optional": ["mcp__stripe__stripe_api_read"]
+      },
+      "scored": true
+    },
+    "ct-060": {
+      "label": {
+        "core": [],
+        "optional": ["mcp__google-calendar__search_events", "mcp__google-drive__search_files"]
+      },
+      "scored": true
+    },
+    "ct-061": {
+      "label": {
+        "core": ["mcp__google-drive__get_file_permissions", "mcp__google-drive__search_files"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-062": {
+      "label": {
+        "core": ["mcp__jira__getJiraIssue"],
+        "optional": ["mcp__gmail__search_threads"]
+      },
+      "scored": true
+    },
+    "ct-063": {
+      "label": null,
+      "scored": false,
+      "why": "ambiguous"
+    },
+    "ct-064": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-065": {
+      "label": {
+        "core": ["mcp__google-drive__search_files"],
+        "optional": ["mcp__notion__notion-search"]
+      },
+      "scored": true
+    },
+    "ct-066": {
+      "label": {
+        "core": ["mcp__stripe__stripe_analytics"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-067": {
+      "label": {
+        "core": ["mcp__vercel__get_runtime_errors"],
+        "optional": ["mcp__vercel__list_deployments"]
+      },
+      "scored": true
+    },
+    "ct-068": {
+      "label": {
+        "core": ["mcp__gmail__create_draft"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-069": {
+      "label": {
+        "core": ["mcp__google-calendar__suggest_time"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-070": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-071": {
+      "label": {
+        "core": ["mcp__vercel__get_deployment_build_logs", "mcp__vercel__list_deployments"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-072": {
+      "label": {
+        "core": ["mcp__google-calendar__create_event"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-073": {
+      "label": {
+        "core": ["mcp__notion__notion-search"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-074": {
+      "label": {
+        "core": ["mcp__stripe__stripe_analytics"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-075": {
+      "label": {
+        "core": ["mcp__google-drive__get_file_permissions", "mcp__google-drive__search_files"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-076": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-077": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-078": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-079": {
+      "label": {
+        "core": ["mcp__gmail__search_threads"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-080": {
+      "label": {
+        "core": ["mcp__google-calendar__list_events"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-081": {
+      "label": {
+        "core": ["mcp__stripe__stripe_api_write"],
+        "optional": ["mcp__stripe__stripe_api_read"]
+      },
+      "scored": true
+    },
+    "ct-082": {
+      "label": {
+        "core": [],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-083": {
+      "label": {
+        "core": ["mcp__vercel__get_runtime_errors", "mcp__vercel__list_deployments"],
+        "optional": []
+      },
+      "scored": true
+    },
+    "ct-084": {
+      "label": {
+        "core": [
+          "mcp__gmail__get_thread",
+          "mcp__gmail__search_threads",
+          "mcp__google-calendar__search_events"
+        ],
+        "optional": []
+      },
+      "scored": true
+    }
+  }
+}
