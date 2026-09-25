@@ -60,6 +60,11 @@
       "rule": "Use as a bounded adoption hypothesis only; it does not authorize Jev for permissions, billing, trust, or consequential actions."
     },
     {
+      "path": "docs/research/ai-chat-ecosystem-inventory-checklist-2026-09-25.md",
+      "status": "dated-implementation-audit",
+      "rule": "Item-level implementation snapshot at commit 21d43953 against the September 24 competitor inventory; code wins on any conflict, and launch quality stays with implementation-status.md and PRODUCT_GAPS.md."
+    },
+    {
       "path": "/Users/siddhartha/Desktop/claude_reference",
       "status": "external-reference-evidence",
       "rule": "Use screenshots and notes for product parity research only. Do not copy proprietary code or assets."
