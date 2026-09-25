@@ -179,6 +179,18 @@ requireIncludes('.github/workflows/ci.yml', 'vscode_changed: ${{ steps.scope.out
 requireIncludes('.github/workflows/ci.yml', 'mobile_changed: ${{ steps.scope.outputs.mobile }}');
 requireIncludes('.github/workflows/ci.yml', "if: needs.scope.outputs.native_changed == 'true'");
 requireIncludes('.github/workflows/ci.yml', "if: needs.scope.outputs.web_changed == 'true'");
+requireIncludes('.github/workflows/codeql-analysis.yml', 'security-events: write');
+requireIncludes(
+  '.github/workflows/codeql-analysis.yml',
+  'language: [actions, javascript-typescript, ruby]',
+);
+requireIncludes('.github/workflows/codeql-analysis.yml', "if: needs.scope.outputs.rust == 'true'");
+requireIncludes(
+  '.github/workflows/codeql-analysis.yml',
+  'git diff --name-only "$BASE_SHA" "$GITHUB_SHA"',
+);
+requireIncludes('.github/workflows/codeql-analysis.yml', 'echo \'rust=true\' >> "$GITHUB_OUTPUT"');
+requireIncludes('.github/workflows/codeql-analysis.yml', 'Cargo\\.(toml|lock)');
 requireIncludes('.github/workflows/ci.yml', '--filter=@agiworkforce/web');
 requireIncludes('.github/workflows/ci.yml', '--filter=agi-workforce');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter agi-workforce package');

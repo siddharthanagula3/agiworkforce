@@ -1,7 +1,7 @@
 name: 'Rust Security'
 
-# JS/TS CodeQL is handled by GitHub's default CodeQL setup.
-# This workflow only runs Rust-specific security checks.
+# CodeQL source analysis lives in codeql-analysis.yml. This workflow runs
+# Rust dependency auditing and clippy when Rust sources or Cargo inputs change.
 
 on:
   push:
