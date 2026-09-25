@@ -1,0 +1,98 @@
+name: CodeQL analysis
+
+on:
+  push:
+    branches: [main, develop]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scope:
+    name: CodeQL Rust scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      rust: ${{ steps.rust.outputs.rust }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Detect Rust or Cargo changes
+        id: rust
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == schedule || "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            echo 'rust=true' >> "$GITHUB_OUTPUT"
+          elif [[ -z "${BASE_SHA:-}" || "$BASE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BASE_SHA^{commit}"; then
+            echo 'rust=true' >> "$GITHUB_OUTPUT"
+          else
+            changed=$(git diff --name-only "$BASE_SHA" "$GITHUB_SHA") || {
+              echo 'rust=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+            if grep -Eq '(^|/)([^/]+\.rs|Cargo\.(toml|lock))$|^\.github/workflows/codeql-analysis\.yml$' <<< "$changed"; then
+              echo 'rust=true' >> "$GITHUB_OUTPUT"
+            else
+              echo 'rust=false' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  interpreted:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript, ruby]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  rust:
+    name: CodeQL (rust)
+    needs: scope
+    if: needs.scope.outputs.rust == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          languages: rust
+          build-mode: none
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          category: /language:rust

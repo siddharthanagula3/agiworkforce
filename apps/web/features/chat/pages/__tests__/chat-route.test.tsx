@@ -38,6 +38,8 @@ vi.mock('@/features/chat/components/ChatStreamRuntimeProvider', () => ({
   ChatStreamRuntimeProvider: ({ children }: PropsWithChildren) => <>{children}</>,
 }));
 
+import ChatLayout from '../../../../app/chat/layout';
+
 beforeEach(() => {
   routeMocks.auth.mockResolvedValue({ userId: 'user_123' });
   routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/chat' }));
@@ -79,8 +81,6 @@ describe('/chat route', () => {
     routeMocks.headers.mockResolvedValue(
       new Headers({ 'x-agi-pathname': '/chat/session-123?panel=artifacts' }),
     );
-    const { default: ChatLayout } = await import('../../../../app/chat/layout');
-
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.redirect).toHaveBeenCalledWith(
@@ -91,8 +91,6 @@ describe('/chat route', () => {
   it('falls back to /chat when the forwarded path is not a chat path', async () => {
     routeMocks.auth.mockResolvedValue({ userId: null });
     routeMocks.headers.mockResolvedValue(new Headers({ 'x-agi-pathname': '/settings' }));
-    const { default: ChatLayout } = await import('../../../../app/chat/layout');
-
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.redirect).toHaveBeenCalledWith('/session-expired?redirectTo=%2Fchat');
@@ -102,8 +100,6 @@ describe('/chat route', () => {
     routeMocks.headers.mockResolvedValue(
       new Headers({ 'x-agi-pathname': '/chat/session-123?panel=artifacts' }),
     );
-    const { default: ChatLayout } = await import('../../../../app/chat/layout');
-
     await ChatLayout({ children: <div>Chat</div> });
 
     expect(routeMocks.requireCurrentTermsAcceptance).toHaveBeenCalledWith(

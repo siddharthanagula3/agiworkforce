@@ -24,6 +24,14 @@
       "reason": "it uploads the signed Windows installer to the release"
     },
     {
+      "id": "codeql-analysis.yml:interpreted:security-events",
+      "reason": "CodeQL uploads source analysis findings to code scanning"
+    },
+    {
+      "id": "codeql-analysis.yml:rust:security-events",
+      "reason": "the Rust CodeQL job uploads findings when Rust or Cargo changes"
+    },
+    {
       "id": "codeql.yml:rust-security:checks",
       "reason": "the analysis reports its result as a check run"
     },

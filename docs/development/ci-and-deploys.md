@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-09-17
+Last updated: 2026-09-24
 
 ## Production invariant
 
@@ -129,6 +129,14 @@ deployment record says which component versions it carries.
   expensive Linux, macOS, and Windows Rust lanes. Desktop changes independently
   select Desktop E2E. Workflow-only, npm wrapper, and Web changes skip Rust.
 - Documentation-only changes select no deployment or native lane.
+
+`.github/workflows/codeql-analysis.yml` scans JavaScript/TypeScript, Ruby, and
+Actions on pushes and pull requests. Its Rust analysis runs for Rust or Cargo
+changes, analysis-workflow changes, and on the weekly scan; a Web-only push
+skips the long Rust analysis.
+The scope job treats an unavailable Git base as a Rust change so it never skips
+analysis when it cannot prove the diff. GitHub's default CodeQL setup must be
+disabled before this advanced workflow can upload results.
 
 CI and deploy workflows cancel superseded runs on the same branch or production
 surface. Priority test workflows run on Linux, use the pnpm cache built into
