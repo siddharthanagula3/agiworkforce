@@ -47,6 +47,32 @@ describe('MermaidDiagram', () => {
     expect(container.querySelector('script')).toBeNull();
   });
 
+  it('keeps centered node labels when Mermaid defines the anchor in its stylesheet', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><style>.node .label text { fill: black; text-anchor: middle; }</style><g class="node"><g class="label"><text>Start</text></g></g></svg>',
+    });
+    const { container } = render(<MermaidDiagram source={FLOWCHART} />);
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-mermaid="ready"] g.label text')?.getAttribute('text-anchor'),
+      ).toBe('middle');
+    });
+  });
+
+  it('handles repeated incomplete selectors without backtracking over the SVG', async () => {
+    const incompleteSelectors = '.node .label text'.repeat(3000);
+    renderMock.mockResolvedValue({
+      svg: `<svg xmlns="http://www.w3.org/2000/svg"><style>${incompleteSelectors}</style><g class="node"><g class="label"><text>Start</text></g></g></svg>`,
+    });
+    const { container } = render(<MermaidDiagram source={FLOWCHART} />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-mermaid="ready"] g.label text')).toBeTruthy();
+    });
+    expect(container.querySelector('g.label text')?.hasAttribute('text-anchor')).toBe(false);
+  });
+
   it('keeps the source and states the reason when the source does not parse', async () => {
     renderMock.mockImplementation((_id: string, _source: string, host: HTMLElement) => {
       const errorNode = document.createElement('div');
