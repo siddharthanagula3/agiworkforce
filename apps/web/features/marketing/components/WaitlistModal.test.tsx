@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { WaitlistModalProvider, WaitlistTrigger } from './WaitlistModal';
 
@@ -13,6 +13,10 @@ function grantRequiredConsent() {
 }
 
 describe('WaitlistModal', () => {
+  beforeAll(async () => {
+    await import('./WaitlistDialog');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     try {
