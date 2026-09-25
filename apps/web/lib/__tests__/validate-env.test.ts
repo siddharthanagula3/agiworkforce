@@ -730,11 +730,15 @@ describe('every encryption key the environment contract demands is one a module 
   // Product code only. A build script naming a key declares a deployment
   // requirement; it does not decrypt anything with it.
   function productSources(): string[] {
-    return execFileSync('git', ['ls-files', 'apps', 'packages', 'services'], {
-      cwd: REPO_ROOT,
-      encoding: 'utf8',
-      maxBuffer: 32 * 1024 * 1024,
-    })
+    return execFileSync(
+      'git',
+      ['grep', '-l', '-F', 'ENCRYPTION_KEY', '--', 'apps', 'packages', 'services'],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        maxBuffer: 32 * 1024 * 1024,
+      },
+    )
       .split('\n')
       .filter(
         (file) =>
