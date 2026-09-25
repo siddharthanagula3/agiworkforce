@@ -90,7 +90,10 @@ function cloudCheck(installed?: string) {
 }
 
 function askedGitHub(): boolean {
-  return mocks.fetch.mock.calls.some(([input]) => String(input).includes('api.github.com'));
+  return mocks.fetch.mock.calls.some(([input]) => {
+    const url = input instanceof Request ? input.url : String(input);
+    return new URL(url).hostname === 'api.github.com';
+  });
 }
 
 beforeEach(() => {
@@ -123,6 +126,16 @@ beforeEach(() => {
 });
 
 describe('the desktop update switch on the Tauri updater feed', () => {
+  it('counts only requests to the GitHub API host', async () => {
+    await mocks.fetch('https://example.test/api.github.com');
+    await mocks.fetch('https://api.github.com.example.test/releases');
+
+    expect(askedGitHub()).toBe(false);
+
+    await mocks.fetch('https://api.github.com/repos/example/releases');
+    expect(askedGitHub()).toBe(true);
+  });
+
   it('looks for a release while nothing is held', async () => {
     await tauriCheck('1.9.0');
 

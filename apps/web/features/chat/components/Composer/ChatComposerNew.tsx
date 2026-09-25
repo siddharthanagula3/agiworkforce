@@ -4708,7 +4708,7 @@ const ChatComposerNewComponent = ({
                   {selectedPromotionalImage && (
                     <span className="text-xs text-muted-foreground">
                       Free quota ·{' '}
-                      {selectedPromotionalImage.outputSize?.replace('*', ' × ') ??
+                      {selectedPromotionalImage.outputSize?.replaceAll('*', ' × ') ??
                         'provider default'}
                     </span>
                   )}
@@ -4934,7 +4934,7 @@ const ChatComposerNewComponent = ({
                   {selectedPromotionalVideo && (
                     <span className="text-xs text-muted-foreground">
                       Free quota ·{' '}
-                      {selectedPromotionalVideo.outputSize?.replace('*', ' × ') ??
+                      {selectedPromotionalVideo.outputSize?.replaceAll('*', ' × ') ??
                         'provider default'}
                       {selectedPromotionalVideo.durationSeconds !== undefined
                         ? ` · ${selectedPromotionalVideo.durationSeconds}s`

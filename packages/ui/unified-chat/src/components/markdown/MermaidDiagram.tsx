@@ -27,7 +27,35 @@ const MERMAID_CONFIG: MermaidConfig = {
 };
 
 const INLINE_TEXT_ANCHOR = /text-anchor:\s*([a-z]+)/i;
-const NODE_LABEL_CENTERED = /\.node \.label text[^{]*\{[^}]*text-anchor:\s*middle/;
+
+function hasCenteredNodeLabels(doc: Document): boolean {
+  for (const style of doc.querySelectorAll('style')) {
+    const css = style.textContent ?? '';
+    let offset = 0;
+    while (offset < css.length) {
+      const open = css.indexOf('{', offset);
+      if (open < 0) break;
+      const close = css.indexOf('}', open + 1);
+      if (close < 0) break;
+
+      const selectors = css.slice(offset, open).replace(/\s+/g, ' ');
+      const declarations = css.slice(open + 1, close);
+      if (selectors.includes('.node .label text')) {
+        const centered = declarations.split(';').some((declaration) => {
+          const colon = declaration.indexOf(':');
+          return (
+            colon >= 0 &&
+            declaration.slice(0, colon).trim() === 'text-anchor' &&
+            declaration.slice(colon + 1).trim() === 'middle'
+          );
+        });
+        if (centered) return true;
+      }
+      offset = close + 1;
+    }
+  }
+  return false;
+}
 
 function bakeTextAnchor(svg: string): string {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
@@ -38,7 +66,7 @@ function bakeTextAnchor(svg: string): string {
     if (match?.[1]) el.setAttribute('text-anchor', match[1]);
   });
 
-  if (NODE_LABEL_CENTERED.test(svg)) {
+  if (hasCenteredNodeLabels(doc)) {
     doc.querySelectorAll('g.node g.label text').forEach((el) => {
       if (!el.hasAttribute('text-anchor')) el.setAttribute('text-anchor', 'middle');
     });
