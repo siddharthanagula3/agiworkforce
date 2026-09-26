@@ -3,7 +3,7 @@
 Status: Current
 Owner: Mobile lead
 Last updated: 2026-08-27
-Applies to: `com.agiworkforce.app`, version 1.2.0 (`app.config.js` → `version`,
+Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
 Paste the body of this file into the **App content → App access → Instructions**
