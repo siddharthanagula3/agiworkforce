@@ -159,6 +159,14 @@ describe('resolveAndroidAvd', () => {
 describe('screenshot catalog', () => {
   const allShots = [...SCREENSHOTS, VERIFY_SCREENSHOT];
 
+  it('runs first-launch onboarding before captures that require a ready chat', () => {
+    const resetShots = SCREENSHOTS.filter((shot) =>
+      readFileSync(join(SPEC_DIR, shot.spec), 'utf8').includes('delete: true'),
+    );
+    expect(resetShots).toHaveLength(1);
+    expect(SCREENSHOTS[0]).toBe(resetShots[0]);
+  });
+
   it('points every screenshot at a spec file that exists', () => {
     for (const shot of allShots) {
       expect(existsSync(join(SPEC_DIR, shot.spec))).toBe(true);

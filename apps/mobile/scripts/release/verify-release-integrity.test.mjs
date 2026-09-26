@@ -21,7 +21,6 @@ function productionConfig(overrides = {}) {
       associatedDomains: ['applinks:agiworkforce.com'],
       entitlements: {
         'com.apple.developer.siri': true,
-        'com.apple.developer.natural-language.translation': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
       },
       ...overrides.ios,

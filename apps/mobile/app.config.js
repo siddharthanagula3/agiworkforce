@@ -30,7 +30,6 @@ const shouldUseProductionEntitlements =
 const iosEntitlements = shouldUseProductionEntitlements
   ? {
       'com.apple.developer.siri': true,
-      'com.apple.developer.natural-language.translation': true,
     }
   : {};
 
