@@ -13,7 +13,7 @@
       "whats_new": 4000
     },
     "char_counts": {
-      "name": 3,
+      "name": 13,
       "subtitle": 22,
       "promotional_text": 134,
       "keywords": 58,
@@ -21,7 +21,7 @@
       "whats_new": 492
     }
   },
-  "app_name": "AGI",
+  "app_name": "AGI Workforce",
   "subtitle": "On-device AI assistant",
   "promotional_text": "Chat with AI on your phone. No Wi-Fi required. Free forever. On-device model runs locally, your conversations never leave your device.",
   "keywords": "ai,chat,assistant,local,offline,privacy,llm,dpdp,on-device",
@@ -32,7 +32,7 @@
     "secondary": "Utilities"
   },
   "age_rating": {
-    "rating": "12+",
+    "rating": "13+",
     "questionnaire": {
       "cartoon_or_fantasy_violence": "None",
       "realistic_violence": "None",
@@ -46,7 +46,7 @@
       "user_generated_content": "None",
       "contests": "None"
     },
-    "note": "12+ chosen to align with age-gate default (13+). 4+ may also qualify for the default experience; 12+ is the conservative choice given AI-generated text output."
+    "note": "App Store Connect calculated 9+ from the content questionnaire on 2026-09-26; its 13+ age-rating override was selected to align with the Cloud age gate. Regional ratings may differ."
   },
   "privacy_nutrition_labels": {
     "data_not_collected": false,

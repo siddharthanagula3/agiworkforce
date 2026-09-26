@@ -21,21 +21,46 @@ environment check, integrity check, TLS pins, Expo dependencies, lint,
 typecheck, and the full mobile test suite pass. The public Apple and Google
 store lookups report no live listing.
 
-The production iOS preflight now passes with EAS authentication. A production
-EAS build attempt on 2026-09-26 stopped before upload because EAS has no iOS
+The production iOS preflight passes with EAS authentication. A production EAS
+build attempt on 2026-09-26 stopped before upload because EAS has no iOS
 distribution certificate or provisioning profile. That attempt created the
 production update channel and branch and advanced EAS's remote iOS build number
 to 3. The local EAS CLI was updated from 20.4.0 to 24.8.0 after its Apple
-login failed with the known `iTunes service key is empty` error; Apple
-credential setup still needs a successful retry. The App Store release is
-blocked on Apple credentials, a signed device archive and TestFlight
-validation, a provisioned Cloud review
-account supplied securely in App Store Connect, and live Cloud sign-in testing.
-The existing screenshot pipeline beyond the welcome frame has not been
-validated against the current age gate and model selection flows. The
-production IAP deployment gate and external purchase links also need a final
-live App Review policy check before submission. Do not mark the iOS store
-record published or submit the app until those checks are complete.
+login failed with the known `iTunes service key is empty` error. Fresh Apple
+SMS verification codes were still rejected by EAS after the account holder
+accepted the updated Apple Developer agreement in the browser.
+
+Xcode automatic signing produced a Release device archive and exported an
+App Store signed IPA for iOS 1.2.0 build 2 on 2026-09-26. The main app and
+share extension contain distribution provisioning profiles and an Apple
+Distribution certificate for team `D2PR62RLT4`. Xcode's upload validation
+stopped with `Failed to find an account with App Store Connect access for team
+D2PR62RLT4`. The account holder confirmed that the AGI Workforce app record
+is visible and the Free Apps agreement is Active in the browser, so the Xcode
+failure is specific to Xcode's sign-in state. Apple ingestion, processing,
+and TestFlight installation remain unverified. The local machine also lacks
+the WWDR G3 intermediate needed for `codesign --verify --strict` to establish
+the certificate chain.
+
+App Store Connect now has draft version 1.2.0 metadata, AGI Workforce as the
+accepted name (Apple rejected `AGI` as already in use), Productivity and
+Utilities categories, a 13+ age override, free pricing, 173 available
+regions, and seven configured privacy data types. The privacy disclosure is
+saved but not published. Release remains blocked on build upload and Apple
+processing, iPhone/iPad screenshots, a provisioned Cloud review account
+supplied securely in App Store Connect, and live Cloud sign-in testing.
+The App Review contact and review notes are saved, but the secure review-account
+fields are empty. The Content Rights declaration is unanswered. EU Digital
+Services Act trader verification requires publicly displaying the account's
+business address plus a contact phone and email; that contact has not been
+submitted. The Paid Apps agreement is pending bank/tax information, while the
+Free Apps agreement is Active. App Accessibility is optional and has not been
+claimed without feature-level validation.
+The screenshot pipeline beyond the welcome frame still needs verification
+against the current age gate and model selection flows. The production IAP
+deployment gate and external purchase links also need a final live App Review
+policy check before submission. Do not mark the iOS store record published or
+submit the app until those checks are complete.
 
 ## CHECKLIST-REAUDIT-2026-09-23
 
