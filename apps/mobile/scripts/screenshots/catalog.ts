@@ -70,18 +70,18 @@ export const DEVICES: DeviceClass[] = [
 
 export const SCREENSHOTS: Screenshot[] = [
   {
-    id: '01',
-    name: 'local-demo-chat',
-    spec: '01-multi-provider.spec.ts',
-    heading: 'Local chat first',
-    subhead: 'Start privately, then sign in to unlock cloud.',
-  },
-  {
     id: '02',
     name: 'onboarding-local',
     spec: '02-onboarding-local.spec.ts',
     heading: 'Start without an account',
     subhead: 'Local setup, device fit, and model readiness.',
+  },
+  {
+    id: '01',
+    name: 'local-demo-chat',
+    spec: '01-multi-provider.spec.ts',
+    heading: 'Local chat first',
+    subhead: 'Start privately, then sign in to unlock cloud.',
   },
   {
     id: '03',
