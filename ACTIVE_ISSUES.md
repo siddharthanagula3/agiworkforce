@@ -2,11 +2,32 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-23
+Last updated: 2026-09-26
 
 The single human-readable register of unresolved defects, risks and required
 corrections, with the execution plan to clear them. Start here before opening
 any older audit.
+
+## MOBILE-IOS-APP-STORE-2026-09-26
+
+The iOS 1.2.0 Release configuration builds and launches in Simulator. Isolated
+iPhone 17 Pro Max and iPad Pro 13 first-run flows pass the ten-step Detox
+onboarding spec. Opaque welcome screenshots at Apple-listed dimensions are
+saved under `apps/mobile/store-listing/screenshots/captures/ios/` (generated
+files ignored by Git). The release listing draft, privacy declarations,
+environment check, integrity check, TLS pins, Expo dependencies, lint,
+typecheck, and the full mobile test suite pass. The public Apple and Google
+store lookups report no live listing.
+
+The production iOS preflight now passes with EAS authentication. The App Store
+release is still blocked on an Apple-signed device archive and TestFlight
+validation, a provisioned Cloud review account supplied securely in App Store
+Connect, and live Cloud sign-in testing. The existing screenshot pipeline beyond
+the welcome frame has not
+been validated against the current age gate and model selection flows. The
+production IAP deployment gate and external purchase links also need a final
+live App Review policy check before submission. Do not mark the iOS store
+record published or submit the app until those checks are complete.
 
 ## CHECKLIST-REAUDIT-2026-09-23
 

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-08-27
+Last updated: 2026-09-26
 Applies to: `com.agiworkforce.app`, version 1.2.0
 
 Paste the body of this file into the **App Review Information → Notes** field in
@@ -19,11 +19,11 @@ a factual claim about the binary.
 
 AGI is an AI assistant with two independent modes.
 
-**Local Mode (default, no account).** A quantized open-weight language model
-runs on the device through ExecuTorch or llama.rn. Inference happens entirely
-on-device; no prompt or response leaves the phone. The catalog-selected default
-is an Apache-2.0 model that the app fetches on first
-run. Chats are stored in a local SQLite database that is encrypted at rest with
+**Local Mode (default, no account).** On supported devices, the app uses
+Apple Intelligence on the device without a model download. Other devices use a
+quantized open-weight model downloaded on first run and executed through
+ExecuTorch or llama.rn. Inference happens entirely on-device; no prompt or
+response leaves the phone. Chats are stored in a local SQLite database that is encrypted at rest with
 SQLCipher; the key lives in the iOS Keychain.
 
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
@@ -37,22 +37,23 @@ this build is purchasable, see "Purchases: please read".
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
 
-## How to review it, no demo account needed
+## How to review it
 
-`demo_account_required` is `false` and that is deliberate:
+Before submission, provide Apple an active AGI Cloud review account through
+App Store Connect's secure demo-account fields. Do not put its credentials in
+this repository. The account must remain accessible throughout review and
+must be able to exercise Cloud chat and web search. The Cloud entry path asks
+for age confirmation before sign-in.
 
 1. **Local Mode requires no account at all.** Launch the app, tap through
-   onboarding, and chat. This exercises the core product. Onboarding downloads
-   the ~2 GB local model over Wi-Fi, please allow that to finish, or use the
-   **Continue to Cloud** button on the download screen to skip it.
+   onboarding, and chat. This exercises the core product. On supported devices, onboarding uses the built-in system model without a
+   download. Otherwise it downloads a local model over Wi-Fi; please allow
+   that to finish, or use **Continue to Cloud** to skip it.
 2. **AGI Cloud sign-up is open self-service.** Sign-in uses Clerk's native
-   `AuthView` (an in-app native sheet, not a web browser). Create an account
-   with any email address; a verification code is emailed. Cloud chat and web
-   search are available immediately on the free tier.
-
-If you would prefer pre-provisioned credentials, email
-`review@agiworkforce.com` and we will supply an account with a paid tier
-attached within one business day.
+   `AuthView` (an in-app native sheet, not a web browser). Cloud chat and web
+   search are available on the free tier after sign-in. Use the review account
+   supplied in App Store Connect to test these features without relying on
+   email verification during review.
 
 ## Why the app asks for each permission
 
@@ -91,7 +92,7 @@ read these notes as inaccurate metadata.
 
 What ships:
 
-- `expo-iap` 5.3.0 is a dependency (`package.json`) and is registered as a config
+- `expo-iap` 5.6.2 is a dependency (`package.json`) and is registered as a config
   plugin (`app.config.js`), so the StoreKit 2 framework is linked into the app.
 - The purchase flow itself is compiled in:
   `src/features/billing/useMobileIap.ts`, rendered by

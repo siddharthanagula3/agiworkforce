@@ -19,6 +19,9 @@ themselves are the slow part (iOS release ~15–25 min cold, Android release ~10
 | `ipad-pro-11`       | 1668 × 2388 | none, internal review only                     |
 
 The iPad slot is required because `app.config.js` sets `ios.supportsTablet: true`.
+Apple also accepts a direct 2064 × 2752 capture for the 13" iPad slot; the
+pipeline's branded canvas uses 2048 × 2732. See [Apple's current screenshot
+specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications).
 `iphone-17-pro` and `ipad-pro-11` produce good-looking frames that App Store Connect has
 no slot for; capture them only for internal review.
 
@@ -101,7 +104,7 @@ submission).
 ```
 store-listing/screenshots/captures/<platform>/<class>/
   raw/     unretouched device captures
-  final/   composited, exactly the canvas size in the table, upload these
+  final/   store-ready JPG/PNG screenshots at a size Apple accepts
 ```
 
 Upload `final/` contents:
@@ -110,7 +113,12 @@ Upload `final/` contents:
 - App Store Connect → 13" iPad slot ← `ios/ipad-pro-13/final/`
 - Play Console → phone screenshots ← `android/phone/final/`
 
-Both stores accept up to 8 screenshots per slot; the pipeline produces 5.
+Apple accepts one to ten screenshots per slot. The pipeline is configured for
+five frames. On 2026-09-26, only `02-onboarding-local` was captured and visually
+checked on isolated iPhone 17 Pro Max and iPad Pro 13 Simulators. Their `final/`
+files are opaque direct JPEG captures at 1320 × 2868 and 2064 × 2752. The other
+four specs and the full pipeline still need a live run before treating the
+five-frame set as complete.
 
 Re-run just the compositing (no simulator needed) after a heading or subhead edit:
 
