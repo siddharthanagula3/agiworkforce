@@ -3,7 +3,7 @@
 Status: Current
 Owner: Mobile lead
 Last updated: 2026-09-26
-Applies to: `com.agiworkforce.app`, version 1.2.0
+Applies to: `com.agiworkforce.app`, version 0.0.1
 
 Paste the body of this file into the **App Review Information → Notes** field in
 App Store Connect. `store-listing/LISTING-METADATA-IOS.json` points
@@ -84,7 +84,7 @@ Health connector was removed in July 2026.
 ## Purchases: please read
 
 **Native store billing code ships inside this binary and is switched off. No
-product is purchasable in 1.2.0, and no in-app-purchase product exists in App
+product is purchasable in 0.0.1, and no in-app-purchase product exists in App
 Store Connect for `com.agiworkforce.app`.**
 
 We would rather over-disclose this than have you find StoreKit in the binary and
@@ -152,7 +152,7 @@ it can render, in render order, from
 | Current plan card                                                                    | `:229`     | Always. Free tier also gets a five-item feature list.                                                                         |
 | Plan-change row, **Upgrade plan** / **Adjust plan** / **Choose plan**                | `:323-329` | Only when the account has a higher self-serve tier and is not on a workspace plan. See "What the plan-change row does today". |
 | **Workspace administration**, opens `agiworkforce.com/settings/team`                 | `:331-338` | Only on a Team or Enterprise plan (`canUseBillingPlanCapability(tier, 'team_admin')`). External link A2 below.                |
-| "Manage billing"                                                                     | `:339-346` | Never in 1.2.0, `FEATURES.billing` is `false`.                                                                                |
+| "Manage billing"                                                                     | `:339-346` | Never in 0.0.1, `FEATURES.billing` is `false`.                                                                                |
 | "How plan upgrades are charged" and "Usage top-ups"                                  | `:350-363` | Only for an active plan billed through our website. Text, no button.                                                          |
 | **"Loading native purchases / Connecting securely to the App Store or Google Play"** | `:365-370` | **On first paint, for every signed-in Cloud account**, see below.                                                             |
 | "Native purchases are not configured"                                                | `:479-489` | After that first paint, in this build, always.                                                                                |

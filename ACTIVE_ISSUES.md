@@ -10,8 +10,8 @@ any older audit.
 
 ## MOBILE-IOS-APP-STORE-2026-09-26
 
-The iOS 1.2.0 Release configuration builds and launches in Simulator. A clean
-production-configured unsigned Release Simulator build also succeeds and its
+The earlier iOS 1.2.0 Release configuration built and launched in Simulator. A clean
+production-configured unsigned Release Simulator build also succeeded and its
 app bundle contains `AGIShareExtension.appex`. Isolated
 iPhone 17 Pro Max and iPad Pro 13 first-run flows pass the ten-step Detox
 onboarding spec. Opaque welcome screenshots at Apple-listed dimensions are
@@ -42,7 +42,7 @@ and TestFlight installation remain unverified. The local machine also lacks
 the WWDR G3 intermediate needed for `codesign --verify --strict` to establish
 the certificate chain.
 
-App Store Connect now has draft version 1.2.0 metadata, AGI Workforce as the
+App Store Connect now has draft version 0.0.1 metadata, AGI Workforce as the
 accepted name (Apple rejected `AGI` as already in use), Productivity and
 Utilities categories, a 13+ age override, free pricing, 173 available
 regions, and seven configured privacy data types. The privacy disclosure is
@@ -56,6 +56,10 @@ business address plus a contact phone and email; that contact has not been
 submitted. The Paid Apps agreement is pending bank/tax information, while the
 Free Apps agreement is Active. App Accessibility is optional and has not been
 claimed without feature-level validation.
+The app and AGI-owned workspace package versions were reset to 0.0.1 on
+2026-09-26. The existing signed IPA remains version 1.2.0 build 2; it cannot
+serve as a 0.0.1 submission build. The new configuration has not yet been
+rebuilt or uploaded, and EAS's remote iOS build counter was last recorded at 3.
 The screenshot pipeline beyond the welcome frame still needs verification
 against the current age gate and model selection flows. The production IAP
 deployment gate and external purchase links also need a final live App Review
