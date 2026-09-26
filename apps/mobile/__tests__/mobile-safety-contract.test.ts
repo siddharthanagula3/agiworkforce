@@ -144,8 +144,8 @@ describe('deleting an account', () => {
 });
 
 describe('what this repository hands a store reviewer', () => {
-  it('asks for no demo account and keeps no credential in the listing', () => {
-    expect(LISTING_IOS.app_review_information?.demo_account_required).toBe(false);
+  it('requires a review account without storing credentials in the repository', () => {
+    expect(LISTING_IOS.app_review_information?.demo_account_required).toBe(true);
 
     const withCredentials = storeListingFiles()
       .filter((file) => CREDENTIAL_SHAPE.test(file.text))

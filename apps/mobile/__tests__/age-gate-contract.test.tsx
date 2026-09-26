@@ -29,6 +29,7 @@ const FIXTURE_TIME_ZONE = 'America/New_York';
 const realIntl = global.Intl;
 
 const mockReplace = jest.fn();
+let mockSearchParams: { returnTo?: string } = {};
 
 jest.mock('expo-router', () => {
   const actual = jest.requireActual('expo-router');
@@ -40,7 +41,7 @@ jest.mock('expo-router', () => {
       back: jest.fn(),
       navigate: jest.fn(),
     }),
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => mockSearchParams,
   };
 });
 
@@ -134,6 +135,25 @@ describe('the age screen when the answer does not work', () => {
   beforeEach(() => {
     clearAgeGate();
     mockReplace.mockClear();
+    mockSearchParams = {};
+  });
+
+  it('returns to Local chat when Cloud sign-in needs age verification', () => {
+    mockSearchParams = { returnTo: '/(auth)/login' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)');
+  });
+
+  it('returns to parental controls when reviewing device age settings', () => {
+    mockSearchParams = { returnTo: '/(app)/settings/parental-controls' };
+    render(<AgeGateScreen />);
+
+    fireEvent.press(screen.getByLabelText('Go back'));
+
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/settings/parental-controls');
   });
 
   it('says what went wrong instead of ignoring the button', () => {
