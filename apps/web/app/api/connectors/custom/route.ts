@@ -16,12 +16,14 @@ import {
   type UserCustomConnectorSummary,
 } from '@/lib/user-connector-tools';
 import { findDirectoryTargetByRemoteUrl } from '@/lib/connectors/mcp-directory-targets';
+import { mcpServerPublishesProtectedResource } from '@/lib/connectors/mcp-discovery';
 import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
   customConnectorId,
   deleteCustomConnectorRows,
+  edgeBlockedMessage,
   insertCustomConnector,
   McpProbeError,
   probeMcpServer,
@@ -38,6 +40,8 @@ const NAME_MAX_LENGTH = 200;
 const AUTH_TOKEN_MAX_LENGTH = 4096;
 const AUDIT_RESOURCE_TYPE = 'custom_mcp_connector';
 const AUDIT_SOURCE = 'custom_mcp';
+const SIGN_IN_REQUIRED_MESSAGE =
+  'This server asks you to sign in, and a custom connector can only send a fixed access token. Add an access token, or connect the server from the directory if it is listed there.';
 
 async function withDirectoryLink(
   summary: UserCustomConnectorSummary,
@@ -136,9 +140,17 @@ async function handlePost(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof McpProbeError) {
-      throw createError.serviceUnavailable(`Failed to connect to MCP server: ${error.message}`);
+      throw createError.serviceUnavailable(
+        error.edgeBlocked
+          ? edgeBlockedMessage(name)
+          : `Failed to connect to MCP server: ${error.message}`,
+      );
     }
     throw error;
+  }
+
+  if (!credential && (await mcpServerPublishesProtectedResource(url))) {
+    throw createError.validation(SIGN_IN_REQUIRED_MESSAGE);
   }
 
   assertConnectorToolCapacity(capacity.planTier, probe.toolCount);

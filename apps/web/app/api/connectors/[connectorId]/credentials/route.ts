@@ -29,8 +29,10 @@ import {
 import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
+  CONNECTOR_BLOCKED_CODE,
   CONNECTOR_UNREACHABLE_CODE,
   customConnectorId,
+  edgeBlockedMessage,
   insertCustomConnector,
   McpProbeError,
   probeMcpServer,
@@ -161,11 +163,11 @@ async function handlePost(
       if (error.authChallenge) {
         throw createError.validation(`${target.name} rejected that API key.`);
       }
-      const message = `${target.name} could not be reached: ${error.message}`;
-      return NextResponse.json(
-        { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
-        { status: 502 },
-      );
+      const message = error.edgeBlocked
+        ? edgeBlockedMessage(target.name)
+        : `${target.name} could not be reached: ${error.message}`;
+      const code = error.edgeBlocked ? CONNECTOR_BLOCKED_CODE : CONNECTOR_UNREACHABLE_CODE;
+      return NextResponse.json({ error: { code, message }, message }, { status: 502 });
     }
     throw error;
   }
