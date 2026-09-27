@@ -49,13 +49,21 @@ async function notifyReconnectRequired(
 }
 
 export type ConnectorAccessOutcome =
-  | { status: 'ready'; accessToken: string; tokenType: string; grantedScopes: string[] }
+  | {
+      status: 'ready';
+      accessToken: string;
+      tokenType: string;
+      grantedScopes: string[];
+      accountKey: string;
+    }
   /** No provider configured for this connector id in this deployment. */
   | { status: 'not-configured' }
   /** Configured, but this user has never authorized it (or has disconnected). */
   | { status: 'not-connected' }
   /** Authorized once, but the stored credential can no longer be used. */
   | { status: 'reauthorization-required'; reason: 'expired' | 'refresh-failed' | 'undecryptable' };
+
+export type ReadyConnectorAccess = Extract<ConnectorAccessOutcome, { status: 'ready' }>;
 
 export interface ResolveConnectorAccessOptions {
   forceRefresh?: boolean;
@@ -90,7 +98,7 @@ export async function resolveConnectorAccessToken(
   if (!grant) return { status: 'not-connected' };
   if (options.discovered && !grant.mcpUrl) return { status: 'not-configured' };
 
-  if (!options.forceRefresh && !expiresSoon(grant)) return ready(grant);
+  if (!options.forceRefresh && !expiresSoon(grant)) return ready(grant, grant.accountKey);
 
   return refreshOnce(userId, connectorId, grant, provider);
 }
@@ -104,12 +112,14 @@ function expiresSoon(grant: ConnectorOAuthGrant): boolean {
 
 function ready(
   tokens: Pick<ConnectorOAuthGrant, 'accessToken' | 'tokenType' | 'grantedScopes'>,
+  accountKey: string,
 ): ConnectorAccessOutcome {
   return {
     status: 'ready',
     accessToken: tokens.accessToken,
     tokenType: tokens.tokenType,
     grantedScopes: tokens.grantedScopes,
+    accountKey,
   };
 }
 
@@ -178,7 +188,7 @@ async function refreshLockedGrant(
   const current = locked.grant;
   if (!current) return { outcome: REFRESH_FAILED, dropped: false };
   if (current.accessToken !== seen.accessToken && !expiresSoon(current)) {
-    return { outcome: ready(current), dropped: false };
+    return { outcome: ready(current, current.accountKey), dropped: false };
   }
 
   const refreshToken = current.refreshToken;
@@ -208,7 +218,7 @@ async function refreshLockedGrant(
       grantedScopes: outcome.grantedScopes,
       accessTokenExpiresAt: outcome.accessTokenExpiresAt,
     });
-    return { outcome: ready(outcome), dropped: false };
+    return { outcome: ready(outcome, current.accountKey), dropped: false };
   }
 
   if (!provider) return { outcome: EXPIRED, dropped: false };
@@ -242,7 +252,7 @@ async function refreshLockedGrant(
     grantedScopes: refreshed.grantedScopes,
     accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
   });
-  return { outcome: ready(refreshed), dropped: false };
+  return { outcome: ready(refreshed, current.accountKey), dropped: false };
 }
 
 /**

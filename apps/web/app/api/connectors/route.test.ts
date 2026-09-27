@@ -115,6 +115,7 @@ vi.mock('@/lib/connectors/oauth-registry', () => ({
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: (...args: unknown[]) => mocks.oauthGrants(...args),
   listPendingConnectorIds: (...args: unknown[]) => mocks.pendingConnectors(...args),
+  listConnectorAccounts: vi.fn(async () => []),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   getConnectorOAuthGrant: vi.fn(),
   revokeConnectorOAuthGrant: vi.fn(),
