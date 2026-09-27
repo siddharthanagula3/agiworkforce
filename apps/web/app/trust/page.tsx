@@ -105,7 +105,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'GDPR: data subject rights',
     value:
-      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 100 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-19.',
+      'Implemented. Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 100 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure is derived from the implementation by a test so changes to the erasure list cannot silently leave this claim behind. As of 2026-09-27.',
   },
   {
     label: 'GDPR: Article 27 EU representative',
@@ -198,7 +198,7 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Database row-level isolation',
     value:
-      'Partial: 177 of 278 database-backed hosted API route files. Counted against the 278 route files that reach the database; the other 117 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 101 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-23.',
+      'Partial: 191 of 303 database-backed hosted API route files. Counted against the 303 route files that reach the database; the other 120 hosted routes touch no database at all and are excluded from both sides rather than used to flatter the ratio. A route that reaches for the owner connection at all is counted against us, even where it also reads under policy. Where bound, queries run under a role that cannot bypass policy with the caller identity set per transaction, and both reads and writes are constrained. The remaining 112 connect as the database owner, which bypasses row-level security by design, and enforce ownership in application code only. The rules those routes must satisfy instead are on /security. As of 2026-09-27.',
   },
   {
     label: 'Authentication and CSRF',
@@ -384,7 +384,7 @@ export default function TrustPage() {
                       {
                         label: '2026-09-27',
                         value:
-                          'Re-measured after the credit billing work shipped. Five tables joined the enumerated erasure list, taking it from 95 to 100 user-scoped tables: auto-reload settings, bonus credit grants, referral codes, expiring credit purchases and refund requests. Each is deleted with the account.',
+                          'Re-measured after the credit billing work shipped. Five tables joined the enumerated erasure list, taking it from 95 to 100 user-scoped tables: auto-reload settings, bonus credit grants, referral codes, expiring credit purchases and refund requests. Each is deleted with the account. The same work added 28 hosted routes. The row-level-isolation count moved from 177 to 191 of 303 database-backed routes with the billing settings, referral and usage routes, which read as the caller. The owner-connection remainder moved from 101 to 112 with the billing crons, the emailed trial cancel link, the refund operations console and the organization member, invitation and usage report routes, and the routes that touch no database moved from 117 to 120.',
                       },
                       {
                         label: '2026-09-23',

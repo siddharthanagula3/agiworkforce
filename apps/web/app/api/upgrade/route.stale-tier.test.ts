@@ -152,6 +152,7 @@ describe('POST /api/upgrade, stale plan_tier vs the live Stripe price', () => {
             billingInterval: 'monthly',
             stripeSubscriptionId: 'sub_live123',
             seats: 1,
+            promotionCodeId: null,
             prorationDate: PRORATION_DATE,
           },
           SECRET,

@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   BILLING_PLAN_PRICING,
   BILLING_PLAN_PRODUCT_LIMITS,
+  MANAGED_USAGE_LIMITS,
   normalizeUIPlanTier,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
@@ -136,8 +137,7 @@ const DEDICATED_CAPACITY_CLAIMS = [
 ];
 
 describe('pricing locale bundles, enterprise capacity claims', () => {
-  it('describes enterprise managed usage the way the usage table configures it', async () => {
-    const { MANAGED_USAGE_LIMITS } = await import('@/lib/billing/managed-usage-caps');
+  it('describes enterprise managed usage the way the usage table configures it', () => {
     expect(
       MANAGED_USAGE_LIMITS.enterprise.unlimited,
       'enterprise is no longer uncapped; the pricing row has to be rewritten with it',

@@ -95,7 +95,7 @@ describe('readEconomicsSummary', () => {
     const summary = await readEconomicsSummary({ from: FROM, to: TO, groupBy: 'total', db });
 
     expect(summary.totals.canonicalValueMicrousd).toBe(1_500_000);
-    expect(summary.totals.canonicalValueCredits).toBe(75);
+    expect(summary.totals.canonicalValueCredits).toBe(300);
     expect(summary.totals.canonicalValueToCogsRatio).toBe(3);
     expect(summary.totals.legacyRows).toBe(1);
   });
@@ -123,6 +123,20 @@ describe('readEconomicsSummary', () => {
     expect(revenue?.topUpMicrousd).toBe(10_000_000);
     expect(revenue?.cashMicrousd).toBe(50_000_000);
     expect(summary.totals.paymentFeesMicrousd).toBe(2_000_000);
+  });
+
+  it('counts a credit pack at the price charged, not the provider budget its credits carry', async () => {
+    const { db, query } = harness({ cost: [costRow()] });
+
+    await readEconomicsSummary({ from: FROM, to: TO, groupBy: 'total', db });
+
+    const topUpSql = query.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes('credit_transactions'));
+    expect(topUpSql).toBeDefined();
+    const chargedOrLedger = "coalesce((t.metadata ->> 'charged_cents')::bigint, t.amount_cents)";
+    expect(topUpSql!.split(chargedOrLedger)).toHaveLength(4);
+    expect(topUpSql).not.toMatch(/sum\(t\.amount_cents\)/);
   });
 
   it('estimates the Apple commission from the store-billed subscriptions', async () => {

@@ -34,16 +34,23 @@ vi.mock('@/lib/services/stripe-settlement-reconciliation-service', () => ({
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   importStripeCogsAdjustments: vi.fn(),
 }));
+vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/payments/stripe-provider')>()),
+  readStripeCostActivity: vi.fn(),
+}));
 
 import { CreditService } from '@/lib/services/credit-service';
 import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
 import { reconcileStripeSettlement } from '@/lib/services/stripe-settlement-reconciliation-service';
 import { importStripeCogsAdjustments } from '@/lib/services/cogs-ledger-service';
+import { readStripeCostActivity } from '@/lib/server/payments/stripe-provider';
 import { sendSupportEmail } from '@/lib/support/handoff/resend-client';
 import { GET } from './route';
 
 const reconcileStripe = vi.mocked(reconcileStripeSettlement);
 const importCogs = vi.mocked(importStripeCogsAdjustments);
+const readCostActivity = vi.mocked(readStripeCostActivity);
+const COST_ACTIVITY = { balanceEntries: [], invoiceDiscounts: [] };
 
 const processPending = vi.mocked(CreditService.processPendingSettlements);
 const sendEmail = vi.mocked(sendSupportEmail);
@@ -71,6 +78,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     importCogs.mockResolvedValue({
       examined: 0,
       feesRecorded: 0,
+      feesAttributed: 0,
       adjustmentsRecorded: 0,
       discountsRecorded: 0,
     });
@@ -232,9 +240,11 @@ describe('GET /api/cron/reconcile-credits · Stripe settlement reconciliation', 
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
+    readCostActivity.mockResolvedValue(COST_ACTIVITY);
   });
 
   afterEach(() => {
@@ -351,9 +361,11 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
+    readCostActivity.mockResolvedValue(COST_ACTIVITY);
   });
 
   afterEach(() => {
@@ -363,9 +375,11 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
   it('imports Stripe fees, refunds and chargebacks over a window that tolerates late settlement', async () => {
     const response = await GET(cronRequest('cron-secret') as never);
 
+    expect(readCostActivity).toHaveBeenCalledOnce();
+    const window = readCostActivity.mock.calls[0]![0];
+    expect(window.until.getTime() - window.since.getTime()).toBe(3 * 24 * 60 * 60 * 1000);
     expect(importCogs).toHaveBeenCalledOnce();
-    const call = importCogs.mock.calls[0]![0];
-    expect(call.until.getTime() - call.since.getTime()).toBe(3 * 24 * 60 * 60 * 1000);
+    expect(importCogs.mock.calls[0]![0]).toMatchObject({ activity: COST_ACTIVITY });
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       cogs: { examined: 12, feesRecorded: 9, adjustmentsRecorded: 3, discountsRecorded: 0 },
@@ -379,5 +393,15 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toMatchObject({ reason: 'cogs_import_failed' });
+  });
+
+  it('fails the run without writing the ledger when the Stripe activity cannot be read', async () => {
+    readCostActivity.mockRejectedValue(new Error('stripe unreachable'));
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ reason: 'cogs_import_failed' });
+    expect(importCogs).not.toHaveBeenCalled();
   });
 });
