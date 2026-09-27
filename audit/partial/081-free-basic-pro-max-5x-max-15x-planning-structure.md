@@ -106,18 +106,6 @@ Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/lib/billing/managed-usa
 
 Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/app/pricing/page.tsx:206-217`, `packages/contracts/types/src/billing-catalog.ts:208-227`, `apps/web/app/api/media/image/generate/route.ts:223-226`
 
-## S81.11: Separate storage limits.
-
-- Done when: Each plan has its own storage limit, stated to users and enforced when files are added.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cap is read via SubscriptionService.getSubscription, which returns null when the user has no subscriptions row; getKnowledgeStorageLimitBytes(undefined) -> toEnforceableBillingPlanLimit(undefined) -> 0, so usedBytes + byteCount > 0 rejects every upload for row-less Free users and seat members. No signup path inserts a free row (only Stripe/IAP/claim_beta_invite insert). Route tests mock getSubscription as pro. Auditor note ("seat members get no cap") has the direction wrong. |  |
-| desktop | partial | Cap is read via SubscriptionService.getSubscription, which returns null when the user has no subscriptions row; getKnowledgeStorageLimitBytes(undefined) -> toEnforceableBillingPlanLimit(undefined) -> 0, so usedBytes + byteCount > 0 rejects every upload for row-less Free users and seat members. No signup path inserts a free row (only Stripe/IAP/claim_beta_invite insert). Route tests mock getSubscription as pro. Auditor note ("seat members get no cap") has the direction wrong. |  |
-
-Code: `apps/web/app/pricing/page.tsx:1225-1233`, `packages/contracts/types/src/billing-catalog.ts:300-304`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-406`
-
 ## S81.12: Separate context limits.
 
 - Done when: Each plan has its own context-size limit, stated to users and enforced per request.
