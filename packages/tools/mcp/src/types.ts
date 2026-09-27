@@ -106,16 +106,28 @@ export interface McpCatalogDiscoveryError {
   message: string;
 }
 
+export type McpServerTransport = 'stdio' | 'sse' | 'streamable-http';
+
+export type McpToolRejectionReason = 'non-canonical-name' | 'invalid-input-schema';
+
+export interface McpRejectedTool {
+  toolName?: string;
+  reason: McpToolRejectionReason;
+  detail?: string;
+}
+
 export interface McpServerCatalog {
   serverName: string;
   safeServerName: string;
   protocolEra: 'modern' | 'legacy';
   protocolVersion?: string;
   serverInfo?: { name: string; version: string };
+  transport?: McpServerTransport;
   capabilities: Record<string, unknown>;
   tasksSupported: boolean;
   discover?: DiscoverResult;
   tools: McpCatalogTool[];
+  rejectedTools?: McpRejectedTool[];
   resources: McpCatalogResource[];
   resourceTemplates: McpCatalogResourceTemplate[];
   prompts: McpCatalogPrompt[];

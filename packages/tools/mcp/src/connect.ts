@@ -33,8 +33,10 @@ import type {
   McpCatalogTool,
   McpClientCacheConfig,
   McpDiscoveryConfig,
+  McpRejectedTool,
   McpServerCatalog,
   McpServerConfig,
+  McpServerTransport,
   McpTaskOperations,
   McpToolCatalog,
   McpToolVisibility,
@@ -376,6 +378,11 @@ function fenceThrownMcpError(
   return new Error(fenced);
 }
 
+function serverTransport(config: McpServerConfig): McpServerTransport {
+  if (config.command) return 'stdio';
+  return config.transport === 'sse' ? 'sse' : 'streamable-http';
+}
+
 function toSafeServerName(name: string): string {
   return name
     .toLowerCase()
@@ -570,6 +577,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     throw fenceThrownMcpError(err, serverName, 'list_tools');
   }
   const tools: McpCatalogTool[] = [];
+  const rejectedTools: McpRejectedTool[] = [];
   const listedTools = listed.tools ?? [];
   if (listedTools.length > CATALOG_ITEM_LIMITS.tools) {
     discoveryErrors.push({
@@ -578,10 +586,15 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     });
   }
   for (const t of listedTools.slice(0, CATALOG_ITEM_LIMITS.tools)) {
+    const rejectedName = sanitizeCatalogText(t.name, MCP_TITLE_MAX_BYTES);
     if (!isAcceptableMcpToolName(t.name)) {
       console.warn('[mcp] rejecting tool with non-canonical name', {
         serverName,
         toolName: t.name,
+      });
+      rejectedTools.push({
+        ...(rejectedName ? { toolName: rejectedName } : {}),
+        reason: 'non-canonical-name',
       });
       continue;
     }
@@ -595,6 +608,11 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
         serverName,
         toolName: t.name,
         reason: schemaResult.reason,
+      });
+      rejectedTools.push({
+        ...(rejectedName ? { toolName: rejectedName } : {}),
+        reason: 'invalid-input-schema',
+        ...(schemaResult.reason ? { detail: schemaResult.reason } : {}),
       });
       continue;
     }
@@ -749,10 +767,12 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     protocolEra,
     ...(protocolVersion ? { protocolVersion } : {}),
     ...(serverVersion ? { serverInfo: serverVersion } : {}),
+    transport: serverTransport(config),
     capabilities,
     tasksSupported,
     ...(discover ? { discover } : {}),
     tools,
+    rejectedTools,
     resources,
     resourceTemplates,
     prompts,
@@ -917,6 +937,7 @@ export async function buildMcpToolCatalog(
         serverName,
         safeServerName: toSafeServerName(serverName),
         protocolEra: 'legacy',
+        transport: serverTransport(config),
         capabilities: {},
         tasksSupported: false,
         tools: [],

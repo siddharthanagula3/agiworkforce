@@ -18,9 +18,18 @@ const ConnectorCapabilityCatalogSchema = z.object({
   generatedAt: z.number(),
   protocolEra: z.enum(['modern', 'legacy']),
   protocolVersion: z.string().optional(),
+  supportedVersions: z.array(z.string()),
+  transport: z.enum(['stdio', 'sse', 'streamable-http']).optional(),
   serverInfo: z.object({ name: z.string(), version: z.string() }).optional(),
   capabilityKeys: z.array(z.string()),
   tasksSupported: z.boolean(),
+  rejectedTools: z.array(
+    z.object({
+      toolName: z.string().optional(),
+      reason: z.enum(['non-canonical-name', 'invalid-input-schema']),
+      detail: z.string().optional(),
+    }),
+  ),
   tools: z.array(
     CatalogItemSchema.extend({
       visibility: z.enum(['model', 'app', 'both']),
