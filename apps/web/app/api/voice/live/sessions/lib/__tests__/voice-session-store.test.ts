@@ -183,7 +183,7 @@ describe('close and history', () => {
 });
 
 describe('closeExpiredVoiceSessions', () => {
-  it('closes every session open past the span it could run for', async () => {
+  it('closes every session that has not been seen within the span one block covers', async () => {
     const { db, calls } = stubDb([[{ id: 'vs_1' }, { id: 'vs_2' }]]);
     const closed = await closeExpiredVoiceSessions({
       db,
@@ -193,7 +193,8 @@ describe('closeExpiredVoiceSessions', () => {
     expect(closed).toBe(2);
     const [sql, params] = calls[0] ?? ['', []];
     expect(sql).toContain("status = 'active'");
-    expect(sql).toContain('started_at <= now() - make_interval');
+    expect(sql).toContain('last_seen_at <= now() - make_interval');
+    expect(sql).not.toContain('started_at <=');
     expect(sql).toContain('closed_at = now()');
     expect(params[0]).toBe('user_1');
     expect(params[1]).toBe(600);

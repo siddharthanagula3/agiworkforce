@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   providerStarted: vi.fn(),
   clientDelivered: vi.fn(),
-  getSubscription: vi.fn(),
+  entitlement: vi.fn(),
+  planBlock: vi.fn(),
   userScopedDb: vi.fn(),
   fetch: vi.fn(),
   assertTierUnitAllowance: vi.fn(),
@@ -49,8 +50,13 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { getSubscription: (...args: unknown[]) => mocks.getSubscription(...args) },
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  resolveEntitlementBundle: (...args: unknown[]) => mocks.entitlement(...args),
+}));
+vi.mock('./lib/voice-session-budget', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./lib/voice-session-budget')>()),
+  planVoiceSessionBlock: (...args: unknown[]) => mocks.planBlock(...args),
 }));
 vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeSubscriptionAccess: vi.fn(async () => ({ allowed: true })),
@@ -75,9 +81,17 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 const { POST } = await import('./route');
-const { LIVE_SESSION_BLOCK_MINUTES, liveSessionCostCents } =
-  await import('@/lib/voice/live-voice-billing');
+const {
+  LIVE_SESSION_BLOCK_MINUTES,
+  LIVE_SESSION_CEILING_SECONDS,
+  LIVE_SESSION_MIN_BLOCK_SECONDS,
+  liveSessionChargeMicrousd,
+} = await import('@/lib/voice/live-voice-billing');
 const { ManagedUsageRequestError } = await import('@/lib/services/managed-usage-request-service');
+
+function charge(seconds: number): number {
+  return liveSessionChargeMicrousd(seconds, LIVE_MODEL.id) as number;
+}
 
 interface ManagedUsageReservationCall {
   idempotencyKey: string;
@@ -90,14 +104,44 @@ async function errorCode(response: Response): Promise<string | undefined> {
 }
 
 const OFFER = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\n';
+const CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
 const RESERVATION = {
   db: {},
   userId: 'user-1',
   idempotencyKey: 'agi.voice.live.test',
   requestHash: 'hash',
   leaseToken: 'lease',
-  estimatedCostCents: liveSessionCostCents(LIVE_SESSION_BLOCK_MINUTES * 60),
+  estimatedCostMicrousd: charge(LIVE_SESSION_CEILING_SECONDS),
+  estimatedCostCents: 0,
 };
+const FIVE_HOUR_RESET = '2026-09-27T20:00:00.000Z';
+
+function sessionDb(overrides: { insertedId?: string | null } = {}) {
+  return {
+    query: vi.fn(async (sql: string) => {
+      if (sql.includes('to_regclass')) return [{ ready: true }];
+      if (sql.includes('insert into public.voice_sessions')) {
+        return overrides.insertedId === null ? [] : [{ id: overrides.insertedId ?? 'vs_1' }];
+      }
+      return [];
+    }),
+  };
+}
+
+function withSessionStore(overrides: { insertedId?: string | null } = {}): void {
+  mocks.userScopedDb.mockResolvedValue({
+    db: sessionDb(overrides),
+    userId: 'user-1',
+    organizationId: null,
+  });
+}
+
+function fullBlock(): void {
+  mocks.planBlock.mockResolvedValue({
+    blockSeconds: LIVE_SESSION_CEILING_SECONDS,
+    resetsAt: { rolling_five_hour_limit_reached: FIVE_HOUR_RESET },
+  });
+}
 
 function request(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/voice/live/sessions', {
@@ -112,8 +156,9 @@ describe('POST /api/voice/live/sessions', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', mocks.fetch);
     mocks.requireEnv.mockReturnValue('sk-test-openai-key');
-    mocks.userScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    withSessionStore();
+    mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: null, subscription: null });
+    fullBlock();
     mocks.assertTierUnitAllowance.mockResolvedValue(undefined);
     mocks.reserve.mockResolvedValue(RESERVATION);
     mocks.finalize.mockResolvedValue({});
@@ -128,7 +173,9 @@ describe('POST /api/voice/live/sessions', () => {
       ),
     );
 
-    const response = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const response = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
     expect(response.status).toBe(201);
     const body = (await response.json()) as {
       sessionId: string;
@@ -138,7 +185,15 @@ describe('POST /api/voice/live/sessions', () => {
     expect(body.sessionId).toBe('live_1');
     expect(body.sdp).toBe('answer');
     expect(body.settlement.idempotencyKey).toBe(RESERVATION.idempotencyKey);
-    expect(body.settlement.ceilingSeconds).toBe(LIVE_SESSION_BLOCK_MINUTES * 60);
+    expect(body.settlement.ceilingSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
+    expect(mocks.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        estimatedCostMicrousd: charge(LIVE_SESSION_CEILING_SECONDS),
+        planTier: 'pro',
+        isFlagship: false,
+        quotaFeature: 'voice_live',
+      }),
+    );
 
     const [url, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toContain('/live/sessions');
@@ -264,8 +319,99 @@ describe('POST /api/voice/live/sessions', () => {
     expect(body.error.code).toBe('voice_session_not_recorded');
     expect(body.error.message).toContain('nothing was charged');
     expect(mocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
+  });
+
+  it('sizes the block to what the plan windows still cover', async () => {
+    mocks.planBlock.mockResolvedValue({ blockSeconds: 240, resetsAt: {} });
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_4' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { settlement: { ceilingSeconds: number } };
+    expect(body.settlement.ceilingSeconds).toBe(240);
+    expect(mocks.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ estimatedCostMicrousd: charge(240) }),
+    );
+    expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ unit: 'voice_minutes', requestedUnits: 4 }),
+    );
+    expect(mocks.planBlock).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', planTier: 'pro', modelId: LIVE_MODEL.id }),
+    );
+  });
+
+  it('asks the ledger for at least a minute, so an empty window is refused by the ledger', async () => {
+    mocks.planBlock.mockResolvedValue({
+      blockSeconds: 0,
+      resetsAt: { rolling_five_hour_limit_reached: FIVE_HOUR_RESET },
+    });
+    mocks.reserve.mockRejectedValue(
+      new ManagedUsageRequestError('limit', 429, 'rolling_five_hour_limit_reached'),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(mocks.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({ estimatedCostMicrousd: charge(LIVE_SESSION_MIN_BLOCK_SECONDS) }),
+    );
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as { error: { code: string; resets_at?: string } };
+    expect(body.error.code).toBe('rolling_five_hour_limit_reached');
+    expect(body.error.resets_at).toBe(FIVE_HOUR_RESET);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a session past its voice minute allowance before any hold', async () => {
+    mocks.assertTierUnitAllowance.mockRejectedValue(
+      new ManagedUsageRequestError('minutes', 402, 'voice_minutes_exhausted'),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(402);
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('answers 503 billing_unavailable when the reservation fails for another reason', async () => {
+    mocks.reserve.mockRejectedValue(new Error('ledger unreachable'));
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(503);
+    expect(await errorCode(response)).toBe('billing_unavailable');
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('needs a conversation to record the session in before anything is reserved', async () => {
+    const response = await POST(request({ sdp: OFFER }));
+
+    expect(response.status).toBe(400);
+    expect(await errorCode(response)).toBe('voice_conversation_required');
+    expect(mocks.reserve).not.toHaveBeenCalled();
+  });
+
+  it('starts nothing and reserves nothing when the session store is not ready', async () => {
+    mocks.userScopedDb.mockResolvedValue({
+      db: { query: vi.fn(async () => [{ ready: false }]) },
+      userId: 'user-1',
+      organizationId: null,
+    });
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(503);
+    expect(await errorCode(response)).toBe('voice_session_not_recorded');
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it('answers 503 with a configuration code when the provider key is missing', async () => {
@@ -273,7 +419,7 @@ describe('POST /api/voice/live/sessions', () => {
       throw new Error('FATAL: OPENAI_API_KEY environment variable is required but not set.');
     });
 
-    const response = await POST(request({ sdp: OFFER }));
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe('live_voice_not_configured');
@@ -296,7 +442,7 @@ describe('POST /api/voice/live/sessions', () => {
       ),
     );
 
-    const response = await POST(request({ sdp: OFFER }));
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
     expect(response.status).toBe(403);
     const body = (await response.json()) as {
       error: { code: string; upstreamCode: string; upstreamStatus: number };
@@ -305,7 +451,7 @@ describe('POST /api/voice/live/sessions', () => {
     expect(body.error.upstreamCode).toBe('model_not_found');
     expect(body.error.upstreamStatus).toBe(404);
     expect(mocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'failed', actualCostCents: 0 }),
+      expect.objectContaining({ outcome: 'failed', actualCostMicrousd: 0 }),
     );
   });
 
@@ -314,6 +460,8 @@ describe('POST /api/voice/live/sessions', () => {
     mocks.userScopedDb.mockResolvedValue({
       db: {
         query: vi.fn(async (sql: string) => {
+          if (sql.includes('to_regclass')) return [{ ready: true }];
+          if (sql.includes('insert into public.voice_sessions')) return [{ id: 'vs_2' }];
           if (sql.includes('from web_conversations')) {
             return [
               {
@@ -358,7 +506,10 @@ describe('POST /api/voice/live/sessions', () => {
   it('starts the session without prior context when the context read fails', async () => {
     mocks.userScopedDb.mockResolvedValue({
       db: {
-        query: vi.fn(async () => {
+        query: vi.fn(async (sql: string) => {
+          if (sql.includes('to_regclass')) return [{ ready: true }];
+          if (sql.includes('insert into public.voice_sessions')) return [{ id: 'vs_3' }];
+          if (sql.includes('public.voice_sessions')) return [];
           throw new Error('context read failed');
         }),
       },
@@ -382,7 +533,7 @@ describe('POST /api/voice/live/sessions', () => {
   });
 
   it('rejects a body without an offer before any reservation', async () => {
-    const response = await POST(request({ voice: 'marin' }));
+    const response = await POST(request({ voice: 'marin', conversationId: CONVERSATION_ID }));
     expect(response.status).toBe(400);
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
@@ -399,7 +550,7 @@ describe('POST /api/voice/live/sessions replayed', () => {
         'content-type': 'application/json',
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ conversationId: CONVERSATION_ID, ...(body as object) }),
     });
   }
 
@@ -415,8 +566,9 @@ describe('POST /api/voice/live/sessions replayed', () => {
     ledger = new Map();
     vi.stubGlobal('fetch', mocks.fetch);
     mocks.requireEnv.mockReturnValue('sk-test-openai-key');
-    mocks.userScopedDb.mockResolvedValue({ db: {}, userId: 'user-1' });
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    withSessionStore();
+    mocks.entitlement.mockResolvedValue({ plan: 'pro', catalogVersion: null, subscription: null });
+    fullBlock();
     mocks.assertTierUnitAllowance.mockResolvedValue(undefined);
     mocks.providerStarted.mockResolvedValue(undefined);
     mocks.fetch.mockImplementation(async () => sessionAccepted(`live_${ledger.size}`));
@@ -451,8 +603,8 @@ describe('POST /api/voice/live/sessions replayed', () => {
   });
 
   it('holds one live session once when the same offer is sent twice', async () => {
-    const first = await POST(request({ sdp: OFFER, voice: 'quartz' }));
-    const second = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const first = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const second = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
@@ -462,8 +614,8 @@ describe('POST /api/voice/live/sessions replayed', () => {
   });
 
   it('derives the same key from the same offer and a different key from a new one', async () => {
-    await POST(request({ sdp: OFFER, voice: 'quartz' }));
-    await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
     const keys = mocks.reserve.mock.calls.map(
       (call) => (call[0] as ManagedUsageReservationCall).idempotencyKey,
     );
@@ -473,8 +625,8 @@ describe('POST /api/voice/live/sessions replayed', () => {
   });
 
   it('opens a second hold for a session the user deliberately starts', async () => {
-    const first = await POST(request({ sdp: OFFER, voice: 'quartz' }));
-    const second = await POST(request({ sdp: SECOND_OFFER, voice: 'quartz' }));
+    const first = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const second = await POST(request({ sdp: SECOND_OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
@@ -486,12 +638,12 @@ describe('POST /api/voice/live/sessions replayed', () => {
     mocks.fetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: { code: 'server_error' } }), { status: 500 }),
     );
-    const failed = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const failed = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
 
     expect(failed.status).not.toBe(201);
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
 
-    const retry = await POST(request({ sdp: OFFER, voice: 'quartz' }));
+    const retry = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
 
     expect(retry.status).toBe(409);
     expect(await errorCode(retry)).toBe('idempotency_replay');

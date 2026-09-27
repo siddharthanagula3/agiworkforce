@@ -7,14 +7,17 @@ const { recordSettledProviderCost } = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({ recordSettledProviderCost }));
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
+const MICROUSD_PER_TOKEN = vi.hoisted(() => 10);
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
-    calculateCost: vi.fn(
+    calculateCostMicrousd: vi.fn(
       (_p: string, _m: string, u: { promptTokens: number; completionTokens: number }) =>
-        u.promptTokens + u.completionTokens,
+        (u.promptTokens + u.completionTokens) * MICROUSD_PER_TOKEN,
     ),
   },
 }));
+
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 
 import { recordLiveVoiceBackendCost } from '../live-voice-backend-cost';
 
@@ -49,7 +52,13 @@ describe('live voice backend cost', () => {
     });
 
     expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    expect(rowFor()).toMatchObject({ provider: 'openai', model: 'backend-model-under-test' });
+    expect(rowFor()).toMatchObject({
+      provider: 'openai',
+      model: 'backend-model-under-test',
+      providerEstimatedCostMicrousd: 1_200 * MICROUSD_PER_TOKEN,
+      actualCostCents: ledgerCentsFromMicrousd(1_200 * MICROUSD_PER_TOKEN),
+      taskOutcome: 'delivered',
+    });
   });
 
   it('never bills the customer twice for a session they already pay per minute', async () => {
@@ -99,12 +108,7 @@ describe('live voice backend cost', () => {
     expect(usage['cachedTokens']).toBe(100);
   });
 
-  /**
-   * The provider's own web_search has no published unit rate here, and pricing
-   * it at Perplexity's or Google's would put a false number in the ledger under
-   * a provider that never billed it. The count is kept so the gap is visible.
-   */
-  it('carries the search count without inventing a price for it', async () => {
+  it('carries the search count on the row without tagging it as a rate card unit', async () => {
     await recordLiveVoiceBackendCost({
       ...BASE,
       reported: { inputTokens: 100, outputTokens: 10, webSearchCalls: 3 },
