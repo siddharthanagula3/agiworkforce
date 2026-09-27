@@ -10,6 +10,8 @@ export type ToolApprovalPolicy = (typeof TOOL_APPROVAL_POLICIES)[number];
 
 export const DEFAULT_TOOL_APPROVAL_POLICY: ToolApprovalPolicy = 'ask_every_time';
 
+export const CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY: ToolApprovalPolicy = 'autonomous';
+
 export interface ToolApprovalPreferences {
   defaultPolicy: ToolApprovalPolicy;
 }

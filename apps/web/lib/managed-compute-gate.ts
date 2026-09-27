@@ -15,7 +15,10 @@ import {
   type CrossingRefusalReason,
   type ProviderEgressRequest,
 } from '@/lib/server/trust-boundary-crossing';
-import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
+import {
+  evaluateModelAccessForRequest,
+  modelPolicyRefusalInit,
+} from '@/lib/services/model-policy-gate';
 import { evaluateSpendLimit } from '@/lib/services/spend-limit-service';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -342,7 +345,7 @@ export async function buildModelPolicyGateResponse(
         code: decision.code,
       },
     },
-    { status: 403, headers },
+    modelPolicyRefusalInit(decision, headers),
   );
 }
 

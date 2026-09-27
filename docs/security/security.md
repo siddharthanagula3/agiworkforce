@@ -113,8 +113,10 @@ creates an egress path (E). Documented in-file (`tool-call-gate.ts`) as a
 mitigation, not a proof. The limits are published verbatim on `/agent-permissions`
 because a security reviewer will find them anyway:
 
-- U is raised by **tool-fetched** third-party content. Content the user **pasted
-  or attached is not counted**, a real injection vector the heuristic does not see.
+- U is raised by third-party content: a page or result a tool fetched, a file or
+  image the user attached, a project knowledge file, or connector context the user
+  selected. Text the user **pasted is not counted**, a real injection vector the
+  heuristic does not see.
 - S is derived from the offered catalog, not from what was actually read, so it
   over-triggers rather than under-triggers (deliberate).
 - E is per-tool metadata, so an MCP server that exfiltrates through an undeclared
