@@ -193,6 +193,10 @@ impl McpServerOAuthStore {
         Self::hashed_id("client", issuer)
     }
 
+    fn step_up_id(server: &str) -> String {
+        Self::hashed_id("step-up", server)
+    }
+
     fn hashed_id(kind: &str, value: &str) -> String {
         let digest = Sha256::digest(value.as_bytes());
         format!("{kind}:{}", crate::hex::encode(&digest))
@@ -235,6 +239,18 @@ impl McpServerOAuthStore {
                     .context("saved MCP OAuth client registration is invalid")
             })
             .transpose()
+    }
+
+    pub fn save_step_up_scope(&self, server: &str, scope: &str) -> Result<()> {
+        self.write_entry(&Self::step_up_id(server), scope)
+    }
+
+    pub fn load_step_up_scope(&self, server: &str) -> Result<Option<String>> {
+        self.read_entry(&Self::step_up_id(server))
+    }
+
+    pub fn delete_step_up_scope(&self, server: &str) -> Result<()> {
+        self.delete_entry(&Self::step_up_id(server))
     }
 
     fn write_entry(&self, credential_id: &str, json: &str) -> Result<()> {
