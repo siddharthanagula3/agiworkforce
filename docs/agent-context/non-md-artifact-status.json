@@ -49,7 +49,7 @@
       "path": "docs/research/evidence/frontend-ui-audit-2026-09-01/**",
       "status": "live-evidence",
       "owner": "Repository maintainers",
-      "reason": "Screenshot corpus from the 2026-09-01 live parity audit, referenced by the frontend transition workstream; superseded and deletable once the post-transition browser re-measure is appended to docs/research/chat-ui-parity-2026-08-30.md."
+      "reason": "Screenshot corpus from the 2026-09-01 live parity audit, referenced by the frontend transition workstream; superseded and deletable once the post-transition browser re-measure is appended to docs/research/leader-ui-measurements-2026-09-04.md."
     },
     {
       "path": "docs/security/security-claims.json",

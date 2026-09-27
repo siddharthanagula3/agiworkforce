@@ -144,7 +144,7 @@ claude.ai (`docs/research/leader-ui-measurements-2026-09-04.md`,
 `leader-observation-2026-09-13.md`, `leader-ui-reference-2026-09-04.md`,
 `claude-ai-ui-reference-2026-09-03.md`,
 `leader-settings-and-directory-reference-2026-09-07.md`,
-`leader-code-surface-2026-09-05.md`, `chat-ui-parity-2026-08-30.md`), plus
+`leader-code-surface-2026-09-05.md`), plus
 official help-centre and release-note pages for all three products read on
 2026-09-14. A = common to all three, B = common to two, C = one product, D =
 independently appropriate for AGI Workforce. "Unverified" means no official
