@@ -19,7 +19,7 @@ function selectionDraft(text: string, url: string): string {
 }
 
 async function pasteImage(win: BrowserWindow, png: Buffer): Promise<void> {
-  const priorText = clipboard.readText();
+  const priorText = await clipboard.readText();
   await clipboard.write([
     new ClipboardItem({
       'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }),
