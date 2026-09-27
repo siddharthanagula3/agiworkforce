@@ -1,13 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listCanonicalModels } from '@agiworkforce/types';
+import {
+  chargeMicrousdForProviderCost,
+  listCanonicalModels,
+  MICROUSD_PER_CREDIT,
+} from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
 const tx = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn() }));
 const db = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(), transaction: vi.fn() }));
+const scopes = vi.hoisted(() => [] as Array<{ userId: string; organizationId: string | null }>);
 const scopedRead = { query: tx.query } as never;
 
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => db }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: (
+    _db: unknown,
+    scope: { userId: string; organizationId: string | null },
+  ) => {
+    scopes.push(scope);
+    return db;
+  },
+}));
 
 const logger = vi.hoisted(() => ({
   warn: vi.fn(),
@@ -18,18 +32,40 @@ const logger = vi.hoisted(() => ({
 
 vi.mock('@/lib/logger', () => ({ logger }));
 
+const recordSettledProviderCost = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  recordSettledProviderCost,
+}));
+
+import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
+
 import {
   FREE_TRIAL_INTERNAL_USAGE_POLICY,
   applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
+  createFreeTrialToolSpend,
   estimateConservativeFreeInputTokens,
   fitFreeTrialOutputBudget,
+  fitsFreeTrialWindow,
+  freeTrialResetAt,
+  freeTrialRetryAfterSeconds,
   getFreeTrialPublicUsage,
+  releaseExpiredFreeTrialReservations,
+  scopeFreeTrialToolSpend,
   settleFreeTrialRequest,
+  type FreeTrialReservation,
 } from './free-trial-service';
 import { LLMCostCalculator } from './llm-cost-calculator';
 
 const FIVE_HOUR_OLDEST = '2026-07-22T12:00:00.000Z';
+const WEEKLY_OLDEST = '2026-07-20T08:00:00.000Z';
+const PERIOD_END = '2026-08-01T00:00:00.000Z';
+const FIVE_HOUR_BUDGET = 2 * MICROUSD_PER_CREDIT;
+const WEEKLY_BUDGET = 15 * MICROUSD_PER_CREDIT;
+const MONTHLY_BUDGET = 20 * MICROUSD_PER_CREDIT;
+
 const TIERED_MODEL = (() => {
   const candidate = listCanonicalModels().find(
     (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
@@ -60,71 +96,546 @@ const ANTHROPIC_CHAT_MODEL = (() => {
   return candidate;
 })();
 
-function mockSettledReservation(row: Record<string, unknown> | null) {
-  tx.query.mockImplementation(async (sql: string) =>
-    sql.includes('from public.free_daily_usage_reservations') && row ? [row] : [],
-  );
+
+interface WindowUse {
+  fiveHour: number;
+  weekly: number;
+  monthly: number;
 }
 
-describe('free trial service', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    tx.execute.mockResolvedValue(1);
-    db.transaction.mockImplementation(async (callback: (transaction: typeof tx) => unknown) =>
-      callback(tx),
-    );
-  });
+let windows: WindowUse | null = null;
+const stored = new Map<string, { reserved: number; settledAt: string | null }>();
 
-  it('retains the legacy settlement policy for reservations created before Free became unmetered', () => {
+function snapshotRow(use: WindowUse) {
+  return {
+    five_hour_used_microusd: String(use.fiveHour),
+    weekly_used_microusd: String(use.weekly),
+    monthly_used_microusd: String(use.monthly),
+    five_hour_oldest_at: use.fiveHour > 0 ? FIVE_HOUR_OLDEST : null,
+    weekly_oldest_at: use.weekly > 0 ? WEEKLY_OLDEST : null,
+    account_period_end: PERIOD_END,
+  };
+}
+
+function useWindows(use: Partial<WindowUse>): void {
+  windows = { fiveHour: 0, weekly: 0, monthly: 0, ...use };
+}
+
+function storedReservation(requestId: string, reserved: number, settledAt: string | null = null) {
+  stored.set(requestId, { reserved, settledAt });
+}
+
+function executed(fragment: string): unknown[][] {
+  return tx.execute.mock.calls.filter(([sql]) => String(sql).includes(fragment)) as unknown[][];
+}
+
+function reservation(overrides: Partial<FreeTrialReservation> = {}): FreeTrialReservation {
+  return {
+    kind: 'free_trial',
+    userId: 'user-1',
+    requestId: 'request-1',
+    reservedMicrousd: 25_000,
+    ...overrides,
+  };
+}
+
+const BEGIN = {
+  userId: 'user-1',
+  requestId: 'request-1',
+  leaseSeconds: 300,
+  provider: 'openrouter',
+  model: 'free-route-model',
+};
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  scopes.length = 0;
+  stored.clear();
+  useWindows({});
+  recordSettledProviderCost.mockResolvedValue(undefined);
+  db.transaction.mockImplementation(async (callback: (transaction: typeof tx) => unknown) =>
+    callback(tx),
+  );
+  db.query.mockImplementation((sql: string, params?: unknown[]) => tx.query(sql, params));
+  tx.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+    if (sql.includes('from public.website_auto_economy_trial_usage')) {
+      return [{ user_id: params[0] }];
+    }
+    if (sql.includes('with account_anchor')) return windows ? [snapshotRow(windows)] : [];
+    if (sql.includes('from public.free_daily_usage_reservations')) {
+      const row = stored.get(String(params[1]));
+      return row
+        ? [
+            {
+              window_started_at: FIVE_HOUR_OLDEST,
+              reserved_microusd: row.reserved,
+              settled_at: row.settledAt,
+            },
+          ]
+        : [];
+    }
+    return [];
+  });
+  tx.execute.mockImplementation(async (sql: string, params: unknown[] = []) => {
+    if (sql.includes('insert into public.free_daily_usage_reservations')) {
+      storedReservation(String(params[1]), Number(params[2]));
+    }
+    if (sql.includes('update public.free_daily_usage_reservations')) {
+      const row = stored.get(String(params[1]));
+      if (row && !row.settledAt) row.settledAt = '2026-07-22T12:05:00.000Z';
+    }
+    return 1;
+  });
+});
+
+describe('the Free usage windows', () => {
+  it('holds Free to the plan table: 2, 15 and 20 credits per 5 hours, week and month', () => {
     expect(FREE_TRIAL_INTERNAL_USAGE_POLICY).toEqual({
-      unitMicrousd: 5_000,
-      fiveHourBudgetMicrousd: 25_000,
+      fiveHourBudgetMicrousd: FIVE_HOUR_BUDGET,
       fiveHourWindowHours: 5,
-      weeklyBudgetMicrousd: 75_000,
+      weeklyBudgetMicrousd: WEEKLY_BUDGET,
       weeklyWindowHours: 168,
-      monthlyBudgetMicrousd: 100_000,
+      monthlyBudgetMicrousd: MONTHLY_BUDGET,
     });
   });
 
-  it('reports no account usage for Free access without reading the legacy ledger', async () => {
-    const snapshot = await getFreeTrialPublicUsage(scopedRead, 'user-1');
+  it('reports what each window used, how full it is and when it resets', async () => {
+    useWindows({ fiveHour: 5_000, weekly: 15_000, monthly: 20_000 });
 
-    expect(snapshot).toEqual({
+    await expect(getFreeTrialPublicUsage(scopedRead, 'user-1')).resolves.toEqual({
+      usagePercentage: toPublicUsagePercentage(20_000, MONTHLY_BUDGET),
+      resetAt: PERIOD_END,
+      sessionUsagePercentage: toPublicUsagePercentage(5_000, FIVE_HOUR_BUDGET),
+      sessionResetAt: '2026-07-22T17:00:00.000Z',
+      weeklyUsagePercentage: toPublicUsagePercentage(15_000, WEEKLY_BUDGET),
+      weeklyResetAt: '2026-07-27T08:00:00.000Z',
+      hasUsageRemaining: true,
+      monthlyUsedMicrousd: 20_000,
+      weeklyUsedMicrousd: 15_000,
+      fiveHourUsedMicrousd: 5_000,
+    });
+    const [sql, params] = tx.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('from public.free_daily_usage_reservations');
+    expect(params).toEqual(['user-1', 5, 168]);
+  });
+
+  it('says nothing is left once any one window is spent', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET, weekly: FIVE_HOUR_BUDGET, monthly: FIVE_HOUR_BUDGET });
+
+    const usage = await getFreeTrialPublicUsage(scopedRead, 'user-1');
+
+    expect(usage.hasUsageRemaining).toBe(false);
+    expect(usage.sessionUsagePercentage).toBe(100);
+  });
+
+  it('reports an account with no Free ledger yet as every window open', async () => {
+    windows = null;
+
+    await expect(getFreeTrialPublicUsage(scopedRead, 'user-1')).resolves.toMatchObject({
       usagePercentage: 0,
       resetAt: null,
-      sessionUsagePercentage: 0,
-      sessionResetAt: null,
-      weeklyUsagePercentage: 0,
-      weeklyResetAt: null,
       hasUsageRemaining: true,
-      fiveHourUsedMicrousd: 0,
-      weeklyUsedMicrousd: 0,
       monthlyUsedMicrousd: 0,
     });
-    expect(db.query).not.toHaveBeenCalled();
-    expect(tx.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('beginFreeTrialRequest', () => {
+  it('reserves the estimate charged to the hundredth of a credit, with its lease and route', async () => {
+    const result = await beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 4_321 });
+
+    const reserved = chargeMicrousdForProviderCost(4_321);
+    expect(result).toEqual({
+      ok: true,
+      reservation: {
+        kind: 'free_trial',
+        userId: 'user-1',
+        requestId: 'request-1',
+        reservedMicrousd: reserved,
+      },
+    });
+    const [insert] = executed('insert into public.free_daily_usage_reservations');
+    expect(insert?.[0]).toContain('lease_expires_at');
+    expect(insert?.[1]).toEqual(['user-1', 'request-1', reserved, 300, 'openrouter', 'free-route-model']);
+    expect(scopes).toContainEqual({ userId: 'user-1', organizationId: null });
   });
 
-  it('starts Free access without creating or checking an account-level usage reservation', async () => {
+  it('reserves the smallest remaining window when the call carries no estimate', async () => {
+    useWindows({ fiveHour: 4_000, weekly: WEEKLY_BUDGET - 5_000, monthly: 50_000 });
+
+    const result = await beginFreeTrialRequest(BEGIN);
+
+    expect(result).toMatchObject({ ok: true, reservation: { reservedMicrousd: 5_000 } });
+  });
+
+  it('reserves at least one microUSD for a call estimated at nothing', async () => {
+    const result = await beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 0 });
+
+    expect(result).toMatchObject({ ok: true, reservation: { reservedMicrousd: 1 } });
+  });
+
+  it('refuses a call the five-hour window cannot cover and names when it resets', async () => {
+    useWindows({ fiveHour: 8_000, weekly: 8_000, monthly: 8_000 });
+
+    await expect(beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 3_000 })).resolves.toEqual({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: '2026-07-22T17:00:00.000Z',
+    });
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
+  });
+
+  it('names the weekly reset when the week is the window that binds', async () => {
+    useWindows({ fiveHour: 1, weekly: WEEKLY_BUDGET - 500, monthly: WEEKLY_BUDGET - 500 });
+
+    await expect(beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 2_000 })).resolves.toEqual({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: '2026-07-27T08:00:00.000Z',
+    });
+  });
+
+  it('names the end of the account month when the month is the window that binds', async () => {
+    useWindows({ fiveHour: 0, weekly: 0, monthly: MONTHLY_BUDGET });
+
+    await expect(beginFreeTrialRequest(BEGIN)).resolves.toEqual({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: PERIOD_END,
+    });
+  });
+
+  it('names the later reset when two windows are spent at once', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET, weekly: WEEKLY_BUDGET, monthly: WEEKLY_BUDGET });
+
+    const result = await beginFreeTrialRequest(BEGIN);
+
+    expect(result).toEqual({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: '2026-07-27T08:00:00.000Z',
+    });
+  });
+
+  it('starts a free-pool turn unmetered at zero when no window has room', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET, weekly: FIVE_HOUR_BUDGET, monthly: FIVE_HOUR_BUDGET });
+
     await expect(
-      beginFreeTrialRequest({ userId: 'user-1', requestId: 'request-1' }),
+      beginFreeTrialRequest({ ...BEGIN, freePoolRoute: true, estimatedMicrousd: 2_000 }),
     ).resolves.toEqual({
       ok: true,
       reservation: {
         kind: 'free_trial',
         userId: 'user-1',
         requestId: 'request-1',
-        reservedMicrousd: Number.MAX_SAFE_INTEGER,
+        reservedMicrousd: 0,
         unmetered: true,
       },
     });
-
-    expect(db.transaction).not.toHaveBeenCalled();
-    expect(tx.query).not.toHaveBeenCalled();
-    expect(tx.execute).not.toHaveBeenCalled();
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(0);
   });
 
-  it('does not apply the legacy output budget to unmetered Free access', () => {
+  it('still reserves the windows for a free-pool turn so its paid tools are covered', async () => {
+    const result = await beginFreeTrialRequest({
+      ...BEGIN,
+      freePoolRoute: true,
+      estimatedMicrousd: 2_000,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      reservation: { reservedMicrousd: chargeMicrousdForProviderCost(2_000), unmetered: true },
+    });
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(1);
+  });
+
+  it('refuses a request id it has already reserved instead of reserving it twice', async () => {
+    await beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 2_000 });
+
+    await expect(beginFreeTrialRequest({ ...BEGIN, estimatedMicrousd: 2_000 })).resolves.toEqual({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: null,
+    });
+    expect(executed('insert into public.free_daily_usage_reservations')).toHaveLength(1);
+  });
+});
+
+describe('settleFreeTrialRequest', () => {
+  it('charges the measured token and tool spend, rounded up to a hundredth of a credit', async () => {
+    storedReservation('request-1', 25_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation(),
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'turn-model',
+      usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
+      cost: { tokenMicrousd: 1_234, toolMicrousd: 2_000 },
+    });
+
+    const [settle] = executed('update public.free_daily_usage_reservations');
+    expect(settle?.[0]).toContain('actual_cost_microusd = $3');
+    expect(settle?.[1]).toEqual(['user-1', 'request-1', 3_250, 'completed', expect.any(String)]);
+    expect(JSON.parse(String(settle?.[1]?.[4]))).toEqual({
+      requestId: 'request-1',
+      outcome: 'completed',
+      provider: 'anthropic',
+      model: 'turn-model',
+      recordedTokens: 120,
+    });
+    expect(executed('update public.website_auto_economy_trial_usage')[0]?.[1]).toEqual([
+      'user-1',
+      120,
+    ]);
+  });
+
+  it('never charges past what the turn reserved', async () => {
+    storedReservation('request-1', 2_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation({ reservedMicrousd: 2_000 }),
+      outcome: 'completed',
+      cost: { tokenMicrousd: 9_000, toolMicrousd: 0 },
+    });
+
+    expect(executed('update public.free_daily_usage_reservations')[0]?.[1]?.[2]).toBe(2_000);
+  });
+
+  it('charges a free-pool turn for its paid tools and never for its tokens', async () => {
+    storedReservation('request-1', 25_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation({ unmetered: true }),
+      outcome: 'completed',
+      cost: { tokenMicrousd: 9_000, toolMicrousd: 5_000 },
+    });
+
+    expect(executed('update public.free_daily_usage_reservations')[0]?.[1]?.[2]).toBe(5_000);
+  });
+
+  it('prices the tokens at the serving route when no measured cost is passed', async () => {
+    const model = ANTHROPIC_CHAT_MODEL;
+    const usage = { promptTokens: 1_000, completionTokens: 200, totalTokens: 1_200 };
+    storedReservation('request-1', 25_000);
+
+    await settleFreeTrialRequest({
+      reservation: reservation(),
+      outcome: 'completed',
+      provider: model.provider,
+      model: model.id,
+      usage,
+    });
+
+    expect(executed('update public.free_daily_usage_reservations')[0]?.[1]?.[2]).toBe(
+      Math.min(
+        25_000,
+        chargeMicrousdForProviderCost(
+          Math.ceil(LLMCostCalculator.calculateCostMicrousd(model.provider, model.id, usage)),
+        ),
+      ),
+    );
+  });
+
+  it('releases a reservation after a zero-usage failure', async () => {
+    storedReservation('request-1', 25_000);
+
+    await settleFreeTrialRequest({ reservation: reservation(), outcome: 'failed' });
+
+    expect(executed('update public.free_daily_usage_reservations')[0]?.[1]).toEqual([
+      'user-1',
+      'request-1',
+      0,
+      'failed',
+      expect.any(String),
+    ]);
+  });
+
+  it('treats repeated settlement as an idempotent no-op', async () => {
+    storedReservation('request-1', 5_000, '2026-07-22T12:01:00.000Z');
+
+    await settleFreeTrialRequest({
+      reservation: reservation({ reservedMicrousd: 5_000 }),
+      outcome: 'completed',
+      cost: { tokenMicrousd: 1_000, toolMicrousd: 0 },
+    });
+
+    expect(executed('free_daily_usage_reservations')).toHaveLength(0);
+    expect(executed('website_auto_economy_trial_usage')).toHaveLength(0);
+  });
+
+  it('writes nothing for a turn that reserved nothing', async () => {
+    await settleFreeTrialRequest({
+      reservation: reservation({ reservedMicrousd: 0, unmetered: true }),
+      outcome: 'completed',
+      cost: { tokenMicrousd: 1_000, toolMicrousd: 1_000 },
+    });
+
+    expect(db.transaction).not.toHaveBeenCalled();
+  });
+
+  it('logs settlement failures without exposing private policy values', async () => {
+    db.transaction.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(
+      settleFreeTrialRequest({
+        reservation: reservation({ requestId: 'request-log', reservedMicrousd: 5_000 }),
+        outcome: 'failed',
+      }),
+    ).resolves.toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', requestId: 'request-log' }),
+      'Free-tier usage settlement failed',
+    );
+  });
+});
+
+describe('Free tool spend inside a turn', () => {
+  it('holds a paid tool call while the turn reservation still covers it', () => {
+    const recorded: number[] = [];
+    const spend = createFreeTrialToolSpend({
+      reservation: reservation({ reservedMicrousd: 10_000 }),
+      spent: () => ({ tokenMicrousd: 4_000, toolMicrousd: 0 }),
+      record: (spentMicrousd) => recorded.push(spentMicrousd),
+    });
+
+    expect(spend.hold(5_000)).toBe(true);
+    expect(spend.hold(1_001)).toBe(false);
+    expect(spend.exhausted()).toBe(true);
+
+    spend.settle(5_000, 5_000);
+    expect(recorded).toEqual([5_000]);
+    expect(spend.hold(1_000)).toBe(true);
+  });
+
+  it('leaves free-pool tokens out of what a tool call is held against', () => {
+    const spend = createFreeTrialToolSpend({
+      reservation: reservation({ reservedMicrousd: 10_000, unmetered: true }),
+      spent: () => ({ tokenMicrousd: 9_999, toolMicrousd: 0 }),
+      record: () => undefined,
+    });
+
+    expect(spend.hold(10_000)).toBe(true);
+  });
+
+  it('counts a scoped call its own spend while holding against the turn', () => {
+    const recorded: number[] = [];
+    const parent = createFreeTrialToolSpend({
+      reservation: reservation({ reservedMicrousd: 10_000 }),
+      spent: () => ({ tokenMicrousd: 0, toolMicrousd: 0 }),
+      record: (spentMicrousd) => recorded.push(spentMicrousd),
+    });
+    const call = scopeFreeTrialToolSpend(parent);
+
+    expect(call.hold(3_000)).toBe(true);
+    call.settle(3_000, 2_500);
+
+    expect(call.spentMicrousd()).toBe(2_500);
+    expect(recorded).toEqual([2_500]);
+    expect(call.exhausted()).toBe(false);
+  });
+
+  it('offers a paid tool to Free only when one call fits the smallest window', () => {
+    expect(fitsFreeTrialWindow(FIVE_HOUR_BUDGET)).toBe(true);
+    expect(fitsFreeTrialWindow(FIVE_HOUR_BUDGET + 1)).toBe(false);
+  });
+});
+
+describe('the reset a refused Free turn reports', () => {
+  it('counts whole seconds to the reset, and at least one', () => {
+    const now = Date.parse('2026-07-22T12:00:00.000Z');
+    expect(freeTrialRetryAfterSeconds('2026-07-22T12:00:10.200Z', now)).toBe(11);
+    expect(freeTrialRetryAfterSeconds('2026-07-22T11:59:00.000Z', now)).toBe(1);
+    expect(freeTrialRetryAfterSeconds(null, now)).toBeUndefined();
+    expect(freeTrialRetryAfterSeconds('not-a-date', now)).toBeUndefined();
+  });
+
+  it('reads the binding window reset under the owner scope', async () => {
+    useWindows({ fiveHour: FIVE_HOUR_BUDGET, weekly: FIVE_HOUR_BUDGET, monthly: FIVE_HOUR_BUDGET });
+
+    await expect(freeTrialResetAt('user-1')).resolves.toBe('2026-07-22T17:00:00.000Z');
+    expect(scopes).toContainEqual({ userId: 'user-1', organizationId: null });
+  });
+
+  it('reports no reset rather than failing when the windows cannot be read', async () => {
+    db.query.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(freeTrialResetAt('user-1')).resolves.toBeNull();
+    expect(logger.warn).toHaveBeenCalled();
+  });
+});
+
+describe('releaseExpiredFreeTrialReservations', () => {
+  function sweepDb(rows: Array<Record<string, unknown>>) {
+    const query = vi.fn(async (_sql: string, _params: unknown[]) => rows);
+    return { db: { query } as never, query };
+  }
+
+  it('releases only unsettled reservations past their lease, at no charge to the user', async () => {
+    const { db: serviceDb, query } = sweepDb([]);
+
+    await releaseExpiredFreeTrialReservations(serviceDb, 500);
+
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('where settled_at is null');
+    expect(sql).toContain('lease_expires_at is null or lease_expires_at <= now()');
+    expect(sql).toContain('for update skip locked');
+    expect(sql).toContain('set actual_cost_microusd = 0');
+    expect(sql).toContain("outcome = 'failed'");
+    expect(sql).toContain('and reservation.settled_at is null');
+    expect(sql).toContain("'leaseExpired', true");
+    expect(sql).toContain('on conflict do nothing');
+    expect(params).toEqual([500]);
+  });
+
+  it('records each absorbed reservation once as undelivered COGS', async () => {
+    const { db: serviceDb } = sweepDb([
+      {
+        user_id: 'user-1',
+        request_id: 'request-1',
+        reserved_microusd: '4350',
+        provider: 'openrouter',
+        model: 'free-route-model',
+      },
+      { user_id: 'user-2', request_id: 'request-2', reserved_microusd: 1_000, provider: null, model: null },
+    ]);
+
+    await expect(releaseExpiredFreeTrialReservations(serviceDb, 500)).resolves.toEqual({
+      released: 2,
+      absorbedMicrousd: 5_350,
+    });
+
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(2);
+    expect(recordSettledProviderCost).toHaveBeenNthCalledWith(1, {
+      userId: 'user-1',
+      organizationId: null,
+      provider: 'openrouter',
+      model: 'free-route-model',
+      actualCostCents: ledgerCentsFromMicrousd(4_350),
+      providerEstimatedCostMicrousd: 4_350,
+      sourceRef: 'free_trial_lease_expired:user-1:request-1',
+      taskOutcome: 'undelivered',
+      taskRef: 'request-1',
+      usage: { type: 'free_trial_lease_expired', reservedMicrousd: 4_350 },
+      db: serviceDb,
+    });
+    expect(recordSettledProviderCost).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ provider: 'unknown', model: null, userId: 'user-2' }),
+    );
+  });
+
+  it('records nothing when no reservation has expired', async () => {
+    await expect(releaseExpiredFreeTrialReservations(sweepDb([]).db, 500)).resolves.toEqual({
+      released: 0,
+      absorbedMicrousd: 0,
+    });
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
+  });
+});
+
+describe('Free output budgeting', () => {
+  it('does not cap the output of an unmetered free-pool reservation', () => {
     expect(
       fitFreeTrialOutputBudget({
         reservation: {
@@ -140,23 +651,6 @@ describe('free trial service', () => {
         requestedMaxOutputTokens: 8_192,
       }),
     ).toEqual({ ok: true, maxOutputTokens: 8_192 });
-  });
-
-  it('settles unmetered Free access without writing account usage', async () => {
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-unmetered',
-        reservedMicrousd: Number.MAX_SAFE_INTEGER,
-        unmetered: true,
-      },
-      outcome: 'completed',
-      usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
-    });
-
-    expect(db.transaction).not.toHaveBeenCalled();
-    expect(tx.execute).not.toHaveBeenCalled();
   });
 
   it('caps one provider response to the private amount reserved for it', () => {
@@ -285,105 +779,5 @@ describe('free trial service', () => {
     expect(result.ok).toBe(true);
     expect(request.max_tokens).toBeLessThan(8_192);
     expect(request.usePromptCache).toBe(false);
-  });
-
-  it('charges one unit for a completed inexpensive response, not the full five-hour cap', async () => {
-    mockSettledReservation({
-      window_started_at: FIVE_HOUR_OLDEST,
-      reserved_microusd: 25_000,
-      settled_at: null,
-    });
-
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-complete',
-        reservedMicrousd: 25_000,
-      },
-      outcome: 'completed',
-      provider: 'anthropic',
-      model: ANTHROPIC_CHAT_MODEL.id,
-      usage: { promptTokens: 100, completionTokens: 20, totalTokens: 120 },
-    });
-
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /update public\.free_daily_usage_reservations[\s\S]*actual_cost_microusd = \$3/i,
-      ),
-      ['user-1', 'request-complete', 5_000, 'completed', expect.any(String)],
-    );
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringMatching(
-        /update public\.website_auto_economy_trial_usage[\s\S]*period_tokens_used/i,
-      ),
-      ['user-1', 120],
-    );
-  });
-
-  it('releases a reservation after a zero-usage failure', async () => {
-    mockSettledReservation({
-      window_started_at: FIVE_HOUR_OLDEST,
-      reserved_microusd: 25_000,
-      settled_at: null,
-    });
-
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-failed',
-        reservedMicrousd: 25_000,
-      },
-      outcome: 'failed',
-    });
-
-    expect(tx.execute).toHaveBeenCalledWith(
-      expect.stringContaining('update public.free_daily_usage_reservations'),
-      ['user-1', 'request-failed', 0, 'failed', expect.any(String)],
-    );
-  });
-
-  it('treats repeated settlement as an idempotent no-op', async () => {
-    mockSettledReservation({
-      window_started_at: FIVE_HOUR_OLDEST,
-      reserved_microusd: 5_000,
-      settled_at: '2026-07-22T12:01:00.000Z',
-    });
-
-    await settleFreeTrialRequest({
-      reservation: {
-        kind: 'free_trial',
-        userId: 'user-1',
-        requestId: 'request-settled',
-        reservedMicrousd: 5_000,
-      },
-      outcome: 'completed',
-    });
-
-    expect(tx.execute).not.toHaveBeenCalledWith(
-      expect.stringContaining('free_daily_usage_reservations'),
-      expect.anything(),
-    );
-  });
-
-  it('logs settlement failures without exposing private policy values', async () => {
-    db.transaction.mockRejectedValueOnce(new Error('database unavailable'));
-
-    await expect(
-      settleFreeTrialRequest({
-        reservation: {
-          kind: 'free_trial',
-          userId: 'user-1',
-          requestId: 'request-log',
-          reservedMicrousd: 5_000,
-        },
-        outcome: 'failed',
-      }),
-    ).resolves.toBeUndefined();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user-1', requestId: 'request-log' }),
-      'Free-tier usage settlement failed',
-    );
   });
 });
