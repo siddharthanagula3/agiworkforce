@@ -1071,7 +1071,7 @@
       },
       "WorkspaceApiError": {
         "type": "object",
-        "description": "Error envelope of the workspace administration endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
+        "description": "Error envelope of the workspace administration and account settings endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
         "required": ["error"],
         "properties": {
           "error": {
@@ -1405,6 +1405,170 @@
             "description": "Pass as `page`, with the same `from` and `to`, to read the next day buckets."
           }
         }
+      },
+      "ToolApprovalDecision": {
+        "type": "object",
+        "required": ["tool_call_id", "decision"],
+        "properties": {
+          "tool_call_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The `toolCallId` of an `approval-requested` event"
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["approved", "rejected"]
+          }
+        }
+      },
+      "ToolApprovalResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "tool_approvals"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The `X-AGI-Agent-Run-Id` header of the stream that paused"
+          },
+          "tool_approvals": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/ToolApprovalDecision"
+            },
+            "description": "One decision per paused call. Every pending call of the run must be answered."
+          },
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Optional text the agent reads before it continues, for example what to do instead of a denied call. Guidance that contains a secret is refused with 400."
+          }
+        }
+      },
+      "PausedRunResumeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Optional text the agent reads before it continues."
+          }
+        }
+      },
+      "ToolInputResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "tool_inputs"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tool_inputs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "required": ["tool_call_id", "input_responses"],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "input_responses": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "The answers the connector asked for, passed to it verbatim. At most 16,000 characters once serialized."
+                }
+              }
+            }
+          },
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      },
+      "DeviceStepResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "device_id", "device_results"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "device_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Must be the device the step was issued to"
+          },
+          "device_results": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": ["tool_call_id", "content", "is_error"],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "content": {
+                  "type": "string",
+                  "maxLength": 24000
+                },
+                "is_error": {
+                  "type": "boolean"
+                },
+                "image": {
+                  "type": "object",
+                  "required": ["base64", "mime_type"],
+                  "properties": {
+                    "base64": {
+                      "type": "string",
+                      "maxLength": 2500000
+                    },
+                    "mime_type": {
+                      "type": "string",
+                      "enum": ["image/png", "image/jpeg"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ConnectorToolPermission": {
+        "type": "object",
+        "required": ["connectorId", "toolName", "level"],
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "toolName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "level": {
+            "type": "string",
+            "enum": ["allow", "ask", "deny"],
+            "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+          }
+        }
       }
     },
     "headers": {
@@ -1485,7 +1649,7 @@
     "/llm/v1/chat/completions": {
       "post": {
         "summary": "Create a chat completion",
-        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.",
+        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.\n\nWhen a tool call needs the user's approval, a streamed turn emits a chunk whose `choices[0].delta.x_agent_event.event` has `type: \"approval-requested\"` with `approvalId`, `toolCallId`, `name`, `category`, `summary`, `input` and, on a high-risk call, `riskLevel: \"high\"`, then ends. The `X-AGI-Agent-Run-Id` response header names the paused run. Answer it with `POST /llm/v1/chat/completions/approve` within 24 hours.",
         "tags": ["Inference"],
         "security": [
           {
@@ -3761,6 +3925,843 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/approve": {
+      "post": {
+        "summary": "Answer a run's pending tool approvals",
+        "description": "Resumes a run that paused for approval. Send one decision per paused call; a rejected call is not run and the agent is told it was denied. `guidance` lets the user say what to do instead. The response streams the rest of the turn in the same format as a streamed chat completion, and may pause again. A pending approval expires 24 hours after the run paused.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolApprovalResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, decisions that do not match the pending calls (`tool_approval_invalid`), or guidance that contains a secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending approval for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The approval is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The approval expired and can no longer be resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/runs/{runId}/resume": {
+      "post": {
+        "summary": "Resume a paused run",
+        "description": "Resumes a run the user paused, optionally with guidance, and streams the rest of the turn. If the pause was requested but has not taken effect yet, the request is withdrawn instead and the run is returned as JSON.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PausedRunResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream, or `{ \"run\": ... }` when a pending pause was withdrawn",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, unknown fields, or guidance that contains a secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such run for this caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run is not paused (`run_not_paused`) or is already resuming (`run_already_resuming`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/resume-input": {
+      "post": {
+        "summary": "Answer a connector's request for input",
+        "description": "Resumes a run that paused because a connector tool asked for more input. Each response is passed to the connector verbatim. Streams the rest of the turn. A pending input request expires 24 hours after the run paused.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolInputResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume-input`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, responses that do not match the paused calls (`tool_input_invalid`), or a secret in the responses or guidance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending input request for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The input request is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The input request expired and can no longer be resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/resume-device": {
+      "post": {
+        "summary": "Return a device step's results",
+        "description": "Used by the desktop app. Resumes a run that paused on a step to be carried out on one of the user's devices, with that step's output, and streams the rest of the turn. Only the device the step was issued to can answer it.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceStepResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume-device`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, results that do not match the paused step (`device_step_invalid`), or a secret in the results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending device step for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The step is waiting on a different device, or is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The device step expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/permissions": {
+      "get": {
+        "summary": "List saved connector tool permissions",
+        "description": "The per-tool levels the caller has saved. A tool with no saved level follows the account's approval policy.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved levels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["permissions"],
+                  "properties": {
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConnectorToolPermission"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save a connector tool permission",
+        "description": "Saves `allow`, `ask` or `deny` for one connector tool. Whether the tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectorToolPermission"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "destructive"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "destructive": {
+                      "type": "boolean",
+                      "description": "Whether the server treats this tool as destructive"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing connectorId or toolName, or an unknown level",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A browser session sent no valid CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke saved connector tool permissions",
+        "description": "Removes the saved level for one tool, or for every tool of the connector when `toolName` is omitted. Those tools then follow the account's approval policy again.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "toolName",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "removed"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "integer",
+                      "description": "How many saved levels were removed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing connectorId, or an empty toolName",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A browser session sent no valid CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
                 }
               }
             }
