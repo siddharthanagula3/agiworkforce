@@ -18,10 +18,20 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { readAutoReloadSettings, saveAutoReloadSettings } from '@/lib/services/auto-reload-service';
+import {
+  maybeTriggerAutoReload,
+  readAutoReloadSettings,
+  saveAutoReloadSettings,
+} from '@/lib/services/auto-reload-service';
 
 const AUTO_RELOAD_SCOPE = { resolveOrganization: false } as const;
 const PAYMENT_METHOD_REQUIRED_CODE = 'payment_method_required';
+const CONSENT_REQUIRED_CODE = 'consent_required';
+
+function consentVersionOf(body: object): string | null {
+  const value = (body as Record<string, unknown>)['consentVersion'];
+  return typeof value === 'string' ? value : null;
+}
 
 async function handleGetAutoReload(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request, AUTO_RELOAD_SCOPE);
@@ -54,13 +64,25 @@ async function handlePutAutoReload(request: NextRequest): Promise<NextResponse> 
     amountUsd: body.amountUsd,
   };
 
-  const result = await saveAutoReloadSettings(db, userId, update);
+  const result = await saveAutoReloadSettings(db, userId, update, consentVersionOf(body));
   if (result.status === 'payment_method_required') {
     return NextResponse.json(
       {
         error: {
           code: PAYMENT_METHOD_REQUIRED_CODE,
           message: 'Add a card in Settings > Billing before turning on auto-reload.',
+        },
+      },
+      { status: 409 },
+    );
+  }
+  if (result.status === 'consent_required') {
+    return NextResponse.json(
+      {
+        error: {
+          code: CONSENT_REQUIRED_CODE,
+          message: 'Review and accept the auto-reload terms to turn it on.',
+          details: { consent: result.consent },
         },
       },
       { status: 409 },
@@ -75,10 +97,15 @@ async function handlePutAutoReload(request: NextRequest): Promise<NextResponse> 
       resourceType: 'auto_reload',
       source: 'settings',
       enabled: update.enabled,
-      count: update.thresholdCredits,
-      resourceName: `$${update.amountUsd}`,
+      amountUsd: update.amountUsd,
+      thresholdCredits: update.thresholdCredits,
+      ...(result.settings.consent && update.enabled
+        ? { version: result.settings.consent.version }
+        : {}),
     },
   });
+
+  if (update.enabled) maybeTriggerAutoReload(userId);
 
   return NextResponse.json(result.settings);
 }
