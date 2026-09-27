@@ -10,13 +10,13 @@ const {
   dbHolder,
   verifyScimTokenMock,
   recordSyncEventMock,
-  getSubscriptionMock,
+  organizationPlanMock,
   isTenantLockedDownMock,
 } = vi.hoisted(() => ({
   dbHolder: { current: null as unknown },
   verifyScimTokenMock: vi.fn(),
   recordSyncEventMock: vi.fn(async (..._args: unknown[]) => {}),
-  getSubscriptionMock: vi.fn(),
+  organizationPlanMock: vi.fn(),
   isTenantLockedDownMock: vi.fn(async (_organizationId: string | null) => false),
 }));
 
@@ -36,8 +36,9 @@ vi.mock('../scim-provisioning-service', () => ({
   recordSyncEvent: (...args: unknown[]) => recordSyncEventMock(...args),
 }));
 
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { getSubscription: (...args: unknown[]) => getSubscriptionMock(...args) },
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  resolveOrganizationEntitlementPlan: (...args: unknown[]) => organizationPlanMock(...args),
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -87,7 +88,7 @@ beforeEach(() => {
     organizationId: ORG,
     createdByUserId: ISSUER,
   });
-  getSubscriptionMock.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
+  organizationPlanMock.mockResolvedValue('enterprise');
   isTenantLockedDownMock.mockResolvedValue(false);
   recordSyncEventMock.mockClear();
 });
@@ -171,5 +172,48 @@ describe('authenticateScimRequest tenant lockdown', () => {
     await expect(authenticateScimRequest(scimRequest())).resolves.toMatchObject({
       organizationId: ORG,
     });
+  });
+});
+
+describe('authenticateScimRequest organization entitlement', () => {
+  it('asks for the plan of the organization the token belongs to, not the issuer', async () => {
+    dbHolder.current = createDb({ role: 'admin' });
+
+    await authenticateScimRequest(scimRequest());
+
+    expect(organizationPlanMock).toHaveBeenCalledWith(ORG);
+    expect(organizationPlanMock).not.toHaveBeenCalledWith(ISSUER);
+  });
+
+  it('refuses a connection whose organization is not on Enterprise and records why', async () => {
+    dbHolder.current = createDb({ role: 'owner' });
+    organizationPlanMock.mockResolvedValue('team');
+
+    const error = await expectScimError(authenticateScimRequest(scimRequest()));
+
+    expect(error.status).toBe(403);
+    expect(error.message).toBe('Directory sync requires an active Enterprise subscription');
+    expect(recordSyncEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ organizationId: ORG, connectionId: CONNECTION }),
+      expect.objectContaining({
+        eventType: 'sync.denied',
+        error: expect.stringContaining('current plan: team'),
+      }),
+    );
+  });
+
+  it('fails closed to Free when the organization plan cannot be resolved', async () => {
+    dbHolder.current = createDb({ role: 'owner' });
+    organizationPlanMock.mockRejectedValue(new Error('database unavailable'));
+
+    const error = await expectScimError(authenticateScimRequest(scimRequest()));
+
+    expect(error.status).toBe(403);
+    expect(recordSyncEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ error: expect.stringContaining('current plan: free') }),
+    );
   });
 });
