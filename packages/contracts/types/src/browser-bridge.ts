@@ -217,6 +217,8 @@ export const NATIVE_BROWSER_RESULT_MESSAGE = 'desktop_browser_result';
  * answer and the user is offered tools that cannot work.
  */
 export const NATIVE_BROWSER_UNPAIR_MESSAGE = 'desktop_browser_unpair';
+export const NATIVE_PAGE_CAPTURE_MESSAGE = 'page_capture';
+export const NATIVE_SELECTED_TEXT_MESSAGE = 'selected_text_query';
 export const BROWSER_COMMAND_PROTOCOL_VERSION = 1;
 export const BROWSER_COMMAND_POLL_WINDOW_MS = 20_000;
 export const BROWSER_COMMAND_TIMEOUT_MS = 45_000;

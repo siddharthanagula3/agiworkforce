@@ -1083,6 +1083,7 @@
       "tags": [
         "cli",
         "install cli",
+        "install.sh",
         "agi command",
         "terminal",
         "agi login",
@@ -1092,10 +1093,9 @@
         "resume",
         "fork",
         "sandbox",
-        "homebrew",
-        "npm",
-        "cargo",
-        "checksum"
+        "update",
+        "checksum",
+        "signature"
       ],
       "platforms": [
         "cli",
@@ -1103,7 +1103,7 @@
         "macos",
         "windows"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-27",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1111,7 +1111,7 @@
           "ordinal": 0,
           "heading": "Getting the binary",
           "headingPath": "Install and set up the CLI › Getting the binary",
-          "text": "The download page carries the current release assets for the `agi` command, one\nper architecture, with checksums that carry a Sigstore signature. The CLI page\ncarries the current install route for your platform.\n\nAn npm wrapper is published as `@agiworkforce/cli`. It runs only the matching\n`@agiworkforce/cli-<platform>` package, a bundled binary, or the path you set in\n`AGI_CLI_BINARY_PATH`; it never falls back to some other `agi` that happens to\nbe on your PATH. A shell installer and a Homebrew tap are planned and not\npublished yet, so no command is listed for them.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
+          "text": "```\ncurl -fsSL https://agiworkforce.com/install.sh | bash\n```\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`\nfor local coding sessions, and the VS Code extension offers **Install AGI CLI**\nwhen it cannot find one.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
         },
         {
           "id": "install-the-cli#1",
@@ -1990,7 +1990,7 @@
         "end temporary chat",
         "ephemeral"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-09-27",
       "source": "content/support/temporary-chats.md",
       "chunks": [
         {
@@ -1998,7 +1998,7 @@
           "ordinal": 0,
           "heading": "What a temporary chat does",
           "headingPath": "Temporary chats › What a temporary chat does",
-          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
+          "text": "A temporary chat stays out of your history, your search results, your memory\nand your Library. It is never written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, including\nany research report and the log that lets an interrupted reply resume, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
         },
         {
           "id": "temporary-chats#1",

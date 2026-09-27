@@ -764,9 +764,9 @@ async fn handle_bash_prefix(cmd: &str, session: &mut AgentSession) {
     };
     let opts = crate::tools::ToolExecOptions {
         mcp_tool_definitions: None,
-        require_confirmation: !session.skip_permissions,
+        require_confirmation: !session.skips_approval(),
         auto_approve_safe: session.auto_approve_safe,
-        auto_approve_edits: session.permission_mode.auto_approves_edits(),
+        auto_approve_edits: session.governed_permission_mode().auto_approves_edits(),
         quiet: session.quiet,
         approval_callback: None,
         privacy_mode: session.privacy_mode,
