@@ -603,6 +603,16 @@ pub fn print_subscription_cost(input_tokens: u32, output_tokens: u32) {
     eprintln!("{} {}", ts::muted("cost:"), ts::muted(summary));
 }
 
+pub async fn print_billed_turn(request_ids: &[String]) {
+    if let Some(billed) = crate::usage_summary::billed_turn(request_ids).await {
+        eprintln!(
+            "{} {}",
+            ts::muted("billed:"),
+            ts::muted(crate::usage_summary::render_billed_turn(&billed))
+        );
+    }
+}
+
 /// Print a session total cost.
 pub fn print_session_cost(
     total_input: u32,

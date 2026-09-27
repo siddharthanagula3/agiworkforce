@@ -5237,6 +5237,18 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if !turn.managed_request_ids.is_empty() {
+                let request_ids = turn.managed_request_ids.clone();
+                tokio::spawn(async move {
+                    if let Some(billed) = crate::usage_summary::billed_turn(&request_ids).await {
+                        crate::tui::push_tui_notice(format!(
+                            "This turn: {}",
+                            crate::usage_summary::render_billed_turn(&billed)
+                        ));
+                    }
+                });
+            }
         }
         Some(Err(e)) => {
             app.chat_messages.push(ChatMessage {
