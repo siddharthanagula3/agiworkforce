@@ -61,6 +61,7 @@ import {
   parkUnsentDraft,
   readMessageArrayPatch,
 } from '@shared/stores/web-chat-store';
+import { useStyleStore } from '@features/chat/stores/style-store';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -1533,7 +1534,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setActiveConversation,
   } = useConversations();
   useConversationDraftSync();
-  const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingChatToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingComposerToggles = useCallback(
+    (conversationId: string) => {
+      adoptPendingChatToggles(conversationId);
+      useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+    },
+    [adoptPendingChatToggles],
+  );
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
     groupsByMessageId: branchGroupsByMessageId,

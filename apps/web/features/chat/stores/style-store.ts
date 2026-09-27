@@ -37,13 +37,48 @@ function currentLength(value: unknown): ResponseLength {
     : DEFAULT_RESPONSE_LENGTH;
 }
 
-function withoutRetiredDefaults<T extends { style?: unknown; length?: unknown }>(
-  stored: T,
-): T & { style: ResponseStyle; length: ResponseLength } {
-  if (stored.style === 'concise' && stored.length === 'brief') {
-    return { ...stored, style: DEFAULT_PRESET_STYLE, length: DEFAULT_RESPONSE_LENGTH };
-  }
-  return { ...stored, style: currentStyle(stored.style), length: currentLength(stored.length) };
+export interface ResponseStyleSelection {
+  style: ResponseStyle;
+  length: ResponseLength;
+  activeCustomStyleId: string | null;
+}
+
+const DEFAULT_SELECTION: ResponseStyleSelection = {
+  style: DEFAULT_PRESET_STYLE,
+  length: DEFAULT_RESPONSE_LENGTH,
+  activeCustomStyleId: null,
+};
+
+const UNBOUND_SELECTION_KEY = '';
+
+function isDefaultSelection(selection: ResponseStyleSelection): boolean {
+  return (
+    selection.style === DEFAULT_PRESET_STYLE &&
+    selection.length === DEFAULT_RESPONSE_LENGTH &&
+    selection.activeCustomStyleId === null
+  );
+}
+
+function withSelection(
+  selections: Record<string, ResponseStyleSelection>,
+  key: string,
+  selection: ResponseStyleSelection,
+): Record<string, ResponseStyleSelection> {
+  const { [key]: _previous, ...rest } = selections;
+  return key === UNBOUND_SELECTION_KEY || isDefaultSelection(selection)
+    ? rest
+    : { ...rest, [key]: selection };
+}
+
+function normalizeSelection(value: unknown): ResponseStyleSelection | null {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  return {
+    style: currentStyle(record['style']),
+    length: currentLength(record['length']),
+    activeCustomStyleId:
+      typeof record['activeCustomStyleId'] === 'string' ? record['activeCustomStyleId'] : null,
+  };
 }
 
 export interface CustomStyle {
@@ -54,11 +89,12 @@ export interface CustomStyle {
   createdAt: string;
 }
 
-interface StyleState {
-  style: ResponseStyle;
-  length: ResponseLength;
-  activeCustomStyleId: string | null;
+interface StyleState extends ResponseStyleSelection {
   customStyles: CustomStyle[];
+  selectionKey: string;
+  selectionsByConversation: Record<string, ResponseStyleSelection>;
+  bindConversation: (key: string) => void;
+  adoptSelection: (fromKey: string, toKey: string) => void;
   setStyle: (style: ResponseStyle) => void;
   setLength: (length: ResponseLength) => void;
   setActiveCustomStyle: (id: string | null) => void;
@@ -74,112 +110,148 @@ interface StyleState {
 
 export const RESPONSE_STYLE_PREFERENCES_NAMESPACE = 'response-style';
 
-const STYLE_PAYLOAD_VERSION = 5;
+const STYLE_PAYLOAD_VERSION = 6;
 
 interface StylePreferencesPayload {
-  style: ResponseStyle;
-  length: ResponseLength;
-  activeCustomStyleId: string | null;
   customStyles: CustomStyle[];
   version?: number;
 }
 
+function selectionOf(state: ResponseStyleSelection): ResponseStyleSelection {
+  return {
+    style: state.style,
+    length: state.length,
+    activeCustomStyleId: state.activeCustomStyleId,
+  };
+}
+
 export const useStyleStore = create<StyleState>()(
   persist(
-    (set) => ({
-      style: DEFAULT_PRESET_STYLE,
-      length: DEFAULT_RESPONSE_LENGTH,
-      activeCustomStyleId: null,
-      customStyles: [],
-
-      setStyle: (style) => {
-        set({ style, activeCustomStyleId: style === 'custom' ? null : null });
-        void syncToServer();
-      },
-
-      setLength: (length) => {
-        set({ length });
-        void syncToServer();
-      },
-
-      setActiveCustomStyle: (id) => {
-        set({ style: 'custom', activeCustomStyleId: id });
-        void syncToServer();
-      },
-
-      addCustomStyle: (name, instruction, sampleText) => {
-        const id = crypto.randomUUID();
-        set((state) => ({
-          customStyles: [
-            ...state.customStyles,
-            { id, name, instruction, sampleText, createdAt: new Date().toISOString() },
-          ],
-          style: 'custom' as ResponseStyle,
-          activeCustomStyleId: id,
-        }));
-        void syncToServer();
-        return id;
-      },
-
-      updateCustomStyle: (id, updates) => {
-        set((state) => ({
-          customStyles: state.customStyles.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-        }));
-        void syncToServer();
-      },
-
-      deleteCustomStyle: (id) => {
-        set((state) => ({
-          customStyles: state.customStyles.filter((s) => s.id !== id),
-          activeCustomStyleId: state.activeCustomStyleId === id ? null : state.activeCustomStyleId,
-          style: state.activeCustomStyleId === id ? DEFAULT_PRESET_STYLE : state.style,
-        }));
-        void syncToServer();
-      },
-
-      resetToDefault: () => {
-        set({
-          style: DEFAULT_PRESET_STYLE,
-          length: DEFAULT_RESPONSE_LENGTH,
-          activeCustomStyleId: null,
+    (set) => {
+      const select = (update: Partial<ResponseStyleSelection>) =>
+        set((state) => {
+          const next = { ...selectionOf(state), ...update };
+          return {
+            ...next,
+            selectionsByConversation: withSelection(
+              state.selectionsByConversation,
+              state.selectionKey,
+              next,
+            ),
+          };
         });
-        void syncToServer();
-      },
 
-      hydrateFromServer: async () => {
-        try {
-          const stored = await fetchStoredPreferenceNamespace<StylePreferencesPayload>(
-            RESPONSE_STYLE_PREFERENCES_NAMESPACE,
-          );
-          if (Object.keys(stored).length === 0) return;
-          const normalized =
-            stored.version === STYLE_PAYLOAD_VERSION
-              ? { style: currentStyle(stored.style), length: currentLength(stored.length) }
-              : withoutRetiredDefaults(stored);
-          set({
-            style: normalized.style,
-            length: normalized.length,
-            activeCustomStyleId: stored.activeCustomStyleId ?? null,
-            customStyles: stored.customStyles ?? [],
+      return {
+        ...DEFAULT_SELECTION,
+        customStyles: [],
+        selectionKey: UNBOUND_SELECTION_KEY,
+        selectionsByConversation: {},
+
+        bindConversation: (key) =>
+          set((state) =>
+            state.selectionKey === key
+              ? state
+              : {
+                  ...(state.selectionsByConversation[key] ?? DEFAULT_SELECTION),
+                  selectionKey: key,
+                },
+          ),
+
+        adoptSelection: (fromKey, toKey) =>
+          set((state) => {
+            const pending = state.selectionsByConversation[fromKey];
+            if (!pending || fromKey === toKey) return state;
+            const { [fromKey]: _pending, ...rest } = state.selectionsByConversation;
+            return {
+              selectionsByConversation: { ...rest, [toKey]: rest[toKey] ?? pending },
+              ...(state.selectionKey === fromKey ? { selectionKey: toKey } : {}),
+            };
+          }),
+
+        setStyle: (style) => select({ style, activeCustomStyleId: null }),
+
+        setLength: (length) => select({ length }),
+
+        setActiveCustomStyle: (id) => select({ style: 'custom', activeCustomStyleId: id }),
+
+        addCustomStyle: (name, instruction, sampleText) => {
+          const id = crypto.randomUUID();
+          set((state) => ({
+            customStyles: [
+              ...state.customStyles,
+              { id, name, instruction, sampleText, createdAt: new Date().toISOString() },
+            ],
+          }));
+          select({ style: 'custom', activeCustomStyleId: id });
+          void syncToServer();
+          return id;
+        },
+
+        updateCustomStyle: (id, updates) => {
+          set((state) => ({
+            customStyles: state.customStyles.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+          }));
+          void syncToServer();
+        },
+
+        deleteCustomStyle: (id) => {
+          set((state) => {
+            const selectionsByConversation = Object.fromEntries(
+              Object.entries(state.selectionsByConversation).filter(
+                ([, selection]) => selection.activeCustomStyleId !== id,
+              ),
+            );
+            return {
+              customStyles: state.customStyles.filter((s) => s.id !== id),
+              selectionsByConversation,
+              ...(state.activeCustomStyleId === id ? DEFAULT_SELECTION : {}),
+            };
           });
-        } catch {
-          // Offline or unauthenticated: the localStorage cache is still valid.
-        }
-      },
-    }),
+          void syncToServer();
+        },
+
+        resetToDefault: () => {
+          set({ ...DEFAULT_SELECTION, selectionsByConversation: {} });
+        },
+
+        hydrateFromServer: async () => {
+          try {
+            const stored = await fetchStoredPreferenceNamespace<StylePreferencesPayload>(
+              RESPONSE_STYLE_PREFERENCES_NAMESPACE,
+            );
+            if (!Array.isArray(stored.customStyles)) return;
+            set({ customStyles: stored.customStyles });
+          } catch {
+            // Offline or unauthenticated: the localStorage cache is still valid.
+          }
+        },
+      };
+    },
     {
       name: 'agi-response-style',
-      version: 5,
+      version: 6,
       storage: createJSONStorage(() => localStorage),
-      migrate: (persisted: unknown, version: number) => {
-        let state = { ...((persisted ?? {}) as Record<string, unknown>) };
-        if (version < 3) {
-          state = { ...state, activeCustomStyleId: null, customStyles: [], length: 'brief' };
-        } else if (version < 4) {
-          state = { ...state, length: 'brief' };
-        }
-        if (version < 5) state = withoutRetiredDefaults(state);
-        return state as unknown as StyleState;
+      partialize: (state) => ({
+        customStyles: state.customStyles,
+        selectionsByConversation: state.selectionsByConversation,
+      }),
+      migrate: (persisted: unknown) => {
+        const state = (persisted ?? {}) as Record<string, unknown>;
+        const selections =
+          state['selectionsByConversation'] && typeof state['selectionsByConversation'] === 'object'
+            ? Object.fromEntries(
+                Object.entries(state['selectionsByConversation'] as Record<string, unknown>)
+                  .map(([key, value]) => [key, normalizeSelection(value)] as const)
+                  .filter(
+                    (entry): entry is readonly [string, ResponseStyleSelection] =>
+                      entry[1] !== null && !isDefaultSelection(entry[1]),
+                  ),
+              )
+            : {};
+        return {
+          customStyles: Array.isArray(state['customStyles']) ? state['customStyles'] : [],
+          selectionsByConversation: selections,
+        } as unknown as StyleState;
       },
     },
   ),
@@ -190,13 +262,10 @@ function syncToServer(): void {
   if (typeof window === 'undefined') return;
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => {
-    const { style, length, activeCustomStyleId, customStyles } = useStyleStore.getState();
+    const { customStyles } = useStyleStore.getState();
     void Promise.resolve()
       .then(() =>
         savePreferenceNamespace<StylePreferencesPayload>(RESPONSE_STYLE_PREFERENCES_NAMESPACE, {
-          style,
-          length,
-          activeCustomStyleId,
           customStyles,
           version: STYLE_PAYLOAD_VERSION,
         }),
