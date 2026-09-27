@@ -39,7 +39,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-227 open items.
+223 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -75,7 +75,7 @@ Nothing left in this wave.
 | 65. Computer-use experience | 3 | [partial/065-computer-use-experience.md](../partial/065-computer-use-experience.md) |
 | 66. Coding-workspace frontend | 18 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
 | 67. Coding capabilities and developer workflows | 25 | [partial/067-coding-capabilities-and-developer-workflows.md](../partial/067-coding-capabilities-and-developer-workflows.md) |
-| 68. Session continuity and remote-session product | 8 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
+| 68. Session continuity and remote-session product | 4 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
 | 69. Web application | 1 | [partial/069-web-application.md](../partial/069-web-application.md) |
 | 71. Mobile application | 1 | [partial/071-mobile-application.md](../partial/071-mobile-application.md) |
 | 81. Free / Basic / Pro / Max 5x / Max 20x planning structure | 10 | [partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md](../partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md) |
@@ -96,7 +96,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1731 open items.
+1735 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -165,7 +165,7 @@ Nothing left in this wave.
 | 65. Computer-use experience | 22 | [partial/065-computer-use-experience.md](../partial/065-computer-use-experience.md) |
 | 66. Coding-workspace frontend | 16 | [partial/066-coding-workspace-frontend.md](../partial/066-coding-workspace-frontend.md) |
 | 67. Coding capabilities and developer workflows | 12 | [partial/067-coding-capabilities-and-developer-workflows.md](../partial/067-coding-capabilities-and-developer-workflows.md) |
-| 68. Session continuity and remote-session product | 20 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
+| 68. Session continuity and remote-session product | 24 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
 | 69. Web application | 5 | [partial/069-web-application.md](../partial/069-web-application.md) |
 | 70. Desktop application | 11 | [partial/070-desktop-application.md](../partial/070-desktop-application.md) |
 | 71. Mobile application | 9 | [partial/071-mobile-application.md](../partial/071-mobile-application.md) |
