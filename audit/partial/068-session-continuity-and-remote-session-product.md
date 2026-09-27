@@ -394,6 +394,6 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 | --- | --- | --- | --- |
 | web | partial | Cloud and desktop-local sessions notify; CLI and VS Code local sessions send no activity yet. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
+| vscode | partial | VS Code alerts in the editor when a turn needs approval, finishes or fails while the window is unfocused. It does not push to the phone: the phone opens local sessions through the paired desktop, which cannot answer an approval raised in the VS Code process, so a push would dead-end (lead decision). | handler |
 
-Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`
+Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`, `apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts:19-19`, `apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts:149-149`, `apps/extension-vscode/src/providers/chatEditorPanel.ts:137-137`
