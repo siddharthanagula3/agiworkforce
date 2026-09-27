@@ -49,8 +49,35 @@ export interface ScheduleCompletionNotice {
   userId: string;
   taskId: string;
   taskName: string;
-  status: 'success' | 'failed' | 'timeout' | 'cancelled';
+  status: 'success' | 'failed' | 'timeout' | 'cancelled' | 'awaiting_approval';
   runId?: string;
+  approvalStep?: number;
+  approvalSummary?: string;
+}
+
+function noticeCopy(notice: ScheduleCompletionNotice): {
+  title: string;
+  body: string;
+  severity: 'success' | 'error' | 'warning';
+} {
+  const name = shortTitle(notice.taskName);
+  if (notice.status === 'awaiting_approval') {
+    return {
+      title: 'Scheduled task needs your approval',
+      body: notice.approvalSummary
+        ? `“${name}” is paused until you approve or deny: ${notice.approvalSummary}.`
+        : `“${name}” is paused until you approve or deny its next step.`,
+      severity: 'warning',
+    };
+  }
+  if (notice.status === 'success') {
+    return { title: 'Scheduled task finished', body: `“${name}” completed.`, severity: 'success' };
+  }
+  return {
+    title: 'Scheduled task failed',
+    body: `“${name}” ${notice.status === 'timeout' ? 'timed out' : 'failed'}.`,
+    severity: 'error',
+  };
 }
 
 export async function notifyScheduleCompleted(
@@ -63,21 +90,21 @@ export async function notifyScheduleCompleted(
   try {
     if (notice.status === 'cancelled') return none;
 
-    const succeeded = notice.status === 'success';
-    const timedOut = notice.status === 'timeout';
-    const title = succeeded ? 'Scheduled task finished' : 'Scheduled task failed';
-    const body = succeeded
-      ? `“${shortTitle(notice.taskName)}” completed.`
-      : `“${shortTitle(notice.taskName)}” ${timedOut ? 'timed out' : 'failed'}.`;
+    const { title, body, severity } = noticeCopy(notice);
+    const awaitingApproval = notice.status === 'awaiting_approval';
 
     await recordNotification(db, {
       userId: notice.userId,
       category: 'schedule',
-      severity: succeeded ? 'success' : 'error',
+      severity,
       title,
       message: body,
       target: { kind: 'schedule', id: notice.taskId },
-      dedupeKey: notice.runId ? `schedule-run:${notice.runId}` : null,
+      dedupeKey: notice.runId
+        ? awaitingApproval
+          ? `schedule-run:${notice.runId}:approval:${notice.approvalStep ?? 0}`
+          : `schedule-run:${notice.runId}`
+        : null,
     });
 
     const loaded = await loadSchedulePreferences(db, notice.userId);
@@ -103,7 +130,8 @@ export async function notifyScheduleCompleted(
         ? sendScheduleCompletionEmail({
             to: preferences.email_address,
             taskName: notice.taskName,
-            status: succeeded ? 'success' : timedOut ? 'timeout' : 'failed',
+            status: notice.status,
+            ...(notice.approvalSummary ? { approvalSummary: notice.approvalSummary } : {}),
           }).catch(() => null)
         : Promise.resolve(null),
     ]);
