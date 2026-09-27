@@ -300,7 +300,7 @@ export function resolveFeatureRate(
   }
 
   const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed < 0) {
+  if (!Number.isFinite(parsed) || parsed <= 0) {
     return { ...entry, feature, overrideEnv, overrideApplied: false, overrideInvalid: true };
   }
 
