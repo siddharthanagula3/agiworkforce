@@ -1060,6 +1060,15 @@
           }
         }
       }
+    },
+    "headers": {
+      "XQuotaWarning": {
+        "description": "Sent when this request is projected to take the account to 80% or more of a usage window. Semicolon-separated fields: level (warning from 80%, critical from 95%), scope (billing_period, rolling_five_hour or rolling_weekly, whichever is fullest), used_percent after this request, and threshold_percent. Absent below 80% and on plans without usage limits.",
+        "schema": {
+          "type": "string",
+          "example": "level=warning; scope=rolling_weekly; used_percent=84; threshold_percent=80"
+        }
+      }
     }
   },
   "security": [
@@ -1164,6 +1173,11 @@
                 "schema": {
                   "type": "string"
                 }
+              }
+            },
+            "headers": {
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
               }
             }
           },
