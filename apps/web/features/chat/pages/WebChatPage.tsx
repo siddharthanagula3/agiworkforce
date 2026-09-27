@@ -212,6 +212,7 @@ import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonom
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
+import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -5199,6 +5200,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
+        {...(turnNeedsTwoFactor(lastChatMessage)
+          ? {
+              actionSlot: (
+                <button
+                  type="button"
+                  onClick={() => openSettings('security')}
+                  className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
+                >
+                  Turn on two-factor
+                </button>
+              ),
+            }
+          : {})}
         action={{
           label: 'Retry',
           ariaLabel: 'Retry this turn',

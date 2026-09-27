@@ -3224,6 +3224,140 @@
           "name": "keeps the loop in manual mode when a destructive tool is offered under autonomous"
         }
       ]
+    },
+    {
+      "id": "password-change-requires-current-password",
+      "doc": "account-security",
+      "section": "Password",
+      "kind": "prose",
+      "sentence": "Changing it requires your current password, and a code from your authenticator app as well when two-factor authentication is on.",
+      "implementation": ["apps/web/app/api/settings/password/route.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/password/route.ts",
+          "text": "throw createError.validation('Enter your current password.').asUserSafe();"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/password/route.ts",
+          "text": "!user.passwordEnabled || factors.anySecondFactor || factors.earlierEnrollmentPending"
+        }
+      ]
+    },
+    {
+      "id": "password-change-signs-out-other-devices",
+      "doc": "account-security",
+      "section": "Password",
+      "kind": "prose",
+      "sentence": "Every other device signed in to the account is signed out when the password changes.",
+      "implementation": ["apps/web/app/api/settings/password/route.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/password/route.ts",
+          "text": "const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);"
+        }
+      ]
+    },
+    {
+      "id": "email-change-removes-previous-address",
+      "doc": "account-security",
+      "section": "Email address",
+      "kind": "prose",
+      "sentence": "The previous address is removed unless a sign-in method still uses it.",
+      "implementation": [
+        "apps/web/app/api/settings/email/route.ts",
+        "apps/web/features/settings/components/EmailAddressChange.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/email/route.ts",
+          "text": "await identity.removeEmailAddress(previousId);"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
+          "text": "Your previous address stays on the account because a sign-in method still uses it."
+        }
+      ]
+    },
+    {
+      "id": "step-up-covers-account-changes",
+      "doc": "account-security",
+      "section": "Confirming it is you",
+      "kind": "prose",
+      "sentence": "Deleting the account, logging out of all devices, creating an API key, turning two-factor authentication on or off, replacing backup codes and changing the email address each requires you to confirm it is you, even when you are already signed in.",
+      "implementation": [
+        "apps/web/lib/server/step-up-auth.ts#requireStepUp",
+        "apps/web/lib/server/step-up/actions.ts#STEP_UP_ACTIONS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/step-up-action-coverage.test.ts",
+          "name": "demands a fresh factor for every declared action that has somewhere to demand it"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/user/delete-account/route.ts",
+          "text": "action: 'account.delete'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/sessions/route.ts",
+          "text": "action: 'session.revoke_all'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/api-keys/route.ts",
+          "text": "action: 'api_credential.reveal'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/2fa/setup/route.ts",
+          "text": "action: 'two_factor.enable'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/2fa/route.ts",
+          "text": "action: 'two_factor.disable'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/2fa/backup-codes/route.ts",
+          "text": "action: 'two_factor.regenerate_backup_codes'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/settings/email/route.ts",
+          "text": "action: 'email.change'"
+        }
+      ]
+    },
+    {
+      "id": "step-up-confirmation-lasts-five-minutes",
+      "doc": "account-security",
+      "section": "Confirming it is you",
+      "kind": "prose",
+      "sentence": "A confirmation stays valid for up to 5 minutes, so a second change right after the first does not ask again.",
+      "implementation": [
+        "apps/web/lib/server/step-up/actions.ts#STEP_UP_ACTIONS",
+        "apps/web/lib/server/step-up/session-proof.ts#freshVerificationMinutes"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/server/step-up/actions.ts",
+          "text": "freshnessSeconds: 300"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/hooks/use-step-up.tsx",
+          "text": "const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);"
+        }
+      ]
     }
   ],
   "unproven": [

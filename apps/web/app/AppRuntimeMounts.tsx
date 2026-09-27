@@ -10,6 +10,7 @@ import { DesktopHostMount } from '@/features/desktop-host';
 import { OfflineIndicator } from '@shared/components/OfflineIndicator';
 import { WebPushOptIn } from '@/features/notifications';
 import { PendingCheckoutConfirmation } from '@/features/billing/components/PendingCheckoutConfirmation';
+import { ProductNotices } from '@shared/components/ProductNotices';
 
 export default function AppRuntimeMounts() {
   return (
@@ -24,6 +25,7 @@ export default function AppRuntimeMounts() {
       <OfflineIndicator position="bottom" />
       <WebPushOptIn />
       <PendingCheckoutConfirmation />
+      <ProductNotices />
     </>
   );
 }
