@@ -1,5 +1,5 @@
 import * as Crypto from 'expo-crypto';
-import { extractCandidateMemoryFacts, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import { extractPassiveMemoryFacts, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
 import type { MemoryFact } from '@/storage/types';
 
@@ -140,7 +140,7 @@ export async function consolidateFactsFromTurn(params: {
   if (!enabled) return { extracted: 0, inserted: 0 };
 
   try {
-    const candidates = extractCandidateMemoryFacts(message);
+    const candidates = extractPassiveMemoryFacts(message);
     if (candidates.length === 0) return { extracted: 0, inserted: 0 };
 
     const existing = await listMemoryFacts({ limit: 500 });
