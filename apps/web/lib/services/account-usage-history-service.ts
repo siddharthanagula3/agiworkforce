@@ -327,3 +327,31 @@ export async function readMonthlyImageUsage(
     credits: creditsFromMicrousd(num(row?.cost_microusd)),
   };
 }
+
+export interface ManagedUsageTurnCost {
+  requestId: string;
+  status: 'settled' | 'pending';
+  credits: number | null;
+}
+
+const SETTLED_TURN_STATUSES: ReadonlySet<string> = new Set(['completed', 'released', 'declined']);
+
+export async function readManagedUsageTurnCost(
+  db: DatabaseAdapter,
+  userId: string,
+  requestId: string,
+): Promise<ManagedUsageTurnCost | null> {
+  const [row] = await db.query<{ status: string; cost_microusd: string | number | null }>(
+    `select status, actual_cost_microusd as cost_microusd
+       from public.managed_usage_requests
+      where user_id = $1
+        and idempotency_key = $2
+      limit 1`,
+    [userId, requestId],
+  );
+  if (!row) return null;
+  if (!SETTLED_TURN_STATUSES.has(row.status)) {
+    return { requestId, status: 'pending', credits: null };
+  }
+  return { requestId, status: 'settled', credits: creditsFromMicrousd(num(row.cost_microusd)) };
+}

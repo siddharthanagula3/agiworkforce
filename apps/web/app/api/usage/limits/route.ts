@@ -2,7 +2,11 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimitHandler } from '@/lib/rate-limit';
+import {
+  readManagedTurnSlots,
+  withRateLimitHandler,
+  type ManagedTurnSlotReading,
+} from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
@@ -25,12 +29,25 @@ export interface UsageLimitsResponse {
   resetAt: string;
   units: TierUnitUsage[];
   images: MonthlyImageUsage;
+  responses: ManagedTurnSlotReading | null;
+}
+
+async function readRunningResponses(
+  userId: string,
+  planTier: string,
+): Promise<ManagedTurnSlotReading | null> {
+  try {
+    return await readManagedTurnSlots({ userId, planTier });
+  } catch (error) {
+    logger.warn({ error, userId }, 'Running response count unavailable');
+    return null;
+  }
 }
 
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;
   try {
-    scoped = await getUserScopedDb(request);
+    scoped = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
   } catch (error) {
     if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
       throw error;
@@ -40,9 +57,10 @@ async function handler(request: NextRequest) {
 
   try {
     const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
-    const [period, images] = await Promise.all([
+    const [period, images, responses] = await Promise.all([
       readTierUnitUsage(scoped.db, scoped.userId, planTier),
       readMonthlyImageUsage(scoped.db, scoped.userId),
+      readRunningResponses(scoped.userId, planTier),
     ]);
     const body: UsageLimitsResponse = {
       planTier,
@@ -50,6 +68,7 @@ async function handler(request: NextRequest) {
       resetAt: period.resetAt,
       units: period.units,
       images,
+      responses,
     };
     return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
