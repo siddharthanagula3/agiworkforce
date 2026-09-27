@@ -11,16 +11,18 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Share2,
   Trash2,
   X,
   Zap,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { ApprovalCard } from '@agiworkforce/ui';
+import { ApprovalCard, useConfirmAction } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
   describeScheduleRunTiming,
+  managedCloudScheduleShareUrlPath,
   type ManagedCloudScheduleTemplate,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRecurrence,
@@ -31,6 +33,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { getCloudModels, type CloudModelInfo } from '../../api/cloudApi';
+import { WEB_APP_URL } from '../../api/config';
 import type { PlanTier } from '../../lib/cloudAccountTypes';
 import { resolveDesktopCloudPickerModels } from '../../services/desktopCloudEntitlements';
 import {
@@ -501,6 +504,8 @@ function AuthenticatedDesktopCloudSchedules({
   }, [editorOpen, saving]);
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
+  const [shareUrls, setShareUrls] = useState<Record<string, string>>({});
+  const { confirm: confirmAction, dialog: confirmDialog } = useConfirmAction();
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
   const [expandedTriggersId, setExpandedTriggersId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, HistoryState>>({});
@@ -677,6 +682,43 @@ function AuthenticatedDesktopCloudSchedules({
       setSchedules((current) =>
         current.map((candidate) => (candidate.id === updated.id ? updated : candidate)),
       );
+    });
+  };
+
+  const shareSchedule = async (schedule: ManagedCloudScheduleTask) => {
+    setOperation((current) => ({ ...current, [schedule.id]: 'share' }));
+    setRowErrors((current) => ({ ...current, [schedule.id]: null }));
+    try {
+      const share = await api.shareSchedule(schedule.id);
+      const url = `${WEB_APP_URL || window.location.origin}${managedCloudScheduleShareUrlPath(share.token)}`;
+      setShareUrls((current) => ({ ...current, [schedule.id]: url }));
+    } catch (error) {
+      setRowErrors((current) => ({
+        ...current,
+        [schedule.id]: errorText(error, 'The share link could not be created.'),
+      }));
+    } finally {
+      setOperation((current) => ({ ...current, [schedule.id]: null }));
+    }
+  };
+
+  const stopSharing = (schedule: ManagedCloudScheduleTask) => {
+    confirmAction({
+      title: 'Stop sharing this schedule?',
+      description:
+        'The link stops working for everyone who has it. Copies people already made stay theirs. Sharing again creates a new link.',
+      confirmLabel: 'Stop sharing',
+      onConfirm: async () => {
+        try {
+          await api.unshareSchedule(schedule.id);
+          setShareUrls(({ [schedule.id]: _removed, ...rest }) => rest);
+        } catch (error) {
+          setRowErrors((current) => ({
+            ...current,
+            [schedule.id]: errorText(error, 'Sharing could not be stopped.'),
+          }));
+        }
+      },
     });
   };
 
@@ -1133,6 +1175,16 @@ function AuthenticatedDesktopCloudSchedules({
                         </button>
                         <button
                           type="button"
+                          aria-label={`Share ${schedule.name}`}
+                          title="Share schedule"
+                          onClick={() => void shareSchedule(schedule)}
+                          disabled={Boolean(busy)}
+                          className={SECONDARY_BUTTON}
+                        >
+                          <Share2 className="h-3.5 w-3.5" aria-hidden />
+                        </button>
+                        <button
+                          type="button"
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
@@ -1182,6 +1234,47 @@ function AuthenticatedDesktopCloudSchedules({
                     ) : null}
                   </div>
 
+                  {shareUrls[schedule.id] ? (
+                    <div className="space-y-2 border-t border-[var(--chat-border)] px-4 py-3 text-xs">
+                      <p className="text-[var(--chat-text-secondary)]">
+                        Anyone with this link can see this schedule&apos;s name, instructions and
+                        timing as they are now, and add a copy to their own schedules. Run history
+                        and results stay private.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          readOnly
+                          value={shareUrls[schedule.id]}
+                          aria-label={`Share link for ${schedule.name}`}
+                          onFocus={(event) => event.currentTarget.select()}
+                          className="min-w-0 flex-1 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-base)] px-2 py-1.5 text-[var(--chat-text-primary)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void navigator.clipboard
+                              .writeText(shareUrls[schedule.id] ?? '')
+                              .catch((error: unknown) =>
+                                setRowErrors((current) => ({
+                                  ...current,
+                                  [schedule.id]: errorText(error, 'The link could not be copied.'),
+                                })),
+                              )
+                          }
+                          className={SECONDARY_BUTTON}
+                        >
+                          Copy link
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => stopSharing(schedule)}
+                          className={SECONDARY_BUTTON}
+                        >
+                          Stop sharing
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   {triggersExpanded ? (
                     <div className="border-t border-[var(--chat-border)] px-4 py-3">
                       <DesktopScheduleTriggersPanel
@@ -1661,6 +1754,7 @@ function AuthenticatedDesktopCloudSchedules({
           </section>
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }
