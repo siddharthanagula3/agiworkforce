@@ -78,6 +78,7 @@ import {
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { OPEN_CLOUD_CODE_SESSION_COMMAND, resolveCloudCodeApi } from '../cloud-tasks';
+import { githubRepositoryName, workspaceGitHubRepositories } from '../context-handoff';
 import { resolveAccountPresence } from '../surfaces/accountAccess';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
@@ -1516,10 +1517,16 @@ export class ChatStateManager {
       return;
     }
     try {
-      const [page, codeSessions] = await Promise.all([
+      const [page, codeSessions, workspaceRepositories] = await Promise.all([
         resolution.workspace.chat.listConversations({ limit: 50 }),
         code.status === 'ready' ? code.api.list('open') : null,
+        workspaceGitHubRepositories(),
       ]);
+      const inWorkspaceRepository = (repositoryUrl: string | null): boolean => {
+        if (workspaceRepositories.length === 0) return true;
+        const name = repositoryUrl ? githubRepositoryName(repositoryUrl) : null;
+        return name !== null && workspaceRepositories.includes(name);
+      };
       const inputs: SessionRowInput[] = [
         ...page.conversations.map((conversation) => ({
           id: conversation.id,
@@ -1527,13 +1534,15 @@ export class ChatStateManager {
           updatedAt: conversation.updatedAt,
           source: 'cloud' as const,
         })),
-        ...(codeSessions?.sessions ?? []).map((session) => ({
-          id: session.id,
-          title: session.title,
-          updatedAt: session.updatedAt,
-          source: 'cloud-code' as const,
-          ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
-        })),
+        ...(codeSessions?.sessions ?? [])
+          .filter((session) => inWorkspaceRepository(session.repositoryUrl))
+          .map((session) => ({
+            id: session.id,
+            title: session.title,
+            updatedAt: session.updatedAt,
+            source: 'cloud-code' as const,
+            ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
+          })),
       ];
       this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
     } catch (error) {
