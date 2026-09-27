@@ -76,6 +76,46 @@ impl PermissionMode {
     pub(crate) fn auto_approves_edits(self) -> bool {
         matches!(self, PermissionMode::AcceptEdits)
     }
+
+    fn autonomy(self) -> u8 {
+        match self {
+            PermissionMode::Plan => 0,
+            PermissionMode::DontAsk => 1,
+            PermissionMode::Default => 2,
+            PermissionMode::AcceptEdits => 3,
+            PermissionMode::BypassPermissions => 4,
+        }
+    }
+
+    pub(crate) fn within(self, pinned: Option<PermissionMode>) -> PermissionMode {
+        match pinned {
+            Some(pinned) if self.autonomy() > pinned.autonomy() => pinned,
+            _ => self,
+        }
+    }
+
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            PermissionMode::Default => "default",
+            PermissionMode::Plan => "plan",
+            PermissionMode::AcceptEdits => "acceptEdits",
+            PermissionMode::BypassPermissions => "bypassPermissions",
+            PermissionMode::DontAsk => "dontAsk",
+        }
+    }
+}
+
+impl EffectivePermissions {
+    pub(crate) fn held_to(self, pinned: Option<PermissionMode>) -> Self {
+        if pinned.is_none() {
+            return self;
+        }
+        Self {
+            mode: self.mode.within(pinned),
+            skip_permissions: false,
+            auto_approve_safe: self.auto_approve_safe,
+        }
+    }
 }
 
 impl CliOptions {

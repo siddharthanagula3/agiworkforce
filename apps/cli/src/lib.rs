@@ -1237,6 +1237,15 @@ enum ApprovalsSubcommand {
     },
     /// Reset all approval rules.
     Reset,
+    /// Show recent approval decisions, newest first.
+    History {
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Show or save the permission mode new sessions start in.
+    Mode {
+        mode: Option<cli_options::PermissionMode>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2420,6 +2429,20 @@ fn run_hooks_command(action: Option<&HooksSubcommand>) -> Result<()> {
     Ok(())
 }
 
+fn held_to_managed_policy(
+    requested: cli_options::EffectivePermissions,
+) -> cli_options::EffectivePermissions {
+    let pinned = permissions::managed_permission_mode();
+    let held = requested.held_to(pinned);
+    if held != requested {
+        output::print_warn(&format!(
+            "Your organization's policy holds tool approval at {}; the looser mode you asked for was not applied.",
+            held.mode.name()
+        ));
+    }
+    held
+}
+
 /// Print what `agi update --install` will run, ask, then run it.
 fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bool) -> Result<()> {
     let plan = update_check::InstallPlan::new(running, release);
@@ -2697,6 +2720,64 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             store.reset();
             store.save()?;
             println!("Approval rules reset.");
+            Ok(())
+        }
+        ApprovalsSubcommand::History { limit } => {
+            let entries = approval_audit::recent_approvals(*limit)?;
+            if entries.is_empty() {
+                println!("No approval decisions recorded yet.");
+            }
+            for entry in entries {
+                let decision = match entry.decision {
+                    approval_audit::ApprovalDecision::Approved => "approved",
+                    approval_audit::ApprovalDecision::Denied => "denied",
+                    approval_audit::ApprovalDecision::BlockedByRule => "blocked by rule",
+                };
+                let reason = entry
+                    .reason
+                    .map(|reason| format!(" ({reason})"))
+                    .unwrap_or_default();
+                println!(
+                    "{}",
+                    terminal_text::sanitize_terminal_text(&format!(
+                        "{}  {decision}{reason}  {}  {}",
+                        entry.timestamp, entry.tool_name, entry.target
+                    ))
+                );
+            }
+            Ok(())
+        }
+        ApprovalsSubcommand::Mode { mode } => {
+            let pinned = permissions::managed_permission_mode();
+            match mode {
+                None => {
+                    let saved = config::CliConfig::load()?
+                        .default
+                        .permission_mode
+                        .as_deref()
+                        .and_then(cli_options::persisted_permission_mode)
+                        .unwrap_or_default();
+                    println!("New sessions start in {}.", saved.within(pinned).name());
+                }
+                Some(cli_options::PermissionMode::BypassPermissions) => anyhow::bail!(
+                    "bypassPermissions is never saved as a default; pass --permission-mode bypassPermissions for one run"
+                ),
+                Some(mode) if mode.within(pinned) != *mode => anyhow::bail!(
+                    "your organization's policy holds tool approval at {}, so {} cannot be the default",
+                    mode.within(pinned).name(),
+                    mode.name()
+                ),
+                Some(mode) => {
+                    onboarding::update_config_permission_mode(*mode)?;
+                    println!("New sessions start in {}.", mode.name());
+                }
+            }
+            if let Some(pinned) = pinned {
+                println!(
+                    "Your organization's policy holds tool approval at {}.",
+                    pinned.name()
+                );
+            }
             Ok(())
         }
     }
@@ -3175,15 +3256,16 @@ pub async fn run_main() -> Result<()> {
                 }
                 session.demo_force_rate_limit = cli.demo;
                 session.demo_mode = cli.demo;
-                let exec_permissions = normalized_cli_options.effective_permissions(
-                    cli.mode,
-                    cli.dangerously_skip_permissions,
-                    cli.yes,
-                    app_config.default.permission_mode.as_deref(),
-                );
+                let exec_permissions =
+                    held_to_managed_policy(normalized_cli_options.effective_permissions(
+                        cli.mode,
+                        cli.dangerously_skip_permissions || *full_auto,
+                        cli.yes || *full_auto,
+                        app_config.default.permission_mode.as_deref(),
+                    ));
                 session.permission_mode = exec_permissions.mode;
-                session.skip_permissions = exec_permissions.skip_permissions || *full_auto;
-                session.auto_approve_safe = exec_permissions.auto_approve_safe || *full_auto;
+                session.skip_permissions = exec_permissions.skip_permissions;
+                session.auto_approve_safe = exec_permissions.auto_approve_safe;
                 session.auto_approve_plan = cli.auto_approve_plan;
                 if matches!(exec_permissions.mode, cli_options::PermissionMode::Plan) {
                     session.plan_mode = true;
@@ -4496,12 +4578,13 @@ pub async fn run_main() -> Result<()> {
     }
 
     let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
-    let resolved_permissions = normalized_cli_options.effective_permissions(
-        cli.mode,
-        cli.dangerously_skip_permissions,
-        cli.yes,
-        app_config.default.permission_mode.as_deref(),
-    );
+    let resolved_permissions =
+        held_to_managed_policy(normalized_cli_options.effective_permissions(
+            cli.mode,
+            cli.dangerously_skip_permissions,
+            cli.yes,
+            app_config.default.permission_mode.as_deref(),
+        ));
     let effective_skip_permissions = resolved_permissions.skip_permissions;
     let effective_auto_approve_safe = resolved_permissions.auto_approve_safe;
     let effective_permission_mode: cli_options::PermissionMode = resolved_permissions.mode;

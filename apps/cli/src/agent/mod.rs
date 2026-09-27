@@ -162,6 +162,7 @@ pub struct AgentSession {
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
+    pub(crate) pinned_permission_mode: Option<crate::cli_options::PermissionMode>,
     pub plan_approved: bool,
     pub current_plan: Option<crate::plan_mode::Plan>,
     pub current_plan_path: Option<std::path::PathBuf>,
@@ -625,6 +626,7 @@ impl AgentSession {
             on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
             permission_mode: crate::cli_options::PermissionMode::Default,
+            pinned_permission_mode: crate::permissions::managed_permission_mode(),
             plan_approved: false,
             current_plan: None,
             current_plan_path: None,
@@ -698,8 +700,8 @@ impl AgentSession {
             config.clone(),
             self.model.clone(),
             sys_context.clone(),
-            self.skip_permissions,
-            self.permission_mode,
+            self.skips_approval(),
+            self.governed_permission_mode(),
             self.allowed_tools.clone(),
             self.disallowed_tools.clone(),
             self.subagent_depth,
@@ -1371,7 +1373,7 @@ impl AgentSession {
             .unwrap_or_else(|| "<unwritten>".to_string());
 
         let message = if matches!(
-            self.permission_mode,
+            self.governed_permission_mode(),
             crate::cli_options::PermissionMode::Plan
         ) && !self.plan_approved
         {
@@ -1537,6 +1539,14 @@ impl AgentSession {
         } else {
             crate::output::print_warn(&warning);
         }
+    }
+
+    pub(crate) fn governed_permission_mode(&self) -> crate::cli_options::PermissionMode {
+        self.permission_mode.within(self.pinned_permission_mode)
+    }
+
+    pub(crate) fn skips_approval(&self) -> bool {
+        self.skip_permissions && self.pinned_permission_mode.is_none()
     }
 
     /// The approval callback a tool call receives: the surface's own, with
