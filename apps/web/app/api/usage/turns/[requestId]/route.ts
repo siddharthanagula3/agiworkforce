@@ -11,18 +11,34 @@ import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
-  readAccountUsageHistory,
-  resolveUsageHistoryGranularity,
-  usageHistoryWindowStart,
-  type AccountUsageHistory,
+  ManagedUsageRequestError,
+  parseManagedUsageIdempotencyKey,
+} from '@/lib/services/managed-usage-request-service';
+import {
+  readManagedUsageTurnCost,
+  type ManagedUsageTurnCost,
 } from '@/lib/services/account-usage-history-service';
-import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
 
 export const runtime = 'nodejs';
 
-export type AccountUsageHistoryResponse = AccountUsageHistory;
+export type UsageTurnResponse = ManagedUsageTurnCost;
 
-async function handler(request: NextRequest) {
+type RouteContext = { params: Promise<{ requestId: string }> };
+
+function parseRequestId(value: string): string {
+  try {
+    return parseManagedUsageIdempotencyKey(value);
+  } catch (error) {
+    if (error instanceof ManagedUsageRequestError) {
+      throw createError.validation(
+        'The request ID is the Idempotency-Key the request was sent with: 8 to 128 letters, digits, dots, underscores, colons or hyphens.',
+      );
+    }
+    throw error;
+  }
+}
+
+async function handler(request: NextRequest, context: RouteContext) {
   let scoped: UserScopedDb;
   try {
     scoped = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
@@ -33,25 +49,19 @@ async function handler(request: NextRequest) {
     throw createError.unauthorized('Authentication required');
   }
 
-  const params = new URL(request.url).searchParams;
-  const granularity = resolveUsageHistoryGranularity(params.get('granularity'));
-  const window = resolveUsageWindow(
-    params.get('from') ?? usageHistoryWindowStart(granularity).toISOString(),
-    params.get('to'),
-  );
+  const requestId = parseRequestId((await context.params).requestId);
 
+  let turn: UsageTurnResponse | null;
   try {
-    const history: AccountUsageHistoryResponse = await readAccountUsageHistory(
-      scoped.db,
-      scoped.userId,
-      window,
-      granularity,
-    );
-    return NextResponse.json(history);
+    turn = await readManagedUsageTurnCost(scoped.db, scoped.userId, requestId);
   } catch (error) {
-    logger.error({ error, userId: scoped.userId }, 'Failed to fetch usage history');
-    throw createError.internal('Failed to fetch usage history');
+    logger.error({ error, userId: scoped.userId }, 'Failed to read the settled cost of a turn');
+    throw createError.internal('Failed to read the settled cost of this request');
   }
+  if (!turn) {
+    throw createError.notFound('No managed request with that ID exists on this account.');
+  }
+  return NextResponse.json(turn, { headers: { 'Cache-Control': 'no-store' } });
 }
 
 export const GET = withCorsRoute(

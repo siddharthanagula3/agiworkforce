@@ -15,6 +15,7 @@ import {
   type ResearchStep,
 } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { ResearchCostEstimate, type ResearchCostEstimateProps } from './ResearchCostEstimate';
 
 const MAX_PLAN_STEPS = 6;
 const MAX_STEP_CHARS = 300;
@@ -61,6 +62,7 @@ export interface ResearchPlanProps {
   busy?: boolean;
   onStart?: (submission: ResearchPlanSubmission) => void;
   onCancel?: () => void;
+  costEstimate?: Omit<ResearchCostEstimateProps, 'className'>;
   className?: string;
 }
 
@@ -86,6 +88,7 @@ export function ResearchPlan({
   busy = false,
   onStart,
   onCancel,
+  costEstimate,
   className,
 }: ResearchPlanProps) {
   const [draft, setDraft] = useState<ResearchStep[]>(() => editableSteps(steps));
@@ -283,6 +286,8 @@ export function ResearchPlan({
           </ul>
         </div>
       ) : null}
+
+      {editable && costEstimate ? <ResearchCostEstimate {...costEstimate} /> : null}
 
       {editable ? (
         <div className="flex flex-wrap items-center gap-2">
