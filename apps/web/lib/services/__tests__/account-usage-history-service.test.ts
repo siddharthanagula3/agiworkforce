@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { readAccountUsageHistory } from '../account-usage-history-service';
 import { readOrganizationUsage } from '../organization-usage-service';
 
@@ -11,8 +12,10 @@ const WINDOW = { from: '2026-07-24T00:00:00.000Z', to: '2026-08-23T00:00:00.000Z
 function harness(rows: Record<string, unknown[]> = {}) {
   const query = vi.fn(async (sql: string, _params?: unknown[]) => {
     const text = String(sql);
+    if (/date_trunc\(\$4::text/.test(text)) return rows['periods'] ?? [];
     if (/date_trunc\('day'/.test(text)) return rows['daily'] ?? [];
     if (/unsettled_requests/.test(text)) return rows['freshness'] ?? [];
+    if (/own\.project_id as key/.test(text)) return rows['project'] ?? [];
     if (/group by 1/.test(text)) {
       if (/as sessions/.test(text)) return rows['workloadSessions'] ?? [];
       if (/'workload' as key/.test(text)) return rows['workload'] ?? [];
@@ -24,13 +27,17 @@ function harness(rows: Record<string, unknown[]> = {}) {
   return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
 }
 
+function credits(count: number): string {
+  return String(count * MICROUSD_PER_CREDIT);
+}
+
 function agg(over: Record<string, unknown> = {}) {
   return {
     key: 'chat',
     requests: 12,
     input_tokens: '4000',
     output_tokens: '1500',
-    cost_cents: '250',
+    cost_microusd: credits(125),
     ...over,
   };
 }
@@ -62,47 +69,76 @@ describe('readAccountUsageHistory', () => {
     }
   });
 
-  it('returns the day series oldest first so a trend reads left to right', async () => {
+  it('returns the period series oldest first in credits so a trend reads left to right', async () => {
     const h = harness({
-      daily: [
-        { day: '2026-08-21T00:00:00.000Z', requests: 3, cost_cents: '40' },
-        { day: '2026-08-22T00:00:00.000Z', requests: 5, cost_cents: '90' },
+      periods: [
+        { period: '2026-08-21T00:00:00.000Z', requests: 3, cost_microusd: credits(40) },
+        { period: '2026-08-22T00:00:00.000Z', requests: 5, cost_microusd: credits(90) },
       ],
     });
-    const history = await readAccountUsageHistory(h.db, USER, WINDOW);
+    const history = await readAccountUsageHistory(h.db, USER, WINDOW, 'week');
 
-    expect(history.daily.map((day) => day.day)).toEqual([
-      '2026-08-21T00:00:00.000Z',
-      '2026-08-22T00:00:00.000Z',
+    expect(history.granularity).toBe('week');
+    expect(history.periods).toEqual([
+      { start: '2026-08-21T00:00:00.000Z', requests: 3, credits: 40 },
+      { start: '2026-08-22T00:00:00.000Z', requests: 5, credits: 90 },
     ]);
-    expect(history.daily.map((day) => day.costCents)).toEqual([40, 90]);
-    const [dailySql] = h.query.mock.calls.find(([sql]) =>
-      /date_trunc\('day'/.test(String(sql)),
-    ) as [string];
-    expect(dailySql).toContain('order by 1 asc');
+    const [periodSql, periodParams] = h.query.mock.calls.find(([sql]) =>
+      /date_trunc\(\$4::text/.test(String(sql)),
+    ) as [string, unknown[]];
+    expect(periodSql).toContain('order by 1 asc');
+    expect(periodParams).toEqual([USER, WINDOW.from, WINDOW.to, 'week']);
   });
 
-  it('breaks the same window down by product area and by model', async () => {
+  it('breaks the same window down by product area, model and project, in credits', async () => {
     const h = harness({
-      workload: [agg({ key: 'work', cost_cents: '900' }), agg({ key: 'chat', cost_cents: '120' })],
-      model: [agg({ key: 'model-a', cost_cents: '900' })],
+      workload: [
+        agg({ key: 'work', cost_microusd: credits(900) }),
+        agg({ key: 'chat', cost_microusd: credits(120) }),
+      ],
+      model: [agg({ key: 'model-a', cost_microusd: credits(900) })],
+      project: [agg({ key: 'project-1', label: 'Launch plan', cost_microusd: credits(300) })],
     });
     const history = await readAccountUsageHistory(h.db, USER, WINDOW);
 
     expect(history.byWorkload.map((row) => row.key)).toEqual(['work', 'chat']);
-    expect(history.byWorkload[0]?.costCents).toBe(900);
+    expect(history.byWorkload[0]?.credits).toBe(900);
     expect(history.byModel.map((row) => row.key)).toEqual(['model-a']);
+    expect(history.byProject).toEqual([
+      {
+        key: 'project-1',
+        label: 'Launch plan',
+        requests: 12,
+        inputTokens: 4_000,
+        outputTokens: 1_500,
+        credits: 300,
+      },
+    ]);
+  });
+
+  it('names a project from the workspace the usage row belongs to', async () => {
+    const h = harness();
+    await readAccountUsageHistory(h.db, USER, WINDOW);
+
+    const [projectSql] = h.query.mock.calls.find(([sql]) =>
+      /own\.project_id as key/.test(String(sql)),
+    ) as [string];
+    expect(projectSql).toContain(
+      'project.organization_id is not distinct from own.organization_id',
+    );
   });
 
   it('ranks the heaviest spender first in every breakdown', async () => {
     const h = harness();
     await readAccountUsageHistory(h.db, USER, WINDOW);
 
-    const grouped = h.query.mock.calls.filter(([sql]) => /group by 1/.test(String(sql)));
+    const grouped = h.query.mock.calls.filter(([sql]) =>
+      /group by (1|own\.project_id)/.test(String(sql)),
+    );
     expect(grouped.length).toBeGreaterThan(0);
     for (const [sql] of grouped) {
       if (/date_trunc/.test(String(sql))) continue;
-      expect(String(sql)).toContain('order by cost_cents desc');
+      expect(String(sql)).toContain('order by cost_microusd desc, requests desc');
     }
   });
 
@@ -130,10 +166,11 @@ describe('readAccountUsageHistory', () => {
       requests: 0,
       inputTokens: 0,
       outputTokens: 0,
-      costCents: 0,
+      credits: 0,
     });
-    expect(history.daily).toEqual([]);
+    expect(history.periods).toEqual([]);
     expect(history.byWorkload).toEqual([]);
+    expect(history.byProject).toEqual([]);
     expect(history.freshness.latestActivityAt).toBeNull();
   });
 
@@ -164,7 +201,7 @@ describe('account history and workspace console agree on what usage is', () => {
       settled: text.split(`status = 'completed'`).length - 1,
       unsettled: text.split(`'reserving', 'reserved', 'provider_started', 'outcome_unknown'`)
         .length,
-      cost: text.split('sum(coalesce(actual_cost_cents, 0))').length - 1,
+      cost: text.split('actual_cost_microusd, 0)').length - 1,
       tokens: text.split(`usage->>'input_tokens'`).length - 1,
     };
   }
@@ -202,26 +239,27 @@ describe('account history and workspace console agree on what usage is', () => {
 
     const statements = [...accountHarness.query.mock.calls, ...organizationHarness.query.mock.calls]
       .map(([sql]) => String(sql))
-      .filter((sql) => /cost_cents/.test(sql));
+      .filter((sql) => /cost_microusd/.test(sql));
 
     expect(statements.length).toBeGreaterThan(0);
     for (const sql of statements) {
-      const costExpressions = sql.match(/as cost_cents/gu) ?? [];
-      expect(costExpressions.length).toBe(1);
-      expect(sql).toContain('sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents');
+      expect(sql).toContain('coalesce(actual_cost_microusd, 0)');
       expect(sql).not.toMatch(/price|rate|per_million|multiplier|credits_per/iu);
       expect(sql).not.toMatch(/tokens.*\*|\*.*tokens/u);
-      expect(sql).not.toMatch(/\bjoin\b/iu);
+      for (const [, joined] of sql.matchAll(/\bjoin\s+(\S+)/giu)) {
+        expect(joined).toBe('public.user_projects');
+      }
     }
   });
 
   it('reports the same figures for one turn read from either surface', async () => {
-    const settled = [agg({ key: null, requests: 7, cost_cents: '410' })];
+    const settled = [agg({ key: null, requests: 7, cost_microusd: credits(205) })];
     const accountHarness = harness({ totals: settled });
     const account = await readAccountUsageHistory(accountHarness.db, USER, WINDOW);
     const organizationHarness = harness({ totals: settled });
     const organization = await readOrganizationUsage(organizationHarness.db, ORG, WINDOW);
 
     expect(account.totals).toEqual(organization.totals);
+    expect(account.totals.credits).toBe(205);
   });
 });

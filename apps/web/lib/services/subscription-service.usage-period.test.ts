@@ -12,7 +12,8 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn(),
 }));
 
-const scopedDb = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() } as never;
+const scopedQuery = vi.fn();
+const scopedDb = { query: scopedQuery, execute: vi.fn(), transaction: vi.fn() } as never;
 
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -40,6 +41,7 @@ describe('SubscriptionService managed usage periods', () => {
     mockGetOrCreateAccount.mockReset().mockResolvedValue('account-id');
     mockResetForPeriod.mockReset().mockResolvedValue('account-id');
     mockCarryUsageIntoUpgradedPeriod.mockReset().mockResolvedValue('account-id');
+    scopedQuery.mockReset().mockResolvedValue([{ plan_catalog_version: 1 }]);
   });
 
   afterEach(() => {
@@ -63,6 +65,33 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
       scopedDb,
+      1,
+    );
+    expect(scopedQuery).toHaveBeenCalledWith(
+      'select plan_catalog_version from subscriptions where id = $1 and user_id = $2 limit 1',
+      ['subscription-1', 'user-1'],
+    );
+  });
+
+  it('keeps a subscriber on the catalog version the caller already knows without reading it', async () => {
+    await SubscriptionService.allocateCreditsForPeriod(
+      'user-1',
+      'subscription-1',
+      'pro',
+      new Date('2026-07-18T12:00:00.000Z'),
+      new Date('2026-08-18T12:00:00.000Z'),
+      { db: scopedDb, catalogVersion: 1 },
+    );
+
+    expect(scopedQuery).not.toHaveBeenCalled();
+    expect(mockGetOrCreateAccount).toHaveBeenCalledWith(
+      'user-1',
+      'subscription-1',
+      new Date('2026-07-18T12:00:00.000Z'),
+      new Date('2026-08-18T12:00:00.000Z'),
+      1_000,
+      scopedDb,
+      1,
     );
   });
 
@@ -83,6 +112,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-08-18T12:00:00.000Z'),
       1_000,
       scopedDb,
+      1,
     );
   });
 
@@ -95,6 +125,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-01-18T12:00:00.000Z'),
       new Date('2027-01-18T12:00:00.000Z'),
       scopedDb,
+      { previous: 1, next: 1 },
     );
 
     expect(mockCarryUsageIntoUpgradedPeriod).toHaveBeenCalledWith(
@@ -104,6 +135,7 @@ describe('SubscriptionService managed usage periods', () => {
       new Date('2026-08-18T12:00:00.000Z'),
       4_000,
       scopedDb,
+      1,
     );
   });
 });
