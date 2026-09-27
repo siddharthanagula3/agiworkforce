@@ -210,5 +210,7 @@
   "usageExplainer": "Jeder kostenpflichtige Tarif enthält Credits in drei Zeitfenstern: pro 5 Stunden, pro Woche und pro Monat. {{baseline}} enthält {{fiveHour, number}} Credits pro 5 Stunden, {{weekly, number}} pro Woche und {{monthly, number}} pro Monat, und ein Faktor wie 5x erhöht alle drei Zeitfenster dieses Kontingents.",
   "flagshipShare": "Ab {{baseline}} können die leistungsfähigsten Modelle bis zu {{percent}} % der Credits jeder Woche nutzen.",
   "switchToPlanCta": "Zu {{plan}} wechseln",
-  "downgradeScheduledToast": "Ihr Tarif wechselt am {{date}} zu {{plan}}."
+  "downgradeScheduledToast": "Ihr Tarif wechselt am {{date}} zu {{plan}}.",
+  "pricingFootnote": "Die angezeigten Preise enthalten keine anfallenden Steuern. Zahlungen werden nicht erstattet, es sei denn, unsere Erstattungsrichtlinie sieht etwas anderes vor oder das örtliche Recht verlangt es.",
+  "refundPolicyLink": "Erstattungsrichtlinie"
 }

@@ -385,8 +385,8 @@ function deprecationWarningFor(model: AIModel): { shortLabel: string; fullLabel:
   if (daysUntil <= 0 || daysUntil > DEPRECATION_WARNING_WINDOW_DAYS) return null;
   const date = new Date(retiresAt);
   return {
-    shortLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    fullLabel: date.toLocaleDateString('en-US', {
+    shortLabel: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    fullLabel: date.toLocaleDateString(undefined, {
       month: 'long',
       day: 'numeric',
       year: 'numeric',

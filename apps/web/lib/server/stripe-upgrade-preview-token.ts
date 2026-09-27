@@ -13,6 +13,10 @@ const UpgradePreviewTokenPayloadSchema = z
     billingInterval: z.enum(['monthly', 'yearly']),
     stripeSubscriptionId: z.string().regex(/^sub_[A-Za-z0-9]+$/),
     seats: z.number().int().min(1).max(MAX_PURCHASABLE_SEATS),
+    promotionCodeId: z
+      .string()
+      .regex(/^promo_[A-Za-z0-9]+$/)
+      .nullable(),
     prorationDate: z.number().int().positive(),
     expiresAt: z.number().int().positive(),
   })
@@ -78,7 +82,8 @@ export function verifyUpgradePreviewToken(
     payload.plan !== expected.plan ||
     payload.billingInterval !== expected.billingInterval ||
     payload.stripeSubscriptionId !== expected.stripeSubscriptionId ||
-    payload.seats !== expected.seats
+    payload.seats !== expected.seats ||
+    payload.promotionCodeId !== expected.promotionCodeId
   ) {
     throw new Error('Invalid upgrade preview token');
   }
