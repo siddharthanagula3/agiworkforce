@@ -29,14 +29,12 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
+import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import {
-  fingerprintManagedUsageRequest,
-  finalizeManagedUsageRequest,
-  markManagedUsageProviderStarted,
-  reserveManagedUsageRequest,
-} from '@/lib/services/managed-usage-request-service';
+  reserveBackgroundUsage,
+  type BackgroundUsageLease,
+} from '@/lib/services/background-usage-lease';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { logger } from '@/lib/logger';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -120,12 +118,13 @@ export async function extractAutoMemoryFactsWithModel(
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const wireMode = resolveWireMode(dispatchProvider);
 
-  let reservation;
+  let lease: BackgroundUsageLease;
   try {
-    reservation = await reserveManagedUsageRequest({
+    lease = await reserveBackgroundUsage({
       db: input.db,
       userId: input.userId,
       organizationId: input.organizationId,
+      planTier: input.planTier,
       idempotencyKey: managedUsageIdempotencyKey({
         namespace: MEMORY_EXTRACTION_NAMESPACE,
         identity: {
@@ -143,15 +142,10 @@ export async function extractAutoMemoryFactsWithModel(
       }),
       provider: route.provider,
       model: route.modelKey,
-      estimatedCostCents: LLMCostCalculator.estimateCost(
-        route.provider,
-        route.modelKey,
-        estimateTokens(input.message, route.modelKey) + 256,
-        MAX_OUTPUT_TOKENS,
-      ),
+      routeId: route.routeId,
+      estimatedPromptTokens: estimateTokens(input.message, route.modelKey) + 256,
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
       leaseSeconds: 60,
-      planTier: input.planTier,
-      isFlagship: false,
       quotaFeature: MEMORY_EXTRACTION_QUOTA_FEATURE,
     });
   } catch (error) {
@@ -175,7 +169,7 @@ export async function extractAutoMemoryFactsWithModel(
         );
       },
       runner: async ({ systemPrompt, message }, signal) => {
-        await markManagedUsageProviderStarted(reservation);
+        await lease.providerStarted();
         const chatRequest = openAIWireRequestToChatRequest({
           model: route.providerModelId,
           messages: [
@@ -203,17 +197,12 @@ export async function extractAutoMemoryFactsWithModel(
           cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
         };
         settled = true;
-        await finalizeManagedUsageRequest({
-          ...reservation,
-          outcome: 'completed',
-          actualCostCents: LLMCostCalculator.calculateCost(
-            route.provider,
-            route.modelKey,
-            usage,
-            undefined,
-            route.routeId,
-          ),
-          usage: { ...usage, type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId },
+        await lease.completed({
+          provider: route.provider,
+          model: route.modelKey,
+          routeId: route.routeId,
+          usage,
+          record: { ...usage, type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId },
         });
 
         return response.content;
@@ -223,17 +212,14 @@ export async function extractAutoMemoryFactsWithModel(
     return result.facts;
   } finally {
     if (!settled) {
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'failed',
-        actualCostCents: 0,
-        usage: { type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId },
-      }).catch((releaseError: unknown) => {
-        logger.error(
-          { releaseError, userId: input.userId, requestId: input.requestId },
-          '[memory-extraction] reservation release failed',
-        );
-      });
+      await lease
+        .failed({ type: MEMORY_EXTRACTION_QUOTA_FEATURE, requestId: input.requestId })
+        .catch((releaseError: unknown) => {
+          logger.error(
+            { releaseError, userId: input.userId, requestId: input.requestId },
+            '[memory-extraction] reservation release failed',
+          );
+        });
     }
   }
 }
