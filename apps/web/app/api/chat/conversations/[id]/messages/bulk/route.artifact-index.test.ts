@@ -27,6 +27,14 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 const { scheduleArtifactIndexing } = vi.hoisted(() => ({ scheduleArtifactIndexing: vi.fn() }));
 vi.mock('../lib/index-artifacts', () => ({ scheduleArtifactIndexing }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { POST as postBulkMessages } from './route';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 

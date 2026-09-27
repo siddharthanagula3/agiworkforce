@@ -34,12 +34,15 @@ const PRORATED_PREVIEW = {
       { description: 'Remaining time on Max', amountCents: 10_000 },
     ],
     subtotalCents: 8_596,
+    discountCents: 0,
     taxCents: 660,
     totalCents: 9_256,
     appliedBalanceCents: 0,
     totalDueTodayCents: 9_256,
     renewsAt: '2026-09-17T12:00:00.000Z',
   },
+  promotion: null,
+  replacesScheduledChange: false,
 };
 
 function renderPanel() {
@@ -161,6 +164,57 @@ describe('UpgradeOrderPanel', () => {
     ]);
     expect(definitions).toHaveLength(terms.length);
     expect(definitions.at(-1)).toHaveTextContent('$92.56');
+  });
+
+  it('prices a promotion code before charging and applies the upgrade with it', async () => {
+    renderPanel();
+    await waitFor(() => expect(screen.getByText('$92.56')).toBeVisible());
+    paymentMocks.previewUpgrade.mockResolvedValueOnce({
+      ...PRORATED_PREVIEW,
+      previewToken: 'signed-promo-token',
+      charge: {
+        ...PRORATED_PREVIEW.charge,
+        discountCents: 2_149,
+        taxCents: 495,
+        totalCents: 6_942,
+        totalDueTodayCents: 6_942,
+      },
+      promotion: {
+        code: 'SPRING',
+        percentOff: 25,
+        amountOffCents: null,
+        currency: null,
+        duration: 'once',
+        durationInMonths: null,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a promotion code' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Promotion code' }), {
+      target: { value: 'SPRING' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }));
+
+    const order = screen.getByRole('region', { name: 'Order details' });
+    expect(await within(order).findByText('Discount (SPRING)')).toBeVisible();
+    expect(within(order).getByText('$69.42')).toBeVisible();
+    expect(paymentMocks.previewUpgrade).toHaveBeenLastCalledWith(
+      expect.objectContaining({ plan: 'max', promotionCode: 'SPRING' }),
+    );
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    const subscribe = screen.getByRole('button', { name: /subscribe to/i });
+    await waitFor(() => expect(subscribe).toBeEnabled());
+    fireEvent.click(subscribe);
+
+    await waitFor(() =>
+      expect(paymentMocks.upgradePlanMidCycle).toHaveBeenCalledWith({
+        plan: 'max',
+        billingInterval: 'monthly',
+        previewToken: 'signed-promo-token',
+        promotionCode: 'SPRING',
+      }),
+    );
   });
 
   it('states the yearly interval next to a yearly price', async () => {

@@ -7,13 +7,12 @@ import {
   BILLING_PLAN_CAPABILITY_TIERS,
   BILLING_PLAN_PRICING,
   BILLING_PLAN_PRODUCT_LIMITS,
+  MANAGED_USAGE_LIMITS,
+  PLAN_CREDIT_ALLOWANCES,
   PLAN_SURFACE_VISIBILITY,
   listPlanCatalog,
   type BillingPlanTier,
 } from '@agiworkforce/types';
-
-import { MANAGED_USAGE_LIMITS } from './managed-usage-caps';
-import { PLAN_CREDIT_ALLOWANCES } from './plan-credits';
 
 /**
  * Adding a plan means editing every registry keyed by tier. TypeScript forces
@@ -24,10 +23,9 @@ import { PLAN_CREDIT_ALLOWANCES } from './plan-credits';
 const REPO_ROOT = path.resolve(__dirname, '../../../..');
 
 const PER_TIER_REGISTRY_FILES = [
-  'apps/web/lib/billing/managed-usage-caps.ts',
-  'apps/web/lib/billing/plan-credits.ts',
   'packages/contracts/types/src/billing-catalog.ts',
   'packages/contracts/types/src/billing-plan-catalog.ts',
+  'packages/contracts/types/src/managed-usage-limits.ts',
 ];
 
 const TIERS = Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[];

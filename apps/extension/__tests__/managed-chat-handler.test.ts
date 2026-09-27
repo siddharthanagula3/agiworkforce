@@ -401,6 +401,59 @@ describe('executeChromeManagedChat', () => {
     expect(result).toMatchObject({ status: 'error', code: 'quota_exceeded' });
   });
 
+  it('carries the refusing plan limit and its recovery link to the panel', async () => {
+    const quota = {
+      code: 'rolling_weekly_limit_reached',
+      recovery: { action: 'top_up' as const, href: '/settings/billing' },
+    };
+    const deps = dependencies({
+      streamChat: vi.fn(() =>
+        stream({
+          type: 'error',
+          message: 'You have used your 500 credits for this week.',
+          code: 'quota_exceeded',
+          quota,
+        }),
+      ),
+    });
+
+    const result = await executeChromeManagedChat(
+      { id: 'stream-limit', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: 'error',
+      code: 'quota_exceeded',
+      message: 'You have used your 500 credits for this week.',
+      quota,
+    });
+  });
+
+  it('hands a usage warning to the panel without ending the turn', async () => {
+    const warning = { scope: 'rolling_five_hour' as const, usedPercent: 91 };
+    const onQuotaWarning = vi.fn();
+    const deps = dependencies({
+      onQuotaWarning,
+      streamChat: vi.fn(() =>
+        stream(
+          { type: 'quota-warning', warning },
+          { type: 'text', text: 'hello' },
+          { type: 'done' },
+        ),
+      ),
+    });
+
+    const result = await executeChromeManagedChat(
+      { id: 'stream-warned', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(onQuotaWarning).toHaveBeenCalledWith(warning);
+    expect(deps.onText).toHaveBeenCalledWith('hello');
+    expect(result).toMatchObject({ status: 'success' });
+  });
+
   it.each([
     ['free', FREE_TRIAL_MODEL],
     ['basic', PAID_ECONOMY_MODEL],
@@ -592,5 +645,39 @@ describe('executeChromeManagedApproval', () => {
     expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
     expect(deps.getAuthToken).not.toHaveBeenCalled();
     expect(deps.streamApproval).not.toHaveBeenCalled();
+  });
+
+  it('carries a plan limit that stops the continued run to the panel', async () => {
+    const quota = {
+      code: 'flagship_weekly_limit_reached',
+      recovery: { action: 'upgrade' as const, href: '/pricing' },
+    };
+    const onQuotaWarning = vi.fn();
+    const deps = approvalDependencies({
+      onQuotaWarning,
+      streamApproval: vi.fn(() =>
+        stream(
+          { type: 'quota-warning', warning: { scope: 'rolling_weekly', usedPercent: 99 } },
+          {
+            type: 'error',
+            message: 'You have used your weekly capacity for the most capable models.',
+            code: 'quota_exceeded',
+            quota,
+          },
+        ),
+      ),
+    });
+
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-approval',
+        run,
+        toolApprovals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+      },
+      deps,
+    );
+
+    expect(onQuotaWarning).toHaveBeenCalledWith({ scope: 'rolling_weekly', usedPercent: 99 });
+    expect(result).toMatchObject({ status: 'error', code: 'quota_exceeded', quota });
   });
 });

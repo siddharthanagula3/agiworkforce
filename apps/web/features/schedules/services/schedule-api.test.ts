@@ -68,6 +68,7 @@ const payload: ScheduleMutation = {
   retryBackoffSeconds: 300,
   missedExecutionPolicy: 'run_once',
   condition: null,
+  creditCap: null,
 };
 
 function response(body: unknown, init: ResponseInit = {}) {

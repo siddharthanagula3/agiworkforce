@@ -71,7 +71,7 @@ describe('UpgradeConfirmDialog', () => {
     );
 
     const continueButton = await screen.findByRole('button', {
-      name: 'Start Max 15x · pay $200.00',
+      name: 'Start Max 20x · pay $200.00',
     });
     expect(screen.getByText(/no paid Stripe charge to credit/i)).toBeTruthy();
     expect(screen.getByText(/\$200\.00 today/i)).toBeTruthy();
@@ -103,7 +103,9 @@ describe('UpgradeConfirmDialog', () => {
       />,
     );
 
-    expect(await screen.findByText(/renewal date stays the same, at \$75\/month/i)).toBeTruthy();
+    expect(
+      await screen.findByText(/After that, Team renews at \$75\/month plus tax/i),
+    ).toBeTruthy();
   });
 
   it('quotes the published catalog amount for the requested interval', async () => {
@@ -121,6 +123,6 @@ describe('UpgradeConfirmDialog', () => {
       />,
     );
 
-    expect(await screen.findByText(/renewal date stays the same, at \$200\/year/i)).toBeTruthy();
+    expect(await screen.findByText(/After that, Pro renews at \$200\/year plus tax/i)).toBeTruthy();
   });
 });

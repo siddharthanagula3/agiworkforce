@@ -14,7 +14,7 @@ function usage(unsettledRequests: number) {
     organizationId: 'qa-workspace',
     from: '2026-09-01T00:00:00.000Z',
     to: '2026-09-19T10:00:00.000Z',
-    totals: { requests: 0, costCents: 0, inputTokens: 0, outputTokens: 0 },
+    totals: { requests: 0, credits: 0, inputTokens: 0, outputTokens: 0 },
     byMember: [],
     byModel: [],
     byProvider: [],
@@ -34,7 +34,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     });
   });
 
-  it('distinguishes pending settlement from no activity and keeps settled spend unchanged', () => {
+  it('distinguishes pending settlement from no activity and keeps settled credits unchanged', () => {
     mocks.query.mockReturnValue({
       data: { currentUserRole: 'owner', usage: usage(2) },
       isPending: false,
@@ -43,7 +43,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     render(<WorkspaceUsageAnalytics />);
     expect(screen.getByText(/2 requests are awaiting settlement/)).toBeInTheDocument();
     expect(screen.getByText('No settled managed usage in this window')).toBeInTheDocument();
-    expect(screen.getByText('$0.00')).toBeInTheDocument();
+    expect(screen.getByText('0 credits')).toBeInTheDocument();
     expect(screen.queryByText(/has cost nothing/)).not.toBeInTheDocument();
   });
 
@@ -57,27 +57,27 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(screen.queryByText(/never reaches our infrastructure/)).not.toBeInTheDocument();
   });
 
-  it('breaks spend down per member for an administrator', () => {
+  it('breaks credits down per member for an administrator, with no dollar figure', () => {
     mocks.query.mockReturnValue({
       data: {
         currentUserRole: 'admin',
         usage: {
           ...usage(0),
-          totals: { requests: 7, costCents: 1_250, inputTokens: 900, outputTokens: 300 },
+          totals: { requests: 7, credits: 2_500, inputTokens: 900, outputTokens: 300 },
           byMember: [
             {
               key: 'ada@example.com',
               requests: 5,
               inputTokens: 600,
               outputTokens: 200,
-              costCents: 1_000,
+              credits: 2_000,
             },
             {
               key: 'alan@example.com',
               requests: 2,
               inputTokens: 300,
               outputTokens: 100,
-              costCents: 250,
+              credits: 500,
             },
           ],
         },
@@ -85,7 +85,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
       isPending: false,
       isError: false,
     });
-    render(<WorkspaceUsageAnalytics />);
+    const { container } = render(<WorkspaceUsageAnalytics />);
 
     const byMember = screen.getByRole('region', { name: 'By member' });
     const rows = within(byMember).getAllByRole('row').slice(1);
@@ -93,8 +93,10 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
       expect.stringContaining('ada@example.com'),
       expect.stringContaining('alan@example.com'),
     ]);
-    expect(rows[0]).toHaveTextContent('$10.00');
-    expect(rows[1]).toHaveTextContent('$2.50');
+    expect(rows[0]).toHaveTextContent('2,000 credits');
+    expect(rows[1]).toHaveTextContent('500 credits');
+    expect(screen.getByText('2,500 credits')).toBeInTheDocument();
+    expect(container).not.toHaveTextContent('$');
   });
 
   it('tells someone who does not administer the workspace why there is no breakdown', () => {
@@ -102,7 +104,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     render(<WorkspaceUsageAnalytics />);
 
     expect(screen.getByText('You do not administer this workspace')).toBeVisible();
-    expect(screen.getByText(/Per-member spend is limited to owners and admins/)).toBeVisible();
+    expect(screen.getByText(/Per-member usage is limited to owners and admins/)).toBeVisible();
     expect(screen.queryByRole('region', { name: 'By member' })).toBeNull();
   });
 

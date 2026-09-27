@@ -38,8 +38,13 @@ import {
   domainChallengeExpiresAt,
   issueDomainVerificationToken,
 } from '@/lib/server/sso/domain-verification';
+import { answerSsoEntitlementSql } from './sso-entitlement-sql';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
+const OWNER_WORLD = {
+  memberships: [{ organization_id: ORG_ID, role: 'owner' }],
+  billingUserId: 'owner-user',
+};
 const CONNECTION_ID = '22222222-2222-4222-8222-222222222222';
 const DOMAIN = 'example.com';
 
@@ -81,6 +86,8 @@ function withDraft(token: string | null) {
   const writes: { sql: string; params: unknown[] }[] = [];
   mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
     const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+    const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+    if (entitlement) return entitlement;
     if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
     if (text.includes('from sso_connections where id =')) return [draftRow(token)];
     if (text.startsWith('update sso_connections')) {
@@ -166,6 +173,8 @@ describe('POST /api/admin/sso/verify-domain, challenge expiry', () => {
   it('cannot be replayed against an already-verified connection', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+      if (entitlement) return entitlement;
       if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
       if (text.includes('from sso_connections where id =')) {
         return [

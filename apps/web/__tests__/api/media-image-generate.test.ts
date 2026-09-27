@@ -308,6 +308,8 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 import { POST, OPTIONS } from '@/app/api/media/image/generate/route';
+import { imageProviderCostMicrousd } from '@/app/api/media/image/lib/image-generation-provider';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { PLATFORM_POLICY_REFUSAL } from '@/lib/moderation';
 
@@ -834,7 +836,7 @@ describe('POST /api/media/image/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('uses the canonical reservation lifecycle and settles returned images at actual cost', async () => {
+    it('uses the canonical reservation lifecycle and settles returned images at provider cost', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ data: [{ url: 'https://example.com/image.png' }] }),
@@ -848,7 +850,7 @@ describe('POST /api/media/image/generate', () => {
           userId: TEST_USER.userId,
           idempotencyKey: 'agi.media.web.image.operation-123',
           provider: 'openai',
-          estimatedCostMicrousd: 50000,
+          estimatedCostMicrousd: imageProviderCostMicrousd('openai', 1, undefined),
           planTier: 'pro',
           isFlagship: false,
         }),
@@ -857,7 +859,7 @@ describe('POST /api/media/image/generate', () => {
       expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
         expect.objectContaining({
           outcome: 'completed',
-          actualCostMicrousd: 50000,
+          actualCostMicrousd: imageProviderCostMicrousd('openai', 1, undefined),
           usage: expect.objectContaining({ operation: 'image', outputCount: 1 }),
         }),
       );
@@ -1789,7 +1791,10 @@ describe('POST /api/media/image/generate', () => {
         expect.objectContaining({
           userId: TEST_USER.userId,
           provider: 'openai',
-          actualCostCents: 5,
+          actualCostCents: ledgerCentsFromMicrousd(
+            imageProviderCostMicrousd('openai', 1, undefined),
+          ),
+          providerEstimatedCostMicrousd: imageProviderCostMicrousd('openai', 1, undefined),
           taskOutcome: 'undelivered',
           sourceRef: expect.stringMatching(/^image_job:[0-9a-f-]{36}:attempt:1$/),
           usage: expect.objectContaining({

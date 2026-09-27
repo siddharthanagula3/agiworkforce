@@ -40,8 +40,13 @@ vi.mock('@/lib/server/sso/domain-verification', async (importOriginal) => {
 
 import { POST as VERIFY, PUT as REISSUE } from '../verify-domain/route';
 import { issueDomainVerificationToken } from '@/lib/server/sso/domain-verification';
+import { answerSsoEntitlementSql } from './sso-entitlement-sql';
 
 const ORG_ID = '11111111-1111-4111-8111-111111111111';
+const OWNER_WORLD = {
+  memberships: [{ organization_id: ORG_ID, role: 'owner' }],
+  billingUserId: 'owner-user',
+};
 const CONNECTION_ID = '22222222-2222-4222-8222-222222222222';
 const TOKEN = issueDomainVerificationToken();
 
@@ -79,6 +84,8 @@ function dbFailingOn(match: string, error: Error) {
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
     if (text.includes(match)) throw error;
+    const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+    if (entitlement) return entitlement;
     if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
     if (text.includes('from sso_connections where id =')) return [{ ...DRAFT_ROW }];
     throw new Error(`unexpected sql in test: ${text}`);
@@ -143,6 +150,8 @@ describe('SSO domain verification under backend failure', () => {
   it('returns 409, not 500, when another organization wins the verification race', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+      if (entitlement) return entitlement;
       if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
       if (text.includes('from sso_connections where id =')) return [{ ...DRAFT_ROW }];
       if (text.startsWith('update sso_connections set domain_verified_at = now()')) {

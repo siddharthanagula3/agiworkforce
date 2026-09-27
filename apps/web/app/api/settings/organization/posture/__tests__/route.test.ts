@@ -29,6 +29,7 @@ vi.mock('@/lib/services/org-entitlements', () => ({
   getSharedProjectLimitErrorMessage: vi.fn(() => ''),
   isOrgResourceLimitError: vi.fn(() => false),
   resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
+  resolveUserPersonalPlanTier: vi.fn(async () => 'enterprise'),
 }));
 vi.mock('@/lib/server/organization-encryption-keys', () => ({
   readOrganizationKeyStatus: vi.fn(async () => ({

@@ -32,6 +32,7 @@ describe('UpgradeConfirmDialog order details', () => {
           { description: 'Unused time on Max plan - 5x after 26 Feb 2026', amountCents: -8_913 },
         ],
         subtotalCents: 11_087,
+        discountCents: 0,
         taxCents: 732,
         totalCents: 11_819,
         appliedBalanceCents: 0,
@@ -68,6 +69,7 @@ describe('UpgradeConfirmDialog order details', () => {
       charge: {
         lineItems: [{ description: 'Pro plan', amountCents: 2_000 }],
         subtotalCents: 2_000,
+        discountCents: 0,
         taxCents: 132,
         totalCents: 2_132,
         appliedBalanceCents: 3,
@@ -102,6 +104,7 @@ describe('UpgradeConfirmDialog order details', () => {
           { description: 'Unused time on Claude Pro after 23 Feb 2026', amountCents: -1_936 },
         ],
         subtotalCents: 8_064,
+        discountCents: 0,
         taxCents: 532,
         totalCents: 8_596,
         appliedBalanceCents: 0,

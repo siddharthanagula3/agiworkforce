@@ -34,6 +34,16 @@ const LOOKUPS: Record<string, { count: number; reason: string }> = {
     reason:
       'linkAccount returns before the lookup unless the address is on a domain the provisioning organization verified, and the SCIM caller is that organization.',
   },
+  'lib/services/billing-refund-service.ts': {
+    count: 1,
+    reason:
+      'lookupAccountBilling is reached only from /api/admin/billing-refunds after requirePlatformAdmin, so only a platform operator refunding an account can ask.',
+  },
+  'lib/services/organization-member-admin-service.ts': {
+    count: 1,
+    reason:
+      'The email filter narrows the active members of the caller workspace only, a list the caller already holds admin.members.view to read.',
+  },
   'lib/services/organization-invitation-service.ts': {
     count: 1,
     reason:

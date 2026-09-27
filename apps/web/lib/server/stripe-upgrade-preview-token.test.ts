@@ -16,6 +16,7 @@ describe('Stripe upgrade preview tokens', () => {
         billingInterval: 'monthly',
         stripeSubscriptionId: 'sub_123',
         seats: 1,
+        promotionCodeId: null,
         prorationDate: Math.floor(NOW_MS / 1000),
       },
       SECRET,
@@ -31,6 +32,7 @@ describe('Stripe upgrade preview tokens', () => {
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
           seats: 1,
+          promotionCodeId: null,
         },
         SECRET,
         NOW_MS + 60_000,
@@ -48,6 +50,7 @@ describe('Stripe upgrade preview tokens', () => {
         billingInterval: 'monthly',
         stripeSubscriptionId: 'sub_123',
         seats: 1,
+        promotionCodeId: null,
         prorationDate: Math.floor(NOW_MS / 1000),
       },
       SECRET,
@@ -63,6 +66,7 @@ describe('Stripe upgrade preview tokens', () => {
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
           seats: 1,
+          promotionCodeId: null,
         },
         SECRET,
         NOW_MS,
@@ -77,6 +81,7 @@ describe('Stripe upgrade preview tokens', () => {
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
           seats: 1,
+          promotionCodeId: null,
         },
         SECRET,
         NOW_MS + 11 * 60_000,
@@ -92,6 +97,7 @@ describe('Stripe upgrade preview tokens', () => {
         billingInterval: 'monthly',
         stripeSubscriptionId: 'sub_123',
         seats: 2,
+        promotionCodeId: null,
         prorationDate: Math.floor(NOW_MS / 1000),
       },
       SECRET,
@@ -107,6 +113,7 @@ describe('Stripe upgrade preview tokens', () => {
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
           seats: 50,
+          promotionCodeId: null,
         },
         SECRET,
         NOW_MS + 60_000,
@@ -122,10 +129,71 @@ describe('Stripe upgrade preview tokens', () => {
           billingInterval: 'monthly',
           stripeSubscriptionId: 'sub_123',
           seats: 2,
+          promotionCodeId: null,
         },
         SECRET,
         NOW_MS + 60_000,
       ),
     ).toMatchObject({ seats: 2 });
+  });
+
+  it('refuses a token applied with a different promotion code than it was priced with', () => {
+    const promoToken = createUpgradePreviewToken(
+      {
+        userId: 'user_123',
+        plan: 'pro',
+        billingInterval: 'monthly',
+        stripeSubscriptionId: 'sub_123',
+        seats: 1,
+        promotionCodeId: 'promo_SPRING',
+        prorationDate: Math.floor(NOW_MS / 1000),
+      },
+      SECRET,
+      NOW_MS,
+    );
+    const expected = {
+      userId: 'user_123',
+      plan: 'pro' as const,
+      billingInterval: 'monthly' as const,
+      stripeSubscriptionId: 'sub_123',
+      seats: 1,
+    };
+
+    for (const promotionCodeId of [null, 'promo_OTHER']) {
+      expect(() =>
+        verifyUpgradePreviewToken(
+          promoToken,
+          { ...expected, promotionCodeId },
+          SECRET,
+          NOW_MS + 60_000,
+        ),
+      ).toThrow(/invalid/i);
+    }
+    expect(
+      verifyUpgradePreviewToken(
+        promoToken,
+        { ...expected, promotionCodeId: 'promo_SPRING' },
+        SECRET,
+        NOW_MS + 60_000,
+      ),
+    ).toMatchObject({ promotionCodeId: 'promo_SPRING' });
+  });
+
+  it('refuses to sign a promotion code that is not a Stripe promotion code id', () => {
+    expect(() =>
+      createUpgradePreviewToken(
+        {
+          userId: 'user_123',
+          plan: 'pro',
+          billingInterval: 'monthly',
+          stripeSubscriptionId: 'sub_123',
+          seats: 1,
+          promotionCodeId: 'SPRING25',
+          prorationDate: Math.floor(NOW_MS / 1000),
+        },
+        SECRET,
+        NOW_MS,
+      ),
+    ).toThrow();
   });
 });

@@ -22,6 +22,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/projectsDrawer.ts',
   'src/features/side-panel/artifactsDrawer.ts',
   'src/features/side-panel/schedulesSection.ts',
+  'src/features/side-panel/planComparison.ts',
 ] as const;
 
 function read(relativePath: string): string {

@@ -4,6 +4,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const { mockRecordEmailSend } = vi.hoisted(() => ({ mockRecordEmailSend: vi.fn() }));
+vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/infrastructure-cost')>()),
+  recordEmailSend: mockRecordEmailSend,
+}));
+
 import { sendSupportEmail } from '../resend-client';
 
 const fetchMock = vi.fn();

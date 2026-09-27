@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
+import { MICROUSD_PER_CREDIT, MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
 import { recordVerifiedMobileIapPurchase } from './mobile-iap-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import type { VerifiedMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
@@ -91,7 +91,7 @@ function harness(
 afterEach(() => vi.restoreAllMocks());
 
 describe('verified mobile IAP ledger', () => {
-  it('grants exactly the canonical $10 / 500-unit top-up once', async () => {
+  it('grants the $10 store pack its 500 credits, two per ledger cent, once', async () => {
     const h = harness();
     await expect(
       recordVerifiedMobileIapPurchase({
@@ -101,13 +101,37 @@ describe('verified mobile IAP ledger', () => {
         verified: verified(),
       }),
     ).resolves.toMatchObject({ status: 'granted', unitsGranted: 500 });
-    expect(h.execute).toHaveBeenCalledWith('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
-      'user-1',
-      'account-1',
-      10_000_000,
-      expect.stringContaining('transaction-1'),
-      'purchase',
-    ]);
+    expect(h.execute).toHaveBeenCalledWith(
+      'select public.add_credits_microusd($1, $2, $3, $4, $5, $6)',
+      [
+        'user-1',
+        'account-1',
+        500 * MICROUSD_PER_CREDIT,
+        'Mobile ios top-up transaction-1',
+        'purchase',
+        JSON.stringify({ charged_cents: 1_000, charged_currency: 'usd' }),
+      ],
+    );
+  });
+
+  it('records a Japanese store purchase with the expiry local law sets for it', async () => {
+    const h = harness();
+    await recordVerifiedMobileIapPurchase({
+      db: h.db,
+      userId: 'user-1',
+      purchaseToken: 'fixture-token',
+      verified: { ...verified(), purchaseCountry: 'JP' },
+    });
+
+    const grant = (h.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
+      sql.includes('add_credits_microusd'),
+    );
+    expect(JSON.parse(String(grant?.[1][5]))).toEqual({
+      purchase_country: 'JP',
+      purchase_expires_at: '2027-02-01T00:00:00.000Z',
+      charged_cents: 1_000,
+      charged_currency: 'usd',
+    });
   });
 
   it('returns an idempotent result without granting a replay', async () => {

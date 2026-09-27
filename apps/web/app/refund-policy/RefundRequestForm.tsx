@@ -52,7 +52,11 @@ function consequence(charge: RefundableChargeView, reason: RefundRequestReason):
       charge.kind === 'plan'
         ? 'Your plan ends today and its remaining credits for this period are removed.'
         : 'The credits from this payment that you have not spent leave your balance.';
-    return `You are within 14 days of this payment, so as soon as you confirm you get back ${formatPaymentAmount(withdrawal, charge.currency)}, the part of the payment for the credits you have not used. ${effect} A refund cannot be undone.`;
+    const amount = formatPaymentAmount(withdrawal, charge.currency);
+    const refund = charge.withdrawalProrated
+      ? `${amount}: you asked for immediate access when you paid, so the refund is reduced in proportion to the credits you have used`
+      : `the whole payment, ${amount}`;
+    return `You are within 14 days of this payment, so as soon as you confirm you get back ${refund}. ${effect} A refund cannot be undone.`;
   }
   const effect =
     charge.kind === 'plan'
@@ -64,7 +68,10 @@ function consequence(charge: RefundableChargeView, reason: RefundRequestReason):
 function withdrawalHint(charge: RefundableChargeView): string | null {
   if (!charge.withdrawalEligible || charge.withdrawalRefundCents === null) return null;
   if (charge.withdrawalRefundCents > 0) {
-    return `You are within 14 days of this payment. Withdrawing refunds ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}, prorated by the credits you have used.`;
+    const amount = formatPaymentAmount(charge.withdrawalRefundCents, charge.currency);
+    return charge.withdrawalProrated
+      ? `You are within 14 days of this payment. Withdrawing refunds ${amount}, reduced in proportion to the credits you have used, as you agreed when you paid.`
+      : `You are within 14 days of this payment. Withdrawing refunds the whole payment, ${amount}.`;
   }
   return 'You have used the credits this payment bought, so a refund prorated by use comes to nothing. A person can still review the request.';
 }

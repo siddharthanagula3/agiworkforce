@@ -154,6 +154,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     url: '/api/voice/live/sessions/active',
     why: 'cross-device voice reconnect and session-history protocol',
   },
+  {
+    url: '/api/usage/estimate',
+    why: 'public API for sessions and usage:read keys that prices a chat completion in credits before it is sent, documented in openapi.json',
+  },
 
   // Built this wave by another executor; their surfaces are still landing.
   { url: '/api/plugins/authored', why: 'plugins directory work in flight' },

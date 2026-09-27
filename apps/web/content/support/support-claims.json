@@ -31,7 +31,7 @@
     },
     {
       "doc": "chrome-extension",
-      "sha256": "3b64c6301c03621200d1ab1cf7f58519d6b98d6e4c55e101219f740a5f98ddce"
+      "indexed": true
     },
     {
       "doc": "connectors-and-mcp",
@@ -2512,6 +2512,207 @@
           "kind": "copy",
           "file": "apps/web/lib/services/conversation-branch-service.ts",
           "text": "This conversation already has the maximum number of forks"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-not-published",
+      "doc": "chrome-extension",
+      "section": "Availability",
+      "kind": "prose",
+      "sentence": "The Chrome extension, AGI Browser Companion, is not published yet.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_STATUS",
+        "apps/extension/manifest.json"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/marketing-constants.test.ts",
+          "name": "keeps the surfaces with no release tag marked unreleased"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/chrome-extension/page.tsx",
+          "text": "AGI in Chrome · coming soon"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/extension/manifest.json",
+          "text": "\"name\": \"AGI Browser Companion\""
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-status-and-notify-list",
+      "doc": "chrome-extension",
+      "section": "Availability",
+      "kind": "prose",
+      "sentence": "The Chrome page carries its status and the download page keeps a notify list; there is no Web Store listing to install from today.",
+      "implementation": [
+        "apps/web/app/chrome-extension/page.tsx",
+        "apps/web/app/download/page.tsx",
+        "apps/web/lib/surface-status.ts#SURFACE_STATUS"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/app/chrome-extension/page.tsx",
+          "text": "AGI in Chrome · coming soon"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/download/page.tsx",
+          "text": "Leave an address and we will write when a platform opens."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/integrations/page.tsx",
+          "text": "not on the Chrome Web Store yet"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/marketing-constants.test.ts",
+          "name": "keeps the surfaces with no release tag marked unreleased"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-host-permissions-agi-only",
+      "doc": "chrome-extension",
+      "section": "What it is being built to do",
+      "kind": "prose",
+      "sentence": "Its host permissions are limited to agiworkforce.com, the AGI API and localhost, so it talks to AGI and to nothing else by default.",
+      "implementation": ["apps/extension/manifest.json"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/manifest-contract.test.ts",
+          "name": "installs with host access to loopback and AGI only"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/manifest-contract.test.ts",
+          "name": "keeps every other origin behind an optional grant Chrome itself asks for"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-browser-command-capability-gated",
+      "doc": "chrome-extension",
+      "section": "Browser automation",
+      "kind": "prose",
+      "sentence": "The composer's `/browser` command exists only on surfaces whose capabilities allow browser automation, which is what the extension provides.",
+      "implementation": [
+        "packages/ui/unified-chat/src/lib/slashCommands.ts#canUseBrowserAutomation",
+        "packages/contracts/types/src/capabilities.ts#PLATFORM_CAPABILITIES",
+        "apps/extension/src/features/computer-use/cloudAgentClient.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/commands/__tests__/slash-capability-filter.test.ts",
+          "name": "drops desktop-only commands (/browser, /terminal, /database) on WEB"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/commands/__tests__/slash-capability-filter.test.ts",
+          "name": "keeps desktop-only commands on DESKTOP"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/__tests__/chrome-extension-boundary-honesty.test.ts",
+          "name": "still has an extension path that calls the cloud gateway directly"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-driving-a-page-asks",
+      "doc": "chrome-extension",
+      "section": "Browser automation",
+      "kind": "prose",
+      "sentence": "Anything that drives a page is a write action under the approval rules: on the default setting it asks before every action, and even on the read-only-auto setting it still asks, because driving a browser is not a read.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#UNKNOWN_TOOL_METADATA",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool",
+        "apps/web/lib/connectors/catalog.ts#getConnectorExecutionChannel"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "asks for approval on a read-only tool when the account keeps the fail-closed default"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.approval-policy.test.ts",
+          "name": "still asks for an undeclared connector tool under read-only auto-approval"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.permission-matrix.test.ts",
+          "name": "keeps the loop in manual mode when a destructive tool is offered under autonomous"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-managed-chat-every-cloud-plan",
+      "doc": "chrome-extension",
+      "section": "Managed cloud from the extension",
+      "kind": "prose",
+      "sentence": "Managed chat in the Chrome side panel works on every cloud plan, Free included, and spends the same credits as the web app.",
+      "implementation": [
+        "apps/web/lib/free-chat-surface-policy.ts#getCloudChatSurfaceCapability",
+        "packages/contracts/types/src/billing-catalog.ts#CLOUD_CHAT_TIERS",
+        "apps/extension/src/features/cloud-bridge/freeTrialClient.ts#FREE_TRIAL_ENDPOINT"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "gives the Chrome side panel managed chat on every cloud plan, Free included"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "gates and meters Chrome chat under the same capability as web chat"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/free-chat-surface-policy.test.ts",
+          "name": "admits Free and Basic chat on %s"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/free-trial-quota.test.ts",
+          "name": "FREE_TRIAL_ENDPOINT points at agiworkforce.com web app (not api.agiworkforce.com)"
+        }
+      ]
+    },
+    {
+      "id": "chrome-extension-takes-no-provider-key",
+      "doc": "chrome-extension",
+      "section": "Managed cloud from the extension",
+      "kind": "prose",
+      "sentence": "The extension does not accept provider keys: web, mobile, desktop and Chrome all run on your AGI account, while BYOK is a CLI and VS Code capability.",
+      "implementation": [
+        "packages/contracts/types/src/surface-capability-manifest.ts",
+        "apps/web/app/chrome-extension/page.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "guard",
+          "file": "scripts/check-capability-boundaries.mjs"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/chrome-extension/page.tsx",
+          "text": "never stores provider keys"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "states the same contract on the Desktop, Local, and BYOK pages"
         }
       ]
     }

@@ -112,6 +112,7 @@ async function harness(
         joined_at: '2026-01-01T00:00:00.000Z',
       },
     ],
+    organizations: [{ id: ORG, owner_user_id: ADMIN, stripe_subscription_id: null }],
     subscriptions: withSubscription
       ? [
           {
@@ -274,10 +275,38 @@ describe('SCIM entitlement gate', () => {
     expect(state.scim_provisioned_users).toHaveLength(0);
   });
 
-  it('fails closed when the issuing admin has no subscription row at all', async () => {
+  it('fails closed when the organization has no subscription row at all', async () => {
     const { rawToken } = await harness({ withSubscription: false });
     const response = await usersGet(scimRequest('/Users', { token: rawToken }));
     expect(response.status).toBe(403);
+  });
+
+  it('provisions for an Enterprise organization whatever plan the issuing admin holds', async () => {
+    const { rawToken, state } = await harness();
+    state.organizations[0]!['owner_user_id'] = 'org-owner';
+    state.subscriptions[0]!['user_id'] = 'org-owner';
+    state.organization_members[0]!['role'] = 'admin';
+
+    expect((await usersGet(scimRequest('/Users', { token: rawToken }))).status).toBe(200);
+  });
+
+  it('refuses a Team organization even when the issuing admin holds Enterprise personally', async () => {
+    const { rawToken, state } = await harness({ planTier: 'team' });
+    state.organizations[0]!['owner_user_id'] = 'org-owner';
+    state.subscriptions[0]!['user_id'] = 'org-owner';
+    state.subscriptions.push({
+      ...state.subscriptions[0]!,
+      id: 'sub-admin',
+      user_id: ADMIN,
+      plan_tier: 'enterprise',
+      stripe_subscription_id: 'sub_stripe_admin',
+    });
+    state.organization_members[0]!['role'] = 'admin';
+
+    const response = await usersGet(scimRequest('/Users', { token: rawToken }));
+
+    expect(response.status).toBe(403);
+    expect(String(state.directory_sync_events.at(-1)?.['error'])).toContain('current plan: team');
   });
 
   it('fails closed the moment an enterprise subscription lapses', async () => {

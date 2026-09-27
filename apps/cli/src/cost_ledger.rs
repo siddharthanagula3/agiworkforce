@@ -306,6 +306,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn one_credit_is_half_a_cent_of_provider_cost() {
+        assert_eq!(credits_for_usd(0.005), 1.0);
+        assert_eq!(credits_for_usd(1.0), 200.0);
+        assert_eq!(credits_for_usd(12.34), 2_468.0);
+        for unpriced in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(credits_for_usd(unpriced), 0.0, "{unpriced}");
+        }
+    }
+
+    #[test]
+    fn a_credit_figure_is_grouped_and_keeps_at_most_two_decimals() {
+        assert_eq!(credit_amount(20_000.0), "20,000");
+        assert_eq!(credit_amount(4_200.5), "4,200.5");
+        assert_eq!(credit_amount(0.25), "0.25");
+        assert_eq!(credit_amount(0.004), "0");
+        assert_eq!(credit_amount(-3.0), "0");
+        assert_eq!(format_credits(1.0), "1 credit");
+        assert_eq!(format_credits(0.0), "0 credits");
+        assert_eq!(format_credits(2.5), "2.5 credits");
+        assert_eq!(format_usd_as_credits(0.005), "1 credit");
+        assert_eq!(format_usd_as_credits(1_234.5), "246,900 credits");
+        assert_eq!(
+            format_credits_per_million_tokens(3.0, 15.0),
+            "600 / 3,000 credits per 1M tokens"
+        );
+    }
+
+    #[test]
     fn a_budget_reports_what_is_left_and_refuses_once_it_is_spent() {
         let budget = CostBudget::new(1.0, 0.25);
         assert!((budget.remaining_usd() - 0.75).abs() < 1e-12);
