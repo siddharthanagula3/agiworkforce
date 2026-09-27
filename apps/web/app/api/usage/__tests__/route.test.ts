@@ -83,6 +83,9 @@ describe('GET /api/usage', () => {
   it('publishes the spendable credit balance and whether it will actually be spent', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 20_000_000,
+      credits_used_microusd: 1_000_000,
+      credits_remaining_microusd: 19_000_000,
       credits_allocated_cents: 2000,
       credits_used_cents: 100,
       credits_remaining_cents: 1900,
@@ -99,6 +102,9 @@ describe('GET /api/usage', () => {
   it('reports an unknown balance rather than zero when the credit lookup fails', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 20_000_000,
+      credits_used_microusd: 1_000_000,
+      credits_remaining_microusd: 19_000_000,
       credits_allocated_cents: 2000,
       credits_used_cents: 100,
       credits_remaining_cents: 1900,
@@ -120,6 +126,9 @@ describe('GET /api/usage', () => {
       current_period_end: '2026-08-01T00:00:00.000Z',
     });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 10_000_000,
+      credits_used_microusd: 1_000_000,
+      credits_remaining_microusd: 9_000_000,
       credits_allocated_cents: 1000,
       credits_used_cents: 100,
       credits_remaining_cents: 900,
@@ -128,8 +137,8 @@ describe('GET /api/usage', () => {
     });
     mockGetRollingUsage
       .mockResolvedValueOnce({
-        usedMicrousd: 200000,
-        usedCents: 20,
+        usedMicrousd: 100000,
+        usedCents: 10,
         oldestAt: '2026-07-05T03:00:00.000Z',
       })
       .mockResolvedValueOnce({
@@ -154,6 +163,17 @@ describe('GET /api/usage', () => {
     );
     expect(json.weekly_usage_percentage).toBe(20);
     expect(json.flagship_weekly_usage_percentage).toBeCloseTo(13.33, 2);
+    expect(json.credits).toMatchObject({
+      monthly: { allowance: 2_000, used: 200, remaining: 1_800, reset_at: json.usage_reset_at },
+      weekly: { allowance: 500, used: 100, remaining: 400, reset_at: json.weekly_reset_at },
+      five_hour: { allowance: 50, used: 20, remaining: 30, reset_at: json.session_reset_at },
+      flagship_weekly: {
+        allowance: 150,
+        used: 20,
+        remaining: 130,
+        reset_at: json.flagship_weekly_reset_at,
+      },
+    });
     expect(json).not.toHaveProperty('credits_allocated_cents');
     expect(json).not.toHaveProperty('credits_used_cents');
     expect(json).not.toHaveProperty('credits_remaining_cents');
@@ -167,13 +187,20 @@ describe('GET /api/usage', () => {
     expect(mockGetRollingUsage).toHaveBeenCalledTimes(3);
   });
 
-  it('uses the precise rolling Free daily percentage without exposing private operands', async () => {
+  it('states the Free windows in credits from the free usage counters, without private operands', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'free', status: 'none' });
     mockGetBalance.mockResolvedValue(null);
     mockGetFreeTrialPublicUsage.mockResolvedValue({
       usagePercentage: 75,
       resetAt: '2026-07-19T12:00:00.000Z',
+      sessionUsagePercentage: 50,
+      sessionResetAt: '2026-07-18T17:00:00.000Z',
+      weeklyUsagePercentage: 60,
+      weeklyResetAt: '2026-07-22T00:00:00.000Z',
       hasUsageRemaining: true,
+      monthlyUsedMicrousd: 75_000,
+      weeklyUsedMicrousd: 45_000,
+      fiveHourUsedMicrousd: 5_000,
     });
 
     const res = await GET(makeRequest());
@@ -181,10 +208,18 @@ describe('GET /api/usage', () => {
 
     expect(json.usage_percentage).toBe(75);
     expect(json.usage_reset_at).toBe('2026-07-19T12:00:00.000Z');
-    expect(json.session_usage_percentage).toBe(0);
-    expect(json.weekly_usage_percentage).toBe(0);
+    expect(json.session_usage_percentage).toBe(50);
+    expect(json.session_reset_at).toBe('2026-07-18T17:00:00.000Z');
+    expect(json.weekly_usage_percentage).toBe(60);
+    expect(json.weekly_reset_at).toBe('2026-07-22T00:00:00.000Z');
     expect(json.flagship_weekly_usage_percentage).toBe(0);
-    expect(json.session_reset_at).toBeNull();
+    expect(json.credits).toMatchObject({
+      monthly: { allowance: 20, used: 15, remaining: 5, reset_at: '2026-07-19T12:00:00.000Z' },
+      weekly: { allowance: 15, used: 9, remaining: 6, reset_at: '2026-07-22T00:00:00.000Z' },
+      five_hour: { allowance: 2, used: 1, remaining: 1, reset_at: '2026-07-18T17:00:00.000Z' },
+      flagship_weekly: null,
+    });
+    expect(json).not.toHaveProperty('usage_allocation');
     expect(mockGetRollingUsage).not.toHaveBeenCalled();
     expect(mockGetFreeTrialPublicUsage).toHaveBeenCalledWith(expect.anything(), 'user-1');
     expect(JSON.stringify(json)).not.toMatch(/microusd|daily_cost|daily_reserved/i);
@@ -193,6 +228,9 @@ describe('GET /api/usage', () => {
   it('returns null reset timestamps when there is no usage yet in the window', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'max', status: 'active' });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 75_000_000,
+      credits_used_microusd: 0,
+      credits_remaining_microusd: 75_000_000,
       credits_allocated_cents: 7500,
       credits_used_cents: 0,
       credits_remaining_cents: 7500,
@@ -212,6 +250,9 @@ describe('GET /api/usage', () => {
   it('reports no immediately available usage when a shared rolling admission window is exhausted', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 20_000_000,
+      credits_used_microusd: 1_000_000,
+      credits_remaining_microusd: 19_000_000,
       credits_allocated_cents: 2000,
       credits_used_cents: 100,
       credits_remaining_cents: 1900,
@@ -241,6 +282,9 @@ describe('GET /api/usage', () => {
   it('keeps non-flagship work available when only the flagship sub-limit is exhausted', async () => {
     mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: 20_000_000,
+      credits_used_microusd: 1_000_000,
+      credits_remaining_microusd: 19_000_000,
       credits_allocated_cents: 2000,
       credits_used_cents: 100,
       credits_remaining_cents: 1900,

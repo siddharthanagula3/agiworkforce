@@ -26,8 +26,10 @@ vi.mock('@/lib/cors', async (importOriginal) => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { GET } from '../route';
 import { ApiKeyScopeError } from '@/lib/api-key-scope-error';
+import { usageHistoryWindowStart } from '@/lib/services/account-usage-history-service';
 
 const USER = 'user_2abcDEF';
 
@@ -37,8 +39,12 @@ function makeRequest(query = ''): never {
   }) as never;
 }
 
-function daily(day: string, requests: number, costCents: number) {
-  return { day, requests, cost_cents: String(costCents) };
+function credits(count: number): string {
+  return String(count * MICROUSD_PER_CREDIT);
+}
+
+function period(start: string, requests: number, spent: number) {
+  return { period: start, requests, cost_microusd: credits(spent) };
 }
 
 describe('GET /api/usage/history', () => {
@@ -47,7 +53,7 @@ describe('GET /api/usage/history', () => {
     mockGetUserScopedDb.mockResolvedValue({ db: { query: mockDbQuery }, userId: USER });
     mockDbQuery.mockImplementation(async (sql: string) => {
       const text = String(sql);
-      if (/date_trunc\('day'/.test(text)) return [daily('2026-08-22T00:00:00.000Z', 5, 90)];
+      if (/date_trunc\(\$4::text/.test(text)) return [period('2026-08-22T00:00:00.000Z', 5, 180)];
       if (/unsettled_requests/.test(text)) {
         return [{ latest_activity_at: '2026-08-22T09:00:00.000Z', unsettled_requests: 2 }];
       }
@@ -58,32 +64,60 @@ describe('GET /api/usage/history', () => {
             requests: 4,
             input_tokens: '900',
             output_tokens: '300',
-            cost_cents: '80',
+            cost_microusd: credits(160),
           },
         ];
       }
       if (/group by 1/.test(text)) return [];
       return [
-        { key: null, requests: 5, input_tokens: '1000', output_tokens: '400', cost_cents: '90' },
+        {
+          key: null,
+          requests: 5,
+          input_tokens: '1000',
+          output_tokens: '400',
+          cost_microusd: credits(180),
+        },
       ];
     });
   });
 
-  it('serves the reader their own settled spend, day by day and by product area', async () => {
+  it('serves the reader their own settled spend in credits, day by day and by product area', async () => {
     const response = await GET(makeRequest());
     expect(response.status).toBe(200);
 
     const body = await response.json();
     expect(body.userId).toBe(USER);
+    expect(body.granularity).toBe('day');
     expect(body.totals).toEqual({
       requests: 5,
       inputTokens: 1000,
       outputTokens: 400,
-      costCents: 90,
+      credits: 180,
     });
-    expect(body.daily).toEqual([{ day: '2026-08-22T00:00:00.000Z', requests: 5, costCents: 90 }]);
-    expect(body.byWorkload[0]).toMatchObject({ key: 'work', requests: 4, costCents: 80 });
+    expect(body.periods).toEqual([
+      { start: '2026-08-22T00:00:00.000Z', requests: 5, credits: 180 },
+    ]);
+    expect(body.byWorkload[0]).toMatchObject({ key: 'work', requests: 4, credits: 160 });
     expect(body.freshness.unsettledRequests).toBe(2);
+    expect(JSON.stringify(body)).not.toMatch(/cents|microusd/iu);
+  });
+
+  it('groups by the granularity asked for over that many periods, and falls back to days', async () => {
+    const now = new Date();
+    await GET(makeRequest('?granularity=week'));
+    const [, weekParams] = mockDbQuery.mock.calls.find(([sql]) =>
+      /date_trunc\(\$4::text/.test(String(sql)),
+    ) as [string, unknown[]];
+    expect(weekParams[1]).toBe(usageHistoryWindowStart('week', now).toISOString());
+    expect(weekParams[3]).toBe('week');
+
+    mockDbQuery.mockClear();
+    const body = await (await GET(makeRequest('?granularity=fortnight'))).json();
+    expect(body.granularity).toBe('day');
+    const [, dayParams] = mockDbQuery.mock.calls.find(([sql]) =>
+      /date_trunc\(\$4::text/.test(String(sql)),
+    ) as [string, unknown[]];
+    expect(dayParams[3]).toBe('day');
   });
 
   it('reads on the caller scoped connection under the usage read scope', async () => {
