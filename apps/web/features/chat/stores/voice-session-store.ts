@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
 import type { LiveVoiceToolActivity } from '@features/chat/lib/live-voice-session';
+import type { LiveVoicePendingApproval } from '@agiworkforce/cloud-contracts';
 import {
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
@@ -47,6 +48,7 @@ interface VoiceSessionStoreState {
   pace: number;
   backendBusy: boolean;
   toolActivity: readonly LiveVoiceToolActivity[];
+  toolApprovals: readonly LiveVoicePendingApproval[];
 }
 
 interface VoiceSessionStoreActions {
@@ -55,6 +57,7 @@ interface VoiceSessionStoreActions {
   setVoice: (voice: string) => void;
   setBackendBusy: (backendBusy: boolean) => void;
   setToolActivity: (toolActivity: readonly LiveVoiceToolActivity[]) => void;
+  setToolApprovals: (toolApprovals: readonly LiveVoicePendingApproval[]) => void;
   toggleFocusMode: () => void;
   setDockOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -82,6 +85,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
       pace: VOICE_PACE_DEFAULT,
       backendBusy: false,
       toolActivity: [],
+      toolApprovals: [],
 
       resetOnLogout: () =>
         set({
@@ -93,6 +97,7 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
           pace: VOICE_PACE_DEFAULT,
           backendBusy: false,
           toolActivity: [],
+          toolApprovals: [],
         }),
 
       dispatch: (event) => {
@@ -101,12 +106,19 @@ export const useVoiceSessionStore = create<VoiceSessionStoreState & VoiceSession
         set(
           isVoiceSessionActive(session.status)
             ? { session }
-            : { session, backendBusy: false, toolActivity: [], ...PANELS_CLOSED },
+            : {
+                session,
+                backendBusy: false,
+                toolActivity: [],
+                toolApprovals: [],
+                ...PANELS_CLOSED,
+              },
         );
       },
       setVoice: (voice) => set({ voice: isLiveVoice(voice) ? voice : LIVE_DEFAULT_VOICE }),
       setBackendBusy: (backendBusy) => set({ backendBusy }),
       setToolActivity: (toolActivity) => set({ toolActivity }),
+      setToolApprovals: (toolApprovals) => set({ toolApprovals }),
 
       toggleFocusMode: () => set((state) => ({ focusMode: !state.focusMode })),
       setDockOpen: (dockOpen) =>

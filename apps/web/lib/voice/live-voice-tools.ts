@@ -1,9 +1,20 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ModelMetadata } from '@agiworkforce/types';
+import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { appendWebSearchTool } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
+import { loadMcpToolDefs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { EXECUTE_CODE_TOOL, resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import { parseQualifiedToolName } from '@/lib/mcp-tool-executor';
+import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
+import {
+  createManagedOfficeFileToolDefinition,
+  MANAGED_OFFICE_FILE_TOOL_NAME,
+} from '@/lib/services/managed-office-file-service';
+import { URL_FETCH_TOOL, urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import { loadUserConnectorToolCatalog } from '@/lib/user-connector-tools';
 import { WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';
 import {
   toolApprovalPolicyOption,
@@ -92,10 +103,24 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     label: 'Fetching a page',
     toolClass: 'function',
     risk: 'read',
-    reachable: false,
-    reason: 'executed by our egress-guarded fetcher, which the delegation cannot call',
+    reachable: true,
+    reason:
+      'the voice client hands the call to our tool route, which runs the egress-guarded fetcher behind the chat approval gate',
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: URL_FETCH_TOOL,
+  },
+  {
+    id: MANAGED_OFFICE_FILE_TOOL_NAME,
+    label: 'Creating a file',
+    toolClass: 'function',
+    risk: 'write',
+    reachable: true,
+    reason:
+      'the voice client hands the call to our tool route, which creates the file in the Library behind the chat approval gate',
+    timeoutMs: LONG_TOOL_TIMEOUT_MS,
+    requiresApproval: true,
+    policyTool: MANAGED_OFFICE_FILE_TOOL_NAME,
   },
   {
     id: 'web_search_fallback',
@@ -153,8 +178,9 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     label: 'Using a connector',
     toolClass: 'function',
     risk: 'write',
-    reachable: false,
-    reason: 'per-call approval is evaluated by the tool loop, which is not in this path',
+    reachable: true,
+    reason:
+      'the voice client hands each call to our tool route, which applies the chat approval gate and shows any approval on screen',
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: true,
   },
@@ -176,7 +202,9 @@ export interface LiveVoiceToolDescriptor {
 }
 
 export function describeLiveVoiceTool(toolId: string): LiveVoiceToolDescriptor {
-  const tool = findLiveVoiceTool(toolId);
+  const tool =
+    findLiveVoiceTool(toolId) ??
+    (parseQualifiedToolName(toolId) ? findLiveVoiceTool('connectors') : null);
   return {
     id: toolId,
     label: tool?.label ?? 'Working on it',
@@ -230,6 +258,80 @@ export function resolveLiveVoiceDelegationTools(
     }
   }
   return { tools, withheld };
+}
+
+const DELEGATION_FUNCTION_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
+
+interface ChatFunctionTool {
+  function: { name: string; description: string; parameters: Record<string, unknown> };
+}
+
+export interface LiveVoiceFunctionTools {
+  tools: Record<string, unknown>[];
+  names: string[];
+}
+
+function delegationFunctionTool(
+  name: string,
+  description: string,
+  parameters: Record<string, unknown>,
+): Record<string, unknown> {
+  return { type: 'function', name, description, parameters, strict: false };
+}
+
+export async function resolveLiveVoiceFunctionTools(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  organizationId: string | null;
+  planTier: string | null;
+  backendModel: ModelMetadata;
+}): Promise<LiveVoiceFunctionTools> {
+  if (input.backendModel.capabilities?.tools === false) return { tools: [], names: [] };
+  const permissions = await loadConnectorToolPermissions(input.db, input.userId);
+  const [operatorTools, connectorCatalog] = await Promise.all([
+    loadMcpToolDefs(),
+    loadUserConnectorToolCatalog(input.userId, {
+      customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
+      planTier: input.planTier,
+      organizationId: input.organizationId,
+      isToolDenied: permissions.isConnectorToolDenied,
+    }),
+  ]);
+  const productTools: ChatFunctionTool[] = [
+    urlFetchToolDef(),
+    createManagedOfficeFileToolDefinition(),
+  ];
+  const candidates = [
+    ...productTools.map((tool) => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      parameters: tool.function.parameters,
+    })),
+    ...[...operatorTools, ...connectorCatalog.tools].map((tool) => ({
+      name: tool.qualifiedName,
+      description: tool.description,
+      parameters: tool.inputSchema,
+    })),
+  ];
+  const tools: Record<string, unknown>[] = [];
+  const names: string[] = [];
+  for (const candidate of candidates) {
+    if (!DELEGATION_FUNCTION_NAME.test(candidate.name)) continue;
+    if (names.includes(candidate.name) || permissions.isDenied(candidate.name)) continue;
+    names.push(candidate.name);
+    tools.push(delegationFunctionTool(candidate.name, candidate.description, candidate.parameters));
+  }
+  return { tools, names };
+}
+
+export function formatLiveVoiceApprovalNotice(functionTools: readonly string[]): string | null {
+  if (functionTools.length === 0) return null;
+  return (
+    "Some actions need the user's approval before they run. When one does, the app shows the " +
+    'request on the screen and the action waits. Tell the user in one short sentence that it is ' +
+    'waiting for their approval on screen. A spoken yes does not approve it, and never say an ' +
+    'action ran until its result comes back.'
+  );
 }
 
 export function formatWithheldLiveVoiceTools(
