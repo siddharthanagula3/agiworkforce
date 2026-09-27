@@ -176,6 +176,7 @@ export const ManagedCloudScheduleRunSchema = z.object({
   idempotencyKey: z.string(),
   leaseExpiresAt: z.string().nullable(),
   attemptCount: z.number().int().positive(),
+  creditsUsed: z.number().nonnegative().nullable().optional(),
 });
 export type ManagedCloudScheduleRun = z.infer<typeof ManagedCloudScheduleRunSchema>;
 

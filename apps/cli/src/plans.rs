@@ -169,3 +169,179 @@ pub fn plans_lines() -> Vec<String> {
             .as_ref(),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window_credits(plan: &str) -> String {
+        let (_, five_hour, weekly, monthly) = PLAN_WINDOW_CREDITS
+            .iter()
+            .copied()
+            .find(|(id, _, _, _)| *id == plan)
+            .unwrap_or_else(|| panic!("{plan} states no window credits"));
+        format!(
+            "{} / {} / {} credits",
+            credit_amount(f64::from(five_hour)),
+            credit_amount(f64::from(weekly)),
+            credit_amount(f64::from(monthly))
+        )
+    }
+
+    fn labels(capabilities: &[&str]) -> String {
+        capabilities
+            .iter()
+            .map(|capability| capability_label(capability))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn plan_rows(lines: &[String]) -> Vec<(&str, &str)> {
+        lines[1..lines.len() - 1]
+            .chunks(2)
+            .map(|row| (row[0].as_str(), row[1].as_str()))
+            .collect()
+    }
+
+    #[test]
+    fn the_200_dollar_plan_is_named_max_20x_and_every_plan_by_its_catalog_label() {
+        assert_eq!(plan_label("max_15x"), "Max 20x");
+        assert_eq!(plan_label("max"), "Max 5x");
+        let lines = render_plans(None);
+        let headings: Vec<&str> = plan_rows(&lines)
+            .into_iter()
+            .map(|(heading, _)| heading.split(':').next().unwrap_or_default().trim())
+            .collect();
+        assert_eq!(
+            headings,
+            [
+                "Free",
+                "Basic",
+                "Pro",
+                "Max 5x",
+                "Max 20x",
+                "Team",
+                "Enterprise"
+            ]
+        );
+    }
+
+    #[test]
+    fn without_a_plan_each_row_states_its_credits_per_window_and_what_it_includes() {
+        let lines = render_plans(None);
+        assert_eq!(lines[0], "Plans, with credits per 5 hours / week / month");
+        assert_eq!(
+            lines.last().map(String::as_str),
+            Some(
+                format!(
+                    "Prices and checkout: {}/pricing",
+                    tier_cache::default_api_base()
+                )
+                .as_str()
+            )
+        );
+        let rows = plan_rows(&lines);
+        assert_eq!(rows.len(), PLAN_ORDER.len());
+        assert_eq!(
+            rows[0],
+            (
+                format!("  Free: {}, free models only", window_credits("free")).as_str(),
+                format!("    Includes: {}", labels(&plan_capabilities("free"))).as_str(),
+            )
+        );
+        assert_eq!(
+            rows[4].0,
+            format!("  Max 20x: {}", window_credits("max_15x"))
+        );
+        assert_eq!(
+            rows[5].0,
+            format!("  Team: {} per seat", window_credits("team"))
+        );
+        assert_eq!(rows[6].0, "  Enterprise: usage set by your contract");
+        for (heading, detail) in rows {
+            assert!(!heading.contains("(your plan)"), "{heading}");
+            assert!(detail.starts_with("    Includes: "), "{detail}");
+            assert!(!heading.contains('$') && !detail.contains('$'), "{heading}");
+        }
+    }
+
+    #[test]
+    fn a_current_plan_is_marked_and_every_other_row_says_what_it_adds() {
+        let lines = render_plans(Some(&UserTier::Pro));
+        let rows = plan_rows(&lines);
+        let row = |label: &str| {
+            rows.iter()
+                .find(|(heading, _)| heading.starts_with(&format!("  {label}")))
+                .copied()
+                .unwrap_or_else(|| panic!("no {label} row"))
+        };
+
+        assert_eq!(
+            row("Pro"),
+            (
+                format!("  Pro (your plan): {}", window_credits("pro")).as_str(),
+                format!("    Includes: {}", labels(&plan_capabilities("pro"))).as_str(),
+            )
+        );
+        assert_eq!(row("Free").1, "    No features beyond Pro");
+        assert_eq!(row("Max 5x").1, "    No features beyond Pro");
+        assert_eq!(
+            row("Max 20x").1,
+            format!(
+                "    Adds over Pro: {}",
+                capability_label("video_generation")
+            )
+        );
+        assert_eq!(
+            row("Team").1,
+            format!("    Adds over Pro: {}", capability_label("team_admin"))
+        );
+        assert_eq!(
+            row("Enterprise").1,
+            format!(
+                "    Adds over Pro: {}",
+                labels(&["video_generation", "team_admin", "enterprise_controls"])
+            )
+        );
+        assert_eq!(
+            rows.iter()
+                .filter(|(heading, _)| heading.contains("(your plan)"))
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn a_max_20x_account_sees_itself_marked_under_its_catalog_label() {
+        let lines = render_plans(Some(&UserTier::Max15x));
+        let rows = plan_rows(&lines);
+        assert_eq!(
+            rows[4].0,
+            format!("  Max 20x (your plan): {}", window_credits("max_15x"))
+        );
+        assert_eq!(rows[3].1, "    No features beyond Max 20x");
+        assert_eq!(
+            rows[6].1,
+            format!(
+                "    Adds over Max 20x: {}",
+                labels(&["team_admin", "enterprise_controls"])
+            )
+        );
+    }
+
+    #[test]
+    fn a_byok_session_has_no_managed_plan_to_mark() {
+        assert_eq!(render_plans(Some(&UserTier::Byok)), render_plans(None));
+    }
+
+    #[test]
+    fn every_capability_a_plan_includes_has_a_label_of_its_own() {
+        for (capability, _) in PLAN_CAPABILITY_TIERS {
+            assert_ne!(capability_label(capability), capability);
+        }
+        assert_eq!(
+            capability_label("developer_surfaces"),
+            "Managed Cloud in the CLI and VS Code"
+        );
+    }
+}

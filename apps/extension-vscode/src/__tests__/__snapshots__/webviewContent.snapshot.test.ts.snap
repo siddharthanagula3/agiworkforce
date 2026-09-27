@@ -3070,11 +3070,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Account needs attention';
       } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
         meterCloudIcon.style.display = 'inline';
-        var planLabel = payload.accountPlanTier.charAt(0).toUpperCase() + payload.accountPlanTier.slice(1).replace(/_/g, ' ');
-        var paidPlanNeedsAttention = ['pro', 'max', 'max_15x', 'team', 'enterprise'].includes(payload.accountPlanTier);
+        var planLabel = payload.accountPlanLabel || payload.accountPlanTier;
+        var paidPlanNeedsAttention = payload.accountPlanNeedsBilling === true;
         meterText.textContent = paidPlanNeedsAttention
           ? planLabel + ' subscription needs attention · Managed Cloud paused'
-          : planLabel + ' account · Managed developer access requires Pro or above';
+          : payload.developerAccessPlanLabel
+            ? planLabel + ' account · Managed developer access requires ' + payload.developerAccessPlanLabel + ' or above'
+            : planLabel + ' account · Managed developer access is not included in this plan';
         meterReset.textContent = '· Local and provider BYOK remain available';
         upgradeBtn.textContent = paidPlanNeedsAttention ? 'Manage billing' : 'Upgrade';
         upgradeBtn.dataset.action = paidPlanNeedsAttention ? 'billing' : 'upgrade';
@@ -9289,11 +9291,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Account needs attention';
       } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
         meterCloudIcon.style.display = 'inline';
-        var planLabel = payload.accountPlanTier.charAt(0).toUpperCase() + payload.accountPlanTier.slice(1).replace(/_/g, ' ');
-        var paidPlanNeedsAttention = ['pro', 'max', 'max_15x', 'team', 'enterprise'].includes(payload.accountPlanTier);
+        var planLabel = payload.accountPlanLabel || payload.accountPlanTier;
+        var paidPlanNeedsAttention = payload.accountPlanNeedsBilling === true;
         meterText.textContent = paidPlanNeedsAttention
           ? planLabel + ' subscription needs attention · Managed Cloud paused'
-          : planLabel + ' account · Managed developer access requires Pro or above';
+          : payload.developerAccessPlanLabel
+            ? planLabel + ' account · Managed developer access requires ' + payload.developerAccessPlanLabel + ' or above'
+            : planLabel + ' account · Managed developer access is not included in this plan';
         meterReset.textContent = '· Local and provider BYOK remain available';
         upgradeBtn.textContent = paidPlanNeedsAttention ? 'Manage billing' : 'Upgrade';
         upgradeBtn.dataset.action = paidPlanNeedsAttention ? 'billing' : 'upgrade';
@@ -15508,11 +15512,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Account needs attention';
       } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
         meterCloudIcon.style.display = 'inline';
-        var planLabel = payload.accountPlanTier.charAt(0).toUpperCase() + payload.accountPlanTier.slice(1).replace(/_/g, ' ');
-        var paidPlanNeedsAttention = ['pro', 'max', 'max_15x', 'team', 'enterprise'].includes(payload.accountPlanTier);
+        var planLabel = payload.accountPlanLabel || payload.accountPlanTier;
+        var paidPlanNeedsAttention = payload.accountPlanNeedsBilling === true;
         meterText.textContent = paidPlanNeedsAttention
           ? planLabel + ' subscription needs attention · Managed Cloud paused'
-          : planLabel + ' account · Managed developer access requires Pro or above';
+          : payload.developerAccessPlanLabel
+            ? planLabel + ' account · Managed developer access requires ' + payload.developerAccessPlanLabel + ' or above'
+            : planLabel + ' account · Managed developer access is not included in this plan';
         meterReset.textContent = '· Local and provider BYOK remain available';
         upgradeBtn.textContent = paidPlanNeedsAttention ? 'Manage billing' : 'Upgrade';
         upgradeBtn.dataset.action = paidPlanNeedsAttention ? 'billing' : 'upgrade';

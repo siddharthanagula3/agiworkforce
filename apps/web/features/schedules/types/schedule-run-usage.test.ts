@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { creditsFromCents, getModels, isModelLive } from '@agiworkforce/types';
+import { getModels, isModelLive } from '@agiworkforce/types';
 
-import { formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
+import { formatRunCredits, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
 import type { ScheduleRun } from './index';
 
-function run(result: Record<string, unknown> | null): ScheduleRun {
+function run(result: Record<string, unknown> | null, creditsUsed?: number | null): ScheduleRun {
   return {
     id: 'run-1',
     taskId: 'task-1',
@@ -19,19 +19,22 @@ function run(result: Record<string, unknown> | null): ScheduleRun {
     idempotencyKey: 'key-1',
     leaseExpiresAt: null,
     attemptCount: 1,
+    ...(creditsUsed === undefined ? {} : { creditsUsed }),
   } as ScheduleRun;
 }
 
 describe('scheduleRunUsage', () => {
-  it('reads the credits the executor recorded', () => {
+  it('reads what the executor recorded and the credits the run was charged', () => {
     const usage = scheduleRunUsage(
-      run({
-        text: 'done',
-        model: 'fixture-model',
-        provider: 'anthropic',
-        credits: 0.9,
-        usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500 },
-      }),
+      run(
+        {
+          text: 'done',
+          model: 'fixture-model',
+          provider: 'anthropic',
+          usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500 },
+        },
+        0.9,
+      ),
     );
 
     expect(usage).toEqual({
@@ -40,19 +43,6 @@ describe('scheduleRunUsage', () => {
       totalTokens: 1500,
       credits: 0.9,
     });
-  });
-
-  it('converts a run recorded before credits from its cents into credits', () => {
-    const usage = scheduleRunUsage(
-      run({
-        model: 'fixture-model',
-        provider: 'anthropic',
-        usage: { totalTokens: 1500, costCents: 0.45 },
-      }),
-    );
-
-    expect(usage?.credits).toBe(creditsFromCents(0.45));
-    expect(usage).not.toHaveProperty('costCents');
   });
 
   it('returns null when the run recorded no usage at all', () => {
@@ -73,7 +63,7 @@ describe('scheduleRunUsage', () => {
 
   it('rejects non-finite and wrongly-typed values instead of rendering them', () => {
     const usage = scheduleRunUsage(
-      run({ model: 42, usage: { totalTokens: Number.NaN, costCents: '0.45' } }),
+      run({ model: 42, usage: { totalTokens: Number.NaN } }, Number.NaN),
     );
 
     expect(usage).toBeNull();
@@ -82,6 +72,22 @@ describe('scheduleRunUsage', () => {
   it('survives a result whose usage field is not an object', () => {
     expect(() => scheduleRunUsage(run({ usage: 'unavailable' }))).not.toThrow();
     expect(scheduleRunUsage(run({ usage: 'unavailable' }))).toBeNull();
+  });
+});
+
+describe('formatRunCredits', () => {
+  it('shows an exact zero as zero credits, because it is', () => {
+    expect(formatRunCredits(0)).toBe('0 credits');
+  });
+
+  it('does not round the smallest real charge down to nothing', () => {
+    expect(formatRunCredits(0.01)).toBe('0.01 credits');
+    expect(formatRunCredits(0.05)).toBe('0.05 credits');
+  });
+
+  it('formats ordinary amounts in credits', () => {
+    expect(formatRunCredits(300)).toBe('300 credits');
+    expect(formatRunCredits(1)).toBe('1 credit');
   });
 });
 

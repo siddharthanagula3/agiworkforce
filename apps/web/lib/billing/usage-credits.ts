@@ -1,11 +1,12 @@
 import 'server-only';
 
-import type { BillingPlanTier, ManagedUsageCreditWindow } from '@agiworkforce/types';
 import {
   PLAN_CREDIT_ALLOWANCES,
   getPlanCreditAllowance,
+  type BillingPlanTier,
+  type ManagedUsageCreditWindow,
   type PlanCreditAllowance,
-} from '@/lib/billing/plan-credits';
+} from '@agiworkforce/types';
 
 /**
  * Null for a plan that has no managed allowance to state: BYOK and local-only

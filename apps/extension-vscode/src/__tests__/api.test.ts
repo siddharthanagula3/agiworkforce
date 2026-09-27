@@ -14,6 +14,7 @@ import {
   AgiWorkforceApiError,
   streamChatCompletion,
   AgiWorkforcePaywallError,
+  AgiWorkforceUsageLimitError,
   buildCloudUtilityChatCompletionRequest,
   getAccountAuthState,
   getAccountToken,
@@ -28,8 +29,10 @@ import {
   setApiKey,
   clearAccountToken,
   clearApiKey,
+  fetchBilledCredits,
   AgiWorkforceClientUpdateRequiredError,
 } from '../utils/api';
+import { BILLING_PLAN_PRICING, classifyManagedQuotaErrorCode } from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
 
@@ -325,6 +328,72 @@ describe('cloud completion error envelopes', () => {
     expect(error).toMatchObject({ statusCode: 429, code: 'RATE_LIMITED' });
     expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
   });
+
+  it('turns a plan limit refusal into a usage limit carrying the server recovery', () => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({
+        error: {
+          message: 'You have used your rolling 5-hour capacity.',
+          type: 'insufficient_quota',
+          code: 'rolling_five_hour_limit_reached',
+          resets_at: '2026-08-15T15:30:00.000Z',
+          alternative_model: 'fixture-standard-model',
+          recovery: { action: 'top_up', href: '/settings/billing?intent=credits' },
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error).toMatchObject({
+      statusCode: 429,
+      code: 'rolling_five_hour_limit_reached',
+      message: 'You have used your rolling 5-hour capacity.',
+      recovery: { action: 'top_up', href: '/settings/billing?intent=credits' },
+      block: { kind: 'rolling_window', showResetTime: true, clearedByCredits: true },
+    });
+  });
+
+  it('explains a billing period refusal with the shared reason when the body has none', () => {
+    const error = parseCloudCompletionError(
+      402,
+      JSON.stringify({ error: { code: 'monthly_credit_limit_reached' } }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error.message).toBe(classifyManagedQuotaErrorCode('monthly_credit_limit_reached')?.reason);
+    expect((error as AgiWorkforceUsageLimitError).recovery).toBeUndefined();
+  });
+
+  it.each([
+    ['points at another origin', { action: 'upgrade', href: 'https://attacker.example/pricing' }],
+    ['is protocol-relative', { action: 'upgrade', href: '//attacker.example/pricing' }],
+    ['names an action the editor cannot take', { action: 'open_anything', href: '/pricing' }],
+  ])('drops a recovery link that %s', (_case, recovery) => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({
+        error: {
+          code: 'flagship_weekly_limit_reached',
+          message: 'Flagship capacity is used up.',
+          recovery,
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect((error as AgiWorkforceUsageLimitError).recovery).toBeUndefined();
+  });
+
+  it('keeps a request-rate refusal retryable rather than a plan limit', () => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({ error: { code: 'rate_limit_exceeded', message: 'Slow down.' } }),
+    );
+
+    expect(error).not.toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error).toMatchObject({ statusCode: 429, code: 'rate_limit_exceeded' });
+  });
 });
 
 describe('AGI Cloud subscription hydration', () => {
@@ -590,6 +659,94 @@ describe('cloud request retry policy', () => {
   });
 });
 
+describe('billed credits for a settled turn', () => {
+  function answerTurnPolls(...answers: Array<{ status: number; body: unknown }>): string[] {
+    const paths: string[] = [];
+    vi.mocked(https.request).mockImplementation(((
+      options: https.RequestOptions,
+      callback: (res: EventEmitter & { statusCode?: number }) => void,
+    ) => {
+      paths.push(String(options.path));
+      const next = answers.shift() ?? { status: 500, body: 'exhausted' };
+      const res = Object.assign(new EventEmitter(), { statusCode: next.status });
+      queueMicrotask(() => {
+        callback(res);
+        const body = typeof next.body === 'string' ? next.body : JSON.stringify(next.body);
+        res.emit('data', Buffer.from(body, 'utf8'));
+        res.emit('end');
+      });
+      return Object.assign(new EventEmitter(), {
+        end: () => undefined,
+        destroy: () => undefined,
+        setTimeout: () => undefined,
+      });
+    }) as never);
+    return paths;
+  }
+
+  async function billedCredits(requestId: string): Promise<number | null> {
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    await setApiKey(secrets, 'agi-test-key');
+    const settled = fetchBilledCredits(secrets, requestId);
+    await vi.advanceTimersByTimeAsync(10_000);
+    return settled;
+  }
+
+  beforeEach(() => {
+    vi.mocked(https.request).mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reads the credits a turn was billed once the ledger settles it', async () => {
+    const paths = answerTurnPolls(
+      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'pending', credits: null } },
+      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'settled', credits: 0.35 } },
+    );
+
+    await expect(billedCredits('agi.vscode.chat.turn-1')).resolves.toBe(0.35);
+    expect(paths).toEqual([
+      '/api/usage/turns/agi.vscode.chat.turn-1',
+      '/api/usage/turns/agi.vscode.chat.turn-1',
+    ]);
+  });
+
+  it('counts a settled turn that recorded no charge as zero credits', async () => {
+    answerTurnPolls({
+      status: 200,
+      body: { requestId: 'agi.vscode.chat.turn-2', status: 'settled', credits: null },
+    });
+
+    await expect(billedCredits('agi.vscode.chat.turn-2')).resolves.toBe(0);
+  });
+
+  it('reports a turn still pending after the last poll as not settled', async () => {
+    const pending = { requestId: 'agi.vscode.chat.turn-3', status: 'pending', credits: null };
+    const paths = answerTurnPolls(
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+    );
+
+    await expect(billedCredits('agi.vscode.chat.turn-3')).resolves.toBeNull();
+    expect(paths).toHaveLength(4);
+  });
+
+  it.each([
+    ['an error status', { status: 404, body: { error: 'not found' } }],
+    ['a body this editor cannot read', { status: 200, body: { status: 'settled', credits: -1 } }],
+  ])('stops polling on %s', async (_case, answer) => {
+    const paths = answerTurnPolls(answer);
+
+    await expect(billedCredits('agi.vscode.chat.turn-4')).resolves.toBeNull();
+    expect(paths).toHaveLength(1);
+  });
+});
+
 describe('cloud utility completion contract', () => {
   it('sends only the canonical Web effort and thinking fields', () => {
     vi.spyOn(Config, 'agentThinking').mockReturnValue(true);
@@ -627,10 +784,23 @@ describe('AgiWorkforcePaywallError', () => {
     expect(err).toBeInstanceOf(AgiWorkforcePaywallError);
   });
 
-  it('generates a descriptive error message', () => {
+  it('names the required plan by its catalog label in the message', () => {
     const err = new AgiWorkforcePaywallError('image', 'pro', 'Image generation requires Pro');
-    expect(err.message).toContain('pro');
-    expect(err.message).toContain('image');
+    expect(err.message).toBe(
+      `Upgrade to ${BILLING_PLAN_PRICING.pro.label} required for image: Image generation requires Pro`,
+    );
+  });
+
+  it('labels the $200 plan from the catalog rather than its tier key', () => {
+    const err = new AgiWorkforcePaywallError('video', 'max_15x', 'Video generation needs more');
+    expect(BILLING_PLAN_PRICING.max_15x.label).toBe('Max 20x');
+    expect(err.message).toBe('Upgrade to Max 20x required for video: Video generation needs more');
+    expect(err.message).not.toContain('max_15x');
+  });
+
+  it('keeps an unknown tier readable instead of dropping it', () => {
+    const err = new AgiWorkforcePaywallError('chat', 'fixture-unknown-tier', 'Not included');
+    expect(err.message).toBe('Upgrade to fixture-unknown-tier required for chat: Not included');
   });
 
   it('is NOT an instance of AgiWorkforceApiError', () => {

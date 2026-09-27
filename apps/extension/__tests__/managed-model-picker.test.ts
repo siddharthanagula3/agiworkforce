@@ -3,13 +3,18 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   CHAT_MODEL_TYPES,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canAccessManualModelSelection,
+  getBillingPlanPricing,
   getModelEffortOptions,
+  getModelReasoning,
   getModelsForTierAndSurface,
   getPickerModels,
   getProviderDisplayLabel,
   getRoutingSlotModel,
   resolveModelEffort,
   resolveProviderDisplayId,
+  splitEffortsByEntitlement,
 } from '@agiworkforce/types';
 import {
   formatManagedTierLabel,
@@ -22,6 +27,16 @@ import {
 } from '../src/features/cloud-bridge/managedModelPicker';
 
 const admittedModel = getRoutingSlotModel('general_fast');
+
+function modelWithEffortGatedOnFree(): string {
+  const model = getPickerModels().find(
+    (candidate) =>
+      getModelEffortOptions(candidate.id).length > 0 &&
+      splitEffortsByEntitlement(getModelReasoning(candidate.id), 'free').gated.length > 0,
+  );
+  expect(model).toBeDefined();
+  return model!.id;
+}
 
 describe('managed model picker', () => {
   it('shows only Auto before authenticated admission is loaded', () => {
@@ -104,27 +119,61 @@ describe('managed model picker', () => {
     expect(formatManagedTierLabel('enterprise')).toBe('Enterprise plan');
   });
 
+  it('names the plan with its catalog label rather than a capitalised tier key', () => {
+    expect(formatManagedTierLabel('max_15x')).toBe('Max 20x plan');
+    expect(formatManagedTierLabel('max')).toBe(`${getBillingPlanPricing('max').label} plan`);
+    expect(formatManagedTierLabel('hobby')).toBe(`${getBillingPlanPricing('basic').label} plan`);
+    expect(formatManagedTierLabel('  ')).toBe('Account');
+  });
+
   it('keeps Auto effort explicitly unresolved until a concrete route exists', () => {
-    expect(getManagedEffortControlState('auto', undefined, undefined)).toEqual({
+    expect(getManagedEffortControlState('auto', undefined, undefined, 'pro')).toEqual({
       status: 'awaiting-route',
       options: [],
+      gated: [],
       description: 'Auto chooses reasoning effort after routing to a model.',
     });
   });
 
-  it('derives the exact effort ladder and default from routed model metadata', () => {
-    const model = getPickerModels().find((candidate) => getModelEffortOptions(candidate.id).length);
-    expect(model).toBeDefined();
-    const modelId = model!.id;
-    const options = getModelEffortOptions(modelId);
-    const state = getManagedEffortControlState('auto', modelId, 'not-supported');
+  it('offers the full effort ladder on a plan with manual model selection', () => {
+    const modelId = modelWithEffortGatedOnFree();
+    const state = getManagedEffortControlState('auto', modelId, 'not-supported', 'pro');
 
     expect(state).toMatchObject({
       status: 'ready',
       modelId,
-      options,
+      options: getModelEffortOptions(modelId),
+      gated: [],
       effort: resolveModelEffort(modelId, 'not-supported'),
     });
+    expect(state).not.toHaveProperty('unlockPlanLabel');
+  });
+
+  it('gates efforts above the default on Free and names the cheapest plan that unlocks them', () => {
+    const modelId = modelWithEffortGatedOnFree();
+    const supported = getModelEffortOptions(modelId);
+    const entitlement = splitEffortsByEntitlement(getModelReasoning(modelId), 'free');
+    const highest = supported.at(-1)!;
+
+    const state = getManagedEffortControlState(modelId, undefined, highest, 'free');
+
+    expect(state.status).toBe('ready');
+    expect(state.gated).toEqual(entitlement.gated);
+    expect(state.options).toEqual(supported.filter((effort) => !entitlement.gated.includes(effort)));
+    expect(state.gated).toContain(highest);
+    expect(state.effort).toBe(entitlement.cap);
+    expect(state.options).toContain(state.effort);
+
+    const unlockTier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find(
+      (tier) => getBillingPlanPricing(tier).label === state.unlockPlanLabel,
+    );
+    expect(unlockTier).toBeDefined();
+    expect(canAccessManualModelSelection(unlockTier)).toBe(true);
+    const cheaper = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.slice(
+      0,
+      SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.indexOf(unlockTier!),
+    );
+    expect(cheaper.some((tier) => canAccessManualModelSelection(tier))).toBe(false);
   });
 
   it('omits latent effort for unresolved Auto and reconciles it after a concrete route', () => {
@@ -132,13 +181,24 @@ describe('managed model picker', () => {
     expect(model).toBeDefined();
     const modelId = model!.id;
 
-    expect(getManagedOutboundEffort('auto', undefined, 'high')).toBeUndefined();
-    expect(getManagedOutboundEffort('auto-economy', undefined, 'high')).toBeUndefined();
-    expect(getManagedOutboundEffort('auto', modelId, 'not-supported')).toBe(
+    expect(getManagedOutboundEffort('auto', undefined, 'high', 'pro')).toBeUndefined();
+    expect(getManagedOutboundEffort('auto-economy', undefined, 'high', 'pro')).toBeUndefined();
+    expect(getManagedOutboundEffort('auto', modelId, 'not-supported', 'pro')).toBe(
       resolveModelEffort(modelId, 'not-supported'),
     );
-    expect(getManagedOutboundEffort(modelId, undefined, 'not-supported')).toBe(
+    expect(getManagedOutboundEffort(modelId, undefined, 'not-supported', 'pro')).toBe(
       resolveModelEffort(modelId, 'not-supported'),
     );
+  });
+
+  it('never sends an effort the plan does not include', () => {
+    const modelId = modelWithEffortGatedOnFree();
+    const entitlement = splitEffortsByEntitlement(getModelReasoning(modelId), 'free');
+    const gatedEffort = entitlement.gated[0]!;
+
+    expect(getManagedOutboundEffort(modelId, undefined, gatedEffort, 'free')).toBe(
+      entitlement.cap,
+    );
+    expect(getManagedOutboundEffort(modelId, undefined, gatedEffort, 'pro')).toBe(gatedEffort);
   });
 });
