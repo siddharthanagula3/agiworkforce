@@ -28,7 +28,7 @@ const KEY = {
   id: 'key-1',
   name: 'SIEM',
   keyPrefix: 'agiadm_AbCdEf12',
-  scopes: ['audit.read'],
+  scopes: ['admin.audit.view'],
   createdBy: 'user-1',
   createdAt: '2026-09-17T00:00:00.000Z',
   expiresAt: null,
@@ -45,7 +45,7 @@ function bind(canManageKeys: boolean) {
     data: {
       organizationId: 'org',
       canManageKeys,
-      grantableScopes: ['audit.read', 'content.govern'],
+      grantableScopes: ['admin.audit.view', 'feature.content.govern'],
       keys: [KEY],
     },
   });
@@ -63,11 +63,13 @@ describe('WorkspaceApiKeys', () => {
     render(<WorkspaceApiKeys />);
 
     await user.type(screen.getByLabelText('Workspace API key name'), 'SIEM export');
-    await user.click(screen.getByLabelText('Read the audit trail and usage'));
+    const auditScope = screen.getByRole('checkbox', { name: /Read the audit trail and usage/ });
+    expect(auditScope.closest('label')).toHaveTextContent('admin.audit.view');
+    await user.click(auditScope);
     await user.click(screen.getByRole('button', { name: 'Create key' }));
 
     expect(mocks.createMutate).toHaveBeenCalledWith(
-      { name: 'SIEM export', scopes: ['audit.read'], expiresInDays: 90 },
+      { name: 'SIEM export', scopes: ['admin.audit.view'], expiresInDays: 90 },
       expect.anything(),
     );
     const notice = screen.getByRole('region', { name: 'New workspace API key' });
@@ -84,7 +86,8 @@ describe('WorkspaceApiKeys', () => {
     await user.click(screen.getByRole('button', { name: 'Revoke' }));
     expect(mocks.revokeMutate).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveTextContent('loses access');
+    expect(dialog).toHaveTextContent('stops working at once');
+    expect(dialog).toHaveTextContent('cannot be restored');
     mocks.revokeMutate.mockImplementation((_id, options) => options.onSettled());
     await user.click(within(dialog).getByRole('button', { name: 'Revoke key' }));
 
@@ -98,6 +101,10 @@ describe('WorkspaceApiKeys', () => {
     render(<WorkspaceApiKeys />);
 
     expect(screen.getByText('SIEM')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'API reference' })).toHaveAttribute(
+      'href',
+      '/openapi.json',
+    );
     expect(screen.queryByRole('button', { name: 'Create key' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull();
   });
