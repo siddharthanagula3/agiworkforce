@@ -119,7 +119,7 @@ function injectStyles(): void {
     .opt-link {
       font-size: 12px;
       font-weight: 500;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       text-decoration: none;
       flex-shrink: 0;
       white-space: nowrap;
@@ -150,7 +150,7 @@ function injectStyles(): void {
       width: 14px;
       height: 14px;
       border-radius: 50%;
-      background: #ffffff;
+      background: var(--agi-ext-toggle-knob);
       /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
          the light theme, a plain white knob on it was ~1.05:1 and the OFF
          state read as an empty pill. An outset ring costs no layout and
@@ -240,7 +240,7 @@ function injectStyles(): void {
     }
 
     .opt-allowlist-toggle-btn:hover {
-      background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+      background: var(--agi-ext-accent-hover);
     }
 
     .opt-allowlist-toggle-btn:disabled {
@@ -251,7 +251,7 @@ function injectStyles(): void {
     .opt-allowlist-toggle-btn.remove {
       background: none;
       border: 1px solid var(--agi-ext-danger-border);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
 
     .opt-allowlist-toggle-btn.remove:hover {
@@ -268,7 +268,7 @@ function injectStyles(): void {
     .opt-allowlist-consent-headline {
       font-size: 12px;
       font-weight: 600;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       margin-bottom: 4px;
     }
 
@@ -316,7 +316,7 @@ function injectStyles(): void {
       flex-shrink: 0;
     }
 
-    .opt-allowlist-item-remove:hover { color: var(--agi-ext-danger); }
+    .opt-allowlist-item-remove:hover { color: var(--agi-ext-danger-text); }
 
     .opt-allowlist-empty {
       font-size: 11px;
@@ -328,7 +328,7 @@ function injectStyles(): void {
     .opt-btn-danger {
       background: none;
       border: 1px solid var(--agi-ext-danger-border);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       border-radius: 6px;
       padding: 5px 14px;
       font-size: 12px;
@@ -479,7 +479,7 @@ function injectStyles(): void {
     }
 
     .opt-btn-primary:hover {
-      background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+      background: var(--agi-ext-accent-hover);
     }
 
     .opt-btn-primary:disabled,
@@ -495,11 +495,11 @@ function injectStyles(): void {
     }
 
     .opt-save-status.saved {
-      color: var(--agi-ext-success, #22c55e);
+      color: var(--agi-ext-success-text);
     }
 
     .opt-save-status.error {
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
 
     .opt-sr-only {
@@ -549,6 +549,7 @@ function injectStyles(): void {
     .opt-bearer-input:focus {
       border-color: var(--agi-ext-accent);
     }
+    .opt-bearer-input::placeholder { color: var(--agi-ext-text-placeholder); }
 
     /* ── Chrome settings visual system ──────────────────────────────────── */
     body {
@@ -789,7 +790,7 @@ function injectStyles(): void {
 
     kbd { min-width: 25px; padding: 3px 7px; border-radius: 7px; text-align: center; }
     .opt-link { font-size: 12px; text-decoration: none; }
-    .opt-version { padding-top: 4px; opacity: 0.72; }
+    .opt-version { padding-top: 4px; }
 
     @media (max-width: 900px) {
       .opt-shell { grid-template-columns: 204px minmax(0, 1fr); }

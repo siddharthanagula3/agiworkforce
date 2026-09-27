@@ -121,7 +121,7 @@ function buildModalStyles(): string {
     }
     .agi-tab-btn:hover { color:var(--agi-ext-text); }
     .agi-tab-btn.active {
-      color:var(--agi-ext-accent);
+      color:var(--agi-ext-accent-text);
       border-bottom-color:var(--agi-ext-accent);
     }
 
@@ -160,7 +160,7 @@ function buildModalStyles(): string {
     }
 
     .agi-error-text {
-      font-size:11px; color:var(--agi-ext-danger);
+      font-size:11px; color:var(--agi-ext-danger-text);
       margin-top:5px; display:none;
     }
     .agi-error-text.visible { display:block; }
@@ -172,10 +172,10 @@ function buildModalStyles(): string {
       border:none; border-radius:6px; cursor:pointer;
       display:flex; align-items:center; justify-content:center; gap:6px;
       transition:opacity 0.15s, box-shadow 0.15s;
-      background:linear-gradient(135deg,var(--agi-ext-accent) 0%,var(--agi-ext-accent-secondary) 100%);
+      background:var(--agi-ext-accent);
       color:var(--agi-ext-on-accent);
     }
-    .agi-btn:hover:not(:disabled) { opacity:0.9; box-shadow:0 3px 10px rgba(33,128,141,0.3); }
+    .agi-btn:hover:not(:disabled) { background:var(--agi-ext-accent-hover); }
     .agi-btn:disabled { opacity:0.5; cursor:not-allowed; }
 
     /* ── Spinner ── */
@@ -196,7 +196,7 @@ function buildModalStyles(): string {
     }
     .agi-switch-link button {
       background:transparent; border:none; cursor:pointer;
-      color:var(--agi-ext-accent); font-size:11px; font-weight:600;
+      color:var(--agi-ext-accent-text); font-size:11px; font-weight:600;
       text-decoration:underline; text-underline-offset:2px; padding:0;
     }
     .agi-switch-link button:hover { opacity:0.8; }
@@ -213,7 +213,7 @@ function buildModalStyles(): string {
       background:var(--agi-ext-success-bg);
       border:1px solid var(--agi-ext-success-border);
       display:flex; align-items:center; justify-content:center;
-      color:var(--agi-ext-success);
+      color:var(--agi-ext-success-text);
       font-size:22px; line-height:1;
     }
 

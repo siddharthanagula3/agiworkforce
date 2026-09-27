@@ -59,6 +59,7 @@ describe('enrichManagedMemoryContext', () => {
       userId: 'user-1',
       chatRequest,
       isTemporary: false,
+      surface: 'web',
     });
 
     expect(chatRequest.messages[0]).toMatchObject({ role: 'system' });
@@ -79,6 +80,7 @@ describe('enrichManagedMemoryContext', () => {
       userId: 'user-1',
       chatRequest,
       isTemporary: false,
+      surface: 'web',
     });
 
     const recall = query.mock.calls.find(([sql]) => sql.includes('from user_memories'));
@@ -95,6 +97,7 @@ describe('enrichManagedMemoryContext', () => {
       userId: 'user-1',
       chatRequest,
       isTemporary: true,
+      surface: 'web',
     });
 
     expect(query).not.toHaveBeenCalled();
@@ -110,6 +113,7 @@ describe('enrichManagedMemoryContext', () => {
       userId: 'user-1',
       chatRequest,
       isTemporary: false,
+      surface: 'web',
     });
 
     expect(query).not.toHaveBeenCalled();

@@ -361,8 +361,7 @@ describe('research loop over the REAL Anthropic wire', () => {
     // The synthesis turn is the third call; its thread must carry the
     // gathering round's TAG-FREE notes, never the `<thinking>` wire rendering.
     const synthesisRequest = streamMock.mock.calls[2]?.[2] as
-      | { messages: Array<{ role: string; content: string }> }
-      | undefined;
+      { messages: Array<{ role: string; content: string }> } | undefined;
     const assistantNotes = (synthesisRequest?.messages ?? []).filter(
       (message) => message.role === 'assistant',
     );
@@ -422,7 +421,7 @@ describe('research loop over the REAL Anthropic wire', () => {
       runResearchLoop(
         processed,
         { userId: 'user-1', token: 'tok' },
-        { maxIterations: 3, maxSearches: 12 },
+        { maxIterations: 3, maxSearches: 12, toolApprovalPolicy: 'autonomous' },
       ),
     );
 

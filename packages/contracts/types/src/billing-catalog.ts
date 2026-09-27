@@ -699,19 +699,36 @@ export function planOffersBillingInterval(
 
 export type PublishedPricePlanTier = Exclude<BillingPlanTier, 'enterprise'>;
 
-export function getPublishedPlanPriceUsd(plan: PublishedPricePlanTier): number {
+export function getPublishedMonthlyPriceUsd(plan: PublishedPricePlanTier): number {
   return BILLING_PLAN_PRICING[plan].monthlyPriceUsd;
 }
 
-export function getPublishedPlanPriceCents(plan: PublishedPricePlanTier): number {
-  return Math.round(getPublishedPlanPriceUsd(plan) * 100);
+export function getPublishedPlanPriceUsd(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval,
+): number | null {
+  return interval === 'monthly'
+    ? getPublishedMonthlyPriceUsd(plan)
+    : getPlanPriceUsd(plan, interval);
+}
+
+export function getPublishedMonthlyPriceCents(plan: PublishedPricePlanTier): number {
+  return Math.round(getPublishedMonthlyPriceUsd(plan) * 100);
+}
+
+export function getPublishedPlanPriceCents(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval,
+): number | null {
+  const usd = getPublishedPlanPriceUsd(plan, interval);
+  return usd === null ? null : Math.round(usd * 100);
 }
 
 export function getPublishedPlanPricePerMonthUsd(
   plan: PublishedPricePlanTier,
   interval: BillingInterval,
 ): number | null {
-  const cents = getPlanPriceCents(plan, interval);
+  const cents = getPublishedPlanPriceCents(plan, interval);
   if (cents === null) return null;
   return interval === 'yearly' ? Math.round(cents / 12) / 100 : cents / 100;
 }

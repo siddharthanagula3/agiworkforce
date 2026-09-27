@@ -10,7 +10,7 @@ import {
   DialogTitle,
   Button,
 } from '@agiworkforce/ui';
-import { getPlanPriceUsd } from '@agiworkforce/types';
+import { getPublishedPlanPriceUsd } from '@agiworkforce/types';
 import {
   CheckoutRequiredError,
   previewUpgrade,
@@ -144,7 +144,7 @@ export function UpgradeConfirmDialog({
 
   const display = getBillingPlanDisplay(request.plan);
   const planLabel = display.pricing.label;
-  const unitPriceUsd = getPlanPriceUsd(request.plan, request.billingInterval);
+  const unitPriceUsd = getPublishedPlanPriceUsd(request.plan, request.billingInterval);
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
   const recurringPrice =
     unitPriceUsd === null

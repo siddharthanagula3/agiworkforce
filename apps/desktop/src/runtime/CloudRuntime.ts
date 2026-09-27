@@ -101,6 +101,7 @@ import {
   captureCloudConversationBoundary,
   deleteCloudConversation,
   ensureCloudConversation,
+  isTemporaryCloudConversation,
   markCloudConversationReady,
   updateCloudConversation,
   waitForCloudConversationReady,
@@ -373,6 +374,7 @@ export class CloudRuntime implements ChatRuntime {
     messageProjection?: CloudStreamMessageProjection,
   ): Promise<void> {
     const boundary = this.requireBoundary();
+    if (isTemporaryCloudConversation(conversationId, boundary)) return;
     if (
       !content &&
       !agentActivity &&
@@ -998,7 +1000,7 @@ export class CloudRuntime implements ChatRuntime {
         if (uploaded) this._attachmentAssetIds.set(attachment.id, uploaded.id);
       }
 
-      if (!isContinuation) {
+      if (!isContinuation && !isTemporaryCloudConversation(conversationId, boundary)) {
         await client.saveMessage(
           conversationId,
           {

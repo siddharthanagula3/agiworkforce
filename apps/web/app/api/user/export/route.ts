@@ -2098,7 +2098,7 @@ async function collectUserData(
     workspaces,
     sql: `select id, title, model, project_id, pinned, draft, created_at, updated_at, deleted_at
           from web_conversations
-          where user_id = $1
+          where user_id = $1 and is_temporary = false
           order by created_at asc`,
     values: [user.id],
     schema: conversationExportSchema,
@@ -2140,7 +2140,7 @@ async function collectUserData(
     sql: `select m.id, m.conversation_id, m.role, m.content, m.model, m.provider, m.created_at
           from web_messages m
           inner join web_conversations c on c.id = m.conversation_id
-          where c.user_id = $1
+          where c.user_id = $1 and c.is_temporary = false
           order by m.created_at asc`,
     values: [user.id],
     schema: messageExportSchema,

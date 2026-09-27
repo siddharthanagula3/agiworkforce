@@ -46,7 +46,7 @@ export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) 
         background: 'color-mix(in srgb, var(--chat-info) 12%, transparent)',
         cursor: status === 'downloading' ? 'default' : 'pointer',
         width: '100%',
-        color: 'var(--chat-info)',
+        color: 'var(--chat-info-text)',
         fontSize: 12,
         fontWeight: 500,
         whiteSpace: 'nowrap',

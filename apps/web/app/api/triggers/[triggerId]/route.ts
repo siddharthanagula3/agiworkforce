@@ -7,7 +7,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { releaseGmailWatch, startGmailWatch } from '@/lib/triggers/gmail-watch';
 import { rethrowTriggerError } from '@/lib/triggers/trigger-errors';
 import {
   deleteTrigger,
@@ -68,7 +70,14 @@ async function handleUpdateTrigger(
   const triggerId = triggerIdFrom((await context.params).triggerId);
   const body = await requestObject(request);
   try {
-    const trigger = await updateTrigger(db, userId, triggerId, body as TriggerUpdateInput);
+    const previous = await getTrigger(db, userId, triggerId);
+    const updated = await updateTrigger(db, userId, triggerId, body as TriggerUpdateInput);
+    let trigger = updated;
+    if (updated.isEnabled && !previous.isEnabled) {
+      trigger = await startGmailWatch(getNeonDb(), updated);
+    } else if (!updated.isEnabled && previous.isEnabled) {
+      await releaseGmailWatch(getNeonDb(), updated);
+    }
     await recordAuditEvent({
       userId,
       organizationId: organizationId ?? null,
@@ -101,7 +110,9 @@ async function handleDeleteTrigger(
 
   const triggerId = triggerIdFrom((await context.params).triggerId);
   try {
+    const trigger = await getTrigger(db, userId, triggerId);
     await deleteTrigger(db, userId, triggerId);
+    await releaseGmailWatch(getNeonDb(), trigger);
     await recordAuditEvent({
       userId,
       organizationId: organizationId ?? null,

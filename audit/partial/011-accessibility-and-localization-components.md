@@ -284,6 +284,6 @@ Code: `apps/extension-vscode/package.json:1143-1143`, `apps/extension-vscode/src
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | --plain / AGI_PLAIN only affect REPL output: the default TUI still opens with spinners and redraws, and its syntax highlighting ignores NO_COLOR. Make --plain skip the TUI and strip colour everywhere. | handler |
+| cli | partial | TUI code highlighting now honours NO_COLOR, but --plain and AGI_PLAIN still affect only REPL output: the default TUI opens with spinners and redraws. Make --plain skip the TUI and strip colour everywhere. | handler |
 
 Code: `apps/cli/src/lib.rs:433-433`, `apps/cli/src/lib.rs:2998-2998`, `apps/cli/src/lib.rs:4610-4610`, `apps/cli/src/tui/markdown_renderer.rs:8-8`

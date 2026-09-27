@@ -68,11 +68,7 @@ export function SendButton({ state, onPress, disabled, accessibilityLabel }: Sen
     };
   });
 
-  const iconColor = disabled
-    ? colors.textSecondary
-    : state === 'idle'
-      ? colors.accentText
-      : colors.white;
+  const iconColor = disabled ? colors.textSecondary : colors.accentText;
   const Icon = iconForState(state);
 
   return (

@@ -470,20 +470,20 @@ function getStatusConfig(status: GoalData['status']) {
       return {
         icon: CheckCircle2,
         label: 'Goal achieved',
-        bgColor: 'bg-success/10',
-        iconColor: 'text-success',
-        borderColor: 'border-success/20',
-        progressColor: 'bg-success',
+        bgColor: 'bg-success-fill/10',
+        iconColor: 'text-success-text',
+        borderColor: 'border-success-fill/20',
+        progressColor: 'bg-success-fill',
         animate: '',
       };
     case 'failed':
       return {
         icon: XCircle,
         label: 'Goal failed',
-        bgColor: 'bg-destructive/10',
-        iconColor: 'text-destructive',
-        borderColor: 'border-destructive/20',
-        progressColor: 'bg-destructive',
+        bgColor: 'bg-danger-fill/10',
+        iconColor: 'text-danger-text',
+        borderColor: 'border-danger-fill/20',
+        progressColor: 'bg-danger-fill',
         animate: '',
       };
   }
@@ -510,16 +510,16 @@ function getStepStatusConfig(status: StepData['status']) {
     case 'completed':
       return {
         icon: Check,
-        bgColor: 'bg-success/10',
-        iconColor: 'text-success',
+        bgColor: 'bg-success-fill/10',
+        iconColor: 'text-success-text',
         textColor: 'text-foreground',
         animate: '',
       };
     case 'failed':
       return {
         icon: AlertTriangle,
-        bgColor: 'bg-destructive/10',
-        iconColor: 'text-destructive',
+        bgColor: 'bg-danger-fill/10',
+        iconColor: 'text-danger-text',
         textColor: 'text-foreground',
         animate: '',
       };

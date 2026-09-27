@@ -86,14 +86,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           testID="generated-file-status-badge"
         >
           <View
-            color="#10a37f"
+            color="#11ad87"
             size={10}
             testID="icon-shield-check"
           />
           <Text
             style={
               {
-                "color": "#10a37f",
+                "color": "#11ad87",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
@@ -606,14 +606,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           testID="generated-file-status-badge"
         >
           <View
-            color="#10a37f"
+            color="#11ad87"
             size={10}
             testID="icon-shield-check"
           />
           <Text
             style={
               {
-                "color": "#10a37f",
+                "color": "#11ad87",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,

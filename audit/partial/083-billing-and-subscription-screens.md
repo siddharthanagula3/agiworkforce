@@ -25,9 +25,8 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: the toggle changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so the chosen cadence cannot be bought. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: the toggle changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so the chosen cadence cannot be bought. | flag-off |
-| mobile | partial | Native products carry an interval but are gated off (MOBILE_IAP_ENABLED unset), so no cadence can be chosen in the app. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
+| web | partial | The toggle exists only on the Team card now; individual plans are monthly only (D-2026-09-27-01). It changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
+| desktop | partial | The toggle exists only on the Team card now; individual plans are monthly only (D-2026-09-27-01). It changes prices and cadence, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
 
 Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/features/chat/components/dialogs/UpgradePlanDialog.tsx:146-154`, `apps/web/lib/validations/checkout.ts:11-29`, `apps/web/app/api/checkout/route.ts:208-221`
 

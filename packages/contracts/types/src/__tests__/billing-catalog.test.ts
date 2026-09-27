@@ -13,6 +13,7 @@ import {
   getPlanPriceCents,
   getPlanPriceInr,
   getPlanPriceUsd,
+  getPublishedMonthlyPriceUsd,
   getPublishedPlanPricePerMonthUsd,
   getPublishedPlanPriceUsd,
   planOffersBillingInterval,
@@ -113,16 +114,16 @@ describe('billing catalog', () => {
     for (const plan of SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER) {
       expect(billingIntervalsForPlan(plan)).toEqual(['monthly']);
       expect(planOffersBillingInterval(plan, 'yearly')).toBe(false);
-      expect(getPlanPriceUsd(plan, 'yearly')).toBeNull();
+      expect(getPublishedPlanPriceUsd(plan, 'yearly')).toBeNull();
     }
     expect(billingIntervalsForPlan('team')).toEqual(['monthly', 'yearly']);
-    expect(getPlanPriceUsd('team', 'yearly')).toBe(240);
+    expect(getPublishedPlanPriceUsd('team', 'yearly')).toBe(240);
   });
 
   it('prices a yearly seat by its monthly equivalent and a monthly seat as sold', () => {
     expect(getPublishedPlanPricePerMonthUsd('team', 'yearly')).toBe(20);
     expect(getPublishedPlanPricePerMonthUsd('team', 'monthly')).toBe(
-      getPublishedPlanPriceUsd('team'),
+      getPublishedMonthlyPriceUsd('team'),
     );
     expect(getPublishedPlanPricePerMonthUsd('pro', 'monthly')).toBe(20);
     expect(getPublishedPlanPricePerMonthUsd('pro', 'yearly')).toBeNull();

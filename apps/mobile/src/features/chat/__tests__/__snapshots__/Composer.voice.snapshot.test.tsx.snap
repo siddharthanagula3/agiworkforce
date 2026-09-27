@@ -152,7 +152,7 @@ exports[`Composer, voice scaffolding snapshots RecordingOverlay locks recording 
       }
     >
       <View
-        color="#ffffff"
+        color="#000000"
         size={24}
         testID="icon-check"
       />
