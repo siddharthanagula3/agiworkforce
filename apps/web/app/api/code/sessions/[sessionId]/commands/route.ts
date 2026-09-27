@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -16,7 +15,7 @@ import {
   isCloudCodeSchemaUnavailable,
   runCloudCodeCommand,
 } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -74,18 +73,18 @@ async function handleRun(request: NextRequest, context: RouteContext) {
 
   const body = await requestObject(request);
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,
-    subscription,
+    entitlement.subscription,
     resolveCloudChatSurface(request),
     { request },
     'code',
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
   try {
     return NextResponse.json(
       await runCloudCodeCommand(
