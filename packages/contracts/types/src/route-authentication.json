@@ -20,6 +20,7 @@
     "apps/web/app/api/releases/cli/latest/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/releases/desktop-cloud/latest/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/releases/latest/[platform]/route.ts": "published release metadata is the same for every caller",
+    "apps/web/app/api/schedule-shares/[token]/route.ts": "an unguessable, revocable share token is the whole audience, and the snapshot it returns holds no account data beyond what its owner chose to share",
     "apps/web/app/api/support/handoff/availability/route.ts": "reports whether live support is staffed right now",
     "apps/web/app/api/trial/cancel/route.ts": "the signed link in a trial reminder email is the only principal, and it can cancel only the one trial it names before that trial ends",
     "apps/web/app/api/v1/providers/[providerId]/stream/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
