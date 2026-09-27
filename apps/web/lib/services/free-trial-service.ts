@@ -500,6 +500,7 @@ export async function beginFreeTrialRequest(params: {
   /** The requested model is selectable only because the event promotes it. */
   eventPromoted?: boolean;
   freePoolRoute?: boolean;
+  estimatedMicrousd?: number;
 }): Promise<ReserveResult> {
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: params.userId,
@@ -544,7 +545,11 @@ export async function beginFreeTrialRequest(params: {
     if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
 
     const remainingMicrousd = remainingFromSnapshot(snapshot);
-    if (remainingMicrousd === 0) {
+    const reserveMicrousd =
+      params.estimatedMicrousd === undefined
+        ? remainingMicrousd
+        : Math.max(1, chargeMicrousdForProviderCost(params.estimatedMicrousd));
+    if (remainingMicrousd === 0 || reserveMicrousd > remainingMicrousd) {
       if (params.freePoolRoute !== true) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
       }
@@ -564,7 +569,7 @@ export async function beginFreeTrialRequest(params: {
       `insert into public.free_daily_usage_reservations
          (user_id, request_id, window_started_at, reserved_microusd)
        values ($1, $2, now(), $3)`,
-      [params.userId, params.requestId, remainingMicrousd],
+      [params.userId, params.requestId, reserveMicrousd],
     );
     if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
 
@@ -574,7 +579,7 @@ export async function beginFreeTrialRequest(params: {
         kind: 'free_trial',
         userId: params.userId,
         requestId: params.requestId,
-        reservedMicrousd: remainingMicrousd,
+        reservedMicrousd: reserveMicrousd,
         ...unmetered,
       },
     };
