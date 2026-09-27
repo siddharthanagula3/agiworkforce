@@ -9,6 +9,7 @@ vi.mock('@/lib/services/cogs-ledger-service', () => ({ recordSettledProviderCost
 vi.mock('@/lib/logger', () => ({ logger: { warn: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 const MICROUSD_PER_TOKEN = vi.hoisted(() => 10);
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
+  normalizeProviderId: (provider: string | null | undefined) => provider?.toLowerCase() ?? null,
   LLMCostCalculator: {
     calculateCostMicrousd: vi.fn(
       (_p: string, _m: string, u: { promptTokens: number; completionTokens: number }) =>
@@ -17,6 +18,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   },
 }));
 
+import { FEATURE_RATE_CARD } from '@agiworkforce/types';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 
 import { recordLiveVoiceBackendCost } from '../live-voice-backend-cost';
@@ -117,6 +119,23 @@ describe('live voice backend cost', () => {
     const usage = rowFor()['usage'] as Record<string, unknown>;
     expect(usage['webSearchCalls']).toBe(3);
     expect(rowFor()['feature']).toBeUndefined();
+  });
+
+  it('prices the provider native search calls at the published rate card rate', async () => {
+    await recordLiveVoiceBackendCost({
+      ...BASE,
+      reported: { inputTokens: 100, outputTokens: 0, webSearchCalls: 3 },
+    });
+
+    const searchMicrousd = 3 * (FEATURE_RATE_CARD.web_search_openai.providerCogsMicrousd ?? 0);
+    expect(searchMicrousd).toBeGreaterThan(0);
+    expect(rowFor()).toMatchObject({
+      providerEstimatedCostMicrousd: 100 * MICROUSD_PER_TOKEN + searchMicrousd,
+      customerCanonicalCents: 0,
+    });
+    expect((rowFor()['usage'] as Record<string, unknown>)['searchCostMicrousd']).toBe(
+      searchMicrousd,
+    );
   });
 
   it('prefers the model the provider reported over the configured slot', async () => {

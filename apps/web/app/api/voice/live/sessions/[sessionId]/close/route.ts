@@ -11,7 +11,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
-import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import {
+  chargeMicrousdForProviderCost,
+  getModelMetadataById,
+  getRoutingSlotModel,
+} from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   finalizeManagedUsageRequest,
@@ -26,7 +30,10 @@ import {
   liveSessionSecondsCoveredBy,
 } from '@/lib/voice/live-voice-billing';
 import { readVoiceReservation } from '../../lib/voice-session-budget';
-import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
+import {
+  priceLiveVoiceBackend,
+  recordLiveVoiceBackendCost,
+} from '@/lib/voice/live-voice-backend-cost';
 import {
   closeVoiceSession,
   getVoiceSessionByProviderId,
@@ -144,8 +151,17 @@ async function handleCloseLiveSession(
     meteredSeconds,
     liveSessionSecondsCoveredBy(estimatedCostMicrousd, model),
   );
+  const backendProvider = record?.provider ?? (liveModel ? String(liveModel.provider) : 'unknown');
+  const backendCost = body.backend
+    ? priceLiveVoiceBackend({
+        provider: backendProvider,
+        backendModel: getRoutingSlotModel('voice_live_backend'),
+        reported: body.backend,
+      })
+    : null;
   const actualCostMicrousd = Math.min(
-    liveSessionChargeMicrousd(billedSeconds, model) ?? 0,
+    (liveSessionChargeMicrousd(billedSeconds, model) ?? 0) +
+      chargeMicrousdForProviderCost(backendCost?.totalMicrousd ?? 0),
     estimatedCostMicrousd,
   );
   const providerCostMicrousd = liveSessionProviderCostMicrousd(billedSeconds, model);
@@ -182,6 +198,7 @@ async function handleCloseLiveSession(
       reportedSeconds,
       billedSeconds,
       reason: body.reason ?? 'close_requested',
+      ...(backendCost ? { backendCostMicrousd: backendCost.totalMicrousd } : {}),
       ...(providerCostMicrousd === null
         ? {}
         : { providerCostMicrousd, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
