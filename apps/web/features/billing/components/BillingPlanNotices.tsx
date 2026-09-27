@@ -168,7 +168,12 @@ export function BillingPlanNotices({
           {days ? `Your ${days}-day free trial of ${planLabel}` : `Your ${planLabel} trial`}
           {trialEnd ? ` ends on ${trialEnd}.` : ' is active.'}
         </p>
-        {!stripeBilled ? null : endingSoon ? (
+        {billingSource === 'manual' ? (
+          <p>
+            When it ends, your account moves to Free; your chats, projects and files stay. You can
+            then choose a paid plan on the plans page.
+          </p>
+        ) : !stripeBilled ? null : endingSoon ? (
           <p>
             The trial won&rsquo;t turn into a paid plan. After it ends, your account moves to Free;
             your chats, projects and files stay.

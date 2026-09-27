@@ -99,6 +99,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/expire-code-trials",
+      "schedule": "25 * * * *"
+    },
+    {
       "path": "/api/cron/purge-security-audit-logs",
       "schedule": "30 2 * * *"
     },
