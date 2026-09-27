@@ -55,14 +55,19 @@ const SELECT_LIVE_BONUS_CREDITS = `
        and revoked_at is null
        and credits_remaining > 0
        and expires_at > now()
+  ),
+  nearest as (
+    select min(expires_at) as expires_at from live
   )
-  select coalesce(sum(credits_remaining), 0) as remaining,
-         min(expires_at) as next_expiry_at,
+  select coalesce(sum(live.credits_remaining), 0) as remaining,
+         nearest.expires_at as next_expiry_at,
          coalesce(
-           sum(credits_remaining) filter (where expires_at = (select min(expires_at) from live)),
+           sum(live.credits_remaining) filter (where live.expires_at = nearest.expires_at),
            0
          ) as next_expiry_credits
-    from live`;
+    from nearest
+    left join live on true
+   group by nearest.expires_at`;
 
 function toCredits(value: string | number | null | undefined): number {
   const parsed = typeof value === 'number' ? value : Number.parseFloat(value ?? '');
