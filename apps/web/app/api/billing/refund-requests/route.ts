@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
 import { isStripeConfigured } from '@/lib/server/payments/stripe-provider';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -23,10 +24,6 @@ import {
   listRefundRequests,
   listRefundableCharges,
 } from '@/lib/services/billing-refund-service';
-import {
-  readBillingOwnerRow,
-  resolveBillingCustomerId,
-} from '@/features/billing/server/billing-account';
 
 const RefundRequestSchema = z
   .object({

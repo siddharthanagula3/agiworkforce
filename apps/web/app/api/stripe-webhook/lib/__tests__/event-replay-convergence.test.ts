@@ -47,8 +47,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: subscriptionServiceMocks,
 }));
 
-// The dispute path is the one branch that moves money through the service
-// rather than through SQL, so its balance has to be as stateful as the ledger.
+// The balance a dispute holds, kept as stateful as the ledger so a replayed
+// dispute can be seen to take nothing the second time.
 const creditAccount = vi.hoisted(() => ({
   remainingCents: 0,
   consumedKeys: new Set<string>(),
@@ -156,6 +156,7 @@ function makeLedgerDb(seed: StoredSubscription | null) {
   const table = seed ? [seed] : [];
   const ledger: LedgerRow[] = [];
   const balanceMoves: string[] = [];
+  const disputes = new Map<string, Record<string, unknown>>();
 
   const recordPurchase = (userId: string, description: string, amountCents: number): void => {
     const duplicate = ledger.some(
@@ -195,15 +196,76 @@ function makeLedgerDb(seed: StoredSubscription | null) {
       recordPurchase(String(params[0]), String(params[3]), Number(params[2]) / 10_000);
       return [];
     }
+    if (text.includes('sum(-amount_microusd)')) {
+      const revoked = ledger
+        .filter(
+          (row) =>
+            row.userId === params[0] && row.type === 'refund' && row.description === params[1],
+        )
+        .reduce((total, row) => total - row.amountCents * 10_000, 0);
+      return [{ revoked }];
+    }
+    if (text.includes('revoke_plan_allowance_microusd')) {
+      ledger.push({
+        userId: String(params[0]),
+        type: 'refund',
+        description: String(params[3]),
+        amountCents: -Number(params[2]) / 10_000,
+      });
+      balanceMoves.push(`refund:${String(params[3])}:${Number(params[2]) / 10_000}`);
+      return [];
+    }
     if (text.includes('handle_top_up_refund') || text.includes('handle_refund')) {
+      const cents = text.includes('_microusd') ? Number(params[1]) / 10_000 : Number(params[1]);
       ledger.push({
         userId: String(params[0]),
         type: 'refund',
         description: String(params[2]),
-        amountCents: -Number(params[1]),
+        amountCents: -cents,
       });
-      balanceMoves.push(`refund:${String(params[2])}:${Number(params[1])}`);
+      balanceMoves.push(`refund:${String(params[2])}:${cents}`);
       return [];
+    }
+    if (text.startsWith('insert into public.billing_disputes')) {
+      const id = String(params[0]);
+      if (!disputes.has(id)) {
+        disputes.set(id, {
+          id,
+          user_id: params[1],
+          stripe_customer_id: params[2],
+          outcome: 'open',
+          revoked_at: null,
+          restored_at: null,
+        });
+      }
+      return [];
+    }
+    if (text.includes('from public.billing_disputes where id = $1')) {
+      const dispute = disputes.get(String(params[0]));
+      return dispute ? [dispute] : [];
+    }
+    if (text.includes('revoke_disputed_credits_microusd')) {
+      const revoked = creditAccount.remainingCents * 10_000;
+      creditAccount.remainingCents = 0;
+      return [{ account_id: 'acct_1', revoked_microusd: revoked, top_up_microusd: 0 }];
+    }
+    if (text.startsWith('update public.billing_disputes set revoked_at = now()')) {
+      const dispute = disputes.get(String(params[0]));
+      if (dispute) dispute['revoked_at'] = new Date(NOW * 1000).toISOString();
+      return [];
+    }
+    if (text.includes('select id as subscription_id, plan_tier')) {
+      const row = table.find((entry) => entry.stripe_customer_id === params[0]);
+      return row
+        ? [
+            {
+              subscription_id: row.id,
+              plan_tier: row.plan_tier,
+              current_period_start: row.current_period_start,
+              current_period_end: row.current_period_end,
+            },
+          ]
+        : [];
     }
     if (text.includes('from subscriptions') && text.includes('last_stripe_event_at')) {
       const row = bySubscription(params[0]);
@@ -279,7 +341,14 @@ function makeLedgerDb(seed: StoredSubscription | null) {
     if (text.includes('select id from profiles where id')) return [{ id: 'user_1' }];
     if (text.includes('select email from profiles')) return [{ email: 'buyer@example.com' }];
     if (text.includes('from token_credits')) {
-      return [{ id: 'acct_1', remaining_microusd: creditAccount.remainingCents * 10_000 }];
+      return [
+        {
+          id: 'acct_1',
+          remaining_microusd: creditAccount.remainingCents * 10_000,
+          credits_allocated_microusd: 20_000_000,
+          top_up_allocated_microusd: 0,
+        },
+      ];
     }
     if (text.includes('select id, current_period_start, current_period_end from subscriptions')) {
       const row = table.find((entry) => entry.user_id === params[0]);
@@ -390,6 +459,7 @@ const OBJECT_BY_FAMILY: Readonly<Record<string, unknown>> = {
     amount: 2000,
     amount_refunded: 2000,
     refunded: true,
+    created: NOW + 60,
     metadata: {},
   },
   'radar.early_fraud_warning': {

@@ -17,6 +17,7 @@ import { handleAutoReloadEvent } from './auto-reload-events';
 import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
 import { handleReferralChargeReversal, handleReferralInvoicePaid } from './referral-events';
 import { handleChargeRefunded } from './refund-events';
+import { recordWithdrawalConsent } from './withdrawal-consent-events';
 import {
   endEnterpriseContractIfPresent,
   recordEnterpriseInvoiceEvent,
@@ -77,6 +78,7 @@ export async function dispatchStripeEvent(
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
+      await recordWithdrawalConsent(stripe, session, event.created);
       if (session.metadata?.['type'] === 'credit_topup') {
         logger.info({ sessionId: session.id }, 'Processing credit top-up checkout');
         if (session.payment_status === 'unpaid') {

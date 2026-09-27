@@ -23,6 +23,10 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { buildCheckoutTrialParams, resolveTrialDaysForCheckout } from '@/lib/billing/trial-policy';
+import {
+  withdrawalConsentMessage,
+  withdrawalConsentMetadata,
+} from '@/lib/billing/withdrawal-consent';
 import { BILLING_PLAN_CATALOG_VERSION, getPlanTrialDays } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
@@ -388,13 +392,18 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       success_url: `${returnOrigin}/billing?success=true&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${returnOrigin}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
-      metadata: checkoutMetadata,
+      metadata: { ...checkoutMetadata, ...withdrawalConsentMetadata() },
       subscription_data: {
-        metadata: checkoutMetadata,
+        metadata: { ...checkoutMetadata, ...withdrawalConsentMetadata() },
         ...trialParams.subscriptionData,
       },
       ...trialParams.session,
       ...trialTerms,
+      consent_collection: { terms_of_service: 'required' },
+      custom_text: {
+        ...('custom_text' in trialTerms ? trialTerms.custom_text : {}),
+        terms_of_service_acceptance: { message: withdrawalConsentMessage() },
+      },
       allow_promotion_codes: true,
       ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
     };

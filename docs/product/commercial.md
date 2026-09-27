@@ -177,15 +177,20 @@ on `/refund-policy`; both issue the refund in Stripe, and the `charge.refunded` 
 the only path that changes credits or plan.
 
 An EU, EEA or UK customer who asks within 14 days of a plan payment or a top-up gets the
-payment back prorated by the credits used, as Claude does
-(support.claude.com/en/articles/12386328): a plan payment by the share of the period's
-plan credits not used, a top-up by the share of its credits not spent.
-`apps/web/lib/services/billing-refund-service.ts` issues it on request, cancels a
+payment back. Both checkouts require the statement in
+`apps/web/lib/billing/withdrawal-consent.ts`, a request for immediate access that
+acknowledges a reduced refund, through Stripe `consent_collection` and
+`custom_text.terms_of_service_acceptance`; the webhook records its version and time in the
+subscription or payment intent metadata. With that record the refund is prorated by the
+credits used, as Claude does (support.claude.com/en/articles/12386328): a plan payment by
+the share of the period's plan credits not used, a top-up by the share of its credits not
+spent. Without it the whole payment is refunded, because EU and UK law allows a deduction
+only after an express request for immediate performance.
+`apps/web/lib/services/billing-refund-service.ts` issues the refund on request, cancels a
 withdrawn plan in Stripe, and records the amount in
 `billing_refund_requests.assessed_refund_cents`; an operator settling that request cannot
 refund less. The country is the payment's billing address, then the Stripe customer's
-address or tax location, then the card's issuing country. Checkout collects no consent to
-immediate performance, so no waiver reduces the refund. Both paths reach Stripe only
+address or tax location, then the card's issuing country. Both paths reach Stripe only
 through `apps/web/lib/server/payments/stripe-provider.ts`.
 
 ## Allowance And Purchased Balance Are Distinct Entitlements
