@@ -94,6 +94,10 @@ import {
   consolidateFactsFromTurn,
   shouldConsolidateMemoryOnClient,
 } from '@/src/features/memory/services/consolidation';
+import {
+  answerMemoryCommand,
+  hasMemoryCommand,
+} from '@/src/features/memory/services/memoryCommands';
 import { recognizeText } from '@/src/features/image/services/ocr';
 import {
   executionModeForConversation,
@@ -113,6 +117,7 @@ import type {
   ChatMessage,
   MessageAttachment,
   ConversationSummary,
+  StatusStep,
   ToolCall,
   ToolSearchResult,
 } from '@/types/chat';
@@ -700,6 +705,29 @@ function conversationRowsInOrder(conversationId: string): ChatMessage[] {
   const owned =
     getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
   return [...owned].sort(compareCloudMessagesByCreatedAtThenId);
+}
+
+function attachTurnStep(conversationId: string, messageId: string, step: StatusStep): void {
+  getConversationMessageStore(conversationId).setState((state) => {
+    const messages = state.messages[conversationId];
+    if (!messages?.some((message) => message.id === messageId)) return {};
+    return {
+      messages: {
+        ...state.messages,
+        [conversationId]: messages.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                steps: [
+                  ...(message.steps ?? []).filter((existing) => existing.id !== step.id),
+                  step,
+                ],
+              }
+            : message,
+        ),
+      },
+    };
+  });
 }
 
 /**
@@ -1474,6 +1502,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     options?.onAccepted?.();
+
+    if (userMessage && !isTemporaryChat && !conversationIsTemporary && hasMemoryCommand(content)) {
+      void answerMemoryCommand(
+        {
+          executionMode,
+          message: content,
+          conversationId,
+          projectId: activeProjectId,
+          memoryEnabled: memorySettings.memoryEnabled,
+        },
+        (step) => attachTurnStep(conversationId, assistantMessageId, step),
+      );
+    }
 
     if (cancelledBeforeStream.has(conversationId)) {
       cancelledBeforeStream.delete(conversationId);
