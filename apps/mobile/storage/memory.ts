@@ -1,4 +1,3 @@
-
 import { getDb } from './db';
 import type { MemoryFact } from './types';
 
@@ -81,6 +80,16 @@ export async function deleteMemoryFact(id: string): Promise<void> {
       // sqlite-vec table may not exist.
     }
   });
+}
+
+export async function deleteAllMemoryFacts(): Promise<number> {
+  const db = await getDb();
+  let deleted = 0;
+  await db.withTransactionAsync(async () => {
+    deleted = (await db.runAsync('DELETE FROM memory_facts;')).changes;
+    await db.runAsync('DELETE FROM memory_vectors;').catch(() => undefined);
+  });
+  return deleted;
 }
 
 export async function searchMemoryByEmbedding(
