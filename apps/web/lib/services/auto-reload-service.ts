@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { after } from 'next/server';
-import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   AUTO_RELOAD_CONSENT_VERSION,
@@ -23,21 +22,25 @@ import {
 } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { grantCreditTopUp, isCreditTopUpApplied } from '@/app/api/stripe-webhook/lib/db';
-import {
-  buildPaymentIntentTaxCalculationParams,
-  isTaxLocationMissing,
-} from '@/lib/billing/tax-policy';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { getStripeClientOrNull } from '@/lib/server/stripe-client';
+import type {
+  NormalizedBillingInstrument,
+  NormalizedCard,
+  NormalizedPayment,
+} from '@/lib/server/payments/domain';
 import {
-  isStripeCustomerId,
-  isStripeResourceMissing,
-  isStripeSubscriptionId,
-} from '@/lib/server/stripe-resource-ids';
+  calculateStripeOffSessionTax,
+  cancelStripePayment,
+  chargeStripeOffSession,
+  listStripeCustomerPayments,
+  readStripeBillingInstrument,
+  retrieveStripePayment,
+} from '@/lib/server/payments/stripe-provider';
+import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { getPrepaidCreditBalances } from '@/lib/services/bonus-credit-service';
 import {
   isNotificationEmailConfigured,
@@ -47,6 +50,7 @@ import { recordNotification } from '@/lib/services/notification-service';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
+const RELOAD_CURRENCY = 'USD';
 const RELOAD_LEASE_SECONDS = 600;
 const ATTEMPT_LOOKUP_SLACK_SECONDS = 60;
 const ATTEMPT_LOOKUP_LIMIT = 20;
@@ -117,18 +121,6 @@ interface TopUpBillingAccount {
   subscriptionId: string;
 }
 
-interface DefaultCard {
-  id: string;
-  brand: string;
-  last4: string;
-}
-
-interface BillingInstrument {
-  currency: string;
-  card: DefaultCard | null;
-  billingEmail: string | null;
-}
-
 interface ReloadPlan {
   quote: TopUpQuote;
   account: TopUpBillingAccount;
@@ -170,11 +162,8 @@ export function topUpChargesEnabled(): boolean {
   );
 }
 
-export function isAutoReloadPaymentIntent(paymentIntent: Stripe.PaymentIntent): boolean {
-  return (
-    paymentIntent.metadata?.['type'] === 'credit_topup' &&
-    paymentIntent.metadata?.['auto_reload'] === 'true'
-  );
+export function isAutoReloadPaymentIntent(payment: NormalizedPayment): boolean {
+  return payment.metadata['type'] === 'credit_topup' && payment.metadata['auto_reload'] === 'true';
 }
 
 function toIso(value: string | Date): string {
@@ -195,10 +184,11 @@ function failureMessage(reason: string): string {
     : FAILURE_MESSAGES.payment_failed;
 }
 
-function failureReasonOf(
-  error: { code?: string | null; decline_code?: string | null } | null | undefined,
-): AutoReloadFailureReason {
-  const codes = [error?.decline_code, error?.code];
+function failureReasonOf(decline: {
+  failureCode: string | null;
+  declineCode: string | null;
+}): AutoReloadFailureReason {
+  const codes = [decline.declineCode, decline.failureCode];
   if (codes.includes('authentication_required')) return 'authentication_required';
   if (codes.includes('insufficient_funds')) return 'insufficient_funds';
   if (codes.includes('expired_card')) return 'expired_card';
@@ -206,10 +196,10 @@ function failureReasonOf(
   return 'payment_failed';
 }
 
-function paymentFailureReason(paymentIntent: Stripe.PaymentIntent): AutoReloadFailureReason {
-  if (paymentIntent.status === 'requires_action') return 'authentication_required';
-  if (paymentIntent.status === 'canceled') return 'payment_canceled';
-  return failureReasonOf(paymentIntent.last_payment_error);
+function paymentFailureReason(payment: NormalizedPayment): AutoReloadFailureReason {
+  if (payment.status === 'requires_action') return 'authentication_required';
+  if (payment.status === 'canceled') return 'payment_canceled';
+  return failureReasonOf(payment);
 }
 
 function positiveInteger(value: unknown): number | null {
@@ -219,7 +209,7 @@ function positiveInteger(value: unknown): number | null {
 
 function toAutoReloadSettings(
   row: AutoReloadRow | undefined,
-  card: DefaultCard | null,
+  card: NormalizedCard | null,
 ): AutoReloadSettings {
   return {
     enabled: row?.enabled ?? false,
@@ -275,7 +265,7 @@ async function saveConsentedSettings(
   db: DatabaseAdapter,
   userId: string,
   update: AutoReloadSettingsUpdate,
-  card: DefaultCard,
+  card: NormalizedCard,
 ): Promise<AutoReloadRow> {
   const [row] = await db.query<AutoReloadRow>(
     `insert into public.auto_reload_settings
@@ -334,35 +324,6 @@ async function readTopUpBillingAccount(
   return { customerId: billing.stripe_customer_id, subscriptionId: billing.stripe_subscription_id };
 }
 
-function cardOf(method: string | Stripe.PaymentMethod | null | undefined): DefaultCard | null {
-  if (!method || typeof method === 'string' || method.type !== 'card' || !method.card) return null;
-  return { id: method.id, brand: method.card.brand, last4: method.card.last4 };
-}
-
-function liveCustomer(
-  customer: string | Stripe.Customer | Stripe.DeletedCustomer,
-): Stripe.Customer | null {
-  if (typeof customer === 'string' || customer.deleted === true) return null;
-  return customer;
-}
-
-async function readBillingInstrument(
-  stripe: Stripe,
-  account: TopUpBillingAccount,
-): Promise<BillingInstrument> {
-  const subscription = await stripe.subscriptions.retrieve(account.subscriptionId, {
-    expand: ['default_payment_method', 'customer.invoice_settings.default_payment_method'],
-  });
-  const customer = liveCustomer(subscription.customer);
-  return {
-    currency: subscription.currency.trim().toLowerCase(),
-    card: subscription.default_payment_method
-      ? cardOf(subscription.default_payment_method)
-      : cardOf(customer?.invoice_settings?.default_payment_method),
-    billingEmail: customer?.email?.trim() || null,
-  };
-}
-
 async function readProfileEmail(db: DatabaseAdapter, userId: string): Promise<string | null> {
   const [profile] = await db.query<{ email: string | null }>(
     'select email from public.profiles where id = $1 limit 1',
@@ -374,11 +335,10 @@ async function readProfileEmail(db: DatabaseAdapter, userId: string): Promise<st
 async function readInstrumentForSettings(
   account: TopUpBillingAccount | null,
   userId: string,
-): Promise<BillingInstrument | null> {
-  const stripe = getStripeClientOrNull();
-  if (!account || !stripe) return null;
+): Promise<NormalizedBillingInstrument | null> {
+  if (!account) return null;
   try {
-    return await readBillingInstrument(stripe, account);
+    return await readStripeBillingInstrument(account.subscriptionId);
   } catch (error) {
     logger.warn(
       { error, userId },
@@ -484,9 +444,9 @@ export async function saveAutoReloadSettings(
   if (!instrument) {
     throw createError.serviceUnavailable('Auto-reload is not available right now.').asUserSafe();
   }
-  if (instrument.currency !== 'usd') {
+  if (instrument.currency !== RELOAD_CURRENCY) {
     throw createError.validation(
-      `Auto-reload is billed in USD and your plan is billed in ${instrument.currency.toUpperCase()}. ` +
+      `Auto-reload is billed in USD and your plan is billed in ${instrument.currency ?? 'another currency'}. ` +
         'Upgrade your plan for more included usage, or contact support.',
     );
   }
@@ -720,23 +680,20 @@ async function failReload(db: DatabaseAdapter, failure: ReloadFailure): Promise<
   await emailReloadFailure(db, failure, headline);
 }
 
-async function cancelOpenPaymentIntent(
-  stripe: Stripe,
-  paymentIntent: Stripe.PaymentIntent,
-): Promise<void> {
-  if (paymentIntent.status === 'canceled' || paymentIntent.status === 'succeeded') return;
+async function cancelOpenPayment(payment: NormalizedPayment): Promise<void> {
+  if (payment.status === 'canceled' || payment.status === 'succeeded') return;
   try {
-    await stripe.paymentIntents.cancel(paymentIntent.id);
+    await cancelStripePayment(payment.reference);
   } catch (error) {
     logger.warn(
-      { error, paymentIntentId: paymentIntent.id },
+      { error, paymentIntentId: payment.reference },
       'A failed auto-reload PaymentIntent could not be canceled',
     );
   }
 }
 
-function readReloadPurchase(paymentIntent: Stripe.PaymentIntent): ReloadPurchase | null {
-  const metadata = paymentIntent.metadata ?? {};
+function readReloadPurchase(payment: NormalizedPayment): ReloadPurchase | null {
+  const metadata = payment.metadata;
   const userId = metadata['user_id'];
   const attemptId = metadata['auto_reload_attempt_id'];
   const creditAmountCents = Number(metadata['credit_amount_cents']);
@@ -763,46 +720,46 @@ function readReloadPurchase(paymentIntent: Stripe.PaymentIntent): ReloadPurchase
 
 export async function settleAutoReloadPayment(
   db: DatabaseAdapter,
-  paymentIntent: Stripe.PaymentIntent,
+  payment: NormalizedPayment,
 ): Promise<void> {
-  const purchase = readReloadPurchase(paymentIntent);
+  const purchase = readReloadPurchase(payment);
   if (!purchase) {
     logger.error(
-      { paymentIntentId: paymentIntent.id },
+      { paymentIntentId: payment.reference },
       'Invalid required metadata for auto-reload top-up',
     );
-    throw new Error(`Invalid auto-reload metadata for PaymentIntent ${paymentIntent.id}`);
+    throw new Error(`Invalid auto-reload metadata for PaymentIntent ${payment.reference}`);
   }
 
   const expectedCents = purchase.chargedCents + purchase.taxCents;
   if (
-    paymentIntent.status !== 'succeeded' ||
-    paymentIntent.currency !== 'usd' ||
-    paymentIntent.amount_received !== expectedCents
+    payment.status !== 'succeeded' ||
+    payment.amountReceived?.currency !== RELOAD_CURRENCY ||
+    payment.amountReceived.minorUnits !== expectedCents
   ) {
     logger.error(
       {
-        paymentIntentId: paymentIntent.id,
+        paymentIntentId: payment.reference,
         userId: purchase.userId,
-        status: paymentIntent.status,
+        status: payment.status,
         expectedCents,
-        actualAmountReceived: paymentIntent.amount_received,
+        actualAmountReceived: payment.amountReceived,
       },
       'SECURITY: Auto-reload payment does not match its purchase metadata',
     );
-    throw new Error(`Auto-reload payment mismatch for PaymentIntent ${paymentIntent.id}`);
+    throw new Error(`Auto-reload payment mismatch for PaymentIntent ${payment.reference}`);
   }
 
-  if (await isCreditTopUpApplied(db, purchase.userId, paymentIntent.id)) {
+  if (await isCreditTopUpApplied(db, purchase.userId, payment.reference)) {
     logger.info(
-      { paymentIntentId: paymentIntent.id, userId: purchase.userId },
+      { paymentIntentId: payment.reference, userId: purchase.userId },
       'Auto-reload top-up was already applied',
     );
   } else {
     await grantCreditTopUp(db, {
       userId: purchase.userId,
       creditAmountCents: purchase.creditAmountCents,
-      receiptId: paymentIntent.id,
+      receiptId: payment.reference,
     });
   }
 
@@ -811,13 +768,13 @@ export async function settleAutoReloadPayment(
 
 export async function failAutoReloadPayment(
   db: DatabaseAdapter,
-  paymentIntent: Stripe.PaymentIntent,
+  payment: NormalizedPayment,
 ): Promise<void> {
-  const userId = paymentIntent.metadata?.['user_id'];
-  const attemptId = paymentIntent.metadata?.['auto_reload_attempt_id'];
+  const userId = payment.metadata['user_id'];
+  const attemptId = payment.metadata['auto_reload_attempt_id'];
   if (!userId || !attemptId) {
     logger.error(
-      { paymentIntentId: paymentIntent.id },
+      { paymentIntentId: payment.reference },
       'Auto-reload payment failure names no account or attempt',
     );
     return;
@@ -825,42 +782,38 @@ export async function failAutoReloadPayment(
   await failReload(db, {
     userId,
     attemptId,
-    reason: paymentFailureReason(paymentIntent),
-    credits: positiveInteger(paymentIntent.metadata?.['top_up_units']),
+    reason: paymentFailureReason(payment),
+    credits: positiveInteger(payment.metadata['top_up_units']),
   });
 }
 
-async function settleInTransaction(
-  db: DatabaseAdapter,
-  paymentIntent: Stripe.PaymentIntent,
-): Promise<void> {
+async function settleInTransaction(db: DatabaseAdapter, payment: NormalizedPayment): Promise<void> {
   try {
-    await db.transaction((tx) => settleAutoReloadPayment(tx, paymentIntent));
+    await db.transaction((tx) => settleAutoReloadPayment(tx, payment));
   } catch (error) {
     if ((error as { code?: unknown } | null)?.code !== UNIQUE_VIOLATION) throw error;
     logger.info(
-      { paymentIntentId: paymentIntent.id },
+      { paymentIntentId: payment.reference },
       'Auto-reload top-up was granted concurrently by another settlement path',
     );
   }
 }
 
-async function resolvePaymentIntent(
+async function resolvePayment(
   db: DatabaseAdapter,
-  stripe: Stripe,
   failure: Omit<ReloadFailure, 'reason'>,
-  paymentIntent: Stripe.PaymentIntent,
+  payment: NormalizedPayment,
 ): Promise<AutoReloadOutcome> {
-  switch (paymentIntent.status) {
+  switch (payment.status) {
     case 'succeeded':
-      await settleInTransaction(db, paymentIntent);
+      await settleInTransaction(db, payment);
       return 'charged';
     case 'processing':
       await extendLease(db, failure.userId, failure.attemptId);
       return 'processing';
     default:
-      await failReload(db, { ...failure, reason: paymentFailureReason(paymentIntent) });
-      await cancelOpenPaymentIntent(stripe, paymentIntent);
+      await failReload(db, { ...failure, reason: paymentFailureReason(payment) });
+      await cancelOpenPayment(payment);
       return 'failed';
   }
 }
@@ -887,48 +840,12 @@ async function auditReloadCharge(
   });
 }
 
-async function handleChargeError(
-  db: DatabaseAdapter,
-  stripe: Stripe,
-  failure: Omit<ReloadFailure, 'reason'>,
-  quote: TopUpQuote,
-  error: unknown,
-): Promise<AutoReloadOutcome> {
-  if (error instanceof Stripe.errors.StripeCardError) {
-    const reason = failureReasonOf(error);
-    await failReload(db, { ...failure, reason });
-    if (error.payment_intent) await cancelOpenPaymentIntent(stripe, error.payment_intent);
-    await auditReloadCharge(failure.userId, quote, error.payment_intent?.id ?? null, reason);
-    return 'failed';
-  }
-  if (error instanceof Stripe.errors.StripeInvalidRequestError) {
-    const reason = error.code === 'resource_missing' ? 'payment_method_missing' : 'payment_failed';
-    logger.error(
-      {
-        userId: failure.userId,
-        attemptId: failure.attemptId,
-        code: error.code,
-        message: error.message,
-      },
-      'Stripe refused the auto-reload charge request',
-    );
-    await failReload(db, { ...failure, reason });
-    await auditReloadCharge(failure.userId, quote, null, reason);
-    return 'failed';
-  }
-  logger.warn(
-    { error, userId: failure.userId, attemptId: failure.attemptId },
-    'Auto-reload charge outcome is unknown; the sweep reconciles it once the lease expires',
-  );
-  return 'deferred';
-}
-
 function reloadMetadata(
   userId: string,
   attemptId: string,
   quote: TopUpQuote,
   charge: ReloadCharge,
-): Stripe.MetadataParam {
+): Record<string, string> {
   return {
     type: 'credit_topup',
     user_id: userId,
@@ -946,45 +863,15 @@ function reloadMetadata(
   };
 }
 
-async function calculateReloadCharge(
-  stripe: Stripe,
-  customerId: string,
-  attemptId: string,
-  quote: TopUpQuote,
-): Promise<ReloadCharge> {
-  const calculation = await stripe.tax.calculations.create(
-    buildPaymentIntentTaxCalculationParams({
-      customerId,
-      currency: 'usd',
-      amountMinor: quote.priceCents,
-      reference: `auto-reload:${attemptId}`,
-    }),
-    { idempotencyKey: `auto-reload-tax:${attemptId}` },
-  );
-  if (!calculation.id) throw new Error('Stripe Tax returned a calculation without an id');
-  return {
-    amountCents: calculation.amount_total,
-    taxCents: calculation.tax_amount_exclusive,
-    calculationId: calculation.id,
-    country: calculation.customer_details.address?.country ?? null,
-  };
-}
-
 async function chargeReload(
   db: DatabaseAdapter,
   userId: string,
   attemptId: string,
   plan: ReloadPlan,
 ): Promise<AutoReloadOutcome> {
-  const stripe = getStripeClientOrNull();
-  if (!stripe) {
-    await releaseLease(db, userId, attemptId);
-    return 'unavailable';
-  }
-
-  let instrument: BillingInstrument;
+  let instrument: NormalizedBillingInstrument | null;
   try {
-    instrument = await readBillingInstrument(stripe, plan.account);
+    instrument = await readStripeBillingInstrument(plan.account.subscriptionId);
   } catch (error) {
     logger.warn(
       { error, userId, attemptId },
@@ -992,7 +879,11 @@ async function chargeReload(
     );
     return 'deferred';
   }
-  if (instrument.currency !== 'usd') {
+  if (!instrument) {
+    await releaseLease(db, userId, attemptId);
+    return 'unavailable';
+  }
+  if (instrument.currency !== RELOAD_CURRENCY) {
     logger.warn(
       { userId, currency: instrument.currency },
       'Auto-reload skipped: top-ups are billed in USD and this plan is not',
@@ -1009,12 +900,23 @@ async function chargeReload(
 
   let charge: ReloadCharge;
   try {
-    charge = await calculateReloadCharge(stripe, plan.account.customerId, attemptId, plan.quote);
-  } catch (error) {
-    if (isTaxLocationMissing(error)) {
+    const tax = await calculateStripeOffSessionTax({
+      customerReference: plan.account.customerId,
+      amount: { currency: RELOAD_CURRENCY, minorUnits: plan.quote.priceCents },
+      reference: `auto-reload:${attemptId}`,
+      idempotencyKey: `auto-reload-tax:${attemptId}`,
+    });
+    if (tax.outcome === 'location_missing') {
       await failReload(db, { ...failure, reason: 'billing_address_missing' });
       return 'failed';
     }
+    charge = {
+      amountCents: tax.calculation.total.minorUnits,
+      taxCents: tax.calculation.taxMinorUnits,
+      calculationId: tax.calculation.reference,
+      country: tax.calculation.country,
+    };
+  } catch (error) {
     logger.error(
       { error, userId, attemptId },
       'Auto-reload deferred: Stripe Tax could not calculate the charge; the lease holds until the sweep retries',
@@ -1027,40 +929,55 @@ async function chargeReload(
     logger.warn({ userId }, 'Auto-reload charge has no email on file to send its receipt to');
   }
 
-  let paymentIntent: Stripe.PaymentIntent;
-  try {
-    paymentIntent = await stripe.paymentIntents.create(
-      {
-        amount: charge.amountCents,
-        currency: 'usd',
-        customer: plan.account.customerId,
-        payment_method: instrument.card.id,
-        payment_method_types: ['card'],
-        off_session: true,
-        confirm: true,
-        description: `AGI auto-reload, ${formatCredits(plan.quote.credits)}`,
-        metadata: reloadMetadata(userId, attemptId, plan.quote, charge),
-        hooks: { inputs: { tax: { calculation: charge.calculationId } } },
-        ...(receiptEmail ? { receipt_email: receiptEmail } : {}),
-      },
-      { idempotencyKey: `auto-reload:${attemptId}` },
-    );
-  } catch (error) {
-    return handleChargeError(db, stripe, failure, plan.quote, error);
-  }
+  const result = await chargeStripeOffSession({
+    customerReference: plan.account.customerId,
+    paymentMethodReference: instrument.card.reference,
+    amount: { currency: RELOAD_CURRENCY, minorUnits: charge.amountCents },
+    description: `AGI auto-reload, ${formatCredits(plan.quote.credits)}`,
+    metadata: reloadMetadata(userId, attemptId, plan.quote, charge),
+    receiptEmail,
+    taxCalculationReference: charge.calculationId,
+    idempotencyKey: `auto-reload:${attemptId}`,
+  });
 
-  await recordPaymentIntent(db, userId, attemptId, paymentIntent.id);
-  await auditReloadCharge(userId, plan.quote, paymentIntent.id, null);
-  return resolvePaymentIntent(db, stripe, failure, paymentIntent);
+  switch (result.outcome) {
+    case 'created':
+      await recordPaymentIntent(db, userId, attemptId, result.payment.reference);
+      await auditReloadCharge(userId, plan.quote, result.payment.reference, null);
+      return resolvePayment(db, failure, result.payment);
+    case 'declined': {
+      const reason = failureReasonOf(result);
+      await failReload(db, { ...failure, reason });
+      if (result.payment) await cancelOpenPayment(result.payment);
+      await auditReloadCharge(userId, plan.quote, result.payment?.reference ?? null, reason);
+      return 'failed';
+    }
+    case 'rejected': {
+      const reason =
+        result.code === 'resource_missing' ? 'payment_method_missing' : 'payment_failed';
+      logger.error(
+        { userId, attemptId, code: result.code, message: result.message },
+        'Stripe refused the auto-reload charge request',
+      );
+      await failReload(db, { ...failure, reason });
+      await auditReloadCharge(userId, plan.quote, null, reason);
+      return 'failed';
+    }
+    case 'unknown':
+      logger.warn(
+        { error: result.error, userId, attemptId },
+        'Auto-reload charge outcome is unknown; the sweep reconciles it once the lease expires',
+      );
+      return 'deferred';
+  }
 }
 
-async function findAttemptPaymentIntent(
+async function findAttemptPayment(
   db: DatabaseAdapter,
-  stripe: Stripe,
   userId: string,
   attemptId: string,
   startedAt: string | Date | null,
-): Promise<Stripe.PaymentIntent | null> {
+): Promise<NormalizedPayment | null> {
   const [billing] = await db.query<Pick<SubscriptionRow, 'stripe_customer_id'>>(
     'select stripe_customer_id from public.subscriptions where user_id = $1 limit 1',
     [userId],
@@ -1068,30 +985,12 @@ async function findAttemptPaymentIntent(
   const customerId = billing?.stripe_customer_id;
   if (!isStripeCustomerId(customerId)) return null;
   const since = startedAt
-    ? Math.floor(new Date(startedAt).getTime() / 1000) - ATTEMPT_LOOKUP_SLACK_SECONDS
+    ? new Date(new Date(startedAt).getTime() - ATTEMPT_LOOKUP_SLACK_SECONDS * 1000)
     : null;
-  const page = await stripe.paymentIntents.list({
-    customer: customerId,
-    limit: ATTEMPT_LOOKUP_LIMIT,
-    ...(since === null ? {} : { created: { gte: since } }),
-  });
+  const payments = await listStripeCustomerPayments(customerId, since, ATTEMPT_LOOKUP_LIMIT);
   return (
-    page.data.find(
-      (paymentIntent) => paymentIntent.metadata?.['auto_reload_attempt_id'] === attemptId,
-    ) ?? null
+    payments.find((payment) => payment.metadata['auto_reload_attempt_id'] === attemptId) ?? null
   );
-}
-
-async function retrieveRecordedPaymentIntent(
-  stripe: Stripe,
-  paymentIntentId: string,
-): Promise<Stripe.PaymentIntent | null> {
-  try {
-    return await stripe.paymentIntents.retrieve(paymentIntentId);
-  } catch (error) {
-    if (isStripeResourceMissing(error)) return null;
-    throw error;
-  }
 }
 
 async function recoverReload(
@@ -1100,26 +999,22 @@ async function recoverReload(
   attemptId: string,
   row: AutoReloadRow,
 ): Promise<AutoReloadOutcome> {
-  const stripe = getStripeClientOrNull();
-  if (!stripe) return 'deferred';
-
-  const paymentIntent = row.reload_payment_intent_id
-    ? await retrieveRecordedPaymentIntent(stripe, row.reload_payment_intent_id)
-    : await findAttemptPaymentIntent(db, stripe, userId, attemptId, row.last_attempt_at);
-  if (!paymentIntent) {
+  const payment = row.reload_payment_intent_id
+    ? await retrieveStripePayment(row.reload_payment_intent_id)
+    : await findAttemptPayment(db, userId, attemptId, row.last_attempt_at);
+  if (!payment) {
     await releaseLease(db, userId, attemptId);
     return 'released';
   }
 
   logger.info(
-    { userId, attemptId, paymentIntentId: paymentIntent.id, status: paymentIntent.status },
+    { userId, attemptId, paymentIntentId: payment.reference, status: payment.status },
     'Reconciling an auto-reload whose lease expired before it settled',
   );
-  return resolvePaymentIntent(
+  return resolvePayment(
     db,
-    stripe,
-    { userId, attemptId, credits: positiveInteger(paymentIntent.metadata?.['top_up_units']) },
-    paymentIntent,
+    { userId, attemptId, credits: positiveInteger(payment.metadata['top_up_units']) },
+    payment,
   );
 }
 
