@@ -64,6 +64,7 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
 const streamRequestMock = vi.mocked(buildToolLoopStream);
+const SKIP_APPROVALS = { toolApprovalPolicy: 'autonomous' } as const;
 const OPENAI_CHAT_MODEL = requireProviderDefaultModel('openai');
 
 function sseStream(events: unknown[]): ReadableStream {
@@ -196,7 +197,7 @@ describe('research loop url_fetch integration', () => {
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
+        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }, SKIP_APPROVALS),
       );
 
       expect(raw).toContain('"name":"url_fetch"');
@@ -251,7 +252,7 @@ describe('research loop url_fetch integration', () => {
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
+        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }, SKIP_APPROVALS),
       );
 
       expect(raw).toContain('Fetch failed (url_not_allowed)');
@@ -301,7 +302,7 @@ describe('research loop url_fetch integration', () => {
         runResearchLoop(
           makeProcessed(),
           { userId: 'user-1', token: 't' },
-          { signal: controller.signal },
+          { ...SKIP_APPROVALS, signal: controller.signal },
         ),
       );
 
@@ -341,7 +342,7 @@ describe('research loop url_fetch integration', () => {
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
+        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }, SKIP_APPROVALS),
       );
 
       expect(distinctPagesFetched(fetchMock)).toHaveLength(3);
@@ -435,10 +436,11 @@ describe('research loop runtime web_search', () => {
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]), {
-          userId: 'user-1',
-          token: 't',
-        }),
+        runResearchLoop(
+          makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]),
+          { userId: 'user-1', token: 't' },
+          SKIP_APPROVALS,
+        ),
       );
 
       expect(searchBackendCalls(fetchMock)).toHaveLength(1);
@@ -525,10 +527,11 @@ describe('research loop runtime web_search', () => {
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]), {
-          userId: 'user-1',
-          token: 't',
-        }),
+        runResearchLoop(
+          makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]),
+          { userId: 'user-1', token: 't' },
+          SKIP_APPROVALS,
+        ),
       );
 
       expect(searchBackendCalls(fetchMock)).toHaveLength(WEB_SEARCH_MAX_CALLS_PER_TURN);

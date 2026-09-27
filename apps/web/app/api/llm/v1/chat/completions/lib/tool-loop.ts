@@ -861,6 +861,21 @@ function canonicalApprovalSummary(
   return `Review ${humanizeIdentifier(toolName)} action`;
 }
 
+function egressApprovalSummary(
+  toolName: string,
+  args: Record<string, unknown>,
+  serverLabel?: string,
+): string {
+  if (isUrlFetchTool(toolName)) {
+    const host = urlHostOf(args);
+    return `Could send data from this chat to ${host ?? 'a website'}`;
+  }
+  if (isWebSearchTool(toolName)) return 'Could send data from this chat in a web search';
+  if (toolName === EXECUTE_CODE_TOOL) return 'Could send data from this chat out of the sandbox';
+  const server = serverLabel ?? mcpServerLabel(toolName);
+  return `Could send data from this chat to ${server ?? 'an outside service'}`;
+}
+
 function offeredServerLabel(toolName: string, offeredTools: WebMcpToolDef[]): string | undefined {
   return offeredTools.find((t) => t.qualifiedName === toolName)?.serverLabel;
 }
@@ -928,14 +943,19 @@ function validCanonicalSources(sources: FetchedSource[]): FetchedSource[] {
   });
 }
 
-function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
+function urlHostOf(args: Record<string, unknown> | undefined): string | undefined {
   const raw = args?.['url'];
   if (typeof raw !== 'string') return undefined;
   try {
-    return `Fetching ${new URL(raw).hostname}`;
+    return new URL(raw).hostname || undefined;
   } catch {
     return undefined;
   }
+}
+
+function urlFetchDomainPhrase(args: Record<string, unknown> | undefined): string | undefined {
+  const host = urlHostOf(args);
+  return host ? `Fetching ${host}` : undefined;
 }
 
 /**
@@ -2555,6 +2575,23 @@ function hasNonTextPart(message: ProcessedRequest['llmRequest']['messages'][numb
   return parts.some((part) => (part as { type?: string })?.type !== 'text');
 }
 
+export function hasUntrustedContext(
+  processed: Pick<ProcessedRequest, 'untrustedContextPresent'>,
+  messages: readonly ProcessedRequest['llmRequest']['messages'][number][],
+): boolean {
+  return (
+    processed.untrustedContextPresent === true ||
+    messages.some((message) => hasNonTextPart(message)) ||
+    untrustedToolContentInContext(
+      messages.flatMap((message) =>
+        Array.isArray(message.tool_calls)
+          ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
+          : [],
+      ),
+    )
+  );
+}
+
 function toolResultSecretBlockedMessage(toolName: string): string {
   return `The result from "${toolName}" was blocked because it contained a secret. This organization's policy blocks sensitive values before they reach the model.`;
 }
@@ -2829,13 +2866,7 @@ export async function* runToolLoop(
     offeredTools: mcpTools,
     availableToolNames: [...availableTools],
   });
-  let untrustedContentInContext = untrustedToolContentInContext(
-    messages.flatMap((message) =>
-      Array.isArray(message.tool_calls)
-        ? parseAssistantToolCalls(message.tool_calls).map((call) => call.qualifiedName)
-        : [],
-    ),
-  );
+  let untrustedContentInContext = hasUntrustedContext(processed, messages);
 
   function gateForToolCall(
     toolCall: PendingToolCall,
@@ -5627,25 +5658,26 @@ export async function* runToolLoop(
         }
         const approvalChunks: Uint8Array[] = [];
         const approvalEvents: AgentEventEnvelope[] = [];
-        for (const { tc } of approvalCalls) {
+        for (const { tc, gate } of approvalCalls) {
           approvalChunks.push(
             encoder.encode(
               toolApprovalRequestEvent(tc.id, tc.qualifiedName, tc.args, responseModel),
             ),
           );
           const category = canonicalToolCategory(tc.qualifiedName, mcpTools);
+          const serverLabel = offeredServerLabel(tc.qualifiedName, mcpTools);
+          const egressEscalation = gate.reason === 'lethal_trifecta';
           const emitted = eventStream.emitWithEnvelope({
             type: 'approval-requested',
             approvalId: tc.id,
             toolCallId: tc.id,
             name: tc.qualifiedName,
             category,
-            summary: canonicalApprovalSummary(
-              tc.qualifiedName,
-              category,
-              offeredServerLabel(tc.qualifiedName, mcpTools),
-            ),
+            summary: egressEscalation
+              ? egressApprovalSummary(tc.qualifiedName, tc.args, serverLabel)
+              : canonicalApprovalSummary(tc.qualifiedName, category, serverLabel),
             input: toAgentEventJson(tc.args),
+            ...(egressEscalation ? { riskLevel: 'high' as const } : {}),
           });
           approvalEvents.push(emitted.envelope);
           approvalChunks.push(encoder.encode(emitted.sse));
