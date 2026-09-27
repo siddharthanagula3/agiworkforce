@@ -1987,7 +1987,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   context.subscriptions.push(
     register('agi-workforce.showAccountUsage', async () => {
-      const { getTokenCounter, formatSessionCreditEstimate } = await import('../data/tokenCounter');
+      const { getTokenCounter, formatBilledCredits, formatSessionCreditEstimate } =
+        await import('../data/tokenCounter');
       const {
         CREDIT_BALANCE_LABEL,
         formatCreditBalance,
@@ -2004,6 +2005,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           fetchTierInfo(context.secrets),
           fetchAccountIdentity(context.secrets),
           fetchUsageHistory(context.secrets),
+          counter.settleQueuedBilling(context.secrets),
         ]);
       const accountToken = await getAccountToken(context.secrets);
       const authInvalidated = capturedAccountToken !== undefined && accountToken === undefined;
@@ -2062,6 +2064,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         {
           label: `$(calculator) Rough session estimate`,
           description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
+        },
+        {
+          label: `$(credit-card) Billed for editor actions`,
+          description: formatBilledCredits(counter),
         },
       );
 

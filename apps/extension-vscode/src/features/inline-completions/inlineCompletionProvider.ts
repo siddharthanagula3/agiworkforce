@@ -199,7 +199,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     ];
 
     try {
-      const response = await chatCompletion(this.secrets, messages, token);
+      const response = await chatCompletion(this.secrets, messages, token, undefined, 'deferred');
       if (token.isCancellationRequested) {
         return [];
       }
