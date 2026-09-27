@@ -1297,59 +1297,9 @@
       }
     }
   },
-  "spPlansCredits": {
-    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month",
-    "description": "A plan's credits in each usage window",
-    "placeholders": {
-      "five_hour": {
-        "content": "$1",
-        "example": "50"
-      },
-      "weekly": {
-        "content": "$2",
-        "example": "500"
-      },
-      "monthly": {
-        "content": "$3",
-        "example": "2,000"
-      }
-    }
-  },
-  "spPlansCreditsFree": {
-    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month, free models only",
-    "description": "The Free plan's credits in each usage window, which apply to free models",
-    "placeholders": {
-      "five_hour": {
-        "content": "$1",
-        "example": "50"
-      },
-      "weekly": {
-        "content": "$2",
-        "example": "500"
-      },
-      "monthly": {
-        "content": "$3",
-        "example": "2,000"
-      }
-    }
-  },
-  "spPlansCreditsPerSeat": {
-    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month per seat",
-    "description": "A per-seat plan's credits in each usage window",
-    "placeholders": {
-      "five_hour": {
-        "content": "$1",
-        "example": "50"
-      },
-      "weekly": {
-        "content": "$2",
-        "example": "500"
-      },
-      "monthly": {
-        "content": "$3",
-        "example": "2,000"
-      }
-    }
+  "spPlansFreeUsage": {
+    "message": "A small allowance, free models only",
+    "description": "The Free plan's usage in the plan comparison, which applies to free models"
   },
   "spPlansContract": {
     "message": "Usage set by your contract",
