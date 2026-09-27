@@ -10,15 +10,11 @@ nothing is left.
 
 - Done when: User writes a text prompt in a video mode and gets a generated video clip back.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| desktop | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| mobile | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:73-74`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/features/chat/pages/WebChatPage.tsx:3012-3022`
 
 ## S46.05: Video-model picker.
 
@@ -165,15 +161,11 @@ Code: `apps/web/app/api/media/video/generate/route.ts:1001-1007`, `apps/mobile/s
 
 - Done when: User cancels a video generation in progress and the job stops.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop only records the request: provider cancellation exists for Runway alone, which is not released, so Google and OpenRouter jobs keep running and are billed if they deliver. | handler |
-| desktop | partial | Stop only records the request: provider cancellation exists for Runway alone, which is not released, so Google and OpenRouter jobs keep running and are billed if they deliver. | handler |
-| mobile | partial | Same server limit: Stop calls the cancel route, but released providers have no provider cancellation. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx:147-158`, `apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx:178-182`, `apps/web/app/api/media/video/cancel/route.ts:56-58`, `apps/web/lib/server/video-provider-release-policy.ts:16-18`
 
 ## S46.29: Retry failed job.
 

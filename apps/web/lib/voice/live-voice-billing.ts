@@ -1,34 +1,56 @@
 import 'server-only';
 
-import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  MICROUSD_PER_USD,
+  chargeMicrousdForProviderCost,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 
 export const LIVE_VOICE_FEATURE = 'voice_live';
 export const LIVE_SESSION_BLOCK_MINUTES = 10;
-export const LIVE_SESSION_CENTS_PER_MINUTE = 5;
 export const LIVE_SESSION_PROVIDER_COST_SOURCE = 'provider_published_rate';
 
 const SECONDS_PER_MINUTE = 60;
-const CENTS_PER_USD = 100;
 
-export function liveSessionCostCents(seconds: number): number {
-  if (seconds <= 0) return 0;
-  return Math.max(1, Math.ceil((seconds / SECONDS_PER_MINUTE) * LIVE_SESSION_CENTS_PER_MINUTE));
-}
+export const LIVE_SESSION_CEILING_SECONDS = LIVE_SESSION_BLOCK_MINUTES * SECONDS_PER_MINUTE;
+export const LIVE_SESSION_MIN_BLOCK_SECONDS = SECONDS_PER_MINUTE;
 
-/**
- * What the provider charges for the session itself, at its published
- * per-minute session rate. Separate from what the user is charged: the two
- * rates are equal today and must not be allowed to track each other silently.
- * Null when the model declares no session rate, which leaves the caller to
- * record no provider cost rather than a number it cannot source.
- */
-export function liveSessionProviderCostCents(
+export function liveSessionProviderCostMicrousd(
   seconds: number,
   modelId: string | null | undefined,
 ): number | null {
   const usdPerMinute = getModelMetadataById(modelId)?.sessionPerMinuteCost;
-  if (seconds <= 0 || usdPerMinute === undefined || usdPerMinute <= 0) return null;
-  return Math.max(1, Math.ceil((seconds / SECONDS_PER_MINUTE) * usdPerMinute * CENTS_PER_USD));
+  if (usdPerMinute === undefined || !(usdPerMinute > 0)) return null;
+  if (!(seconds > 0)) return 0;
+  return Math.ceil((seconds / SECONDS_PER_MINUTE) * usdPerMinute * MICROUSD_PER_USD);
+}
+
+export function liveSessionChargeMicrousd(
+  seconds: number,
+  modelId: string | null | undefined,
+): number | null {
+  const providerMicrousd = liveSessionProviderCostMicrousd(seconds, modelId);
+  return providerMicrousd === null ? null : chargeMicrousdForProviderCost(providerMicrousd);
+}
+
+export function liveSessionMinutes(seconds: number): number {
+  return Math.ceil(Math.max(0, seconds) / SECONDS_PER_MINUTE);
+}
+
+export function liveSessionSecondsCoveredBy(
+  microusd: number,
+  modelId: string | null | undefined,
+): number {
+  const perMinute = liveSessionChargeMicrousd(SECONDS_PER_MINUTE, modelId);
+  if (perMinute === null || !(perMinute > 0) || !(microusd > 0) || !Number.isFinite(microusd)) {
+    return 0;
+  }
+  const charge = (seconds: number): number =>
+    liveSessionChargeMicrousd(seconds, modelId) ?? Number.POSITIVE_INFINITY;
+  let seconds = Math.floor((microusd * SECONDS_PER_MINUTE) / perMinute);
+  while (seconds > 0 && charge(seconds) > microusd) seconds -= 1;
+  while (charge(seconds + 1) <= microusd) seconds += 1;
+  return seconds;
 }
 
 export interface LiveSessionFailure {

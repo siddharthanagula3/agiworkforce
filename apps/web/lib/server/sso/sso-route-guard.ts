@@ -7,7 +7,13 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent } from '@/lib/security-audit';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
-import { requireSSOAdminAccess, type SSOAdminAccess } from './sso-access';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
+import {
+  canManageSSOOnPlan,
+  requireSSOAdminAccess,
+  ssoEntitlementDenial,
+  type SSOAdminAccess,
+} from './sso-access';
 
 export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -98,6 +104,19 @@ export async function requireOrgRole(
       },
       { status: 403 },
     );
+  }
+
+  const plan = await resolveOrganizationEntitlementPlan(organizationId);
+  if (!canManageSSOOnPlan(plan)) {
+    await logSecurityEvent({
+      userId: principal.userId,
+      eventType: 'authorization_failed',
+      severity: 'low',
+      endpoint,
+      details: { action: 'sso-entitlement-denied', organization_id: organizationId, plan },
+    });
+    const denial = ssoEntitlementDenial(plan);
+    return NextResponse.json(denial.body, { status: denial.status });
   }
 
   return null;
