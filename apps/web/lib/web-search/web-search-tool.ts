@@ -8,7 +8,6 @@ import {
   extractPageTitle,
   hasStructuredPageData,
 } from '@/lib/url-fetch/url-fetch-tool';
-import { recordPerplexitySearchCost } from '@/lib/web-search/perplexity-search-cost';
 import {
   configuredWebSearchProviders,
   registerWebSearchProvider,
@@ -122,19 +121,6 @@ export interface WebSearchOverrides {
   timeoutMs?: number;
   maxResults?: number;
   signal?: AbortSignal;
-  /**
-   * Present only when the caller can attribute this call to a user and turn.
-   * When set, a successful call is billed through `recordPerplexitySearchCost`;
-   * omitting it (as today's only caller does) simply skips billing rather
-   * than throwing, so wiring identity through is additive, not required.
-   */
-  userId?: string;
-  organizationId?: string | null;
-  turnRef?: string;
-  /** The client surface the turn came from, recorded on the COGS row. */
-  surface?: string | null;
-  /** What the customer is charged for this call, when the caller's plan does not include it. */
-  customerChargeCents?: number | null;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -368,7 +354,6 @@ if (perplexityDescriptor) {
     isConfigured: (overrides) =>
       Boolean(overrides?.apiKey ?? process.env[perplexityDescriptor.apiKeyEnv]),
     search: perplexitySearch,
-    recordCost: recordPerplexitySearchCost,
   };
   registerWebSearchProvider(provider);
 }
@@ -425,17 +410,6 @@ export async function executeWebSearch(
       });
       if (outcome.errorCode === 'cancelled') return lastFailure;
       continue;
-    }
-
-    if (overrides.userId && provider.recordCost) {
-      await provider.recordCost({
-        userId: overrides.userId,
-        organizationId: overrides.organizationId ?? null,
-        turnRef: overrides.turnRef ?? query,
-        calls: 1,
-        surface: overrides.surface ?? null,
-        customerChargeCents: overrides.customerChargeCents ?? null,
-      });
     }
 
     return {
