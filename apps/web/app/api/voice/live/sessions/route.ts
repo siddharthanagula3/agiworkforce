@@ -45,8 +45,11 @@ import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/to
 import {
   describeDelegationTools,
   describeLiveVoiceTools,
+  formatLiveVoiceApprovalNotice,
   formatWithheldLiveVoiceTools,
   resolveLiveVoiceDelegationTools,
+  resolveLiveVoiceFunctionTools,
+  type LiveVoiceFunctionTools,
 } from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
@@ -240,6 +243,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
   let reservation: ManagedUsageRequestReservation;
+  let planTier: string | null = null;
   let limitResets: VoiceLimitResets | undefined;
   let ceilingSeconds = LIVE_SESSION_MIN_BLOCK_SECONDS;
   let estimatedCostMicrousd = 0;
@@ -254,7 +258,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, gateHeaders);
       if (gateResponse) return gateResponse;
     }
-    const planTier = entitlement.plan;
+    planTier = entitlement.plan;
     const block = await planVoiceSessionBlock({
       db: scoped.db,
       userId,
@@ -328,6 +332,20 @@ async function handleCreateLiveSession(request: NextRequest) {
     }
   };
 
+  const functionToolsLoad = resolveLiveVoiceFunctionTools({
+    db: scoped.db,
+    userId,
+    organizationId: scoped.organizationId,
+    planTier,
+    backendModel,
+  }).catch((error: unknown): LiveVoiceFunctionTools => {
+    logger.error(
+      { event: 'live_voice_function_tools_failed', error, userId },
+      'Live voice function tools could not be loaded; starting with hosted tools only',
+    );
+    return { tools: [], names: [] };
+  });
+
   let context: LiveVoiceContextBundle = EMPTY_LIVE_VOICE_CONTEXT;
   try {
     context = await loadLiveVoiceContext(scoped.db, {
@@ -350,13 +368,16 @@ async function handleCreateLiveSession(request: NextRequest) {
 
   const toolApprovalPolicy = await loadToolApprovalPolicy(scoped.db, userId);
   const delegation = resolveLiveVoiceDelegationTools(backendModel, toolApprovalPolicy);
-  const offeredToolIds = describeDelegationTools(delegation.tools);
-  const toolNotice = formatWithheldLiveVoiceTools(delegation.withheld, toolApprovalPolicy);
-  let response: Response;
-  let responseText: string;
-  try {
-    await markManagedUsageProviderStarted(reservation);
-    response = await fetch(providerApiUrl(provider, 'live/sessions'), {
+  const hostedToolIds = describeDelegationTools(delegation.tools);
+  const withheldNotice = formatWithheldLiveVoiceTools(delegation.withheld, toolApprovalPolicy);
+  let functionTools = await functionToolsLoad;
+
+  const requestProviderSession = (offered: LiveVoiceFunctionTools): Promise<Response> => {
+    const toolNotice =
+      [withheldNotice, formatLiveVoiceApprovalNotice(offered.names)]
+        .filter((notice): notice is string => Boolean(notice))
+        .join('\n\n') || null;
+    return fetch(providerApiUrl(provider, 'live/sessions'), {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -379,7 +400,7 @@ async function handleCreateLiveSession(request: NextRequest) {
                 context,
                 { toolNotice },
               ),
-              tools: delegation.tools,
+              tools: [...delegation.tools, ...offered.tools],
               tool_choice: 'auto',
             },
           },
@@ -388,11 +409,33 @@ async function handleCreateLiveSession(request: NextRequest) {
       }),
       signal: AbortSignal.timeout(SESSION_CREATE_TIMEOUT_MS),
     });
+  };
+
+  let response: Response;
+  let responseText: string;
+  try {
+    await markManagedUsageProviderStarted(reservation);
+    response = await requestProviderSession(functionTools);
     responseText = await response.text();
+    if (response.status === 400 && functionTools.names.length > 0) {
+      logger.warn(
+        {
+          event: 'live_voice_function_tools_rejected',
+          upstreamCode: upstreamErrorCode(responseText),
+          body: responseText,
+          functionTools: functionTools.names.length,
+        },
+        'The live voice provider rejected the function tools; retrying with hosted tools only',
+      );
+      functionTools = { tools: [], names: [] };
+      response = await requestProviderSession(functionTools);
+      responseText = await response.text();
+    }
   } catch (error) {
     await releaseReservation('provider_unreachable');
     throw error;
   }
+  const offeredToolIds = [...hostedToolIds, ...functionTools.names];
 
   if (!response.ok) {
     const upstreamCode = upstreamErrorCode(responseText);
@@ -488,6 +531,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       contextMemory: context.memoryPrompt !== null,
       toolApprovalPolicy,
       withheldTools: delegation.withheld.map((tool) => tool.id),
+      functionTools: functionTools.names.length,
     },
     'Live voice session created',
   );

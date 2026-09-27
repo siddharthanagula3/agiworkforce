@@ -1,14 +1,17 @@
 import 'server-only';
 
 import {
+  Client,
   discoverOAuthProtectedResourceMetadata,
-  LATEST_PROTOCOL_VERSION,
+  StreamableHTTPClientTransport,
+  type FetchLike,
 } from '@modelcontextprotocol/client';
 
 import { logger } from '@/lib/logger';
-import { createDeadline, guardedFetch } from '@/lib/url-fetch/guarded-fetch';
+import { createDeadline, guardedFetch, type Deadline } from '@/lib/url-fetch/guarded-fetch';
 import { AUTHORIZATION_HEADER_NAME, BEARER_VALUE_PREFIX } from '@/lib/custom-connector-crypto';
 import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
+import { mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import {
   MCP_REGISTRY_BASE_URL,
   type RegistryEntry,
@@ -40,8 +43,8 @@ const SCHEME_IN_DESCRIPTION_RE = /\b(Bearer|Basic|Token)\b/i;
 const CHALLENGE_SCHEME_RE = /^([A-Za-z][A-Za-z0-9._~+/-]*)/;
 const PROBE_CLIENT_NAME = 'AGI Workforce';
 const PROBE_CLIENT_VERSION = '0';
+const PROBE_VERSION_NEGOTIATION = { mode: 'auto' } as const;
 const JSON_MEDIA_TYPE = 'application/json';
-const PROBE_ACCEPT = `${JSON_MEDIA_TYPE}, text/event-stream`;
 
 const registryEntryCache = new NeonMcpResponseCacheStore();
 
@@ -116,7 +119,7 @@ function registryHeaderSpec(
 async function discoveredPlacement(mcpUrl: string): Promise<CredentialPlacement | null> {
   try {
     const metadata = await Promise.race([
-      discoverOAuthProtectedResourceMetadata(mcpUrl),
+      discoverOAuthProtectedResourceMetadata(mcpUrl, undefined, mcpOAuthFetch),
       new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), PROBE_TIMEOUT_MS)),
     ]);
     const methods = metadata?.bearer_methods_supported ?? [];
@@ -130,49 +133,58 @@ async function discoveredPlacement(mcpUrl: string): Promise<CredentialPlacement 
   }
 }
 
-function initializeProbeBody(): string {
-  return JSON.stringify({
-    jsonrpc: '2.0',
-    id: 1,
-    method: 'initialize',
-    params: {
-      protocolVersion: LATEST_PROTOCOL_VERSION,
-      capabilities: {},
-      clientInfo: { name: PROBE_CLIENT_NAME, version: PROBE_CLIENT_VERSION },
-    },
-  });
-}
-
 export function parseChallengeScheme(wwwAuthenticate: string | null): string | null {
   if (!wwwAuthenticate) return null;
   const match = CHALLENGE_SCHEME_RE.exec(wwwAuthenticate.trim());
   return match?.[1] ?? null;
 }
 
-/**
- * The challenge belongs to the server the user registered. A redirect would be
- * a different server answering for it, so no hop is allowed.
- */
-async function challengeScheme(mcpUrl: string): Promise<string | null> {
-  const deadline = createDeadline(PROBE_TIMEOUT_MS);
-  try {
-    const outcome = await guardedFetch(new URL(mcpUrl), {
+function challengeRecordingFetch(
+  deadline: Deadline,
+  record: (wwwAuthenticate: string | null) => void,
+): FetchLike {
+  return async (input, init) => {
+    const outcome = await guardedFetch(new URL(input), {
       deadline,
       maxRedirects: 0,
-      method: 'POST',
-      body: initializeProbeBody(),
-      headers: { 'content-type': JSON_MEDIA_TYPE, accept: PROBE_ACCEPT },
+      method: init?.method === 'POST' ? 'POST' : 'GET',
+      headers: Object.fromEntries(new Headers(init?.headers ?? {}).entries()),
+      ...(typeof init?.body === 'string' ? { body: init.body } : {}),
     });
-    if (!outcome.ok || outcome.kind !== 'response') return null;
-    const response = outcome.response;
-    await response.body?.cancel().catch(() => undefined);
-    if (!CHALLENGE_STATUSES.has(response.status)) return null;
-    return parseChallengeScheme(response.headers.get(WWW_AUTHENTICATE_HEADER));
-  } catch {
-    return null;
+    if (!outcome.ok) throw new Error(outcome.detail);
+    if (outcome.kind !== 'response')
+      throw new Error('The server answered the probe with a redirect.');
+    if (CHALLENGE_STATUSES.has(outcome.response.status)) {
+      record(outcome.response.headers.get(WWW_AUTHENTICATE_HEADER));
+    }
+    return outcome.response;
+  };
+}
+
+async function challengeScheme(mcpUrl: string): Promise<string | null> {
+  const deadline = createDeadline(PROBE_TIMEOUT_MS);
+  let challenge: string | null = null;
+  const client = new Client(
+    { name: PROBE_CLIENT_NAME, version: PROBE_CLIENT_VERSION },
+    { versionNegotiation: PROBE_VERSION_NEGOTIATION },
+  );
+  const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
+    fetch: challengeRecordingFetch(deadline, (wwwAuthenticate) => {
+      challenge ??= wwwAuthenticate;
+    }),
+  });
+  try {
+    await client.connect(transport);
+  } catch (error) {
+    logger.info(
+      { error: error instanceof Error ? error.name : 'unknown' },
+      '[mcp-credential-spec] probe connection refused, reading its challenge',
+    );
   } finally {
+    await client.close().catch(() => undefined);
     deadline.release();
   }
+  return parseChallengeScheme(challenge);
 }
 
 export async function resolveConnectorCredentialSpec(

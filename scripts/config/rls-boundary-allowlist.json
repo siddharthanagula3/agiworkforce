@@ -102,10 +102,6 @@
       "reason": "the client-supplied device id may already be held by another account the caller's scope cannot see, so the ownership probe that answers 403 reads over the schema owner; the upsert and the token clear are caller-scoped"
     },
     {
-      "path": "apps/web/app/api/settings/2fa/route.ts",
-      "reason": "user_two_factor is read and written only through getUserScopedDb; the privileged connection is passed solely to handleIdentitySecurityEvent, whose identity risk signals 0255 requires on the service connection because app_rls reads its own rows and never writes them"
-    },
-    {
       "path": "apps/web/app/api/share/[token]/route.ts",
       "reason": "reading a shared conversation by its unguessable token is the feature, a public share link has no viewer subject to constrain by"
     },

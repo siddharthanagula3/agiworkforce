@@ -1,4 +1,3 @@
-
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -31,9 +30,9 @@ export function BriefStatus({ status, className }: BriefStatusProps) {
           'flex items-center gap-2 px-3 py-1.5 rounded-full',
           'text-sm',
           status.isError
-            ? 'text-rose-400 bg-rose-500/10'
+            ? 'text-danger-text bg-danger-fill/10'
             : status.isComplete
-              ? 'text-emerald-400 bg-emerald-500/10'
+              ? 'text-success-text bg-success-fill/10'
               : 'text-muted-foreground bg-muted/50',
           className,
         )}
@@ -105,9 +104,9 @@ export function FloatingBriefStatus({ status, className }: FloatingBriefStatusPr
           'border border-white/10',
           'shadow-lg',
           status.isError
-            ? 'text-rose-400 border-rose-500/30'
+            ? 'text-danger-text border-danger-fill/30'
             : status.isComplete
-              ? 'text-emerald-400 border-emerald-500/30'
+              ? 'text-success-text border-success-fill/30'
               : 'text-foreground',
           className,
         )}

@@ -24,13 +24,14 @@ describe('marketing plan matrix', () => {
           planId: 'max_15x',
           label: 'Max 20x',
           price: '$200/mo',
-          usageCapacity: '20x Pro per 5 hours, 10x per week',
+          usageCapacity: '20x more usage per session and 10x more weekly usage than Pro',
         }),
         expect.objectContaining({
           planId: 'team',
           label: 'Team',
           price: '$25/seat/mo',
           billingInterval: 'Self-serve monthly; annual only where checkout offers it',
+          usageCapacity: 'Same usage as Pro for every seat',
         }),
       ]),
     );
@@ -116,19 +117,18 @@ describe('surface availability', () => {
   });
 
   // `publish = false` in apps/cli/Cargo.toml keeps the crate off crates.io. It
-  // says nothing about whether the CLI is downloadable, and this assertion used
-  // to read the flag as if it did. What /download actually offers is signed
-  // GitHub release archives under the `v-cli-` tag, resolved at request time by
-  // lib/releases/github-cli-releases.ts, so that is the channel the public claim
-  // has to follow.
-  it('calls the CLI available because /download serves signed release archives', () => {
+  // says nothing about whether the CLI is downloadable. What /download offers is
+  // signed GitHub release archives under the `v-cli-` tag, resolved at request
+  // time by lib/releases/github-cli-releases.ts, and none has been published, so
+  // the CLI stays unreleased until the first signed release ships.
+  it('keeps the CLI unreleased until a signed v-cli- release is published', () => {
     const releases = readFileSync(
       resolve(repoRoot, 'apps/web/lib/releases/github-cli-releases.ts'),
       'utf8',
     );
 
     expect(releases).toContain("CLI_RELEASE_TAG_PREFIX = 'v-cli-'");
-    expect(SURFACE_STATUS.cli).not.toBe(COMING_SOON_LABEL);
+    expect(SURFACE_STATUS.cli).toBe(COMING_SOON_LABEL);
   });
 
   it('pins no CLI version in the registry, because the release endpoint owns it', () => {

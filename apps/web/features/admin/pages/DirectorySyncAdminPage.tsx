@@ -306,7 +306,7 @@ export default function DirectorySyncAdminPage({
           {scimBaseUrl ? (
             <p className="mt-4 text-sm text-foreground">
               SCIM base URL:{' '}
-              <code className="rounded-compact bg-muted px-2 py-1 text-emerald-700 dark:text-emerald-300">
+              <code className="rounded-compact bg-muted px-2 py-1 text-success-text">
                 {scimBaseUrl}
               </code>
             </p>
@@ -316,7 +316,7 @@ export default function DirectorySyncAdminPage({
         {error ? (
           <p
             role="alert"
-            className="rounded-md border border-red-600/60 dark:border-red-500/40 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200"
+            className="rounded-md border border-danger-fill/60 bg-danger-fill/10 p-3 text-sm text-danger-text"
           >
             {error}
           </p>
@@ -357,7 +357,7 @@ export default function DirectorySyncAdminPage({
                         onConfirm: () => deleteConnection(connection.id),
                       })
                     }
-                    className="rounded-compact border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
+                    className="rounded-compact border border-danger-fill/60 px-3 py-1 text-xs text-danger-text disabled:opacity-50"
                   >
                     Remove
                   </button>
@@ -403,7 +403,7 @@ export default function DirectorySyncAdminPage({
             <button
               type="submit"
               disabled={busy}
-              className="rounded-compact bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-success-fill/10 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
             >
               Add connection
             </button>
@@ -418,13 +418,11 @@ export default function DirectorySyncAdminPage({
           </p>
 
           {freshToken ? (
-            <div className="mt-4 rounded-compact border border-emerald-500/40 bg-emerald-500/10 p-3">
-              <p className="text-xs uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+            <div className="mt-4 rounded-compact border border-success-fill/40 bg-success-fill/10 p-3">
+              <p className="text-xs uppercase tracking-wide text-success-text">
                 Copy this now, it will not be shown again
               </p>
-              <code className="mt-2 block break-all text-sm text-emerald-900 dark:text-emerald-100">
-                {freshToken}
-              </code>
+              <code className="mt-2 block break-all text-sm text-success-text">{freshToken}</code>
             </div>
           ) : null}
 
@@ -460,7 +458,7 @@ export default function DirectorySyncAdminPage({
                           onConfirm: () => revokeToken(token.id),
                         })
                       }
-                      className="rounded-compact border border-red-600/60 dark:border-red-500/40 px-3 py-1 text-xs text-red-700 dark:text-red-200 disabled:opacity-50"
+                      className="rounded-compact border border-danger-fill/60 px-3 py-1 text-xs text-danger-text disabled:opacity-50"
                     >
                       Revoke
                     </button>
@@ -500,7 +498,7 @@ export default function DirectorySyncAdminPage({
             <button
               type="submit"
               disabled={busy || connections.length === 0}
-              className="rounded-compact bg-emerald-500/90 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-success-fill/10 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
             >
               Mint token
             </button>
@@ -515,7 +513,7 @@ export default function DirectorySyncAdminPage({
             <strong className="text-foreground">member</strong>. A group can never grant ownership.
           </p>
           {!canManageRoles ? (
-            <p className="mt-2 text-sm text-amber-700 dark:text-amber-200">
+            <p className="mt-2 text-sm text-warning-text">
               Only an organization owner can change group role mapping.
             </p>
           ) : null}
@@ -578,9 +576,7 @@ export default function DirectorySyncAdminPage({
                   <span className="text-muted-foreground">{formatTimestamp(event.created_at)}</span>{' '}
                   {event.event_type}
                   {event.user_email ? ` · ${event.user_email}` : ''}
-                  {event.error ? (
-                    <span className="text-red-700 dark:text-red-300"> · {event.error}</span>
-                  ) : null}
+                  {event.error ? <span className="text-danger-text"> · {event.error}</span> : null}
                 </li>
               ))}
             </ul>

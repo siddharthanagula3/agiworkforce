@@ -32,7 +32,7 @@ export function SendButton({
         onClick={onClick}
         className={cn(
           'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
-          'bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600',
+          'bg-foreground text-background hover:bg-foreground/90',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
           className,
         )}
@@ -54,8 +54,8 @@ export function SendButton({
           'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
           disabled
-            ? 'bg-amber-500/50 text-white/70 cursor-not-allowed'
-            : 'bg-amber-500 text-white shadow-md hover:bg-amber-600',
+            ? 'bg-muted text-muted-foreground cursor-not-allowed'
+            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80',
           className,
         )}
         title={t(

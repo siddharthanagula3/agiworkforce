@@ -177,24 +177,24 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
       {/* Error display */}
       {errors.length > 0 && (
         <div
-          className="flex items-start gap-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md text-sm"
+          className="flex items-start gap-2 p-2 bg-danger-fill/10 border border-danger-fill/30 rounded-md text-sm"
           role="alert"
         >
-          <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+          <AlertCircle className="w-4 h-4 text-danger-text shrink-0 mt-0.5" />
           <div className="flex-1">
             {errors.map((err, idx) => (
-              <p key={idx} className="text-red-700 dark:text-red-300">
+              <p key={idx} className="text-danger-text">
                 {err.message}
               </p>
             ))}
           </div>
           <button
             onClick={clearErrors}
-            className="p-0.5 hover:bg-red-100 dark:hover:bg-red-800 rounded"
+            className="p-0.5 hover:bg-danger-fill/10 rounded"
             aria-label="Dismiss errors"
             type="button"
           >
-            <X className="w-3 h-3 text-red-500" />
+            <X className="w-3 h-3 text-danger-text" />
           </button>
         </div>
       )}

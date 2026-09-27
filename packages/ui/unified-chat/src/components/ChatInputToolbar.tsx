@@ -163,7 +163,7 @@ export function ChatInputToolbar({
             variant={isAutoMode ? 'default' : 'outline'}
             size="sm"
             onClick={onAutoModeToggle}
-            className={cn(isAutoMode && 'bg-emerald-700 hover:bg-emerald-800 text-white')}
+            className={cn(isAutoMode && 'bg-success-fill hover:brightness-95 text-success-on-fill')}
             title={isAutoMode ? 'Auto: Agent acts autonomously' : 'Manual: Agent asks permission'}
             aria-label={isAutoMode ? 'Switch to manual mode' : 'Switch to auto mode'}
             aria-pressed={isAutoMode}

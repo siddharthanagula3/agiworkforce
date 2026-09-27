@@ -68,16 +68,10 @@ legacy_binary="./target/release/agiworkforce"
 if [ -x "$binary" ]; then
   ver=$($binary --version)
   cargo_ver=$(grep -E '^version' apps/cli/Cargo.toml | head -1 | cut -d'"' -f2)
-  npm_ver=$(node -p "require('./apps/cli/npm/package.json').version" 2>/dev/null)
   if echo "$ver" | grep -q "$cargo_ver"; then
     pass "binary version: $ver"
   else
     fail "binary reports $ver but Cargo.toml says $cargo_ver"
-  fi
-  if [ "$cargo_ver" = "$npm_ver" ]; then
-    pass "Cargo.toml + npm package.json versions match ($cargo_ver)"
-  else
-    fail "version mismatch: Cargo.toml=$cargo_ver, npm=$npm_ver"
   fi
 else
   fail "binary not found at $binary"

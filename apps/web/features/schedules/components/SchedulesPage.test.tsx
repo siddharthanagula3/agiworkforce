@@ -4,6 +4,17 @@ import type { ComponentProps } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { SchedulesPage as ProductionSchedulesPage } from './SchedulesPage';
+
+vi.mock('@/features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    customNames: {},
+    toolConnectorIds: {},
+    loading: false,
+    error: null,
+    retry: vi.fn(),
+  }),
+}));
 import type { ScheduleApi } from '../services/schedule-api';
 import type { ScheduleRun, ScheduleTask } from '../types';
 

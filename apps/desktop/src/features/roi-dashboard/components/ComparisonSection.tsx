@@ -1,13 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { Bot, Clock, DollarSign, Target, TrendingUp, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/ui/Card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import type {
   BenchmarkComparisonData,
   ComparisonData,
@@ -134,10 +128,7 @@ function ManualVsAutoComparison({ data }: { data: ComparisonData }) {
 }
 
 function PeriodComparison({ data }: { data: PeriodComparisonData }) {
-  const percentageColor =
-    data.percentageChange >= 0
-      ? 'text-green-600 dark:text-green-500'
-      : 'text-red-600 dark:text-red-500';
+  const percentageColor = data.percentageChange >= 0 ? 'text-success-text' : 'text-danger-text';
 
   return (
     <div className="space-y-4">

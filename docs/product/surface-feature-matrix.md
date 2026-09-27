@@ -575,7 +575,7 @@ this document.
 - **cli**: present. `apps/cli/src/permissions.rs`, reached by `apps/cli/src/lib.rs` (module).
 - **vscode**: unverified. Settled by: apps/extension-vscode/src/features/config is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both.
 - **chrome**: unverified. Settled by: apps/extension/src/features/site-policy is a directory, not an entry point. A file in it that the surface's shell imports or routes to would settle this, naming both.
-- **api**: present. `apps/web/lib/services/connector-policy-gate.ts`, reached by `apps/web/app/api/plugins/uploads/route.ts` (import).
+- **api**: present. `apps/web/features/plugins/server/directory/install-gate.ts`, reached by `apps/web/app/api/plugins/uploads/route.ts` (import).
 
 ### Model restrictions
 
@@ -589,7 +589,7 @@ this document.
 
 ### Connector restrictions
 
-- **web**: present. `apps/web/lib/services/connector-policy-gate.ts`, reached by `apps/web/app/api/plugins/uploads/route.ts` (import).
+- **web**: present. `apps/web/features/plugins/server/directory/install-gate.ts`, reached by `apps/web/app/api/plugins/uploads/route.ts` (import).
 - **desktop**: present. `apps/desktop/src/services/desktopCloudConnectorInstall.ts`, reached by `apps/desktop/src/features/settings/DesktopCloudSettingsModal.tsx` (import).
 - **mobile**: unverified. Settled by: Whether apps/mobile/services/connectors.ts refuses a connector the workspace disallows rather than only listing what the server returns.
 - **cli**: absent. The CLI has no connectors, so it has nothing to restrict.

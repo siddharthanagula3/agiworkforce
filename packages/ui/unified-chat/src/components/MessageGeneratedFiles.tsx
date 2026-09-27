@@ -488,7 +488,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
 
               {previewState.status === 'error' ? (
                 <div className="flex h-full min-h-72 flex-col items-center justify-center gap-3 text-center">
-                  <AlertTriangle className="h-10 w-10 text-rose-400" aria-hidden />
+                  <AlertTriangle className="h-10 w-10 text-danger-text" aria-hidden />
                   <div>
                     <h3 className="text-base font-medium text-[var(--chat-text-primary)]">
                       Preview couldn’t load

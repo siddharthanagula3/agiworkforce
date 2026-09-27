@@ -206,7 +206,7 @@ import {
 } from './tool-turn-governor';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
-import { managedCloudE2BSessionScope } from '@/lib/e2b/session-store';
+import { managedCloudE2BSessionScope, type E2BSessionScope } from '@/lib/e2b/session-store';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import {
   snapshotSandboxFiles,
@@ -301,6 +301,7 @@ import {
 } from './tool-call-gate';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
@@ -647,6 +648,7 @@ export interface ToolLoopOptions {
   approvalMode?: ApprovalMode;
   /** No human can answer an approval prompt on this run (e.g. a scheduled cron). */
   unattended?: boolean;
+  unattendedEscalationPauses?: boolean;
   mcpTools?: WebMcpToolDef[];
   resume?: ResumeApproval;
   eventSessionId?: string;
@@ -796,7 +798,7 @@ function mcpServerLabel(toolName: string): string | null {
 
 function canonicalToolCategory(
   toolName: string,
-  offeredTools: WebMcpToolDef[],
+  offeredTools: readonly WebMcpToolDef[],
 ): AgentEventToolCategory {
   if (isWebSearchTool(toolName)) return 'web-search';
   if (isUrlFetchTool(toolName)) return 'web-fetch';
@@ -1115,17 +1117,6 @@ function interactiveCardEvent(card: InteractiveCard, responseModel: string): Sse
 
 const MAX_INPUT_REQUEST_ENTRIES = 32;
 const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
-
-const MCP_INPUT_PAUSE_ENV = 'AGI_MCP_INPUT_PAUSE';
-
-// Off unless explicitly enabled: the server half of the MCP `input_required`
-// pause is complete (checkpoint, `input-requested` events, /resume-input), but
-// no client surface calls /resume-input yet, so a real pause would strand the
-// turn with no way to answer it. Until a client ships, an `input_required`
-// result takes the fail-safe branch below and the turn finishes cleanly.
-function isMcpInputPauseEnabled(): boolean {
-  return process.env[MCP_INPUT_PAUSE_ENV] === '1';
-}
 
 // Remote `input_required` definitions are UNTRUSTED. Only a JSON object of a
 // bounded field count and serialized size is safe to persist, stream, and later
@@ -1838,6 +1829,13 @@ function skillLoadRequestedName(args: Record<string, unknown>): string | null {
     : null;
 }
 
+function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
+  return getSkillInstallOverrides(getNeonDb(), userId).catch((error: unknown) => {
+    logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
+    return EMPTY_SKILL_INSTALL_OVERRIDES;
+  });
+}
+
 function callerScopedDb(
   executionContext: { organizationId: string | null } | undefined,
   userId: string,
@@ -2130,7 +2128,11 @@ async function runMcpTool(
   }
 
   const parsed = parseQualifiedToolName(toolCall.qualifiedName);
-  if (!parsed) {
+  // Every other branch of this function checks the tool was offered this turn.
+  // isToolOffered only runs on the resume and post-approval paths, so without
+  // this a fresh tool_call naming any connector or operator MCP tool reached
+  // its executor.
+  if (!parsed || !availableTools.has(toolCall.qualifiedName)) {
     return {
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
@@ -2138,12 +2140,6 @@ async function runMcpTool(
   }
 
   if (connectorExecutor) {
-    // Every other branch of this function checks the tool was offered this turn.
-    // isToolOffered only runs on the resume and post-approval paths, so without
-    // this a fresh tool_call naming any connector reached the executor.
-    if (!availableTools.has(toolCall.qualifiedName)) {
-      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
-    }
     try {
       const connectorResult = await connectorExecutor(
         parsed.serverId,
@@ -2535,7 +2531,8 @@ function recordProviderStepFailure(input: {
  * Private data is a sensitive source in its own right: memory facts,
  * attachments and earlier turns are all in the model's hands when an injected
  * page asks it to egress. This is one leg of the lethal-trifecta gate, and on
- * an unattended run the gate has nobody to ask, so its answer is allow or deny.
+ * an unattended run that cannot pause the gate has nobody to ask, so its answer
+ * is allow or deny.
  *
  * Every signal here except `sensitiveContextPresent` is read off the shape of
  * the conversation, which is why a scheduled run defeated it: built as exactly
@@ -2694,6 +2691,266 @@ export async function recordToolCallAudit(input: {
   });
 }
 
+function auditToolOutcome(input: {
+  userId: string | undefined;
+  organizationId: string | null | undefined;
+  surface: string;
+  toolName: string;
+  category: AgentEventToolCategory;
+  status: ToolCallAuditStatus;
+  durationMs?: number;
+}): Promise<void> {
+  recordToolOutcome({
+    category: input.category,
+    status: input.status,
+    durationMs: input.durationMs,
+    remote: isDeviceStepTool(input.toolName),
+  });
+  if (isBrowserCommand(input.toolName)) {
+    recordBrowserTask({ status: input.status, surface: input.surface, errorType: input.category });
+  }
+  return recordToolCallAudit(input);
+}
+
+function generatedFilesFailedNote(failedCount: number): string {
+  const plural = failedCount === 1 ? 'file' : 'files';
+  return `Note: ${failedCount} generated ${plural} could not be retrieved from the execution sandbox and ${failedCount === 1 ? 'is' : 'are'} not attached.`;
+}
+
+async function persistSandboxOutputs(input: {
+  sandbox: { executor: E2BExecutor; baseline: SandboxSnapshot } | null;
+  pngResults: readonly string[];
+  userId: string;
+  organizationId: string | null;
+  model: string;
+  conversationId: string | null | undefined;
+}): Promise<{ files: GeneratedFileWire[]; failedCount: number }> {
+  const files: GeneratedFileWire[] = [];
+  let failedCount = 0;
+  const conversation = input.conversationId ? { conversationId: input.conversationId } : {};
+
+  if (input.sandbox) {
+    try {
+      const harvest = await harvestGeneratedFiles({
+        executor: input.sandbox.executor,
+        baseline: input.sandbox.baseline,
+        userId: input.userId,
+        organizationId: input.organizationId,
+        model: input.model,
+        ...conversation,
+      });
+      files.push(...harvest.files);
+      failedCount += harvest.failedCount;
+    } catch (err) {
+      logger.warn({ err }, '[tool-loop] generated-file harvest failed; no file card emitted');
+      failedCount += 1;
+    }
+  }
+
+  for (const [index, png] of input.pngResults.entries()) {
+    try {
+      const outcome = await persistGeneratedFileBytes({
+        userId: input.userId,
+        organizationId: input.organizationId,
+        data: Buffer.from(png, 'base64'),
+        mimeType: 'image/png',
+        filename: input.pngResults.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
+        provider: 'e2b',
+        origin: 'e2b-execution-result',
+        model: input.model,
+        ...conversation,
+      });
+      if (outcome.ok) {
+        files.push(outcome.file);
+      } else {
+        failedCount += 1;
+      }
+    } catch (err) {
+      logger.warn({ err }, '[tool-loop] chart png persist failed; skipping');
+      failedCount += 1;
+    }
+  }
+
+  return { files, failedCount };
+}
+
+async function releaseSandbox(
+  executor: E2BExecutor,
+  scope: E2BSessionScope | undefined,
+): Promise<void> {
+  if (!scope) {
+    await executor.dispose();
+  } else if (executor.pause) {
+    await executor.pause();
+  } else {
+    await pauseE2BSession(scope);
+  }
+}
+
+export interface OfferedToolCallInput {
+  call: PendingToolCall;
+  offeredTools: ReadonlySet<string>;
+  mcpTools?: readonly WebMcpToolDef[];
+  connectorExecutor?: ConnectorToolExecutor;
+  userId: string;
+  organizationId: string | null;
+  conversationId: string | null;
+  model: string;
+  requestId: string;
+  planTier: string | null;
+  surface: string;
+  signal?: AbortSignal;
+}
+
+export type OfferedToolCallResult = ToolLoopToolResult & { untrustedContent: boolean };
+
+export async function executeOfferedToolCall(
+  input: OfferedToolCallInput,
+): Promise<OfferedToolCallResult> {
+  const { call, userId, organizationId, conversationId, model, requestId } = input;
+  const toolName = call.qualifiedName;
+  const category = canonicalToolCategory(toolName, input.mcpTools ?? []);
+  const audit = (status: ToolCallAuditStatus, durationMs?: number): Promise<void> =>
+    auditToolOutcome({
+      userId,
+      organizationId,
+      surface: input.surface,
+      toolName,
+      category,
+      status,
+      ...(durationMs === undefined ? {} : { durationMs }),
+    });
+
+  if (!input.offeredTools.has(toolName) || isWebSearchTool(toolName)) {
+    await audit('blocked');
+    return {
+      content: `Tool ${toolName} is not available.`,
+      isError: true,
+      unavailable: true,
+      untrustedContent: false,
+    };
+  }
+
+  const sessionScope = conversationId
+    ? managedCloudE2BSessionScope(userId, conversationId)
+    : undefined;
+  const sandbox: { executor: E2BExecutor | null; baseline: SandboxSnapshot | null } = {
+    executor: null,
+    baseline: null,
+  };
+  let resolution: Promise<E2BExecutorResolution> | null = null;
+  const resolveExecutor = (): Promise<E2BExecutorResolution> => {
+    resolution ??= (async () => {
+      let cause: E2BUnavailableCause | null = null;
+      const executor = await getE2BExecutor(sessionScope, (unavailable) => {
+        cause ??= unavailable;
+      });
+      if (executor) {
+        sandbox.executor = executor;
+        sandbox.baseline = await snapshotSandboxFiles(executor);
+      }
+      return { executor, cause };
+    })();
+    return resolution;
+  };
+
+  const execute = (): Promise<ToolLoopToolResult> =>
+    withSpan(
+      TOOL_EXECUTION_SPAN,
+      {
+        kind: 'internal',
+        domain: 'tool',
+        attributes: {
+          [OBSERVABILITY_ATTRIBUTE.toolName]: toolName,
+          [OBSERVABILITY_ATTRIBUTE.toolCallId]: call.id,
+          [OBSERVABILITY_ATTRIBUTE.toolCategory]: category,
+          [OBSERVABILITY_ATTRIBUTE.sessionId]: conversationId ?? requestId,
+          [OBSERVABILITY_ATTRIBUTE.turnId]: requestId,
+          [OBSERVABILITY_ATTRIBUTE.surface]: input.surface,
+        },
+      },
+      async (span) => {
+        const result = await runMcpTool(
+          call,
+          resolveExecutor,
+          input.offeredTools,
+          input.connectorExecutor,
+          {
+            userId,
+            organizationId,
+            model,
+            requestId,
+            planTier: input.planTier,
+            surface: input.surface,
+            loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
+            ...(input.signal ? { signal: input.signal } : {}),
+          },
+        );
+        span.setAttributes({ [OBSERVABILITY_ATTRIBUTE.toolStatus]: toolSpanStatus(result) });
+        return result;
+      },
+    );
+
+  const startedAt = Date.now();
+  const result = await withToolTimeout(
+    runToolCallOnce({
+      idempotencyKey: toolInvocationIdempotencyKey({
+        requestKey: requestId,
+        step: 0,
+        toolCallId: call.id,
+        userId,
+        organizationId,
+      }),
+      retrySafety: resolveToolRetrySafety(toolName),
+      toolName,
+      execute,
+    }),
+    toolName,
+    TOOL_CALL_DEADLINE_MS,
+  );
+  const elapsedMs = Math.max(0, Date.now() - startedAt);
+
+  const { executor, baseline } = sandbox;
+  const { pngResults, inputRequired, generatedFiles, ...settled } = result;
+  const outputs = await persistSandboxOutputs({
+    sandbox: executor && baseline ? { executor, baseline } : null,
+    pngResults: pngResults ?? [],
+    userId,
+    organizationId,
+    model,
+    conversationId,
+  });
+  if (executor) {
+    try {
+      await releaseSandbox(executor, sessionScope);
+    } catch (err) {
+      logger.warn(
+        { err, conversationId },
+        '[tool-loop] sandbox was not released after a tool call',
+      );
+    }
+  }
+
+  const isError = inputRequired !== undefined || result.isError;
+  const rawContent = inputRequired ? inputRequiredFailSafeMessage(toolName) : result.content;
+  const content = await applyToolResultSecretPolicy(
+    userId,
+    toolName,
+    outputs.failedCount > 0
+      ? `${rawContent}\n\n${generatedFilesFailedNote(outputs.failedCount)}`
+      : rawContent,
+  );
+  await audit(isError ? 'failed' : 'completed', elapsedMs);
+  const files = [...(generatedFiles ?? []), ...outputs.files];
+  return {
+    ...settled,
+    content,
+    isError,
+    ...(files.length > 0 ? { generatedFiles: files } : {}),
+    untrustedContent: !isError && toolAcceptsUntrustedContent(toolName),
+  };
+}
+
 export async function* runToolLoop(
   processed: ProcessedRequest,
   options: ToolLoopOptions = {},
@@ -2703,20 +2960,15 @@ export async function* runToolLoop(
   const startedAt = now();
   const approvalMode = options.approvalMode ?? 'manual';
   const unattended = options.unattended === true;
+  const unattendedEscalationPauses =
+    unattended &&
+    options.unattendedEscalationPauses === true &&
+    options.onApprovalCheckpoint !== undefined;
   const skillInstallOverridesUserId = options.userId;
   let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
   const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
     if (!skillInstallOverridesUserId) return Promise.resolve(EMPTY_SKILL_INSTALL_OVERRIDES);
-    skillInstallOverridesPromise ??= getSkillInstallOverrides(
-      getNeonDb(),
-      skillInstallOverridesUserId,
-    ).catch((error: unknown) => {
-      logger.warn(
-        { error, userId: skillInstallOverridesUserId },
-        'Skill install overrides read failed; assuming none',
-      );
-      return EMPTY_SKILL_INSTALL_OVERRIDES;
-    });
+    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
     return skillInstallOverridesPromise;
   };
   const encoder = new TextEncoder();
@@ -2751,7 +3003,7 @@ export async function* runToolLoop(
   // Attended runs opt connector calls into MCP `input_required`. An unattended
   // run (a scheduled task, no human to answer) must never invite a pause it can
   // only fail-safe out of, so it never sets this.
-  const allowConnectorInputRequired = !unattended && isMcpInputPauseEnabled();
+  const allowConnectorInputRequired = !unattended;
   // Set by runAndStreamToolCalls when a connector call paused for input and the
   // loop suspended; every caller returns after seeing it.
   let suspendedForInput = false;
@@ -2828,27 +3080,16 @@ export async function* runToolLoop(
     toolName: string,
     status: ToolCallAuditStatus,
     durationMs?: number,
-  ): Promise<void> => {
-    const category = canonicalToolCategory(toolName, mcpTools);
-    recordToolOutcome({
-      category,
-      status,
-      durationMs,
-      remote: isDeviceStepTool(toolName),
-    });
-    if (isBrowserCommand(toolName)) {
-      recordBrowserTask({ status, surface: processed.chatSurface, errorType: category });
-    }
-    return recordToolCallAudit({
+  ): Promise<void> =>
+    auditToolOutcome({
       userId: options.userId,
       organizationId: processed.organizationId,
       surface: processed.chatSurface,
       toolName,
-      category,
+      category: canonicalToolCategory(toolName, mcpTools),
       status,
       ...(durationMs === undefined ? {} : { durationMs }),
     });
-  };
   // The connector schemas are added per step, not here: the directory tool can
   // load a deferred one mid-turn and the next step has to carry it.
   const llmRequest = { ...processed.llmRequest, stream: true };
@@ -2857,7 +3098,9 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const connectorPermissions = processed.toolLockdown
+    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
+    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   const privateContextPresent = hasPrivateContext(processed, messages);
@@ -2882,6 +3125,7 @@ export async function* runToolLoop(
         approvalMode,
         toolApprovalPolicy,
         unattended,
+        unattendedEscalationPauses,
         deviceHostPresent: deviceHost !== undefined,
         untrustedContentInContext,
         sensitiveSourceAvailable,
@@ -3410,11 +3654,17 @@ export async function* runToolLoop(
   // race past it and each attempt its own sandbox. One attempt per turn, and
   // every caller after the first sees the answer the first one got.
   let e2bResolution: Promise<E2BExecutorResolution> | null = null;
+  const continuesTurn =
+    options.resume !== undefined ||
+    options.resumedFromPause !== undefined ||
+    options.invocationContinuation === true;
   async function stageTurnAttachmentsForSandbox(executor: E2BExecutor): Promise<void> {
     const attachments = processed.turnAttachments ?? [];
     if (attachments.length === 0) return;
     try {
-      const outcome = await stageTurnAttachments(executor, attachments);
+      const outcome = await stageTurnAttachments(executor, attachments, {
+        keepExisting: continuesTurn,
+      });
       if (outcome.failed.length > 0) {
         logger.warn(
           { failed: outcome.failed, staged: outcome.staged.length, conversationId },
@@ -3470,47 +3720,19 @@ export async function* runToolLoop(
       }
     }
 
-    if (executionToolRan && e2bExecutor && e2bBaseline) {
-      try {
-        const harvest = await harvestGeneratedFiles({
-          executor: e2bExecutor,
-          baseline: e2bBaseline,
-          userId: options.userId,
-          organizationId: processed.organizationId ?? null,
-          model: responseModel,
-          ...(conversationId ? { conversationId } : {}),
-        });
-        files.push(...harvest.files);
-        failedCount += harvest.failedCount;
-      } catch (err) {
-        logger.warn({ err }, '[tool-loop] generated-file harvest failed; no file card emitted');
-        failedCount += 1;
-      }
-    }
-
-    for (const [index, png] of turnPngResults.entries()) {
-      try {
-        const outcome = await persistGeneratedFileBytes({
-          userId: options.userId,
-          organizationId: processed.organizationId ?? null,
-          data: Buffer.from(png, 'base64'),
-          mimeType: 'image/png',
-          filename: turnPngResults.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
-          provider: 'e2b',
-          origin: 'e2b-execution-result',
-          model: responseModel,
-          ...(conversationId ? { conversationId } : {}),
-        });
-        if (outcome.ok) {
-          files.push(outcome.file);
-        } else {
-          failedCount += 1;
-        }
-      } catch (err) {
-        logger.warn({ err }, '[tool-loop] chart png persist failed; skipping');
-        failedCount += 1;
-      }
-    }
+    const sandboxOutputs = await persistSandboxOutputs({
+      sandbox:
+        executionToolRan && e2bExecutor && e2bBaseline
+          ? { executor: e2bExecutor, baseline: e2bBaseline }
+          : null,
+      pngResults: turnPngResults,
+      userId: options.userId,
+      organizationId: processed.organizationId ?? null,
+      model: responseModel,
+      conversationId,
+    });
+    files.push(...sandboxOutputs.files);
+    failedCount += sandboxOutputs.failedCount;
 
     if (files.length > 0) {
       lines.push(generatedFilesEvent(files, responseModel));
@@ -3528,13 +3750,12 @@ export async function* runToolLoop(
       }
     }
     if (failedCount > 0) {
-      const plural = failedCount === 1 ? 'file' : 'files';
       lines.push(
         sseData({
           choices: [
             {
               delta: {
-                content: `\n\n*Note: ${failedCount} generated ${plural} could not be retrieved from the execution sandbox and ${failedCount === 1 ? 'is' : 'are'} not attached.*`,
+                content: `\n\n*${generatedFilesFailedNote(failedCount)}*`,
               },
               index: 0,
             },
@@ -5795,17 +6016,7 @@ export async function* runToolLoop(
     yield* flushTerminal('error', 'partial');
   } finally {
     await recordGroundingSpend(false);
-    if (e2bExecutor) {
-      if (e2bSessionScope) {
-        if (e2bExecutor.pause) {
-          await e2bExecutor.pause();
-        } else {
-          await pauseE2BSession(e2bSessionScope);
-        }
-      } else {
-        await e2bExecutor.dispose();
-      }
-    }
+    if (e2bExecutor) await releaseSandbox(e2bExecutor, e2bSessionScope);
   }
 }
 

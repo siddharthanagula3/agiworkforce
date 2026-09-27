@@ -82,6 +82,7 @@ import {
   type ManagedCloudAgentRunHandle,
   type ManagedCloudAgentRunReference,
   type ManagedCloudSaveMessageOptions,
+  type ToolInputResumeRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
   applyAgentActivityEvent,
@@ -280,6 +281,11 @@ export interface UseChatStreamReturn {
     decision: ToolApprovalDecision,
     guidance?: string,
   ) => Promise<void>;
+  resolveToolInput: (
+    assistantMessageId: string,
+    toolCallId: string,
+    inputResponses: Record<string, unknown>,
+  ) => Promise<boolean>;
   isStreaming: boolean;
 }
 
@@ -647,8 +653,91 @@ interface PendingTurn {
 
 const pendingTurns = new Map<string, PendingTurn>();
 
+interface PendingInputCall {
+  toolCallId: string;
+  name: string;
+  connectorId: string;
+  inputRequests: Record<string, unknown>;
+}
+
+interface PendingInputTurn {
+  runId: string;
+  model: string;
+  conversationId: string;
+  isTemporaryConversation: boolean;
+  calls: PendingInputCall[];
+  responses: Map<string, Record<string, unknown>>;
+  resolving: boolean;
+}
+
+const pendingInputTurns = new Map<string, PendingInputTurn>();
+
+const TOOL_INPUT_RESUME_PATH = '/api/llm/v1/chat/completions/resume-input';
+
 export function __resetPendingTurnsForTests(): void {
   pendingTurns.clear();
+  pendingInputTurns.clear();
+}
+
+export function isInputTurnLive(assistantMessageId: string): boolean {
+  return (
+    pendingInputTurns.has(assistantMessageId) ||
+    restorePendingInputTurn(assistantMessageId) !== null
+  );
+}
+
+function readPendingInputCalls(metadata: MessageMetadata | undefined): PendingInputCall[] {
+  const calls = new Map<string, PendingInputCall>();
+  for (const entry of metadata?.agentActivity?.entries ?? []) {
+    if (entry.kind !== 'tool' || !entry.inputRequest) continue;
+    const { connectorId, inputRequests } = entry.inputRequest;
+    if (!inputRequests || typeof inputRequests !== 'object' || Array.isArray(inputRequests)) {
+      continue;
+    }
+    calls.set(entry.toolCallId, {
+      toolCallId: entry.toolCallId,
+      name: entry.name,
+      connectorId,
+      inputRequests: inputRequests as Record<string, unknown>,
+    });
+  }
+  for (const tool of metadata?.tools ?? []) {
+    if (!tool.toolCallId) continue;
+    if (tool.status !== 'awaiting_input' || !tool.inputRequests) {
+      calls.delete(tool.toolCallId);
+      continue;
+    }
+    calls.set(tool.toolCallId, {
+      toolCallId: tool.toolCallId,
+      name: tool.name,
+      connectorId: tool.connectorId ?? '',
+      inputRequests: tool.inputRequests,
+    });
+  }
+  return [...calls.values()];
+}
+
+function restorePendingInputTurn(assistantMessageId: string): PendingInputTurn | null {
+  const store = useChatStore.getState();
+  const message = store.messages.find((candidate) => candidate.id === assistantMessageId);
+  const conversationId = store.activeConversationId;
+  const runId = message?.metadata?.cloudAgentRun?.runId;
+  const calls = readPendingInputCalls(message?.metadata);
+  if (!message || !runId || !conversationId || calls.length === 0) return null;
+
+  const turn: PendingInputTurn = {
+    runId,
+    model: message.model ?? message.metadata?.model ?? 'auto',
+    conversationId,
+    isTemporaryConversation:
+      store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary ??
+      false,
+    calls,
+    responses: new Map(),
+    resolving: false,
+  };
+  pendingInputTurns.set(assistantMessageId, turn);
+  return turn;
 }
 
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
@@ -802,6 +891,13 @@ const ToolApprovalContext = createContext<ResolveToolApprovalFn | null>(null);
 export const ToolApprovalProvider = ToolApprovalContext.Provider;
 export function useToolApprovalResolver(): ResolveToolApprovalFn | null {
   return useContext(ToolApprovalContext);
+}
+
+type ResolveToolInputFn = UseChatStreamReturn['resolveToolInput'];
+const ToolInputContext = createContext<ResolveToolInputFn | null>(null);
+export const ToolInputProvider = ToolInputContext.Provider;
+export function useToolInputResolver(): ResolveToolInputFn | null {
+  return useContext(ToolInputContext);
 }
 
 type ResumeInteractiveCardTurnFn = UseChatStreamReturn['resumeInteractiveCardTurn'];
@@ -990,6 +1086,7 @@ interface StreamOutcome {
   suspended: boolean;
   pendingCalls: PendingApprovalCall[];
   pendingDeviceSteps: PendingDeviceStep[];
+  pendingInputs: PendingInputCall[];
   runHandle: ManagedCloudAgentRunHandle | null;
 }
 
@@ -1163,6 +1260,30 @@ function beginEmptyTurnRetry(
     },
     conversationId,
   );
+}
+
+function readToolInputRequest(raw: Record<string, unknown>): PendingInputCall | null {
+  const toolCallId = raw['tool_call_id'];
+  const name = raw['name'];
+  const connectorId = raw['connector_id'];
+  const inputRequests = raw['input_requests'];
+  if (
+    typeof toolCallId !== 'string' ||
+    !toolCallId ||
+    typeof name !== 'string' ||
+    !name ||
+    !inputRequests ||
+    typeof inputRequests !== 'object' ||
+    Array.isArray(inputRequests)
+  ) {
+    return null;
+  }
+  return {
+    toolCallId,
+    name,
+    connectorId: typeof connectorId === 'string' ? connectorId : '',
+    inputRequests: inputRequests as Record<string, unknown>,
+  };
 }
 
 function readDeviceStepRequest(raw: Record<string, unknown>): PendingDeviceStep | null {
@@ -1410,6 +1531,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
   const toolStartTimes = new Map<string, number>();
   const pendingCalls: PendingApprovalCall[] = [];
   const pendingDeviceSteps: PendingDeviceStep[] = [];
+  const pendingInputs: PendingInputCall[] = [];
   let suspended = false;
   const liveMessageMetadata = findConversationMessage(
     conversationId,
@@ -1910,6 +2032,33 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     publishToolTimeline();
   };
 
+  const recordInputRequest = (request: PendingInputCall) => {
+    suspended = true;
+    const known = pendingInputs.findIndex((call) => call.toolCallId === request.toolCallId);
+    if (known >= 0) pendingInputs[known] = request;
+    else pendingInputs.push(request);
+
+    let index = toolTimeline.findIndex((tool) => tool.toolCallId === request.toolCallId);
+    if (index < 0) {
+      const running = findLastToolIndex(request.name, ['pending', 'running']);
+      const candidate = running >= 0 ? toolTimeline[running] : undefined;
+      if (candidate && !candidate.toolCallId) index = running;
+    }
+    const paused = {
+      status: 'awaiting_input' as const,
+      toolCallId: request.toolCallId,
+      ...(request.connectorId ? { connectorId: request.connectorId } : {}),
+      inputRequests: request.inputRequests,
+    };
+    const existing = index >= 0 ? toolTimeline[index] : undefined;
+    if (existing) {
+      Object.assign(existing, paused);
+    } else {
+      toolTimeline.push({ id: createToolId(request.name), name: request.name, ...paused });
+    }
+    publishToolTimeline();
+  };
+
   const buildAssistantMetadata = (
     generatedVideoUrl: string | null,
   ): MessageMetadata | undefined => {
@@ -2305,7 +2454,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+    return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
   const replayDurableRun = async (): Promise<StreamOutcome> => {
@@ -2360,6 +2509,21 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                   : envelope.event.reason === 'error'
                     ? 'error'
                     : 'stop';
+          }
+          if (envelope.event.type === 'input-requested') {
+            const { toolCallId, connectorId, toolName, inputRequests } = envelope.event;
+            if (
+              inputRequests &&
+              typeof inputRequests === 'object' &&
+              !Array.isArray(inputRequests)
+            ) {
+              recordInputRequest({
+                toolCallId,
+                name: `mcp__${connectorId}__${toolName}`,
+                connectorId,
+                inputRequests: inputRequests as Record<string, unknown>,
+              });
+            }
           }
           sawRealAgentEvent = true;
           applySourceListEvent(envelope.event);
@@ -2416,7 +2580,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     persistAssistant(fullAssistantContent);
     stopStreaming(conversationId);
     setLoading(false, conversationId);
-    return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+    return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
   };
 
   const collectEventPayloads = (rawEvent: string): string[] => {
@@ -2490,7 +2654,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           persistAssistant(fullAssistantContent);
           stopStreaming(conversationId);
           setLoading(false, conversationId);
-          return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+          return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
         }
 
         try {
@@ -2745,6 +2909,12 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
               });
               publishToolTimeline();
             }
+          }
+
+          const inputReq = parsed.choices?.[0]?.delta?.x_tool_input_request;
+          if (inputReq && typeof inputReq === 'object') {
+            const request = readToolInputRequest(inputReq as Record<string, unknown>);
+            if (request) recordInputRequest(request);
           }
 
           const deviceStepReq = parsed.choices?.[0]?.delta?.x_device_step_request;
@@ -3022,7 +3192,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         useChatStore.getState().setError(errorMessage, conversationId);
         stopStreaming(conversationId);
         setLoading(false, conversationId);
-        return { suspended, pendingCalls, pendingDeviceSteps, runHandle };
+        return { suspended, pendingCalls, pendingDeviceSteps, pendingInputs, runHandle };
       }
     }
     flushContentBuffer(true);
@@ -3162,6 +3332,7 @@ export function useChatStream(): UseChatStreamReturn {
   }, [activeConversationId]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef);
+  const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -3663,6 +3834,22 @@ export function useChatStream(): UseChatStreamReturn {
             break;
           }
 
+          if (settled.suspended && settled.pendingInputs.length > 0) {
+            if (!settled.runHandle) {
+              throw new Error('The managed agent did not return a durable run handle.');
+            }
+            pendingInputTurns.set(assistantMessageId, {
+              runId: settled.runHandle.runId,
+              model,
+              conversationId,
+              isTemporaryConversation,
+              calls: settled.pendingInputs,
+              responses: new Map(),
+              resolving: false,
+            });
+            break;
+          }
+
           // ChatGPT parity: a turn that ends with no content, no tool call and
           // no error gets one silent retry (same request, same conversation, no
           // duplicate user message) before the reader ever sees the "model
@@ -4034,6 +4221,7 @@ export function useChatStream(): UseChatStreamReturn {
     continueGeneration,
     resumeInteractiveCardTurn,
     resolveToolApproval,
+    resolveToolInput,
     isStreaming,
   };
 }
@@ -4289,6 +4477,20 @@ export function useResolveToolApproval(
         } else {
           pendingTurns.delete(assistantMessageId);
         }
+        if (settled.suspended && settled.pendingInputs.length > 0) {
+          if (!settled.runHandle) {
+            throw new Error('The managed agent continuation lost its durable run handle.');
+          }
+          pendingInputTurns.set(assistantMessageId, {
+            runId: settled.runHandle.runId,
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            calls: settled.pendingInputs,
+            responses: new Map(),
+            resolving: false,
+          });
+        }
       } catch (error) {
         if (error instanceof ChatApiError) {
           await restoreApprovalControls();
@@ -4316,6 +4518,254 @@ export function useResolveToolApproval(
       }
     },
     [abortControllers, getToken],
+  );
+}
+
+const INACTIVE_INPUT_STATUSES = new Set([404, 410]);
+
+function useResolveToolInput(
+  sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
+  resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
+): UseChatStreamReturn['resolveToolInput'] {
+  const { getToken } = useSession();
+  const abortControllers = sharedAbortControllers;
+
+  return useCallback(
+    async function resolveToolInput(
+      assistantMessageId: string,
+      toolCallId: string,
+      inputResponses: Record<string, unknown>,
+    ): Promise<boolean> {
+      const store = useChatStore.getState();
+      const {
+        startStreaming,
+        stopStreaming,
+        setLoading,
+        setError,
+        updateMessage,
+        updateToolEntry,
+      } = store;
+
+      const turn =
+        pendingInputTurns.get(assistantMessageId) ?? restorePendingInputTurn(assistantMessageId);
+      if (!turn || turn.resolving) return false;
+      if (!turn.calls.some((call) => call.toolCallId === toolCallId)) return false;
+
+      turn.responses.set(toolCallId, inputResponses);
+      if (turn.responses.size < turn.calls.length) return true;
+      turn.resolving = true;
+
+      for (const call of turn.calls) {
+        updateToolEntry(
+          assistantMessageId,
+          call.toolCallId,
+          { status: 'running', inputRequests: undefined },
+          turn.conversationId,
+        );
+      }
+
+      const getAuthToken: AuthTokenProvider = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+
+      const restoreInputControls = () => {
+        turn.resolving = false;
+        turn.responses.clear();
+        for (const call of turn.calls) {
+          updateToolEntry(
+            assistantMessageId,
+            call.toolCallId,
+            { status: 'awaiting_input', inputRequests: call.inputRequests },
+            turn.conversationId,
+          );
+        }
+        updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
+      };
+
+      const closeInactiveTurn = async (reason: string) => {
+        pendingInputTurns.delete(assistantMessageId);
+        for (const call of turn.calls) {
+          updateToolEntry(
+            assistantMessageId,
+            call.toolCallId,
+            { status: 'failed', error: reason, inputRequests: undefined },
+            turn.conversationId,
+          );
+        }
+        updateMessage(assistantMessageId, { isStreaming: false }, turn.conversationId);
+        const message = findConversationMessage(turn.conversationId, assistantMessageId);
+        if (turn.isTemporaryConversation || !message) return;
+        await saveMessageToDb(
+          turn.conversationId,
+          {
+            id: assistantMessageId,
+            role: message.role,
+            content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model: message.model ?? turn.model,
+            ...(message.metadata ? { metadata: message.metadata } : {}),
+          },
+          getAuthToken,
+        ).catch((error) => notifyPersistenceFailure('assistant', error));
+      };
+
+      let authToken: string;
+      try {
+        authToken = await getAuthToken();
+      } catch {
+        restoreInputControls();
+        setError('Your session has expired. Please sign in again.', turn.conversationId);
+        return false;
+      }
+
+      const previousController = abortControllers.current.get(turn.conversationId);
+      if (previousController) {
+        abortControllers.current.delete(turn.conversationId);
+        previousController.abort();
+      }
+      const abortController = new AbortController();
+      abortControllers.current.set(turn.conversationId, abortController);
+
+      const assistantMessage = findConversationMessage(turn.conversationId, assistantMessageId);
+      const seedTools = assistantMessage?.metadata?.tools;
+      const resumeRequest: ToolInputResumeRequest = {
+        run_id: turn.runId,
+        tool_inputs: turn.calls.map((call) => ({
+          tool_call_id: call.toolCallId,
+          input_responses: turn.responses.get(call.toolCallId) ?? {},
+        })),
+      };
+
+      startStreaming(assistantMessageId, turn.conversationId);
+      setLoading(true, turn.conversationId);
+      setError(null, turn.conversationId);
+
+      try {
+        const hostContext = await readChatHostContext();
+        const headers = await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+          'X-AGI-Surface': hostContext.surface,
+          'Idempotency-Key': createManagedChatIdempotencyKey({
+            surface: hostContext.surface,
+            purpose: 'tool-resume',
+            operationId: crypto.randomUUID(),
+          }),
+          ...hostContext.headers,
+        });
+        const response = await fetch(TOOL_INPUT_RESUME_PATH, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(resumeRequest),
+          signal: abortController.signal,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const { message, code, recovery, retryAt } = readChatApiErrorPayload(
+            errorData,
+            `Resume failed: ${response.status}`,
+          );
+          throw new ChatApiError(message, {
+            code,
+            status: response.status,
+            resetAt: readErrorResetAt(errorData, response),
+            ...(recovery ? { recovery } : {}),
+            ...(retryAt ? { retryAt } : {}),
+          });
+        }
+
+        let settled = await consumeAssistantStream({
+          response,
+          assistantMessageId,
+          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
+          conversationId: turn.conversationId,
+          isTemporaryConversation: turn.isTemporaryConversation,
+          getAuthToken,
+          seedContent: assistantMessage?.content ?? '',
+          ...(seedTools ? { seedTools: seedTools.map((tool) => ({ ...tool })) } : {}),
+        });
+
+        if (settled.suspended && settled.pendingDeviceSteps.length > 0 && settled.runHandle) {
+          settled = await driveDeviceSteps(
+            {
+              assistantMessageId,
+              conversationId: turn.conversationId,
+              isTemporaryConversation: turn.isTemporaryConversation,
+              model: turn.model,
+              runId: settled.runHandle.runId,
+              getAuthToken,
+              signal: abortController.signal,
+            },
+            settled.pendingDeviceSteps,
+          );
+        }
+
+        const pendingCalls = settled.suspended ? settled.pendingCalls : [];
+        const pendingInputs = settled.suspended ? settled.pendingInputs : [];
+        const runId = settled.runHandle?.runId;
+        if (!runId && (pendingCalls.length > 0 || pendingInputs.length > 0)) {
+          throw new Error('The managed agent continuation lost its durable run handle.');
+        }
+        if (runId && pendingCalls.length > 0) {
+          pendingTurns.set(assistantMessageId, {
+            runId,
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            calls: pendingCalls,
+            decisions: new Map(),
+            resolving: false,
+          });
+          autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
+        }
+        if (runId && pendingInputs.length > 0) {
+          pendingInputTurns.set(assistantMessageId, {
+            runId,
+            model: turn.model,
+            conversationId: turn.conversationId,
+            isTemporaryConversation: turn.isTemporaryConversation,
+            calls: pendingInputs,
+            responses: new Map(),
+            resolving: false,
+          });
+        } else {
+          pendingInputTurns.delete(assistantMessageId);
+        }
+        return true;
+      } catch (error) {
+        if (error instanceof ChatApiError) {
+          if (error.status !== undefined && INACTIVE_INPUT_STATUSES.has(error.status)) {
+            await closeInactiveTurn(getVisibleErrorMessage(error));
+          } else {
+            restoreInputControls();
+          }
+          setError(getVisibleErrorMessage(error), turn.conversationId);
+          stopStreaming(turn.conversationId);
+          setLoading(false, turn.conversationId);
+          return false;
+        }
+        pendingInputTurns.delete(assistantMessageId);
+        await handleStreamError(error, {
+          assistantMessageId,
+          model: turn.model,
+          conversationId: turn.conversationId,
+          isTemporaryConversation: turn.isTemporaryConversation,
+          getAuthToken,
+          setError,
+          stopStreaming,
+          setLoading,
+          updateMessage,
+        });
+        return false;
+      } finally {
+        if (abortControllers.current.get(turn.conversationId) === abortController) {
+          abortControllers.current.delete(turn.conversationId);
+        }
+      }
+    },
+    [abortControllers, getToken, resolveToolApproval],
   );
 }
 

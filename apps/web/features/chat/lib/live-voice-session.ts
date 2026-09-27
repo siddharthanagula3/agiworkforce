@@ -1,3 +1,13 @@
+import {
+  LiveVoiceToolBridge,
+  LiveVoiceToolCallResponseSchema,
+  liveVoiceFunctionCallOf,
+  liveVoiceToolCallPath,
+  type LiveVoicePendingApproval,
+  type LiveVoiceToolCallRequest,
+  type LiveVoiceToolCallResponse,
+  type LiveVoiceToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
@@ -97,6 +107,7 @@ export interface LiveVoiceSessionCallbacks {
   onToolActivity?: (activities: readonly LiveVoiceToolActivity[]) => void;
   /** A spoken claim of a completed action with no tool result behind it. */
   onUnverifiedClaim?: (turn: LiveTranscriptTurn) => void;
+  onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
   onClosed: (closed: LiveSessionClosed) => void;
@@ -247,6 +258,7 @@ export class LiveVoiceSession {
   private readonly delegationTimers = new Map<string, number>();
   private readonly completedTools: string[] = [];
   private readonly toolDescriptors = new Map<string, LiveVoiceToolDescriptor>();
+  private readonly toolBridge: LiveVoiceToolBridge;
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
   private lastDeliveredTurnId: string | null = null;
@@ -268,6 +280,16 @@ export class LiveVoiceSession {
     this.settlement = created.settlement;
     this.callbacks = callbacks;
     for (const tool of created.tools ?? []) this.toolDescriptors.set(tool.id, tool);
+    this.toolBridge = new LiveVoiceToolBridge({
+      callTool: (request) => this.callTool(request),
+      send: (event) => this.send(event),
+      onApprovalsChanged: (approvals) => {
+        if (approvals.length > 0) this.holdDelegationTimers();
+        this.callbacks.onToolApprovals?.(approvals);
+        this.publishToolActivity();
+      },
+      onToolCompleted: (name) => this.completedTools.push(name),
+    });
   }
 
   get outputElement(): HTMLAudioElement {
@@ -389,6 +411,20 @@ export class LiveVoiceSession {
     }).catch(() => undefined);
   }
 
+  decideToolApproval(callId: string, decision: LiveVoiceToolDecision): Promise<void> {
+    return this.toolBridge.decide(callId, decision);
+  }
+
+  private async callTool(request: LiveVoiceToolCallRequest): Promise<LiveVoiceToolCallResponse> {
+    const response = await fetch(liveVoiceToolCallPath(this.sessionId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: await getCsrfToken() },
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw await readLiveSessionError(response);
+    return LiveVoiceToolCallResponseSchema.parse(await response.json());
+  }
+
   setMuted(muted: boolean): void {
     this.microphone.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
@@ -432,6 +468,7 @@ export class LiveVoiceSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.toolBridge.dispose();
     this.stopTimers();
     this.microphone.getTracks().forEach((track) => track.stop());
     this.channel.close();
@@ -569,10 +606,16 @@ export class LiveVoiceSession {
       case 'response.event': {
         const nested = parsed['event'] as { type?: string; item?: { type?: string } } | undefined;
         const delegationId = parsed['delegation_id'];
-        const toolId = nested?.item?.type;
+        const toolId = liveVoiceFunctionCallOf(nested)?.name ?? nested?.item?.type;
         if (typeof delegationId === 'string' && toolId) this.nameDelegation(delegationId, toolId);
+        this.toolBridge.observe(nested);
         if (nested?.type && DELEGATION_TERMINAL_EVENTS.has(nested.type)) {
           const succeeded = nested.type === 'response.completed';
+          if (succeeded && this.toolBridge.busy) {
+            this.publishToolActivity();
+            return;
+          }
+          if (!succeeded) this.toolBridge.cancel();
           if (typeof delegationId === 'string') this.endDelegation(delegationId, succeeded);
           else
             for (const id of [...this.pendingDelegations.keys()]) this.endDelegation(id, succeeded);
@@ -626,6 +669,15 @@ export class LiveVoiceSession {
     this.delegationTimers.set(delegationId, timer);
   }
 
+  private holdDelegationTimers(): void {
+    for (const [delegationId, timer] of this.delegationTimers) {
+      window.clearTimeout(timer);
+      this.delegationTimers.delete(delegationId);
+      const activity = this.pendingDelegations.get(delegationId);
+      if (activity) this.pendingDelegations.set(delegationId, { ...activity, state: 'running' });
+    }
+  }
+
   private nameDelegation(delegationId: string, toolId: string): void {
     const activity = this.pendingDelegations.get(delegationId);
     if (!activity || activity.toolId !== 'unknown') return;
@@ -658,7 +710,7 @@ export class LiveVoiceSession {
   }
 
   private publishToolActivity(): void {
-    this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+    this.callbacks.onBackendBusy(this.pendingDelegations.size > 0 || this.toolBridge.busy);
     this.callbacks.onToolActivity?.([...this.pendingDelegations.values()]);
   }
 
@@ -671,6 +723,7 @@ export class LiveVoiceSession {
       this.send({ type: 'session.delegation.cancel', delegation_id: delegationId });
       this.endDelegation(delegationId, false);
     }
+    this.toolBridge.cancel();
     this.publishToolActivity();
   }
 

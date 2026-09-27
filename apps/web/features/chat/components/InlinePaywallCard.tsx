@@ -56,7 +56,7 @@ import {
 
 export { normalizePaywallFeature };
 import { cn } from '@shared/lib/utils';
-import { formatCatalogPrice, formatPlanCreditWindows } from '@features/billing/lib/plan-display';
+import { formatCatalogPrice, planUsageComparisonLabel } from '@features/billing/lib/plan-display';
 import {
   formatFreeCapacityCountdown,
   freeCapacityRetryRemainingMs,
@@ -402,17 +402,17 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
     showUpgradeCta &&
     !freeCapacity &&
     (effectiveAction === 'upgrade' || effectiveAction === 'subscribe');
-  const requiredPlanCredits = sellsPlan ? formatPlanCreditWindows(requiredTier) : null;
+  const requiredPlanUsage = sellsPlan ? planUsageComparisonLabel(requiredTier) : null;
 
   return (
     <Card
       as="section"
       aria-labelledby="paywall-card-title"
-      className="my-2 border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10"
+      className="my-2 border-warning-fill/40 bg-warning-fill/5"
     >
       <CardHeader className="pb-3">
         <div className="flex items-center">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-warning-fill/10 text-warning-text">
             <FeatureIcon feature={feature} />
           </span>
           <CardTitle
@@ -435,10 +435,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       <CardContent className="pb-0">
         {/* rendering-conditional-render: ternary, not && */}
         {reason !== EMPTY_REASON ? <p className="text-sm text-muted-foreground">{reason}</p> : null}
-        {requiredPlanCredits ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            {getBillingPlanPricing(requiredTier).label} includes {requiredPlanCredits}.
-          </p>
+        {requiredPlanUsage ? (
+          <p className="mt-2 text-sm text-muted-foreground">{`${requiredPlanUsage}.`}</p>
         ) : null}
         {/* GOV-20: the two other ways out, shown only when they actually apply. */}
         {suggestStandardModel && alternativeModel && onSwitchModel ? (

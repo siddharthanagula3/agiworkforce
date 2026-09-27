@@ -767,16 +767,14 @@ enum Command {
     /// Compare this build against the newest published CLI release.
     ///
     /// Reads the release feed by default and downloads nothing. `--install`
-    /// runs the documented install command after printing it and asking.
-    ///
-    /// Installing needs a signed release: the install routes refuse an archive
-    /// without its signed checksum manifest, and no published CLI release
-    /// carries one yet, so an install can fail on provenance.
+    /// downloads the newest release for this platform, checks its signed
+    /// checksum manifest against the release key built into this agi and its
+    /// SHA-256, and replaces the binary this agi runs from, after asking.
     Update {
         /// Exit non-zero when a newer release is published, for scripts.
         #[arg(long)]
         check: bool,
-        /// Run the documented install command when a newer release exists.
+        /// Install the newer release when one exists.
         #[arg(long)]
         install: bool,
         /// Skip the confirmation prompt. Only meaningful with `--install`.
@@ -826,6 +824,9 @@ enum Command {
         /// Accept `?token=` for browser clients. Prefer headers because URLs are logged.
         #[arg(long)]
         allow_query_token: bool,
+        /// Run without saved memory: sessions neither read memories nor save new ones.
+        #[arg(long)]
+        no_memory: bool,
     },
     /// Continue previous session, from this device or from your account.
     Resume {
@@ -1159,6 +1160,29 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Approve the step a paused run is waiting on, and let the run continue.
+    Approve {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// The run to approve. Defaults to the schedule's run that is waiting.
+        #[arg(long)]
+        run: Option<String>,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Deny the step a paused run is waiting on; the run continues without it.
+    Deny {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// The run to deny. Defaults to the schedule's run that is waiting.
+        #[arg(long)]
+        run: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -1237,6 +1261,15 @@ enum ApprovalsSubcommand {
     },
     /// Reset all approval rules.
     Reset,
+    /// Show recent approval decisions, newest first.
+    History {
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Show or save the permission mode new sessions start in.
+    Mode {
+        mode: Option<cli_options::PermissionMode>,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -2218,17 +2251,98 @@ async fn handle_schedules_command(
             match client.runs(&resolved, *limit, *offset).await {
                 Ok(rows) => render(
                     serde_json::to_value(&rows)?,
-                    schedules::render_runs(&rows),
+                    schedules::render_runs(&resolved, &rows),
                     *json,
                 ),
                 Err(error) => Err(anyhow::anyhow!("{error}")),
             }
         }
+        SchedulesSubcommand::Approve { id, run, yes, json } => resolve_schedule_approval(
+            &client,
+            id,
+            run.as_deref(),
+            schedules::ApprovalDecision::Approve,
+            *yes,
+        )
+        .await
+        .and_then(|resolved| {
+            render(
+                serde_json::to_value(&resolved.1)?,
+                schedules::render_runs(&resolved.0, std::slice::from_ref(&resolved.1)),
+                *json,
+            )
+        }),
+        SchedulesSubcommand::Deny { id, run, json } => resolve_schedule_approval(
+            &client,
+            id,
+            run.as_deref(),
+            schedules::ApprovalDecision::Deny,
+            true,
+        )
+        .await
+        .and_then(|resolved| {
+            render(
+                serde_json::to_value(&resolved.1)?,
+                schedules::render_runs(&resolved.0, std::slice::from_ref(&resolved.1)),
+                *json,
+            )
+        }),
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+async fn resolve_schedule_approval(
+    client: &schedules::SchedulesClient,
+    id: &str,
+    run_id: Option<&str>,
+    decision: schedules::ApprovalDecision,
+    confirmed: bool,
+) -> Result<(String, schedules::ScheduleRun)> {
+    let schedule_id = client
+        .resolve_id(id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let waiting = client
+        .awaiting_run(&schedule_id, run_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    if decision == schedules::ApprovalDecision::Approve && !confirmed {
+        if let Some(pending) = waiting.pending_approval.as_ref() {
+            eprintln!(
+                "{}",
+                schedules::render_pending_approval(&schedule_id, pending)
+            );
+        }
+        if !confirm_approval("Approve this step and let the run continue?", confirmed) {
+            anyhow::bail!("Nothing was approved; the run is still waiting");
+        }
+    }
+    let resolved = client
+        .resolve_approval(&schedule_id, &waiting, decision)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok((schedule_id, resolved))
+}
+
+fn confirm_approval(prompt: &str, yes: bool) -> bool {
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => true,
+        DestructiveDecision::Refuse => {
+            output::print_warn(
+                "Nothing was approved: this run cannot ask for confirmation. Re-run with --yes to \
+                 approve non-interactively.",
+            );
+            false
+        }
+        DestructiveDecision::Prompt => dialoguer::Confirm::new()
+            .with_prompt(prompt)
+            .default(false)
+            .interact()
+            .unwrap_or(false),
     }
 }
 
@@ -2420,18 +2534,43 @@ fn run_hooks_command(action: Option<&HooksSubcommand>) -> Result<()> {
     Ok(())
 }
 
-/// Print what `agi update --install` will run, ask, then run it.
-fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bool) -> Result<()> {
-    let plan = update_check::InstallPlan::new(running, release);
+fn held_to_managed_policy(
+    requested: cli_options::EffectivePermissions,
+) -> cli_options::EffectivePermissions {
+    let pinned = permissions::managed_permission_mode();
+    let held = requested.held_to(pinned);
+    if held != requested {
+        output::print_warn(&format!(
+            "Your organization's policy holds tool approval at {}; the looser mode you asked for was not applied.",
+            held.mode.name()
+        ));
+    }
+    held
+}
+
+/// Print what `agi update --install` will replace, ask, then install it.
+async fn run_update_install(
+    running: &str,
+    release: &update_check::CliRelease,
+    yes: bool,
+) -> Result<()> {
+    let executable = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .context("could not tell where this agi is installed")?;
+    let plan = update_check::InstallPlan::new(running, release, &executable);
     for line in plan.render() {
         println!("{line}");
     }
-    if !plan.has_work() {
+    let (true, Ok(directory)) = (plan.has_work(), &plan.target) else {
         return Ok(());
-    }
+    };
     if !yes {
         let confirmed = dialoguer::Confirm::new()
-            .with_prompt(format!("Run `{}` now?", plan.command))
+            .with_prompt(format!(
+                "Install agi {} into {}?",
+                release.version,
+                directory.display()
+            ))
             .default(false)
             .interact()
             .unwrap_or(false);
@@ -2440,18 +2579,12 @@ fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bo
             return Ok(());
         }
     }
-    let status = update_check::run_install_command(&plan.command)?;
-    if status.success() {
-        println!("Installed. Re-run `agi update` to confirm the new version.");
-        Ok(())
-    } else {
-        anyhow::bail!(
-            "`{}` exited with {}. {}",
-            plan.command,
-            status.code().unwrap_or(-1),
-            update_check::INSTALL_SIGNING_NOTE
-        )
-    }
+    update_check::install_release(release, directory).await?;
+    println!(
+        "Installed agi {}. Re-run `agi update` to confirm.",
+        release.version
+    );
+    Ok(())
 }
 
 async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
@@ -2697,6 +2830,64 @@ fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
             store.reset();
             store.save()?;
             println!("Approval rules reset.");
+            Ok(())
+        }
+        ApprovalsSubcommand::History { limit } => {
+            let entries = approval_audit::recent_approvals(*limit)?;
+            if entries.is_empty() {
+                println!("No approval decisions recorded yet.");
+            }
+            for entry in entries {
+                let decision = match entry.decision {
+                    approval_audit::ApprovalDecision::Approved => "approved",
+                    approval_audit::ApprovalDecision::Denied => "denied",
+                    approval_audit::ApprovalDecision::BlockedByRule => "blocked by rule",
+                };
+                let reason = entry
+                    .reason
+                    .map(|reason| format!(" ({reason})"))
+                    .unwrap_or_default();
+                println!(
+                    "{}",
+                    terminal_text::sanitize_terminal_text(&format!(
+                        "{}  {decision}{reason}  {}  {}",
+                        entry.timestamp, entry.tool_name, entry.target
+                    ))
+                );
+            }
+            Ok(())
+        }
+        ApprovalsSubcommand::Mode { mode } => {
+            let pinned = permissions::managed_permission_mode();
+            match mode {
+                None => {
+                    let saved = config::CliConfig::load()?
+                        .default
+                        .permission_mode
+                        .as_deref()
+                        .and_then(cli_options::persisted_permission_mode)
+                        .unwrap_or_default();
+                    println!("New sessions start in {}.", saved.within(pinned).name());
+                }
+                Some(cli_options::PermissionMode::BypassPermissions) => anyhow::bail!(
+                    "bypassPermissions is never saved as a default; pass --permission-mode bypassPermissions for one run"
+                ),
+                Some(mode) if mode.within(pinned) != *mode => anyhow::bail!(
+                    "your organization's policy holds tool approval at {}, so {} cannot be the default",
+                    mode.within(pinned).name(),
+                    mode.name()
+                ),
+                Some(mode) => {
+                    onboarding::update_config_permission_mode(*mode)?;
+                    println!("New sessions start in {}.", mode.name());
+                }
+            }
+            if let Some(pinned) = pinned {
+                println!(
+                    "Your organization's policy holds tool approval at {}.",
+                    pinned.name()
+                );
+            }
             Ok(())
         }
     }
@@ -3175,15 +3366,16 @@ pub async fn run_main() -> Result<()> {
                 }
                 session.demo_force_rate_limit = cli.demo;
                 session.demo_mode = cli.demo;
-                let exec_permissions = normalized_cli_options.effective_permissions(
-                    cli.mode,
-                    cli.dangerously_skip_permissions,
-                    cli.yes,
-                    app_config.default.permission_mode.as_deref(),
-                );
+                let exec_permissions =
+                    held_to_managed_policy(normalized_cli_options.effective_permissions(
+                        cli.mode,
+                        cli.dangerously_skip_permissions || *full_auto,
+                        cli.yes || *full_auto,
+                        app_config.default.permission_mode.as_deref(),
+                    ));
                 session.permission_mode = exec_permissions.mode;
-                session.skip_permissions = exec_permissions.skip_permissions || *full_auto;
-                session.auto_approve_safe = exec_permissions.auto_approve_safe || *full_auto;
+                session.skip_permissions = exec_permissions.skip_permissions;
+                session.auto_approve_safe = exec_permissions.auto_approve_safe;
                 session.auto_approve_plan = cli.auto_approve_plan;
                 if matches!(exec_permissions.mode, cli_options::PermissionMode::Plan) {
                     session.plan_mode = true;
@@ -3535,13 +3727,10 @@ pub async fn run_main() -> Result<()> {
                 let release = update_check::fetch_latest_release().await?;
                 let running = update_check::running_version();
                 if *install {
-                    return run_update_install(running, &release, *yes);
+                    return run_update_install(running, &release, *yes).await;
                 }
-                for line in update_check::render_verdict(
-                    running,
-                    &release,
-                    &update_check::install_command(),
-                ) {
+                for line in update_check::render_verdict(running, &release, "agi update --install")
+                {
                     println!("{line}");
                 }
                 if *check
@@ -3565,7 +3754,9 @@ pub async fn run_main() -> Result<()> {
                 auth_token,
                 allowed_origin,
                 allow_query_token,
+                no_memory,
             } => {
+                cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
                 let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
                     app_config.clone(),
@@ -4496,12 +4687,13 @@ pub async fn run_main() -> Result<()> {
     }
 
     let oneshot_output_mode = resolve_oneshot_output_mode(cli.json, cli.raw, cli.print, cli.output);
-    let resolved_permissions = normalized_cli_options.effective_permissions(
-        cli.mode,
-        cli.dangerously_skip_permissions,
-        cli.yes,
-        app_config.default.permission_mode.as_deref(),
-    );
+    let resolved_permissions =
+        held_to_managed_policy(normalized_cli_options.effective_permissions(
+            cli.mode,
+            cli.dangerously_skip_permissions,
+            cli.yes,
+            app_config.default.permission_mode.as_deref(),
+        ));
     let effective_skip_permissions = resolved_permissions.skip_permissions;
     let effective_auto_approve_safe = resolved_permissions.auto_approve_safe;
     let effective_permission_mode: cli_options::PermissionMode = resolved_permissions.mode;

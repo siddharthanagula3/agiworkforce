@@ -73,7 +73,7 @@ function grantFor(organizationId: string, userId = 'current-owner') {
     userId,
     action: 'organization.transfer_ownership',
     resourceId: organizationId,
-    method: 'totp',
+    method: 'second_factor',
   }).token;
 }
 

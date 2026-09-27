@@ -50,7 +50,7 @@ function warnIfScreenCaptureBlocked(): void {
 
 // Every app can read the clipboard, so the capture stays there only as long
 // as the paste needs it; an empty or image clipboard must not keep the screen.
-function takeCaptureBackFromClipboard(priorText: string): void {
+export function takeCaptureBackFromClipboard(priorText: string): void {
   if (priorText !== '') {
     clipboard.writeText(priorText);
     return;

@@ -166,7 +166,7 @@ export function ReminderCard({ job, onPause, onResume, onEdit, onDelete }: Remin
               <div
                 className={cn(
                   'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-                  job.status === 'active' ? 'bg-green-500' : 'bg-gray-400',
+                  job.status === 'active' ? 'bg-success-fill' : 'bg-gray-400',
                 )}
               />
             </div>

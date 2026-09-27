@@ -106,6 +106,7 @@ import {
   hasUnavailableWebSearch,
   isLocalPlaceholderActivityEntry,
   type AgentActivityState,
+  type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 
 const MarkdownContent = dynamic(
@@ -149,7 +150,14 @@ import {
 import { ComposerFeedbackDialog } from '../Composer/ComposerFeedbackDialog';
 import { AGI_WORK_FEEDBACK_LABEL, DELIVERABLES_LABEL } from '../../lib/agi-work';
 import { DeliverableCard } from './DeliverableCard';
-import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
+import {
+  useToolApprovalResolver,
+  useToolInputResolver,
+  isApprovalTurnLive,
+  isInputTurnLive,
+} from '@/lib/hooks/useChatStream';
+import { ConnectorInputRequestForm } from '@/features/connectors/components/ConnectorInputRequestForm';
+import { describeMcpTool, mcpServerLabel } from '@/features/connectors/lib/mcp-tool-name';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
 import { hasWebSearchSources } from '../../types/message-metadata';
@@ -297,7 +305,8 @@ function isUnresolvedToolEntry(tool: ToolEntry): boolean {
     tool.status === 'pending' ||
     tool.status === 'running' ||
     tool.status === 'awaiting_approval' ||
-    tool.status === 'awaiting_device'
+    tool.status === 'awaiting_device' ||
+    tool.status === 'awaiting_input'
   );
 }
 
@@ -902,6 +911,62 @@ const MessageBubbleComponent = function MessageBubble({
   // mechanism Regenerate uses. Wired independently of `approvalHandlers`
   // because a connect-required result never involves the approval registry.
   const connectRetryHandler = onRegenerate ? { onRetryTurn: handleResendTool } : {};
+  const resolveToolInput = useToolInputResolver();
+  const asksForInput =
+    !isUser &&
+    (Boolean(message.metadata?.tools?.some((tool) => tool.status === 'awaiting_input')) ||
+      Boolean(
+        message.metadata?.agentActivity?.entries.some(
+          (entry) => entry.kind === 'tool' && entry.inputRequest !== undefined,
+        ),
+      ));
+  const inputTurnExpired =
+    Boolean(resolveToolInput) && asksForInput && !isInputTurnLive(message.id);
+  const renderConnectorInput = useCallback(
+    (toolCallId: string, toolName: string, connectorId: string | undefined, requests: unknown) => {
+      if (!requests || typeof requests !== 'object' || Array.isArray(requests)) return null;
+      const described = describeMcpTool(toolName);
+      return (
+        <ConnectorInputRequestForm
+          serverLabel={
+            connectorId ? mcpServerLabel(connectorId) : (described?.serverLabel ?? toolName)
+          }
+          toolLabel={described?.toolLabel ?? toolName}
+          inputRequests={requests as Record<string, unknown>}
+          expired={inputTurnExpired}
+          {...(resolveToolInput
+            ? {
+                onRespond: (responses: Record<string, unknown>) =>
+                  resolveToolInput(message.id, toolCallId, responses),
+              }
+            : {})}
+        />
+      );
+    },
+    [inputTurnExpired, message.id, resolveToolInput],
+  );
+  const renderActivityInputRequest = useCallback(
+    (entry: AgentActivityToolEntry) => {
+      const answered = message.metadata?.tools?.some(
+        (tool) => tool.toolCallId === entry.toolCallId && tool.status !== 'awaiting_input',
+      );
+      if (!entry.inputRequest || answered) return null;
+      return renderConnectorInput(
+        entry.toolCallId,
+        entry.name,
+        entry.inputRequest.connectorId,
+        entry.inputRequest.inputRequests,
+      );
+    },
+    [message.metadata?.tools, renderConnectorInput],
+  );
+  const renderToolInputRequest = useCallback(
+    (tool: ToolEntry) =>
+      tool.toolCallId
+        ? renderConnectorInput(tool.toolCallId, tool.name, tool.connectorId, tool.inputRequests)
+        : null,
+    [renderConnectorInput],
+  );
 
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
@@ -1660,7 +1725,10 @@ const MessageBubbleComponent = function MessageBubble({
     (canonicalActivity?.status === 'awaiting-approval' ||
       Boolean(
         message.metadata?.tools?.some(
-          (tool) => tool.status === 'awaiting_approval' || tool.status === 'awaiting_device',
+          (tool) =>
+            tool.status === 'awaiting_approval' ||
+            tool.status === 'awaiting_device' ||
+            tool.status === 'awaiting_input',
         ),
       ));
   const proseIsStreaming = Boolean(message.isStreaming) && !pausedForDecision;
@@ -1767,6 +1835,7 @@ const MessageBubbleComponent = function MessageBubble({
           searchSources={searchSources}
           searchQuery={searchQuery}
           {...approvalHandlers}
+          renderInputRequest={renderToolInputRequest}
           {...connectRetryHandler}
         />
       </div>
@@ -1809,7 +1878,7 @@ const MessageBubbleComponent = function MessageBubble({
             (isUser && message.metadata?.isPasted)) && (
             <div className="mb-1 flex items-center gap-1.5">
               {message.metadata?.isPinned && (
-                <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
+                <Pin className="h-3 w-3 text-amber-700 dark:text-amber-500" aria-hidden="true" />
               )}
               {(hasBranches || branchNavigation) && (
                 <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />
@@ -1877,6 +1946,7 @@ const MessageBubbleComponent = function MessageBubble({
               {...(turnFailureReason ? { failureReason: turnFailureReason } : {})}
               {...(turnFailureActions ? { failureActions: turnFailureActions } : {})}
               screenshotFor={screenshotForToolCall}
+              renderInputRequest={renderActivityInputRequest}
               {...connectRetryHandler}
             />
           )}
@@ -1932,6 +2002,7 @@ const MessageBubbleComponent = function MessageBubble({
                           searchSources={searchSources}
                           searchQuery={searchQuery}
                           {...approvalHandlers}
+                          renderInputRequest={renderToolInputRequest}
                           {...connectRetryHandler}
                         />
                       </div>,
@@ -1949,6 +2020,7 @@ const MessageBubbleComponent = function MessageBubble({
                         searchSources={searchSources}
                         searchQuery={searchQuery}
                         {...approvalHandlers}
+                        renderInputRequest={renderToolInputRequest}
                         {...connectRetryHandler}
                       />
                     </div>,

@@ -10,6 +10,7 @@
 const RUNS_PATH = '/tasks';
 const RUN_QUERY_PARAM = 'run';
 const CHAT_PATH = '/chat';
+const CODE_PATH = '/code';
 const HIGHLIGHT_QUERY_PARAM = 'highlightMessage';
 const ICON_URL = '/logo-192.png';
 const BADGE_URL = '/logo-192.png';
@@ -49,6 +50,10 @@ function targetUrl(payload) {
     const messageId = data.messageId;
     if (typeof messageId !== 'string' || messageId.length === 0) return chatUrl;
     return `${chatUrl}?${HIGHLIGHT_QUERY_PARAM}=${encodeURIComponent(messageId)}`;
+  }
+  const codeSessionId = data.codeSessionId;
+  if (typeof codeSessionId === 'string' && codeSessionId.length > 0) {
+    return `${CODE_PATH}/${encodeURIComponent(codeSessionId)}`;
   }
   const runId = data.runId;
   if (typeof runId !== 'string' || runId.length === 0) return RUNS_PATH;

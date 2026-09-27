@@ -83,13 +83,21 @@ export function stagedAttachmentPaths(attachments: readonly TurnAttachment[]): s
  * Writes each attachment into the workspace. One failure is one file: the
  * remaining attachments still stage, and the caller reports what did not.
  */
+async function workspaceFileNames(executor: E2BExecutor): Promise<ReadonlySet<string>> {
+  const entries = (await executor.listFiles?.(SANDBOX_WORKSPACE_ROOT)) ?? [];
+  return new Set(entries.filter((entry) => !entry.isDir).map((entry) => entry.name));
+}
+
 export async function stageTurnAttachments(
   executor: E2BExecutor,
   attachments: readonly TurnAttachment[],
+  options: { keepExisting?: boolean } = {},
 ): Promise<StagingOutcome> {
   const staged: string[] = [];
   const failed: string[] = [];
+  const existing = options.keepExisting ? await workspaceFileNames(executor) : null;
   for (const entry of resolveStagedAttachments(attachments)) {
+    if (existing?.has(entry.name)) continue;
     try {
       const result = await executor.writeFile({
         path: entry.path,

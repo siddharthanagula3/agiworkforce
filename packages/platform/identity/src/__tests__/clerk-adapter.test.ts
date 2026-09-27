@@ -151,7 +151,11 @@ describe('account and session reads', () => {
     clerkState.users = {
       getUser: async () => ({
         id: 'user_1',
-        emailAddresses: [{ emailAddress: 'first@b.test' }, { emailAddress: 'second@b.test' }],
+        emailAddresses: [
+          { id: 'idn_1', emailAddress: 'first@b.test', verification: { status: 'verified' } },
+          { id: 'idn_2', emailAddress: 'second@b.test', verification: null },
+        ],
+        primaryEmailAddressId: 'idn_1',
         primaryEmailAddress: {
           emailAddress: 'primary@b.test',
           verification: { status: 'verified' },
@@ -164,7 +168,10 @@ describe('account and session reads', () => {
         privateMetadata: { tier: 'gold' },
         banned: false,
         locked: false,
+        passwordEnabled: true,
         twoFactorEnabled: true,
+        totpEnabled: true,
+        backupCodeEnabled: false,
         createdAt: 10,
         lastSignInAt: 20,
         enterpriseAccounts: [
@@ -182,7 +189,12 @@ describe('account and session reads', () => {
       id: 'user_1',
       primaryEmail: 'primary@b.test',
       primaryEmailVerification: 'verified',
+      primaryEmailAddressId: 'idn_1',
       emails: ['first@b.test', 'second@b.test'],
+      emailAddresses: [
+        { id: 'idn_1', emailAddress: 'first@b.test', verified: true },
+        { id: 'idn_2', emailAddress: 'second@b.test', verified: false },
+      ],
       firstName: 'Ada',
       lastName: 'Lovelace',
       fullName: 'Ada Lovelace',
@@ -192,7 +204,10 @@ describe('account and session reads', () => {
       privateMetadata: { tier: 'gold' },
       banned: false,
       locked: false,
+      passwordEnabled: true,
       twoFactorEnabled: true,
+      totpEnabled: true,
+      backupCodesEnabled: false,
       createdAt: 10,
       lastSignInAt: 20,
       enterpriseAccounts: [

@@ -13,7 +13,11 @@ import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
-import { ToolApprovalProvider, InteractiveCardResumeProvider } from '@/lib/hooks/useChatStream';
+import {
+  ToolApprovalProvider,
+  ToolInputProvider,
+  InteractiveCardResumeProvider,
+} from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
@@ -208,6 +212,7 @@ import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonom
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
+import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -1359,6 +1364,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     continueGeneration,
     resumeInteractiveCardTurn,
     resolveToolApproval,
+    resolveToolInput,
   } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
@@ -5194,6 +5200,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
+        {...(turnNeedsTwoFactor(lastChatMessage)
+          ? {
+              actionSlot: (
+                <button
+                  type="button"
+                  onClick={() => openSettings('security')}
+                  className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
+                >
+                  Turn on two-factor
+                </button>
+              ),
+            }
+          : {})}
         action={{
           label: 'Retry',
           ariaLabel: 'Retry this turn',
@@ -5687,9 +5706,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div
                 role="alert"
                 aria-live="polite"
-                className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
+                className="flex shrink-0 items-start justify-between gap-3 border-b border-danger-fill/30 bg-danger-fill/10 px-4 py-2 text-sm"
               >
-                <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
+                <span className="min-w-0 flex-1 break-words font-medium text-danger-text">
                   {turnFailureNotice.message}
                 </span>
                 {(retryableTurnId || retryableCardResumeMessageId) && (
@@ -5730,9 +5749,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
             {/* Notification permission banner · shown during long generations */}
             {showNotifBanner && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-warning-fill/10 px-4 py-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                  <Bell className="h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />
                   <span className="text-[var(--chat-text-secondary)]">
                     Get notified when the response is ready.
                   </span>
@@ -5741,7 +5760,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   <button
                     type="button"
                     onClick={() => void handleRequestNotifPermission()}
-                    className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-md bg-warning-fill px-3 py-1 text-xs font-medium text-warning-on-fill transition-opacity hover:opacity-90"
                   >
                     Enable
                   </button>
@@ -5831,47 +5850,49 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                   <ToolApprovalProvider value={resolveToolApproval}>
-                    <MessageInlineEditProvider value={messageInlineEdit}>
-                      <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                        <ChatMessageList
-                          messages={chatMessages}
-                          transcriptPatch={chatMessageProjection.patch}
-                          currentTier={currentTier}
-                          conversationId={displayedConversationId}
-                          isLoading={isLoading && !isStreaming}
-                          isUserTyping={isUserTyping}
-                          onRegenerate={handleRegenerateMessage}
-                          onRetryResearch={handleRetryResearch}
-                          onResearchPlanDecision={handleResearchPlanDecision}
-                          retryingResearchMessageId={retryingResearchMessageId}
-                          onContinue={handleContinueMessage}
-                          onEdit={handleEditMessage}
-                          onDelete={handleDeleteMessage}
-                          onDeleteVariant={handleDeleteVariant}
-                          countVariantFollowers={countVariantFollowers}
-                          onReact={handleReactMessage}
-                          onPin={handlePinMessage}
-                          branchGroupsByMessageId={branchGroupsByMessageId}
-                          branchingMessageId={branchingMessageId}
-                          onBranch={createBranch}
-                          onSwitchBranch={switchBranch}
-                          variantInfoByMessageId={variantInfoByMessageId}
-                          onSelectVariant={handleSelectVariant}
-                          activeLeafId={activeLeafId}
-                          variantAnchorMessageId={variantAnchorMessageId}
-                          isConversationStreaming={isStreaming}
-                          onRegenerateImage={handleRegenerateImageInPlace}
-                          onResumeVideo={handleResumeVideo}
-                          onRetryVideo={handleRetryVideo}
-                          onSendMessage={setComposerPrefill}
-                          onPaywallUpgrade={handlePaywallRecovery}
-                          onPaywallDismiss={handlePaywallDismiss}
-                          onRegenerateWithModel={handleRegenerateWithModel}
-                          regenerateModelOptions={regenerateModelOptions}
-                          turnErrorActive={turnErrorNotice !== null}
-                        />
-                      </InteractiveCardResumeProvider>
-                    </MessageInlineEditProvider>
+                    <ToolInputProvider value={resolveToolInput}>
+                      <MessageInlineEditProvider value={messageInlineEdit}>
+                        <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
+                          <ChatMessageList
+                            messages={chatMessages}
+                            transcriptPatch={chatMessageProjection.patch}
+                            currentTier={currentTier}
+                            conversationId={displayedConversationId}
+                            isLoading={isLoading && !isStreaming}
+                            isUserTyping={isUserTyping}
+                            onRegenerate={handleRegenerateMessage}
+                            onRetryResearch={handleRetryResearch}
+                            onResearchPlanDecision={handleResearchPlanDecision}
+                            retryingResearchMessageId={retryingResearchMessageId}
+                            onContinue={handleContinueMessage}
+                            onEdit={handleEditMessage}
+                            onDelete={handleDeleteMessage}
+                            onDeleteVariant={handleDeleteVariant}
+                            countVariantFollowers={countVariantFollowers}
+                            onReact={handleReactMessage}
+                            onPin={handlePinMessage}
+                            branchGroupsByMessageId={branchGroupsByMessageId}
+                            branchingMessageId={branchingMessageId}
+                            onBranch={createBranch}
+                            onSwitchBranch={switchBranch}
+                            variantInfoByMessageId={variantInfoByMessageId}
+                            onSelectVariant={handleSelectVariant}
+                            activeLeafId={activeLeafId}
+                            variantAnchorMessageId={variantAnchorMessageId}
+                            isConversationStreaming={isStreaming}
+                            onRegenerateImage={handleRegenerateImageInPlace}
+                            onResumeVideo={handleResumeVideo}
+                            onRetryVideo={handleRetryVideo}
+                            onSendMessage={setComposerPrefill}
+                            onPaywallUpgrade={handlePaywallRecovery}
+                            onPaywallDismiss={handlePaywallDismiss}
+                            onRegenerateWithModel={handleRegenerateWithModel}
+                            regenerateModelOptions={regenerateModelOptions}
+                            turnErrorActive={turnErrorNotice !== null}
+                          />
+                        </InteractiveCardResumeProvider>
+                      </MessageInlineEditProvider>
+                    </ToolInputProvider>
                   </ToolApprovalProvider>
                 </div>
 

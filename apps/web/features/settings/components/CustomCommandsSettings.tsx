@@ -115,10 +115,10 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
           <DialogTitle>{isEditing ? 'Edit command' : 'New custom command'}</DialogTitle>
           <DialogDescription>
             Custom commands appear in the slash menu when you type{' '}
-            <code className="rounded-compact bg-muted px-1 text-xs">/</code> in the chat composer. Use{' '}
-            <code className="rounded-compact bg-muted px-1 text-xs">{INPUT_TOKEN}</code> in your template to
-            insert what you type after the command; without it, whatever you type is appended to the
-            end.
+            <code className="rounded-compact bg-muted px-1 text-xs">/</code> in the chat composer.
+            Use <code className="rounded-compact bg-muted px-1 text-xs">{INPUT_TOKEN}</code> in your
+            template to insert what you type after the command; without it, whatever you type is
+            appended to the end.
           </DialogDescription>
         </DialogHeader>
 
@@ -188,7 +188,8 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
             <Label htmlFor="cmd-template" className="text-sm">
               Template{' '}
               <span className="text-muted-foreground text-xs">
-                (use <code className="rounded-compact bg-muted px-1">{INPUT_TOKEN}</code> for user text)
+                (use <code className="rounded-compact bg-muted px-1">{INPUT_TOKEN}</code> for user
+                text)
               </span>
             </Label>
             <Textarea
@@ -246,7 +247,11 @@ function DeleteConfirmDialog({ open, commandName, onConfirm, onCancel }: DeleteC
           <Button variant="outline" size="sm" onClick={onCancel} className="border-border">
             Cancel
           </Button>
-          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white" onClick={onConfirm}>
+          <Button
+            size="sm"
+            className="bg-danger-fill hover:brightness-95 text-danger-on-fill"
+            onClick={onConfirm}
+          >
             Delete
           </Button>
         </DialogFooter>
@@ -314,7 +319,7 @@ export function CustomCommandsSettings() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                  className="h-7 w-7 text-muted-foreground hover:text-danger-text"
                   onClick={() => setDeletingCmd(cmd)}
                   aria-label={`Delete /${cmd.name}`}
                 >

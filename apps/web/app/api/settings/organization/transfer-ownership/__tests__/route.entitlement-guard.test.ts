@@ -67,7 +67,7 @@ function transferRequest(body: unknown) {
     userId: 'current-owner',
     action: 'organization.transfer_ownership',
     resourceId: (body as { organizationId?: string }).organizationId ?? '',
-    method: 'totp',
+    method: 'second_factor',
   });
   return new Request('http://localhost:3000/api/settings/organization/transfer-ownership', {
     method: 'POST',

@@ -4,11 +4,10 @@ import {
   SELF_SERVE_PAID_PLAN_TIERS,
   billingPlanCapabilities,
   billingPlanCapabilitiesAddedOver,
-  creditAmount,
   getBillingPlanPricing,
   isBillingPlanTier,
   isFreeBillingPlanTier,
-  isPerSeatBillingPlan,
+  managedUsageComparisonLines,
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -23,7 +22,7 @@ const COMPARED_PLANS: readonly BillingPlanTier[] = [
 export interface PlanComparisonView {
   label: string;
   current: boolean;
-  credits: string;
+  usage: string;
   features: string;
 }
 
@@ -31,18 +30,10 @@ function capabilityList(capabilities: readonly BillingPlanCapability[]): string 
   return capabilities.map((capability) => BILLING_PLAN_CAPABILITY_LABELS[capability]).join(', ');
 }
 
-function creditsPhrase(plan: BillingPlanTier): string {
-  const allowance = PLAN_CREDIT_ALLOWANCES[plan];
-  if (allowance.unlimited) return t('spPlansContract');
-  const amounts = [
-    creditAmount(allowance.fiveHour),
-    creditAmount(allowance.weekly),
-    creditAmount(allowance.monthly),
-  ];
-  if (isFreeBillingPlanTier(plan)) return t('spPlansCreditsFree', amounts);
-  return isPerSeatBillingPlan(plan)
-    ? t('spPlansCreditsPerSeat', amounts)
-    : t('spPlansCredits', amounts);
+function usagePhrase(plan: BillingPlanTier): string {
+  if (PLAN_CREDIT_ALLOWANCES[plan].unlimited) return t('spPlansContract');
+  if (isFreeBillingPlanTier(plan)) return t('spPlansFreeUsage');
+  return managedUsageComparisonLines(plan).join(', ');
 }
 
 export function planComparisonViews(currentPlan: string | null | undefined): PlanComparisonView[] {
@@ -67,7 +58,7 @@ export function planComparisonViews(currentPlan: string | null | undefined): Pla
     return {
       label: isCurrent ? t('spPlansYourPlan', [label]) : label,
       current: isCurrent,
-      credits: creditsPhrase(plan),
+      usage: usagePhrase(plan),
       features,
     };
   });

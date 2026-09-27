@@ -2,20 +2,25 @@ import 'server-only';
 
 import { createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'crypto';
 import { z } from 'zod';
-import { STEP_UP_ACTIONS, stepUpActionSpec, type StepUpAction } from './actions';
+import {
+  STEP_UP_ACTIONS,
+  STEP_UP_LEVELS,
+  stepUpActionSpec,
+  type StepUpAction,
+  type StepUpLevel,
+} from './actions';
 
 const MIN_SECRET_BYTES = 32;
 const DERIVATION_INFO = 'agi:step-up-grant:v1';
 
-export const STEP_UP_METHODS = ['totp', 'backup_code'] as const;
-export type StepUpMethod = (typeof STEP_UP_METHODS)[number];
+export type StepUpMethod = StepUpLevel;
 
 const GrantPayloadSchema = z
   .object({
     userId: z.string().min(1).max(255),
     action: z.enum(Object.keys(STEP_UP_ACTIONS) as [StepUpAction, ...StepUpAction[]]),
     resourceId: z.string().max(255).nullable(),
-    method: z.enum(STEP_UP_METHODS),
+    method: z.enum(STEP_UP_LEVELS),
     issuedAt: z.number().int().positive(),
     expiresAt: z.number().int().positive(),
     nonce: z.string().min(16).max(64),
@@ -63,10 +68,12 @@ function signatureFor(encodedPayload: string): string {
 }
 
 export function createStepUpGrant(
-  input: StepUpGrantSubject & { method: StepUpMethod },
+  input: StepUpGrantSubject & { method: StepUpMethod; verifiedSecondsAgo?: number },
   nowMs = Date.now(),
 ): { token: string; expiresAt: number } {
-  const expiresAt = nowMs + stepUpActionSpec(input.action).freshnessSeconds * 1000;
+  const lifetimeSeconds =
+    stepUpActionSpec(input.action).freshnessSeconds - (input.verifiedSecondsAgo ?? 0);
+  const expiresAt = nowMs + lifetimeSeconds * 1000;
   const payload = GrantPayloadSchema.parse({
     userId: input.userId,
     action: input.action,

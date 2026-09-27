@@ -55,11 +55,15 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub privacy_mode: Option<String>,
 
-    /// Terminal theme slug: dark | light | ansi | solarized-dark | solarized-light
-    /// | colorblind. Read at startup so a theme chosen in the picker or via
+    /// Terminal theme slug: auto | dark | light | ansi | high-contrast-dark |
+    /// high-contrast-light | colorblind. Read at startup so a theme chosen in the picker or via
     /// `/theme` survives a restart.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+
+    /// Hold the full-screen TUI's spinner and shimmer still.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduced_motion: Option<bool>,
 
     /// Line-editing mode for the classic REPL: `emacs` or `vi`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -100,10 +104,6 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 
-    /// Approval mode: suggest (default), auto-edit, full-auto.
-    #[serde(default = "default_approval_mode")]
-    pub approval_mode: String,
-
     /// Permission posture applied when no flag or client names one:
     /// `default`, `plan`, `acceptEdits` or `dontAsk`.
     ///
@@ -133,10 +133,6 @@ pub struct DefaultConfig {
     /// MCP tool call timeout in seconds (default: 120).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_call_tool_timeout: Option<u64>,
-}
-
-fn default_approval_mode() -> String {
-    "suggest".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -187,7 +183,6 @@ impl DefaultConfig {
             fallback_chain: Vec::new(),
             fast_model: None,
             reasoning_effort: None,
-            approval_mode: default_approval_mode(),
             permission_mode: None,
             sandbox_mode: None,
             review_model: None,
@@ -624,8 +619,8 @@ impl CliConfig {
         &mut self,
         managed: &crate::platform::policy::managed::ManagedConfigSection,
     ) {
-        if let Some(mode) = &managed.approval_mode {
-            self.default.approval_mode = mode.clone();
+        if let Some(mode) = &managed.permission_mode {
+            self.default.permission_mode = Some(mode.clone());
         }
         if let Some(mode) = &managed.privacy_mode {
             self.ui.privacy_mode = Some(mode.clone());
@@ -677,10 +672,6 @@ impl CliConfig {
         if other.default.fast_model.is_some() {
             self.default.fast_model = other.default.fast_model.clone();
         }
-        // Merge approval_mode if non-default
-        if other.default.approval_mode != default_approval_mode() {
-            self.default.approval_mode = other.default.approval_mode.clone();
-        }
         // Merge reasoning_effort if set
         if other.default.reasoning_effort.is_some() {
             self.default.reasoning_effort = other.default.reasoning_effort.clone();
@@ -708,6 +699,12 @@ impl CliConfig {
         }
         if other.ui.edit_mode.is_some() {
             self.ui.edit_mode = other.ui.edit_mode.clone();
+        }
+        if other.ui.theme.is_some() {
+            self.ui.theme = other.ui.theme.clone();
+        }
+        if other.ui.reduced_motion.is_some() {
+            self.ui.reduced_motion = other.ui.reduced_motion;
         }
         for (action, binding) in &other.ui.keybindings {
             self.ui.keybindings.insert(action.clone(), binding.clone());
@@ -895,6 +892,12 @@ impl CliConfig {
         if let Some(ref edit_mode) = self.ui.edit_mode {
             out.push_str(&format!("REPL edit mode: {}\n", edit_mode));
         }
+        if let Some(ref theme) = self.ui.theme {
+            out.push_str(&format!("Theme: {}\n", theme));
+        }
+        if let Some(reduced_motion) = self.ui.reduced_motion {
+            out.push_str(&format!("Reduced motion: {}\n", reduced_motion));
+        }
         if !self.ui.keybindings.is_empty() {
             out.push_str("Keybindings:\n");
             for (action, binding) in &self.ui.keybindings {
@@ -996,6 +999,10 @@ impl CliConfig {
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
+            "theme" | "ui.theme" => self.ui.theme.clone(),
+            "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
+                self.ui.reduced_motion.map(|reduced| reduced.to_string())
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
             }
@@ -1073,6 +1080,24 @@ impl CliConfig {
                 }
                 self.ui.edit_mode = Some(mode);
             }
+            "theme" | "ui.theme" => {
+                let choice = crate::tui::widgets::theme_picker::ThemeChoice::from_arg(value.trim())
+                    .with_context(|| {
+                        format!(
+                            "theme must be one of: {}",
+                            crate::tui::widgets::theme_picker::ThemeChoice::available()
+                        )
+                    })?;
+                self.ui.theme = Some(choice.slug().to_string());
+            }
+            "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
+                self.ui.reduced_motion = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("reduced-motion must be true or false")?,
+                );
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 self.telemetry.crash_reports = value
                     .trim()
@@ -1090,7 +1115,7 @@ impl CliConfig {
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
-                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, crash-reports, and ui.keybindings.<action>",
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, crash-reports, and ui.keybindings.<action>",
                         key
                     );
                 }
@@ -2313,16 +2338,16 @@ model = "fixture-config-model"
         use crate::platform::policy::managed::ManagedConfigSection;
 
         let mut config = CliConfig::default();
-        config.default.approval_mode = "full-auto".to_string();
+        config.default.permission_mode = Some("acceptEdits".to_string());
         config.ui.privacy_mode = Some("byok".to_string());
 
         config.apply_managed_config(&ManagedConfigSection {
-            approval_mode: Some("ask".to_string()),
+            permission_mode: Some("default".to_string()),
             privacy_mode: Some("local".to_string()),
             allow_project_config: Some(false),
         });
 
-        assert_eq!(config.default.approval_mode, "ask");
+        assert_eq!(config.default.permission_mode.as_deref(), Some("default"));
         assert_eq!(config.ui.privacy_mode.as_deref(), Some("local"));
     }
 
@@ -2338,18 +2363,18 @@ model = "fixture-config-model"
         let user_file = home.path().join("config.toml");
         std::fs::write(
             &user_file,
-            "[default]\napproval_mode = \"full-auto\"\nreasoning_effort = \"low\"\n\n[ui]\noutput_style = \"concise\"\nedit_mode = \"vim\"\n",
+            "[default]\npermission_mode = \"acceptEdits\"\nreasoning_effort = \"low\"\n\n[ui]\noutput_style = \"concise\"\nedit_mode = \"vim\"\n",
         )
         .unwrap();
         let repository_dir = checkout.path().join(".agiworkforce");
         std::fs::create_dir_all(&repository_dir).unwrap();
         std::fs::write(
             repository_dir.join("config.toml"),
-            "[default]\napproval_mode = \"auto-edit\"\nreasoning_effort = \"high\"\n\n[ui]\nedit_mode = \"emacs\"\n",
+            "[default]\npermission_mode = \"plan\"\nreasoning_effort = \"high\"\n\n[ui]\nedit_mode = \"emacs\"\n",
         )
         .unwrap();
         let managed_file = home.path().join("managed-policy.toml");
-        std::fs::write(&managed_file, "[config]\napprovalMode = \"ask\"\n").unwrap();
+        std::fs::write(&managed_file, "[config]\npermissionMode = \"default\"\n").unwrap();
 
         let layered = |managed: &crate::platform::policy::managed::ManagedPolicyState| {
             CliConfig::from_layers(
@@ -2360,7 +2385,11 @@ model = "fixture-config-model"
         };
 
         let merged = layered(&load_managed_policy_from(&managed_file)).expect("merged");
-        assert_eq!(merged.default.approval_mode, "ask", "managed beats both");
+        assert_eq!(
+            merged.default.permission_mode.as_deref(),
+            Some("default"),
+            "managed beats both"
+        );
         assert_eq!(merged.default.reasoning_effort.as_deref(), Some("high"));
         assert_eq!(merged.ui.edit_mode.as_deref(), Some("emacs"));
         assert_eq!(merged.ui.output_style.as_deref(), Some("concise"));
@@ -2373,11 +2402,12 @@ model = "fixture-config-model"
         let without_policy =
             layered(&load_managed_policy_from(&home.path().join("absent.toml"))).expect("merged");
         assert_eq!(
-            without_policy.default.approval_mode, "auto-edit",
+            without_policy.default.permission_mode.as_deref(),
+            Some("plan"),
             "the repository beats the user when nothing is pinned above it"
         );
 
-        std::fs::write(&managed_file, "[config]\napprovalMode = [").unwrap();
+        std::fs::write(&managed_file, "[config]\npermissionMode = [").unwrap();
         assert!(
             layered(&load_managed_policy_from(&managed_file)).is_err(),
             "an unreadable managed layer must stop the load, not fall away"
@@ -2389,11 +2419,14 @@ model = "fixture-config-model"
         use crate::platform::policy::managed::ManagedConfigSection;
 
         let mut config = CliConfig::default();
-        config.default.approval_mode = "full-auto".to_string();
+        config.default.permission_mode = Some("acceptEdits".to_string());
 
         config.apply_managed_config(&ManagedConfigSection::default());
 
-        assert_eq!(config.default.approval_mode, "full-auto");
+        assert_eq!(
+            config.default.permission_mode.as_deref(),
+            Some("acceptEdits")
+        );
     }
 
     /// Every key a released CLI writes into config.toml, in the shape it

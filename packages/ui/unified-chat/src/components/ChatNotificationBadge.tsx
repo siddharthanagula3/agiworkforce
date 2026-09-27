@@ -10,9 +10,9 @@ export interface ChatNotificationBadgeProps {
 }
 
 const BG_CLASS: Record<BadgeNotificationType, string> = {
-  alert: 'bg-red-500',
-  info: 'bg-blue-500',
-  success: 'bg-green-500',
+  alert: 'bg-danger-fill text-danger-on-fill',
+  info: 'bg-info-fill text-info-on-fill',
+  success: 'bg-success-fill text-success-on-fill',
 };
 
 function formatCount(count: number): string {
@@ -43,7 +43,7 @@ export function ChatNotificationBadge({
           className={cn(
             'absolute -top-1 -right-1 flex items-center justify-center',
             'min-w-[18px] h-[18px] rounded-full',
-            'text-caption text-white font-bold leading-none',
+            'text-caption font-bold leading-none',
             'ring-2 ring-card',
             bgClass,
             label === '' && 'min-w-[10px] h-[10px] -top-0.5 -right-0.5',

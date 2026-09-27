@@ -479,7 +479,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
             variant="ghost"
             size="sm"
             onClick={toggleStreaming}
-            className={cn('h-7', isStreaming && 'text-green-600')}
+            className={cn('h-7', isStreaming && 'text-success-text')}
           >
             {isStreaming ? (
               <>
@@ -523,7 +523,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
 
           {isStreaming && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <div className="h-2 w-2 rounded-full bg-green-600 animate-pulse" />
+              <div className="h-2 w-2 rounded-full bg-success-fill animate-pulse" />
               Live
             </div>
           )}
@@ -568,7 +568,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
               {/* Highlight Overlay - scaled to rendered image size */}
               {scaledBounds && (
                 <div
-                  className="absolute border-2 border-yellow-400 bg-yellow-400/10 pointer-events-none animate-pulse z-10"
+                  className="absolute border-2 border-warning-fill/60 bg-warning-fill/10 pointer-events-none animate-pulse z-10"
                   style={{
                     left: scaledBounds.x,
                     top: scaledBounds.y,
@@ -576,7 +576,7 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
                     height: scaledBounds.height,
                   }}
                 >
-                  <div className="absolute -top-6 left-0 bg-yellow-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
+                  <div className="absolute -top-6 left-0 bg-warning-fill text-warning-on-fill text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap">
                     Target Element
                   </div>
                 </div>

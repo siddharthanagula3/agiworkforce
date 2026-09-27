@@ -585,7 +585,7 @@ function AddCustomConnectorForm({
           </p>
         )}
         {jsonImportNote && (
-          <p role="status" className="text-caption text-amber-600 dark:text-amber-500">
+          <p role="status" className="text-caption text-warning-text">
             {jsonImportNote}
           </p>
         )}

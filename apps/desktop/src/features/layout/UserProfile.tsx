@@ -267,9 +267,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
             <button
               type="button"
               onClick={() => handleAction(() => void useAuthStore.getState().signOut())}
-              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-red-400 transition-colors hover:bg-[hsl(var(--accent))]"
+              className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm text-danger-text transition-colors hover:bg-[hsl(var(--accent))]"
             >
-              <LogOut className="h-4 w-4 text-red-400" />
+              <LogOut className="h-4 w-4 text-danger-text" />
               <span>Log Out</span>
             </button>
           </div>

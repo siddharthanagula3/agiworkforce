@@ -31,6 +31,7 @@ interface TwoFactorPanelProps {
   isSaving: boolean;
   isUpdateSettingsPending: boolean;
   isChangePasswordPending: boolean;
+  hasPassword: boolean;
   showNewPassword: boolean;
   showConfirmPassword: boolean;
   onSaveSecurity: (data: SecuritySettingsFormData) => void;
@@ -45,6 +46,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
   isSaving,
   isUpdateSettingsPending,
   isChangePasswordPending,
+  hasPassword,
   showNewPassword,
   showConfirmPassword,
   onSaveSecurity,
@@ -112,7 +114,37 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
       <div className="border-t border-border pt-6">
         <Form {...passwordForm}>
           <form onSubmit={passwordForm.handleSubmit(onPasswordChange)} className="space-y-4">
-            <h4 className="font-medium text-foreground">Change Password</h4>
+            <h4 className="font-medium text-foreground">
+              {hasPassword ? 'Change Password' : 'Set a password'}
+            </h4>
+
+            {hasPassword ? (
+              <FormField
+                control={passwordForm.control}
+                name="currentPassword"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm text-muted-foreground">
+                      Current Password
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        {...field}
+                        type="password"
+                        autoComplete="current-password"
+                        className="border-border bg-background text-foreground"
+                        placeholder="Enter current password"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Your account signs in without a password. You confirm it is you before one is set.
+              </p>
+            )}
 
             <FormField
               control={passwordForm.control}
@@ -125,6 +157,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
                       <Input
                         {...field}
                         type={showNewPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
                         className="border-border bg-background pr-10 text-foreground"
                         placeholder="Enter new password"
                       />
@@ -204,7 +237,7 @@ export const TwoFactorPanel: React.FC<TwoFactorPanelProps> = ({
               ) : (
                 <Key className="mr-2 h-4 w-4" />
               )}
-              Change Password
+              {hasPassword ? 'Change Password' : 'Set password'}
             </Button>
           </form>
         </Form>

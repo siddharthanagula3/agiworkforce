@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   AlertTriangle,
@@ -72,7 +71,7 @@ export function ReflectionPanel({ className }: ReflectionPanelProps) {
     return (
       <div className={cn('flex h-full items-center justify-center', className)}>
         <div className="text-center">
-          <CheckCircle className="mx-auto h-8 w-8 text-green-500/70" />
+          <CheckCircle className="mx-auto h-8 w-8 text-success-text" />
           <p className="mt-2 text-sm font-medium text-foreground">All Clear</p>
           <p className="mt-1 text-xs text-muted-foreground">
             No issues detected. The AI is executing smoothly.
@@ -90,13 +89,13 @@ export function ReflectionPanel({ className }: ReflectionPanelProps) {
           <div
             className={cn(
               'flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
-              reflection.goalAchievable ? 'bg-amber-500/10' : 'bg-destructive/10',
+              reflection.goalAchievable ? 'bg-warning-fill/10' : 'bg-destructive/10',
             )}
           >
             {reflection.isReflecting ? (
               <Brain className="h-4 w-4 animate-pulse text-primary" />
             ) : reflection.goalAchievable ? (
-              <Lightbulb className="h-4 w-4 text-amber-500" />
+              <Lightbulb className="h-4 w-4 text-amber-700 dark:text-amber-500" />
             ) : (
               <AlertTriangle className="h-4 w-4 text-destructive" />
             )}
@@ -201,7 +200,7 @@ export function ReflectionPanel({ className }: ReflectionPanelProps) {
             <ul className="space-y-2">
               {reflection.recommendations.map((recommendation, index) => (
                 <li key={index} className="flex items-start gap-2 text-sm text-muted-foreground">
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-green-700 dark:text-green-500" />
                   <span>{recommendation}</span>
                 </li>
               ))}
@@ -232,16 +231,16 @@ function CollapsibleSection({
 }: CollapsibleSectionProps) {
   const variantStyles = {
     default: 'border-border',
-    warning: 'border-amber-500/30 bg-amber-500/5',
+    warning: 'border-warning-fill/30 bg-warning-fill/5',
     info: 'border-blue-500/30 bg-blue-500/5',
-    success: 'border-green-500/30 bg-green-500/5',
+    success: 'border-success-fill/30 bg-success-fill/5',
   };
 
   const iconStyles = {
     default: 'text-muted-foreground',
-    warning: 'text-amber-500',
+    warning: 'text-warning-text',
     info: 'text-blue-500',
-    success: 'text-green-500',
+    success: 'text-success-text',
   };
 
   return (
@@ -273,9 +272,13 @@ interface HealthScoreProps {
 function HealthScore({ successRate, goalAchievable }: HealthScoreProps) {
   const percentage = Math.round(successRate * 100);
   const color =
-    percentage >= 75 ? 'text-green-500' : percentage >= 50 ? 'text-amber-500' : 'text-destructive';
+    percentage >= 75
+      ? 'text-success-text'
+      : percentage >= 50
+        ? 'text-warning-text'
+        : 'text-destructive';
   const bgColor =
-    percentage >= 75 ? 'bg-green-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-destructive';
+    percentage >= 75 ? 'bg-success-fill' : percentage >= 50 ? 'bg-warning-fill' : 'bg-destructive';
 
   return (
     <div className="text-right">
@@ -351,7 +354,7 @@ function OverviewContent({ insight }: OverviewContentProps) {
               >
                 <span className="truncate">{step.description}</span>
                 {step.recoverable && (
-                  <span className="shrink-0 rounded bg-green-500/20 px-1 text-green-600">
+                  <span className="shrink-0 rounded bg-success-fill/10 px-1 text-success-text">
                     recoverable
                   </span>
                 )}
@@ -379,8 +382,8 @@ interface StatCardProps {
 function StatCard({ label, value, icon: Icon, variant }: StatCardProps) {
   const variantStyles = {
     default: 'text-foreground',
-    success: 'text-green-500',
-    warning: 'text-amber-500',
+    success: 'text-success-text',
+    warning: 'text-warning-text',
     error: 'text-destructive',
   };
 
@@ -401,14 +404,14 @@ function FailurePatternCard({ pattern }: FailurePatternCardProps) {
   const categoryInfo = getFailureCategoryInfo(pattern.category);
 
   return (
-    <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-2">
+    <div className="rounded-md border border-warning-fill/20 bg-warning-fill/5 p-2">
       <div className="flex items-start gap-2">
         <categoryInfo.icon className={cn('mt-0.5 h-4 w-4 shrink-0', categoryInfo.color)} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-foreground">{categoryInfo.label}</span>
             {pattern.frequency > 1 && (
-              <span className="rounded bg-amber-500/20 px-1.5 text-xs text-amber-600">
+              <span className="rounded bg-warning-fill/10 px-1.5 text-xs text-warning-text">
                 {pattern.frequency}x
               </span>
             )}
@@ -470,7 +473,7 @@ function SubGoalCard({ subGoal }: SubGoalCardProps) {
             <ul className="mt-1 space-y-0.5">
               {subGoal.successCriteria.slice(0, 2).map((criteria, i) => (
                 <li key={i} className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <CheckCircle className="h-3 w-3 text-green-500" />
+                  <CheckCircle className="h-3 w-3 text-success-text" />
                   {criteria}
                 </li>
               ))}
@@ -499,17 +502,17 @@ function getFailureCategoryInfo(category: string) {
     ResourceUnavailable: {
       label: 'Resource Not Found',
       icon: HelpCircle,
-      color: 'text-orange-500',
+      color: 'text-warning-text',
     },
     PermissionDenied: {
       label: 'Permission Denied',
       icon: XCircle,
-      color: 'text-red-500',
+      color: 'text-danger-text',
     },
     InvalidInput: {
       label: 'Invalid Input',
       icon: AlertTriangle,
-      color: 'text-yellow-500',
+      color: 'text-warning-text',
     },
     NetworkError: {
       label: 'Network Error',
@@ -529,12 +532,12 @@ function getFailureCategoryInfo(category: string) {
     ToolError: {
       label: 'Tool Error',
       icon: Wrench,
-      color: 'text-red-400',
+      color: 'text-danger-text',
     },
     StateError: {
       label: 'State Error',
       icon: AlertTriangle,
-      color: 'text-amber-500',
+      color: 'text-warning-text',
     },
     Unknown: {
       label: 'Unknown Error',
@@ -571,17 +574,17 @@ function getCorrectionTypeInfo(type: string) {
     Decompose: {
       label: 'Break Into Steps',
       icon: GitBranch,
-      color: 'text-green-500',
+      color: 'text-success-text',
     },
     Defer: {
       label: 'Wait and Retry',
       icon: Clock,
-      color: 'text-amber-500',
+      color: 'text-warning-text',
     },
     RequiresHuman: {
       label: 'Needs Your Help',
       icon: User,
-      color: 'text-red-500',
+      color: 'text-danger-text',
     },
   };
 

@@ -95,7 +95,7 @@ function grant(identityId: string) {
     userId: 'user-1',
     action: 'identity.unlink',
     resourceId: identityId,
-    method: 'totp',
+    method: 'second_factor',
   }).token;
 }
 

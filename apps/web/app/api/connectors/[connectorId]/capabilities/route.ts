@@ -42,9 +42,12 @@ async function handleGet(
       generatedAt: resolved.catalog.generatedAt,
       protocolEra: server.protocolEra,
       protocolVersion: server.protocolVersion,
+      supportedVersions: server.discover?.supportedVersions ?? [],
+      transport: server.transport,
       serverInfo: server.serverInfo,
       capabilityKeys: Object.keys(server.capabilities).sort(),
       tasksSupported: server.tasksSupported,
+      rejectedTools: server.rejectedTools ?? [],
       tools: server.tools.map((tool) => ({
         name: tool.toolName,
         title: plainMcpServerText(tool.title),

@@ -10,7 +10,6 @@ import {
   WEB_PAID_PLAN_ORDER,
   getBillingPlanDisplay,
   formatCatalogPrice,
-  formatPlanCreditWindows,
   planUsageComparisonLabel,
   type SelectablePaidPlan,
 } from '@features/billing/lib/plan-display';
@@ -50,6 +49,10 @@ export function UpgradeChooser() {
     !isFreeBillingPlanTier(billing.plan) &&
     ['active', 'trialing'].includes(billing.status ?? '');
   const ownerBlocked = hasActivePaidPlan && subscription?.subscription_source !== 'stripe';
+  const paymentOverdue =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['past_due', 'unpaid'].includes(billing.status ?? '');
 
   const currentDisplay = getBillingPlanDisplay(currentPlan ?? 'free');
   const nextTier = ready ? getNextUpgradeTier(currentPlan) : null;
@@ -58,7 +61,6 @@ export function UpgradeChooser() {
     ? nextDisplay.features.filter((feature) => !currentDisplay.features.includes(feature))
     : [];
   const nextUsageComparison = nextTier ? planUsageComparisonLabel(nextTier) : null;
-  const currentCredits = formatPlanCreditWindows(currentPlan);
 
   const nextIndex = nextTier ? WEB_PAID_PLAN_ORDER.indexOf(nextTier) : -1;
   const secondaryTiers: readonly SelectablePaidPlan[] =
@@ -125,9 +127,6 @@ export function UpgradeChooser() {
                 {priceLabel(currentDisplay.monthlyPriceUsd)}
               </span>
             </div>
-            {currentCredits ? (
-              <p className="mt-1 text-sm text-muted-foreground">{currentCredits}</p>
-            ) : null}
 
             {usedPercent !== null ? (
               <div className="mt-5">
@@ -165,6 +164,16 @@ export function UpgradeChooser() {
               </p>
               <Link href="/settings/billing" className={panelActionClassName}>
                 {billingOwnerPlanActionLabel(subscription?.subscription_source)}
+              </Link>
+            </section>
+          ) : paymentOverdue ? (
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <p className="text-sm text-foreground">
+                Your last {currentDisplay.pricing.label} payment didn&rsquo;t go through. Pay the
+                open invoice or update your payment method in Billing, then come back to upgrade.
+              </p>
+              <Link href="/settings/billing" className={panelActionClassName}>
+                Open billing
               </Link>
             </section>
           ) : !nextTier || !nextDisplay ? (

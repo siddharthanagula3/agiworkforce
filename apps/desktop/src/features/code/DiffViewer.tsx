@@ -119,10 +119,10 @@ export function DiffViewer({
 
           {diffStats && (
             <div className="flex items-center gap-3 text-xs">
-              <span className="text-green-500">
+              <span className="text-success-text">
                 +{diffStats.additions} addition{diffStats.additions !== 1 ? 's' : ''}
               </span>
-              <span className="text-red-500">
+              <span className="text-danger-text">
                 -{diffStats.deletions} deletion{diffStats.deletions !== 1 ? 's' : ''}
               </span>
               <span className="text-muted-foreground">
@@ -195,7 +195,7 @@ export function DiffViewer({
           <span>Modified: {modifiedValue.split('\n').length} lines</span>
         </div>
         <div className="flex items-center gap-3">
-          {readOnly && <span className="text-amber-500">Read-only</span>}
+          {readOnly && <span className="text-warning-text">Read-only</span>}
           <span>Side-by-side view</span>
         </div>
       </div>

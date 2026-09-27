@@ -1,4 +1,3 @@
-
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Search, Code, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -73,8 +72,8 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
         'flex flex-col gap-1.5 px-3 py-2 rounded-lg',
         'bg-muted/50 backdrop-blur-xs',
         'border border-white/5',
-        isCompleted && 'bg-emerald-900/20 border-emerald-500/20',
-        isError && 'bg-rose-900/20 border-rose-500/20',
+        isCompleted && 'bg-success-fill/10 border-success-fill/20',
+        isError && 'bg-danger-fill/10 border-danger-fill/20',
       )}
       role="status"
       aria-label={`${entry.type}: ${entry.message}`}
@@ -109,10 +108,10 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
           <motion.div
             className={cn(
               'h-full rounded-full',
-              entry.type === 'thinking' && 'bg-amber-500',
+              entry.type === 'thinking' && 'bg-warning-fill',
               entry.type === 'searching' && 'bg-teal-500',
               entry.type === 'coding' && 'bg-blue-500',
-              entry.type === 'running' && 'bg-amber-500',
+              entry.type === 'running' && 'bg-warning-fill',
             )}
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}

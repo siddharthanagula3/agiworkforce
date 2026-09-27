@@ -1,4 +1,4 @@
-    // llm-guardrail-allow: "eval(" mentions here are prose describing the CSP, not executable code
+// llm-guardrail-allow: "eval(" mentions here are prose describing the CSP, not executable code
 
 import React, { useMemo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -89,7 +89,7 @@ function CodeRenderer({ data }: { data: CodeRenderData }) {
           <span className="text-xs text-zinc-500">{data.line_count} lines</span>
         </div>
         {data.executable && (
-          <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+          <Badge variant="outline" className="text-xs text-success-text border-success-fill">
             Executable
           </Badge>
         )}
@@ -258,24 +258,22 @@ function DiagramRenderer({
 
   if (error) {
     return (
-      <div className="p-4 rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20">
+      <div className="p-4 rounded-lg border border-danger-fill/30 bg-danger-fill/10">
         <div className="flex items-start justify-between gap-3 mb-2">
-          <p className="text-sm font-medium text-red-600 dark:text-red-400">
-            Failed to render diagram
-          </p>
+          <p className="text-sm font-medium text-danger-text">Failed to render diagram</p>
           {onFixBug && (
             <button
               type="button"
               onClick={() => onFixBug(error, data.source)}
-              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-red-600 dark:text-red-300 border border-red-300 dark:border-red-500/40 hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors"
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs text-danger-text border border-danger-fill/30 hover:bg-danger-fill/10 transition-colors"
             >
               <WrenchIcon className="h-3 w-3" />
               Fix Bug
             </button>
           )}
         </div>
-        <pre className="text-xs text-red-500 whitespace-pre-wrap">{error}</pre>
-        <div className="mt-4 pt-4 border-t border-red-200 dark:border-red-800">
+        <pre className="text-xs text-danger-text whitespace-pre-wrap">{error}</pre>
+        <div className="mt-4 pt-4 border-t border-danger-fill/30">
           <p className="text-xs text-zinc-500 mb-1">Source:</p>
           <pre className="text-xs font-mono bg-zinc-100 dark:bg-zinc-800 p-2 rounded">
             {data.source}
@@ -369,7 +367,7 @@ ${data.html}
           HTML Preview
         </Badge>
         {data.scripts_enabled && (
-          <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
+          <Badge variant="outline" className="text-xs text-warning-text border-warning-fill">
             Scripts Enabled
           </Badge>
         )}

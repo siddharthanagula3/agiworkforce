@@ -70,8 +70,8 @@ export function ExecutionSidecarTerminal() {
     <div className="flex flex-col h-full bg-surface-base">
       {/* Terminal header */}
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-white/5 shrink-0">
-        <Terminal className="w-3 h-3 text-green-400/70" />
-        <span className="text-[10px] text-green-400/70 font-mono">
+        <Terminal className="w-3 h-3 text-green-700 dark:text-green-400" />
+        <span className="text-[10px] text-green-700 dark:text-green-400 font-mono">
           {activeTerminalStreams.length > 0
             ? `${activeTerminalStreams.length} active`
             : 'Terminal output'}
@@ -93,11 +93,11 @@ export function ExecutionSidecarTerminal() {
               key={`${index}-${line}`}
               className={
                 isCommand
-                  ? 'text-green-300 font-semibold'
+                  ? 'text-success-text font-semibold'
                   : isStderr
-                    ? 'text-red-400/80'
+                    ? 'text-danger-text'
                     : isExit
-                      ? 'text-yellow-400/60'
+                      ? 'text-warning-text'
                       : 'text-gray-300/80'
               }
             >
@@ -106,7 +106,7 @@ export function ExecutionSidecarTerminal() {
           );
         })}
         {activeTerminalStreams.length > 0 && (
-          <div className="text-green-400/60 animate-pulse">_</div>
+          <div className="text-green-700 dark:text-green-400 animate-pulse">_</div>
         )}
       </div>
     </div>

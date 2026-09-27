@@ -11,10 +11,11 @@ import {
   interruptDeveloperTurn,
   listDeveloperSessions,
   readDeveloperSessionActivity,
+  startDeveloperSession,
   startDeveloperTurn,
 } from '../runtime/developerSessionService';
 import { readWorkingTreeDiff } from '../runtime/gitService';
-import { getRoot } from '../runtime/workspaceStore';
+import { getRoot, listRoots } from '../runtime/workspaceStore';
 import { createRemoteControlHost, type RemoteControlHost } from './remoteControlHost';
 
 type WebSocketWithHeaders = new (
@@ -42,6 +43,10 @@ export function configureRemoteControl(emit: (state: RemoteControlState) => void
         const root = getRoot(rootId);
         return root ? readWorkingTreeDiff(root.path, paths) : null;
       },
+      startSession: async (rootId, title) => ({
+        threadId: (await startDeveloperSession(rootId, undefined, title)).id,
+      }),
+      defaultRoot: () => listRoots()[0] ?? null,
     },
     deviceName: () => deviceIdentity().deviceName,
     appVersion: () => app.getVersion(),
