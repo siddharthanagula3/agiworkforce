@@ -1,4 +1,3 @@
-
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { isSupportAgentEnabled } from '../answer/model-route';
@@ -30,17 +29,17 @@ describe('SUPPORT_AGENT_ENABLED kill switch', () => {
     else process.env['SUPPORT_AGENT_ENABLED'] = original;
   });
 
-  it('defaults to OFF when unset, so an unconfigured deploy spends nothing', () => {
+  it('defaults to ON when unset, so the assistant answers without extra configuration', () => {
     delete process.env['SUPPORT_AGENT_ENABLED'];
-    expect(isSupportAgentEnabled()).toBe(false);
+    expect(isSupportAgentEnabled()).toBe(true);
   });
 
-  it.each(['0', 'false', 'off', '', 'maybe', 'no'])('stays off for %j', (value) => {
+  it.each(['0', 'false', 'off', 'no', ' OFF '])('turns off for %j', (value) => {
     process.env['SUPPORT_AGENT_ENABLED'] = value;
     expect(isSupportAgentEnabled()).toBe(false);
   });
 
-  it.each(['1', 'true', 'on', 'YES', ' True '])('turns on for %j', (value) => {
+  it.each(['1', 'true', 'on', 'YES', ''])('stays on for %j', (value) => {
     process.env['SUPPORT_AGENT_ENABLED'] = value;
     expect(isSupportAgentEnabled()).toBe(true);
   });

@@ -24,7 +24,7 @@ use crate::design_system::{
 };
 use crate::model_catalog::Model;
 use crate::terminal_text::sanitize_terminal_text;
-use crate::tui::terminal_palette::{ui_accent, ui_muted};
+use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_surface_elevated};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 // ---------------------------------------------------------------------------
@@ -366,6 +366,7 @@ pub fn render(
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
+        .style(Style::default().bg(ui_surface_elevated()))
         .title(title_line);
     frame.render_widget(outer_block, popup_area);
 

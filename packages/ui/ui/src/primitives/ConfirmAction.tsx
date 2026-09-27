@@ -21,6 +21,7 @@ export interface ConfirmActionRequest {
   cancelLabel?: string;
   destructive?: boolean;
   onConfirm: () => unknown | Promise<unknown>;
+  onCancel?: () => void;
 }
 
 interface PendingConfirm extends ConfirmActionRequest {
@@ -83,7 +84,9 @@ export function useConfirmAction(): {
       key={pending.key}
       open
       onOpenChange={(open) => {
-        if (!open && !busy) close();
+        if (open || busy) return;
+        pending.onCancel?.();
+        close();
       }}
     >
       <AlertDialogContent opener={openerRef.current}>

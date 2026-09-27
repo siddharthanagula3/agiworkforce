@@ -21,6 +21,7 @@ import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 import { useCurrentUser } from '@/lib/identity/client';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 export function SecuritySection() {
   const { data: serverSettings, isLoading } = useUserSettings();
@@ -116,6 +117,9 @@ export function SecuritySection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Passkeys, two-factor authentication, session timeout, and password.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="account-security" label="How account security works" />
+        </div>
       </div>
 
       <PasskeysPanel />
