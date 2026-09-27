@@ -3,6 +3,7 @@ import { AUTH_SIGNUP_PATH } from '@/features/auth/authRoutes';
 import {
   REFERRAL_ATTRIBUTION_COOKIE,
   REFERRAL_PROGRAM,
+  REFERRAL_WELCOME_PATH,
   normalizeReferralCode,
 } from '@/lib/services/referral-program';
 
@@ -14,7 +15,9 @@ export async function GET(
 ): Promise<NextResponse> {
   const { code } = await context.params;
   const referralCode = normalizeReferralCode(code);
-  const response = NextResponse.redirect(new URL(AUTH_SIGNUP_PATH, request.url));
+  const response = NextResponse.redirect(
+    new URL(referralCode ? REFERRAL_WELCOME_PATH : AUTH_SIGNUP_PATH, request.url),
+  );
   if (referralCode) {
     response.cookies.set({
       name: REFERRAL_ATTRIBUTION_COOKIE,

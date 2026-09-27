@@ -95,6 +95,7 @@ const routes: RouteConfig[] = [
   { path: '/subprocessors', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/accessibility', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/refund-policy', priority: 0.6, changeFrequency: 'yearly' },
+  { path: '/referral-terms', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/cookies', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/copyright', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },

@@ -161,6 +161,16 @@
         }
       ]
     },
+    "referralTerms": {
+      "page": "apps/web/app/referral-terms/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-27",
+          "digest": "5e63ba8ad8126ac1",
+          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review."
+        }
+      ]
+    },
     "accessibility": {
       "page": "apps/web/app/accessibility/page.tsx",
       "versions": [
@@ -208,6 +218,11 @@
           "date": null,
           "digest": "0db69193fc02515b",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": null,
+          "digest": "51546d0f78f9150d",
+          "note": "Lists the new referral program terms at /referral-terms; the index prints no date of its own."
         }
       ]
     },
