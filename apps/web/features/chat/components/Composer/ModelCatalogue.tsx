@@ -35,6 +35,8 @@ const CHIP_GROUP_LABEL = 'Filter by capability';
 const UNAVAILABLE_TEXT = 'Temporarily unavailable';
 const NOT_OFFERED_TEXT = 'Not available in this app';
 const EVENT_TAG_LABEL = 'Free during event';
+const FREE_POOL_TAG_LABEL = 'Free';
+const FREE_POOL_COST_TEXT = 'Free, uses no credits';
 const TYPICAL_MESSAGE_NOTE = `A typical message is about ${TYPICAL_MESSAGE_TOKENS.input.toLocaleString()} tokens in and ${TYPICAL_MESSAGE_TOKENS.output.toLocaleString()} out.`;
 
 const RAIL_CLASS =
@@ -124,7 +126,8 @@ function formatMessageCredits(credits: number): string {
   return `~${amount} ${credits === 1 ? 'credit' : 'credits'}`;
 }
 
-function messageCostLabel(credits: number | null): string | null {
+function messageCostLabel(entry: ModelCatalogueEntry, credits: number | null): string | null {
+  if (entry.freePool && !entry.eventAccess) return FREE_POOL_COST_TEXT.toLowerCase();
   if (credits === null) return null;
   return `about ${credits.toLocaleString(undefined, { maximumFractionDigits: 2 })} credits per typical message`;
 }
@@ -153,8 +156,8 @@ function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
 
 function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () => void }) {
   const capabilities = CAPABILITY_CHIPS.filter((chip) => chip.matches(entry));
-  const messageCredits = estimateMessageCredits(entry.id);
-  const rates = creditsPerMillionTokens(entry.id);
+  const messageCredits = entry.freePool ? null : estimateMessageCredits(entry.id);
+  const rates = entry.freePool ? null : creditsPerMillionTokens(entry.id);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
       <button
@@ -182,15 +185,21 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         <div>
           <dt className={CARD_LABEL_CLASS}>Typical message</dt>
           <dd className={CARD_VALUE_CLASS}>
-            {messageCredits === null ? NOT_PUBLISHED_TEXT : formatMessageCredits(messageCredits)}
+            {entry.freePool
+              ? FREE_POOL_COST_TEXT
+              : messageCredits === null
+                ? NOT_PUBLISHED_TEXT
+                : formatMessageCredits(messageCredits)}
           </dd>
         </div>
         <div>
           <dt className={CARD_LABEL_CLASS}>Credits per 1M tokens</dt>
           <dd className={CARD_VALUE_CLASS}>
-            {rates
-              ? `${rates.input.toLocaleString()} in · ${rates.output.toLocaleString()} out`
-              : NOT_PUBLISHED_TEXT}
+            {entry.freePool
+              ? FREE_POOL_COST_TEXT
+              : rates
+                ? `${rates.input.toLocaleString()} in · ${rates.output.toLocaleString()} out`
+                : NOT_PUBLISHED_TEXT}
           </dd>
         </div>
         <div>
@@ -478,8 +487,11 @@ export function ModelCatalogue({
                 const hardLocked =
                   comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
                 const locked = planLocked || hardLocked;
-                const credits = entry.eventAccess ? null : (messageCredits.get(entry.id) ?? null);
-                const costLabel = messageCostLabel(credits);
+                const credits =
+                  entry.eventAccess || entry.freePool
+                    ? null
+                    : (messageCredits.get(entry.id) ?? null);
+                const costLabel = messageCostLabel(entry, credits);
                 return (
                   <div key={entry.id} className="flex items-center gap-0">
                     <button
@@ -553,11 +565,17 @@ export function ModelCatalogue({
                             {ROUTER_TAG_LABEL}
                           </span>
                         )}
-                        {credits !== null ? (
+                        {entry.freePool && !entry.eventAccess ? (
+                          <span
+                            className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}
+                          >
+                            {FREE_POOL_TAG_LABEL}
+                          </span>
+                        ) : credits !== null ? (
                           <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                             {formatMessageCredits(credits)}
                           </span>
-                        ) : entry.priceBand && !entry.eventAccess ? (
+                        ) : entry.priceBand && !entry.eventAccess && !entry.freePool ? (
                           <PriceBandMark
                             filled={entry.priceBand.filled}
                             scale={entry.priceBand.scale}
