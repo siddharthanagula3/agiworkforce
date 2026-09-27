@@ -37,6 +37,7 @@ import { getIdentityUser } from '@/lib/server/identity';
 import { provisionEnterpriseSignIn } from '@/lib/server/sso/jit-provisioning';
 import { linkPendingScimUsersAtSignIn } from '@/lib/server/scim/scim-sign-in-linking';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
+import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 import {
   buildFlagSubject,
   evaluateFlagsForSubject,
@@ -87,6 +88,7 @@ async function handleGetMe(request: NextRequest) {
 
   try {
     const { userId, email } = await getClerkAuthUser(request);
+    await attributeReferralFromRequest(request, userId);
 
     let clerkName: string | undefined;
     let verifiedProfileEmail: string | null = null;

@@ -64,7 +64,7 @@ function formatDateTime(value: string | null): string {
   if (!value) return ', ';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return ', ';
-  return date.toLocaleString('en-US', {
+  return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -258,7 +258,10 @@ export function LinkedDevicesPanel() {
         {loading ? (
           <div aria-hidden="true" className="flex flex-col gap-2">
             {[0, 1].map((row) => (
-              <div key={row} className="h-10 w-full animate-pulse rounded-compact bg-foreground/[0.07]" />
+              <div
+                key={row}
+                className="h-10 w-full animate-pulse rounded-compact bg-foreground/[0.07]"
+              />
             ))}
           </div>
         ) : loadError ? (

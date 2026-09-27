@@ -148,6 +148,7 @@ export interface ModelCatalogueEntry {
   // No per million price: with the usage meter it lets a plan's allowance be
   // worked back into tokens (founder, 2026-09-21). The band is relative.
   priceBand: ModelPickerPriceBand | null;
+  freePool: boolean;
   capabilities: ModelCatalogueCapabilities;
   admitted: boolean;
   /**
@@ -227,6 +228,7 @@ function toCatalogueEntry(
     contextTokens: model.contextWindow ?? null,
     maxOutputTokens: model.maxOutputTokens ?? null,
     priceBand: getModelPriceBand(model.id),
+    freePool: routes.some((route) => route.isDefault && route.freeInventory !== null),
     capabilities: projectCapabilities(facts.capabilities),
     admitted,
     temporarilyUnavailable,

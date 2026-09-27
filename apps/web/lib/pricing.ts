@@ -1,5 +1,6 @@
 import { logger } from './logger';
 import {
+  BILLING_PLAN_PRICING,
   getPlanPriceUsd,
   getPlanPriceInr,
   type BillingInterval,
@@ -152,17 +153,17 @@ export const PRICING_CONFIG = {
   plans: [
     {
       id: 'basic',
-      name: 'Basic',
+      name: BILLING_PLAN_PRICING.basic.label,
       price: {
         monthly: getPlanPriceUsd('basic', 'monthly'),
         monthlyInr: getPlanPriceInr('basic'),
-        yearly: undefined, // Basic is monthly-only
+        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.basic,
     },
     {
       id: 'pro',
-      name: 'Pro',
+      name: BILLING_PLAN_PRICING.pro.label,
       price: {
         monthly: getPlanPriceUsd('pro', 'monthly'),
         yearly: getPlanPriceUsd('pro', 'yearly'),
@@ -171,25 +172,25 @@ export const PRICING_CONFIG = {
     },
     {
       id: 'max',
-      name: 'Max 5x',
+      name: BILLING_PLAN_PRICING.max.label,
       price: {
         monthly: getPlanPriceUsd('max', 'monthly'),
-        yearly: undefined, // Max is monthly-only
+        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max,
     },
     {
       id: 'max_15x',
-      name: 'Max 15x',
+      name: BILLING_PLAN_PRICING.max_15x.label,
       price: {
         monthly: getPlanPriceUsd('max_15x', 'monthly'),
-        yearly: undefined, // Max 15x is monthly-only
+        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max_15x,
     },
     {
       id: 'team',
-      name: 'Team',
+      name: BILLING_PLAN_PRICING.team.label,
       price: {
         monthly: getPlanPriceUsd('team', 'monthly'),
         monthlyInr: getPlanPriceInr('team'),

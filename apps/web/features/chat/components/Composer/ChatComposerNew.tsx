@@ -66,6 +66,7 @@ import {
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
+import { VideoCostEstimate } from './VideoCostEstimate';
 import { ComposerPlusMenu, PluginsGlyph } from './ComposerPlusMenu';
 import { ComposerFilesMenu } from './ComposerFilesMenu';
 import { ComposerPluginsMenu } from './ComposerPluginsMenu';
@@ -4930,6 +4931,16 @@ const ChatComposerNewComponent = ({
                         ))}
                       </AnchoredComposerMenu>
                     </div>
+                  )}
+                  {!selectedVideoIsPromotional && videoModelId && (
+                    <VideoCostEstimate
+                      modelId={videoModelId}
+                      resolution={effectiveVideoResolution}
+                      aspectRatio={effectiveVideoAspectRatio}
+                      {...(effectiveVideoDurationSecs !== undefined
+                        ? { durationSecs: effectiveVideoDurationSecs }
+                        : {})}
+                    />
                   )}
                   {selectedPromotionalVideo && (
                     <span className="text-xs text-muted-foreground">

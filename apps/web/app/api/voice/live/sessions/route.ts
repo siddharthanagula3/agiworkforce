@@ -24,7 +24,6 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   ManagedUsageRequestError,
-  createManagedUsageErrorBody,
   fingerprintManagedUsageRequest,
   finalizeManagedUsageRequest,
   markManagedUsageProviderStarted,
@@ -49,11 +48,18 @@ import {
 } from '@/lib/voice/live-voice-tools';
 import {
   describeLiveSessionFailure,
-  LIVE_SESSION_BLOCK_MINUTES,
   LIVE_SESSION_CEILING_SECONDS,
+  LIVE_SESSION_MIN_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
   liveSessionChargeMicrousd,
+  liveSessionMinutes,
 } from '@/lib/voice/live-voice-billing';
+import {
+  planVoiceSessionBlock,
+  voiceJsonError,
+  voiceUsageErrorResponse,
+  type VoiceLimitResets,
+} from './lib/voice-session-budget';
 import {
   buildLiveVoiceBackendInstructions,
   buildLiveVoiceInstructions,
@@ -86,39 +92,6 @@ const CreateLiveSessionSchema = z.object({
   pace: z.number().min(VOICE_PACE_MIN).max(VOICE_PACE_MAX).optional(),
   surface: z.enum(['web', 'mobile', 'desktop']).optional(),
 });
-
-function jsonError(
-  request: NextRequest,
-  status: number,
-  code: string,
-  message: string,
-  extra: Record<string, unknown> = {},
-): NextResponse {
-  return NextResponse.json(
-    {
-      error: {
-        message,
-        code,
-        type: status >= 500 ? 'api_error' : 'invalid_request_error',
-        ...extra,
-      },
-    },
-    { status, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-  );
-}
-
-function managedUsageErrorResponse(
-  request: NextRequest,
-  error: ManagedUsageRequestError,
-): NextResponse {
-  return NextResponse.json(
-    createManagedUsageErrorBody(
-      error,
-      error.status === 402 || error.status === 429 ? 'insufficient_quota' : 'invalid_request_error',
-    ),
-    { status: error.status, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
-  );
-}
 
 function upstreamErrorCode(body: string): string {
   try {
@@ -181,7 +154,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   try {
     body = CreateLiveSessionSchema.parse(await request.json());
   } catch {
-    return jsonError(request, 400, 'invalid_request', 'A WebRTC offer is required.');
+    return voiceJsonError(request, 400, 'invalid_request', 'A WebRTC offer is required.');
   }
 
   let apiKey: string;
@@ -189,7 +162,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     apiKey = requireEnv(OPENAI_KEY_ENV);
   } catch {
     logger.error({ event: 'live_voice_not_configured' }, `${OPENAI_KEY_ENV} is not set`);
-    return jsonError(
+    return voiceJsonError(
       request,
       503,
       'live_voice_not_configured',
@@ -199,7 +172,7 @@ async function handleCreateLiveSession(request: NextRequest) {
 
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
-    return managedUsageErrorResponse(
+    return voiceUsageErrorResponse(
       request,
       new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch'),
     );
@@ -207,7 +180,7 @@ async function handleCreateLiveSession(request: NextRequest) {
 
   const conversationId = body.conversationId;
   if (!conversationId) {
-    return jsonError(
+    return voiceJsonError(
       request,
       400,
       'voice_conversation_required',
@@ -224,7 +197,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
   if (!storeReady) {
-    return jsonError(
+    return voiceJsonError(
       request,
       503,
       'voice_session_not_recorded',
@@ -252,16 +225,22 @@ async function handleCreateLiveSession(request: NextRequest) {
     offer: body.sdp,
   };
 
-  const ceilingSeconds = LIVE_SESSION_CEILING_SECONDS;
-  const estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id);
-  if (estimatedCostMicrousd === null) {
+  if (liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, liveModel.id) === null) {
     logger.error(
       { event: 'live_voice_unpriced', model: liveModel.id },
       'The live voice model declares no session rate, so its minutes cannot be charged',
     );
-    return jsonError(request, 503, 'live_voice_unpriced', 'Live voice is unavailable right now.');
+    return voiceJsonError(
+      request,
+      503,
+      'live_voice_unpriced',
+      'Live voice is unavailable right now.',
+    );
   }
   let reservation: ManagedUsageRequestReservation;
+  let limitResets: VoiceLimitResets | undefined;
+  let ceilingSeconds = LIVE_SESSION_MIN_BLOCK_SECONDS;
+  let estimatedCostMicrousd = 0;
   try {
     const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
@@ -274,12 +253,21 @@ async function handleCreateLiveSession(request: NextRequest) {
       if (gateResponse) return gateResponse;
     }
     const planTier = entitlement.plan;
+    const block = await planVoiceSessionBlock({
+      db: scoped.db,
+      userId,
+      planTier,
+      modelId: liveModel.id,
+    });
+    limitResets = block.resetsAt;
+    ceilingSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);
+    estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id) ?? 0;
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,
       planTier,
       unit: 'voice_minutes',
-      requestedUnits: LIVE_SESSION_BLOCK_MINUTES,
+      requestedUnits: liveSessionMinutes(ceilingSeconds),
     });
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
@@ -300,13 +288,13 @@ async function handleCreateLiveSession(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
-      return managedUsageErrorResponse(request, error);
+      return voiceUsageErrorResponse(request, error, limitResets);
     }
     logger.error(
       { event: 'live_voice_reservation_failed', error, userId, model: liveModel.id },
       'Live voice reservation failed before any provider spend',
     );
-    return managedUsageErrorResponse(
+    return voiceUsageErrorResponse(
       request,
       new ManagedUsageRequestError(
         'Managed usage billing is temporarily unavailable.',
@@ -410,7 +398,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
     await releaseReservation('provider_failed');
     const failure = describeLiveSessionFailure(response.status, upstreamCode);
-    return jsonError(request, failure.status, failure.code, failure.message, {
+    return voiceJsonError(request, failure.status, failure.code, failure.message, {
       upstreamStatus: response.status,
       upstreamCode,
     });
@@ -426,7 +414,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   const answer = created.transport?.sdp;
   if (!sessionId || !answer) {
     await releaseReservation('provider_malformed');
-    return jsonError(
+    return voiceJsonError(
       request,
       502,
       'live_voice_malformed',
@@ -437,7 +425,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   await closeExpiredVoiceSessions({
     db: scoped.db,
     userId,
-    maxOpenSeconds: ceilingSeconds,
+    maxOpenSeconds: LIVE_SESSION_CEILING_SECONDS,
   }).catch((error: unknown) => {
     logger.warn(
       { event: 'voice_session_expiry_failed', error, userId },
@@ -469,7 +457,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   }
   if (!record) {
     await releaseReservation('voice_session_not_recorded');
-    return jsonError(
+    return voiceJsonError(
       request,
       503,
       'voice_session_not_recorded',

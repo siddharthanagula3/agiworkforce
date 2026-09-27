@@ -66,30 +66,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
-## S81.07: Explicit definition of the baseline behind “5x” and “15x.”
-
-- Done when: Pricing states what "1x" means: the baseline plan behind 5x/15x and its concrete allowance.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Publish the baseline's concrete allowance: pricing says '15x Pro usage' (computed) and '5x Pro usage', but Pro itself is only '5x Basic usage' and Basic is 'Base paid usage', so 1x is never stated in credits before purchase. | ui |
-| desktop | partial | Same as web (hosted web app): the baseline is named (Pro) but never quantified. | ui |
-
-Code: `apps/web/app/pricing/page.tsx:706-708`, `apps/web/lib/billing/managed-usage-caps.ts:66-90`, `apps/web/features/settings/sections/BillingSection.tsx:511-517`
-
-## S81.08: Explicit identification of the allowance being multiplied.
-
-- Done when: Plan copy names exactly which allowance a multiplier scales (e.g. managed-usage credits per 5-hour, weekly and monthly window).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Say on pricing that Nx scales the managed-usage credit allowance in each window (5-hour, weekly, monthly) and that flagship-weekly is 30% of weekly; pricing only says 'Managed usage: 5x Pro usage'. Settings > Usage names the windows for your own plan only. | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
-
-Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/lib/billing/managed-usage-caps.ts:29-49`, `apps/web/features/settings/sections/UsageSection.tsx:419-428`
-
 ## S81.09: Separate feature-access differences.
 
 - Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
@@ -122,13 +98,11 @@ Code: `packages/contracts/types/src/model-catalog.ts:1142-1153`, `packages/contr
 
 - Done when: Plans differ in generation settings (e.g. reasoning effort, manual model choice), the UI shows the gated options, and the server clamps requests to the plan.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
-| cli | partial | CLI model picker gates manual model choice by tier (is_locked) and the server clamps effort, so the item applies; the lock label is misleading. |  |
-| chrome | partial | Chrome has its own effort control (getManagedEffortControlState) and serves Free/Basic, whose efforts are gated; the item applies. Model list comes from the server (plan-filtered) but effort gating is not shown. |  |
 
 ## S81.17: Monthly and annual billing choices.
 
@@ -147,13 +121,13 @@ Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/lib/validations/checkou
 
 - Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
 - Wave: 2
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No plan sets trialDays, so checkout never offers a trial; the invite-code trial route (/api/claim-offer) has no web caller; and nothing expires a code-granted trialing subscription when its period ends. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
+| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
+| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
 | mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code into a trialing plan via /api/claim-offer, but nothing ends that trial: a code-granted trialing row is never moved to expired, so plan features stay unlocked. | states |
 
 Code: `apps/web/app/api/checkout/route.ts:83-106`, `packages/contracts/types/src/billing-catalog.ts:43-52`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`
 
@@ -224,32 +198,6 @@ Code: `packages/contracts/types/src/billing-plan-catalog.ts:28-38`, `apps/web/ap
 | mobile | partial | Mobile cannot upgrade in-app, and its info block tells Stripe subscribers an upgrade keeps the renewal date, which the web upgrade does not do. | ui, flag-off |
 
 Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/stripe-plan-change.ts:50-78`, `apps/web/app/api/upgrade/route.ts:273-283`, `apps/web/features/billing/components/UpgradeOrderPanel.tsx:289-292`
-
-## S81.24: Downgrade effective time.
-
-- Done when: A downgrade takes effect at a stated time (e.g. end of period), shown to the user before they confirm, with access kept until then.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Add a downgrade review that states when the lower plan starts: the app hands every downgrade to the Stripe Customer Portal, whose configuration (not in this repo) decides immediate vs period-end, and no app screen says which. | ui, handler |
-| desktop | partial | Same as web (hosted web app); the portal opens in the system browser. | ui, handler |
-
-Code: `apps/web/app/pricing/page.tsx:565-587`, `apps/web/lib/server/stripe-plan-change.ts:126-133`
-
-## S81.25: Grace-period behavior.
-
-- Done when: When a renewal payment fails, the plan follows a defined grace rule and the user is told what access remains and how to fix it.
-- Wave: 3
-- Already works on: mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Tell past-due users the real rule: self-serve paid features stop at the first failed renewal (no grace), yet Billing says access 'can be' suspended and links to /payment-failure, which says no subscription was created and nothing was charged. | states |
-| desktop | partial | Same as web (hosted web app). | states |
-| cli | partial | CLI never shows the subscription status; a blocked request only says 'plan payment required' with a pricing link rather than a billing fix. | ui |
-
-Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/web/app/payment-failure/page.tsx:35-38`, `apps/web/lib/services/subscription-access-policy.ts:17-29`, `packages/contracts/types/src/subscription-entitlement.ts:16-30`
 
 ## S81.28: Plan-specific feature explanations.
 

@@ -30,6 +30,8 @@ import {
   type ResearchStep,
 } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { useModelStore } from '@shared/stores/model-store';
+import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
 import { ResearchPlan } from './ResearchPlan';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
@@ -176,6 +178,20 @@ export function ResearchActivity({
     (research.phase === 'planning' ||
       research.phase === 'searching' ||
       research.phase === 'synthesizing');
+  const selectedModelId = useModelStore((state) => state.selectedModelId);
+  const costEstimate = {
+    modelId: selectedModelId,
+    rounds: research.maxIterations,
+    searches: research.maxSearches,
+  };
+  const runEstimate =
+    isActive && research.maxIterations && research.maxSearches !== undefined
+      ? estimateResearchCredits({
+          modelId: selectedModelId,
+          rounds: research.maxIterations,
+          searches: research.maxSearches,
+        })
+      : null;
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -210,6 +226,9 @@ export function ResearchActivity({
   }
   if (!isActive && typeof research.credits === 'number' && Number.isFinite(research.credits)) {
     counts.push(formatCredits(research.credits, { maximumFractionDigits: 2 }));
+  }
+  if (runEstimate) {
+    counts.push(`up to ~${formatCredits(runEstimate.total, { maximumFractionDigits: 0 })}`);
   }
   if (
     isActive &&
@@ -452,6 +471,7 @@ export function ResearchActivity({
             steps={steps}
             editable
             busy={isRetrying}
+            costEstimate={costEstimate}
             onStart={(submission) =>
               onPlanDecision?.('start', {
                 ...researchSourceRequest(sources),

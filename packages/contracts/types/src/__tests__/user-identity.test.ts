@@ -28,7 +28,7 @@ describe('UI plan identity', () => {
   it('uses the canonical public plan labels', () => {
     expect(PLAN_LABEL.free).toBe('Free');
     expect(PLAN_LABEL.max).toBe('Max 5x');
-    expect(PLAN_LABEL.max_15x).toBe('Max 15x');
+    expect(PLAN_LABEL.max_15x).toBe('Max 20x');
     expect(PLAN_LABEL.team).toBe('Team');
   });
 

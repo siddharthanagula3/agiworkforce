@@ -1,18 +1,37 @@
-
 import { Badge } from '@agiworkforce/ui';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@agiworkforce/ui';
+import { formatCredits } from '@agiworkforce/types';
 import { getModelPresentationLabel } from '@agiworkforce/unified-chat';
-import { Zap, TrendingUp, DollarSign } from 'lucide-react';
+import { Zap, TrendingUp } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import {
+  useSettledTurnCredits,
+  type SettledTurnCredits,
+} from '@features/chat/lib/use-settled-turn-credits';
 
 interface TokenUsageDisplayProps {
   tokensUsed: number;
   inputTokens?: number;
   outputTokens?: number;
   model?: string;
-  cost?: number;
+  requestId?: string;
   className?: string;
   variant?: 'compact' | 'detailed';
+}
+
+function settledCreditsLabel(settled: SettledTurnCredits | null): string | null {
+  if (!settled) return null;
+  switch (settled.status) {
+    case 'settled':
+      return formatCredits(settled.credits, { maximumFractionDigits: 2 });
+    case 'loading':
+    case 'pending':
+      return 'Credits settling';
+    case 'unavailable':
+      return 'Credits unavailable';
+    case 'unmetered':
+      return null;
+  }
 }
 
 export function TokenUsageDisplay({
@@ -20,11 +39,11 @@ export function TokenUsageDisplay({
   inputTokens,
   outputTokens,
   model,
-  cost,
+  requestId,
   className,
   variant = 'compact',
 }: TokenUsageDisplayProps) {
-  const formattedCost = cost ? (cost < 0.01 ? `<$0.01` : `$${cost.toFixed(4)}`) : null;
+  const creditsLabel = settledCreditsLabel(useSettledTurnCredits(requestId));
 
   const formatTokens = (num: number) => {
     if (num >= 1000) {
@@ -44,10 +63,10 @@ export function TokenUsageDisplay({
             >
               <Zap className="h-3 w-3" />
               <span>{formatTokens(tokensUsed)} tokens</span>
-              {formattedCost && (
+              {creditsLabel && (
                 <>
                   <span className="text-muted-foreground">•</span>
-                  <span>{formattedCost}</span>
+                  <span>{creditsLabel}</span>
                 </>
               )}
             </Badge>
@@ -73,10 +92,10 @@ export function TokenUsageDisplay({
                 <span className="font-medium">Total:</span>
                 <span className="font-mono font-medium">{formatTokens(tokensUsed)}</span>
               </div>
-              {formattedCost && (
-                <div className="flex items-center justify-between gap-4 text-green-600 dark:text-green-400">
-                  <span className="font-medium">Cost:</span>
-                  <span className="font-mono font-medium">{formattedCost}</span>
+              {creditsLabel && (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="font-medium">Credits:</span>
+                  <span className="font-mono font-medium">{creditsLabel}</span>
                 </div>
               )}
             </div>
@@ -115,12 +134,7 @@ export function TokenUsageDisplay({
           </div>
         )}
 
-        {formattedCost && (
-          <div className="flex items-center gap-1.5 text-green-600 dark:text-green-400">
-            <DollarSign className="h-3.5 w-3.5" />
-            <span className="font-mono font-medium">{formattedCost}</span>
-          </div>
-        )}
+        {creditsLabel && <span className="font-mono font-medium">{creditsLabel}</span>}
       </div>
     </div>
   );
