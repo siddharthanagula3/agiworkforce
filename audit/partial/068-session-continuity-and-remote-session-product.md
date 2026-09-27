@@ -204,7 +204,7 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 ## S68.16: Move work to cloud through an explicit handoff.
 
 - Done when: The user explicitly hands a local session over to cloud execution, seeing what moves.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -212,9 +212,9 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
-| vscode | partial | The extension only issues local handoffs (handOffThread(..., 'local')); nothing moves a session to cloud execution. | ui, handler |
+| vscode | partial | Continue in the Cloud (835ae2a5d) reviews and creates an AGI Code session on the pushed branch and runs the first turn. Session creation needs AGI_E2B_EXECUTION on in production; the title is not yet clipped to the shared title limit (pending lead approval for CLOUD_CODE_LIMITS in packages/contracts/types). | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/core/commandSetup.ts:479-479`
+Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/extension.ts:198-198`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:97-97`
 
 ## S68.17: Bring cloud results back to local workspace.
 
