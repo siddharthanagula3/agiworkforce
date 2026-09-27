@@ -246,10 +246,10 @@ impl std::fmt::Display for UsageFetchError {
             } => {
                 let billing = web_link(BILLING_PATH);
                 match detail {
-                    Some(detail) => write!(f, "{detail} Fix billing at {billing}"),
+                    Some(detail) => write!(f, "{detail} Settings > Billing: {billing}"),
                     None => write!(
                         f,
-                        "a payment on this plan did not go through, update your payment method at {billing}"
+                        "your last payment did not go through. Update your payment method in Settings > Billing: {billing}"
                     ),
                 }
             }
@@ -477,11 +477,12 @@ fn subscription_lines(status: Option<&str>) -> Vec<String> {
         return lines;
     }
     if PAYMENT_FAILED_SUBSCRIPTION_STATUSES.contains(&status.as_str()) {
-        lines.push(
-            "  Payment failed: until it is paid this account runs on Free, and plan features and purchased credits are paused.".to_string(),
-        );
         lines.push(format!(
-            "  Fix it: update your payment method at {}",
+            "  Your last payment did not go through, so this subscription is {}. Until it is settled this account is on Free, and plan features and purchased credits are paused.",
+            subscription_status_label(&status)
+        ));
+        lines.push(format!(
+            "  Update your payment method in Settings > Billing: {}",
             web_link(BILLING_PATH)
         ));
     } else if status == "paused" {
