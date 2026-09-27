@@ -35,7 +35,7 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/entitlement-resolution';
 import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import {
@@ -754,7 +754,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const spendGateResponse = await buildSpendLimitGateResponse(userId);
   if (spendGateResponse) return spendGateResponse;
 
-  const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);
+  const subscription = await resolveEffectiveSubscription((await callerScope()).db, userId);
 
   if (!subscription) {
     return NextResponse.json(

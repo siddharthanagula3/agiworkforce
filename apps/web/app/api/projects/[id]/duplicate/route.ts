@@ -8,7 +8,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { DEFAULT_PROJECT_COLOR, mapProjectRow } from '@/lib/projects';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   getProjectLimit,
   getProjectLimitErrorMessage,
@@ -68,8 +68,7 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     throw createError.notFound('Project not found');
   }
 
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = subscription?.plan_tier;
+  const planTier = await resolveEntitledPlanTier(db, userId);
   const projectLimit = getProjectLimit(planTier);
   if (projectLimit === 0) {
     throw createError.validation(getProjectLimitErrorMessage(planTier));
