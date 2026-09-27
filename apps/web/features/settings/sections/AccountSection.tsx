@@ -33,6 +33,7 @@ import {
   useCancelAccountDeletion,
 } from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return ', ';
@@ -388,6 +389,7 @@ export function AccountSection() {
       ) : (
         <>
           <h1 style={titleStyle}>Account</h1>
+          <HelpArticleLink docId="account-security" label="Sessions, email and API keys" />
 
           <div>
             <AccountRow label="Email" hint={currentEmail ?? 'No email address on this account.'}>
