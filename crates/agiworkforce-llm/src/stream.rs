@@ -774,15 +774,25 @@ async fn stream_openai_compat(
     on_event: OnEvent<'_>,
 ) -> Result<ChatOutcome, LlmError> {
     let body = build_openai_compat_request_body(req, opts);
+    post_openai_compat_stream(client, spec, &body, req.model, req.idle_timeout, on_event).await
+}
 
-    tracing::trace!(spec = ?spec, model = %req.model, "sending openai-compatible chat request");
+pub async fn post_openai_compat_stream(
+    client: &reqwest::Client,
+    spec: &ProviderSpec,
+    body: &Value,
+    model: &str,
+    idle_timeout: Duration,
+    on_event: OnEvent<'_>,
+) -> Result<ChatOutcome, LlmError> {
+    tracing::trace!(spec = ?spec, model = %model, "sending openai-compatible chat request");
 
     let url = &spec.base_url;
     let mut builder = client.post(url);
     builder = apply_headers(builder, url, spec)?;
     builder = builder.header("content-type", "application/json");
     let resp = builder
-        .json(&body)
+        .json(body)
         .send()
         .await
         .map_err(|e| LlmError::Network {
@@ -791,23 +801,28 @@ async fn stream_openai_compat(
         })?;
 
     if !resp.status().is_success() {
-        return Err(error_from_response(provider_label(spec), req.model, resp).await);
+        return Err(error_from_response(provider_label(spec), model, resp).await);
     }
 
-    if let Some(warning) = resp
-        .headers()
-        .get(QUOTA_WARNING_HEADER)
-        .and_then(|value| value.to_str().ok())
-    {
-        on_event(StreamEvent::Vendor {
-            event: QUOTA_WARNING_EVENT.to_string(),
-            data: serde_json::json!({ "value": warning }),
-        });
+    for (header, event) in [
+        (QUOTA_WARNING_HEADER, QUOTA_WARNING_EVENT),
+        (AGENT_RUN_ID_HEADER, AGENT_RUN_ID_EVENT),
+    ] {
+        if let Some(value) = resp
+            .headers()
+            .get(header)
+            .and_then(|value| value.to_str().ok())
+        {
+            on_event(StreamEvent::Vendor {
+                event: event.to_string(),
+                data: serde_json::json!({ "value": value }),
+            });
+        }
     }
 
     run_openai_compat_stream(
         llm_byte_stream(resp),
-        req.idle_timeout,
+        idle_timeout,
         provider_label(spec),
         on_event,
     )
@@ -816,6 +831,9 @@ async fn stream_openai_compat(
 
 const QUOTA_WARNING_HEADER: &str = "x-quota-warning";
 const QUOTA_WARNING_EVENT: &str = "quota_warning";
+const AGENT_RUN_ID_HEADER: &str = "x-agi-agent-run-id";
+pub const AGENT_RUN_ID_EVENT: &str = "agent_run_id";
+pub const FORWARDED_DELTA_EXTENSIONS: [&str; 2] = ["x_tool_approval_request", "x_agent_event"];
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(
@@ -907,6 +925,17 @@ where
                             on_event(StreamEvent::TextDelta {
                                 text: text.to_string(),
                             });
+                        }
+
+                        if let Some(delta) = choice.get("delta") {
+                            for key in FORWARDED_DELTA_EXTENSIONS {
+                                if let Some(value) = delta.get(key) {
+                                    on_event(StreamEvent::Vendor {
+                                        event: key.to_string(),
+                                        data: value.clone(),
+                                    });
+                                }
+                            }
                         }
 
                         // Tool call deltas
