@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { listCanonicalModels } from '@agiworkforce/types';
+import { getModelAvailability, listCanonicalModels } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({
@@ -81,7 +81,9 @@ describe('GET /api/models lifecycle', () => {
       expect(source, entry.id).toBeDefined();
       const deprecated = source?.deprecated === true || source?.status === 'deprecated';
       expect(entry.lifecycle.deprecated, entry.id).toBe(deprecated);
-      expect(entry.lifecycle.availability, entry.id).toBe(source?.availability ?? 'live');
+      expect(entry.lifecycle.availability, entry.id).toBe(
+        source ? getModelAvailability(source) : 'live',
+      );
       expect(['active', 'beta', 'deprecated']).toContain(entry.lifecycle.status);
     }
     expect(body.models.some((entry) => entry.lifecycle.deprecated)).toBe(true);

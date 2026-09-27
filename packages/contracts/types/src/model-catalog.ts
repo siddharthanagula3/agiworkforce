@@ -1092,6 +1092,12 @@ const SEARCH_ONLY_MANAGED_CLOUD_PROVIDER_SET = new Set<string>(
 );
 const BYOK_PROVIDER_SET = new Set<string>(BYOK_PROVIDER_IDS);
 const LOCAL_PROVIDER_SET = new Set<string>(LOCAL_PROVIDER_IDS);
+export function isPastDeprecationDate(model: ModelMetadata, now: number = Date.now()): boolean {
+  if (!model.deprecation_date) return false;
+  const retiresAt = Date.parse(model.deprecation_date);
+  return !Number.isNaN(retiresAt) && retiresAt <= now;
+}
+
 const MANUAL_OVERRIDE_MODEL_TYPES = new Set<ModelType>([
   'chat',
   'code',
@@ -1105,6 +1111,7 @@ const MANUAL_OVERRIDE_MODEL_IDS: readonly string[] = Object.entries(
   .filter(([, model]) => {
     if (model.deprecated) return false;
     if (model.status === 'deprecated') return false;
+    if (isPastDeprecationDate(model)) return false;
     if (model.status === 'experimental') return false;
     return MANUAL_OVERRIDE_MODEL_TYPES.has(model.modelType);
   })
@@ -1996,6 +2003,8 @@ function routePermitsManagedTraffic(route: RegistryRouteRecord): boolean {
 export function listManagedRoutesForModel(modelId: string): ManagedModelRoute[] {
   const canonicalModelId = normalizeModelId(modelId);
   if (!canonicalModelId) return [];
+  const metadata = modelsCatalog.models[canonicalModelId];
+  if (metadata && isPastDeprecationDate(metadata)) return [];
   const routes = modelRegistry.routes as Readonly<Record<string, RegistryRouteRecord>>;
   return Object.entries(routes)
     .filter(([, route]) => route.modelKey === canonicalModelId && routePermitsManagedTraffic(route))
@@ -2168,6 +2177,7 @@ export function getModels(options: ModelQueryOptions = {}): ModelMetadata[] {
 }
 
 export function getModelAvailability(model: ModelMetadata): ModelAvailability {
+  if (isPastDeprecationDate(model)) return 'unavailable';
   return model.availability ?? 'live';
 }
 
@@ -2551,7 +2561,7 @@ export function isModelSelectable(modelId: string | null | undefined): boolean {
 function matchesModelQueryOptions(model: ModelMetadata, options: ModelQueryOptions = {}): boolean {
   const { includeDeprecated = false, modelTypes, requireCapabilities } = options;
 
-  if (!includeDeprecated && model.status === 'deprecated') {
+  if (!includeDeprecated && (model.status === 'deprecated' || isPastDeprecationDate(model))) {
     return false;
   }
 
@@ -2851,7 +2861,10 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
   return getExecutableModelIds()
     .map((modelId) => getModelMetadataById(modelId))
     .filter((model): model is ModelMetadata => Boolean(model))
-    .filter((model) => includeDeprecated || model.status !== 'deprecated')
+    .filter(
+      (model) =>
+        includeDeprecated || (model.status !== 'deprecated' && !isPastDeprecationDate(model)),
+    )
     .filter((model) => allowedTypes.has(model.modelType))
     .filter((model) => (allowedProviderSet ? allowedProviderSet.has(model.provider) : true))
     .sort((left, right) => {
