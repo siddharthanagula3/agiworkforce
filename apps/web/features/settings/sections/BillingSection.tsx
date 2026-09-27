@@ -1,16 +1,21 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Switch } from '@agiworkforce/ui';
+import { Switch, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { openBillingPortal } from '@/features/billing/services/stripe-payments';
-import { fetchPlanChangeState, keepCurrentPlan } from '@/features/billing/services/billing-account';
+import {
+  fetchPlanChangeState,
+  keepCurrentPlan,
+  scheduleDowngrade,
+} from '@/features/billing/services/billing-account';
 import type { PlanChangeState } from '@/features/billing/lib/billing-account-types';
 import {
   formatBillingDate,
   formatBillingDateFromSeconds,
   formatBillingMoney,
+  formatRecurringMoney,
   formatUsdAmount,
 } from '@/features/billing/lib/billing-format';
 import {
@@ -248,9 +253,10 @@ export function BillingSection() {
   const [overageError, setOverageError] = useState<string | null>(null);
   const [planState, setPlanState] = useState<PlanChangeState | null>(null);
   const [planStateError, setPlanStateError] = useState<string | null>(null);
-  const [resumePending, setResumePending] = useState(false);
-  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [planActionPending, setPlanActionPending] = useState(false);
+  const [planActionError, setPlanActionError] = useState<string | null>(null);
   const [downgradeOpen, setDowngradeOpen] = useState(false);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   async function setOverage(next: boolean) {
     if (overagePending) return;
@@ -291,27 +297,63 @@ export function BillingSection() {
   }
 
   async function resumePlan() {
-    if (resumePending) return;
-    setResumePending(true);
-    setResumeError(null);
+    if (planActionPending) return;
+    setPlanActionPending(true);
+    setPlanActionError(null);
     try {
       setPlanState(await keepCurrentPlan());
     } catch (error) {
-      setResumeError(toUserMessage(error, 'Your plan could not be resumed. Nothing was changed.'));
+      setPlanActionError(
+        toUserMessage(error, 'Your plan could not be resumed. Nothing was changed.'),
+      );
     } finally {
-      setResumePending(false);
+      setPlanActionPending(false);
     }
+  }
+
+  function requestSwitchToMonthly() {
+    const target = planState?.cadenceSwitch;
+    if (!target || planActionPending) return;
+    const label = getBillingPlanPricing(target.plan).label;
+    const switchOn = formatBillingDate(planState?.periodEnd);
+    const monthlyPrice = formatRecurringMoney(
+      target.price.amountCents,
+      target.price.currency,
+      target.price.interval,
+    );
+    confirm({
+      title: `Switch ${label} to monthly billing?`,
+      description: `${label} switches to monthly billing ${switchOn ? `on ${switchOn}, ` : ''}when your yearly term ends, and then renews at ${monthlyPrice} plus tax. Nothing is charged today. Once the switch happens, yearly billing is no longer available for ${label}.`,
+      confirmLabel: 'Switch to monthly',
+      destructive: false,
+      onConfirm: async () => {
+        setPlanActionPending(true);
+        setPlanActionError(null);
+        try {
+          setPlanState(await scheduleDowngrade(target.plan));
+        } catch (error) {
+          setPlanActionError(
+            toUserMessage(error, 'The switch to monthly billing could not be scheduled.'),
+          );
+        } finally {
+          setPlanActionPending(false);
+        }
+      },
+    });
   }
 
   const tier: string = String(subscription?.tier ?? 'free').toLowerCase();
   const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : undefined;
   const displayPlanLabel = planLabel ?? subscription?.display_name ?? '';
   const listPriceUsd = getPlanPriceUsd(tier, 'monthly');
+  const yearlyPrice = planState?.price?.interval === 'yearly' ? planState.price : null;
   const planPriceLabel = isContractPricedPlan(tier)
     ? 'Custom, set by your contract'
-    : listPriceUsd !== null && listPriceUsd > 0
-      ? `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
-      : null;
+    : yearlyPrice
+      ? formatRecurringMoney(yearlyPrice.amountCents, yearlyPrice.currency, yearlyPrice.interval)
+      : listPriceUsd !== null && listPriceUsd > 0
+        ? `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
+        : null;
 
   const isFreeTier = isFreeBillingPlanTier(tier);
 
@@ -704,11 +746,12 @@ export function BillingSection() {
               catalogPriceLabel={planPriceLabel}
               paymentMethodLabel={defaultCard ? describeCard(defaultCard) : null}
               openInvoice={openInvoice}
-              resumePending={resumePending}
-              resumeError={resumeError}
+              actionPending={planActionPending}
+              actionError={planActionError}
               portalPending={portalPending}
               onResume={() => void resumePlan()}
               onOpenPortal={() => void openPortal()}
+              onSwitchToMonthly={requestSwitchToMonthly}
             />
             {planStateError ? (
               <p
@@ -1209,6 +1252,7 @@ export function BillingSection() {
           setDowngradeOpen(false);
         }}
       />
+      {confirmDialog}
     </div>
   );
 }

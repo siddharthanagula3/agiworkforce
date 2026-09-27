@@ -71,19 +71,26 @@ test('the module that declares an entry point is not read as a caller', () => {
   );
 });
 
+const FIXTURE_BASELINE = new Map([
+  [
+    'apps/web/lib/services/scheduled-agent-executor.ts',
+    'a fixture entry standing in for a call site that pinned auto while it was being fixed',
+  ],
+]);
+
 test('a new caller pinning auto fails even while another one is baselined', () => {
   const root = fixture({
     'apps/web/lib/services/scheduled-agent-executor.ts': PINNED_AUTO,
     'apps/web/lib/services/new-executor.ts': PINNED_AUTO,
   });
-  const { failures } = approvalModeFailures(root, AUTO_MODE_BASELINE);
+  const { failures } = approvalModeFailures(root, FIXTURE_BASELINE);
   assert.equal(failures.length, 1);
   assert.match(failures[0], /new-executor\.ts/u);
 });
 
 test('a baseline entry that has been fixed must be removed', () => {
   const root = fixture({ 'apps/web/lib/services/scheduled-agent-executor.ts': DERIVED });
-  const { failures } = approvalModeFailures(root, AUTO_MODE_BASELINE);
+  const { failures } = approvalModeFailures(root, FIXTURE_BASELINE);
   assert.equal(failures.length, 1);
   assert.match(failures[0], /remove it from the baseline/u);
 });

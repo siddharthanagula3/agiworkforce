@@ -3244,11 +3244,6 @@ export function useChatStream(): UseChatStreamReturn {
         : resolveUserMessageParentId(conversationId, options.userMessageParentId);
       const threadsThisWrite = !regenerateParentId && userMessageParentId !== undefined;
 
-      const isTemporaryConversation = Boolean(
-        useChatStore
-          .getState()
-          .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
-      );
       let turnCommittedReported = false;
       const reportTurnCommitted = () => {
         if (turnCommittedReported) return;
@@ -3369,6 +3364,12 @@ export function useChatStream(): UseChatStreamReturn {
           conversationId = realConversationId;
         }
       }
+
+      const isTemporaryConversation = Boolean(
+        useChatStore
+          .getState()
+          .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+      );
 
       if (!localModel) {
         try {

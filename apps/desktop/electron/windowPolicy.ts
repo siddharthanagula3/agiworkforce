@@ -18,19 +18,29 @@ const IDENTITY_NAVIGATION_HOSTS = [
   'login.microsoftonline.com',
   'login.live.com',
   'appleid.apple.com',
+  'github.com',
+  '.okta.com',
+  '.okta-emea.com',
+  '.oktapreview.com',
+  '.onelogin.com',
+  'auth.pingone.com',
+  'auth.pingone.eu',
+  'auth.pingone.ca',
+  'auth.pingone.com.au',
+  'auth.pingone.sg',
+  'auth.pingone.asia',
+  'sso.connect.pingidentity.com',
   '.clerk.accounts.dev',
 ] as const;
+
+const IDENTITY_RETURN_PATH = /^\/v1\/(?:oauth_callback|saml\/acs\/[^/]+)$/;
 
 const APP_NAVIGATION_HOSTS = ['agiworkforce.com', '.agiworkforce.com'] as const;
 
 export type RemoteNavigation = 'allow' | 'open-externally';
 
 function matchesHost(hostname: string, hosts: readonly string[]): boolean {
-  return hosts.some((host) =>
-    host.startsWith('.')
-      ? hostname.endsWith(host) || hostname === host.slice(1)
-      : hostname === host,
-  );
+  return hosts.some((host) => (host.startsWith('.') ? hostname.endsWith(host) : hostname === host));
 }
 
 export function openExternally(url: string): void {
@@ -62,7 +72,9 @@ export function decideRemoteNavigation(url: string, appOrigin: string): RemoteNa
   }
 
   if (isAppOrigin(parsed, appOrigin)) {
-    return isProductPath(parsed.pathname) || isAuthPath(parsed.pathname)
+    return isProductPath(parsed.pathname) ||
+      isAuthPath(parsed.pathname) ||
+      IDENTITY_RETURN_PATH.test(parsed.pathname)
       ? 'allow'
       : 'open-externally';
   }

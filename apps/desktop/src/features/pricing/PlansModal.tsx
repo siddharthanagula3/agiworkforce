@@ -90,10 +90,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
         }
         return;
       }
-      setUpgradeRequest({
-        tier,
-        interval: 'monthly',
-      });
+      setUpgradeRequest({ tier });
     }
   }
 

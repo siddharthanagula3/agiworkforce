@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { csrfMock, rateLimitMock, userScopedDbMock, storeOwnedPluginSourceMock } = vi.hoisted(
   () => ({
@@ -10,6 +10,11 @@ const { csrfMock, rateLimitMock, userScopedDbMock, storeOwnedPluginSourceMock } 
   }),
 );
 
+const { featureGateMock, pluginPolicyMock } = vi.hoisted(() => ({
+  featureGateMock: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+  pluginPolicyMock: vi.fn(),
+}));
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
@@ -17,9 +22,17 @@ vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
 vi.mock('@/lib/services/plugin-owned-source-service', () => ({
   storeOwnedPluginSource: storeOwnedPluginSourceMock,
 }));
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
+}));
+vi.mock('@/lib/services/connector-policy-gate', () => ({
+  evaluateConnectorPolicyForUser: vi.fn(),
+  evaluatePluginPolicyForUser: pluginPolicyMock,
+}));
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseSkillFile } from '@/features/plugins/server/directory/skill-files';
+import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
 import { POST } from '../route';
 
 const USER_ID = 'user-1';
@@ -64,9 +77,16 @@ function authoredRequest(body: unknown): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  process.env[USER_SKILL_AUTHORING_ENV_VAR] = '1';
   csrfMock.mockResolvedValue(null);
   rateLimitMock.mockResolvedValue(null);
   userScopedDbMock.mockResolvedValue({ db: DB, userId: USER_ID, organizationId: null });
+  pluginPolicyMock.mockResolvedValue({
+    allowed: true,
+    code: 'ungoverned',
+    reason: '',
+    organizationId: null,
+  });
   storeOwnedPluginSourceMock.mockResolvedValue([
     {
       entryId: 'entry-1',
@@ -76,6 +96,10 @@ beforeEach(() => {
       installation: INSTALLATION,
     },
   ]);
+});
+
+afterEach(() => {
+  delete process.env[USER_SKILL_AUTHORING_ENV_VAR];
 });
 
 describe('POST /api/plugins/authored', () => {

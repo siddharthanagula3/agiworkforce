@@ -52,7 +52,6 @@ export const STRIPE_PRICE_POINTS: readonly StripePricePoint[] = [
   { plan: 'basic', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_BASIC_MONTHLY_USD' },
   { plan: 'basic', interval: 'monthly', currency: 'inr', envVar: 'STRIPE_PRICE_BASIC_MONTHLY_INR' },
   { plan: 'pro', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_PRO_MONTHLY' },
-  { plan: 'pro', interval: 'yearly', currency: 'usd', envVar: 'STRIPE_PRICE_PRO_YEARLY' },
   { plan: 'max', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_MAX_MONTHLY' },
   { plan: 'max_15x', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_MAX_15X_MONTHLY' },
   { plan: 'team', interval: 'monthly', currency: 'usd', envVar: 'STRIPE_PRICE_TEAM_MONTHLY_USD' },
@@ -98,15 +97,12 @@ export const STRIPE_PRICE_IDS = {
   },
   pro: {
     monthly: priceIdAt('pro', 'monthly', 'usd'),
-    yearly: priceIdAt('pro', 'yearly', 'usd'),
   },
   max: {
     monthly: priceIdAt('max', 'monthly', 'usd'),
-    yearly: priceIdAt('max', 'yearly', 'usd'),
   },
   max_15x: {
     monthly: priceIdAt('max_15x', 'monthly', 'usd'),
-    yearly: priceIdAt('max_15x', 'yearly', 'usd'),
   },
   team: {
     monthlyUsd: priceIdAt('team', 'monthly', 'usd'),
@@ -117,10 +113,7 @@ export const STRIPE_PRICE_IDS = {
 
 export function arePriceIdsConfigured(): boolean {
   const plans = ['pro', 'max', 'max_15x'] as const;
-  return plans.some(
-    (plan) =>
-      STRIPE_PRICE_IDS[plan].monthly !== undefined || STRIPE_PRICE_IDS[plan].yearly !== undefined,
-  );
+  return plans.some((plan) => STRIPE_PRICE_IDS[plan].monthly !== undefined);
 }
 
 export function getConfiguredPriceId(
@@ -157,7 +150,6 @@ export const PRICING_CONFIG = {
       price: {
         monthly: getPlanPriceUsd('basic', 'monthly'),
         monthlyInr: getPlanPriceInr('basic'),
-        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.basic,
     },
@@ -166,7 +158,6 @@ export const PRICING_CONFIG = {
       name: BILLING_PLAN_PRICING.pro.label,
       price: {
         monthly: getPlanPriceUsd('pro', 'monthly'),
-        yearly: getPlanPriceUsd('pro', 'yearly'),
       },
       stripe_price_ids: STRIPE_PRICE_IDS.pro,
     },
@@ -175,7 +166,6 @@ export const PRICING_CONFIG = {
       name: BILLING_PLAN_PRICING.max.label,
       price: {
         monthly: getPlanPriceUsd('max', 'monthly'),
-        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max,
     },
@@ -184,7 +174,6 @@ export const PRICING_CONFIG = {
       name: BILLING_PLAN_PRICING.max_15x.label,
       price: {
         monthly: getPlanPriceUsd('max_15x', 'monthly'),
-        yearly: undefined,
       },
       stripe_price_ids: STRIPE_PRICE_IDS.max_15x,
     },

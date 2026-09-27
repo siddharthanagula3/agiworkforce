@@ -3,8 +3,6 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -19,12 +17,9 @@ import {
   getMarketplaceEntryForUser,
   isMissingPluginMarketplaceSchema,
 } from '@/lib/services/plugin-marketplace-service';
-import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
 import { installDirectoryPlugin } from '@/features/plugins/server/directory/install';
-import {
-  installsDisabledResponse,
-  pluginNotPermittedResponse,
-} from '@/features/plugins/server/directory/install-responses';
+import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
+import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 import type { PluginMarketplaceInstallationsResponse } from '@agiworkforce/cloud-contracts';
 
 export const runtime = 'nodejs';
@@ -58,15 +53,7 @@ async function installFromDirectory(
   scope: UserScopedDb,
   pluginId: string,
 ): Promise<NextResponse> {
-  const { db, userId, organizationId } = scope;
-  const policy = await evaluatePluginPolicyForUser({
-    db,
-    userId,
-    organizationId,
-    pluginKey: pluginId,
-    request,
-  });
-  if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
+  const { db, userId } = scope;
   const result = await installDirectoryPlugin(db, userId, pluginId);
   switch (result.status) {
     case 'installed':
@@ -117,7 +104,7 @@ async function installFromDirectory(
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const scope = await getUserScopedDb(request);
-  const { db, userId, organizationId } = scope;
+  const { db, userId } = scope;
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -131,30 +118,20 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const featureGate = await buildWorkspaceFeatureGateResponse(
-    userId,
-    request,
-    'plugins',
-    resolveCloudChatSurface(request),
-  );
-  if (featureGate) return featureGate;
-
   try {
+    const pluginKey =
+      'pluginId' in parsed.data
+        ? parsed.data.pluginId
+        : (await getMarketplaceEntryForUser(db, userId, parsed.data.entryId))?.pluginKey;
+    const refused = await refusePluginInstall(request, scope, {
+      pluginKeys: pluginKey ? [pluginKey] : [],
+    });
+    if (refused) return refused;
+
     if ('pluginId' in parsed.data) {
       return await installFromDirectory(request, scope, parsed.data.pluginId);
     }
 
-    const entry = await getMarketplaceEntryForUser(db, userId, parsed.data.entryId);
-    if (entry) {
-      const policy = await evaluatePluginPolicyForUser({
-        db,
-        userId,
-        organizationId,
-        pluginKey: entry.pluginKey,
-        request,
-      });
-      if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
-    }
     const installation = await installMarketplaceEntry(db, userId, parsed.data.entryId);
     if (!installation) {
       return NextResponse.json(

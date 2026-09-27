@@ -14,7 +14,6 @@ import {
 
 interface TierContent {
   price: string;
-  priceNote?: string;
   bullets: string[];
   ctaLabel: string;
   ctaVariant: 'primary' | 'current';
@@ -67,7 +66,6 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   },
   pro: {
     price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
-    priceNote: `$${getPublishedPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
@@ -155,12 +153,7 @@ export function PlanCard({
         </div>
       </div>
 
-      <div>
-        <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
-        {content.priceNote && (
-          <p className="text-[10px] text-muted-foreground mt-0.5">{content.priceNote}</p>
-        )}
-      </div>
+      <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
 
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (

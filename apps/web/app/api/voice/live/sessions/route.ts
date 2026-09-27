@@ -41,9 +41,11 @@ import {
   LIVE_VOICE_INSTRUCTIONS,
 } from '@/lib/voice/live-voice-prompts';
 import { isLiveVoice, LIVE_DEFAULT_VOICE } from '@features/chat/lib/live-voices';
+import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
   describeDelegationTools,
   describeLiveVoiceTools,
+  formatWithheldLiveVoiceTools,
   resolveLiveVoiceDelegationTools,
 } from '@/lib/voice/live-voice-tools';
 import {
@@ -346,8 +348,10 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
-  const delegationTools = resolveLiveVoiceDelegationTools(backendModel);
-  const offeredToolIds = describeDelegationTools(delegationTools);
+  const toolApprovalPolicy = await loadToolApprovalPolicy(scoped.db, userId);
+  const delegation = resolveLiveVoiceDelegationTools(backendModel, toolApprovalPolicy);
+  const offeredToolIds = describeDelegationTools(delegation.tools);
+  const toolNotice = formatWithheldLiveVoiceTools(delegation.withheld, toolApprovalPolicy);
   let response: Response;
   let responseText: string;
   try {
@@ -358,7 +362,10 @@ async function handleCreateLiveSession(request: NextRequest) {
       body: JSON.stringify({
         session: {
           model: liveModel.apiModelId ?? liveModel.id,
-          instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context, { language }),
+          instructions: buildLiveVoiceInstructions(LIVE_VOICE_INSTRUCTIONS, context, {
+            language,
+            toolNotice,
+          }),
           audio: {
             output: { voice, speed: pace },
             ...(language ? { input: { transcription: { language } } } : {}),
@@ -370,8 +377,9 @@ async function handleCreateLiveSession(request: NextRequest) {
               instructions: buildLiveVoiceBackendInstructions(
                 LIVE_VOICE_BACKEND_INSTRUCTIONS,
                 context,
+                { toolNotice },
               ),
-              tools: delegationTools,
+              tools: delegation.tools,
               tool_choice: 'auto',
             },
           },
@@ -478,6 +486,8 @@ async function handleCreateLiveSession(request: NextRequest) {
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
       contextMemory: context.memoryPrompt !== null,
+      toolApprovalPolicy,
+      withheldTools: delegation.withheld.map((tool) => tool.id),
     },
     'Live voice session created',
   );
