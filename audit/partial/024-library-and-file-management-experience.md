@@ -201,17 +201,14 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:111-115`,
 
 - Done when: Users can add a Library file to a project.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Add to project" copies the file into project knowledge through the knowledge-files upload, whose storage cap reads only the user's own subscription row, so Free and Team-seat users are refused (live E034). | handler |
-| desktop | partial | "Add to project" copies the file into project knowledge through the knowledge-files upload, whose storage cap reads only the user's own subscription row, so Free and Team-seat users are refused (live E034). | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1628-1640`, `apps/web/features/library/components/LibraryView.tsx:210-216`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
 
 ## S24.28: Attach to conversation.
 

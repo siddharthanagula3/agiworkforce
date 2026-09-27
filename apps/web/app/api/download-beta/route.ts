@@ -4,7 +4,7 @@ import { readFile } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -89,15 +89,8 @@ async function handleDownloadBeta(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
-  const [subscription] = await db.query<Pick<SubscriptionRow, 'status'>>(
-    'select status from subscriptions where user_id = $1 limit 1',
-    [userId],
-  );
-
-  const activeStatuses = ['active', 'trialing'];
-  const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);
-
-  if (!hasActiveSubscription) {
+  const { entitled } = await resolveEntitlementBundle(db, userId);
+  if (!entitled) {
     throw createError.forbidden('Active subscription required to download.');
   }
 

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -18,7 +17,7 @@ import {
   listCloudCodeNotebookFiles,
   writeCloudCodeNotebookFile,
 } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -61,15 +60,21 @@ async function handleList(request: NextRequest, context: RouteContext) {
   // Listing a session's files claims the session and provisions the sandbox, so
   // it buys managed compute exactly as the upload below does and answers to the
   // same gate.
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessGateResponse = buildManagedComputeAccessGateResponse(
-    await evaluateManagedComputeAccess(db, userId, subscription, resolveCloudChatSurface(request), {
-      request,
-    }),
+    await evaluateManagedComputeAccess(
+      db,
+      userId,
+      entitlement.subscription,
+      resolveCloudChatSurface(request),
+      {
+        request,
+      },
+    ),
   );
   if (accessGateResponse) return accessGateResponse;
 
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
   try {
     return NextResponse.json(
       await listCloudCodeNotebookFiles(db, { userId, organizationId }, sessionId, planTier),
@@ -115,17 +120,17 @@ async function handleUpload(request: NextRequest, context: RouteContext) {
   }
 
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,
-    subscription,
+    entitlement.subscription,
     resolveCloudChatSurface(request),
     { request },
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
   const bytes = new Uint8Array(await file.arrayBuffer());
   const fileName = 'name' in file && typeof file.name === 'string' ? file.name : path;
   await refuseUnsafeUpload(bytes, file.type || NOTEBOOK_UPLOAD_MIME, {

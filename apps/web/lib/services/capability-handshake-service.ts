@@ -9,8 +9,8 @@
  * in by the caller (tier, surface, the deployment E2B flag the route already
  * resolves) or read from the static model catalog. This intentionally does
  * NOT reuse `lib/services/README.md`'s `DatabaseAdapter` pattern, it has no
- * user-scoped query to make; the route resolves `subscription.plan_tier` via
- * the existing `SubscriptionService` and passes the primitive value in.
+ * user-scoped query to make; the route resolves the entitled plan through
+ * `entitlement-resolution.ts` and passes the primitive value in.
  *
  * ## Layer sourcing (real data only, no fabricated capabilities)
  *

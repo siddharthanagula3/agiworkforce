@@ -21,7 +21,7 @@ export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.fre
   basic: 'Cloud Managed, basic models',
   pro: 'Pro, balanced models, higher usage',
   max: 'Max 5x, flagship models and higher usage',
-  max_15x: 'Max 15x, flagship models and the highest individual usage',
+  max_15x: 'Max 20x, flagship models and the highest individual usage',
   team: 'Pro capabilities with shared team administration',
   enterprise: 'Managed controls and negotiated enterprise capabilities',
 });

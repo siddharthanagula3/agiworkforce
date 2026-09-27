@@ -16,11 +16,11 @@ import {
   readUserIdentity,
   resolveVisibleName,
 } from '@/lib/server/user-identity';
-import { SubscriptionService } from '@/lib/services/subscription-service';
-import { effectivePlanTier } from '@/lib/entitlement';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
   canAccessManualModelSelection,
+  getBillingPlanPricing,
   SYNCED_APP_SURFACES,
   type SyncedAppSurface,
 } from '@agiworkforce/types';
@@ -136,10 +136,11 @@ async function handleGetMe(request: NextRequest) {
     }
 
     const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
-    const [subscription, identity] = await Promise.all([
-      SubscriptionService.getSubscription(db, userId),
+    const [entitlement, identity] = await Promise.all([
+      resolveEntitlementBundle(db, userId),
       readUserIdentity(db, userId),
     ]);
+    const subscription = entitlement.subscription;
     const profile = identity.profile;
 
     if (
@@ -162,7 +163,7 @@ async function handleGetMe(request: NextRequest) {
         ? (rawRoutingPreferences as { us_only?: boolean; geo_overlay?: string })
         : {};
 
-    const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+    const effectiveTier = entitlement.plan;
 
     const searchParams = new URL(request.url).searchParams;
     const requestedSurface = searchParams.get('surface');
@@ -234,12 +235,13 @@ async function handleGetMe(request: NextRequest) {
       resets: await getCapabilityLimitResets(db, userId, subscription?.current_period_end ?? null),
     });
 
-    const subscriptionSource = resolveSubscriptionBillingSource(subscription);
+    const subscriptionSource = entitlement.seatSource
+      ? 'manual'
+      : resolveSubscriptionBillingSource(subscription);
+    const planTier = subscription?.plan_tier || 'free';
     const plan = {
-      tier: subscription?.plan_tier || 'free',
-      display_name:
-        (subscription?.plan_tier || 'free').charAt(0).toUpperCase() +
-        (subscription?.plan_tier || 'free').slice(1),
+      tier: planTier,
+      display_name: getBillingPlanPricing(planTier).label,
       status: subscription?.status || 'none',
       current_period_end: subscription?.current_period_end
         ? new Date(subscription.current_period_end).getTime() / 1000

@@ -4,9 +4,13 @@ import { randomUUID } from 'node:crypto';
 
 import {
   FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
-  getProviderComputePricing,
+  MICROUSD_PER_CENT,
+  SANDBOX_COMPUTE_RATE_ENV,
+  chargeMicrousdForProviderCost,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
+  sandboxComputeRate,
+  type SandboxComputeShape,
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
@@ -14,20 +18,22 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
-import { recordInfrastructureCostEvent } from '@/lib/services/cogs-ledger-service';
+import {
+  recordSettledProviderCost,
+  SANDBOX_COMPUTE_OPERATION,
+} from '@/lib/services/cogs-ledger-service';
 import {
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   ManagedUsageRequestError,
   estimateMicrousdOf,
+  markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
 
-export const E2B_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 const E2B_COMPUTE_PROVIDER_ID = 'e2b';
 
 export const SANDBOX_COMPUTE_QUOTA_FEATURE = 'sandbox_compute';
-const SANDBOX_COMPUTE_OPERATION = 'e2b_sandbox_compute';
 
 /**
  * The sandbox pauses at its plan TTL, but the interval is only closed when the
@@ -37,64 +43,31 @@ const SANDBOX_COMPUTE_OPERATION = 'e2b_sandbox_compute';
  */
 const RESERVATION_LEASE_SLACK_SECONDS = 900;
 
-const MICROUSD_PER_CENT = 10_000;
-const USD_TO_MICROUSD = 1_000_000;
 const MILLISECONDS_PER_SECOND = 1000;
+const MILLISECONDS_PER_MINUTE = 60 * MILLISECONDS_PER_SECOND;
 
 const MAX_BILLABLE_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/** E2B's own default sandbox size when a template does not declare one. */
-const DEFAULT_E2B_VCPU_COUNT = 2;
-const DEFAULT_E2B_MEMORY_GIB = 4;
-
 let unbilledMs = 0;
-
-export interface SandboxComputeShape {
-  vcpuCount?: number | null;
-  memoryGib?: number | null;
-}
 
 type ConfiguredRate = { ok: true; microusdPerSecond: number } | { ok: false };
 
-function resolveConfiguredOverride(): ConfiguredRate | null {
-  const raw = process.env[E2B_COMPUTE_RATE_ENV];
-  if (typeof raw !== 'string' || raw.trim().length === 0) return null;
-  const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+function resolveRate(shape?: SandboxComputeShape): ConfiguredRate {
+  const rate = sandboxComputeRate(shape);
+  if (rate.overrideInvalid) {
     logger.error(
-      { env: E2B_COMPUTE_RATE_ENV, value: raw },
-      '[e2b] invalid sandbox compute rate override; falling back to the declared compute pricing',
+      { env: SANDBOX_COMPUTE_RATE_ENV, value: process.env[SANDBOX_COMPUTE_RATE_ENV] },
+      '[e2b] invalid sandbox compute rate override; falling back to the rate card',
     );
-    return { ok: false };
   }
-  return { ok: true, microusdPerSecond: parsed };
-}
-
-function positiveOr(value: number | null | undefined, fallback: number): number {
-  return typeof value === 'number' && value > 0 ? value : fallback;
-}
-
-function tableRate(shape: SandboxComputeShape | undefined): ConfiguredRate {
-  const declared = getProviderComputePricing(E2B_COMPUTE_PROVIDER_ID);
-  if (!declared || !(declared.ratePerUnit > 0) || !(Number(declared.ramRatePerGibSecond) > 0)) {
+  if (!rate.ok) {
     logger.error(
       { provider: E2B_COMPUTE_PROVIDER_ID },
-      '[e2b] compute pricing declares no vCPU and memory rate pair; refusing to price sandbox compute',
+      '[e2b] the rate card declares no vCPU and memory rate pair; refusing to price sandbox compute',
     );
     return { ok: false };
   }
-  const vcpuCount = positiveOr(shape?.vcpuCount, DEFAULT_E2B_VCPU_COUNT);
-  const memoryGib = positiveOr(shape?.memoryGib, DEFAULT_E2B_MEMORY_GIB);
-  const cpuMicrousdPerSecond = vcpuCount * declared.ratePerUnit * USD_TO_MICROUSD;
-  const ramMicrousdPerSecond =
-    memoryGib * (declared.ramRatePerGibSecond as number) * USD_TO_MICROUSD;
-  return { ok: true, microusdPerSecond: Math.round(cpuMicrousdPerSecond + ramMicrousdPerSecond) };
-}
-
-function resolveRate(shape?: SandboxComputeShape): ConfiguredRate {
-  const override = resolveConfiguredOverride();
-  if (override?.ok) return override;
-  return tableRate(shape);
+  return { ok: true, microusdPerSecond: rate.microusdPerSecond };
 }
 
 export function sandboxComputeIsPriceable(): boolean {
@@ -187,10 +160,14 @@ export async function reserveSandboxComputeInterval(
   input: SandboxComputeReservationInput,
 ): Promise<SandboxComputeReservationOutcome> {
   const ttlSeconds = Math.max(1, Math.ceil(input.ttlMs / MILLISECONDS_PER_SECOND));
-  const estimatedCostMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
+  const providerEstimateMicrousd = Math.ceil(ttlSeconds * Math.max(0, input.microusdPerSecond));
+  const free = isFreeBillingPlanTier(input.planTier);
+  const estimatedCostMicrousd = free
+    ? providerEstimateMicrousd
+    : chargeMicrousdForProviderCost(providerEstimateMicrousd);
   const model = input.templateId?.trim() || E2B_COMPUTE_PROVIDER_ID;
   try {
-    if (isFreeBillingPlanTier(input.planTier)) {
+    if (free) {
       const store = getKeyValueStore();
       if (!store) {
         throw new ManagedUsageRequestError(
@@ -279,6 +256,25 @@ export async function reserveSandboxComputeInterval(
     );
     return { outcome: 'refused', error: refusal };
   }
+}
+
+export async function markSandboxComputeStarted(input: {
+  userId: string;
+  reservation: SandboxComputeReservationRecord;
+}): Promise<void> {
+  if (input.reservation.fundingSource === 'platform-free') return;
+  await markManagedUsageProviderStarted({
+    db: sandboxScopedDb(input.userId),
+    userId: input.userId,
+    idempotencyKey: input.reservation.idempotencyKey,
+    requestHash: input.reservation.requestHash,
+    leaseToken: input.reservation.leaseToken,
+    estimatedCostMicrousd: input.reservation.estimatedCostMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(input.reservation.estimatedCostMicrousd),
+    quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
+    provider: input.reservation.provider,
+    model: input.reservation.model,
+  });
 }
 
 /**
@@ -409,7 +405,12 @@ export async function meterSandboxComputeInterval(
   // Settlement never exceeds what the account agreed to hold: the ledger
   // released nothing beyond the reservation, so charging past it would bill
   // credit that was never reserved.
-  const costMicrousd = Math.min(metered, reservation.estimatedCostMicrousd);
+  const costMicrousd = Math.min(
+    reservation.fundingSource === 'platform-free'
+      ? metered
+      : chargeMicrousdForProviderCost(metered),
+    reservation.estimatedCostMicrousd,
+  );
   try {
     if (reservation.fundingSource === 'platform-free') {
       const store = getKeyValueStore();
@@ -421,15 +422,17 @@ export async function meterSandboxComputeInterval(
       if (!firstSettlement) return costMicrousd;
       const refundMicrousd = reservation.estimatedCostMicrousd - costMicrousd;
       if (refundMicrousd > 0) await store.increment(reservation.quotaKey, -refundMicrousd);
-      await recordInfrastructureCostEvent({
+      await recordSettledProviderCost({
         userId: interval.userId,
-        capability: 'code_compute',
         provider: E2B_COMPUTE_PROVIDER_ID,
-        units: elapsedMs / (60 * MILLISECONDS_PER_SECOND),
-        sourceRef: reservation.idempotencyKey,
-        providerEstimatedCostMicrousd: costMicrousd,
+        model: reservation.model,
+        actualCostCents: ledgerCentsFromMicrousd(metered),
+        providerEstimatedCostMicrousd: metered,
         customerCanonicalMicrousd: 0,
-        metadata: {
+        sourceRef: reservation.idempotencyKey,
+        usage: {
+          operation: SANDBOX_COMPUTE_OPERATION,
+          sandboxMinutes: elapsedMs / MILLISECONDS_PER_MINUTE,
           sandbox_id: interval.sandboxId,
           close_reason: interval.reason,
           funding_source: 'platform-free',
@@ -453,8 +456,10 @@ export async function meterSandboxComputeInterval(
       model: reservation.model,
       outcome: 'completed',
       actualCostMicrousd: costMicrousd,
+      providerCostMicrousd: metered,
       usage: {
         operation: SANDBOX_COMPUTE_OPERATION,
+        sandboxMinutes: elapsedMs / MILLISECONDS_PER_MINUTE,
         sandbox_id: interval.sandboxId,
         ...(interval.conversationId ? { conversation_id: interval.conversationId } : {}),
         ...(interval.codeSessionId ? { code_session_id: interval.codeSessionId } : {}),

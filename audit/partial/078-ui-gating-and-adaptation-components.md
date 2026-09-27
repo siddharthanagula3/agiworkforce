@@ -89,19 +89,6 @@ Code: `apps/cli/src/config.rs:89-89`, `apps/cli/src/models/streaming.rs:301-306`
 
 Code: `apps/cli/src/lib.rs:943-951`
 
-## S78.07: Tier-dependent entitlement checks.
-
-- Done when: Plan entitlements are checked for each gated feature and model, in the UI and again on the server, for every route that runs a model.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Chat and media check the plan, but the Code agent route (/api/code/sessions/[id]/agent) runs any model it is sent with no plan-tier check, and the Code page sends Auto as claude-sonnet-5 (a Pro model) to every plan. | handler |
-| desktop | partial | Chat and media check the plan, but the Code agent route (/api/code/sessions/[id]/agent) runs any model it is sent with no plan-tier check, and the Code page sends Auto as claude-sonnet-5 (a Pro model) to every plan. | handler |
-
-Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:879-886`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3631-3653`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:118-144`
-
 ## S78.10: Role restrictions.
 
 - Done when: Controls restricted to workspace roles (owner/admin) are withheld from other members and refused server-side.

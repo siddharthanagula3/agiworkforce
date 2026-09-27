@@ -30,7 +30,6 @@ export * from './voice';
 
 export * from './visual-session';
 export * from './visual-session-capture';
-export * from './visual-usage';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
@@ -86,6 +85,7 @@ export * from './product-plan';
 export * from './credits';
 export * from './model-price-copy';
 export * from './billing-topups';
+export * from './managed-usage-limits';
 export * from './rate-card';
 export * from './mobile-iap';
 export * from './url';

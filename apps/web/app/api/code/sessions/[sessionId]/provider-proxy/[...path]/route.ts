@@ -43,7 +43,8 @@ import {
   type ManagedComputeAccessDecision,
 } from '@/lib/services/managed-compute-access';
 import { resolveCloudCodeSessionOwnerOrganizationId } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import { resolveEffectiveSubscription } from '@/lib/services/entitlement-resolution';
+import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import { LLMCostCalculator, UnpricedModelError } from '@/lib/services/llm-cost-calculator';
 import {
   fingerprintManagedUsageRequest,
@@ -577,7 +578,7 @@ async function handleProxy(
   const db = getNeonDb();
   let subscriptionPromise: Promise<SubscriptionInfo | null> | null = null;
   const subscription = (): Promise<SubscriptionInfo | null> =>
-    (subscriptionPromise ??= SubscriptionService.getSubscription(db, verified.userId));
+    (subscriptionPromise ??= resolveEffectiveSubscription(db, verified.userId));
 
   const accessDecision = await evaluateProviderProxyAccess(
     db,

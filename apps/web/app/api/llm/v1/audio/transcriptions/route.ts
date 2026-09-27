@@ -32,7 +32,7 @@ import { providerApiUrl } from '@/lib/server/provider-endpoints';
 // run on a tenant-scoped handle. getUserScopedDb covers both a session cookie and a
 // developer API key (inference:write) bearer.
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
@@ -503,11 +503,11 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       idempotencyHeader === null
         ? `agi.transcription.${randomUUID()}`
         : parseManagedUsageIdempotencyKey(idempotencyHeader);
-    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
       scoped.db,
       userId,
-      subscription,
+      entitlement.subscription,
     );
     if (!subscriptionAccess.allowed) {
       const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, {
@@ -519,7 +519,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,
-      planTier: subscription?.plan_tier ?? 'free',
+      planTier: entitlement.plan,
       unit: 'voice_minutes',
       requestedUnits: estimatedSeconds / 60,
     });
@@ -536,7 +536,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: selectedModel.provider,
       model: selectedModel.id,
       estimatedCostMicrousd,
-      planTier: subscription?.plan_tier ?? 'free',
+      planTier: entitlement.plan,
       isFlagship: false,
     });
   } catch (error) {

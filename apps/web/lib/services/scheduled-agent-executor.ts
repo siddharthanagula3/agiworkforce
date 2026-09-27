@@ -72,7 +72,7 @@ import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   loadUserConnectorToolCatalog,
   makeUserConnectorExecutor,
@@ -532,12 +532,12 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   }
   signal.throwIfAborted();
 
-  const subscription = await SubscriptionService.getSubscription(scope.db, scope.userId);
-  const subscriptionTier = subscription?.plan_tier ?? 'free';
+  const entitlement = await resolveEntitlementBundle(scope.db, scope.userId);
+  const subscriptionTier = entitlement.plan;
   const accessDecision = await evaluateManagedComputeAccess(
     scope.db,
     scope.userId,
-    subscription,
+    entitlement.subscription,
     'api',
     { organizationId: scope.organizationId },
     'schedules',
