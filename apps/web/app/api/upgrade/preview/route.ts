@@ -35,7 +35,8 @@ import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-t
 import { resolveTrialDaysForCheckout } from '@/lib/billing/trial-policy';
 import { referralTrialDays } from '@/lib/services/referral-service';
 import {
-  assertSameCheckoutBillingInterval,
+  assertUpgradeBillingInterval,
+  checkoutBillingIntervalFromStripePrice,
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
@@ -43,7 +44,7 @@ import {
   planChangeProration,
   type PlanChangeAnchor,
 } from '@/lib/server/stripe-plan-change';
-import { isPerSeatBillingPlan } from '@agiworkforce/types';
+import { grandfatheredYearlyBillingNotice, isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
@@ -83,6 +84,7 @@ export interface UpgradeChargeBreakdown {
    */
   appliedBalanceCents: number;
   totalDueTodayCents: number;
+  creditToBalanceCents: number;
   /** End of the period being started, so the UI can state the renewal date. */
   renewsAt: string | null;
 }
@@ -140,6 +142,7 @@ function immediateProrationBreakdown(
 
   const totalCents = subtotalCents - discountCents + taxCents;
   const appliedBalanceCents = preview.starting_balance ?? 0;
+  const netCents = totalCents + appliedBalanceCents;
 
   return {
     lineItems,
@@ -148,7 +151,8 @@ function immediateProrationBreakdown(
     taxCents,
     totalCents,
     appliedBalanceCents,
-    totalDueTodayCents: totalCents + appliedBalanceCents,
+    totalDueTodayCents: Math.max(0, netCents),
+    creditToBalanceCents: Math.max(0, -netCents),
     renewsAt: typeof periodEnd === 'number' ? new Date(periodEnd * 1000).toISOString() : null,
   };
 }
@@ -427,7 +431,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
 
   try {
-    assertSameCheckoutBillingInterval(currentPriceRecurring, billingInterval, targetPlan);
+    assertUpgradeBillingInterval(currentPriceRecurring, billingInterval, targetPlan);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Billing cadence could not be verified';
@@ -501,6 +505,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
 
   const charge = immediateProrationBreakdown(preview, anchor);
+  const currentInterval = checkoutBillingIntervalFromStripePrice(currentPriceRecurring);
 
   return NextResponse.json({
     plan: targetPlan,
@@ -508,6 +513,8 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     currency: preview.currency,
     amountDueNowCents: charge.totalDueTodayCents,
     charge,
+    grandfatheredNotice:
+      currentInterval === 'yearly' ? grandfatheredYearlyBillingNotice(currentTier) : null,
     recurringAmountCents: priceSelection.amountMinor * requestedSeats,
     seats: requestedSeats,
     promotion,

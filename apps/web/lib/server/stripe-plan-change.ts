@@ -35,7 +35,7 @@ export function checkoutBillingIntervalFromStripePrice(
   return null;
 }
 
-export function assertSameCheckoutBillingInterval(
+export function assertUpgradeBillingInterval(
   recurring: Stripe.Price.Recurring | null | undefined,
   requestedInterval: CheckoutBillingInterval,
   targetPlan: string,
@@ -45,14 +45,14 @@ export function assertSameCheckoutBillingInterval(
     throw new Error('The current Stripe billing interval could not be verified');
   }
   if (currentInterval === requestedInterval) return;
-  if (!planOffersBillingInterval(targetPlan, currentInterval)) {
-    throw new Error(
-      `Mid-cycle upgrades keep your current ${currentInterval} billing cadence, and ${getBillingPlanPricing(targetPlan).label} is not sold with ${currentInterval} billing. Change plans in billing management.`,
-    );
-  }
+  if (!planOffersBillingInterval(targetPlan, currentInterval)) return;
   throw new Error(
     `Mid-cycle upgrades must keep your current ${currentInterval} billing cadence so you are charged only the prorated difference for the remaining period. Select ${currentInterval} or change cadence in billing management.`,
   );
+}
+
+function sellsCadence(plan: BillingPlanTier, price: RecurringPrice): boolean {
+  return planOffersBillingInterval(plan, price.interval);
 }
 
 export const TIER_ORDER: Readonly<Record<string, number>> = Object.freeze({
@@ -266,6 +266,18 @@ async function resolveTargetPrice(
   return null;
 }
 
+async function cadenceSwitchOf(
+  plan: BillingPlanTier,
+  current: RecurringPrice | null,
+  cancelAt: string | null,
+): Promise<DowngradeTarget | null> {
+  if (!current || cancelAt || !isSelfServeIndividualPlanTier(plan) || sellsCadence(plan, current)) {
+    return null;
+  }
+  const targetPrice = await resolveTargetPrice(plan, current);
+  return targetPrice ? { plan, price: targetPrice.price } : null;
+}
+
 async function downgradeTargetsOf(
   plan: SelfServeIndividualPlanTier,
   current: RecurringPrice,
@@ -303,6 +315,7 @@ async function readScheduledChange(
   stripe: Stripe,
   subscription: Stripe.Subscription,
   plan: BillingPlanTier,
+  current: RecurringPrice | null,
 ): Promise<ScheduledPlanChange | null> {
   const scheduleId = idOf(subscription.schedule);
   if (!scheduleId) return null;
@@ -315,11 +328,12 @@ async function readScheduledChange(
   const nextTier = resolvePlanTier(phase.metadata, idOf(item.price));
   if (!nextTier) return null;
   const nextPlan = normalizeBillingPlanTier(nextTier);
-  if (nextPlan === plan) return null;
+  const price = isLivePrice(item.price) ? recurringPriceOf(item.price, item.quantity ?? 1) : null;
+  if (nextPlan === plan && (!price || price.interval === current?.interval)) return null;
   return {
     plan: nextPlan,
     effectiveAt: new Date(phase.start_date * 1000).toISOString(),
-    price: isLivePrice(item.price) ? recurringPriceOf(item.price, item.quantity ?? 1) : null,
+    price,
   };
 }
 
@@ -332,11 +346,12 @@ export async function readPlanChangeState(
   const price = currentPriceOf(subscription);
   const cancelAt = cancelAtOf(subscription);
   const downgradeBlock = downgradeBlockOf(plan, cancelAt);
-  const [scheduledChange, downgradeTargets] = await Promise.all([
-    readScheduledChange(stripe, subscription, plan),
+  const [scheduledChange, downgradeTargets, cadenceSwitch] = await Promise.all([
+    readScheduledChange(stripe, subscription, plan, price),
     !downgradeBlock && price && isSelfServeIndividualPlanTier(plan)
       ? downgradeTargetsOf(plan, price)
       : Promise.resolve([]),
+    cadenceSwitchOf(plan, price, cancelAt),
   ]);
 
   return {
@@ -350,6 +365,7 @@ export async function readPlanChangeState(
     scheduledChange,
     downgradeTargets,
     downgradeBlock,
+    cadenceSwitch,
   };
 }
 
@@ -388,7 +404,12 @@ export async function scheduleDowngrade(
   if (block) throw createError.conflict(DOWNGRADE_BLOCK_MESSAGE[block]);
 
   const current = currentPriceOf(managed.subscription);
-  if (!current || !isSelfServeIndividualPlanTier(plan) || !lowerPlansThan(plan).includes(target)) {
+  const switchesCadence = target === plan && current !== null && !sellsCadence(plan, current);
+  if (
+    !current ||
+    !isSelfServeIndividualPlanTier(plan) ||
+    !(switchesCadence || lowerPlansThan(plan).includes(target))
+  ) {
     throw createError.validation(
       `${getBillingPlanPricing(target).label} is not a smaller plan than your current one.`,
     );

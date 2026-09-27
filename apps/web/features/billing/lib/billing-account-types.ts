@@ -43,6 +43,7 @@ export const PlanChangeStateSchema = z.object({
   scheduledChange: ScheduledPlanChangeSchema.nullable(),
   downgradeTargets: z.array(DowngradeTargetSchema),
   downgradeBlock: DowngradeBlockSchema.nullable(),
+  cadenceSwitch: DowngradeTargetSchema.nullable(),
 });
 
 export const TopUpReceiptSchema = z.object({

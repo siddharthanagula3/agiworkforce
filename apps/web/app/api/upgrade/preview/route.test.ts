@@ -331,6 +331,76 @@ describe('POST /api/upgrade/preview', () => {
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });
 
+  it('moves a yearly Pro subscriber onto the monthly price, crediting the unused year', async () => {
+    mockSubscriptionRow({
+      status: 'active',
+      plan_tier: 'pro',
+      stripe_subscription_id: 'sub_live123',
+      stripe_customer_id: 'cus_123',
+    });
+    const yearlyPro = {
+      ...makeStripeSubscription(),
+      metadata: { user_id: 'user_123', plan_tier: 'pro' },
+      items: {
+        data: [
+          {
+            id: 'si_123',
+            price: { id: 'price_pro_yearly', recurring: { interval: 'year', interval_count: 1 } },
+          },
+        ],
+      },
+    };
+    stripeMocks.retrieveSubscription.mockResolvedValue(yearlyPro);
+    stripeMocks.listSubscriptions.mockResolvedValue({ data: [yearlyPro] });
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_monthly',
+      currency: 'usd',
+      amountMinor: 10_000,
+    });
+    stripeMocks.createInvoicePreview.mockResolvedValue({
+      currency: 'usd',
+      lines: {
+        data: [
+          {
+            amount: -18_300,
+            parent: { subscription_item_details: { proration: true } },
+            taxes: [],
+          },
+          {
+            amount: 10_000,
+            parent: { subscription_item_details: { proration: false } },
+            taxes: [],
+          },
+        ],
+      },
+    });
+
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/upgrade/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'max', billingInterval: 'monthly' }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      amountDueNowCents: 0,
+      charge: { totalCents: -8_300, totalDueTodayCents: 0, creditToBalanceCents: 8_300 },
+      grandfatheredNotice: expect.stringContaining(
+        'If you already pay yearly for Pro, nothing changes.',
+      ),
+    });
+    expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subscription_details: expect.objectContaining({
+          items: [{ id: 'si_123', price: 'price_max_monthly', quantity: 1 }],
+          billing_cycle_anchor: 'now',
+        }),
+      }),
+    );
+  });
+
   it('refuses yearly billing for an individual plan before reading billing state', async () => {
     const response = await POST(makeRequest('yearly'));
 
