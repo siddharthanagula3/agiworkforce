@@ -236,15 +236,15 @@
     "description": "Avatar initial when the profile carries none"
   },
   "spBillingPastDue": {
-    "message": "Payment is past due. Update billing to restore Chrome access.",
+    "message": "Payment is past due. Update billing to restore Managed Cloud chat.",
     "description": "Quota row for a past_due subscription"
   },
   "spBillingCanceled": {
-    "message": "This subscription is canceled. Manage billing to restore Chrome access.",
+    "message": "This subscription is canceled. Manage billing to restore Managed Cloud chat.",
     "description": "Quota row for a canceled subscription"
   },
   "spBillingOtherStatus": {
-    "message": "This subscription is $STATUS$. Manage billing to restore Chrome access.",
+    "message": "This subscription is $STATUS$. Manage billing to restore Managed Cloud chat.",
     "description": "Quota row for any other non-entitled subscription status",
     "placeholders": {
       "status": {
@@ -254,7 +254,7 @@
     }
   },
   "spBillingPaused": {
-    "message": "Paid Chrome access is paused.",
+    "message": "Managed Cloud chat is paused on this account until billing is fixed.",
     "description": "Quota sub-label while a paid subscription is not entitled"
   },
   "spBillingManage": {
@@ -264,30 +264,6 @@
   "spBillingBadge": {
     "message": "Billing",
     "description": "Header badge while a paid subscription needs attention"
-  },
-  "spQuotaCloudUsage": {
-    "message": "Cloud: $USAGE$",
-    "description": "Quota row when no reset time is known",
-    "placeholders": {
-      "usage": {
-        "content": "$1",
-        "example": "42% left"
-      }
-    }
-  },
-  "spQuotaCloudUsageWithReset": {
-    "message": "Cloud: $USAGE$ · $RESETS$",
-    "description": "Quota row with the remaining allowance and when it resets",
-    "placeholders": {
-      "usage": {
-        "content": "$1",
-        "example": "42% left"
-      },
-      "resets": {
-        "content": "$2",
-        "example": "resets in 3 days"
-      }
-    }
   },
   "spQuotaPaidPlanRequired": {
     "message": "Checking your shared AGI plan and usage…",
@@ -305,13 +281,63 @@
     "message": "View plans",
     "description": "Quota button and header badge that open the pricing page"
   },
-  "spQuotaUsageExhausted": {
-    "message": "Managed Cloud usage limit reached.",
-    "description": "Quota state when the shared AGI allowance is exhausted"
-  },
   "spQuotaManageUsage": {
     "message": "Manage usage",
     "description": "Button that opens the shared usage page"
+  },
+  "spQuotaHeading": {
+    "message": "Cloud usage",
+    "description": "Heading over the per-window credit meters in the account section"
+  },
+  "spQuotaAllocationPending": {
+    "message": "Your plan's credits have not been allocated yet. Try again shortly, or contact support if this continues.",
+    "description": "Quota notice and composer gate while a paid plan's credit allowance has not been granted"
+  },
+  "spQuotaPurchasedLabel": {
+    "message": "Purchased credits",
+    "description": "Label of the purchased credit balance, shown apart from the plan windows"
+  },
+  "spQuotaPurchasedUnavailable": {
+    "message": "Unavailable",
+    "description": "Purchased credit balance when the server could not read it"
+  },
+  "spQuotaPurchasedOn": {
+    "message": "Spent when a plan limit stops you",
+    "description": "Under the purchased balance when overage is on"
+  },
+  "spQuotaPurchasedOff": {
+    "message": "Off. Turn on in billing to spend them past a plan limit",
+    "description": "Under the purchased balance when overage is off"
+  },
+  "spQuotaUsingPurchased": {
+    "message": "Plan limit reached. Your purchased credits are covering usage.",
+    "description": "Notice while every plan window is spent and purchased credits keep chat going"
+  },
+  "spQuotaRecoveryTopUp": {
+    "message": "Add credits",
+    "description": "Button that opens the web billing page to buy credits"
+  },
+  "spQuotaRecoverySupport": {
+    "message": "Contact support",
+    "description": "Button that opens the support page named by the server for a blocked account"
+  },
+  "spQuotaByModelHeading": {
+    "message": "By model, last $DAYS$ days",
+    "description": "Heading over settled credit spend per model in the account section",
+    "placeholders": {
+      "days": {
+        "content": "$1",
+        "example": "30"
+      }
+    }
+  },
+  "spQuotaByModelEmpty": {
+    "message": "No settled usage in this period.",
+    "description": "Shown under the per-model heading when nothing has settled"
+  },
+  "spQuotaByModelUnavailable": {
+    "message": "Usage by model is unavailable right now.",
+    "description": "Shown when the per-model usage history could not be read"
   },
   "spGateUsageLimit": {
     "message": "Your Managed Cloud usage limit has been reached.",
@@ -354,11 +380,11 @@
     "description": "Composer chat gate button that re-reads the account"
   },
   "spGateBillingPastDue": {
-    "message": "Update billing to restore AGI in Chrome.",
+    "message": "Update billing to restore Managed Cloud chat.",
     "description": "Composer chat gate for a past_due subscription"
   },
   "spGateSubscriptionStatus": {
-    "message": "Your paid subscription is $STATUS$.",
+    "message": "Your subscription is $STATUS$. Update billing to restore Managed Cloud chat.",
     "description": "Composer chat gate for any other non-entitled subscription status",
     "placeholders": {
       "status": {
@@ -1121,6 +1147,16 @@
     "message": "Default",
     "description": "Badge on the effort level a model uses when none is chosen"
   },
+  "spEffortGated": {
+    "message": "Available on $PLAN$ and higher plans",
+    "description": "Tooltip and label suffix of a reasoning effort the current plan does not include",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Basic"
+      }
+    }
+  },
   "spMoreModels": {
     "message": "More models",
     "description": "Heading above the models that are not one of the three headline choices"
@@ -1128,6 +1164,24 @@
   "spModelsSignedOut": {
     "message": "Sign in for models",
     "description": "Shown in the model menu when no account is signed in"
+  },
+  "spModelFallback": {
+    "message": "$MODEL$ is not available for your account, so new messages use $FALLBACK$.",
+    "description": "Composer notice after a saved model choice was replaced because the account cannot use it",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Claude Opus"
+      },
+      "fallback": {
+        "content": "$2",
+        "example": "Best (auto)"
+      }
+    }
+  },
+  "spModelNoticeChoose": {
+    "message": "Choose model",
+    "description": "Composer notice button that opens the model picker"
   },
   "spModelsOtherProvider": {
     "message": "Other",

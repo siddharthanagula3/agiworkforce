@@ -705,6 +705,7 @@ async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_in
                     crate::design_system::AccessMode::for_provider(&session.provider),
                 );
             }
+            output::print_billed_turn(&turn.managed_request_ids).await;
         }
         Err(e) => {
             output::print_error(&crate::errors::terminal_text(&e));

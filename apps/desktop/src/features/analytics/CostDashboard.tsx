@@ -18,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/ui/Card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { ScrollArea } from '@/ui/ScrollArea';
 import { Skeleton } from '@/ui/Skeleton';
-import { useBillingUsageStore } from '../../stores/billingUsage';
+import { creditsFromProviderUsd, useBillingUsageStore } from '../../stores/billingUsage';
 import { PROVIDER_LABELS, PROVIDERS_IN_ORDER, getProviderModelOptions } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
 import { usePrompt } from '@/ui/PromptDialog';
@@ -78,13 +78,12 @@ export const CostDashboard = memo(function CostDashboard() {
   }, [filters.provider]);
 
   const handleBudgetUpdate = async () => {
-    const current = overview?.monthly_budget ?? undefined;
+    const current = overview?.monthly_budget ?? null;
     const input = await prompt({
-      title: 'Set Monthly Budget',
-      description: 'Set your monthly budget limit. Leave empty to clear.',
-      label: 'Budget Limit',
-      defaultValue: current != null ? String(current) : '',
-      placeholder: '100',
+      title: 'Set monthly credit limit',
+      description: 'Set your monthly limit in credits. Leave empty to clear.',
+      label: 'Credit limit',
+      defaultValue: current != null ? String(creditsFromProviderUsd(current)) : '',
     });
 
     if (input === null) {
@@ -93,16 +92,16 @@ export const CostDashboard = memo(function CostDashboard() {
     const trimmed = input.trim();
     if (trimmed.length === 0) {
       await setMonthlyBudget(undefined);
-      toast.success('Monthly budget cleared');
+      toast.success('Monthly credit limit cleared');
       return;
     }
-    const amount = Number.parseFloat(trimmed);
-    if (Number.isNaN(amount) || amount < 0) {
-      toast.error('Please enter a valid non-negative number.');
+    const credits = Number.parseFloat(trimmed);
+    if (Number.isNaN(credits) || credits < 0) {
+      toast.error('Enter a credit amount of 0 or more.');
       return;
     }
-    await setMonthlyBudget(amount);
-    toast.success('Monthly budget updated');
+    await setMonthlyBudget(credits);
+    toast.success('Monthly credit limit updated');
   };
 
   return (
@@ -272,7 +271,7 @@ export const CostDashboard = memo(function CostDashboard() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Monthly Budget
+                  Monthly credit limit
                 </CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => void handleBudgetUpdate()}>
                   Edit
@@ -315,7 +314,7 @@ export const CostDashboard = memo(function CostDashboard() {
                     <p className="text-xs text-muted-foreground">
                       {overview?.monthly_budget != null
                         ? `${(100 - Math.min(((overview.month_total || 0) / overview.monthly_budget) * 100, 100)).toFixed(1)}% remaining`
-                        : 'Set a budget to track usage'}
+                        : 'Set a credit limit to track usage'}
                     </p>
                   </div>
                 )}

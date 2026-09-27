@@ -1,7 +1,7 @@
 import {
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
-  topUpUnitsForUsd,
+  isTopUpAmountUsd,
   type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -39,16 +39,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-async function readBillingError(response: Response, fallback: string): Promise<string> {
-  const payload: unknown = await response.json().catch(() => null);
-  if (!isRecord(payload)) return fallback;
-  const error = payload['error'];
-  if (typeof error === 'string') return error;
-  if (isRecord(error) && typeof error['message'] === 'string') return error['message'];
-  if (typeof payload['message'] === 'string') return payload['message'];
-  return fallback;
-}
-
 async function readBillingPayload(response: Response): Promise<Record<string, unknown>> {
   const payload: unknown = await response.json().catch(() => null);
   return isRecord(payload) ? payload : {};
@@ -60,8 +50,6 @@ function readBillingErrorCode(payload: Record<string, unknown>): string | null {
   return typeof error['code'] === 'string' ? error['code'] : null;
 }
 
-// The desktop app has no waitlist or access-code screen, so the refusal names
-// the one surface that does and opens it.
 async function upgradeGateRedirect(payload: Record<string, unknown>): Promise<string | null> {
   if (readBillingErrorCode(payload) !== 'waitlist_access_required') return null;
   await openExternalUrl(`${WEB_APP_URL}/pricing`);
@@ -192,15 +180,15 @@ export async function openTopUpCheckout(
   amountUsd: number,
   onClosed?: () => void | Promise<void>,
 ): Promise<string | null> {
-  if (topUpUnitsForUsd(amountUsd) === null) {
-    return `Choose a whole-dollar top-up from $${MIN_TOP_UP_AMOUNT_USD} to $${MAX_TOP_UP_AMOUNT_USD}.`;
+  if (!isTopUpAmountUsd(amountUsd)) {
+    return `Choose a whole-dollar amount from $${MIN_TOP_UP_AMOUNT_USD} to $${MAX_TOP_UP_AMOUNT_USD.toLocaleString()}.`;
   }
 
   let request: ReturnType<typeof createManagedCloudRequestContext>;
   try {
-    request = createManagedCloudRequestContext('Cloud usage top-up');
+    request = createManagedCloudRequestContext('Cloud credit purchase');
   } catch {
-    return 'Please sign in to buy a usage top-up.';
+    return 'Please sign in to buy credits.';
   }
   const ownershipBlock = stripeBillingActionBlockReason('portal');
   if (ownershipBlock) return ownershipBlock;
@@ -218,22 +206,25 @@ export async function openTopUpCheckout(
     request.assertBoundary();
 
     if (!res.ok) {
-      const msg = await readBillingError(res, `Top-up failed (${res.status})`);
+      const payload = await readBillingPayload(res);
       request.assertBoundary();
-      return msg;
+      return (
+        (await upgradeGateRedirect(payload)) ??
+        billingErrorFromPayload(payload, `Credit checkout failed (${res.status})`)
+      );
     }
 
     const payload: unknown = await res.json();
     request.assertBoundary();
     if (!isRecord(payload) || typeof payload['url'] !== 'string') {
-      return 'No top-up checkout URL returned from server.';
+      return 'No credit checkout URL returned from server.';
     }
     url = payload['url'];
   } catch {
     return 'Unable to reach payment service. Check your internet connection.';
   }
 
-  await openBillingUrl(url, 'Buy an AGI usage top-up', onClosed);
+  await openBillingUrl(url, 'Buy AGI credits', onClosed);
   return null;
 }
 
