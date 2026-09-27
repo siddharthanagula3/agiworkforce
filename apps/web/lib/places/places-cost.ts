@@ -5,7 +5,10 @@ import { chargeMicrousdForProviderCost, PLACES_SEARCH_TOOL_NAME } from '@agiwork
 
 import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { PLACES_SEARCH_FEATURE, placesSearchMicrousdPerCall } from '@/lib/places/places-config';
+import type { FreeTrialToolSpend } from '@/lib/services/free-trial-service';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import {
+  INCLUDED_SEARCH_ADMISSION,
   reserveSearchCharge,
   settleSearchCall,
   type SearchAdmission,
@@ -23,12 +26,27 @@ export interface PlacesSearchBilling {
   surface?: string | null;
   attribution?: UsageAttribution;
   db: DatabaseAdapter;
+  freeTrial?: FreeTrialToolSpend;
 }
 
 export function reservePlacesSearchCharge(
   billing: PlacesSearchBilling,
   call: { providerId: string; toolCallId: string },
 ): Promise<SearchChargeReservationOutcome> {
+  if (billing.freeTrial) {
+    return Promise.resolve<SearchChargeReservationOutcome>(
+      billing.freeTrial.hold(placesSearchMicrousdPerCall())
+        ? { outcome: 'admitted', admission: INCLUDED_SEARCH_ADMISSION }
+        : {
+            outcome: 'refused',
+            error: new ManagedUsageRequestError(
+              'The Free usage window cannot cover this places search.',
+              429,
+              'free_trial_token_budget_reached',
+            ),
+          },
+    );
+  }
   return reserveSearchCharge({
     userId: billing.userId,
     organizationId: billing.organizationId ?? null,
@@ -56,6 +74,7 @@ export function settlePlacesSearchCall(
 ): Promise<void> {
   const calls =
     Number.isFinite(call.billableCalls) && call.billableCalls > 0 ? call.billableCalls : 0;
+  billing.freeTrial?.settle(placesSearchMicrousdPerCall(), calls * placesSearchMicrousdPerCall());
   return settleSearchCall({
     userId: billing.userId,
     organizationId: billing.organizationId ?? null,

@@ -36,6 +36,7 @@ export interface ObservedProviderUsage {
   webSearchRequests?: number;
   webFetchRequests?: number;
   hostedCodeExecution?: HostedCodeExecutionEvidence;
+  toolSpendMicrousd?: number;
   providerCostDollars?: number;
   providerCallObservations?: ProviderUsageObservation[];
 }
@@ -299,6 +300,12 @@ export function mergeObservedProviderUsage(
       source.hostedCodeExecution,
     );
   }
+  addToolSpend(target, source.toolSpendMicrousd);
+}
+
+export function addToolSpend(target: ObservedProviderUsage, microusd: number | undefined): void {
+  const toolSpendMicrousd = nonNegative(target.toolSpendMicrousd) + nonNegative(microusd);
+  if (toolSpendMicrousd > 0) target.toolSpendMicrousd = toolSpendMicrousd;
 }
 
 export function calculateObservedProviderUsageCostDollars(
@@ -423,6 +430,22 @@ export function observedProviderUsageLedgerMicrousd(
   fallbackPricing: ProviderUsagePricingContext,
 ): number {
   return toLedgerMicrousd(calculateObservedProviderUsageCostDollars(usage, fallbackPricing));
+}
+
+export function observedTurnCost(
+  usage: ObservedProviderUsage,
+  pricing: ProviderUsagePricingContext,
+): { tokenMicrousd: number; toolMicrousd: number } {
+  return {
+    tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, pricing),
+    toolMicrousd:
+      priceServerToolUsage({
+        provider: pricing.provider,
+        webSearchRequests: usage.webSearchRequests,
+        webFetchRequests: usage.webFetchRequests,
+        hostedCodeExecution: usage.hostedCodeExecution,
+      }).providerMicrousd + nonNegative(usage.toolSpendMicrousd),
+  };
 }
 
 export function observedListLedgerCents(

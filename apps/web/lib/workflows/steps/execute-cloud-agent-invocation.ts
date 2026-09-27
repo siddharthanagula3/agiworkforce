@@ -106,6 +106,7 @@ const UsageSchema = z
       })
       .strict()
       .optional(),
+    toolSpendMicrousd: z.number().nonnegative().optional(),
     providerCostDollars: z.number().finite().nonnegative().optional(),
     providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
   })
