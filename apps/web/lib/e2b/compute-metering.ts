@@ -366,7 +366,7 @@ export async function meterSandboxComputeInterval(
   if (metered <= 0) {
     unbilledMs += elapsedMs;
     const base = {
-      env: E2B_COMPUTE_RATE_ENV,
+      env: SANDBOX_COMPUTE_RATE_ENV,
       userId: interval.userId,
       sandboxId: interval.sandboxId,
       elapsedMs,
