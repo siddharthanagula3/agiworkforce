@@ -101,6 +101,7 @@ import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  loadConnectorToolPermissions,
   withDisabledConnectorIds,
   withoutStandingApprovals,
 } from './lib/connector-tool-permissions';
@@ -518,6 +519,15 @@ async function dispatchChatCompletions(
       const startedRun = await beginCloudAgentRun(userId, processed, 'research', requestDb);
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
+      const researchToolApprovalPolicy =
+        processed.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
+      const researchConnectorPermissions = await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
+        loadConnectorToolPermissions(requestDb, userId),
+      );
+      processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+        approvalRequired: !policyAutoApprovesTool(researchToolApprovalPolicy, WEB_SEARCH_TOOL),
+        genericBackendConfigured: webSearchBackendConfigured(),
+      });
       const researchUsage = createObservedProviderUsage();
       // The research loop can rotate to a managed-failover candidate. Track the
       // view that is actually serving so settlement and attribution price by it,
@@ -600,6 +610,10 @@ async function dispatchChatCompletions(
           requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
           domainPolicy: researchDomainPolicy,
           fileSources: researchFileSources,
+          toolApprovalPolicy: researchToolApprovalPolicy,
+          connectorPermissions: processed.conversationIsTemporary
+            ? withoutStandingApprovals(researchConnectorPermissions)
+            : researchConnectorPermissions,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
