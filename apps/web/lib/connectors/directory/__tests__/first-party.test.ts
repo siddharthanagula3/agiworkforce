@@ -55,8 +55,8 @@ describe('first-party seeds', () => {
     });
     expect(byId.get('stripe')).toMatchObject({ url: 'https://mcp.stripe.com', authMode: 'oauth' });
     expect(byId.get('paypal')).toMatchObject({
-      url: 'https://mcp.paypal.com/http',
-      authMode: 'api-key',
+      url: 'https://mcp.paypal.com/mcp',
+      authMode: 'oauth',
     });
     expect(byId.get('zapier')).toMatchObject({ url: 'https://mcp.zapier.com/api/v1/connect' });
     expect(byId.get('asana')).toMatchObject({ url: 'https://mcp.asana.com/v2/mcp' });

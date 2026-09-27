@@ -85,6 +85,27 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   'ChatMessage.Send': { sentence: 'Sends a message in a Teams chat.', access: WRITE },
   'Sites.Read.All': { sentence: 'Reads SharePoint site content you can access.', access: READ },
 
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.User.Read.All': {
+    sentence: 'Reads the user profiles in your Microsoft Entra directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Group.Read.All': {
+    sentence: 'Reads the groups in your Microsoft Entra directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.GroupMember.Read.All': {
+    sentence: 'Reads who belongs to each group.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Device.Read.All': {
+    sentence: 'Reads the devices registered in your directory.',
+    access: READ,
+  },
+  'api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/MCP.Organization.Read.All': {
+    sentence: 'Reads your organization profile and license subscriptions.',
+    access: READ,
+  },
+
   'https://management.azure.com/user_impersonation': {
     sentence: "Manages Azure resources on your behalf, using your account's role permissions.",
     access: WRITE,
@@ -107,13 +128,16 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<string, ScopeDescription>> = {
   'app:mentionable': { sentence: 'Lets this app be @mentioned in comments.', access: WRITE },
 
   'read:me': { sentence: 'Reads your account profile.', access: READ },
-  'read:jira-user': { sentence: "Reads other Jira users' basic profiles.", access: READ },
-  'read:jira-work': { sentence: 'Reads issues, projects, and boards.', access: READ },
-  'write:jira-work': { sentence: 'Creates and edits issues.', access: WRITE },
+  'read:jira:agent-interface': { sentence: 'Reads issues, projects, and boards.', access: READ },
+  'write:jira:agent-interface': { sentence: 'Creates and edits issues.', access: WRITE },
+  'search:jira:agent-interface': { sentence: 'Searches issues with JQL.', access: READ },
 
-  'read:confluence-space.summary': { sentence: 'Lists the spaces you can access.', access: READ },
-  'read:confluence-content.all': { sentence: 'Reads pages and their content.', access: READ },
-  'write:confluence-content': { sentence: 'Creates and edits pages.', access: WRITE },
+  'read:confluence:agent-interface': {
+    sentence: 'Reads spaces, pages, and comments.',
+    access: READ,
+  },
+  'write:confluence:agent-interface': { sentence: 'Creates and edits pages.', access: WRITE },
+  'search:confluence:agent-interface': { sentence: 'Searches pages with CQL.', access: READ },
 
   'tasks:read': { sentence: 'Reads tasks in your workspace.', access: READ },
   'tasks:write': { sentence: 'Creates and edits tasks.', access: WRITE },
