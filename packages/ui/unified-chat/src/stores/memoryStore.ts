@@ -5,6 +5,9 @@ export interface MemoryFact {
   id: string;
   text: string;
   sourceConversationId?: string;
+  sourceConversationTitle?: string | null;
+  source?: string;
+  category?: string | null;
   /**
    * Project this fact is confined to, if any (migration 0135). Absent means
    * global, used in every conversation. Shown in the editor so a confined
@@ -23,18 +26,28 @@ export interface MemoryFact {
    * disappears when it fails.
    */
   pending?: boolean;
+  unsaved?: boolean;
 }
 
 export type MemorySyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
+export interface MemoryProjectScope {
+  id: string;
+  name: string;
+}
+
 interface MemoryState {
   facts: MemoryFact[];
   syncStatus: MemorySyncStatus;
-  add: (text: string, sourceConversationId?: string) => MemoryFact | null;
-  update: (id: string, text: string) => void;
-  setPinned: (id: string, pinned: boolean) => void;
-  remove: (id: string) => void;
-  clear: () => void;
+  add: (
+    text: string,
+    sourceConversationId?: string,
+    project?: MemoryProjectScope,
+  ) => Promise<MemoryFact | null>;
+  update: (id: string, text: string) => Promise<void>;
+  setPinned: (id: string, pinned: boolean) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+  clear: () => Promise<void>;
   hydrateFromServer: () => Promise<void>;
 }
 
@@ -76,12 +89,24 @@ interface ServerMemoryRow {
   source: string;
   projectId?: string | null;
   projectName?: string | null;
+  sourceConversationId?: string | null;
+  sourceConversationTitle?: string | null;
   pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
+interface CreatedServerMemory {
+  memory: ServerMemoryRow;
+  merged: boolean;
+  supersededIds: string[];
+  supersededBy: string | null;
+}
+
 const MEMORY_API_BASE = '/api/memory';
+const MEMORY_PAGE_SIZE = 100;
+const MEMORY_MAX_OFFSET = 10_000;
+const MEMORY_REQUEST_FAILED = 'Could not reach your memory. Nothing changed.';
 
 let cachedCsrfToken: string | null = null;
 let cachedCsrfExpiry = 0;
@@ -110,61 +135,92 @@ async function withCsrfHeaders(
   return token ? { ...headers, 'x-csrf-token': token } : headers;
 }
 
-async function fetchServerMemories(): Promise<ServerMemoryRow[] | null> {
+async function memoryRequest<T>(path: string, init: RequestInit): Promise<T> {
+  let res: Response;
   try {
-    const res = await fetch(`${MEMORY_API_BASE}?limit=100`, { method: 'GET' });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { memories?: ServerMemoryRow[] };
-    return data.memories ?? [];
+    res = await fetch(path, init);
   } catch {
-    return null;
+    throw new Error(MEMORY_REQUEST_FAILED);
   }
+  const body = (await res.json().catch(() => null)) as
+    (T & { error?: { message?: string } }) | null;
+  if (!res.ok || body === null) {
+    throw new Error(body?.error?.message || MEMORY_REQUEST_FAILED);
+  }
+  return body;
 }
 
-async function createServerMemory(text: string): Promise<ServerMemoryRow | null> {
-  try {
-    const headers = await withCsrfHeaders({ 'Content-Type': 'application/json' });
-    const res = await fetch(MEMORY_API_BASE, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ content: text, source: 'web' }),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { memory?: ServerMemoryRow };
-    return data.memory ?? null;
-  } catch {
-    return null;
+async function fetchServerMemories(): Promise<ServerMemoryRow[]> {
+  const rows: ServerMemoryRow[] = [];
+  for (let offset = 0; offset <= MEMORY_MAX_OFFSET; offset += MEMORY_PAGE_SIZE) {
+    const page = await memoryRequest<{ memories?: ServerMemoryRow[]; hasMore?: boolean }>(
+      `${MEMORY_API_BASE}?limit=${MEMORY_PAGE_SIZE}&offset=${offset}`,
+      { method: 'GET' },
+    );
+    const memories = page.memories ?? [];
+    rows.push(...memories);
+    if (page.hasMore !== true || memories.length === 0) break;
   }
+  return rows;
+}
+
+async function createServerMemory(text: string, projectId?: string): Promise<CreatedServerMemory> {
+  return memoryRequest<CreatedServerMemory>(MEMORY_API_BASE, {
+    method: 'POST',
+    headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ content: text, source: 'web', ...(projectId ? { projectId } : {}) }),
+  });
 }
 
 async function updateServerMemory(
   serverId: string,
   patch: { content?: string; pinned?: boolean },
-): Promise<boolean> {
-  try {
-    const headers = await withCsrfHeaders({ 'Content-Type': 'application/json' });
-    const res = await fetch(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+): Promise<ServerMemoryRow> {
+  const body = await memoryRequest<{ memory: ServerMemoryRow }>(
+    `${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`,
+    {
       method: 'PUT',
-      headers,
+      headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(patch),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+    },
+  );
+  return body.memory;
 }
 
-async function deleteServerMemory(serverId: string): Promise<boolean> {
-  try {
-    const headers = await withCsrfHeaders();
-    const res = await fetch(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
-      method: 'DELETE',
-      headers,
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
+async function deleteServerMemory(serverId: string): Promise<void> {
+  await memoryRequest<{ success: boolean }>(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+    method: 'DELETE',
+    headers: await withCsrfHeaders(),
+  });
+}
+
+async function deleteAllServerMemories(): Promise<void> {
+  await memoryRequest<{ deleted: number }>(MEMORY_API_BASE, {
+    method: 'DELETE',
+    headers: await withCsrfHeaders(),
+  });
+}
+
+function factFromServer(row: ServerMemoryRow, id: string = randomId()): MemoryFact {
+  return {
+    id,
+    serverId: row.id,
+    text: row.content,
+    source: row.source,
+    category: row.category,
+    projectId: row.projectId ?? null,
+    projectName: row.projectName ?? null,
+    ...(row.sourceConversationId ? { sourceConversationId: row.sourceConversationId } : {}),
+    sourceConversationTitle: row.sourceConversationTitle ?? null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    pinned: row.pinned === true,
+  };
+}
+
+function withServerRow(fact: MemoryFact, row: ServerMemoryRow): MemoryFact {
+  const saved = factFromServer(row, fact.id);
+  return { ...saved, projectName: saved.projectName ?? fact.projectName ?? null, pending: false };
 }
 
 export const useMemoryStore = create<MemoryState>()(
@@ -173,83 +229,123 @@ export const useMemoryStore = create<MemoryState>()(
       facts: [],
       syncStatus: canSyncToServer() ? 'idle' : 'unavailable',
 
-      add: (text, sourceConversationId) => {
+      add: async (text, sourceConversationId, project) => {
         const trimmed = text.trim();
         if (!trimmed) return null;
-        const dupe = get().facts.find((f) => f.text.toLowerCase() === trimmed.toLowerCase());
+        const dupe = get().facts.find(
+          (f) =>
+            f.text.toLowerCase() === trimmed.toLowerCase() &&
+            (f.projectId ?? null) === (project?.id ?? null),
+        );
         if (dupe) return dupe;
         const now = new Date().toISOString();
         const fact: MemoryFact = {
           id: randomId(),
           text: trimmed,
-          sourceConversationId,
+          ...(sourceConversationId ? { sourceConversationId } : {}),
+          ...(project ? { projectId: project.id, projectName: project.name } : {}),
           createdAt: now,
           updatedAt: now,
+          ...(canSyncToServer() ? { pending: true } : {}),
         };
         set((state) => ({ facts: [fact, ...state.facts] }));
+        if (!canSyncToServer()) return fact;
 
-        if (canSyncToServer()) {
-          void createServerMemory(trimmed).then((row) => {
-            if (!row) return;
-            const stillLocal = get().facts.some((f) => f.id === fact.id);
-            if (!stillLocal) {
-              void deleteServerMemory(row.id);
-              return;
-            }
-            set((state) => ({
-              facts: state.facts.map((f) =>
-                f.id === fact.id ? { ...f, serverId: row.id, updatedAt: row.updatedAt } : f,
-              ),
-            }));
-          });
+        let created: CreatedServerMemory;
+        try {
+          created = await createServerMemory(trimmed, project?.id);
+        } catch (error) {
+          set((state) => ({ facts: state.facts.filter((f) => f.id !== fact.id) }));
+          throw error;
         }
 
-        return fact;
+        const superseded = new Set(created.supersededIds);
+        const keeper = created.supersededBy
+          ? get().facts.find((f) => f.serverId === created.supersededBy)
+          : undefined;
+        if (created.supersededBy) {
+          set((state) => ({ facts: state.facts.filter((f) => f.id !== fact.id) }));
+          throw new Error(
+            keeper
+              ? `Kept “${keeper.text}” instead, because it outranks the new fact. Unpin or edit it to change what is remembered.`
+              : 'Kept an existing memory instead, because it outranks the new fact.',
+          );
+        }
+
+        const existing = created.merged
+          ? get().facts.find((f) => f.serverId === created.memory.id)
+          : undefined;
+        const saved = withServerRow(existing ?? fact, created.memory);
+        set((state) => ({
+          facts: state.facts
+            .filter((f) => !(f.serverId && superseded.has(f.serverId)))
+            .filter((f) => !(existing && f.id === fact.id))
+            .map((f) => (f.id === saved.id ? saved : f)),
+        }));
+        return saved;
       },
 
-      update: (id, text) => {
+      update: async (id, text) => {
         const trimmed = text.trim();
-        if (!trimmed) return;
         const target = get().facts.find((f) => f.id === id);
+        if (!trimmed || !target || target.pending) return;
         set((state) => ({
           facts: state.facts.map((f) =>
             f.id === id ? { ...f, text: trimmed, updatedAt: new Date().toISOString() } : f,
           ),
         }));
-        if (canSyncToServer() && target?.serverId) {
-          void updateServerMemory(target.serverId, { content: trimmed });
+        if (!canSyncToServer() || !target.serverId) return;
+        try {
+          const row = await updateServerMemory(target.serverId, { content: trimmed });
+          set((state) => ({
+            facts: state.facts.map((f) => (f.id === id ? withServerRow(f, row) : f)),
+          }));
+        } catch (error) {
+          set((state) => ({ facts: state.facts.map((f) => (f.id === id ? target : f)) }));
+          throw error;
         }
       },
 
-      setPinned: (id, pinned) => {
+      setPinned: async (id, pinned) => {
         const target = get().facts.find((f) => f.id === id);
         if (!target || target.pending) return;
         set((state) => ({
           facts: state.facts.map((f) => (f.id === id ? { ...f, pinned } : f)),
         }));
-        if (canSyncToServer() && target.serverId) {
-          void updateServerMemory(target.serverId, { pinned });
+        if (!canSyncToServer() || !target.serverId) return;
+        try {
+          const row = await updateServerMemory(target.serverId, { pinned });
+          set((state) => ({
+            facts: state.facts.map((f) => (f.id === id ? withServerRow(f, row) : f)),
+          }));
+        } catch (error) {
+          set((state) => ({ facts: state.facts.map((f) => (f.id === id ? target : f)) }));
+          throw error;
         }
       },
 
-      remove: (id) => {
-        const target = get().facts.find((f) => f.id === id);
-        set((state) => ({
-          facts: state.facts.filter((f) => f.id !== id),
-        }));
-        if (canSyncToServer() && target?.serverId) {
-          void deleteServerMemory(target.serverId);
+      remove: async (id) => {
+        const facts = get().facts;
+        const index = facts.findIndex((f) => f.id === id);
+        const target = facts[index];
+        if (!target || target.pending) return;
+        set((state) => ({ facts: state.facts.filter((f) => f.id !== id) }));
+        if (!canSyncToServer() || !target.serverId) return;
+        try {
+          await deleteServerMemory(target.serverId);
+        } catch (error) {
+          set((state) => {
+            const next = [...state.facts];
+            next.splice(Math.min(index, next.length), 0, target);
+            return { facts: next };
+          });
+          throw error;
         }
       },
 
-      clear: () => {
-        const toDelete = get()
-          .facts.filter((f) => f.serverId)
-          .map((f) => f.serverId as string);
+      clear: async () => {
+        if (canSyncToServer()) await deleteAllServerMemories();
         set({ facts: [] });
-        if (canSyncToServer() && toDelete.length > 0) {
-          void Promise.allSettled(toDelete.map((serverId) => deleteServerMemory(serverId)));
-        }
       },
 
       hydrateFromServer: async () => {
@@ -258,73 +354,57 @@ export const useMemoryStore = create<MemoryState>()(
           return;
         }
         set({ syncStatus: 'syncing' });
-        const rows = await fetchServerMemories();
-        if (rows === null) {
-          set({ syncStatus: 'idle' });
+        let rows: ServerMemoryRow[];
+        try {
+          rows = await fetchServerMemories();
+        } catch {
+          set({ syncStatus: 'error' });
           return;
         }
 
+        const serverTexts = new Set(rows.map((row) => row.content.toLowerCase()));
+        const backlog = get().facts.filter(
+          (f) => !f.serverId && !f.pending && !serverTexts.has(f.text.toLowerCase()),
+        );
         set((state) => {
           const byServerId = new Map(
             state.facts.filter((f) => f.serverId).map((f) => [f.serverId, f]),
           );
-          const unsynced = state.facts.filter((f) => !f.serverId);
-          const merged: MemoryFact[] = [];
-
-          for (const row of rows) {
+          const facts = rows.map((row) => {
             const existing = byServerId.get(row.id);
-            if (existing) {
-              merged.push({
-                ...existing,
-                text: row.content,
-                projectId: row.projectId ?? null,
-                projectName: row.projectName ?? null,
-                createdAt: row.createdAt,
-                updatedAt: row.updatedAt,
-                pinned: row.pinned === true,
-              });
-              byServerId.delete(row.id);
-              continue;
-            }
-            const matchIdx = unsynced.findIndex(
-              (f) => f.text.toLowerCase() === row.content.toLowerCase(),
-            );
-            if (matchIdx !== -1) {
-              const [match] = unsynced.splice(matchIdx, 1);
-              if (match) {
-                merged.push({
-                  ...match,
-                  serverId: row.id,
-                  projectId: row.projectId ?? null,
-                  projectName: row.projectName ?? null,
-                  updatedAt: row.updatedAt,
-                  pinned: row.pinned === true,
-                });
-                continue;
-              }
-            }
-            merged.push({
-              id: randomId(),
-              text: row.content,
-              projectId: row.projectId ?? null,
-              projectName: row.projectName ?? null,
-              createdAt: row.createdAt,
-              updatedAt: row.updatedAt,
-              pinned: row.pinned === true,
-              serverId: row.id,
-            });
-          }
-
-          merged.push(...unsynced);
-          merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-
-          return { facts: merged, syncStatus: 'synced' };
+            return existing ? withServerRow(existing, row) : factFromServer(row);
+          });
+          return {
+            facts: [...state.facts.filter((f) => f.pending), ...backlog, ...facts],
+            syncStatus: 'synced',
+          };
         });
+
+        for (const fact of backlog) {
+          try {
+            const created = await createServerMemory(fact.text);
+            const superseded = new Set(created.supersededIds);
+            set((state) => ({
+              facts: state.facts
+                .filter((f) => !(f.serverId && superseded.has(f.serverId)))
+                .flatMap((f) => {
+                  if (f.id !== fact.id) return [f];
+                  if (created.supersededBy) return [];
+                  if (state.facts.some((other) => other.serverId === created.memory.id)) return [];
+                  return [withServerRow(f, created.memory)];
+                }),
+            }));
+          } catch {
+            set((state) => ({
+              facts: state.facts.map((f) => (f.id === fact.id ? { ...f, unsaved: true } : f)),
+            }));
+          }
+        }
       },
     }),
     {
       name: 'agi-memory-store-v1',
-      partialize: (state) => ({ facts: state.facts }),
+      partialize: (state) => ({ facts: state.facts.filter((f) => !f.pending) }),
     },
   ),
 );

@@ -50,7 +50,9 @@ describe('MemoryControlsCard', () => {
     expect(screen.getByText('Search and reference chats')).toBeTruthy();
     expect(screen.getByText('Generate memory from chat history')).toBeTruthy();
     expect(
-      screen.getByText('Use relevant chats and saved memories on this device when answering.'),
+      screen.getByText(
+        'Let AGI search your other chats on this device for relevant details when answering.',
+      ),
     ).toBeTruthy();
 
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
@@ -64,7 +66,7 @@ describe('MemoryControlsCard', () => {
     expect(onGenerateChange).toHaveBeenCalledWith(false);
   });
 
-  it('shows both sub-switches off and disabled while the master switch is off', () => {
+  it('keeps chat search independent while the master switch is off', () => {
     const { screen } = renderCard({
       memoryEnabled: false,
       referencePastChats: true,
@@ -73,11 +75,7 @@ describe('MemoryControlsCard', () => {
 
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
     expect(switches[0].props).toMatchObject({ value: false, disabled: false });
-    expect(switches[1].props).toMatchObject({
-      value: false,
-      disabled: true,
-      accessibilityState: { checked: false, disabled: true },
-    });
+    expect(switches[1].props).toMatchObject({ value: true, disabled: false });
     expect(switches[2].props).toMatchObject({
       value: false,
       disabled: true,
@@ -102,7 +100,7 @@ describe('MemoryControlsCard', () => {
     expect(cloudOn.screen.getByText(/Cloud memories are stored on your AGI account/)).toBeTruthy();
   });
 
-  it('uses Cloud-specific copy and disables generation while reference memory is off', () => {
+  it('uses Cloud-specific copy and keeps generation independent of chat search', () => {
     const { screen } = renderCard({
       isCloud: true,
       referencePastChats: false,
@@ -110,13 +108,12 @@ describe('MemoryControlsCard', () => {
     });
 
     expect(
-      screen.getByText('Use relevant Cloud chats and saved account memories when answering.'),
+      screen.getByText(
+        'Let AGI search your other Cloud chats for relevant details when answering.',
+      ),
     ).toBeTruthy();
     const switches = screen.UNSAFE_getAllByType(NativeSwitch);
-    expect(switches[2].props).toMatchObject({
-      value: true,
-      disabled: true,
-      accessibilityState: { checked: true, disabled: true },
-    });
+    expect(switches[1].props).toMatchObject({ value: false, disabled: false });
+    expect(switches[2].props).toMatchObject({ value: true, disabled: false });
   });
 });

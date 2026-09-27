@@ -21,6 +21,10 @@ vi.mock('../KnowledgeFilesPanel', () => ({
   KnowledgeFilesPanel: () => null,
 }));
 
+vi.mock('../ProjectMemoryPanel', () => ({
+  ProjectMemoryPanel: () => null,
+}));
+
 import { ProjectSettingsDialog } from '../ProjectSettingsDialog';
 import type { Project } from '@features/projects/stores/project-store';
 
