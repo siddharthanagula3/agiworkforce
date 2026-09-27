@@ -79,8 +79,8 @@ Code: `apps/web/features/billing/components/UpgradeOrderPanel.tsx:241-268`, `app
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Coupon codes are accepted only on Stripe Checkout (allow_promotion_codes), which a first purchase reaches only after the upgrade-waitlist gate; in-place upgrades (/api/upgrade) take no coupon. | flag-off |
-| desktop | partial | Coupon codes are accepted only on Stripe Checkout (allow_promotion_codes), which a first purchase reaches only after the beta_redemptions waitlist gate; in-place upgrades take no coupon, and Checkout opens in the system browser. | flag-off |
+| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Coupons now apply on Checkout and on in-place upgrades (/api/upgrade validates promotion codes with Stripe). | flag-off |
+| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Coupons now apply on Checkout and on in-place upgrades (/api/upgrade validates promotion codes with Stripe). | flag-off |
 | mobile | partial | Mobile has no coupon entry: its invite-code modal is never mounted and its redeem is a local stub, and store offer codes are not wired. | mount, handler |
 
 Code: `apps/web/app/pricing/page.tsx:670-682`, `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/mobile/src/features/waitlist/service.ts:85-95`
@@ -92,8 +92,8 @@ Code: `apps/web/app/pricing/page.tsx:670-682`, `apps/web/app/api/checkout/route.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No plan defines trialDays, so checkout never shows trial terms; a code-granted trial shows only a 'Trial' status and a 'Renews on' date for a trial that neither renews nor expires in code. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, flag-off |
+| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Checkout states the referral trial's price and conversion date and a trial_will_end reminder is sent; code-granted trials show their real end date. | ui, handler, flag-off |
+| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Checkout states the referral trial's price and conversion date and a trial_will_end reminder is sent; code-granted trials show their real end date. | ui, handler, flag-off |
 | mobile | partial | Mobile shows a trialing plan as 'Renews <date>' with no trial terms. | ui |
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:157-160`, `apps/web/features/settings/sections/BillingSection.tsx:757-770`, `apps/web/app/api/checkout/route.ts:83-106`, `apps/web/app/api/checkout/route.ts:208-221`
