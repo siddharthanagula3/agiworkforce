@@ -1749,7 +1749,7 @@ describe('POST /api/media/video/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(429);
-      expect(data.error.message).toContain('Too many requests');
+      expect(data.error.message).toContain('Video generation rate limit reached');
     });
 
     it('marks a Runway 5xx outcome unknown because the provider may have accepted it', async () => {

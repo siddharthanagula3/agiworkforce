@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
+import { apiErrorMessage } from '@/features/billing/lib/api-error';
 
 interface TrialSummary {
   plan: string;
@@ -43,10 +44,7 @@ export function TrialCancelControls({ token, plan, endsOn }: TrialSummary & { to
         setStatus('cancelled');
         return;
       }
-      const body = (await response.json().catch(() => null)) as {
-        error?: { message?: unknown };
-      } | null;
-      setError(typeof body?.error?.message === 'string' ? body.error.message : NOT_CANCELLED);
+      setError(apiErrorMessage(await response.json().catch(() => null), NOT_CANCELLED));
     } catch {
       setError('Your trial was not cancelled. Check your connection and try again.');
     }
