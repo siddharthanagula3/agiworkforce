@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { ModelMetadata } from '@agiworkforce/types';
+import { getTierPolicy, type ModelMetadata } from '@agiworkforce/types';
 import { loadConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import { appendWebSearchTool } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { loadMcpToolDefs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
@@ -286,19 +286,25 @@ export async function resolveLiveVoiceFunctionTools(input: {
   planTier: string | null;
   backendModel: ModelMetadata;
 }): Promise<LiveVoiceFunctionTools> {
-  if (input.backendModel.capabilities?.tools === false) return { tools: [], names: [] };
+  const tierPolicy = getTierPolicy(input.planTier);
+  if (input.backendModel.capabilities?.tools === false || tierPolicy.allowToolUse === false) {
+    return { tools: [], names: [] };
+  }
   const permissions = await loadConnectorToolPermissions(input.db, input.userId);
-  const [operatorTools, connectorCatalog] = await Promise.all([
-    loadMcpToolDefs(),
-    loadUserConnectorToolCatalog(input.userId, {
-      customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
-      planTier: input.planTier,
-      organizationId: input.organizationId,
-      isToolDenied: permissions.isConnectorToolDenied,
-    }),
-  ]);
+  const [operatorTools, connectorCatalog] =
+    tierPolicy.allowMCP === false
+      ? [[], { tools: [] }]
+      : await Promise.all([
+          loadMcpToolDefs(),
+          loadUserConnectorToolCatalog(input.userId, {
+            customConnectorLimit: getCustomRemoteMcpLimit(input.planTier) ?? undefined,
+            planTier: input.planTier,
+            organizationId: input.organizationId,
+            isToolDenied: permissions.isConnectorToolDenied,
+          }),
+        ]);
   const productTools: ChatFunctionTool[] = [
-    urlFetchToolDef(),
+    ...(tierPolicy.allowSearch ? [urlFetchToolDef()] : []),
     createManagedOfficeFileToolDefinition(),
   ];
   const candidates = [

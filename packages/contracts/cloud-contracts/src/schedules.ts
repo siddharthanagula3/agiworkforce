@@ -89,6 +89,25 @@ export const ManagedCloudScheduleConditionStateSchema = z.object({
   contentSha256: z.string().nullable().optional(),
 });
 
+export const ManagedCloudScheduleSourcesSchema = z.object({
+  project: z.boolean(),
+  memory: z.boolean(),
+  web: z.boolean(),
+});
+export type ManagedCloudScheduleSources = z.infer<typeof ManagedCloudScheduleSourcesSchema>;
+
+export const MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES: ManagedCloudScheduleSources = {
+  project: true,
+  memory: true,
+  web: true,
+};
+export const MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS = 100;
+
+export const ManagedCloudScheduleConnectorsSchema = z
+  .array(z.string().trim().min(1).max(128))
+  .max(MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS)
+  .nullable();
+
 export const ManagedCloudScheduleMutationSchema = z.object({
   name: z.string().trim().min(1).max(500),
   description: z.string().max(2_000).nullable(),
@@ -119,6 +138,8 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   retryBackoffSeconds: z.number().int().min(60).max(86_400).optional(),
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
   condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
+  sources: ManagedCloudScheduleSourcesSchema.optional(),
+  connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });
 export type ManagedCloudScheduleMutation = z.infer<typeof ManagedCloudScheduleMutationSchema>;
 
@@ -159,6 +180,8 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   creditCap: z.number().positive().nullable().optional(),
   creditsUsed: z.number().nonnegative().optional(),
   pausedReason: z.enum(['credit_cap_reached', 'approval_required']).nullable().optional(),
+  sources: ManagedCloudScheduleSourcesSchema.optional(),
+  connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
 
