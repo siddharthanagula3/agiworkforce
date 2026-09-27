@@ -816,7 +816,7 @@ impl AgentSession {
             ));
         }
         if matches!(
-            self.permission_mode,
+            self.governed_permission_mode(),
             crate::cli_options::PermissionMode::Plan
         ) && !self.plan_approved
         {
@@ -1562,7 +1562,7 @@ impl TurnHostAdapter<'_> {
         // concurrent read-only batch never contains mutating tools).
         if mode == DispatchMode::Sequential
             && matches!(
-                self.session.permission_mode,
+                self.session.governed_permission_mode(),
                 crate::cli_options::PermissionMode::Plan
             )
             && !self.session.plan_approved
@@ -1728,7 +1728,7 @@ impl TurnHost for TurnHostAdapter<'_> {
         if call.name == "task" || runs_named_agent {
             return ToolClass::Task;
         }
-        let concurrent_eligible = self.session.skip_permissions
+        let concurrent_eligible = self.session.skips_approval()
             && self.concurrency_safe_names.contains(&call.name)
             && !is_team_tool(&call.name)
             && !call.name.starts_with("mcp_")
@@ -1761,7 +1761,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
 
             if matches!(
-                self.session.permission_mode,
+                self.session.governed_permission_mode(),
                 crate::cli_options::PermissionMode::Plan
             ) && !self.session.plan_approved
             {
@@ -1911,8 +1911,8 @@ impl TurnHost for TurnHostAdapter<'_> {
                     self.config.clone(),
                     self.session.model.clone(),
                     crate::context::gather_system_context(),
-                    self.session.skip_permissions,
-                    self.session.permission_mode,
+                    self.session.skips_approval(),
+                    self.session.governed_permission_mode(),
                     self.session.allowed_tools.clone(),
                     self.session.disallowed_tools.clone(),
                     self.session.subagent_depth,
@@ -1920,8 +1920,8 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
 
             let parent_model = self.session.model.clone();
-            let parent_skip_permissions = self.session.skip_permissions;
-            let parent_permission_mode = self.session.permission_mode;
+            let parent_skip_permissions = self.session.skips_approval();
+            let parent_permission_mode = self.session.governed_permission_mode();
             let parent_allowed_tools = self.session.allowed_tools.clone();
             let parent_disallowed_tools = self.session.disallowed_tools.clone();
             self.session
@@ -2110,9 +2110,12 @@ impl TurnHost for TurnHostAdapter<'_> {
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
             mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
-            require_confirmation: !self.session.skip_permissions,
+            require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
-            auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
+            auto_approve_edits: self
+                .session
+                .governed_permission_mode()
+                .auto_approves_edits(),
             quiet: self.session.quiet,
             approval_callback: self.session.recorded_approval_callback(),
             privacy_mode: self.session.privacy_mode,
@@ -2248,12 +2251,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             }
         } else if call.name.starts_with("mcp_") {
             let approval_callback = self.session.recorded_approval_callback();
+            let require_confirmation = !self.session.skips_approval();
             match execute_mcp_tool(
                 &mut self.session.mcp_manager,
                 &call.name,
                 args.clone(),
                 self.session.privacy_mode,
-                !self.session.skip_permissions,
+                require_confirmation,
                 approval_callback,
             )
             .await
@@ -2268,9 +2272,12 @@ impl TurnHost for TurnHostAdapter<'_> {
         } else {
             let opts = crate::tools::ToolExecOptions {
                 mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
-                require_confirmation: !self.session.skip_permissions,
+                require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
-                auto_approve_edits: self.session.permission_mode.auto_approves_edits(),
+                auto_approve_edits: self
+                    .session
+                    .governed_permission_mode()
+                    .auto_approves_edits(),
                 quiet: self.session.quiet,
                 approval_callback: self.session.recorded_approval_callback(),
                 privacy_mode: self.session.privacy_mode,

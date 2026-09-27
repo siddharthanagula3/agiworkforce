@@ -346,7 +346,7 @@ export async function startLocalModelFixture(
   const providerBaseUrl = `${baseUrl}/v1`;
   const stateUrl = `${baseUrl}/__agi_e2e/state`;
   const releaseUrl = `${baseUrl}/__agi_e2e/release`;
-  const configToml = `[default]\nmodel = ${JSON.stringify(E2E_LOCAL_MODEL_ID)}\nprovider = "lmstudio"\nstream = true\nmax_tokens = 256\napproval_mode = "suggest"\n\n[ui]\nprivacy_mode = "local"\n\n[providers.lmstudio]\nbase_url = ${JSON.stringify(providerBaseUrl)}\n\n[providers.ollama]\nbase_url = ${JSON.stringify(baseUrl)}\n`;
+  const configToml = `[default]\nmodel = ${JSON.stringify(E2E_LOCAL_MODEL_ID)}\nprovider = "lmstudio"\nstream = true\nmax_tokens = 256\npermission_mode = "default"\n\n[ui]\nprivacy_mode = "local"\n\n[providers.lmstudio]\nbase_url = ${JSON.stringify(providerBaseUrl)}\n\n[providers.ollama]\nbase_url = ${JSON.stringify(baseUrl)}\n`;
 
   return {
     baseUrl: providerBaseUrl,
