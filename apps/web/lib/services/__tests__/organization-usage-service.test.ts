@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import {
   readOrganizationUsage,
   resolveUsageWindow,
@@ -30,13 +31,17 @@ function harness(rows: Record<string, unknown[]> = {}) {
   return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
 }
 
+function credits(count: number): string {
+  return String(count * MICROUSD_PER_CREDIT);
+}
+
 function agg(over: Record<string, unknown> = {}) {
   return {
     key: 'user-a',
     requests: 12,
     input_tokens: '4000',
     output_tokens: '1500',
-    cost_cents: '250',
+    cost_microusd: credits(250),
     ...over,
   };
 }
@@ -101,11 +106,11 @@ describe('readOrganizationUsage', () => {
     }
   });
 
-  it('sums numeric strings the driver returns rather than concatenating them', async () => {
-    const h = harness({ totals: [agg({ cost_cents: '2500', input_tokens: '900' })] });
+  it('sums numeric strings the driver returns rather than concatenating them, in credits', async () => {
+    const h = harness({ totals: [agg({ cost_microusd: credits(2_500), input_tokens: '900' })] });
     const usage = await readOrganizationUsage(h.db, ORG, window);
 
-    expect(usage.totals.costCents).toBe(2500);
+    expect(usage.totals.credits).toBe(2500);
     expect(usage.totals.inputTokens).toBe(900);
   });
 
@@ -117,7 +122,7 @@ describe('readOrganizationUsage', () => {
       requests: 0,
       inputTokens: 0,
       outputTokens: 0,
-      costCents: 0,
+      credits: 0,
     });
     expect(usage.byMember).toEqual([]);
   });
@@ -136,18 +141,18 @@ describe('readOrganizationUsage', () => {
   it('ranks the heaviest spender first so an owner can see who is driving the bill', async () => {
     const h = harness({
       member: [
-        agg({ key: 'user-heavy', requests: 400, cost_cents: '90000' }),
-        agg({ key: 'user-light', requests: 2, cost_cents: '30' }),
+        agg({ key: 'user-heavy', requests: 400, cost_microusd: credits(90_000) }),
+        agg({ key: 'user-light', requests: 2, cost_microusd: credits(30) }),
       ],
     });
     const usage = await readOrganizationUsage(h.db, ORG, window);
 
     expect(usage.byMember.map((row) => row.key)).toEqual(['user-heavy', 'user-light']);
-    expect(usage.byMember[0]?.costCents).toBe(90000);
+    expect(usage.byMember[0]?.credits).toBe(90000);
 
     const memberQuery = h.query.mock.calls.find(([sql]) => /user_id as key/.test(String(sql)));
     expect(memberQuery).toBeDefined();
-    expect(String(memberQuery?.[0])).toContain('order by cost_cents desc');
+    expect(String(memberQuery?.[0])).toContain('order by cost_microusd desc');
   });
 
   it('bounds each breakdown so one workspace cannot return an unbounded set', async () => {
@@ -168,25 +173,25 @@ describe('readOrganizationUsage product area and project', () => {
 
   it('groups settled spend by workload and by project from the recorded attribution', async () => {
     const h = harness({
-      workload: [agg({ key: 'research', cost_cents: '900' }), agg({ key: null })],
-      project: [agg({ key: 'project-1', cost_cents: '400' })],
+      workload: [agg({ key: 'research', cost_microusd: credits(900) }), agg({ key: null })],
+      project: [agg({ key: 'project-1', cost_microusd: credits(400) })],
     });
 
     const usage = await readOrganizationUsage(h.db, ORG, window);
 
-    expect(usage.byWorkload.map((row) => [row.key, row.costCents])).toEqual([
+    expect(usage.byWorkload.map((row) => [row.key, row.credits])).toEqual([
       ['research', 900],
       ['unknown', 250],
     ]);
-    expect(usage.byProject[0]).toMatchObject({ key: 'project-1', costCents: 400 });
+    expect(usage.byProject[0]).toMatchObject({ key: 'project-1', credits: 400 });
   });
 
   it('names Work sessions and Code sessions rather than leaving them to be inferred', async () => {
     const h = harness({
       workloadSessions: [
-        agg({ key: 'work', sessions: 4, requests: 20, cost_cents: '900' }),
-        agg({ key: 'code', sessions: 2, requests: 7, cost_cents: '300' }),
-        agg({ key: 'chat', sessions: 9, requests: 40, cost_cents: '100' }),
+        agg({ key: 'work', sessions: 4, requests: 20, cost_microusd: credits(900) }),
+        agg({ key: 'code', sessions: 2, requests: 7, cost_microusd: credits(300) }),
+        agg({ key: 'chat', sessions: 9, requests: 40, cost_microusd: credits(100) }),
       ],
     });
 
@@ -196,13 +201,13 @@ describe('readOrganizationUsage product area and project', () => {
       workload: 'work',
       sessions: 4,
       requests: 20,
-      costCents: 900,
+      credits: 900,
     });
     expect(usage.codeSessions).toMatchObject({
       workload: 'code',
       sessions: 2,
       requests: 7,
-      costCents: 300,
+      credits: 300,
     });
   });
 
@@ -224,7 +229,7 @@ describe('readOrganizationUsage product area and project', () => {
       requests: 0,
       inputTokens: 0,
       outputTokens: 0,
-      costCents: 0,
+      credits: 0,
     });
     expect(usage.codeSessions.sessions).toBe(0);
   });

@@ -62,6 +62,7 @@ function seatCandidate(overrides: Record<string, unknown> = {}) {
     stripe_price_id: 'price_team',
     apple_original_transaction_id: null,
     google_purchase_token: null,
+    plan_catalog_version: 1,
     ...overrides,
   };
 }
@@ -118,8 +119,27 @@ describe('resolveEffectiveSubscription', () => {
       'sub-owner-1',
       new Date(PERIOD_START),
       new Date(PERIOD_END),
+      getPlanUsageBudgetCents({ tier: 'team', catalogVersion: 1 }, 'monthly'),
+      scopedDb,
+      1,
+    );
+  });
+
+  it('keeps a seat member on the catalog version the owner bought', async () => {
+    mocks.getSubscription.mockResolvedValue(null);
+    mocks.privilegedQuery.mockResolvedValue([seatCandidate({ plan_catalog_version: null })]);
+
+    const resolved = await resolveEffectiveSubscription(scopedDb, 'member-1');
+
+    expect(resolved).toMatchObject({ plan_catalog_version: null });
+    expect(mocks.getOrCreateAccount).toHaveBeenCalledWith(
+      'member-1',
+      'sub-owner-1',
+      new Date(PERIOD_START),
+      new Date(PERIOD_END),
       getPlanUsageBudgetCents('team', 'monthly'),
       scopedDb,
+      null,
     );
   });
 
@@ -218,6 +238,7 @@ describe('provisionSeatMemberCreditAccounts', () => {
       subscriptionId: 'sub-owner-1',
       periodStart: new Date(PERIOD_START),
       periodEnd: new Date(PERIOD_END),
+      catalogVersion: 1,
     });
 
     expect(provisioned).toBe(2);
@@ -227,8 +248,9 @@ describe('provisionSeatMemberCreditAccounts', () => {
       'sub-owner-1',
       new Date(PERIOD_START),
       new Date(PERIOD_END),
-      getPlanUsageBudgetCents('team', 'monthly'),
+      getPlanUsageBudgetCents({ tier: 'team', catalogVersion: 1 }, 'monthly'),
       db,
+      1,
     );
   });
 

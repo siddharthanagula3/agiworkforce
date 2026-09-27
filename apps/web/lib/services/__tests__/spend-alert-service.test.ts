@@ -24,6 +24,7 @@ vi.mock('@/lib/services/notification-email-service', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { formatCredits } from '@agiworkforce/types';
 import { dispatchSpendAlertIfDue, dueSpendAlertKind } from '../spend-alert-service';
 import type { SpendState } from '../spend-limit-service';
 
@@ -32,10 +33,10 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 function state(overrides: Partial<SpendState> = {}): SpendState {
   return {
     configured: true,
-    monthlyCapCents: 10_000,
+    monthlyCapCredits: 20_000,
     enforcement: 'notify',
     alertThresholdPct: 80,
-    spentCents: 8_500,
+    spentCredits: 17_000,
     usedPct: 85,
     overCap: false,
     overThreshold: true,
@@ -97,10 +98,14 @@ describe('dispatchSpendAlertIfDue', () => {
     expect(recipients.sort()).toEqual(['admin@example.com', 'owner@example.com']);
     expect((mocks.sendSpendAlertEmail.mock.calls[0] as unknown as [unknown])[0]).toMatchObject({
       workspaceName: 'Acme',
-      spent: '$85.00',
-      cap: '$100.00',
+      spent: formatCredits(17_000),
+      cap: formatCredits(20_000),
       thresholdPct: 80,
     });
+    const email = (
+      mocks.sendSpendAlertEmail.mock.calls[0] as unknown as [Record<string, unknown>]
+    )[0];
+    expect(JSON.stringify(email)).not.toContain('$');
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: ORG,

@@ -12,6 +12,7 @@ vi.mock('@/lib/services/spend-alert-service', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromCents, creditsFromMicrousd } from '@agiworkforce/types';
 import {
   __clearSpendCacheForTests,
   evaluateSpendLimit,
@@ -21,6 +22,7 @@ import {
 } from '../spend-limit-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
+const MICROUSD_PER_LEDGER_CENT = 10_000;
 
 function harness({
   cap = 10_000 as number | null,
@@ -37,7 +39,7 @@ function harness({
         monthly_cap_cents: cap,
         enforcement,
         alert_threshold_pct: threshold,
-        spent_cents: spent,
+        spent_microusd: typeof spent === 'string' ? spent : spent * MICROUSD_PER_LEDGER_CENT,
       },
     ];
   });
@@ -74,8 +76,19 @@ describe('readSpendState', () => {
     const state = await readSpendState(h.db, ORG);
 
     expect(state.configured).toBe(false);
-    expect(state.monthlyCapCents).toBeNull();
+    expect(state.monthlyCapCredits).toBeNull();
     expect(state.usedPct).toBeNull();
+  });
+
+  it('states the cap and the month-to-date spend in credits, never in money', async () => {
+    const h = harness({ cap: 10_000, spent: 5_000 });
+    const state = await readSpendState(h.db, ORG);
+
+    expect(state.monthlyCapCredits).toBe(creditsFromCents(10_000));
+    expect(state.spentCredits).toBe(creditsFromCents(5_000));
+    expect(state).not.toHaveProperty('monthlyCapCents');
+    expect(state).not.toHaveProperty('spentCents');
+    expect(String(h.query.mock.calls[0]?.[0])).toContain('m.actual_cost_microusd');
   });
 
   it('computes the used percentage against the cap', async () => {
@@ -84,8 +97,8 @@ describe('readSpendState', () => {
   });
 
   it('sums a numeric string rather than concatenating it', async () => {
-    const h = harness({ spent: '7500' });
-    expect((await readSpendState(h.db, ORG)).spentCents).toBe(7500);
+    const h = harness({ spent: '75000000' });
+    expect((await readSpendState(h.db, ORG)).spentCredits).toBe(creditsFromMicrousd(75_000_000));
   });
 
   it('flags the alert threshold separately from the cap', async () => {

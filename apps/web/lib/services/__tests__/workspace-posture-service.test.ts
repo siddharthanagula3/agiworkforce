@@ -406,7 +406,7 @@ describe('readWorkspacePosture', () => {
     const s = signal((await readWorkspacePosture(h.db, ORG)).groups, 'spend-limit');
 
     expect(s.enforcement).toBe('enforced');
-    expect(s.value).toBe('$500.00 a month, enforced');
+    expect(s.value).toBe('100,000 credits a month, enforced');
     expect(s.detail).toMatch(/eventual rather than exact/i);
   });
 

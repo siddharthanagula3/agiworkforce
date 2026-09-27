@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { getModelsForTierAndSurface } from '@agiworkforce/types';
+import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
+import {
+  formatCredits,
+  getModelsForTierAndSurface,
+  microusdFromCredits,
+} from '@agiworkforce/types';
 
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn((db: DatabaseAdapter) => db),
@@ -53,15 +58,19 @@ function updateSchedule(
   return updateScheduleWithPlan(db, userId, taskId, patch, { planTier: 'max', ...options });
 }
 
+const CREDITS_USED_READ = 'and scheduled_task_id = $2';
+
 function database(
   query: ReturnType<typeof vi.fn>,
   execute: ReturnType<typeof vi.fn> = vi.fn(),
+  creditsUsed: ReturnType<typeof vi.fn> = vi.fn(async () => [{ used: 0 }]),
 ): DatabaseAdapter {
   return {
-    query,
+    query: (sql: string, params?: unknown[]) =>
+      sql.includes(CREDITS_USED_READ) ? creditsUsed(sql, params) : query(sql, params),
     execute,
     transaction: vi.fn(async (callback: (db: DatabaseAdapter) => Promise<unknown>) =>
-      callback(database(query, execute)),
+      callback(database(query, execute, creditsUsed)),
     ),
     withUser: vi.fn(),
     dispose: vi.fn(),
@@ -180,7 +189,7 @@ describe('schedule service persistence', () => {
 
     expect(schedules).toHaveLength(1);
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/where user_id = \$1/i);
+    expect(sql).toMatch(/where task\.user_id = \$1/i);
     expect(params).toEqual(['user-1', 100, 0]);
   });
 
@@ -195,7 +204,7 @@ describe('schedule service persistence', () => {
 
     expect(schedules).toEqual([expect.objectContaining({ projectId: 'project-1' })]);
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/where user_id = \$1 and project_id = \$2/i);
+    expect(sql).toMatch(/where task\.user_id = \$1 and task\.project_id = \$2/i);
     expect(params).toEqual(['user-1', 'project-1', 50, 0]);
   });
 
@@ -1012,5 +1021,138 @@ describe('due-schedule batch isolation', () => {
     expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(1, db, claim.scope);
     expect(createClaimedUserScopedDb).toHaveBeenNthCalledWith(2, db, claim.scope);
     expect(summary.claimed).toBe(2);
+  });
+});
+
+describe('routine credit caps', () => {
+  const CAP_CREDITS = 50;
+  const CAP_MICROUSD = microusdFromCredits(CAP_CREDITS);
+  const cappedRow = { ...taskRow, credit_cap_microusd: String(CAP_MICROUSD) };
+
+  it('states a routine cap and what it has spent in credits', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValue([
+        { ...cappedRow, credits_used_microusd: String(microusdFromCredits(12.5)) },
+      ]);
+
+    const [schedule] = await listSchedules(database(query), 'user-1', { limit: 10, offset: 0 });
+
+    expect(schedule).toMatchObject({
+      creditCap: CAP_CREDITS,
+      creditsUsed: 12.5,
+      pausedReason: null,
+    });
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('charge.scheduled_task_id = task.id');
+    expect(sql).toContain("charge.status = 'completed'");
+    expect(sql).toContain('sum(charge.actual_cost_microusd)');
+  });
+
+  it('refuses a cap that is not a whole number of credits in range', async () => {
+    const query = vi.fn();
+    for (const creditCap of [0, -1, 1.5, MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP + 1]) {
+      await expect(
+        createSchedule(database(query), 'user-1', {
+          name: 'Capped',
+          prompt: 'Brief me',
+          model: 'auto-balanced',
+          recurrence: 'daily',
+          timeOfDay: '12:00',
+          timezone: 'UTC',
+          creditCap,
+        }),
+      ).rejects.toBeInstanceOf(ScheduleValidationError);
+    }
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('stores the cap in microUSD when a routine is created', async () => {
+    const query = vi.fn().mockResolvedValue([cappedRow]);
+
+    await createSchedule(
+      database(query),
+      'user-1',
+      {
+        name: 'Capped',
+        prompt: 'Brief me',
+        model: 'auto-balanced',
+        recurrence: 'daily',
+        timeOfDay: '12:00',
+        timezone: 'UTC',
+        creditCap: CAP_CREDITS,
+      },
+      { now: new Date('2026-07-15T11:00:00.000Z') },
+    );
+
+    const [sql, params] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('credit_cap_microusd');
+    expect(params.at(-1)).toBe(CAP_MICROUSD);
+  });
+
+  it('will not enable a routine that has spent its cap, and says so in credits', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { ...cappedRow, is_enabled: false, status: 'paused', paused_reason: 'credit_cap_reached' },
+      ]);
+    const creditsUsed = vi.fn(async () => [{ used: String(CAP_MICROUSD) }]);
+
+    const enabling = setScheduleEnabled(
+      database(query, vi.fn(), creditsUsed),
+      'user-1',
+      'task-1',
+      true,
+      {
+        now: new Date('2026-07-15T13:00:00.000Z'),
+      },
+    );
+
+    await expect(enabling).rejects.toBeInstanceOf(ScheduleConflictError);
+    await expect(enabling).rejects.toThrow(
+      `This routine reached its ${formatCredits(CAP_CREDITS)} cap after using ${formatCredits(CAP_CREDITS)}. Raise the cap to run it again.`,
+    );
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('refuses a manual run of a routine that has spent its cap', async () => {
+    const query = vi.fn().mockResolvedValueOnce([cappedRow]).mockResolvedValueOnce([]);
+    const creditsUsed = vi.fn(async () => [{ used: String(CAP_MICROUSD + 1) }]);
+
+    await expect(
+      createManualScheduleRun(database(query, vi.fn(), creditsUsed), {
+        userId: 'user-1',
+        taskId: 'task-1',
+        idempotencyKey: 'manual-capped',
+      }),
+    ).rejects.toBeInstanceOf(ScheduleConflictError);
+    expect(creditsUsed).toHaveBeenCalledWith(expect.any(String), ['user-1', 'task-1', null]);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('pauses a routine whose run spent the rest of its cap and records the run in credits', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([cappedRow])
+      .mockResolvedValueOnce([runRow('success')])
+      .mockResolvedValueOnce([{ id: 'task-1' }]);
+    const creditsUsed = vi.fn(async (_sql: string, params?: unknown[]) =>
+      params?.[2] === 'run-1'
+        ? [{ used: String(microusdFromCredits(8)) }]
+        : [{ used: String(CAP_MICROUSD) }],
+    );
+
+    await finalizeScheduleRun(database(query, vi.fn(), creditsUsed), claim, {
+      status: 'success',
+      result: { text: 'Done' },
+      completedAt: new Date('2026-07-15T12:00:02.000Z'),
+    });
+
+    const [, runParams] = query.mock.calls[1] as [string, unknown[]];
+    expect(JSON.parse(String(runParams[3]))).toEqual({ text: 'Done', credits: 8 });
+    const [taskSql, taskParams] = query.mock.calls[2] as [string, unknown[]];
+    expect(taskSql).toContain("then 'credit_cap_reached'");
+    expect(taskParams.at(-1)).toBe(true);
+    expect(taskParams).toContain('paused');
   });
 });
