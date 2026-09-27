@@ -15,7 +15,6 @@ that lists every open item with what is left per surface.
 Fix these first. Each file is one defect; delete it when the fix lands and its
 ledger cells are updated.
 
-- [06-approval-web-default-policy-autonomous.md](../blockers/06-approval-web-default-policy-autonomous.md)
 - [14-desktop-and-vscode-need-unpublished-cli.md](../blockers/14-desktop-and-vscode-need-unpublished-cli.md)
 - [20-mobile-image-stop-keeps-billing.md](../blockers/20-mobile-image-stop-keeps-billing.md)
 - [30-product-definition-p0-gaps.md](../blockers/30-product-definition-p0-gaps.md)
@@ -35,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-224 open items.
+223 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -57,7 +56,7 @@ Nothing left in this wave.
 | 26. Artifact container and panel | 1 | [partial/026-artifact-container-and-panel.md](../partial/026-artifact-container-and-panel.md) |
 | 28. Code Canvas and application preview | 1 | [partial/028-code-canvas-and-application-preview.md](../partial/028-code-canvas-and-application-preview.md) |
 | 31. PDF and document-transformation products | 1 | [partial/031-pdf-and-document-transformation-products.md](../partial/031-pdf-and-document-transformation-products.md) |
-| 39. Memory product | 2 | [partial/039-memory-product.md](../partial/039-memory-product.md) |
+| 39. Memory product | 1 | [partial/039-memory-product.md](../partial/039-memory-product.md) |
 | 41. Temporary and private experiences | 1 | [partial/041-temporary-and-private-experiences.md](../partial/041-temporary-and-private-experiences.md) |
 | 43. Image and visual understanding | 13 | [partial/043-image-and-visual-understanding.md](../partial/043-image-and-visual-understanding.md) |
 | 48. Voice conversation interface | 19 | [partial/048-voice-conversation-interface.md](../partial/048-voice-conversation-interface.md) |
@@ -93,7 +92,7 @@ Nothing left in this wave.
 
 ## Wave 3: finish half-built features
 
-1732 open items.
+1733 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -134,7 +133,7 @@ Nothing left in this wave.
 | 36. Sources and grounding interface | 16 | [partial/036-sources-and-grounding-interface.md](../partial/036-sources-and-grounding-interface.md) |
 | 37. Notebook and knowledge-workspace product | 21 | [partial/037-notebook-and-knowledge-workspace-product.md](../partial/037-notebook-and-knowledge-workspace-product.md) |
 | 38. Learning and study products | 4 | [partial/038-learning-and-study-products.md](../partial/038-learning-and-study-products.md) |
-| 39. Memory product | 26 | [partial/039-memory-product.md](../partial/039-memory-product.md) |
+| 39. Memory product | 27 | [partial/039-memory-product.md](../partial/039-memory-product.md) |
 | 40. Instructions, preferences, and personal style | 26 | [partial/040-instructions-preferences-and-personal-style.md](../partial/040-instructions-preferences-and-personal-style.md) |
 | 41. Temporary and private experiences | 17 | [partial/041-temporary-and-private-experiences.md](../partial/041-temporary-and-private-experiences.md) |
 | 42. Proactive assistance, briefings, and reflection | 12 | [partial/042-proactive-assistance-briefings-and-reflection.md](../partial/042-proactive-assistance-briefings-and-reflection.md) |
