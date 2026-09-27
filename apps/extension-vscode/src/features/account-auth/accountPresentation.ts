@@ -1,19 +1,7 @@
 import * as vscode from 'vscode';
 import { AGENT_MODE_LABEL, type AgentMode } from '@agiworkforce/types';
 
-import { accountTypeForTier, type AccountIdentity, type TierInfo } from '../../utils/api';
-import { planDisplayLabel } from './planLabel';
-
-export function withEffectivePlan(
-  identity: AccountIdentity,
-  tierInfo: TierInfo | null | undefined,
-): AccountIdentity {
-  if (!tierInfo) return identity;
-  const planTier = tierInfo.accountPlanTier ?? tierInfo.tier;
-  const planName = planDisplayLabel(planTier);
-  if (planName === undefined) return identity;
-  return { ...identity, planName, tier: planTier, accountType: accountTypeForTier(planTier) };
-}
+import type { AccountIdentity } from '../../utils/api';
 
 export function scheduledCancellationDate(
   identity: AccountIdentity | null | undefined,

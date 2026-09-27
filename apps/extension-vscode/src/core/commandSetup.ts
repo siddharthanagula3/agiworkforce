@@ -147,7 +147,6 @@ import {
   buildAccountIdentityItems,
   buildTrustReviewItems,
   scheduledCancellationDate,
-  withEffectivePlan,
 } from '../features/account-auth/accountPresentation';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
@@ -2014,13 +2013,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await refreshAccountTierCache(context, async () => capturedTierInfo);
       }
       const tierInfo = authInvalidated ? null : capturedTierInfo;
-      const accountIdentity =
-        authInvalidated || capturedAccountIdentity === undefined
-          ? null
-          : withEffectivePlan(capturedAccountIdentity, tierInfo);
+      const accountIdentity = authInvalidated ? null : (capturedAccountIdentity ?? null);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'unknown';
-      const planLabel = planDisplayLabel(tierInfo?.accountPlanTier ?? tier) ?? tier;
+      const planLabel =
+        accountIdentity?.planName ?? planDisplayLabel(tierInfo?.accountPlanTier ?? tier) ?? tier;
       const cancellationDate = scheduledCancellationDate(accountIdentity);
       const subscriptionNeedsAttention = Boolean(
         tierInfo?.accountPlanTier && !isEntitledSubscriptionStatus(tierInfo.subscriptionStatus),

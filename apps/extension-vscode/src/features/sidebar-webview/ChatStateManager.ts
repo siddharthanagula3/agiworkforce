@@ -61,12 +61,10 @@ import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/ro
 import {
   accountTypeForTier,
   fetchAccountIdentity,
-  fetchTierInfo,
   getAccountAuthState,
   getCloudWebOrigin,
   type AccountIdentity,
 } from '../../utils/api';
-import { withEffectivePlan } from '../account-auth/accountPresentation';
 import {
   BUILT_IN_SLASH_COMMANDS,
   CliCapabilityAdapter,
@@ -1415,10 +1413,7 @@ export class ChatStateManager {
       return;
     }
 
-    const [identity, tierInfo] = await Promise.all([
-      fetchAccountIdentity(this._secrets),
-      fetchTierInfo(this._secrets),
-    ]);
+    const identity = await fetchAccountIdentity(this._secrets);
     const refreshedState = await getAccountAuthState(this._secrets);
     if (refreshedState.status !== 'signed-in') {
       await clearAccountTierCache(this._context);
@@ -1432,7 +1427,7 @@ export class ChatStateManager {
     this._post({
       type: 'accountStatus',
       payload: identity
-        ? { status: refreshedState.status, identity: withEffectivePlan(identity, tierInfo) }
+        ? { status: refreshedState.status, identity }
         : { status: refreshedState.status },
     });
   }

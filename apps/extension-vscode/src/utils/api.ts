@@ -762,7 +762,7 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
     parsed.data.name.trim() ||
     email ||
     'AGI Cloud account';
-  const planName = planDisplayLabel(tier) ?? (parsed.data.plan.display_name.trim() || 'Unknown');
+  const planName = parsed.data.plan.display_name.trim() || planDisplayLabel(tier) || 'Unknown';
 
   const currentPeriodEnd = unixSecondsToIso(parsed.data.plan.current_period_end);
   return {
