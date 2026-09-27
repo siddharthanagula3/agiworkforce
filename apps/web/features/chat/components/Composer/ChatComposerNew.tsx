@@ -918,6 +918,7 @@ const ChatComposerNewComponent = ({
     imageMode,
     videoMode,
     selectedSkillName,
+    pendingImageSettings,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
@@ -1176,6 +1177,29 @@ const ChatComposerNewComponent = ({
       setImageAspectRatio('auto');
     }
   }, [availableImageModels, imageModelId, mediaModelsSettled]);
+
+  useEffect(() => {
+    if (!mediaModelsSettled || !pendingImageSettings) return;
+    const { modelId, aspectRatio } = pendingImageSettings;
+    const model =
+      modelId && availableImageModels.some((candidate) => candidate.id === modelId)
+        ? modelId
+        : imageModelId;
+    setImageModelId(model);
+    setImageAspectRatio(
+      aspectRatio &&
+        getImageAspectOptionsForModel(model).some((option) => option.id === aspectRatio)
+        ? aspectRatio
+        : 'auto',
+    );
+    setComposerToggles({ pendingImageSettings: null });
+  }, [
+    availableImageModels,
+    imageModelId,
+    mediaModelsSettled,
+    pendingImageSettings,
+    setComposerToggles,
+  ]);
 
   useEffect(() => {
     if (!mediaModelsSettled) return;
