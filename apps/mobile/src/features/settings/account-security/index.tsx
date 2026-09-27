@@ -8,6 +8,8 @@ import {
   History,
   KeyRound,
   Laptop,
+  Lock,
+  LogOut,
   ShieldCheck,
   Smartphone,
   Timer,
@@ -28,6 +30,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
+  SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
@@ -35,13 +38,17 @@ import { ChangePasswordModal } from './ChangePasswordModal';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
+  WEB_SECURITY_URL,
   changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
+  fetchLockdownMode,
   fetchSessionTimeout,
   groupAuditEntries,
   revokeAccountSession,
+  revokeAllAccountSessions,
+  saveLockdownMode,
   saveSessionTimeout,
   type AccountSecurityStatus,
   type AccountSessionRow,
@@ -83,7 +90,6 @@ function formatSessionLabel(row: AccountSessionRow): string {
   return row.isCurrent ? `${parts.join(' · ')} (this device)` : parts.join(' · ');
 }
 
-const WEB_SECURITY_URL = 'https://agiworkforce.com/settings/security';
 const WEB_ACCOUNT_URL = 'https://agiworkforce.com/settings/account';
 
 export default function AccountSecurityScreen() {
@@ -107,6 +113,10 @@ export default function AccountSecurityScreen() {
   const [sessions, setSessions] = useState<AccountSessions | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
+  const [lockdown, setLockdown] = useState<boolean | null>(null);
+  const [savingLockdown, setSavingLockdown] = useState(false);
+  const signOut = useAuthStore((state) => state.signOut);
   const appLockHydrated = useBiometricFlag((state) => state.hydrated);
   const appLockEnabled = useBiometricFlag((state) => state.enabled);
 
@@ -194,6 +204,79 @@ export default function AccountSecurityScreen() {
     },
     [loadSessions],
   );
+
+  useEffect(() => {
+    if (!isClerkSignedIn || appMode !== 'cloud') return;
+    let cancelled = false;
+    fetchLockdownMode()
+      .then((enabled) => {
+        if (!cancelled) setLockdown(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setLockdown(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appMode, isClerkSignedIn, clerkUserId]);
+
+  const changeLockdown = useCallback(
+    (next: boolean) => {
+      const previous = lockdown;
+      setLockdown(next);
+      void (async () => {
+        setSavingLockdown(true);
+        try {
+          await saveLockdownMode(next);
+        } catch (saveError) {
+          setLockdown(previous);
+          Alert.alert(
+            'Lockdown mode was not changed',
+            saveError instanceof Error ? saveError.message : 'Please try again.',
+          );
+        } finally {
+          setSavingLockdown(false);
+        }
+      })();
+    },
+    [lockdown],
+  );
+
+  const confirmRevokeAllSessions = useCallback(() => {
+    const account = captureCloudAccountEpoch();
+    if (!account || account.ownerId !== clerkUserId) return;
+    Alert.alert(
+      'Log out of all devices?',
+      'Every signed-in device, including this one, is signed out. You will need to sign in again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log out everywhere',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setRevokingAll(true);
+              try {
+                await withStepUp('session.revoke_all', null, (headers) =>
+                  revokeAllAccountSessions(headers),
+                );
+                if (!isCloudAccountEpochCurrent(account)) return;
+                await signOut();
+              } catch (revokeError) {
+                if (isStepUpCancelled(revokeError)) return;
+                Alert.alert(
+                  'Could not log out of all devices',
+                  revokeError instanceof Error ? revokeError.message : 'Please try again.',
+                );
+              } finally {
+                setRevokingAll(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [clerkUserId, signOut, withStepUp]);
 
   const openOwnedWebPage = useCallback(
     (url: string) => {
@@ -308,6 +391,7 @@ export default function AccountSecurityScreen() {
 
   return (
     <SettingsScreenShell title="Account Security">
+      {passwordModalOpen ? null : stepUpModal}
       <ChangePasswordModal
         visible={passwordModalOpen}
         hasPassword={hasPassword}
@@ -315,7 +399,7 @@ export default function AccountSecurityScreen() {
         onCancel={() => setPasswordModalOpen(false)}
         onSubmit={handleChangePassword}
       >
-        {stepUpModal}
+        {passwordModalOpen ? stepUpModal : null}
       </ChangePasswordModal>
       {appMode !== 'cloud' ? (
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
@@ -412,6 +496,15 @@ export default function AccountSecurityScreen() {
             )}
           </>
         )}
+        {appMode === 'cloud' ? (
+          <SettingsRow
+            label="Log out of all devices"
+            icon={LogOut}
+            value={revokingAll ? 'Signing out…' : undefined}
+            onPress={revokingAll ? undefined : confirmRevokeAllSessions}
+            destructive
+          />
+        ) : null}
         <SettingsRow
           label="Open Web account"
           icon={ExternalLink}
@@ -468,9 +561,23 @@ export default function AccountSecurityScreen() {
         )}
       </SettingsGroup>
 
+      {appMode === 'cloud' && lockdown !== null ? (
+        <SettingsGroup>
+          <SettingsSwitchRow
+            label="Lockdown mode"
+            description="Refuses connector tools, web search, page fetch, code execution and Deep Research in every chat on this account, so a page or document cannot talk the model into calling one."
+            icon={Lock}
+            value={lockdown}
+            onValueChange={changeLockdown}
+            disabled={savingLockdown}
+            isLast
+          />
+        </SettingsGroup>
+      ) : null}
+
       <SettingsInfo
         title="Unavailable account controls"
-        body="Passkeys, SMS MFA, and Lockdown mode are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them."
+        body="Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

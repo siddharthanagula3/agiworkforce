@@ -5,6 +5,7 @@ import { useDeviceRegistryHeartbeat } from '@/src/features/device-registry';
 import { useThemeColors } from '@/src/ui/theme';
 import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell';
+import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
 
 export { default as ErrorBoundary } from './error';
 
@@ -91,6 +92,8 @@ export default function AppLayout() {
         <Drawer.Screen name="notifications/index" options={HIDDEN} />
 
         {/* Standalone screens */}
+        <Drawer.Screen name="support/index" options={HIDDEN} />
+        <Drawer.Screen name="support/[ticketId]" options={HIDDEN} />
         <Drawer.Screen name="feedback" options={HIDDEN} />
         <Drawer.Screen name="about" options={HIDDEN} />
         <Drawer.Screen name="camera" options={HIDDEN} />
@@ -101,6 +104,7 @@ export default function AppLayout() {
         <Drawer.Screen name="widget-setup" options={HIDDEN} />
       </Drawer>
       <ContinuityOnboardingGate />
+      <WorkspaceMfaBanner />
     </>
   );
 }
