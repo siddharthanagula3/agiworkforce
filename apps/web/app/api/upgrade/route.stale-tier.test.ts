@@ -251,9 +251,7 @@ describe('POST /api/upgrade, a yearly Pro subscription moving to a plan sold mon
     );
 
     expect(response.status).toBe(400);
-    expect(JSON.stringify(await response.json())).toMatch(
-      /Max 5x is not sold with yearly billing/,
-    );
+    expect(JSON.stringify(await response.json())).toMatch(/Max 5x is not sold with yearly billing/);
     expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
   });
 });

@@ -43,16 +43,28 @@ describe('Stripe billing cadence', () => {
 
   it('refuses a monthly-to-yearly switch on the prorated upgrade path', () => {
     expect(() =>
-      assertUpgradeBillingInterval({ interval: 'month', interval_count: 1 } as never, 'yearly', 'team'),
+      assertUpgradeBillingInterval(
+        { interval: 'month', interval_count: 1 } as never,
+        'yearly',
+        'team',
+      ),
     ).toThrow(/charged only the prorated difference/i);
     expect(() =>
-      assertUpgradeBillingInterval({ interval: 'year', interval_count: 1 } as never, 'monthly', 'team'),
+      assertUpgradeBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'team',
+      ),
     ).toThrow(/charged only the prorated difference/i);
   });
 
   it('moves a yearly subscriber onto the monthly price of a plan sold monthly only', () => {
     expect(() =>
-      assertUpgradeBillingInterval({ interval: 'year', interval_count: 1 } as never, 'monthly', 'max'),
+      assertUpgradeBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'max',
+      ),
     ).not.toThrow();
     expect(() =>
       assertUpgradeBillingInterval(
@@ -107,7 +119,11 @@ describe('a yearly Pro subscription after individual plans became monthly only',
       .mockReset()
       .mockImplementation(async (plan: string, interval: string) =>
         interval === 'monthly'
-          ? { priceId: `price_${plan}_monthly`, currency: 'usd', amountMinor: MONTHLY_AMOUNTS[plan] }
+          ? {
+              priceId: `price_${plan}_monthly`,
+              currency: 'usd',
+              amountMinor: MONTHLY_AMOUNTS[plan],
+            }
           : null,
       );
   });
@@ -188,7 +204,11 @@ describe('a yearly Pro subscription after individual plans became monthly only',
           status: 'active',
           current_phase: { start_date: 1_760_000_000, end_date: 1_800_000_000 },
           phases: [
-            { start_date: 1_760_000_000, items: [{ price: YEARLY_PRO, quantity: 1 }], metadata: {} },
+            {
+              start_date: 1_760_000_000,
+              items: [{ price: YEARLY_PRO, quantity: 1 }],
+              metadata: {},
+            },
             {
               start_date: 1_800_000_000,
               items: [{ price: MONTHLY_PRO, quantity: 1 }],
