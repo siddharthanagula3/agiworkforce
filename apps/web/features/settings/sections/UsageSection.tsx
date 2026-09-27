@@ -807,7 +807,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
             <HistoryRows
               caption="By project"
               rows={shown.byProject}
-              labelFor={(row) => row.label ?? 'Deleted project'}
+              labelFor={(row) => row.label ?? 'Project not in this workspace'}
             />
             {shown.freshness.unsettledRequests > 0 && (
               <span role="status" style={DETAIL}>
