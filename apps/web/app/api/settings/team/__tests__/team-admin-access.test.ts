@@ -11,7 +11,14 @@ const { getSubscription, mockQuery, resolveOrganizationEntitlementPlan } = vi.ho
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription },
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({ resolveOrganizationEntitlementPlan }));
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  resolveOrganizationEntitlementPlan,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
@@ -58,6 +65,17 @@ describe('team administration billing capability', () => {
       code: 'SUBSCRIPTION_REQUIRED',
       statusCode: 403,
     });
+  });
+
+  it('does not let a seat elsewhere entitle its holder to administer a team of their own', async () => {
+    getSubscription.mockResolvedValue(null);
+
+    await expect(getTeamAdminAccess(db, 'user-1')).resolves.toEqual({
+      plan: 'free',
+      canManageTeam: false,
+      ...NO_ORG_SCOPE,
+    });
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it('does not read seat state at all when no organization is in scope', async () => {
