@@ -3,6 +3,7 @@ import {
   SETTINGS_DEEP_LINK_QUERY_KEY,
   isWebSettingsSection,
 } from '@/features/settings/lib/web-settings-sections';
+import { codeSessionPath } from '@/features/code/code-surface';
 
 export {
   NOTIFICATION_CATEGORIES,
@@ -27,6 +28,7 @@ export function notificationTargetHref(
 ): string | null {
   if (!kind || !id || !isProductLinkId(id)) return null;
   if (kind === 'chat') return `/chat/${encodeURIComponent(id)}`;
+  if (kind === 'code-session') return codeSessionPath(id);
   if (kind === 'settings') {
     return isWebSettingsSection(id)
       ? `/chat?${SETTINGS_DEEP_LINK_QUERY_KEY}=${encodeURIComponent(id)}`
