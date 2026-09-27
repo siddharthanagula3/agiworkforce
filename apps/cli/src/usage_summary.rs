@@ -23,6 +23,14 @@ const FLAGSHIP_LIMIT_CODE: &str = "flagship_weekly_limit_reached";
 const ENTITLED_SUBSCRIPTION_STATUSES: [&str; 2] = ["active", "trialing"];
 const PAYMENT_FAILED_SUBSCRIPTION_STATUSES: [&str; 3] = ["past_due", "unpaid", "incomplete"];
 const HISTORY_MODEL_LIMIT: usize = 8;
+const USAGE_WORKLOAD_LABELS: [(&str, &str); 6] = [
+    ("chat", "Chat"),
+    ("work", "AGI Work"),
+    ("research", "Deep Research"),
+    ("code", "AGI Code"),
+    ("browser", "Browser"),
+    ("unknown", "Not attributed"),
+];
 const HISTORY_DAY_LIMIT: usize = 7;
 const SECONDS_PER_DAY: i64 = 86_400;
 
@@ -120,8 +128,17 @@ pub struct UsageHistory {
     pub to: String,
     pub totals: UsageHistoryTotals,
     pub daily: Vec<UsageHistoryDay>,
+    pub by_workload: Vec<UsageHistoryBreakdown>,
     pub by_model: Vec<UsageHistoryBreakdown>,
     pub freshness: UsageHistoryFreshness,
+}
+
+fn usage_workload_label(key: &str) -> &str {
+    USAGE_WORKLOAD_LABELS
+        .iter()
+        .find(|(id, _)| *id == key)
+        .map(|(_, label)| *label)
+        .unwrap_or(key)
 }
 
 pub fn parse_usage_history(body: &str) -> Result<UsageHistory, serde_json::Error> {
@@ -686,8 +703,19 @@ pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
         format_credits(credits_for_cents(history.totals.cost_cents)),
         request_count(history.totals.requests)
     )];
-    if history.by_model.is_empty() && history.daily.is_empty() {
+    if history.by_model.is_empty() && history.by_workload.is_empty() && history.daily.is_empty() {
         lines.push("  No settled usage in this window".to_string());
+    }
+    if !history.by_workload.is_empty() {
+        lines.push("  By product area:".to_string());
+        lines.extend(history.by_workload.iter().map(|row| {
+            format!(
+                "    {}: {}, {}",
+                usage_workload_label(&row.key),
+                format_credits(credits_for_cents(row.cost_cents)),
+                request_count(row.requests)
+            )
+        }));
     }
     if !history.by_model.is_empty() {
         lines.push("  By model:".to_string());

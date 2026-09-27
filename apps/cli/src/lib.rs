@@ -52,6 +52,7 @@ pub mod output;
 pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
+pub mod plans;
 pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
@@ -915,6 +916,8 @@ enum Command {
     Onboarding,
     /// Show the account's managed allowance from the shared usage ledger.
     Usage,
+    /// Show what each plan includes and its credits per window.
+    Plans,
     /// Manage the account's scheduled agent tasks in AGI cloud.
     Schedules {
         #[command(subcommand)]
@@ -4048,6 +4051,10 @@ pub async fn run_main() -> Result<()> {
             // --- Usage ---
             Command::Usage => {
                 println!("{}", usage_summary::account_lines().await.join("\n"));
+                Ok(())
+            }
+            Command::Plans => {
+                println!("{}", plans::plans_lines().join("\n"));
                 Ok(())
             }
 
