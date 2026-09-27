@@ -193,6 +193,18 @@ export function describeHostPlatform(platform: string): string | null {
   return HOST_PLATFORM_NAMES[suffix] ?? null;
 }
 
+export const SESSION_COMPLETION_ALERTS = ['never', 'background', 'always'] as const;
+
+export type SessionCompletionAlerts = (typeof SESSION_COMPLETION_ALERTS)[number];
+
+export const SESSION_COMPLETION_ALERT_LABELS: Record<SessionCompletionAlerts, string> = {
+  never: 'Never',
+  background: 'While the app is in the background',
+  always: 'Always',
+};
+
+export const DEFAULT_SESSION_COMPLETION_ALERTS: SessionCompletionAlerts = 'background';
+
 export interface HostPreferences {
   launchAtLogin: boolean;
   quickAskShortcut: string;
@@ -205,6 +217,8 @@ export interface HostPreferences {
    * terminal install already puts there.
    */
   cliPath: string;
+  sessionCompletionAlerts: SessionCompletionAlerts;
+  sessionApprovalAlerts: boolean;
 }
 
 export const HOST_SHORTCUT_PREFERENCE_KEYS: Record<HostShortcutKey, keyof HostPreferences> = {

@@ -433,12 +433,12 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
+| web | partial | GitHub's hosted MCP server (repos toolset, search_code) is now pinned as github-mcp; it connects once the owner adds the github-mcp CONNECTOR_OAUTH_PROVIDERS_JSON descriptor and CONNECTOR_OAUTH_GITHUB_MCP_CLIENT_ID/_CLIENT_SECRET from a GitHub App. GitLab still has no pinned server. | flag-off |
 | desktop | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
 | mobile | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
 | chrome | partial | The GitHub connector reads a PR diff and posts comments/reviews but cannot search a repository; GitLab has scopes but no pinned server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for GitLab. | handler, flag-off |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `packages/ui/ui/src/settings-modal/SettingsModal.tsx:1967-1969`, `apps/web/app/api/llm/v1/chat/completions/route.ts:735-741`, `apps/web/lib/user-connector-tools.ts:2269-2289`
+Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `apps/web/lib/connectors/catalog.ts:163-163`, `apps/web/lib/connectors/oauth-scope-allowlist.ts:169-169`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`
 
 ## S56.32: Pull-request workflows.
 
