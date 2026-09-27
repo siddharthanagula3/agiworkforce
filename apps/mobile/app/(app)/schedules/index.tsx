@@ -266,7 +266,7 @@ export default function SchedulesScreen() {
               >
                 <Text
                   style={{
-                    color: selected ? colors.white : colors.textSecondary,
+                    color: selected ? colors.accentText : colors.textSecondary,
                     fontSize: 13,
                     fontWeight: '600',
                   }}
@@ -327,7 +327,7 @@ export default function SchedulesScreen() {
           className="absolute bottom-6 right-6 w-14 h-14 rounded-full items-center justify-center shadow-lg active:opacity-80"
           style={{ backgroundColor: colors.teal }}
         >
-          <Plus size={24} color={colors.white} />
+          <Plus size={24} color={colors.accentText} />
         </Pressable>
       )}
     </SafeAreaView>

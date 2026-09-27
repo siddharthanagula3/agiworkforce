@@ -383,9 +383,11 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
                   accessibilityRole="button"
                 >
                   {loading ? (
-                    <ActivityIndicator color={colors.white} size="small" />
+                    <ActivityIndicator color={colors.accentText} size="small" />
                   ) : (
-                    <Text className="text-[15px] font-semibold text-white">Create Schedule</Text>
+                    <Text className="text-[15px] font-semibold" style={{ color: colors.accentText }}>
+                      Create Schedule
+                    </Text>
                   )}
                 </Pressable>
               </View>
