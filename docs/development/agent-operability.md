@@ -14,7 +14,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `CLAUDE.md` is a thin Claude Code adapter over it and may not weaken it.
 - `docs/product/definition.md` is the first product definition and parity/gap read.
 - `docs/product/requirements.md` is the long-form PRD for decision-complete product and Mobile v1 requirements.
-- `docs/work/implementation-status.md` is the first feature/component implementation read.
+- `audit/prior-audits/parity-implementation-matrix.md` is the first feature/component implementation read.
 - `docs/architecture/byok-provider-strategy.md` is the first BYOK/open-model provider read.
 - `PLAN.md` is the active strategy and transition plan.
 - `docs/work/` holds the dated execution queues.

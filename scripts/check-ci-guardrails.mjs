@@ -302,6 +302,8 @@ if (repositoryFiles.status !== 0) {
     if (
       productionMutationOwners.has(relativePath) ||
       relativePath.startsWith('docs/') ||
+      // Audit evidence quotes the commands it reports on; nothing under audit/ runs.
+      relativePath.startsWith('audit/') ||
       relativePath.includes('.test.') ||
       relativePath === 'scripts/check-ci-guardrails.mjs'
     ) {

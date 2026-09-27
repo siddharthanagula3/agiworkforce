@@ -13,7 +13,7 @@
       "kinds": ["md-path"]
     },
     {
-      "pathPrefix": "docs/work/checklist-secondary-verification-2026-09-18.md",
+      "pathPrefix": "audit/prior-audits/checklist-secondary-review-2026-09-18.md",
       "reason": "The missing-path section quotes the exact references the verification found unresolvable, so every path it lists is meant not to resolve. Repointing them would erase the finding the document reports.",
       "kinds": ["md-path"]
     },
@@ -28,13 +28,7 @@
       "kinds": ["md-path"]
     }
   ],
-  "knownContradictions": [
-    {
-      "key": "md-path::docs/work/implementation-status.md::docs/security/artifact-runtime-bridge-review.md",
-      "owner": "Platform lead",
-      "reason": "The CAP-052 artifact runtime bridge review was merged into section 5 of docs/security/security.md and the standalone file deleted on 2026-09-07. The parity ledger line that cites the old path is another session's uncommitted edit and could not be changed in the same commit. Repoint that line at docs/security/security.md section 5 and delete this entry."
-    }
-  ],
+  "knownContradictions": [],
   "debt": [
     "md-path::docs/work/restructure-execution-queue.md::docs/plans/monorepo-restructure-2026-07-08.md",
     "md-path::docs/decisions/wire-or-cut.md::apps/desktop/src/api/council.ts",
@@ -42,11 +36,6 @@
     "md-path::docs/standards/cli-command-surface.md::apps/cli/src/tui/chatwidget.rs",
     "md-path::docs/standards/cli-command-surface.md::apps/cli/src/tui/slash_command.rs",
     "md-path::docs/product/experience-contract.md::docs/research/competitor-capability-session-architecture-2026-07-15.md",
-    "md-path::docs/work/implementation-status.md::apps/github-app",
-    "md-path::docs/work/implementation-status.md::apps/slack-app",
-    "md-path::docs/work/implementation-status.md::apps/web/core",
-    "md-path::docs/work/implementation-status.md::apps/web/core/ai/llm",
-    "md-path::docs/work/implementation-status.md::apps/web/stores",
     "md-path::docs/product/definition.md::apps/web/lib/modelRouter.ts",
     "md-path::docs/architecture/trust-boundaries.md::docs/research/competitor-capability-session-architecture-2026-07-15.md",
     "md-path::docs/architecture/execution-plan-contract.md::apps/cli/src/routing/strategy.rs",

@@ -507,7 +507,7 @@ AGENTS.md                                           # concise standing rule and 
 docs/product/competitive-guidance.md                # this policy and 192-point inventory
 docs/research/*-YYYY-MM-DD.md                       # dated sources, observations and deltas
 docs/product/surface-feature-matrix.{json,md}       # generated reachability inventory
-docs/work/implementation-status.md                  # current implementation evidence
+audit/prior-audits/parity-implementation-matrix.md                  # current implementation evidence
 docs/decisions/README.md                            # governing product decisions
 ```
 

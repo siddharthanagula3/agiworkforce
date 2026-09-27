@@ -32,11 +32,9 @@ const ROOT_DOCS = new Set([
   'CONTRIBUTING.md',
   'DPDP_PROGRESS.md',
   'PLAN.md',
-  'PRODUCT_GAPS.md',
   'README.md',
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
-  'WEB_PUBLIC_RELEASE_AUDIT.md',
 ]);
 
 // Markdown that is not documentation: shipped content, tool-owned output,
@@ -153,12 +151,10 @@ const STATUS_EXEMPT = new Set([
   'tasks.md',
 ]);
 
-// Grandfathered, with the reason. Removing this one was proposed twice and
-// refuted both times on evidence: its seventeen five-column matrices carry a
-// competitive-target column, a surfaces tuple and per-table source and
-// code-anchor footers that no machine source holds. The ratchet stops NEW status
-// documents; it does not relitigate a settled decision.
-const STATUS_BASELINE = new Set(['docs/work/implementation-status.md']);
+// Grandfathered status documents. Empty since 2026-09-27: the one entry,
+// docs/work/implementation-status.md, moved under audit/, where open work is
+// tracked until it is resolved and then deleted (audit/README.md).
+const STATUS_BASELINE = new Set();
 
 function checkStatusDocuments(files) {
   for (const file of files) {

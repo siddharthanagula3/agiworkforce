@@ -7,7 +7,7 @@ Last updated: 2026-09-22
 Split out of root `PLAN.md` on 2026-08-28. This file preserves the dated queue
 and its evidence; it is not the current resume point. The September 21
 rebaseline moved execution to one platform at a time, starting with Web. Use
-`docs/specs/website-launch/PROGRESS.md`, `WEB_PUBLIC_RELEASE_AUDIT.md`, and the
+`docs/specs/website-launch/PROGRESS.md`, `audit/prior-audits/web-public-release-audit.md`, and the
 current product/architecture documents for present status. Statements below
 about sequencing, public Desktop shells, Chrome conversation ownership, or
 launch readiness remain historical evidence and do not override those owners.
@@ -360,15 +360,15 @@ control doc.
 
 Active goal (2026-08-01, latest): **six apps, nothing unwired, zero stubs,
 zero partial**, the completion standard and its four scope decisions are
-recorded in `docs/work/implementation-status.md` §2026-08-01
+recorded in `audit/prior-audits/parity-implementation-matrix.md` §2026-08-01
 Completion Standard. Desktop first, then the rest; server contracts get built
-on both sides; `audit/inventory.json` is corrected against verified code at the
+on both sides; `audit/registers/code-reachability-inventory.json` is corrected against verified code at the
 end and the checker then enforces it.
 
 Founder decisions (2026-08-01, evening): build 11 of the 13 undecided missing
 surfaces (all except Finances; Plugins resolves to Connectors permanently).
 the full list with external gates is recorded in
-`docs/work/implementation-status.md` §2026-08-01 Founder Scope
+`audit/prior-audits/parity-implementation-matrix.md` §2026-08-01 Founder Scope
 Decisions. Additionally: sonnet-5 low/medium effort follows the catalog (tests
 updated and green), and the branch is authorized for a plain push to origin
 (no PR). Reversed later the same evening: the model picker stays in the "+"

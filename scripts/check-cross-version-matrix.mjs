@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const CHECKLIST = 'docs/work/enterprise-master-build-checklist-2026-09-16.md';
+const CHECKLIST = 'audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md';
 const VERSION_MATRIX = '.github/cross-version-matrix.json';
 const SURFACE_CHAIN = '.github/cross-surface-e2e-chain.json';
 const WORKFLOW = '.github/workflows/cross-version-compatibility.yml';

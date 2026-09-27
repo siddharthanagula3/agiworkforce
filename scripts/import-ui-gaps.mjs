@@ -12,8 +12,8 @@ import {
 } from './ui-gaps-lib.mjs';
 
 const root = process.cwd();
-const csvPath = path.join(root, 'audit/ui-gaps.csv');
-const markdownPath = path.join(root, 'audit/ui-gaps.md');
+const csvPath = path.join(root, 'audit/registers/ui-gaps.csv');
+const markdownPath = path.join(root, 'audit/registers/ui-gaps.md');
 
 function fail(message) {
   console.error(`UI gap import failed: ${message}`);
@@ -252,14 +252,16 @@ function writeArtifacts(records) {
   fs.mkdirSync(path.dirname(csvPath), { recursive: true });
   fs.writeFileSync(csvPath, csv);
   fs.writeFileSync(markdownPath, renderUiGapsMarkdown(sorted, csv));
-  console.log(`Wrote ${sorted.length} records to audit/ui-gaps.csv and audit/ui-gaps.md.`);
+  console.log(
+    `Wrote ${sorted.length} records to audit/registers/ui-gaps.csv and audit/ui-gaps.md.`,
+  );
 }
 
 if (process.argv[2] === '--render') {
-  if (!fs.existsSync(csvPath)) fail('audit/ui-gaps.csv does not exist');
+  if (!fs.existsSync(csvPath)) fail('audit/registers/ui-gaps.csv does not exist');
   const parsed = parseCsv(fs.readFileSync(csvPath, 'utf8'));
   if (JSON.stringify(parsed.columns) !== JSON.stringify(UI_GAP_COLUMNS)) {
-    fail('audit/ui-gaps.csv does not use the canonical schema');
+    fail('audit/registers/ui-gaps.csv does not use the canonical schema');
   }
   writeArtifacts(parsed.records);
   process.exit(0);

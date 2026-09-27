@@ -165,7 +165,7 @@ export function renderUiGapsMarkdown(records, csv) {
     `<!-- ui-gaps-csv-sha256: ${csvSha256(csv)} -->`,
     '',
     '> Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.',
-    '> `audit/ui-gaps.csv` is the source of truth; this document is generated with',
+    '> `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with',
     '> `pnpm generate:ui-gaps`. The imported audit is a pre-remediation baseline, so',
     '> evidence must be revalidated against current code before a status is changed.',
     '',

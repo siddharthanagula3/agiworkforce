@@ -185,25 +185,26 @@ Documentation describes current reality unless explicitly historical. Do not
 create arbitrary Markdown, update the canonical owner instead, and delete stale
 or contradictory copies. Git carries history; the live tree does not.
 
-| Kind of knowledge              | Home                            |
-| ------------------------------ | ------------------------------- |
-| Permanent agent rule           | This file                       |
-| Claude-specific behavior       | `CLAUDE.md`, `.claude/rules/`   |
-| Architecture                   | `docs/architecture/`            |
-| Product requirements           | `docs/product/`                 |
-| Decision record                | `docs/decisions/`               |
-| Standards and conventions      | `docs/standards/`               |
-| Setup, commands, testing, CI   | `docs/development/`             |
-| Security                       | `docs/security/security.md`     |
-| Platform and legal policy      | `docs/compliance/`              |
-| Operational procedure          | `docs/runbooks/`                |
-| Feature under development      | a directory under `docs/specs/` |
-| Dated external research        | `docs/research/`                |
-| Generated from the repo        | `docs/generated/`               |
-| Machine-readable agent context | `docs/agent-context/`           |
-| Temporary operational work     | `docs/work/`                    |
-| Released user-facing change    | `CHANGELOG.md`                  |
-| Historical detail              | Git                             |
+| Kind of knowledge               | Home                                  |
+| ------------------------------- | ------------------------------------- |
+| Permanent agent rule            | This file                             |
+| Claude-specific behavior        | `CLAUDE.md`, `.claude/rules/`         |
+| Architecture                    | `docs/architecture/`                  |
+| Product requirements            | `docs/product/`                       |
+| Decision record                 | `docs/decisions/`                     |
+| Standards and conventions       | `docs/standards/`                     |
+| Setup, commands, testing, CI    | `docs/development/`                   |
+| Security                        | `docs/security/security.md`           |
+| Platform and legal policy       | `docs/compliance/`                    |
+| Operational procedure           | `docs/runbooks/`                      |
+| Feature under development       | a directory under `docs/specs/`       |
+| Dated external research         | `docs/research/`                      |
+| Generated from the repo         | `docs/generated/`                     |
+| Machine-readable agent context  | `docs/agent-context/`                 |
+| Temporary operational work      | `docs/work/`                          |
+| Audits, gaps, open product work | `audit/` only; read `audit/README.md` |
+| Released user-facing change     | `CHANGELOG.md`                        |
+| Historical detail               | Git                                   |
 
 If a new document does not fit a row, establish ownership before writing it.
 Rules worth never violating belong in a guard, not in prose.

@@ -61,7 +61,7 @@ passing, the §130 enterprise smoke test automated and green, confirmed by a fou
   `~/.claude/projects/-Users-siddhartha-Desktop-agiworkforce/ledger/enterprise-checklist-ledger.json`, with
   `ledger.py` (`python3 ledger.py check` fails if any open row lacks a lane or acceptance; `assign` fills defaults),
   the page source and the production probe notes. The Markdown view is
-  `docs/work/enterprise-master-build-checklist-2026-09-16.md`.
+  `audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md`.
 - Add to every open row: `lane`, `wave`, `owner`, `size` (wiring / feature / subsystem / config / external),
   `depends_on`, `acceptance` (one sentence). A small script regenerates the Markdown and the artifact
   (https://claude.ai/artifact/3oUD8mmbcLbQvvn6H8rSK5) from the JSON and **fails if any open row lacks a lane or
@@ -237,7 +237,7 @@ Subsystem totals ≈ 125–165 agent-days, ~2 parallel subsystem owners alongsid
 
 - §130 smoke automated on the F14 tenant, nightly and before every release.
 - §127, §128, §129, §131 recomputed from their underlying rows each week; §129 screen sweep on every surface with the
-  design skill gate; `audit/ui-gaps.csv` open P1/P2 driven to zero.
+  design skill gate; `audit/registers/ui-gaps.csv` open P1/P2 driven to zero.
 - Fourth full verification of all 2,097 rows with the same three lenses plus a live-product sample; republish.
 
 ## Timeline and critical path

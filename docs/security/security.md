@@ -1072,4 +1072,4 @@ returned needs-revision and added five items, the worst being that the natural
 billing path charges the artifact publisher, which turns the public shared-artifact
 surface into a wallet drain aimed at one named user. Verdict as it stands: the
 precondition is unmet, so no build starts. The capability row is
-`CAP-052` in `audit/capability-gaps.csv`.
+`CAP-052` in `audit/registers/capability-gaps.csv`.

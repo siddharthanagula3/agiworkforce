@@ -14,7 +14,7 @@ now carries the package/crate ownership it defined.
 > last. Shared contract/package repairs are allowed when they are required by
 > the active platform and make the later surfaces inherit the correction.
 > Current execution lives in `docs/specs/website-launch/PROGRESS.md` and
-> `WEB_PUBLIC_RELEASE_AUDIT.md`. The older queue in
+> `audit/prior-audits/web-public-release-audit.md`. The older queue in
 > `docs/work/restructure-execution-queue.md` is a historical checkpoint.
 
 ## Objective
@@ -98,7 +98,7 @@ consumer.
 
 The current Web queue, resume point, and evidence commands live in
 [`docs/specs/website-launch/PROGRESS.md`](docs/specs/website-launch/PROGRESS.md)
-and [`WEB_PUBLIC_RELEASE_AUDIT.md`](WEB_PUBLIC_RELEASE_AUDIT.md). The dated
+and [`audit/prior-audits/web-public-release-audit.md`](audit/prior-audits/web-public-release-audit.md). The dated
 restructure queue is retained only as historical evidence.
 
 ## Completion Gate

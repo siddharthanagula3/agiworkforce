@@ -148,7 +148,7 @@
     "docs/specs/jev-auto-routing/plan.md": "8a6b07baa788691380ce5e9c6f7f0d9bf20cd3139265e2bb592c835398bfd995",
     "docs/specs/jev-auto-routing/spec.md": "d943140a1450a9a3a4ccbd458c789ba70a1f63f75f0acc426be0aede43da57b1",
     "docs/specs/jev-auto-routing/tasks.md": "9d0f8a44c22c794d8bf29c53632e292c0df44f9315ef98d3b1c492dc7190d635",
-    "docs/work/checklist-secondary-verification-2026-09-18.md": "960c095728b48b8a1ae2df948d359128cf78d2953eb8894920cb96d322f6a012",
+    "audit/prior-audits/checklist-secondary-review-2026-09-18.md": "960c095728b48b8a1ae2df948d359128cf78d2953eb8894920cb96d322f6a012",
     "docs/work/deployment-handoff-2026-09-19.md": "4149e20f9e7ea34eaddb3467fe5a1451a20839b5a73a84a9c4423fda388a6dfd",
     "package.json": "5a7f3dceb8425ced2dcbeb22c761b0fde33d96175395f690e06d050630d22abb",
     "packages/ai/routing/src/__tests__/service-network-state.test.ts": "fe13cf24568c2a6881fe4058c394a6cccb179921a308d2078039e7e1bcb7f30e",

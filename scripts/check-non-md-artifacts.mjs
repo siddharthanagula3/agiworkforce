@@ -99,6 +99,8 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 }
 
 const allowedLiveNonMarkdownPrefixes = [
+  'audit/ledger/',
+  'audit/prior-audits/evidence/',
   'docs/agent-context/',
   'docs/research/evidence/',
   'apps/desktop/docs/qa/',
@@ -109,12 +111,12 @@ const allowedLiveNonMarkdownPrefixes = [
   'docs/work/',
 ];
 const allowedLiveNonMarkdownFiles = new Set([
-  'audit/inventory.json',
-  'audit/capability-gaps.csv',
-  'audit/ui-gaps-baseline.json',
-  'audit/ui-gaps.csv',
-  'audit/theme-only-text-colours.json',
-  'audit/raw-error-to-user.json',
+  'audit/registers/code-reachability-inventory.json',
+  'audit/registers/capability-gaps.csv',
+  'audit/baselines/ui-gaps-baseline.json',
+  'audit/registers/ui-gaps.csv',
+  'audit/baselines/theme-only-text-colours.json',
+  'audit/baselines/raw-error-to-user.json',
   'docs/compliance/policy-versions.json',
   'docs/compliance/trust-claims.json',
   'docs/security/security-claims.json',

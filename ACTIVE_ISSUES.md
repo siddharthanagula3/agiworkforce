@@ -1588,12 +1588,12 @@ Configuration was inspected only; no GitHub settings were changed during verific
 machine-readable registers stay authoritative for their own row identity
 because code, tests and CI cite their IDs directly:
 
-| Register                            | Holds                                     | Enforced by                  |
-| ----------------------------------- | ----------------------------------------- | ---------------------------- |
-| `docs/agent-context/known-flaws.md` | one row per open defect, cited by ID      | PR template, `ci.yml`, tests |
-| `audit/capability-gaps.csv`         | `CAP-*` product capability backlog        | `check:capability-gaps`      |
-| `audit/ui-gaps.csv`                 | `GAP-*` UI parity rows, monotonic ratchet | `check:ui-gaps`              |
-| `PRODUCT_GAPS.md`                   | `PG-*` product completeness findings      | `check:doc-registry`         |
+| Register                                      | Holds                                     | Enforced by                  |
+| --------------------------------------------- | ----------------------------------------- | ---------------------------- |
+| `docs/agent-context/known-flaws.md`           | one row per open defect, cited by ID      | PR template, `ci.yml`, tests |
+| `audit/registers/capability-gaps.csv`         | `CAP-*` product capability backlog        | `check:capability-gaps`      |
+| `audit/registers/ui-gaps.csv`                 | `GAP-*` UI parity rows, monotonic ratchet | `check:ui-gaps`              |
+| `audit/prior-audits/product-gaps-register.md` | `PG-*` product completeness findings      | `check:doc-registry`         |
 
 Those registers hold rows. This file holds root causes. One root cause here may
 retire several rows there. Do not copy long narrative into a register, and do
@@ -1602,7 +1602,7 @@ not open a second active-issues document.
 Capability backlog (`CAP-*`) is product scope, not defect work, and is out of
 scope for this file.
 
-The website's public-release audit lives in `WEB_PUBLIC_RELEASE_AUDIT.md`
+The website's public-release audit lives in `audit/prior-audits/web-public-release-audit.md`
 (2026-09-14, founder-requested, one canonical file). It carries the `WEB-*`
 findings for the web UI, what the pass fixed, and the order for the rest; this
 file points to it rather than restating its rows. It has no open P1 or P2 after
@@ -1763,7 +1763,7 @@ and the check read `content`.
 
 **What the scan was.** A panel-verified read of the 744 files under
 `apps/web/app/api`, run 2026-09-09 against commit `e2a9e898b`. The report is in
-`CLAUDE-SECURITY-20260909-050816/`. 57 findings survived a three-voter panel: 3
+`audit/prior-audits/local/security-scan-2026-09-09/` (local only). 57 findings survived a three-voter panel: 3
 HIGH, 40 MEDIUM, 14 LOW.
 
 **The root causes, not the finding list.** The 57 were six causes and a tail:

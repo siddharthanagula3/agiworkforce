@@ -1848,7 +1848,7 @@
       "section": "6. Closed reviews",
       "kind": "prose",
       "sentence": "The review returned GO-WITH-CONDITIONS on seven conditions: the bridge structurally absent from every anonymous published surface, per-call consent rendered in parent chrome, server-side call and spend caps that fail closed, exact origin validation with the capability default off, the cross-origin invariant preserved, audit logging plus a kill switch, and subresource integrity on the sandbox CDN loads.",
-      "implementation": ["audit/capability-gaps.csv"],
+      "implementation": ["audit/registers/capability-gaps.csv"],
       "why": "historical-record"
     },
     {

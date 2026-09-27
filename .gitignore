@@ -296,3 +296,6 @@ tmp/qa/
 # Local launch coordinator state and advisory lock files
 /.codex/launch-runs/
 /.codex/hooks/__pycache__/
+
+# Local-only prior audits (large checklists and raw security-scan output); see audit/README.md.
+audit/prior-audits/local/
