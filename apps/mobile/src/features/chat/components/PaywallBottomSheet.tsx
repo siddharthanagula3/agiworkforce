@@ -125,6 +125,12 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
     }, [onPrimaryAction, router, salesTier]);
 
+    const showPlanComparison = recoveryAction === 'upgrade' || recoveryAction === 'subscribe';
+    const handleComparePlans = useCallback(() => {
+      sheetRef.current?.close();
+      router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0]);
+    }, [router]);
+
     const renderBackdrop = useCallback(
       (props: BottomSheetBackdropProps) => (
         <BottomSheetBackdrop
@@ -259,6 +265,23 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
               {primaryActionUnavailableMessage}
             </Text>
           )}
+          {showPlanComparison ? (
+            <Pressable
+              onPress={handleComparePlans}
+              style={{
+                minHeight: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 8,
+              }}
+              accessibilityLabel="Compare plans"
+              accessibilityRole="button"
+            >
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.textPrimary }}>
+                Compare plans
+              </Text>
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={handleDismiss}
             style={{
