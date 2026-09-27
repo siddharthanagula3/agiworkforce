@@ -59,6 +59,7 @@
     "apps/web/app/api/cron/report-enterprise-usage/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/reset-credits/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/roll-up-product-metrics/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
+    "apps/web/app/api/cron/run-auto-reloads/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/run-schedules/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/github/webhook/route.ts": "the GitHub app webhook signature over the raw request body is the principal",
     "apps/web/app/api/media/video/openrouter-webhook/route.ts": "the provider callback signature is the principal for an asynchronous media job",

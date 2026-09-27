@@ -246,6 +246,7 @@ export type AuditEventType =
   | 'waitlist_access_redeemed'
   | 'checkout_started'
   | 'billing_portal_opened'
+  | 'auto_reload_changed'
   | 'data_exported'
   | 'account_deletion_requested'
   | 'account_deletion_cancelled'
@@ -427,6 +428,8 @@ export interface AuditEventDetail {
   provider?: string;
   surface?: string;
   trusted?: boolean;
+  amountUsd?: number;
+  thresholdCredits?: number;
 }
 
 export interface AuditEvent {
@@ -526,6 +529,8 @@ const AUDIT_DETAIL_KEYS: ReadonlySet<string> = new Set<keyof AuditEventDetail & 
   'provider',
   'surface',
   'trusted',
+  'amountUsd',
+  'thresholdCredits',
 ]);
 
 const SECRET_KEY_NAME_RE =

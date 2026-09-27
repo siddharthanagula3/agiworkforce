@@ -144,6 +144,7 @@
       "capabilities": ["canUseBilling"],
       "concepts": ["credit-bucket"],
       "tables": [
+        "auto_reload_settings",
         "cogs_adjustments",
         "credit_idempotency_keys",
         "credit_settlement_jobs",

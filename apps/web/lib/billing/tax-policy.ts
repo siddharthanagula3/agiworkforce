@@ -107,6 +107,49 @@ export function buildCheckoutTaxParams(options: {
   return params;
 }
 
+/**
+ * Build the Stripe Tax calculation for a payment taken off-session, where no
+ * Checkout Session exists to carry `automatic_tax`. The customer's saved address
+ * and tax IDs, which Checkout collected with `customer_update`, locate the buyer,
+ * so a registration, a zero rate and a reverse charge come out exactly as they
+ * would at Checkout. The PaymentIntent charges the calculation's `amount_total`
+ * and links it through `hooks.inputs.tax.calculation`; Stripe then records the
+ * tax transaction when the payment succeeds and reverses it on refund
+ * (https://docs.stripe.com/tax/payment-intent/simplified).
+ */
+export function buildPaymentIntentTaxCalculationParams(options: {
+  customerId: string;
+  currency: string;
+  amountMinor: number;
+  reference: string;
+}): Stripe.Tax.CalculationCreateParams {
+  return {
+    currency: options.currency,
+    customer: options.customerId,
+    line_items: [
+      {
+        amount: options.amountMinor,
+        reference: options.reference,
+        tax_behavior: CHECKOUT_TAX_POLICY.priceMode,
+      },
+    ],
+  };
+}
+
+/**
+ * Stripe answers `customer_tax_location_invalid` when the customer has no
+ * address precise enough to place them. That is the buyer's data to fix, not
+ * an outage, so a charge that needs it cannot go ahead.
+ */
+export function isTaxLocationMissing(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'customer_tax_location_invalid'
+  );
+}
+
 export interface SessionTaxOutcome {
   status: 'complete' | 'failed' | 'requires_location_inputs' | 'not_requested';
   calculated: boolean;
