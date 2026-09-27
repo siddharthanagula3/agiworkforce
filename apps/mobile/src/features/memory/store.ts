@@ -45,13 +45,25 @@ interface MemoryState {
   togglePin: (id: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   searchMemories: (query: string, embedding?: Float32Array) => Promise<void>;
-  bulkInsert: (facts: string[]) => Promise<{ inserted: number; skipped: number }>;
+  bulkInsert: (
+    facts: string[],
+    sourceName?: string,
+  ) => Promise<{ inserted: number; skipped: number }>;
   syncMemories: () => Promise<void>;
   clearError: () => void;
   resetVisibleState: () => void;
 }
 
 const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
+const MIN_IMPORTED_FACT_CHARS = 3;
+const MAX_IMPORT_BATCH = 500;
+
+interface CloudImportResult {
+  insertedCount: number;
+  skippedDuplicateCount: number;
+  blockedCount: number;
+  excludedCount: number;
+}
 
 function cloudMemoryOrigin(entry: CloudMemoryEntry): MemoryFactSource {
   const raw = entry.origin ?? entry.source;
@@ -405,15 +417,40 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }
   },
 
-  bulkInsert: async (facts) => {
+  bulkInsert: async (facts, sourceName = 'other') => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) throw new Error('Sign in to manage Cloud memories');
+    const candidates = facts
+      .map((fact) => fact.trim())
+      .filter((fact) => fact.length >= MIN_IMPORTED_FACT_CHARS);
     let inserted = 0;
-    let skipped = 0;
-    for (const fact of facts) {
-      const trimmed = fact.trim();
-      if (trimmed.length < 3) {
+    let skipped = facts.length - candidates.length;
+
+    if (operationScope.scope === 'cloud') {
+      for (let start = 0; start < candidates.length; start += MAX_IMPORT_BATCH) {
+        const result = await api.post<CloudImportResult>('/api/memory/import', {
+          mode: 'commit',
+          items: candidates.slice(start, start + MAX_IMPORT_BATCH),
+          sourceName,
+        });
+        inserted += result.insertedCount;
+        skipped += result.skippedDuplicateCount + result.blockedCount + result.excludedCount;
+      }
+      await syncNow().catch(() => undefined);
+      if (isMemoryOperationScopeCurrent(operationScope)) await get().fetchMemories();
+      return { inserted, skipped };
+    }
+
+    const known = new Set(
+      (await listMemoryFacts({ limit: 5_000 })).map((entry) => normalizeMemoryKey(entry.fact)),
+    );
+    for (const trimmed of candidates) {
+      const key = normalizeMemoryKey(trimmed);
+      if (!key || known.has(key)) {
         skipped++;
         continue;
       }
+      known.add(key);
       try {
         const id = Crypto.randomUUID();
         await insertMemoryFact({
