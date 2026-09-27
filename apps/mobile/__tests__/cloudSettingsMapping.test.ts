@@ -62,7 +62,7 @@ describe('cloudSettingsMapping, language namespace', () => {
 
 describe('cloudSettingsMapping, identity namespace the server actually reads', () => {
   const SERVER_IDENTITY_NAMESPACE = 'general';
-  const SERVER_IDENTITY_KEYS = ['instructions', 'preferredName', 'workDescription'];
+  const SERVER_IDENTITY_KEYS = ['aboutYou', 'instructions', 'preferredName', 'workDescription'];
 
   beforeEach(() => {
     useCloudSettingsStore.setState({

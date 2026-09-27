@@ -95,8 +95,8 @@ describe('chatStore, Wave 2 additions', () => {
   });
 
   describe('chatStyle', () => {
-    it('defaults to "concise" for new chats', () => {
-      expect(useChatViewStore.getInitialState().chatStyle).toBe('concise');
+    it('defaults to "normal", which defers to the saved response style', () => {
+      expect(useChatViewStore.getInitialState().chatStyle).toBe('normal');
     });
 
     it('setChatStyle changes to "concise"', () => {
@@ -104,18 +104,18 @@ describe('chatStore, Wave 2 additions', () => {
       expect(getState().chatStyle).toBe('concise');
     });
 
-    it('setChatStyle changes to "detailed"', () => {
-      getState().setChatStyle('detailed');
-      expect(getState().chatStyle).toBe('detailed');
+    it('setChatStyle changes to "explanatory"', () => {
+      getState().setChatStyle('explanatory');
+      expect(getState().chatStyle).toBe('explanatory');
     });
 
-    it('setChatStyle changes to "creative"', () => {
-      getState().setChatStyle('creative');
-      expect(getState().chatStyle).toBe('creative');
+    it('setChatStyle changes to "formal"', () => {
+      getState().setChatStyle('formal');
+      expect(getState().chatStyle).toBe('formal');
     });
 
     it('setChatStyle back to "normal" after changing', () => {
-      getState().setChatStyle('detailed');
+      getState().setChatStyle('explanatory');
       getState().setChatStyle('normal');
       expect(getState().chatStyle).toBe('normal');
     });
@@ -183,7 +183,7 @@ describe('chatStore, Wave 2 additions', () => {
     });
 
     it('ChatStyle type accepts only valid values', () => {
-      const validStyles = ['normal', 'concise', 'detailed', 'creative'] as const;
+      const validStyles = ['normal', 'concise', 'explanatory', 'formal'] as const;
       for (const style of validStyles) {
         getState().setChatStyle(style);
         expect(getState().chatStyle).toBe(style);
@@ -197,7 +197,7 @@ describe('chat view persistence migration', () => {
     const migrated = migratePersistedChatView({ chatStyle: 'detailed', toolAccess: 'always' }, 0);
 
     expect(migrated).not.toHaveProperty('toolAccess');
-    expect(migrated).toMatchObject({ chatStyle: 'detailed' });
+    expect(migrated).toMatchObject({ chatStyle: 'explanatory' });
   });
 
   it('leaves a payload with nothing to drop untouched', () => {

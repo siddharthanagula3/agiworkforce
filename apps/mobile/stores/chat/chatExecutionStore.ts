@@ -122,6 +122,7 @@ import type {
   ToolSearchResult,
 } from '@/types/chat';
 import {
+  RESPONSE_STYLE_GUIDANCE,
   canUseBillingPlanCapability,
   getModelMetadataById,
   isAutoModeModelId,
@@ -390,11 +391,13 @@ const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
     'Mode: Create. Produce usable drafts, code, plans, or structured outputs with clear next steps.',
 };
 
+const CHAT_STYLE_OVERRIDE = 'Use this style in this chat over any saved response style.';
+
 const CHAT_STYLE_PROMPTS: Record<ChatStyle, string | null> = {
   normal: null,
-  concise: 'Style: Concise. Keep the answer short, direct, and easy to scan.',
-  detailed: 'Style: Detailed. Explain reasoning and tradeoffs clearly without padding.',
-  creative: 'Style: Creative. Offer more original phrasing or options while staying accurate.',
+  concise: `Style: Concise. ${RESPONSE_STYLE_GUIDANCE.concise} ${CHAT_STYLE_OVERRIDE}`,
+  explanatory: `Style: Explanatory. ${RESPONSE_STYLE_GUIDANCE.explanatory} ${CHAT_STYLE_OVERRIDE}`,
+  formal: `Style: Formal. ${RESPONSE_STYLE_GUIDANCE.formal} ${CHAT_STYLE_OVERRIDE}`,
 };
 
 function generateId(): string {
@@ -1408,7 +1411,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       ]);
       if (!isTurnAccountCurrent()) return false;
       const blocks = buildPersonalContextBlocks({
-        personalization: memorySettings.personalization,
+        personalization: executionMode === 'cloud' ? null : memorySettings.personalization,
         memories: memFacts,
       });
       if (pastChatContext) {
