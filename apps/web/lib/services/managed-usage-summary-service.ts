@@ -2,13 +2,13 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  creditsFromCents,
   creditsFromMicrousd,
   isFreeBillingPlanTier,
   type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-credits';
+import { logger } from '@/lib/logger';
 import {
   getPlanFlagshipWeeklyUsageBudgetMicrousd,
   getPlanSessionUsageBudgetMicrousd,
@@ -27,19 +27,79 @@ import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
 
+export interface ManagedUsageBonusCredits {
+  remaining: number;
+  next_expiry_at: string | null;
+  next_expiry_credits: number;
+}
+
+export interface AccountUsageCredits extends ManagedUsageCredits {
+  bonus: ManagedUsageBonusCredits | null;
+}
+
+export interface AccountUsageSummary extends Omit<ManagedUsageSummaryResponse, 'credits'> {
+  credits?: AccountUsageCredits;
+}
+
+interface BonusCreditRow {
+  remaining: string | number | null;
+  next_expiry_at: string | Date | null;
+  next_expiry_credits: string | number | null;
+}
+
+const SELECT_LIVE_BONUS_CREDITS = `
+  with live as (
+    select credits_remaining, expires_at
+      from public.bonus_credit_grants
+     where user_id = $1
+       and revoked_at is null
+       and credits_remaining > 0
+       and expires_at > now()
+  )
+  select coalesce(sum(credits_remaining), 0) as remaining,
+         min(expires_at) as next_expiry_at,
+         coalesce(
+           sum(credits_remaining) filter (where expires_at = (select min(expires_at) from live)),
+           0
+         ) as next_expiry_credits
+    from live`;
+
+function toCredits(value: string | number | null | undefined): number {
+  const parsed = typeof value === 'number' ? value : Number.parseFloat(value ?? '');
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+export async function readBonusCreditBalance(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ManagedUsageBonusCredits | null> {
+  try {
+    const [row] = await db.query<BonusCreditRow>(SELECT_LIVE_BONUS_CREDITS, [userId]);
+    return {
+      remaining: toCredits(row?.remaining),
+      next_expiry_at: toIsoTimestamp(row?.next_expiry_at ?? null),
+      next_expiry_credits: toCredits(row?.next_expiry_credits),
+    };
+  } catch (error) {
+    logger.error({ error, userId }, 'Bonus credit lookup failed; reporting unknown balance');
+    return null;
+  }
+}
+
 export async function getManagedUsageSummary(
   db: DatabaseAdapter,
   userId: string,
-): Promise<ManagedUsageSummaryResponse> {
-  const [balance, subscription, spendableCredits] = await Promise.all([
+): Promise<AccountUsageSummary> {
+  const [balance, subscription, spendableCredits, bonus] = await Promise.all([
     CreditService.getBalance(db, userId),
     resolveEffectiveSubscription(db, userId),
     getSpendableCredits(db, userId),
+    readBonusCreditBalance(db, userId),
   ]);
 
   const planTier = subscription?.plan_tier || 'free';
-  const creditsAllocated = balance?.credits_allocated_cents ?? 0;
-  const creditsUsed = balance?.credits_used_cents ?? 0;
+  const creditsAllocated = balance?.credits_allocated_microusd ?? 0;
+  const creditsUsed = balance?.credits_used_microusd ?? 0;
   const periodStart = balance?.period_start ?? subscription?.current_period_start ?? null;
   const periodEnd = balance?.period_end ?? subscription?.current_period_end ?? null;
 
@@ -49,23 +109,20 @@ export async function getManagedUsageSummary(
     freeUsage?.usagePercentage ?? toPublicUsagePercentage(creditsUsed, creditsAllocated);
   const usageResetAt = freeUsage?.resetAt ?? toIsoTimestamp(periodEnd);
 
-  // The caps are compared against rolling spend, and rolling spend is summed in
-  // microUSD since 0182. Comparing a microUSD total against a cents cap is the
-  // unit error this whole file exists to avoid, so the caps come in microUSD too.
   const sessionCapMicrousd = getPlanSessionUsageBudgetMicrousd(planTier);
   const weeklyCapMicrousd = getPlanWeeklyUsagePaidBudgetMicrousd(planTier);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageBudgetMicrousd(planTier);
 
   const [session, weekly, flagshipWeekly] =
-    sessionCapMicrousd > 0 || weeklyCapMicrousd > 0
+    !isFreePlan && (sessionCapMicrousd > 0 || weeklyCapMicrousd > 0)
       ? await Promise.all([
           getRollingUsage(db, userId, ROLLING_SESSION_WINDOW_HOURS, false),
           getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
           getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
         ])
       : [
-          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
-          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: freeUsage?.fiveHourUsedMicrousd ?? 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: freeUsage?.weeklyUsedMicrousd ?? 0, usedCents: 0, oldestAt: null },
           { usedMicrousd: 0, usedCents: 0, oldestAt: null },
         ];
 
@@ -73,7 +130,7 @@ export async function getManagedUsageSummary(
 
   const hasPaidUsageRemaining =
     creditsAllocated > 0 &&
-    (balance?.credits_remaining_cents ?? 0) > 0 &&
+    (balance?.credits_remaining_microusd ?? 0) > 0 &&
     (sessionCapMicrousd <= 0 || session.usedMicrousd < sessionCapMicrousd) &&
     (weeklyCapMicrousd <= 0 || weekly.usedMicrousd < weeklyCapMicrousd);
 
@@ -86,12 +143,15 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  // Free has no account-level usage allowance. Provider-wide capacity remains
-  // operational state, not a customer credit balance.
-  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(planTier);
-  const credits: ManagedUsageCredits | null = planAllowance
+  const monthlyUsedMicrousd = freeUsage ? freeUsage.monthlyUsedMicrousd : creditsUsed;
+  const planAllowance = resolvePlanCreditAllowance(planTier);
+  const credits: AccountUsageCredits | null = planAllowance
     ? {
-        monthly: creditWindow(planAllowance.monthly, creditsFromCents(creditsUsed), usageResetAt),
+        monthly: creditWindow(
+          planAllowance.monthly,
+          creditsFromMicrousd(monthlyUsedMicrousd),
+          usageResetAt,
+        ),
         weekly: creditWindow(
           planAllowance.weekly,
           creditsFromMicrousd(weekly.usedMicrousd),
@@ -112,11 +172,12 @@ export async function getManagedUsageSummary(
               ),
         purchased: {
           remaining:
-            spendableCredits.availableCents === null
+            spendableCredits.availableMicrousd === null
               ? null
-              : creditsFromCents(spendableCredits.availableCents),
+              : creditsFromMicrousd(spendableCredits.availableMicrousd),
           overage_enabled: spendableCredits.overageEnabled,
         },
+        bonus,
       }
     : null;
 

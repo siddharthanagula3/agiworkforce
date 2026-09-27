@@ -4,7 +4,13 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getTierPolicy } from '@agiworkforce/types';
 import { ManagedUsageRequestError } from './managed-usage-request-service';
 
-export type TierMeteredUnit = 'video_seconds' | 'voice_minutes' | 'computer_use_requests';
+export const TIER_METERED_UNITS = [
+  'voice_minutes',
+  'video_seconds',
+  'computer_use_requests',
+] as const;
+
+export type TierMeteredUnit = (typeof TIER_METERED_UNITS)[number];
 
 export interface TierUnitAllowance {
   hardLimit: number | null;
@@ -129,6 +135,48 @@ async function readConsumedTierUnits(
   }
   const raw = Number(row.consumed ?? 0);
   return Number.isFinite(raw) && raw > 0 ? toUnits(raw) : 0;
+}
+
+export interface TierUnitUsage extends TierUnitAllowance {
+  unit: TierMeteredUnit;
+  consumed: number;
+}
+
+export interface TierUnitUsagePeriod {
+  periodStart: string;
+  resetAt: string;
+  units: TierUnitUsage[];
+}
+
+export async function readTierUnitUsage(
+  db: DatabaseAdapter,
+  userId: string,
+  planTier: string | null | undefined,
+): Promise<TierUnitUsagePeriod> {
+  const [periodRows, consumed] = await Promise.all([
+    db.query<{ period_start: string | Date; reset_at: string | Date }>(
+      `select date_trunc('month', now()) as period_start,
+              date_trunc('month', now()) + interval '1 month' as reset_at`,
+    ),
+    Promise.all(TIER_METERED_UNITS.map((unit) => readConsumedTierUnits(db, userId, unit))),
+  ]);
+  const period = periodRows[0];
+  if (!period) {
+    throw new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    );
+  }
+  return {
+    periodStart: new Date(period.period_start).toISOString(),
+    resetAt: new Date(period.reset_at).toISOString(),
+    units: TIER_METERED_UNITS.map((unit, index) => ({
+      unit,
+      consumed: consumed[index] ?? 0,
+      ...getTierUnitAllowance(planTier, unit),
+    })),
+  };
 }
 
 export async function assertTierUnitAllowance(input: {

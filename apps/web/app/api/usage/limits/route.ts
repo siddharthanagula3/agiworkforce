@@ -7,15 +7,25 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import {
-  getManagedUsageSummary,
-  type AccountUsageSummary,
-} from '@/lib/services/managed-usage-summary-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { readTierUnitUsage, type TierUnitUsage } from '@/lib/services/tier-unit-quota-service';
+import {
+  readMonthlyImageUsage,
+  type MonthlyImageUsage,
+} from '@/lib/services/account-usage-history-service';
 
-export type AccountUsageSummaryResponse = AccountUsageSummary;
+export const runtime = 'nodejs';
+
+export interface UsageLimitsResponse {
+  planTier: string;
+  periodStart: string;
+  resetAt: string;
+  units: TierUnitUsage[];
+  images: MonthlyImageUsage;
+}
 
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;
@@ -29,10 +39,22 @@ async function handler(request: NextRequest) {
   }
 
   try {
-    return NextResponse.json(await getManagedUsageSummary(scoped.db, scoped.userId));
+    const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
+    const [period, images] = await Promise.all([
+      readTierUnitUsage(scoped.db, scoped.userId, planTier),
+      readMonthlyImageUsage(scoped.db, scoped.userId),
+    ]);
+    const body: UsageLimitsResponse = {
+      planTier,
+      periodStart: period.periodStart,
+      resetAt: period.resetAt,
+      units: period.units,
+      images,
+    };
+    return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
-    logger.error({ error, userId: scoped.userId }, 'Failed to fetch usage data');
-    throw createError.internal('Failed to fetch usage data');
+    logger.error({ error, userId: scoped.userId }, 'Failed to fetch usage limits');
+    throw createError.internal('Failed to fetch usage limits');
   }
 }
 
