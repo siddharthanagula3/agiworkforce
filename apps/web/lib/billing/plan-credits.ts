@@ -1,65 +1,7 @@
 import 'server-only';
 
-import type { BillingPlanTier } from '@agiworkforce/types';
-import {
-  isMax15xPlanTier,
-  isMaxPlanTier,
-  isPerSeatBillingPlan,
-  isProPlanTier,
+export {
+  PLAN_CREDIT_ALLOWANCES,
+  getPlanCreditAllowance,
+  type PlanCreditAllowance,
 } from '@agiworkforce/types';
-import { MANAGED_USAGE_LIMITS } from '@/lib/billing/managed-usage-caps';
-import { FLAGSHIP_OF_WEEKLY_BUDGET_RATIO } from '@/lib/server/managed-usage-policy';
-
-function hasFlagshipWeeklyAllowance(tier: BillingPlanTier): boolean {
-  return (
-    isProPlanTier(tier) ||
-    isMaxPlanTier(tier) ||
-    isMax15xPlanTier(tier) ||
-    isPerSeatBillingPlan(tier)
-  );
-}
-
-export interface PlanCreditAllowance {
-  monthly: number;
-  weekly: number;
-  fiveHour: number;
-  flagshipWeekly: number | null;
-  unlimited: boolean;
-}
-
-function buildAllowance(tier: BillingPlanTier): PlanCreditAllowance {
-  const limit = MANAGED_USAGE_LIMITS[tier];
-  if (limit.unlimited) {
-    return {
-      monthly: Infinity,
-      weekly: Infinity,
-      fiveHour: Infinity,
-      flagshipWeekly: null,
-      unlimited: true,
-    };
-  }
-  const weekly = limit.weeklyCredits;
-  return {
-    monthly: limit.monthlyCredits,
-    weekly,
-    fiveHour: limit.fiveHourCredits,
-    flagshipWeekly: hasFlagshipWeeklyAllowance(tier)
-      ? weekly * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO
-      : null,
-    unlimited: false,
-  };
-}
-
-export const PLAN_CREDIT_ALLOWANCES: Readonly<Record<BillingPlanTier, PlanCreditAllowance>> =
-  Object.freeze(
-    Object.fromEntries(
-      (Object.keys(MANAGED_USAGE_LIMITS) as BillingPlanTier[]).map((tier) => [
-        tier,
-        buildAllowance(tier),
-      ]),
-    ) as Record<BillingPlanTier, PlanCreditAllowance>,
-  );
-
-export function getPlanCreditAllowance(tier: BillingPlanTier): PlanCreditAllowance {
-  return PLAN_CREDIT_ALLOWANCES[tier];
-}
