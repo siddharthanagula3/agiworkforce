@@ -7,10 +7,10 @@ export interface Release {
 export const RELEASES: readonly Release[] = [
   {
     date: '2026-09-27',
-    headline: 'Individual plans · billed monthly',
+    headline: 'Individual plans are now billed monthly',
     body: [
       'Basic, Pro, Max 5x and Max 20x are sold with monthly billing only; Team keeps its yearly option.',
-      'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+      'Existing yearly Pro subscriptions keep their price and keep renewing yearly.',
     ],
   },
   {
