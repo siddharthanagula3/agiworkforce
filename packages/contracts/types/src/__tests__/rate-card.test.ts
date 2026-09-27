@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   centsFromMicrousdCeil,
+  chargeMicrousdForProviderCost,
   creditsFromMicrousd,
   customerChargeMicrousd,
   FEATURE_RATE_CARD,
@@ -9,8 +10,8 @@ import {
   RATE_CARD_FEATURES,
   RATE_CARD_PROVIDER_COGS_ENV,
   resolveFeatureRate,
+  unpricedRateCardFeatures,
 } from '../rate-card';
-import { TOP_UP_UNITS_PER_USD } from '../billing-topups';
 
 describe('FEATURE_RATE_CARD', () => {
   it('carries one row per feature, each sourced and dated', () => {
@@ -22,77 +23,44 @@ describe('FEATURE_RATE_CARD', () => {
     }
   });
 
-  it('separates the customer price from the provider cost on every row', () => {
+  it('publishes a positive provider cost on every row', () => {
     for (const feature of RATE_CARD_FEATURES) {
-      const entry = FEATURE_RATE_CARD[feature];
-      if (entry.customerBasis === 'rate_card') {
-        expect(typeof entry.customerMicrousd).toBe('number');
-      } else {
-        expect(entry.customerMicrousd).toBeNull();
-      }
-      if (entry.providerCogsMicrousd !== null) {
-        expect(entry.providerCogsMicrousd).toBeGreaterThanOrEqual(0);
-      }
+      expect(FEATURE_RATE_CARD[feature].providerCogsMicrousd).toBeGreaterThan(0);
     }
+    expect(unpricedRateCardFeatures({})).toEqual([]);
   });
 
-  it('prices search at the published provider rates', () => {
+  it('prices search and places at the published provider rates', () => {
     expect(FEATURE_RATE_CARD.web_search_perplexity.providerCogsMicrousd).toBe(5_000);
     expect(FEATURE_RATE_CARD.web_search_grounding.providerCogsMicrousd).toBe(14_000);
+    expect(FEATURE_RATE_CARD.web_search_anthropic.providerCogsMicrousd).toBe(10_000);
+    expect(FEATURE_RATE_CARD.web_search_openai.providerCogsMicrousd).toBe(10_000);
+    expect(FEATURE_RATE_CARD.places_text_search.providerCogsMicrousd).toBe(35_000);
   });
 
-  it('charges search at the provider cost rounded up to a whole cent', () => {
-    for (const feature of ['web_search_perplexity', 'web_search_grounding'] as const) {
+  it('prices a Google image and a live voice minute at provider cost', () => {
+    expect(
+      creditsFromMicrousd(FEATURE_RATE_CARD.image_generation_google.providerCogsMicrousd ?? 0),
+    ).toBe(13.4);
+    expect(creditsFromMicrousd(FEATURE_RATE_CARD.voice_live_minute.providerCogsMicrousd ?? 0)).toBe(
+      10,
+    );
+  });
+
+  it('includes every infrastructure row in all plans and names its vendor', () => {
+    for (const feature of RATE_CARD_FEATURES) {
       const entry = FEATURE_RATE_CARD[feature];
-      expect(entry.customerMicrousd).toBe(
-        centsFromMicrousdCeil(entry.providerCogsMicrousd ?? 0) * 10_000,
-      );
+      if (entry.vendor === undefined) continue;
+      expect(entry.includedInPlans).toBe('all_plans');
+      expect(customerChargeMicrousd(feature)).toBe(0);
     }
-  });
-
-  it('keeps the image and voice customer prices the product already charges', () => {
-    expect(FEATURE_RATE_CARD.image_generation_openai_medium.customerMicrousd).toBe(50_000);
-    expect(FEATURE_RATE_CARD.image_generation_openai_high.customerMicrousd).toBe(210_000);
-    expect(FEATURE_RATE_CARD.image_generation_google.customerMicrousd).toBe(30_000);
-    expect(FEATURE_RATE_CARD.voice_live_minute.customerMicrousd).toBe(50_000);
-  });
-
-  it('publishes no rate for an infrastructure cost the deployment meters', () => {
-    for (const feature of [
-      'object_storage_gib_month',
-      'database_compute_second',
-      'vector_query_request',
-      'notification_delivery_request',
-      'email_message_request',
-      'network_egress_gib',
-      'work_compute_minute',
-      'code_compute_minute',
-      'browser_session_minute',
-      'connector_call_request',
-      'artifact_storage_gib_month',
-    ] as const) {
-      const entry = FEATURE_RATE_CARD[feature];
-      expect(entry.providerCogsBasis).toBe('deployment_metered');
-      expect(entry.providerCogsMicrousd).toBeNull();
-      expect(entry.customerMicrousd).toBeNull();
-      expect(RATE_CARD_PROVIDER_COGS_ENV[feature]).toMatch(/^AGI_[A-Z0-9_]+$/);
-    }
-  });
-
-  it('prices a metered infrastructure row only once the deployment sets its rate', () => {
-    expect(resolveFeatureRate('network_egress_gib', {}).providerCogsMicrousd).toBeNull();
-    const configured = resolveFeatureRate('network_egress_gib', {
-      AGI_EGRESS_MICROUSD_PER_GIB: '90000',
-    });
-    expect(configured.providerCogsMicrousd).toBe(90_000);
-    expect(configured.overrideApplied).toBe(true);
   });
 
   it('marks every inferred provider figure as an estimate', () => {
     expect(FEATURE_RATE_CARD.image_generation_openai_low.estimate).toBe(true);
     expect(FEATURE_RATE_CARD.image_generation_openai_medium.estimate).toBe(true);
     expect(FEATURE_RATE_CARD.image_generation_openai_high.estimate).toBe(true);
-    expect(FEATURE_RATE_CARD.voice_live_minute.estimate).toBe(true);
+    expect(FEATURE_RATE_CARD.vector_query_request.estimate).toBe(true);
     expect(FEATURE_RATE_CARD.web_search_perplexity.estimate).toBeUndefined();
     expect(FEATURE_RATE_CARD.web_search_grounding.estimate).toBeUndefined();
   });
@@ -107,10 +75,10 @@ describe('resolveFeatureRate', () => {
   });
 
   it('honours a valid provider-cost override', () => {
-    const rate = resolveFeatureRate('web_search_grounding', {
-      AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL: '9000',
+    const rate = resolveFeatureRate('network_egress_gib', {
+      AGI_EGRESS_MICROUSD_PER_GIB: '90000',
     });
-    expect(rate.providerCogsMicrousd).toBe(9_000);
+    expect(rate.providerCogsMicrousd).toBe(90_000);
     expect(rate.overrideApplied).toBe(true);
   });
 
@@ -133,25 +101,33 @@ describe('resolveFeatureRate', () => {
 describe('customerChargeMicrousd', () => {
   it('waives an interactive-chat feature only while it is included', () => {
     expect(customerChargeMicrousd('web_search_perplexity', { included: true })).toBe(0);
-    expect(customerChargeMicrousd('web_search_perplexity', { included: false })).toBe(10_000);
-    expect(customerChargeMicrousd('web_search_grounding', { included: false })).toBe(20_000);
+    expect(customerChargeMicrousd('web_search_perplexity', { included: false })).toBe(5_000);
+    expect(customerChargeMicrousd('web_search_grounding', { included: false })).toBe(14_000);
   });
 
-  it('charges a no-plan feature regardless of surface', () => {
+  it('charges a no-plan feature at provider cost regardless of inclusion', () => {
     expect(customerChargeMicrousd('image_generation_openai_high', { included: true })).toBe(
-      210_000,
+      FEATURE_RATE_CARD.image_generation_openai_high.providerCogsMicrousd,
     );
   });
 });
 
 describe('credit conversion', () => {
-  it('derives the credit size from the public top-up rate', () => {
-    expect(MICROUSD_PER_CREDIT).toBe(1_000_000 / TOP_UP_UNITS_PER_USD);
+  it('holds one credit as 5,000 microUSD of provider cost', () => {
+    expect(MICROUSD_PER_CREDIT).toBe(5_000);
     expect(creditsFromMicrousd(MICROUSD_PER_CREDIT)).toBe(1);
     expect(creditsFromMicrousd(0)).toBe(0);
   });
 
-  it('rounds a partial cent up so a charge is never free', () => {
+  it('charges provider cost rounded up to a hundredth of a credit, never below it', () => {
+    expect(chargeMicrousdForProviderCost(1)).toBe(50);
+    expect(chargeMicrousdForProviderCost(14_000)).toBe(14_000);
+    for (const microusd of [1, 49, 51, 4.5, 14, 16_106.13, 225_485.78]) {
+      expect(chargeMicrousdForProviderCost(microusd)).toBeGreaterThanOrEqual(microusd);
+    }
+  });
+
+  it('rounds a partial cent up so a ledger debit is never free', () => {
     expect(centsFromMicrousdCeil(1)).toBe(1);
     expect(centsFromMicrousdCeil(5_000)).toBe(1);
     expect(centsFromMicrousdCeil(14_000)).toBe(2);
