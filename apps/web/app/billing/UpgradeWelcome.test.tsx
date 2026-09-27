@@ -31,7 +31,7 @@ describe('UpgradeWelcome', () => {
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
     expect(screen.getByRole('heading', { name: 'Payment received.' })).toBeInTheDocument();
-    expect(screen.getByText('Activating your Max 15x plan…')).toBeInTheDocument();
+    expect(screen.getByText('Activating your Max 20x plan…')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /all set/i })).toBeNull();
     unmount();
   });
@@ -40,7 +40,7 @@ describe('UpgradeWelcome', () => {
     billingState.subscription = { tier: 'max_15x', status: 'canceled' };
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
-    expect(screen.getByText('Activating your Max 15x plan…')).toBeInTheDocument();
+    expect(screen.getByText('Activating your Max 20x plan…')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /all set/i })).toBeNull();
     unmount();
   });
@@ -50,7 +50,7 @@ describe('UpgradeWelcome', () => {
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
     expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
-    expect(screen.getByText('Max 15x')).toBeInTheDocument();
+    expect(screen.getByText('Max 20x')).toBeInTheDocument();
     expect(screen.getByText('$200/month')).toBeInTheDocument();
     expect(screen.queryByText(/Activating your/i)).toBeNull();
     expect(billingState.refreshUser).not.toHaveBeenCalled();
