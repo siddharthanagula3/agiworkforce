@@ -154,7 +154,6 @@ export interface DeviceRevocation {
   readonly userId: string;
   readonly deviceId: string;
   readonly reason: DeviceRevocationReason;
-  readonly revokedAtMs: number;
 }
 
 export interface DeviceRevocationDelivery {
@@ -193,7 +192,7 @@ export async function propagateDeviceRevocation(
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ reason: revocation.reason, revokedAtMs: revocation.revokedAtMs }),
+        body: JSON.stringify({ reason: revocation.reason }),
         signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
       },
     );
