@@ -70,7 +70,7 @@ describe('SSO create rejects hostile identity-provider input', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetSubscription.mockResolvedValue({ plan_tier: 'enterprise', status: 'active' });
-    mockQuery.mockResolvedValue([{ role: 'owner' }]);
+    mockQuery.mockResolvedValue([{ organization_id: ORG_ID, role: 'owner', user_id: 'owner' }]);
     mockExecute.mockResolvedValue(undefined);
   });
 
@@ -273,29 +273,32 @@ describe('SSO create rejects hostile identity-provider input', () => {
   });
 
   it('accepts a well-formed payload, proving the suite is not rejecting everything', async () => {
-    mockQuery.mockResolvedValueOnce([{ role: 'owner' }]).mockResolvedValueOnce([
-      {
-        id: '22222222-2222-4222-8222-222222222222',
-        organization_id: ORG_ID,
-        provider_type: 'saml',
-        domain: 'example.com',
-        display_name: null,
-        metadata_url: 'https://idp.example.com/metadata',
-        oidc_discovery_url: null,
-        oidc_client_id: null,
-        clerk_connection_id: null,
-        acs_url: null,
-        sp_entity_id: null,
-        sp_metadata_url: null,
-        domain_verified_at: null,
-        domain_verification_token: 'a'.repeat(48),
-        attribute_mapping: { emailAddress: 'user.email' },
-        is_active: false,
-        created_by: 'owner',
-        created_at: '2026-08-04T00:00:00.000Z',
-        updated_at: '2026-08-04T00:00:00.000Z',
-      },
-    ]);
+    const created = {
+      id: '22222222-2222-4222-8222-222222222222',
+      organization_id: ORG_ID,
+      provider_type: 'saml',
+      domain: 'example.com',
+      display_name: null,
+      metadata_url: 'https://idp.example.com/metadata',
+      oidc_discovery_url: null,
+      oidc_client_id: null,
+      clerk_connection_id: null,
+      acs_url: null,
+      sp_entity_id: null,
+      sp_metadata_url: null,
+      domain_verified_at: null,
+      domain_verification_token: 'a'.repeat(48),
+      attribute_mapping: { emailAddress: 'user.email' },
+      is_active: false,
+      created_by: 'owner',
+      created_at: '2026-08-04T00:00:00.000Z',
+      updated_at: '2026-08-04T00:00:00.000Z',
+    };
+    mockQuery.mockImplementation(async (sql: string) =>
+      String(sql).toLowerCase().includes('insert into sso_connections')
+        ? [created]
+        : [{ organization_id: ORG_ID, role: 'owner', user_id: 'owner' }],
+    );
 
     const response = await post(base({ attribute_mapping: { emailAddress: 'user.email' } }));
 
