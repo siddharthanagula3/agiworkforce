@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -361,21 +361,33 @@ describe('ModelPickerSheet', () => {
   });
 
   it('does not select an unprepared downloaded model until preparation finishes', async () => {
+    let completePreparation: (() => void) | undefined;
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completePreparation = resolve;
+        }),
+    );
     useModelInstallStore.setState({
       installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
       readySystemModelIds: [],
       jobs: {},
+      prepareModel,
     });
     const { getByLabelText, queryByTestId } = renderPicker();
-    // Pressing before the installed read settles selects a model the sheet
-    // believes is absent, so wait for the sheet's own loading row to go.
-    await waitFor(() => expect(queryByTestId('model-picker-loading')).toBeNull());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(queryByTestId('model-picker-loading')).toBeNull();
 
     fireEvent.press(getByLabelText(/AGI Lite/));
 
-    await waitFor(() => {
-      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(prepareModel).toHaveBeenCalledTimes(1);
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    await act(async () => {
+      completePreparation?.();
     });
+    expect(useModelStore.getState().selectedModel).toBe(LITE_MODEL_ID);
   });
 
   it('calls onSelect callback instead of store when provided', () => {
