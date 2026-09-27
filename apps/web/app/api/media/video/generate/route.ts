@@ -35,7 +35,7 @@ import {
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import {
@@ -754,7 +754,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const spendGateResponse = await buildSpendLimitGateResponse(userId);
   if (spendGateResponse) return spendGateResponse;
 
-  const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);
+  const entitlement = await resolveEntitlementBundle((await callerScope()).db, userId);
+  const subscription = entitlement.subscription;
 
   if (!subscription) {
     return NextResponse.json(
@@ -796,7 +797,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const userTier = subscription.plan_tier?.toLowerCase() || 'free';
+  const userTier = entitlement.plan;
   if (!canUseBillingPlanCapability(userTier, 'video_generation')) {
     return NextResponse.json(
       {
@@ -1015,7 +1016,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     await assertTierUnitAllowance({
       db: scopedDb,
       userId,
-      planTier: subscription.plan_tier,
+      planTier: entitlement.plan,
       unit: 'video_seconds',
       requestedUnits: billableDurationSecs * candidateCount,
     });
@@ -1049,7 +1050,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     assistantMessageId,
     idempotencyKeys: candidateIdempotencyKeys,
     requestHash,
-    planTier: subscription.plan_tier,
+    planTier: entitlement.plan,
     provider,
     model,
     prompt,

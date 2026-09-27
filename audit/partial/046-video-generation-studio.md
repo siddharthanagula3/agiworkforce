@@ -10,15 +10,11 @@ nothing is left.
 
 - Done when: User writes a text prompt in a video mode and gets a generated video clip back.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| desktop | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| mobile | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:73-74`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4311-4314`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2929-2936`, `apps/web/features/chat/pages/WebChatPage.tsx:3012-3022`
 
 ## S46.05: Video-model picker.
 

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier, getPlanMaxSandboxes } from '@agiworkforce/types';
+import { getPlanMaxSandboxes } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
 export const runtime = 'nodejs';
 
@@ -137,8 +137,7 @@ async function handleList(request: NextRequest) {
   if (!e2bProvisioningReady()) {
     throw createError.capabilityUnavailable(CODE_UNAVAILABLE_MESSAGE);
   }
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = await resolveEntitledPlanTier(db, userId);
   if (getPlanMaxSandboxes(planTier) <= 0) {
     throw createError.capabilityUnavailable(PLAN_UNAVAILABLE_MESSAGE);
   }

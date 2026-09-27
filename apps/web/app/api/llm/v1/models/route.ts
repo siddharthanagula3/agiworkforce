@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { getCorsHeaders } from '@/lib/cors';
 import { getAllowedAutoModesForTier } from '@shared/config/llm';
 import {
@@ -13,7 +13,6 @@ import {
   type CatalogueEntry,
 } from '@/lib/server/model-catalogue';
 import {
-  effectivePlanTier,
   getMinimumRequiredTier,
   getPickerModelsForRuntimeProfile,
   normalizeSubscriptionAccessTier,
@@ -191,10 +190,9 @@ async function handleListModels(request: NextRequest) {
     return listModelsForRequest(request, ANONYMOUS_PLAN_TIER, ANONYMOUS_FLAG_SUBJECT_ID);
   }
 
-  const subscription = await SubscriptionService.getSubscription(scoped.db, scoped.userId);
   return listModelsForRequest(
     request,
-    effectivePlanTier(subscription?.plan_tier, subscription?.status),
+    await resolveEntitledPlanTier(scoped.db, scoped.userId),
     scoped.userId,
   );
 }

@@ -2,11 +2,13 @@ import 'server-only';
 
 import {
   CREDITS_PER_CENT,
+  FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
+  MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
   type BillingInterval,
   type BillingPlanTier,
+  type ManagedUsageLimit,
 } from '@agiworkforce/types';
-import { MANAGED_USAGE_LIMITS, type ManagedUsageLimit } from '@/lib/billing/managed-usage-caps';
 
 export type ManagedUsageCapCents = number | null;
 export type ManagedUsageCapMicrousd = number | null;
@@ -16,7 +18,7 @@ export const MICROUSD_PER_LEDGER_CENT = 10_000;
 export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_MICROUSD =
   MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS * MICROUSD_PER_LEDGER_CENT;
 
-export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
+export { FLAGSHIP_OF_WEEKLY_BUDGET_RATIO };
 
 export function toPublicUsagePercentage(used: number, limit: number): number {
   if (limit <= 0) return 0;

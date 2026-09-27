@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { logger } from '@/lib/logger';
 import type { HandoffAccountContext } from './types';
 
@@ -47,13 +47,14 @@ export async function buildHandoffAccountContext(
 ): Promise<HandoffAccountContext> {
   if (!userId || !db) return ANONYMOUS_ACCOUNT_CONTEXT;
 
-  const [subscription, usage] = await Promise.all([
-    withTimeout(SubscriptionService.getSubscription(db, userId), 'subscription'),
+  const [entitlement, usage] = await Promise.all([
+    withTimeout(resolveEntitlementBundle(db, userId), 'subscription'),
     withTimeout(getManagedUsageSummary(db, userId), 'managed-usage'),
   ]);
+  const subscription = entitlement?.subscription ?? null;
 
   const degradedParts: string[] = [];
-  if (!subscription) degradedParts.push('subscription lookup unavailable');
+  if (!entitlement) degradedParts.push('subscription lookup unavailable');
   if (!usage) degradedParts.push('usage lookup unavailable');
 
   return {
