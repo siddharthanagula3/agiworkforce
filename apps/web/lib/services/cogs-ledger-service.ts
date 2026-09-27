@@ -648,6 +648,7 @@ export async function recordInfrastructureCostEvent(
         unitBasis: UNIT_BASIS_BY_CAPABILITY[input.capability],
         units,
         providerCostCents: costMicrousd === null ? 0 : centsFromMicrousdCeil(costMicrousd),
+        providerEstimatedCostMicrousd: input.providerEstimatedCostMicrousd ?? costMicrousd,
         billedCents: 0,
         customerCanonicalMicrousd: resolveCustomerCanonicalMicrousd(input) ?? 0,
         metadata: { ...(input.metadata ?? {}), priced: costMicrousd !== null },
@@ -938,6 +939,8 @@ export async function recordSettledProviderCost(
           resolveCustomerCanonicalMicrousd(input) ??
           (retailCostCents === null ? null : microusdFromCents(retailCostCents)),
         providerReportedCostCents: input.providerReportedCostCents ?? null,
+        providerEstimatedCostMicrousd: input.providerEstimatedCostMicrousd ?? null,
+        providerReportedCostMicrousd: input.providerReportedCostMicrousd ?? null,
         feature: input.feature ?? null,
         routeId: input.routeId ?? null,
         surface: input.surface ?? null,

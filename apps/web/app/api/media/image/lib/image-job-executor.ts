@@ -119,6 +119,7 @@ async function recordUndeliveredImageCost(
     provider: job.provider,
     model: job.model,
     actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd),
+    providerEstimatedCostMicrousd: providerCostMicrousd,
     sourceRef: `image_job:${job.id}:attempt:${job.attempts}`,
     taskOutcome: 'undelivered',
     taskRef: `image_job:${job.id}`,

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 
 /**
@@ -88,7 +89,7 @@ export async function recordLiveVoiceBackendCost(
   }
 
   const usage = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
-  const costCents = LLMCostCalculator.calculateCost(input.provider, model, usage);
+  const costMicrousd = LLMCostCalculator.calculateCostMicrousd(input.provider, model, usage);
 
   try {
     await recordSettledProviderCost({
@@ -96,7 +97,8 @@ export async function recordLiveVoiceBackendCost(
       organizationId: input.organizationId ?? null,
       provider: input.provider,
       model,
-      actualCostCents: costCents,
+      actualCostCents: ledgerCentsFromMicrousd(costMicrousd),
+      providerEstimatedCostMicrousd: costMicrousd,
       // Keyed on the session, so the retry of a close that already settled
       // collides on `source_ref` and is discarded rather than counted twice.
       sourceRef: `${LIVE_VOICE_BACKEND_COST_SOURCE}:${input.sessionId}`,
