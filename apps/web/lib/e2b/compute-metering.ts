@@ -27,6 +27,7 @@ import {
   fingerprintManagedUsageRequest,
   ManagedUsageRequestError,
   estimateMicrousdOf,
+  markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
 
@@ -255,6 +256,25 @@ export async function reserveSandboxComputeInterval(
     );
     return { outcome: 'refused', error: refusal };
   }
+}
+
+export async function markSandboxComputeStarted(input: {
+  userId: string;
+  reservation: SandboxComputeReservationRecord;
+}): Promise<void> {
+  if (input.reservation.fundingSource === 'platform-free') return;
+  await markManagedUsageProviderStarted({
+    db: sandboxScopedDb(input.userId),
+    userId: input.userId,
+    idempotencyKey: input.reservation.idempotencyKey,
+    requestHash: input.reservation.requestHash,
+    leaseToken: input.reservation.leaseToken,
+    estimatedCostMicrousd: input.reservation.estimatedCostMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(input.reservation.estimatedCostMicrousd),
+    quotaFeature: SANDBOX_COMPUTE_QUOTA_FEATURE,
+    provider: input.reservation.provider,
+    model: input.reservation.model,
+  });
 }
 
 /**

@@ -63,6 +63,7 @@ import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cac
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
   getSandboxComputeMicrousdPerSecond,
+  markSandboxComputeStarted,
   meterSandboxComputeInterval,
   releaseSandboxComputeReservation,
   reserveSandboxComputeInterval,
@@ -996,6 +997,20 @@ export const getE2BExecutor = tracedCodeAction(
           // The plan timeout remains the billing and lifecycle backstop.
         }
         return abandonReservation('network_policy_unenforceable');
+      }
+    }
+
+    if (scope && computeReservation && reservationAdmittedForThisAttempt) {
+      try {
+        await markSandboxComputeStarted({ userId: scope.userId, reservation: computeReservation });
+      } catch (err) {
+        logger.error(
+          { err, userId: scope.userId, sandboxId, ...scopeLog(scope) },
+          '[e2b] sandbox start could not be recorded against its reservation, so its seconds could not be billed; refusing executor',
+        );
+        refuse('provider-error');
+        await Sandbox.pause(sandboxId).catch(() => undefined);
+        return abandonReservation('sandbox_start_unrecorded');
       }
     }
 
