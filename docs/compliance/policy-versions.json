@@ -166,8 +166,8 @@
         },
         {
           "date": "2026-09-27",
-          "digest": "432cd84fee679ca3",
-          "note": "Adds the signed-in refund request, the 14-day withdrawal refunded in full for the EU and EEA, UK and Turkey, the 7-day unused refund once per account, and the dispute hold, following the ChatGPT and Claude refund practice researched 2026-09-27."
+          "digest": "d8a061f601b4d5f0",
+          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK refunded prorated by the credits used as Claude does (support.claude.com/en/articles/12386328), the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date."
         }
       ]
     },
