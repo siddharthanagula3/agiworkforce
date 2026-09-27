@@ -27,9 +27,19 @@ export const TYPICAL_RESEARCH_ROUND_TOKENS: Readonly<TokenProfile> = Object.free
 
 const RESEARCH_SEARCH_FEATURE = 'web_search_perplexity';
 
+function isPublishedTokenPrice(pricing: { inputCost: number; outputCost: number }): boolean {
+  return (
+    Number.isFinite(pricing.inputCost) &&
+    Number.isFinite(pricing.outputCost) &&
+    pricing.inputCost >= 0 &&
+    pricing.outputCost >= 0 &&
+    pricing.inputCost + pricing.outputCost > 0
+  );
+}
+
 function tokenCostMicrousd(model: ModelMetadata, tokens: TokenProfile, now: Date): number | null {
   const pricing = resolveEffectiveModelPricingForInputTokens(model, now, tokens.input);
-  if (!Number.isFinite(pricing.inputCost) || !Number.isFinite(pricing.outputCost)) return null;
+  if (!isPublishedTokenPrice(pricing)) return null;
   return tokens.input * pricing.inputCost + tokens.output * pricing.outputCost;
 }
 
@@ -47,7 +57,7 @@ export function creditsPerMillionTokens(
   const model = getModelMetadataById(modelId);
   if (!model) return null;
   const pricing = resolveEffectiveModelPricingForInputTokens(model, now, 0);
-  if (!Number.isFinite(pricing.inputCost) || !Number.isFinite(pricing.outputCost)) return null;
+  if (!isPublishedTokenPrice(pricing)) return null;
   return {
     input: formatCreditsPerMillionTokens(pricing.inputCost),
     output: formatCreditsPerMillionTokens(pricing.outputCost),
