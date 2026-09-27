@@ -24,6 +24,7 @@
 import 'server-only';
 
 import {
+  SANDBOX_COMPUTE_RATE_ENV,
   getPlanMaxSandboxes,
   getPlanSandboxTtlMs,
   isFreeBillingPlanTier,
@@ -61,8 +62,8 @@ import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cache';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
-  E2B_COMPUTE_RATE_ENV,
   getSandboxComputeMicrousdPerSecond,
+  markSandboxComputeStarted,
   meterSandboxComputeInterval,
   releaseSandboxComputeReservation,
   reserveSandboxComputeInterval,
@@ -735,7 +736,7 @@ export const getE2BExecutor = tracedCodeAction(
 
     if (!sandboxComputeIsPriceable()) {
       logger.error(
-        { env: E2B_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
+        { env: SANDBOX_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
         '[e2b] sandbox compute has no configured price; refusing to provision (fail-closed)',
       );
       return unavailable('not-configured');
@@ -996,6 +997,20 @@ export const getE2BExecutor = tracedCodeAction(
           // The plan timeout remains the billing and lifecycle backstop.
         }
         return abandonReservation('network_policy_unenforceable');
+      }
+    }
+
+    if (scope && computeReservation && reservationAdmittedForThisAttempt) {
+      try {
+        await markSandboxComputeStarted({ userId: scope.userId, reservation: computeReservation });
+      } catch (err) {
+        logger.error(
+          { err, userId: scope.userId, sandboxId, ...scopeLog(scope) },
+          '[e2b] sandbox start could not be recorded against its reservation, so its seconds could not be billed; refusing executor',
+        );
+        refuse('provider-error');
+        await Sandbox.pause(sandboxId).catch(() => undefined);
+        return abandonReservation('sandbox_start_unrecorded');
       }
     }
 

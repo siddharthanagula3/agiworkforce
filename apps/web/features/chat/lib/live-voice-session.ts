@@ -45,7 +45,6 @@ export interface LiveSessionSettlement {
   idempotencyKey: string;
   leaseToken: string;
   requestHash: string;
-  estimatedCostCents: number;
   ceilingSeconds: number;
 }
 

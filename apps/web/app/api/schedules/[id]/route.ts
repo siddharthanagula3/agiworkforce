@@ -6,7 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   ScheduleConflictError,
   ScheduleNotFoundError,
@@ -68,10 +68,10 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   const { id } = await context.params;
   const body = await requestObject(request);
   try {
-    const subscription = await SubscriptionService.getSubscription(db, userId);
+    const planTier = await resolveEntitledPlanTier(db, userId);
     return NextResponse.json({
       schedule: await updateSchedule(db, userId, id, body as ScheduleUpdateInput, {
-        planTier: subscription?.plan_tier ?? 'free',
+        planTier,
       }),
     });
   } catch (error) {

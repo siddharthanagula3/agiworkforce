@@ -18,7 +18,7 @@ const LABEL = {
   captionsOn: 'Hide captions',
   captionsOff: 'Show captions',
   captionsGlyph: 'CC',
-  exit: 'Leave voice mode',
+  exit: 'End voice session',
 } as const;
 
 const KEY = {
@@ -159,6 +159,7 @@ export function VoiceComposer({
         type="button"
         onClick={onExit}
         aria-label={LABEL.exit}
+        title={LABEL.exit}
         data-testid="voice-exit-button"
         className={cn(
           ROUND_CONTROL_CLASS,

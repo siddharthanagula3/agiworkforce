@@ -1,7 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  getMinimumRequiredTier,
+  getModelMetadataById,
+  modelDisplayNameById,
+} from '@agiworkforce/types';
+import { canAccessModel } from '@/lib/model-tiers';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -24,7 +30,7 @@ import {
   parseManagedUsageIdempotencyKey,
 } from '@/lib/services/managed-usage-request-service';
 import { managedUsageErrorResponse } from '@/lib/services/cloud-code-route-errors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
@@ -72,6 +78,24 @@ function rethrowCloudCodeError(error: unknown): never {
   throw error;
 }
 
+function modelNotOnPlanResponse(model: string): NextResponse {
+  const modelName = modelDisplayNameById(model) ?? model;
+  const requiredTier = getMinimumRequiredTier(model);
+  return NextResponse.json(
+    {
+      error: {
+        message: requiredTier
+          ? `${modelName} needs the ${getBillingPlanPricing(requiredTier).label} plan. Choose a model your plan includes.`
+          : `${modelName} is not available on your plan. Choose a model your plan includes.`,
+        type: 'invalid_request_error',
+        code: 'model_not_available',
+        ...(requiredTier ? { requiredTier } : {}),
+      },
+    },
+    { status: 403 },
+  );
+}
+
 async function handleAgentTurn(request: NextRequest, context: RouteContext) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
@@ -117,20 +141,24 @@ async function handleAgentTurn(request: NextRequest, context: RouteContext) {
   }
   const model = typeof record['model'] === 'string' ? record['model'].trim() : '';
   if (!model) throw createError.validation('"model" is required');
+  if (!getModelMetadataById(model)) {
+    throw createError.validation('"model" must name a model from the catalog');
+  }
 
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,
-    subscription,
+    entitlement.subscription,
     resolveCloudChatSurface(request),
     { request },
     'code',
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
+  if (!canAccessModel(model, planTier)) return modelNotOnPlanResponse(model);
 
   try {
     const result = await runCloudCodeTurn({

@@ -8,7 +8,7 @@ import { unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { resolveEntitlementPlan } from '@/lib/server/scim/scim-auth';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 
 export type DirectorySyncAccessFailure = { response: NextResponse };
@@ -100,7 +100,12 @@ export async function requireDirectorySyncAdmin(
     return failure(403, 'Organization owner or admin role is required');
   }
 
-  const plan = await resolveEntitlementPlan(db, userId);
+  let plan: BillingPlanTier;
+  try {
+    plan = await resolveOrganizationEntitlementPlan(membership.organization_id);
+  } catch {
+    return failure(503, 'Database temporarily unavailable');
+  }
 
   if (!canUseBillingPlanCapability(plan, 'enterprise_controls')) {
     return failure(403, 'Directory sync requires an active Enterprise subscription', {

@@ -15,6 +15,7 @@ import {
   OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
   OBJECT_STORAGE_SECRET_ACCESS_KEY_ENV,
 } from '@agiworkforce/object-storage/config';
+import { RATE_CARD_PROVIDER_COGS_ENV, unpricedRateCardFeatures } from '@agiworkforce/types';
 import {
   describeOptionalFeatureDecisions,
   validateOptionalFeatureConfig,
@@ -1613,6 +1614,22 @@ export function validateDeployedValues(): ValidationResult {
   );
 }
 
+export function validateRateCardPriced(): ValidationResult {
+  const environment = resolveRuntimeEnvironment();
+  if (environment !== 'preview' && environment !== 'production') {
+    return { valid: true, errors: [], warnings: [] };
+  }
+  const overrides: Partial<Record<string, string>> = RATE_CARD_PROVIDER_COGS_ENV;
+  return reportProductionFindings(
+    unpricedRateCardFeatures().map((feature) => {
+      const variable = overrides[feature];
+      return variable
+        ? `${feature} has no provider cost, set ${variable} to a positive microUSD rate`
+        : `${feature} has no provider cost and no variable to supply one`;
+    }),
+  );
+}
+
 /**
  * Every OAuth callback this deployment sends a user to. Each one is a URL an
  * identity provider will hand an authorization code back to.
@@ -1692,6 +1709,7 @@ export function validateEnvironment(): ValidationResult {
     validateOAuthCallbackIsolation(),
     validateConfigKeyRegistry(),
     validateDeployedValues(),
+    validateRateCardPriced(),
     validateOptionalFeatureConfig(),
   ];
 
