@@ -28,18 +28,18 @@ Claude Code, OpenAI Codex CLI, OpenCode, and Gemini CLI are the four serious
 competitors. We close gaps none of them close, and meet them on parity where
 the ecosystem expects it.
 
-| Feature                                          |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
-| ------------------------------------------------ | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
-| Multi-provider in one session, mid-turn switch   |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 15+ + `/model`                   |
-| Always-on cost HUD top-right (tokens + $ + ctx%) | ⚠️ status line only  | ⚠️ /status card  |           ❌           |       ❌       |                          ✅                          |
-| Machine-readable JSONL agent events for CI       | ⚠️ stream-json mode  | ⚠️ JSONL events  |           ❌           |       ❌       |   ✅ `--json-events` (typed, stable kind strings)    |
-| Multi-model fallback chain                       |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
-| Session fork at specific turn with rename        |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |             ✅ `--at-turn N --as <name>`             |
-| Native Rust binary                               |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
-| OSS license                                      |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
-| MCP support (transports)                         | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
-| Hook events                                      |     ~19 (config)     |       ~10        |           ✓            |    (varies)    |                          32                          |
-| Plan mode (model writes plan → user approves)    |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
+| Feature                                                 |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
+| ------------------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
+| Multi-provider in one session, mid-turn switch          |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 15+ + `/model`                   |
+| Always-on usage HUD top-right (tokens + credits + ctx%) | ⚠️ status line only  | ⚠️ /status card  |           ❌           |       ❌       |                          ✅                          |
+| Machine-readable JSONL agent events for CI              | ⚠️ stream-json mode  | ⚠️ JSONL events  |           ❌           |       ❌       |   ✅ `--json-events` (typed, stable kind strings)    |
+| Multi-model fallback chain                              |          ❌          |        ❌        |           ❌           |       ❌       |                    ✅ `-m a,b,c`                     |
+| Session fork at specific turn with rename               |    ✅ resume only    |  ✅ basic fork   |           ✅           |       ❌       |             ✅ `--at-turn N --as <name>`             |
+| Native Rust binary                                      |          ✅          |        ✅        |         ❌ Bun         |       ❌       |                          ✅                          |
+| OSS license                                             |      ❌ Closed       |  ✅ Apache-2.0   |         ✅ MIT         | ✅ Apache-2.0  |                    ❌ Proprietary                    |
+| MCP support (transports)                                | stdio+SSE+HTTP+OAuth | stdio+HTTP+OAuth |  stdio+SSE+HTTP+OAuth  |    (varies)    |             stdio + SSE + HTTP (+OAuth)              |
+| Hook events                                             |     ~19 (config)     |       ~10        |           ✓            |    (varies)    |                          32                          |
+| Plan mode (model writes plan → user approves)           |          ✅          | ✅ `update_plan` |           ✓            |       ❌       | ⚠️ tool-allowlist toggle (real plan mode in Phase 1) |
 
 ## Install
 
@@ -177,7 +177,7 @@ load automatically in later sessions for that repo.
 ## Slash commands (selected)
 
 ```
-/cost           Show session cost summary
+/cost           Show session credit usage by model
 /output-style   Switch output style
 /fallback       Show current fallback chain
 /replay         How to fork from an earlier turn
@@ -263,9 +263,9 @@ Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
 
-Managed Cloud on CLI is a Pro, Max 5x, Max 15x, Team, or Enterprise benefit.
+Managed Cloud on CLI is a Pro, Max 5x, Max 20x, Team, or Enterprise benefit.
 The signed-in account keeps its exact purchased tier label; Auto routing maps
-Team to the Pro roster and Max 15x to the Max roster. Free, Basic, expired, and
+Team to the Pro roster and Max 20x to the Max roster. Free, Basic, expired, and
 unpaid accounts fail closed on this developer surface. Billing, Team
 administration, connector setup, and Enterprise sales live in the Web control
 plane so every AGI client consumes one account and policy source.

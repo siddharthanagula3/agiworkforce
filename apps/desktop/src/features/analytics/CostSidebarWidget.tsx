@@ -3,22 +3,13 @@ import { useShallow } from 'zustand/react/shallow';
 import { TrendingUp, Wallet, PieChart, RefreshCw } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Skeleton } from '@/ui/Skeleton';
-import { useBillingUsageStore } from '../../stores/billingUsage';
+import { formatProviderCostCredits, useBillingUsageStore } from '../../stores/billingUsage';
 import { cn } from '../../lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/ui/Tooltip';
-import { formatCredits, dollarsToCredits } from '../../utils/credits';
 
 interface CostSidebarWidgetProps {
   collapsed?: boolean;
   onOpenDashboard?: () => void;
-}
-
-function formatCostAsCredits(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(value)) {
-    return '0 credits';
-  }
-  const credits = dollarsToCredits(value);
-  return formatCredits(credits);
 }
 
 export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWidgetProps) {
@@ -45,15 +36,15 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
     >
       <div className="mb-2 flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Spend</p>
-          <p className="text-sm font-semibold text-foreground">Cost Snapshot</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Usage</p>
+          <p className="text-sm font-semibold text-foreground">Credits used</p>
         </div>
         <Button
           variant="ghost"
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-primary"
           onClick={() => void loadOverview()}
-          aria-label="Refresh cost overview"
+          aria-label="Refresh credit usage"
         >
           <RefreshCw className="h-4 w-4" />
         </Button>
@@ -73,7 +64,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               Today
             </span>
             <span className="font-medium text-foreground">
-              {formatCostAsCredits(overview?.today_total)}
+              {formatProviderCostCredits(overview?.today_total)}
             </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
@@ -82,7 +73,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               Month
             </span>
             <span className="font-medium text-foreground">
-              {formatCostAsCredits(overview?.month_total)}
+              {formatProviderCostCredits(overview?.month_total)}
             </span>
           </div>
           <div className="flex items-center justify-between text-muted-foreground">
@@ -92,8 +83,8 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
             </span>
             <span className="font-medium text-foreground">
               {overview?.remaining_budget != null
-                ? formatCostAsCredits(overview.remaining_budget)
-                : 'No budget'}
+                ? formatProviderCostCredits(overview.remaining_budget)
+                : 'No limit set'}
             </span>
           </div>
         </div>
@@ -119,7 +110,7 @@ export function CostSidebarWidget({ collapsed, onOpenDashboard }: CostSidebarWid
               size="icon"
               className="h-10 w-10 rounded-full border border-border/60"
               onClick={onOpenDashboard}
-              aria-label="Open cost analytics"
+              aria-label="Open usage analytics"
             >
               <TrendingUp className="h-4 w-4" />
             </Button>

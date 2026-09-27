@@ -5145,7 +5145,11 @@ pub async fn run_oneshot(
                     sdk_io::StatusUpdateEvent {
                         session_id: budget_session_id.clone(),
                         reason: sdk_io::StatusUpdateReason::BudgetExhausted,
-                        detail: Some(format!("${spent:.4} >= ${limit:.4}")),
+                        detail: Some(format!(
+                            "{} used of {}",
+                            cost_ledger::format_usd_as_credits(spent),
+                            cost_ledger::format_usd_as_credits(limit)
+                        )),
                     },
                 ));
             })));
@@ -5355,6 +5359,7 @@ pub async fn run_oneshot(
                         crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
+                output::print_billed_turn(&turn.managed_request_ids).await;
             }
             Err(e) => {
                 output::print_error(&errors::terminal_text(&e));

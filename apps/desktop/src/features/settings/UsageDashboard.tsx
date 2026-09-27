@@ -14,6 +14,9 @@ import { Progress } from '@/ui/Progress';
 import { Button } from '@/ui/Button';
 import {
   useBillingUsageStore,
+  creditsFromProviderUsd,
+  formatProviderCostCredits,
+  providerUsdFromCredits,
   selectBudget,
   selectBudgetPercentage,
   selectCostAnalytics,
@@ -210,7 +213,7 @@ function ModelRow({ name, tokens, cost, pct }: ModelRowProps) {
       <div className="flex items-center justify-between gap-2 text-xs">
         <span className="truncate max-w-[55%] text-foreground/80">{name}</span>
         <span className="text-muted-foreground tabular-nums shrink-0">
-          {tokens.toLocaleString()} tok · ${cost.toFixed(4)}
+          {tokens.toLocaleString()} tok · {formatProviderCostCredits(cost)}
         </span>
       </div>
       <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
@@ -338,7 +341,9 @@ function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
             <Stat
               label="Busiest day"
               value={summary.busiestDay ? formatIsoDay(summary.busiestDay.date) : ', '}
-              hint={summary.busiestDay ? `$${summary.busiestDay.cost.toFixed(4)}` : undefined}
+              hint={
+                summary.busiestDay ? formatProviderCostCredits(summary.busiestDay.cost) : undefined
+              }
             />
             <Stat
               label="Favourite model"
@@ -356,13 +361,13 @@ function ActivitySection({ timeseries, models, nowMs }: ActivitySectionProps) {
               {cells.map((cell) => (
                 <span
                   key={cell.date}
-                  title={`${formatIsoDay(cell.date)} · $${cell.cost.toFixed(4)}`}
+                  title={`${formatIsoDay(cell.date)} · ${formatProviderCostCredits(cell.cost)}`}
                   className={cn('h-3.5 w-3.5 rounded-sm', heatClass(cell.cost, maxCost))}
                 />
               ))}
             </div>
             <p className="text-[10px] text-muted-foreground mt-1.5">
-              Daily spend across the last {ACTIVITY_SPAN_DAYS} days (UTC).
+              Credits used each day across the last {ACTIVITY_SPAN_DAYS} days (UTC).
             </p>
           </div>
         </>
@@ -409,19 +414,23 @@ export function UsageDashboard() {
   }, [loadCostOverview, loadCostAnalytics]);
 
   const handleAdjustLimit = useCallback(async () => {
-    const parsed = parseFloat(budgetInputValue);
-    if (isNaN(parsed) || parsed < 0) {
-      toast.error('Please enter a valid budget amount');
+    const parsed = Number.parseFloat(budgetInputValue);
+    if (Number.isNaN(parsed) || parsed < 0) {
+      toast.error('Enter a credit amount of 0 or more');
       return;
     }
     setIsAdjustingBudget(true);
     try {
       await setMonthlyBudget(parsed === 0 ? undefined : parsed);
-      toast.success(`Monthly budget set to $${parsed.toFixed(2)}`);
+      toast.success(
+        parsed === 0
+          ? 'Monthly credit limit removed'
+          : `Monthly credit limit set to ${formatProviderCostCredits(providerUsdFromCredits(parsed))}`,
+      );
       setShowBudgetInput(false);
       setBudgetInputValue('');
     } catch {
-      toast.error('Failed to update budget');
+      toast.error('Failed to update the credit limit');
     } finally {
       setIsAdjustingBudget(false);
     }
@@ -451,12 +460,11 @@ export function UsageDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-semibold">Plan usage limits</h3>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Monitor your token, model, and cost usage.
+            Monitor your token, model, and credit usage.
           </p>
         </div>
         <Button
@@ -479,7 +487,6 @@ export function UsageDashboard() {
         <>
           <ActivitySection timeseries={timeseries} models={modelUsage} nowMs={Date.now()} />
 
-          {/* ── Section 1: Session / period usage ── */}
           {hasTokenData && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">
               <div className="flex items-center gap-2">
@@ -491,10 +498,9 @@ export function UsageDashboard() {
                 label="Token budget"
                 sublabel={sessionResetLabel ?? undefined}
                 pct={budgetPct}
-                detail={`${budget.currentUsage.toLocaleString()} / ${budget.limit.toLocaleString()} tokens used · Est. $${budget.estimatedCost.toFixed(4)}`}
+                detail={`${budget.currentUsage.toLocaleString()} / ${budget.limit.toLocaleString()} tokens used · about ${formatProviderCostCredits(budget.estimatedCost)}`}
               />
 
-              {/* Input / output breakdown when available */}
               {(budget.inputTokens > 0 || budget.outputTokens > 0) && (
                 <div className="grid grid-cols-2 gap-3 pt-1">
                   <div className="rounded-md bg-muted/50 p-2.5">
@@ -520,7 +526,6 @@ export function UsageDashboard() {
             </div>
           )}
 
-          {/* ── Section 2: Model limits (per-provider breakdown) ── */}
           {hasModelData && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">
               <div className="flex items-center gap-2">
@@ -551,13 +556,12 @@ export function UsageDashboard() {
             </div>
           )}
 
-          {/* ── Section 3: Cost tracking ── */}
           {hasCostData && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  <h4 className="text-sm font-semibold">Cost tracking</h4>
+                  <h4 className="text-sm font-semibold">Credits used</h4>
                 </div>
                 <button
                   type="button"
@@ -568,36 +572,36 @@ export function UsageDashboard() {
                 </button>
               </div>
 
-              {/* Today + month totals */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-md bg-muted/50 p-2.5">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
                     Today
                   </p>
                   <p className="text-sm font-semibold tabular-nums">
-                    ${(costOverview?.today_total ?? 0).toFixed(4)}
+                    {formatProviderCostCredits(costOverview?.today_total)}
                   </p>
                 </div>
                 <div className="rounded-md bg-muted/50 p-2.5">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-0.5">
                     This month
                   </p>
-                  <p className="text-sm font-semibold tabular-nums">${monthTotal.toFixed(4)}</p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {formatProviderCostCredits(monthTotal)}
+                  </p>
                 </div>
               </div>
 
-              {/* Monthly budget bar, only shown when a budget is configured */}
               {monthlyBudget !== null && monthlyBudget > 0 && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm">${monthTotal.toFixed(2)} spent</span>
+                    <span className="text-sm">{formatProviderCostCredits(monthTotal)} used</span>
                     <span
                       className={cn(
                         'text-xs font-semibold tabular-nums',
                         textColorClass(budgetSpendPct),
                       )}
                     >
-                      {Math.round(budgetSpendPct)}% of ${monthlyBudget.toFixed(2)} limit
+                      {Math.round(budgetSpendPct)}% of {formatProviderCostCredits(monthlyBudget)}
                     </span>
                   </div>
                   <Progress
@@ -610,39 +614,36 @@ export function UsageDashboard() {
                     )}
                   />
                   <p className="text-xs text-muted-foreground">
-                    ${(costOverview?.remaining_budget ?? 0).toFixed(2)} remaining this month
+                    {formatProviderCostCredits(costOverview?.remaining_budget)} left this month
                   </p>
                 </div>
               )}
 
-              {/* Adjust limit input */}
               {showBudgetInput && (
                 <div className="pt-1 space-y-2">
                   <label
                     htmlFor="usage-budget-input"
                     className="text-xs font-medium text-foreground"
                   >
-                    Monthly spend cap (USD)
+                    Monthly credit limit
                   </label>
                   <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
-                        $
-                      </span>
-                      <input
-                        id="usage-budget-input"
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={budgetInputValue}
-                        onChange={(e) => setBudgetInputValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') void handleAdjustLimit();
-                        }}
-                        placeholder={monthlyBudget ? String(monthlyBudget) : '20'}
-                        className="h-8 w-full rounded-md border border-input bg-background pl-6 pr-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      />
-                    </div>
+                    <input
+                      id="usage-budget-input"
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      step="1"
+                      value={budgetInputValue}
+                      onChange={(e) => setBudgetInputValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') void handleAdjustLimit();
+                      }}
+                      placeholder={
+                        monthlyBudget ? String(creditsFromProviderUsd(monthlyBudget)) : undefined
+                      }
+                      className="h-8 flex-1 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
                     <Button
                       size="sm"
                       onClick={() => void handleAdjustLimit()}
