@@ -115,6 +115,7 @@ import { useStore as useZustandStore } from 'zustand';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
+import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
@@ -1009,6 +1010,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? freeTrialModelId
       : validatedSelectedModelId;
   const localModelSelection = useLocalModelSelection((state) => state.selected);
+  const { runExplicitMemoryCommand, memoryCommandDialog } = useExplicitMemoryCommands();
   const activeModelId = localModelSelection?.id ?? cloudModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
@@ -2009,6 +2011,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             useChatStore.getState().pendingTemporaryChat,
             useSettingsStore.getState().newChatsTemporary,
           ) || localModelSelection !== null;
+        const conversationIsTemporary = existingConvId
+          ? useChatStore.getState().conversations.find((c) => c.id === existingConvId)
+              ?.isTemporary === true
+          : temporaryIntent;
+        if (!conversationIsTemporary && localModelSelection === null) {
+          runExplicitMemoryCommand(content, {
+            conversationId: existingConvId || null,
+            projectId: sendProjectId ?? null,
+          });
+        }
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -2167,6 +2179,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       claimSendWindow,
       failAttachmentUploadAttempt,
       updateAttachmentUploadStatus,
+      runExplicitMemoryCommand,
     ],
   );
 
@@ -5368,6 +5381,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}
       {destructiveConfirmDialog}
+      {memoryCommandDialog}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
