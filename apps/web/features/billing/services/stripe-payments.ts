@@ -19,20 +19,42 @@ function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): n
   return seats;
 }
 
+export interface CheckoutTrialTerms {
+  days: number;
+  convertsAt: string;
+  amountCents: number;
+}
+
 export class CheckoutRequiredError extends Error {
   readonly amountDueNowCents: number | null;
   readonly currency: string | null;
+  readonly trial: CheckoutTrialTerms | null;
 
   constructor(
     message: string,
     amountDueNowCents: number | null = null,
     currency: string | null = null,
+    trial: CheckoutTrialTerms | null = null,
   ) {
     super(message);
     this.name = 'CheckoutRequiredError';
     this.amountDueNowCents = amountDueNowCents;
     this.currency = currency;
+    this.trial = trial;
   }
+}
+
+function parseCheckoutTrial(
+  value: unknown,
+  recurringAmountCents: unknown,
+): CheckoutTrialTerms | null {
+  if (!value || typeof value !== 'object' || typeof recurringAmountCents !== 'number') return null;
+  const raw = value as Record<string, unknown>;
+  const days = raw['days'];
+  const convertsAt = raw['convertsAt'];
+  if (typeof days !== 'number' || !Number.isInteger(days) || days <= 0) return null;
+  if (typeof convertsAt !== 'string' || Number.isNaN(Date.parse(convertsAt))) return null;
+  return { days, convertsAt, amountCents: recurringAmountCents };
 }
 
 export interface SavedPaymentMethod {
@@ -392,6 +414,8 @@ export async function previewUpgrade(data: {
     checkout?: {
       amountDueNowCents?: unknown;
       currency?: unknown;
+      recurringAmountCents?: unknown;
+      trial?: unknown;
     };
   };
 
@@ -403,6 +427,7 @@ export async function previewUpgrade(data: {
         extractErrorMessage(result, 'Start a new checkout to continue.'),
         typeof checkoutAmount === 'number' ? checkoutAmount : null,
         typeof checkoutCurrency === 'string' ? checkoutCurrency : null,
+        parseCheckoutTrial(result.checkout?.trial, result.checkout?.recurringAmountCents),
       );
     }
     throw new Error(extractErrorMessage(result, `Could not preview the ${data.plan} upgrade`));
