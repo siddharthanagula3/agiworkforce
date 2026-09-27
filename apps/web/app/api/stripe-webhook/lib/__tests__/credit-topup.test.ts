@@ -100,7 +100,7 @@ describe('credit top-up settlement', () => {
       5_000_000,
       'Credit top-up purchase cs_topup_123',
       'purchase',
-      JSON.stringify({ charged_cents: 2_000 }),
+      JSON.stringify({ charged_cents: 2_000, charged_currency: 'usd' }),
     ]);
   });
 
@@ -122,6 +122,7 @@ describe('credit top-up settlement', () => {
       purchase_country: 'JP',
       purchase_expires_at: '2027-03-27T12:00:00.000Z',
       charged_cents: 2_000,
+      charged_currency: 'usd',
     });
   });
 

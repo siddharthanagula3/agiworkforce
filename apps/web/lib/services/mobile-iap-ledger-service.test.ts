@@ -109,7 +109,7 @@ describe('verified mobile IAP ledger', () => {
         500 * MICROUSD_PER_CREDIT,
         'Mobile ios top-up transaction-1',
         'purchase',
-        JSON.stringify({ charged_cents: 1_000 }),
+        JSON.stringify({ charged_cents: 1_000, charged_currency: 'usd' }),
       ],
     );
   });
@@ -130,6 +130,7 @@ describe('verified mobile IAP ledger', () => {
       purchase_country: 'JP',
       purchase_expires_at: '2027-02-01T00:00:00.000Z',
       charged_cents: 1_000,
+      charged_currency: 'usd',
     });
   });
 

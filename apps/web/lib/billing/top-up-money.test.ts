@@ -216,7 +216,10 @@ describe('a purchased top-up grants exactly what was paid for', () => {
 
     expect(quoted).toMatchObject({ discountPercent: 30, priceCents: 70_000, credits: 50_000 });
     expect(grants[0]!.microusd).toBe(50_000 * MICROUSD_PER_CREDIT);
-    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({ charged_cents: 70_000 });
+    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({
+      charged_cents: 70_000,
+      charged_currency: 'usd',
+    });
   });
 
   it('records the list price paid for a checkout sold under the first conversion', async () => {

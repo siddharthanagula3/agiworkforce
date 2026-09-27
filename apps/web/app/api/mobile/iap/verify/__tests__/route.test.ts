@@ -143,7 +143,7 @@ describe('POST /api/mobile/iap/verify', () => {
         2_500_000,
         'Mobile android top-up store-transaction-1',
         'purchase',
-        JSON.stringify({ charged_cents: 1_000 }),
+        JSON.stringify({ charged_cents: 1_000, charged_currency: 'usd' }),
       ],
     );
   });
