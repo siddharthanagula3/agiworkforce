@@ -39,8 +39,8 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Personal skills (user_skills) need AGI_USER_SKILL_AUTHORING=1, which defaults to 0; the only unflagged route is wrapping skills in a self-authored plugin. | flag-off |
-| desktop | partial | Personal skills (user_skills) need AGI_USER_SKILL_AUTHORING=1, which defaults to 0; the only unflagged route is wrapping skills in a self-authored plugin. | flag-off |
+| web | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
+| desktop | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
 | mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
 | vscode | partial | VS Code shows the CLI's personal skills read-only; it cannot add one. | ui |
 | chrome | missing | Not built on this surface. |  |
