@@ -30,6 +30,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
+import { maybeTriggerAutoReload } from '@/lib/services/auto-reload-service';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -422,25 +423,14 @@ function reservationError(decision: string): ManagedUsageRequestError {
   }
 }
 
-/** Headroom is the lesser of what is left and what was purchased, never more. */
 async function resolveOverageHeadroomMicrousd(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<number> {
   try {
     const rows = await db.query<{ headroom_microusd: number | string | null }>(
-      `select greatest(
-                least(
-                  credits.credits_allocated_microusd - credits.credits_used_microusd,
-                  credits.top_up_allocated_microusd
-                ), 0) as headroom_microusd
-         from public.token_credits credits
-         join public.subscriptions subscription on subscription.user_id = credits.user_id
-        where credits.user_id = $1
-          and credits.period_end > now()
-          and subscription.overage_enabled
-        order by credits.period_end desc
-        limit 1`,
+      `select balances.overage_headroom_microusd as headroom_microusd
+         from public.prepaid_credit_balances_microusd($1::text) balances`,
       [userId],
     );
     const value = Number(rows[0]?.headroom_microusd ?? 0);
@@ -564,11 +554,15 @@ export async function reserveManagedUsageProviderStep(
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(input.planTier);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(input.planTier);
   const reservation = input.reservation;
+  const topUpHeadroomMicrousd = await resolveOverageHeadroomMicrousd(
+    reservation.db,
+    reservation.userId,
+  );
   const row = await queryOne(
     reservation.db,
     `select * from public.extend_managed_usage_request_provider_step_microusd(
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-      $7::bigint, $8::bigint, $9::bigint, $10::boolean
+      $7::bigint, $8::bigint, $9::bigint, $10::boolean, $11::bigint
     )`,
     [
       reservation.userId,
@@ -581,6 +575,7 @@ export async function reserveManagedUsageProviderStep(
       weeklyCapMicrousd,
       flagshipWeeklyCapMicrousd,
       input.isFlagship,
+      topUpHeadroomMicrousd,
     ],
   );
 
@@ -856,6 +851,10 @@ export async function finalizeManagedUsageRequest(
       usage,
       ...attribution,
     });
+  }
+
+  if (operationResult === 'finalized' && settledCostMicrousd > 0) {
+    maybeTriggerAutoReload(input.userId);
   }
 
   return {

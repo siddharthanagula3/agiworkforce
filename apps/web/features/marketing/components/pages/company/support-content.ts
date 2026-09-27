@@ -1,4 +1,14 @@
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
+
+const INDIVIDUAL_PLAN_LABELS = new Intl.ListFormat('en', {
+  style: 'long',
+  type: 'conjunction',
+}).format(
+  (['free', 'basic', 'pro', 'max', 'max_15x'] as const).map(
+    (plan) => BILLING_PLAN_PRICING[plan].label,
+  ),
+);
 
 export const SUPPORT_ROWS: readonly { label: string; value: string }[] = [
   {
@@ -6,7 +16,7 @@ export const SUPPORT_ROWS: readonly { label: string; value: string }[] = [
     value: `Help centre and email ${CONTACT_EMAIL}. No response-time commitment.`,
   },
   {
-    label: 'Free, Basic, Pro, and Max (5x and 15x)',
+    label: INDIVIDUAL_PLAN_LABELS,
     value: `Help centre and email ${CONTACT_EMAIL}. No response-time commitment.`,
   },
   {

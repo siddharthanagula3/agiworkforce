@@ -88,6 +88,14 @@ pub enum LlmError {
         required_tier: String,
         reason: String,
     },
+    #[error("[{provider}] {message}")]
+    UsageLimit {
+        provider: String,
+        code: String,
+        message: String,
+        recovery_href: Option<String>,
+        retry_after: Option<u64>,
+    },
     /// The stream produced no data within the idle window.
     ///
     /// The Display text intentionally reproduces the CLI's historical message
@@ -111,6 +119,7 @@ impl LlmError {
             LlmError::Network { .. } => "network",
             LlmError::ContextOverflow { .. } => "context_overflow",
             LlmError::Paywall { .. } => "paywall",
+            LlmError::UsageLimit { .. } => "usage_limit",
             LlmError::IdleTimeout { .. } => "idle_timeout",
             LlmError::Read { .. } => "read",
             LlmError::StreamError { .. } => "stream_error",
@@ -134,6 +143,7 @@ impl LlmError {
     pub fn retry_after(&self) -> Option<u64> {
         match self {
             LlmError::RateLimited { retry_after, .. } => *retry_after,
+            LlmError::UsageLimit { retry_after, .. } => *retry_after,
             LlmError::StreamError { detail, .. } => detail.retry_after,
             _ => None,
         }
@@ -195,6 +205,52 @@ pub fn parse_paywall_body(body: &str) -> Option<PaywallNotice> {
         feature,
         required_tier,
         reason,
+    })
+}
+
+pub const MANAGED_USAGE_LIMIT_CODES: [&str; 10] = [
+    "free_trial_token_budget_reached",
+    "free_trial_model_only",
+    "free_trial_feature_unavailable",
+    "plan_upgrade_required",
+    "rolling_five_hour_limit_reached",
+    "rolling_weekly_limit_reached",
+    "flagship_weekly_limit_reached",
+    "insufficient_credits",
+    "monthly_limit_exceeded",
+    "monthly_credit_limit_reached",
+];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsageLimitNotice {
+    pub code: String,
+    pub message: String,
+    pub recovery_href: Option<String>,
+}
+
+pub fn parse_usage_limit_body(body: &str) -> Option<UsageLimitNotice> {
+    let v: serde_json::Value = serde_json::from_str(body.trim()).ok()?;
+    let error = v.get("error")?;
+    let code = error.get("code")?.as_str()?.trim().to_ascii_lowercase();
+    if !MANAGED_USAGE_LIMIT_CODES.contains(&code.as_str()) {
+        return None;
+    }
+    let message = error
+        .get("message")
+        .and_then(|m| m.as_str())
+        .map(str::trim)
+        .filter(|m| !m.is_empty())
+        .unwrap_or("Usage limit reached.")
+        .to_string();
+    let recovery_href = error
+        .pointer("/recovery/href")
+        .and_then(|h| h.as_str())
+        .filter(|h| h.starts_with('/') && !h.starts_with("//"))
+        .map(str::to_string);
+    Some(UsageLimitNotice {
+        code,
+        message,
+        recovery_href,
     })
 }
 
@@ -300,6 +356,18 @@ pub fn classify_error_response(
     retry_after: Option<&str>,
     body: &str,
 ) -> LlmError {
+    if matches!(status, 402 | 429)
+        && let Some(limit) = parse_usage_limit_body(body)
+    {
+        return LlmError::UsageLimit {
+            provider: provider.to_string(),
+            code: limit.code,
+            message: limit.message,
+            recovery_href: limit.recovery_href,
+            retry_after: retry_after.and_then(|s| s.trim().parse::<u64>().ok()),
+        };
+    }
+
     if looks_like_context_overflow(body) {
         return LlmError::ContextOverflow {
             model: model.to_string(),

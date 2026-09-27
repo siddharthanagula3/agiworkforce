@@ -45,8 +45,20 @@ export const CheckoutRequestSchema = z
     }
   });
 
+export const PromotionCodeSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9]+$/, 'Promotion codes use letters and numbers only');
+
+export const UpgradePreviewRequestSchema = CheckoutRequestSchema.safeExtend({
+  promotionCode: PromotionCodeSchema.optional(),
+});
+
 export const UpgradeApplyRequestSchema = CheckoutRequestSchema.safeExtend({
   previewToken: z.string().min(1).max(4096),
+  promotionCode: PromotionCodeSchema.optional(),
 });
 
 export function resolveCheckoutQuantity(request: {
@@ -58,6 +70,7 @@ export function resolveCheckoutQuantity(request: {
 }
 
 export type CheckoutRequest = z.infer<typeof CheckoutRequestSchema>;
+export type UpgradePreviewRequest = z.infer<typeof UpgradePreviewRequestSchema>;
 export type UpgradeApplyRequest = z.infer<typeof UpgradeApplyRequestSchema>;
 export type PlanTier = z.infer<typeof PlanTierSchema>;
 export type BillingInterval = z.infer<typeof BillingIntervalSchema>;

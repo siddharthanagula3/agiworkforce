@@ -213,6 +213,9 @@ const referralMadeExportSchema = z.object({
   reward_type: z.string().nullable(),
   reward_amount: nullableNumericSchema,
   reward_issued_at: nullableTimestampSchema,
+  hold_until: nullableTimestampSchema,
+  clawed_back_at: nullableTimestampSchema,
+  blocked_reason: z.string().nullable(),
   created_at: timestampSchema,
 });
 
@@ -220,6 +223,23 @@ const referralReceivedExportSchema = z.object({
   id: z.string(),
   referral_code: z.string(),
   status: z.string(),
+  clawed_back_at: nullableTimestampSchema,
+  blocked_reason: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const referralCodeExportSchema = z.object({
+  code: z.string(),
+  created_at: timestampSchema,
+});
+
+const bonusCreditGrantExportSchema = z.object({
+  id: z.string(),
+  source: z.string(),
+  credits_granted: numericSchema,
+  credits_remaining: numericSchema,
+  expires_at: timestampSchema,
+  revoked_at: nullableTimestampSchema,
   created_at: timestampSchema,
 });
 
@@ -1242,7 +1262,7 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     section: 'referrals_made',
     table: 'referrals',
     sql: `select id, referral_code, referred_email, status, reward_type, reward_amount,
-                 reward_issued_at, created_at
+                 reward_issued_at, hold_until, clawed_back_at, blocked_reason, created_at
           from referrals
           where referrer_id = $1
           order by created_at asc`,
@@ -1251,11 +1271,28 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   {
     section: 'referral_received',
     table: 'referrals',
-    sql: `select id, referral_code, status, created_at
+    sql: `select id, referral_code, status, clawed_back_at, blocked_reason, created_at
           from referrals
           where referred_user_id = $1
           order by created_at asc`,
     schema: referralReceivedExportSchema,
+  },
+  {
+    section: 'referral_code',
+    table: 'referral_codes',
+    sql: `select code, created_at
+          from referral_codes
+          where user_id = $1`,
+    schema: referralCodeExportSchema,
+  },
+  {
+    section: 'bonus_credit_grants',
+    table: 'bonus_credit_grants',
+    sql: `select id, source, credits_granted, credits_remaining, expires_at, revoked_at, created_at
+          from bonus_credit_grants
+          where user_id = $1
+          order by created_at asc`,
+    schema: bonusCreditGrantExportSchema,
   },
   {
     section: 'cloud_waitlist',
