@@ -874,6 +874,7 @@ export type ProcessedRequest = {
    * unattended run has nobody to ask, so the gate's choice is allow or deny.
    */
   sensitiveContextPresent?: boolean;
+  untrustedContextPresent?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
@@ -4763,6 +4764,9 @@ export async function processRequest(
     autoMemoryFacts,
     autoMemoryFactsRequireToolFreeTurn,
     ...(autoMemorySourceText ? { autoMemorySourceText } : {}),
+    ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context')
+      ? { untrustedContextPresent: true }
+      : {}),
     requestedModel,
     provider,
     estimatedCostMicrousd,

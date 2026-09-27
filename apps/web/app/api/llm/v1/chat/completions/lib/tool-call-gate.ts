@@ -163,7 +163,7 @@ export function batchIntroducesUntrustedContent(
   );
 }
 
-// The U leg: raised only by a tool call already in the transcript, never by pasted content.
+// The U leg's tool half: a call already in the transcript that returned third-party content.
 export function untrustedToolContentInContext(priorToolCallNames: readonly string[]): boolean {
   return priorToolCallNames.some((name) => toolAcceptsUntrustedContent(name));
 }
