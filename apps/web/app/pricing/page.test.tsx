@@ -52,14 +52,16 @@ vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
-      if (key === 'seatCadenceMonthly') {
-        return `${String(values?.['count'])} seats · billed monthly`;
+      if (key === 'seatTotal') {
+        return `${String(values?.['count'])} seats · ${String(values?.['total'])}/mo`;
       }
-      if (key === 'seatCadenceAnnual') {
-        return `${String(values?.['count'])} seats · billed annually`;
+      if (key === 'seatTotalAnnual') {
+        return `${String(values?.['count'])} seats · ${String(values?.['total'])}/yr`;
       }
       if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
-      if (key === 'perSeatPriceAnnual') return `${String(values?.['price'])}/seat/mo`;
+      if (key === 'compareTeamPriceYearly') {
+        return `${String(values?.['yearly'])}/seat/mo billed yearly, ${String(values?.['monthly'])} billed monthly`;
+      }
       return key;
     },
   }),
@@ -145,6 +147,49 @@ async function showMax20x() {
   fireEvent.click(within(selector).getByRole('button', { name: 'Max 20x' }));
 }
 
+const TEAM_BOTH_CADENCES = {
+  monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
+  yearly: { amountMinor: 24_000, currency: 'usd', localized: false, checkoutReady: true },
+};
+
+function mockPricingFetch(
+  team: Record<string, unknown>,
+  subscription?: { plan: string; interval: 'monthly' | 'yearly' },
+) {
+  vi.mocked(global.fetch).mockImplementation(async (input) => {
+    const url = String(input);
+    if (url.includes('/api/pricing/localized')) {
+      return {
+        ok: true,
+        json: async () => ({
+          country: 'US',
+          requestedCurrency: 'usd',
+          plans: { basic: {}, pro: {}, max: {}, max_15x: {}, team },
+        }),
+      } as Response;
+    }
+    if (url.includes('/api/billing/downgrade-preview') && subscription) {
+      return {
+        ok: true,
+        json: async () => ({
+          plan: subscription.plan,
+          status: 'active',
+          price: { amountCents: 2_500, currency: 'usd', interval: subscription.interval },
+          periodEnd: '2027-01-01T00:00:00.000Z',
+          trialStart: null,
+          trialEnd: null,
+          cancelAt: null,
+          scheduledChange: null,
+          downgradeTargets: [],
+          downgradeBlock: null,
+          cadenceSwitch: null,
+        }),
+      } as Response;
+    }
+    return new Promise<Response>(() => undefined);
+  });
+}
+
 describe('PricingPage', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -221,24 +266,25 @@ describe('PricingPage', () => {
     );
   });
 
-  it('makes the prominent Team total track the canonical per-seat price at multiple quantities', async () => {
+  it('leads the Team card with the per-seat price and totals the chosen seats beside the picker', async () => {
     render(<PricingPage />);
     await showTeamAndEnterprise();
 
     const teamCard = screen.getByRole('heading', { name: 'Team' }).closest('article');
     expect(teamCard).not.toBeNull();
     const card = within(teamCard!);
-    expect(card.getByText('$50')).toBeVisible();
-    expect(card.getByText('2 seats · billed monthly')).toBeVisible();
-    expect(card.getByText('$25/seat/mo')).toBeVisible();
+    expect(card.getByText('$25')).toBeVisible();
+    expect(card.getByText('perSeatPricingSub')).toBeVisible();
+    expect(card.getByText('billedMonthly')).toBeVisible();
+    expect(card.getByText('2 seats · $50/mo')).toBeVisible();
 
     fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
       target: { value: '7' },
     });
 
-    expect(card.getByText('$175')).toBeVisible();
-    expect(card.getByText('7 seats · billed monthly')).toBeVisible();
-    expect(card.getByText('$25/seat/mo')).toBeVisible();
+    expect(card.getByText('$25')).toBeVisible();
+    expect(card.getByText('7 seats · $175/mo')).toBeVisible();
+    expect(card.queryByText('$175')).toBeNull();
   });
 
   it('prefills Team seat management from the licensed-seat link state', async () => {
@@ -247,7 +293,7 @@ describe('PricingPage', () => {
     render(<PricingPage />);
 
     expect(await screen.findByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(5);
-    expect(screen.getByText('$125')).toBeVisible();
+    expect(screen.getByText('5 seats · $125/mo')).toBeVisible();
   });
 
   it('preserves the chosen Team seat count after waitlist-code access', async () => {
@@ -280,8 +326,7 @@ describe('PricingPage', () => {
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '14' } });
 
-    expect(screen.getByText('$280')).toBeVisible();
-    expect(screen.getByText('14 seats · billed monthly')).toBeVisible();
+    expect(await screen.findByText('14 seats · $280/mo')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
@@ -306,40 +351,26 @@ describe('PricingPage', () => {
     );
   });
 
-  it('preserves Team yearly cadence after waitlist-code access', async () => {
+  it('opens Team on yearly billing, priced per seat per month, and keeps that cadence after waitlist-code access', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
-    vi.mocked(global.fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        country: 'US',
-        requestedCurrency: 'usd',
-        plans: {
-          basic: {},
-          pro: {},
-          max: {},
-          max_15x: {},
-          team: {
-            monthly: { amountMinor: 2_500, currency: 'usd', localized: false, checkoutReady: true },
-            yearly: { amountMinor: 24_000, currency: 'usd', localized: false, checkoutReady: true },
-          },
-        },
-      }),
-    } as Response);
+    mockPricingFetch(TEAM_BOTH_CADENCES);
 
     render(<PricingPage />);
 
-    // Team is the only plan sold yearly, so its card carries the only cadence
-    // toggle on the page.
     await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
-    fireEvent.click(within(teamCadence).getByRole('button', { name: /annual/i }));
+    expect(within(teamCadence).getByRole('button', { name: /annual/i })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
 
-    expect(screen.getByText('$480')).toBeVisible();
-    expect(screen.getByText('2 seats · billed annually')).toBeVisible();
-    // The annual seat price is shown per month so the cadence toggle compares
-    // like with like against $25/seat/mo; the charge is still $240 a year,
-    // which the cadence line states.
-    expect(screen.getByText('$20/seat/mo')).toBeVisible();
+    const card = within(screen.getByRole('heading', { name: 'Team' }).closest('article')!);
+    expect(card.getByText('$20')).toBeVisible();
+    expect(card.getByText('perSeatPricingSub')).toBeVisible();
+    expect(card.getByText('billedYearly')).toBeVisible();
+    expect(card.getByText('2 seats · $480/yr')).toBeVisible();
+    expect(card.queryByText('$240')).toBeNull();
+    expect(card.queryByText('$480')).toBeNull();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
@@ -355,6 +386,72 @@ describe('PricingPage', () => {
       }),
     );
   });
+
+  it('shows the monthly seat price billed monthly once Team is switched to monthly', async () => {
+    testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+    mockPricingFetch(TEAM_BOTH_CADENCES);
+
+    render(<PricingPage />);
+
+    await showTeamAndEnterprise();
+    const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
+    fireEvent.click(within(teamCadence).getByRole('button', { name: 'monthly' }));
+
+    const card = within(screen.getByRole('heading', { name: 'Team' }).closest('article')!);
+    expect(card.getByText('$25')).toBeVisible();
+    expect(card.getByText('perSeatPricingSub')).toBeVisible();
+    expect(card.getByText('billedMonthly')).toBeVisible();
+    expect(card.getByText('2 seats · $50/mo')).toBeVisible();
+
+    const teamCta = screen.getByRole('button', { name: 'teamCta' });
+    await waitFor(() => expect(teamCta).toBeEnabled());
+    fireEvent.click(teamCta);
+    fireEvent.click(await screen.findByRole('button', { name: 'Continue with code' }));
+
+    await waitFor(() =>
+      expect(stripeMocks.upgradeToTeamPlan).toHaveBeenCalledWith({ seats: MIN_PURCHASABLE_SEATS }),
+    );
+  });
+
+  it.each([
+    ['pro', 'monthly', 'false'],
+    ['team', 'yearly', 'true'],
+  ] as const)(
+    'opens Team on the %s subscriber’s own %s cadence, which a mid-cycle change must keep',
+    async (plan, interval, annualPressed) => {
+      testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+      testState.billing = { plan, status: 'active' };
+      testState.account.subscription = {
+        tier: plan,
+        status: 'active',
+        subscription_source: 'stripe',
+      };
+      mockPricingFetch(TEAM_BOTH_CADENCES, { plan, interval });
+
+      render(<PricingPage />);
+
+      await showTeamAndEnterprise();
+      const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
+      await waitFor(() =>
+        expect(within(teamCadence).getByRole('button', { name: /annual/i })).toHaveAttribute(
+          'aria-pressed',
+          annualPressed,
+        ),
+      );
+    },
+  );
+
+  it('prices the Team comparison row at both cadences when yearly Team is sold', async () => {
+    mockPricingFetch(TEAM_BOTH_CADENCES);
+
+    render(<PricingPage />);
+
+    const row = await screen.findByRole('row', { name: /^Team / });
+    await waitFor(() =>
+      expect(row).toHaveTextContent('$20/seat/mo billed yearly, $25 billed monthly'),
+    );
+    expect(row).toHaveTextContent('compareTeamBillingYearly');
+  }, 30_000);
 
   it('does not offer a Team yearly cadence when the yearly Price is not checkout-ready (fail-closed)', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
@@ -791,7 +888,7 @@ describe('PricingPage', () => {
     expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£17/mo');
     expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('£18/seat/mo');
     expect(screen.getAllByText('£18/seat/mo').length).toBeGreaterThan(0);
-  });
+  }, 30_000);
 
   it('does not render the obsolete managed-cloud access waitlist before an upgrade choice', () => {
     render(<PricingPage />);
