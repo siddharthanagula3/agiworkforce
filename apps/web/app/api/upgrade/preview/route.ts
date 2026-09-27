@@ -24,18 +24,16 @@ import {
 } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 import {
+  promotionDiscountCents,
   resolveStripeSubscriptionForUpgrade,
+  resolveUpgradePromotion,
+  upgradeDiscounts,
   type ResolvedUpgradeSubscription,
+  type UpgradePromotion,
 } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import { resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
 import { referralTrialDays } from '@/lib/services/referral-service';
-import {
-  promotionDiscountCents,
-  resolveUpgradePromotion,
-  upgradeDiscounts,
-  type UpgradePromotion,
-} from '@/lib/server/stripe-upgrade-promotion';
 import {
   assertSameCheckoutBillingInterval,
   classifyPlanChange,
