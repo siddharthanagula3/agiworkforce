@@ -1,4 +1,7 @@
 import type Stripe from 'stripe';
+import { getPlanTrialDays } from '@agiworkforce/types';
+import { logger } from '@/lib/logger';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
 
 export interface TrialEligibilityInput {
   trialDays: number | null;
@@ -28,4 +31,48 @@ export function buildCheckoutTrialParams(trialDays: number | null): {
       trial_settings: { end_behavior: { missing_payment_method: 'cancel' } },
     },
   };
+}
+
+export async function customerHasSubscriptionHistory(
+  stripe: Stripe,
+  customerId: string,
+  userId: string,
+): Promise<boolean | null> {
+  try {
+    const page = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
+    return page.data.length > 0;
+  } catch (error) {
+    logger.warn(
+      { error, userId, customerId },
+      'Trial eligibility could not be verified; checkout continues without a trial',
+    );
+    return null;
+  }
+}
+
+export async function resolveTrialDaysForCheckout(input: {
+  stripe: Stripe;
+  plan: string;
+  userId: string;
+  stripeCustomerId: string | null;
+  referralTrialDays: number | null;
+  existingSubscription: Pick<
+    SubscriptionRow,
+    'stripe_subscription_id' | 'apple_original_transaction_id' | 'google_purchase_token'
+  > | null;
+}): Promise<number | null> {
+  const trialDays = getPlanTrialDays(input.plan) ?? input.referralTrialDays;
+  if (trialDays === null) return null;
+  const existing = input.existingSubscription;
+  return resolveCheckoutTrialDays({
+    trialDays,
+    priorStoreOrStripeSubscription: Boolean(
+      existing?.stripe_subscription_id ||
+      existing?.apple_original_transaction_id ||
+      existing?.google_purchase_token,
+    ),
+    customerHasSubscriptionHistory: input.stripeCustomerId
+      ? await customerHasSubscriptionHistory(input.stripe, input.stripeCustomerId, input.userId)
+      : false,
+  });
 }
