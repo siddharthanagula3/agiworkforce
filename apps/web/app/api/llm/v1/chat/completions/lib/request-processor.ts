@@ -164,6 +164,7 @@ import {
   estimateTokens,
   isCredentialUnfunded,
   isRoutePolicyExcluded,
+  MODEL_POLICY_UNAVAILABLE,
   observedRouteHealthFromSnapshots,
   planResponseBudget,
   buildRoutingDecisionTrace,
@@ -905,7 +906,7 @@ export type ProcessedRequest = {
    * passed nothing, leaving that enforcement permanently ungoverned.
    *
    * `null` means UNGOVERNED, matching the evaluator's contract: personal
-   * scope, no policy row, or a read that deliberately failed open.
+   * scope or no policy row.
    */
   modelPolicy?: ModelAccessPolicy | null;
   zeroDataRetentionOnly?: boolean;
@@ -1634,28 +1635,22 @@ function candidateRouteIdsForSelection(selection: string): readonly string[] {
  * `rankRoutes` can deprioritize a route in cooldown instead of treating an
  * absent `routeHealthSnapshots` entry as the only signal it has.
  */
-/**
- * The workspace model policy, read once per request, before routing.
- *
- * Fails OPEN on every uncertainty, personal scope, no policy row, or an
- * unreachable table: model governance is a deployment control over which
- * approved tool staff use, not a containment barrier, and turning a database
- * fault into a denial would stop every member's chat. The tenancy layer is what
- * stops cross-workspace access, and it fails closed.
- */
+type WorkspaceModelPolicyRead =
+  { readable: true; policy: ModelAccessPolicy | null } | { readable: false };
+
 async function readWorkspaceModelPolicy(
   scoped: { db: Parameters<typeof readModelPolicy>[0]; organizationId: string | null },
   requestId: string,
-): Promise<ModelAccessPolicy | null> {
-  if (!scoped.organizationId) return null;
+): Promise<WorkspaceModelPolicyRead> {
+  if (!scoped.organizationId) return { readable: true, policy: null };
   try {
-    return await readModelPolicy(scoped.db, scoped.organizationId);
+    return { readable: true, policy: await readModelPolicy(scoped.db, scoped.organizationId) };
   } catch (error) {
     logger.error(
       { error, requestId, organizationId: scoped.organizationId },
-      '[model-policy] policy read failed; this request is ungoverned',
+      '[model-policy] policy read failed; request refused',
     );
-    return null;
+    return { readable: false };
   }
 }
 
@@ -2118,7 +2113,7 @@ function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse 
         code: decision.code,
       },
     },
-    { status: 403 },
+    { status: decision.code === MODEL_POLICY_UNAVAILABLE.code ? 503 : 403 },
   );
 }
 
@@ -3267,7 +3262,7 @@ export async function processRequest(
     baseRouteHealthState,
     routeAffinity,
     zeroDataRetentionPolicy,
-    workspaceModelPolicy,
+    workspaceModelPolicyRead,
     userRoutingPreferences,
     rolloutInputs,
     workspaceRegion,
@@ -3306,6 +3301,10 @@ export async function processRequest(
       ),
     ]),
   );
+  if (!workspaceModelPolicyRead.readable) {
+    return { ok: false, response: modelPolicyDenialResponse(MODEL_POLICY_UNAVAILABLE) };
+  }
+  const workspaceModelPolicy = workspaceModelPolicyRead.policy;
   const availableProviderIds = listAvailableManagedProviderIds();
   const { required: zeroDataRetentionOnly } = zeroDataRetentionPolicy;
   const zeroDataRetentionProviders = resolveZeroDataRetentionProviderOverrides();
