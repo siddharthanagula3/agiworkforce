@@ -22,7 +22,13 @@ import {
   Spinner,
 } from '@agiworkforce/ui';
 import type { CloudCodeSession, CloudCodeTerminalEntry } from '@agiworkforce/types';
-import { CODE_COPY, CODE_LIMITS, changeStateLabel, repositoryLabel } from '../code-surface';
+import {
+  CODE_COPY,
+  CODE_LIMITS,
+  changeStateLabel,
+  continueInVsCodeHref,
+  repositoryLabel,
+} from '../code-surface';
 import { diffByPath, diffLineKind } from '../code-diff';
 import type { CloudCodeChanges } from '../services/cloud-code-api';
 import styles from '../CloudCodePage.module.css';
@@ -133,6 +139,7 @@ export function CodeChangesPanel({
 
   const ready = session.state === 'ready';
   const hasRepository = Boolean(session.repositoryUrl);
+  const vsCodeHref = hasRepository ? continueInVsCodeHref(session) : null;
   const workingBranch = changes?.workingBranch ?? session.workingBranch;
   const base = session.baseBranch ?? changes?.base ?? session.repositoryBranch;
   const closedOrArchived = session.state === 'closed' || session.archivedAt !== null;
@@ -330,6 +337,16 @@ export function CodeChangesPanel({
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {vsCodeHref && (
+          <div className={styles['pullRequestBlock']}>
+            <a className={styles['secondaryButton']} href={vsCodeHref}>
+              <ArrowRight size={GLYPH_SIZE} aria-hidden="true" />
+              <span>{CODE_COPY.continueInVsCode}</span>
+            </a>
+            <span className={styles['formHelp']}>{CODE_COPY.continueInVsCodeHelp}</span>
           </div>
         )}
 

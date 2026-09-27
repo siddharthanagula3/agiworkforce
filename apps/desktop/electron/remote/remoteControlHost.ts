@@ -20,6 +20,8 @@ import {
 const MAX_TOKEN_LENGTH = 16_384;
 const MAX_ID_LENGTH = 128;
 const HEARTBEAT_INTERVAL_MS = 25_000;
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 30_000;
 
 export type RemoteSocketFactory = (wsUrl: string) => WebSocket;
 
@@ -81,6 +83,10 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   let pairingSecret: string | null = null;
   let dispatch: DispatchSession | null = null;
   let generation = 0;
+  let active: RemoteControlStartRequest | null = null;
+  let registered = false;
+  let reconnectAttempts = 0;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   const receipts = createControlReceiptLedger();
   let queue: Promise<void> = Promise.resolve();
 
@@ -188,6 +194,11 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
   function onEvent(event: SignalingEvent, eventGeneration: number): void {
     if (eventGeneration !== generation) return;
     switch (event.type) {
+      case 'registered':
+        registered = true;
+        reconnectAttempts = 0;
+        if (state.status === 'reconnecting') publish({ status: 'waiting', error: null });
+        return;
       case 'peer_ready':
         onPeerReady(event.metadata ?? null);
         return;
@@ -214,10 +225,15 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
           end('This pairing has ended. Pair again to reconnect your phone.');
           return;
         }
+        if (registered) return;
         if (state.status !== 'connected')
           publish({ status: 'error', error: 'The relay connection failed.' });
         return;
       case 'close':
+        if (registered) {
+          reconnect();
+          return;
+        }
         end('The connection to the relay closed. Pair again to reconnect your phone.');
         return;
       default:
@@ -230,11 +246,27 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     publish({ status: 'error', error });
   }
 
+  function reconnect(): void {
+    generation += 1;
+    client = null;
+    dispatch = null;
+    publish({ status: 'reconnecting', phoneName: null, attachedSessions: 0, error: null });
+    const delay = Math.min(
+      RECONNECT_BASE_DELAY_MS * 2 ** reconnectAttempts,
+      RECONNECT_MAX_DELAY_MS,
+    );
+    reconnectAttempts += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (active) connect(active);
+    }, delay);
+  }
+
   function start(args: Record<string, unknown>): RemoteControlState {
     const request = parseStartRequest(args);
     stop();
-    const eventGeneration = ++generation;
     pairingSecret = generatePairingSecret();
+    active = request;
     publish({
       status: 'waiting',
       pairingCode: request.code,
@@ -244,6 +276,12 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       attachedSessions: 0,
       error: null,
     });
+    connect(request);
+    return state;
+  }
+
+  function connect(request: RemoteControlStartRequest): void {
+    const eventGeneration = ++generation;
     const clientOptions = {
       wsUrl: request.wsUrl,
       code: request.code,
@@ -263,11 +301,15 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
     client = options.createClient
       ? options.createClient(clientOptions)
       : new SignalingClient(clientOptions);
-    return state;
   }
 
   function stop(): RemoteControlState {
     generation += 1;
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+    active = null;
+    registered = false;
+    reconnectAttempts = 0;
     client?.close({ endPairing: true });
     client = null;
     dispatch = null;
