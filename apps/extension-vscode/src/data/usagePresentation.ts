@@ -1,6 +1,5 @@
 import {
   MANAGED_USAGE_BUCKET_ORDER,
-  creditsFromCents,
   formatCreditWindowUsage,
   formatCredits,
   formatUsageResetIn,
@@ -33,12 +32,13 @@ export interface UsageHistorySummary {
   totalRequests: string;
   byWorkload: UsageHistoryRow[];
   byModel: UsageHistoryRow[];
-  byDay: UsageHistoryRow[];
+  periodCaption: string;
+  byPeriod: UsageHistoryRow[];
   unsettled: string | null;
 }
 
 const HISTORY_MODEL_LIMIT = 8;
-const HISTORY_DAY_LIMIT = 14;
+const HISTORY_PERIOD_LIMIT = 14;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function creditWindowFor(
@@ -80,12 +80,31 @@ function requestCount(requests: number): string {
   return `${requests.toLocaleString()} ${requests === 1 ? 'request' : 'requests'}`;
 }
 
-function historyRow(label: string, requests: number, costCents: number): UsageHistoryRow {
+function historyRow(label: string, requests: number, credits: number): UsageHistoryRow {
   return {
     label,
-    credits: formatCredits(creditsFromCents(costCents)),
+    credits: formatCredits(credits),
     requests: requestCount(requests),
   };
+}
+
+const PERIOD_CAPTIONS: Readonly<Record<UsageHistory['granularity'], string>> = {
+  day: 'By day',
+  week: 'By week',
+  month: 'By month',
+};
+
+function periodLabel(start: string, granularity: UsageHistory['granularity']): string {
+  const date = new Date(start);
+  if (granularity === 'month') {
+    return date.toLocaleDateString(undefined, { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  }
+  const day = date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  return granularity === 'week' ? `Week of ${day}` : day;
 }
 
 export function summarizeUsageHistory(history: UsageHistory): UsageHistorySummary {
@@ -96,27 +115,20 @@ export function summarizeUsageHistory(history: UsageHistory): UsageHistorySummar
   const unsettled = history.freshness.unsettledRequests;
   return {
     rangeLabel: `last ${days} ${days === 1 ? 'day' : 'days'}`,
-    total: formatCredits(creditsFromCents(history.totals.costCents)),
+    total: formatCredits(history.totals.credits),
     totalRequests: requestCount(history.totals.requests),
     byWorkload: history.byWorkload.map((row) =>
-      historyRow(usageWorkloadLabel(row.key), row.requests, row.costCents),
+      historyRow(row.label ?? usageWorkloadLabel(row.key), row.requests, row.credits),
     ),
     byModel: history.byModel
       .slice(0, HISTORY_MODEL_LIMIT)
-      .map((row) => historyRow(modelDisplayLabel(row.key), row.requests, row.costCents)),
-    byDay: history.daily
-      .slice(-HISTORY_DAY_LIMIT)
+      .map((row) => historyRow(row.label ?? modelDisplayLabel(row.key), row.requests, row.credits)),
+    periodCaption: PERIOD_CAPTIONS[history.granularity],
+    byPeriod: history.periods
+      .slice(-HISTORY_PERIOD_LIMIT)
       .reverse()
       .map((row) =>
-        historyRow(
-          new Date(row.day).toLocaleDateString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            timeZone: 'UTC',
-          }),
-          row.requests,
-          row.costCents,
-        ),
+        historyRow(periodLabel(row.start, history.granularity), row.requests, row.credits),
       ),
     unsettled:
       unsettled > 0
