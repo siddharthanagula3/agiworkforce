@@ -169,6 +169,7 @@ import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts'
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
 import {
   GOOGLE_GROUNDING_FEATURE,
@@ -1826,6 +1827,7 @@ async function runMcpTool(
     turnRef?: string;
     requestId?: string;
     planTier?: string | null;
+    usageAttribution?: UsageAttribution;
     webSearchMaxResults?: number;
     surface?: string | null;
     onWebSearchSpend?: (spend: WebSearchSpend) => void;
@@ -1944,6 +1946,7 @@ async function runMcpTool(
               requestId: billingRequestId,
               turnRef: executionContext?.turnRef ?? billingRequestId,
               surface: executionContext?.surface ?? null,
+              attribution: executionContext?.usageAttribution,
               db: callerScopedDb(executionContext, billingUserId),
             },
           }
@@ -3536,6 +3539,7 @@ export async function* runToolLoop(
         feature: PERPLEXITY_SEARCH_FEATURE,
         provider: PERPLEXITY_SEARCH_PROVIDER_ID,
         chargeMicrousd: perplexitySearchChargeMicrousd(),
+        attribution: processed.managedUsage?.attribution,
         db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
       });
     } catch (error) {
@@ -3567,6 +3571,7 @@ export async function* runToolLoop(
       turnRef: turnId,
       callOrdinal,
       surface: processed.chatSurface,
+      attribution: processed.managedUsage?.attribution,
       db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
     });
   }
@@ -3607,6 +3612,7 @@ export async function* runToolLoop(
               provider: GOOGLE_GROUNDING_PROVIDER,
               chargeMicrousd: googleGroundingChargeMicrousd(responseModel, nativeSearchUses),
               scope: 'grounding',
+              attribution: processed.managedUsage?.attribution,
               db: groundingScopedDb,
             })
           : null;
@@ -3624,6 +3630,7 @@ export async function* runToolLoop(
         billableCalls: pool.billableCalls,
         delivered,
         surface: processed.chatSurface,
+        attribution: processed.managedUsage?.attribution,
         db: groundingScopedDb,
       });
     } catch (error) {
@@ -3886,6 +3893,7 @@ export async function* runToolLoop(
               turnRef: turnId,
               requestId: processed.requestId,
               planTier: processed.subscriptionTier ?? null,
+              usageAttribution: processed.managedUsage?.attribution,
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               surface: processed.chatSurface,
               onWebSearchSpend: (spend) => {

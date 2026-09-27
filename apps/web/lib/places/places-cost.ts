@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { chargeMicrousdForProviderCost, PLACES_SEARCH_TOOL_NAME } from '@agiworkforce/types';
 
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { PLACES_SEARCH_FEATURE, placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   reserveSearchCharge,
@@ -20,6 +21,7 @@ export interface PlacesSearchBilling {
   requestId: string;
   turnRef: string;
   surface?: string | null;
+  attribution?: UsageAttribution;
   db: DatabaseAdapter;
 }
 
@@ -37,6 +39,7 @@ export function reservePlacesSearchCharge(
     provider: call.providerId,
     chargeMicrousd: chargeMicrousdForProviderCost(placesSearchMicrousdPerCall()),
     scope: 'places',
+    ...(billing.attribution ? { attribution: billing.attribution } : {}),
     db: billing.db,
   });
 }
@@ -67,6 +70,7 @@ export function settlePlacesSearchCall(
     costRef: `${PLACES_COST_SOURCE_PREFIX}:${call.toolCallId}`,
     taskRef: billing.turnRef,
     surface: billing.surface ?? null,
+    ...(billing.attribution ? { attribution: billing.attribution } : {}),
     db: billing.db,
   });
 }

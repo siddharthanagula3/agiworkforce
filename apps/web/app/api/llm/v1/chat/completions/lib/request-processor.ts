@@ -4284,7 +4284,10 @@ export async function processRequest(
           isFlagship: isFlagshipRequest,
           quotaFeature,
           attribution: {
-            workload: resolveChatWorkload({ workMode: chatRequest.work_mode, quotaFeature }),
+            workload: resolveChatWorkload({
+              workMode: researchMode ? 'research' : chatRequest.work_mode,
+              quotaFeature,
+            }),
             projectId: conversationProjectId,
             sessionId: chatRequest.conversation_id ?? null,
           },

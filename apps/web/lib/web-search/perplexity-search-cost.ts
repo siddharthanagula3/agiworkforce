@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { chargeMicrousdForProviderCost, resolveFeatureRate } from '@agiworkforce/types';
 
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { logger } from '@/lib/logger';
 import { settleSearchCall, type SearchAdmission } from '@/lib/web-search/search-budget';
 
@@ -36,6 +37,7 @@ export interface PerplexitySearchSettlement {
   turnRef: string;
   callOrdinal: number;
   surface?: string | null;
+  attribution?: UsageAttribution;
   db: DatabaseAdapter;
 }
 
@@ -56,6 +58,7 @@ export function settlePerplexitySearchCall(input: PerplexitySearchSettlement): P
     costRef: `${PERPLEXITY_COST_SOURCE_PREFIX}:${input.turnRef}:${input.callOrdinal}`,
     taskRef: input.turnRef,
     surface: input.surface ?? null,
+    ...(input.attribution ? { attribution: input.attribution } : {}),
     db: input.db,
   });
 }

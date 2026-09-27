@@ -1353,6 +1353,7 @@ export async function* runResearchLoop(
         feature: PERPLEXITY_SEARCH_FEATURE,
         provider: PERPLEXITY_SEARCH_PROVIDER_ID,
         chargeMicrousd: perplexitySearchChargeMicrousd(),
+        attribution: processed.managedUsage?.attribution,
         db: researchScopedDb(),
       });
       if (reserved.outcome === 'refused') return { admitted: false };
@@ -1825,6 +1826,7 @@ export async function* runResearchLoop(
             turnRef: turnId,
             callOrdinal: searchOrdinal,
             surface: processed.chatSurface,
+            attribution: processed.managedUsage?.attribution,
             db: researchScopedDb(),
           });
           if (outcome.ok) {

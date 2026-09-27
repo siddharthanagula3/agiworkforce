@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { normalizeBillingPlanTier, type RateCardFeature } from '@agiworkforce/types';
 
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { logger } from '@/lib/logger';
 import type { SearchAllowance } from './search-allowance';
 import {
@@ -188,6 +189,7 @@ export interface SearchReservationInput {
   provider: string;
   chargeMicrousd: number;
   scope?: SearchChargeScope;
+  attribution?: UsageAttribution;
   db: DatabaseAdapter;
 }
 
@@ -227,6 +229,7 @@ export async function reserveSearchCharge(
       planTier: normalizeBillingPlanTier(input.planTier),
       isFlagship: false,
       quotaFeature: SEARCH_QUOTA_FEATURE,
+      ...(input.attribution ? { attribution: input.attribution } : {}),
     });
     return {
       outcome: 'admitted',
@@ -285,6 +288,7 @@ export interface SearchCallSettlement {
   costRef: string;
   taskRef: string;
   surface?: string | null;
+  attribution?: UsageAttribution;
   db: DatabaseAdapter;
 }
 
@@ -315,6 +319,7 @@ async function recordSearchCost(
     taskRef: input.taskRef,
     feature: input.feature,
     surface: input.surface ?? null,
+    ...(input.attribution ?? {}),
     usage: searchUsage(input),
   });
 }
@@ -335,6 +340,7 @@ async function finalizeSearchHold(
     quotaFeature: SEARCH_QUOTA_FEATURE,
     provider: admission.charge.provider,
     model: admission.charge.feature,
+    ...(input.attribution ? { attribution: input.attribution } : {}),
   };
   try {
     if (chargeMicrousd > 0) await markManagedUsageProviderStarted(reservation);
