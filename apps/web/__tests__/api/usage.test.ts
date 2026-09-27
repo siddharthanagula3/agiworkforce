@@ -116,6 +116,9 @@ const MOCK_BALANCE = {
   account_id: 'acct-abc',
   period_start: '2026-02-01T00:00:00Z',
   period_end: '2026-02-28T23:59:59Z',
+  credits_allocated_microusd: 12_000_000,
+  credits_used_microusd: 3_000_000,
+  credits_remaining_microusd: 9_000_000,
   credits_allocated_cents: 1200,
   credits_used_cents: 300,
   credits_remaining_cents: 900,
@@ -208,6 +211,7 @@ describe('GET /api/usage', () => {
     expect(data).not.toHaveProperty('credits_allocated_cents');
     expect(data).not.toHaveProperty('credits_used_cents');
     expect(data).not.toHaveProperty('credits_remaining_cents');
+    expect(data).not.toHaveProperty('credits_allocated_microusd');
     expect(data).not.toHaveProperty('daily_limit_cents');
     expect(data).not.toHaveProperty('daily_used_cents');
   });
@@ -259,6 +263,9 @@ describe('GET /api/usage', () => {
   it('should calculate 0% usage when credits_allocated_cents is 0', async () => {
     mockGetBalance.mockResolvedValueOnce({
       ...MOCK_BALANCE,
+      credits_allocated_microusd: 0,
+      credits_used_microusd: 0,
+      credits_remaining_microusd: 0,
       credits_allocated_cents: 0,
       credits_used_cents: 0,
       credits_remaining_cents: 0,
