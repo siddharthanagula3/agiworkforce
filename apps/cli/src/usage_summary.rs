@@ -8,10 +8,31 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::time::Duration;
 
+use crate::cost_ledger::{credit_amount, format_credits, format_usd_as_credits};
 use crate::tier_cache::{self, UserTier};
 
 const USAGE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 const USAGE_PATH: &str = "/api/usage";
+const USAGE_HISTORY_PATH: &str = "/api/usage/history";
+const USAGE_TURNS_PATH: &str = "/api/usage/turns/";
+const TURN_SETTLEMENT_POLL_DELAYS_MS: [u64; 4] = [0, 500, 1_000, 2_000];
+const BILLING_PATH: &str = "/settings/billing";
+const PRICING_PATH: &str = "/pricing";
+const USAGE_SETTINGS_PATH: &str = "/settings/usage";
+const FLAGSHIP_LIMIT_CODE: &str = "flagship_weekly_limit_reached";
+const ENTITLED_SUBSCRIPTION_STATUSES: [&str; 2] = ["active", "trialing"];
+const PAYMENT_FAILED_SUBSCRIPTION_STATUSES: [&str; 3] = ["past_due", "unpaid", "incomplete"];
+const HISTORY_MODEL_LIMIT: usize = 8;
+const USAGE_WORKLOAD_LABELS: [(&str, &str); 6] = [
+    ("chat", "Chat"),
+    ("work", "AGI Work"),
+    ("research", "Deep Research"),
+    ("code", "AGI Code"),
+    ("browser", "Browser"),
+    ("unknown", "Not attributed"),
+];
+const HISTORY_PERIOD_LIMIT: usize = 7;
+const SECONDS_PER_DAY: i64 = 86_400;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct UsageCreditWindow {
@@ -60,6 +81,8 @@ pub struct AccountUsage {
     #[serde(default)]
     pub flagship_weekly_reset_at: Option<String>,
     #[serde(default)]
+    pub subscription_status: Option<String>,
+    #[serde(default)]
     pub usage_allocation: Option<String>,
     #[serde(default)]
     pub credits: Option<UsageCredits>,
@@ -67,6 +90,161 @@ pub struct AccountUsage {
 
 pub fn parse_account_usage(body: &str) -> Result<AccountUsage, serde_json::Error> {
     serde_json::from_str(body)
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryTotals {
+    pub requests: u64,
+    pub credits: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryPeriod {
+    pub start: String,
+    pub requests: u64,
+    pub credits: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryBreakdown {
+    pub key: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    pub requests: u64,
+    pub credits: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistoryFreshness {
+    pub unsettled_requests: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UsageHistory {
+    pub from: String,
+    pub to: String,
+    pub granularity: String,
+    pub totals: UsageHistoryTotals,
+    pub periods: Vec<UsageHistoryPeriod>,
+    pub by_workload: Vec<UsageHistoryBreakdown>,
+    pub by_model: Vec<UsageHistoryBreakdown>,
+    pub freshness: UsageHistoryFreshness,
+}
+
+fn usage_workload_label(key: &str) -> &str {
+    USAGE_WORKLOAD_LABELS
+        .iter()
+        .find(|(id, _)| *id == key)
+        .map(|(_, label)| *label)
+        .unwrap_or(key)
+}
+
+pub fn parse_usage_history(body: &str) -> Result<UsageHistory, serde_json::Error> {
+    serde_json::from_str(body)
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSettlement {
+    pub request_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub credits: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BilledTurn {
+    pub credits: f64,
+    pub settled: usize,
+    pub pending: usize,
+    pub unavailable: usize,
+}
+
+enum TurnSettlementOutcome {
+    Settled(f64),
+    Pending,
+    Unavailable,
+}
+
+fn web_link(path: &str) -> String {
+    format!("{}{path}", tier_cache::default_api_base())
+}
+
+pub fn recovery_sentence(href: &str) -> String {
+    let url = web_link(href);
+    match href {
+        BILLING_PATH => format!("Add credits or fix billing at {url}."),
+        PRICING_PATH => format!("Compare plans at {url}."),
+        USAGE_SETTINGS_PATH => format!("See every usage window at {url}."),
+        _ => format!("More options at {url}."),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct UsageLimitContext {
+    pub resets_in: Option<String>,
+    pub alternative_model: Option<String>,
+}
+
+fn limit_window_reset<'a>(usage: &'a AccountUsage, code: &str) -> Option<&'a str> {
+    let credits = usage.credits.as_ref();
+    match code {
+        "rolling_five_hour_limit_reached" => credits
+            .and_then(|credits| credits.five_hour.reset_at.as_deref())
+            .or(usage.session_reset_at.as_deref()),
+        "rolling_weekly_limit_reached" => credits
+            .and_then(|credits| credits.weekly.reset_at.as_deref())
+            .or(usage.weekly_reset_at.as_deref()),
+        FLAGSHIP_LIMIT_CODE => credits
+            .and_then(|credits| credits.flagship_weekly.as_ref())
+            .and_then(|window| window.reset_at.as_deref())
+            .or(usage.flagship_weekly_reset_at.as_deref()),
+        "insufficient_credits"
+        | "monthly_limit_exceeded"
+        | "monthly_credit_limit_reached"
+        | "free_trial_token_budget_reached" => credits
+            .and_then(|credits| credits.monthly.reset_at.as_deref())
+            .or(usage.usage_reset_at.as_deref()),
+        _ => None,
+    }
+}
+
+fn time_until(reset_at: &str, now: DateTime<Utc>) -> Option<String> {
+    let seconds = DateTime::parse_from_rfc3339(reset_at)
+        .ok()?
+        .with_timezone(&Utc)
+        .signed_duration_since(now)
+        .num_seconds();
+    (seconds > 0).then(|| fmt_duration(seconds))
+}
+
+pub fn usage_limit_context_from(
+    usage: &AccountUsage,
+    code: &str,
+    now: DateTime<Utc>,
+) -> UsageLimitContext {
+    let alternative_model = if code == FLAGSHIP_LIMIT_CODE {
+        tier_cache::parse_tier(&usage.plan_tier)
+            .and_then(|tier| crate::model_catalog::standard_model_for_tier(&tier))
+    } else {
+        None
+    };
+    UsageLimitContext {
+        resets_in: limit_window_reset(usage, code).and_then(|reset_at| time_until(reset_at, now)),
+        alternative_model,
+    }
+}
+
+pub async fn usage_limit_context(jwt: &str, code: &str) -> UsageLimitContext {
+    match fetch_account_usage(jwt).await {
+        Ok(usage) => usage_limit_context_from(&usage, code, Utc::now()),
+        Err(_) => UsageLimitContext::default(),
+    }
 }
 
 #[derive(Debug)]
@@ -107,8 +285,18 @@ impl std::fmt::Display for UsageFetchError {
                 Some(detail) => write!(f, "{detail} Run `agi login`."),
                 None => f.write_str("session expired, run `agi login`"),
             },
-            UsageFetchError::EntitlementChanged { status: 402, .. } => {
-                f.write_str("plan payment required, see https://agiworkforce.com/pricing")
+            UsageFetchError::EntitlementChanged {
+                status: 402,
+                detail,
+            } => {
+                let billing = web_link(BILLING_PATH);
+                match detail {
+                    Some(detail) => write!(f, "{detail} Settings > Billing: {billing}"),
+                    None => write!(
+                        f,
+                        "your last payment did not go through. Update your payment method in Settings > Billing: {billing}"
+                    ),
+                }
             }
             UsageFetchError::EntitlementChanged {
                 status: 403,
@@ -144,6 +332,87 @@ pub fn usage_mode() -> UsageMode {
 }
 
 pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchError> {
+    let body = fetch_account_body(jwt, USAGE_PATH).await?;
+    let usage =
+        parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
+    tier_cache::adopt_server_plan(&usage.plan_tier);
+    Ok(usage)
+}
+
+pub async fn fetch_turn_settlement(
+    jwt: &str,
+    request_id: &str,
+) -> Result<TurnSettlement, UsageFetchError> {
+    let path = format!("{USAGE_TURNS_PATH}{}", urlencoding::encode(request_id));
+    let body = fetch_account_body(jwt, &path).await?;
+    serde_json::from_str(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))
+}
+
+async fn settle_turn_request(jwt: &str, request_id: &str) -> TurnSettlementOutcome {
+    for delay_ms in TURN_SETTLEMENT_POLL_DELAYS_MS {
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+        match fetch_turn_settlement(jwt, request_id).await {
+            Ok(settlement) if settlement.status == "settled" => {
+                return TurnSettlementOutcome::Settled(settlement.credits.unwrap_or(0.0));
+            }
+            Ok(_) => continue,
+            Err(_) => return TurnSettlementOutcome::Unavailable,
+        }
+    }
+    TurnSettlementOutcome::Pending
+}
+
+pub async fn billed_turn(request_ids: &[String]) -> Option<BilledTurn> {
+    if request_ids.is_empty() {
+        return None;
+    }
+    let UsageMode::Managed(jwt) = usage_mode() else {
+        return None;
+    };
+    let outcomes = futures_util::future::join_all(
+        request_ids
+            .iter()
+            .map(|request_id| settle_turn_request(&jwt, request_id)),
+    )
+    .await;
+    let mut billed = BilledTurn::default();
+    for outcome in outcomes {
+        match outcome {
+            TurnSettlementOutcome::Settled(credits) => {
+                billed.credits += credits;
+                billed.settled += 1;
+            }
+            TurnSettlementOutcome::Pending => billed.pending += 1,
+            TurnSettlementOutcome::Unavailable => billed.unavailable += 1,
+        }
+    }
+    Some(billed)
+}
+
+pub fn render_billed_turn(billed: &BilledTurn) -> String {
+    if billed.settled == 0 {
+        return "billed credits are not available yet, run `agi usage` later".to_string();
+    }
+    let open = billed.pending + billed.unavailable;
+    if open == 0 {
+        format!("{} billed", format_credits(billed.credits))
+    } else {
+        format!(
+            "{} billed so far, {} not settled yet",
+            format_credits(billed.credits),
+            request_count(open as u64)
+        )
+    }
+}
+
+pub async fn fetch_usage_history(jwt: &str) -> Result<UsageHistory, UsageFetchError> {
+    let body = fetch_account_body(jwt, USAGE_HISTORY_PATH).await?;
+    parse_usage_history(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))
+}
+
+async fn fetch_account_body(jwt: &str, path: &str) -> Result<String, UsageFetchError> {
     let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
         .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
     let base = tier_cache::resolve_agi_api_base(&raw_base).ok_or_else(|| {
@@ -159,7 +428,7 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
 
     let response = crate::cloud::handshake::apply(
         client
-            .get(format!("{base}{USAGE_PATH}"))
+            .get(format!("{base}{path}"))
             .header("Authorization", format!("Bearer {jwt}"))
             .header("Accept", "application/json"),
     )
@@ -184,14 +453,10 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
         )));
     }
 
-    let body = response
+    response
         .text()
         .await
-        .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))?;
-    let usage =
-        parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
-    tier_cache::adopt_server_plan(&usage.plan_tier);
-    Ok(usage)
+        .map_err(|e| UsageFetchError::Other(anyhow::anyhow!("{e}")))
 }
 
 pub async fn account_lines() -> Vec<String> {
@@ -199,10 +464,17 @@ pub async fn account_lines() -> Vec<String> {
         UsageMode::Managed(jwt) => jwt,
         UsageMode::LocalOnly(reason) => return unavailable_lines(reason),
     };
-    match fetch_account_usage(&jwt).await {
+    let (usage, history) = tokio::join!(fetch_account_usage(&jwt), fetch_usage_history(&jwt));
+    let mut lines = match usage {
         Ok(usage) => render_account_usage(&usage, Utc::now()),
-        Err(error) => unavailable_lines(&error.to_string()),
+        Err(error) => return unavailable_lines(&error.to_string()),
+    };
+    lines.push(String::new());
+    match history {
+        Ok(history) => lines.extend(render_usage_history(&history)),
+        Err(error) => lines.push(format!("Usage history unavailable: {error}")),
     }
+    lines
 }
 
 /// The TUI slash dispatcher is synchronous; an owned current-thread runtime
@@ -235,6 +507,8 @@ pub fn render_account_usage(usage: &AccountUsage, now: DateTime<Utc>) -> Vec<Str
         format!("  Plan: {}", plan_label(&usage.plan_tier)),
     ];
 
+    lines.extend(subscription_lines(usage.subscription_status.as_deref()));
+
     if usage.usage_allocation.as_deref() == Some("pending") {
         lines.push("  Allowance: not provisioned yet".to_string());
     }
@@ -248,6 +522,7 @@ pub fn render_account_usage(usage: &AccountUsage, now: DateTime<Utc>) -> Vec<Str
                 lines.push(credit_line("Flagship weekly", flagship, now));
             }
             lines.push(purchased_line(&credits.purchased));
+            lines.push(format!("  Add credits: {}", web_link(BILLING_PATH)));
         }
         None => {
             lines.push(percent_line(
@@ -292,12 +567,53 @@ fn plan_label(plan_tier: &str) -> String {
         .unwrap_or_else(|| plan_tier.to_string())
 }
 
+fn subscription_status_label(status: &str) -> String {
+    match status {
+        "trialing" => "trial".to_string(),
+        other => other.replace('_', " "),
+    }
+}
+
+fn subscription_lines(status: Option<&str>) -> Vec<String> {
+    let Some(status) = status.map(str::trim).filter(|status| !status.is_empty()) else {
+        return Vec::new();
+    };
+    let status = status.to_ascii_lowercase();
+    if status == "none" {
+        return Vec::new();
+    }
+    let mut lines = vec![format!(
+        "  Subscription: {}",
+        subscription_status_label(&status)
+    )];
+    if ENTITLED_SUBSCRIPTION_STATUSES.contains(&status.as_str()) {
+        return lines;
+    }
+    if PAYMENT_FAILED_SUBSCRIPTION_STATUSES.contains(&status.as_str()) {
+        lines.push(format!(
+            "  Your last payment did not go through, so this subscription is {}. Until it is settled this account is on Free, and plan features and purchased credits are paused.",
+            subscription_status_label(&status)
+        ));
+        lines.push(format!(
+            "  Update your payment method in Settings > Billing: {}",
+            web_link(BILLING_PATH)
+        ));
+    } else if status == "paused" {
+        lines.push("  While the subscription is paused this account runs on Free.".to_string());
+        lines.push(format!("  Resume it at {}", web_link(BILLING_PATH)));
+    } else {
+        lines.push("  This subscription has ended, so this account runs on Free.".to_string());
+        lines.push(format!("  Choose a plan at {}", web_link(PRICING_PATH)));
+    }
+    lines
+}
+
 fn credit_line(label: &str, window: &UsageCreditWindow, now: DateTime<Utc>) -> String {
     format!(
         "  {label}: {} of {} credits used, {} left{}",
-        fmt_credits(window.used),
-        fmt_credits(window.allowance),
-        fmt_credits(window.remaining),
+        credit_amount(window.used),
+        credit_amount(window.allowance),
+        credit_amount(window.remaining),
         reset_suffix(window.reset_at.as_deref(), now)
     )
 }
@@ -316,7 +632,7 @@ fn percent_line(
 
 fn purchased_line(purchased: &PurchasedCredits) -> String {
     let balance = match purchased.remaining {
-        Some(remaining) => format!("{} credits", fmt_credits(remaining)),
+        Some(remaining) => format_credits(remaining),
         None => "unknown".to_string(),
     };
     let overage = if purchased.overage_enabled {
@@ -325,14 +641,6 @@ fn purchased_line(purchased: &PurchasedCredits) -> String {
         "overage off"
     };
     format!("  Purchased credits: {balance}, {overage}")
-}
-
-fn fmt_credits(value: f64) -> String {
-    if value.fract().abs() < 1e-9 {
-        format!("{value:.0}")
-    } else {
-        format!("{value:.2}")
-    }
 }
 
 fn reset_suffix(reset_at: Option<&str>, now: DateTime<Utc>) -> String {
@@ -368,6 +676,127 @@ fn fmt_duration(total_seconds: i64) -> String {
     }
 }
 
+fn request_count(requests: u64) -> String {
+    if requests == 1 {
+        "1 request".to_string()
+    } else {
+        format!("{requests} requests")
+    }
+}
+
+fn history_window_days(history: &UsageHistory) -> Option<i64> {
+    let from = DateTime::parse_from_rfc3339(&history.from).ok()?;
+    let to = DateTime::parse_from_rfc3339(&history.to).ok()?;
+    let seconds = to.signed_duration_since(from).num_seconds();
+    Some(((seconds + SECONDS_PER_DAY / 2) / SECONDS_PER_DAY).max(1))
+}
+
+fn history_period_heading(granularity: &str) -> &'static str {
+    match granularity {
+        "week" => "  By week (UTC):",
+        "month" => "  By month (UTC):",
+        _ => "  By day (UTC):",
+    }
+}
+
+fn history_period_label(start: &str, granularity: &str) -> String {
+    let Ok(parsed) = DateTime::parse_from_rfc3339(start) else {
+        return start.to_string();
+    };
+    let start = parsed.with_timezone(&Utc);
+    match granularity {
+        "week" => format!("Week of {}", start.format("%Y-%m-%d")),
+        "month" => start.format("%Y-%m").to_string(),
+        _ => start.format("%Y-%m-%d").to_string(),
+    }
+}
+
+pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
+    let window = history_window_days(history)
+        .map(|days| format!("last {days} {}", if days == 1 { "day" } else { "days" }))
+        .unwrap_or_else(|| format!("{} to {}", history.from, history.to));
+    let mut lines = vec![format!(
+        "Usage history, {window}: {}, {}",
+        format_credits(history.totals.credits),
+        request_count(history.totals.requests)
+    )];
+    if history.by_model.is_empty() && history.by_workload.is_empty() && history.periods.is_empty() {
+        lines.push("  No settled usage in this window".to_string());
+    }
+    if !history.by_workload.is_empty() {
+        lines.push("  By product area:".to_string());
+        lines.extend(history.by_workload.iter().map(|row| {
+            format!(
+                "    {}: {}, {}",
+                row.label
+                    .as_deref()
+                    .unwrap_or_else(|| usage_workload_label(&row.key)),
+                format_credits(row.credits),
+                request_count(row.requests)
+            )
+        }));
+    }
+    if !history.by_model.is_empty() {
+        lines.push("  By model:".to_string());
+        lines.extend(
+            history
+                .by_model
+                .iter()
+                .take(HISTORY_MODEL_LIMIT)
+                .map(|row| {
+                    format!(
+                        "    {}: {}, {}",
+                        row.label
+                            .clone()
+                            .unwrap_or_else(|| crate::model_catalog::display_name(&row.key)),
+                        format_credits(row.credits),
+                        request_count(row.requests)
+                    )
+                }),
+        );
+    }
+    if !history.periods.is_empty() {
+        lines.push(history_period_heading(&history.granularity).to_string());
+        lines.extend(
+            history
+                .periods
+                .iter()
+                .rev()
+                .take(HISTORY_PERIOD_LIMIT)
+                .map(|period| {
+                    format!(
+                        "    {}: {}, {}",
+                        history_period_label(&period.start, &history.granularity),
+                        format_credits(period.credits),
+                        request_count(period.requests)
+                    )
+                }),
+        );
+    }
+    if history.freshness.unsettled_requests > 0 {
+        lines.push(format!(
+            "  {} still settling, not counted yet",
+            request_count(history.freshness.unsettled_requests)
+        ));
+    }
+    lines
+}
+
+pub fn session_model_lines(breakdown: &[(String, f64)]) -> Vec<String> {
+    if breakdown.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = vec!["By model:".to_string()];
+    lines.extend(breakdown.iter().map(|(model, usd)| {
+        format!(
+            "  {}: {}",
+            crate::model_catalog::display_name(model),
+            format_usd_as_credits(*usd)
+        )
+    }));
+    lines
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct SessionEstimate {
     pub turns: u32,
@@ -376,11 +805,12 @@ pub struct SessionEstimate {
     pub cache_read_tokens: u32,
     pub cache_write_tokens: u32,
     pub estimated_cost_usd: f64,
+    pub by_model: Vec<(String, f64)>,
     pub model: String,
 }
 
 pub fn render_session_estimate(estimate: &SessionEstimate) -> Vec<String> {
-    vec![
+    let mut lines = vec![
         "Session estimate (this CLI session, priced locally, not the billed figure)".to_string(),
         format!("  turns: {}", estimate.turns),
         format!(
@@ -390,9 +820,18 @@ pub fn render_session_estimate(estimate: &SessionEstimate) -> Vec<String> {
             estimate.cache_read_tokens,
             estimate.cache_write_tokens
         ),
-        format!("  estimated cost: ${:.6}", estimate.estimated_cost_usd),
-        format!("  model: {}", estimate.model),
-    ]
+        format!(
+            "  estimated: {}",
+            format_usd_as_credits(estimate.estimated_cost_usd)
+        ),
+    ];
+    lines.extend(
+        session_model_lines(&estimate.by_model)
+            .into_iter()
+            .map(|line| format!("  {line}")),
+    );
+    lines.push(format!("  model: {}", estimate.model));
+    lines
 }
 
 pub async fn render_usage_report(estimate: &SessionEstimate) -> String {
@@ -492,18 +931,18 @@ mod tests {
     fn renders_each_meter_with_remaining_and_reset() {
         let usage = parse_account_usage(contract_fixture()).expect("contract fixture must parse");
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
-        assert!(rendered.contains("Plan: Max 15x"), "{rendered}");
+        assert!(rendered.contains("Plan: Max 20x"), "{rendered}");
         assert!(
             rendered
                 .contains("5-hour window: 10.25 of 200 credits used, 189.75 left, resets in 3h 0m"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("Weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h"),
+            rendered.contains("Weekly: 450 of 2,500 credits used, 2,050 left, resets in 1d 12h"),
             "{rendered}"
         );
         assert!(
-            rendered.contains("Monthly: 4200.50 of 10000 credits used"),
+            rendered.contains("Monthly: 4,200.5 of 10,000 credits used"),
             "{rendered}"
         );
         assert!(
@@ -511,7 +950,7 @@ mod tests {
             "{rendered}"
         );
         assert!(
-            rendered.contains("Purchased credits: 120.50 credits, overage on"),
+            rendered.contains("Purchased credits: 120.5 credits, overage on"),
             "{rendered}"
         );
     }
@@ -554,6 +993,7 @@ mod tests {
             weekly_reset_at: None,
             flagship_weekly_usage_percentage: 0.0,
             flagship_weekly_reset_at: None,
+            subscription_status: None,
             usage_allocation: None,
             credits: None,
         };
@@ -588,6 +1028,7 @@ mod tests {
             cache_read_tokens: 0,
             cache_write_tokens: 0,
             estimated_cost_usd: 0.0125,
+            by_model: Vec::new(),
             model: "fixture-model".to_string(),
         })
         .join("\n");

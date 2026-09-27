@@ -1355,7 +1355,7 @@ impl<'a> FrameCtx<'a> {
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
             effort_label: app.effort.label(),
-            cost_str: crate::output::format_cost_compact(app.session.cost_ledger.total_usd),
+            cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
         }
     }
@@ -3328,7 +3328,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.cost_ledger.total_usd,
                 provider_access_mode(&app.session.provider),
             );
-            SlashResult::SystemMessage(format!("Turns: {} │ {}", app.session.turn_count, cost))
+            let mut lines = vec![format!("Turns: {} │ {}", app.session.turn_count, cost)];
+            lines.extend(crate::usage_summary::session_model_lines(
+                &app.session.cost_ledger.model_breakdown(),
+            ));
+            SlashResult::SystemMessage(lines.join("\n"))
         }
 
         "/output-style" => {
@@ -3463,12 +3467,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         if m.supports_reasoning { "R" } else { " " },
                     );
                     format!(
-                        "  {} [{}] {:>6}K ctx  ${:.2}/${:.2} {}",
+                        "  {} [{}] {:>6}K ctx  {} {}",
                         pad_to_cols(&m.id, 32),
                         flags,
                         m.context_window / 1000,
-                        m.input_price_per_1m,
-                        m.output_price_per_1m,
+                        crate::cost_ledger::format_credits_per_million_tokens(
+                            m.input_price_per_1m,
+                            m.output_price_per_1m,
+                        ),
                         if crate::model_catalog::input_token_pricing_tiers(&m.id).is_empty() {
                             "base"
                         } else {
@@ -3902,6 +3908,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 cache_read_tokens: app.session.total_cache_read_tokens,
                 cache_write_tokens: app.session.total_cache_creation_tokens,
                 estimated_cost_usd: app.session.cost_ledger.total_usd,
+                by_model: app.session.cost_ledger.model_breakdown(),
                 turn_count: app.session.turn_count,
                 model: crate::model_catalog::display_name(&app.session.model),
                 account_lines: crate::usage_summary::account_lines_blocking(),
@@ -5041,7 +5048,7 @@ async fn send_message_with_prompt(
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
-    let turn_cost_str = crate::output::format_cost_compact(app.session.cost_ledger.total_usd);
+    let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
 
     let result = {
@@ -5230,6 +5237,18 @@ async fn send_message_with_prompt(
             });
 
             app.sync_stats();
+
+            if !turn.managed_request_ids.is_empty() {
+                let request_ids = turn.managed_request_ids.clone();
+                tokio::spawn(async move {
+                    if let Some(billed) = crate::usage_summary::billed_turn(&request_ids).await {
+                        crate::tui::push_tui_notice(format!(
+                            "This turn: {}",
+                            crate::usage_summary::render_billed_turn(&billed)
+                        ));
+                    }
+                });
+            }
         }
         Some(Err(e)) => {
             app.chat_messages.push(ChatMessage {
@@ -7077,7 +7096,7 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            cost_str: "$0.00".to_string(),
+            cost_str: "0 credits".to_string(),
             notice: None,
         };
 
@@ -7489,7 +7508,7 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            cost_str: "$0.00".to_string(),
+            cost_str: "0 credits".to_string(),
             notice: None,
         };
 
@@ -7541,7 +7560,7 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            cost_str: "$0.00".to_string(),
+            cost_str: "0 credits".to_string(),
             notice: None,
         };
 
@@ -7658,7 +7677,7 @@ mod tests {
             privacy_mode: crate::agent::PrivacyMode::Local,
             mode: InteractionMode::Chat,
             effort_label: "Medium",
-            cost_str: "$0.00".to_string(),
+            cost_str: "0 credits".to_string(),
             notice: None,
         };
 

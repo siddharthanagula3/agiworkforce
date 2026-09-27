@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { SettingsPageLink } from '../components/SettingsSectionLink';
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { Progress, SegmentedControl, Spinner } from '@agiworkforce/ui';
+import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import {
-  creditsFromCents,
   formatCreditWindowUsage,
   formatCredits,
   formatPlanCreditAllowanceLine,
@@ -15,16 +16,98 @@ import {
   isContractPricedPlan,
   isFreeBillingPlanTier,
   managedUsageBucketLabel,
+  normalizeUsagePercentage,
   type ManagedUsageCreditWindow,
 } from '@agiworkforce/types';
+import type { AccountUsageHistoryResponse } from '@/app/api/usage/history/route';
+import type { UsageLimitsResponse } from '@/app/api/usage/limits/route';
+import type { AccountUsageSummaryResponse } from '@/app/api/usage/route';
 import { usageWorkloadLabel } from '@/lib/billing/usage-attribution';
-import { getUsageUrgency } from '@agiworkforce/unified-chat';
-import { RefreshCw } from 'lucide-react';
-import { Progress } from '@agiworkforce/ui';
-import { normalizeUsagePercentage } from '@agiworkforce/types';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import { toUserMessage } from '@/lib/user-error-message';
+import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+
+type Granularity = AccountUsageHistoryResponse['granularity'];
+type HistoryRow = Pick<
+  AccountUsageHistoryResponse['byModel'][number],
+  'key' | 'label' | 'requests' | 'credits'
+>;
+type LimitUnit = UsageLimitsResponse['units'][number];
+type AccountCredits = NonNullable<AccountUsageSummaryResponse['credits']>;
 
 const MINUTE_MS = 60 * 1000;
+const HISTORY_ROW_LIMIT = 8;
+const REPORT_WINDOW = 'window';
+const FREE_PLAN_NOTE = 'Free uses free models. Upgrade for credits on premium models.';
+const LIMITS_FAILURE = 'Could not load this month’s usage.';
+
+const CARD: CSSProperties = {
+  border: '1px solid var(--settings-border)',
+  borderRadius: 'var(--radius-lg)',
+  background: 'var(--bg-elev)',
+  overflow: 'hidden',
+};
+const CARD_HEADER: CSSProperties = {
+  padding: 'var(--space-4) var(--space-5)',
+  borderBottom: '1px solid var(--settings-border)',
+};
+const CARD_BODY: CSSProperties = {
+  padding: 'var(--space-5)',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 'var(--space-5)',
+  margin: 0,
+};
+const CARD_TITLE: CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'var(--text-2)',
+  margin: 0,
+};
+const CARD_NOTE: CSSProperties = {
+  fontSize: 12,
+  color: 'var(--text-3)',
+  margin: 'var(--space-1) 0 0',
+};
+const DETAIL: CSSProperties = { fontSize: 12, color: 'var(--text-3)' };
+const ROW: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  justifyContent: 'space-between',
+  gap: 'var(--space-3)',
+};
+
+const QUIET_BUTTON_CLASS =
+  'inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[var(--settings-border)] px-2.5 text-xs font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 pointer-coarse:min-h-11';
+const PRIMARY_BUTTON_CLASS =
+  'inline-flex min-h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 pointer-coarse:min-h-11';
+const FIELD_CLASS =
+  'w-full rounded-md border border-[var(--settings-border)] bg-background px-3 py-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring disabled:opacity-60';
+
+const GRANULARITY_OPTIONS: readonly { value: Granularity; label: string }[] = [
+  { value: 'day', label: 'Days' },
+  { value: 'week', label: 'Weeks' },
+  { value: 'month', label: 'Months' },
+];
+
+const GRANULARITY_UNIT: Record<Granularity, string> = {
+  day: 'UTC day',
+  week: 'UTC week, Monday to Sunday',
+  month: 'UTC calendar month',
+};
+
+const GRANULARITY_CAPTION: Record<Granularity, string> = {
+  day: 'By day',
+  week: 'By week',
+  month: 'By month',
+};
+
+const UNIT_COPY: Record<LimitUnit['unit'], { label: string; one: string; many: string }> = {
+  voice_minutes: { label: 'Voice', one: 'minute', many: 'minutes' },
+  video_seconds: { label: 'Video', one: 'second', many: 'seconds' },
+  computer_use_requests: { label: 'Computer use', one: 'request', many: 'requests' },
+};
 
 function formatAbsolute(value: string): string {
   return new Date(value).toLocaleString(undefined, {
@@ -36,18 +119,215 @@ function formatAbsolute(value: string): string {
   });
 }
 
-/**
- * GOV-19: `useManagedUsageSummary` / `getWorstUsagePercent` moved to
- * `@/lib/hooks/useManagedUsageSummary` so the chat page can wire the shared
- * Sidebar's usage widget without importing a settings SECTION COMPONENT
- * module. Re-exported here so this file remains the discoverable entry point
- * for the Settings > Usage surface and any existing importer keeps working.
- */
-export {
-  getWorstUsagePercent,
-  useManagedUsageSummary,
-  type ManagedUsageSummaryState,
-} from '@/lib/hooks/useManagedUsageSummary';
+function formatCreditAmount(value: number): string {
+  return formatCredits(value, { maximumFractionDigits: value > 0 && value < 10 ? 2 : 1 });
+}
+
+function formatCount(value: number, one: string, many: string): string {
+  return `${value.toLocaleString()} ${value === 1 ? one : many}`;
+}
+
+function formatUtcDate(value: string): string {
+  return new Date(value).toLocaleDateString(undefined, {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatWindow(history: AccountUsageHistoryResponse): string {
+  return `${formatUtcDate(history.from)} to ${formatUtcDate(history.to)}`;
+}
+
+function formatPeriod(start: string, granularity: Granularity): string {
+  const date = new Date(start);
+  if (granularity === 'month') {
+    return date.toLocaleDateString(undefined, { timeZone: 'UTC', month: 'long', year: 'numeric' });
+  }
+  const day = date.toLocaleDateString(undefined, {
+    timeZone: 'UTC',
+    month: 'short',
+    day: 'numeric',
+  });
+  return granularity === 'week' ? `Week of ${day}` : day;
+}
+
+function periodEnd(start: string, granularity: Granularity): string {
+  const date = new Date(start);
+  if (granularity === 'month') {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1)).toISOString();
+  }
+  const days = granularity === 'week' ? 7 : 1;
+  return new Date(date.getTime() + days * 24 * 60 * MINUTE_MS).toISOString();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function parseRows(value: unknown): AccountUsageHistoryResponse['byModel'] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((row) => {
+    if (!isRecord(row) || typeof row['key'] !== 'string') return [];
+    if (!isFiniteNumber(row['requests']) || !isFiniteNumber(row['credits'])) return [];
+    return [
+      {
+        key: row['key'],
+        label: typeof row['label'] === 'string' ? row['label'] : null,
+        requests: row['requests'],
+        inputTokens: isFiniteNumber(row['inputTokens']) ? row['inputTokens'] : 0,
+        outputTokens: isFiniteNumber(row['outputTokens']) ? row['outputTokens'] : 0,
+        credits: row['credits'],
+      },
+    ];
+  });
+}
+
+function parseUsageHistory(value: unknown): AccountUsageHistoryResponse | null {
+  if (!isRecord(value) || !isRecord(value['totals']) || !isRecord(value['freshness'])) return null;
+  const totals = value['totals'];
+  const freshness = value['freshness'];
+  const granularity = value['granularity'];
+  if (!isFiniteNumber(totals['requests']) || !isFiniteNumber(totals['credits'])) return null;
+  if (granularity !== 'day' && granularity !== 'week' && granularity !== 'month') return null;
+  const periods = Array.isArray(value['periods']) ? value['periods'] : [];
+  return {
+    userId: String(value['userId'] ?? ''),
+    from: String(value['from'] ?? ''),
+    to: String(value['to'] ?? ''),
+    granularity,
+    totals: {
+      requests: totals['requests'],
+      inputTokens: isFiniteNumber(totals['inputTokens']) ? totals['inputTokens'] : 0,
+      outputTokens: isFiniteNumber(totals['outputTokens']) ? totals['outputTokens'] : 0,
+      credits: totals['credits'],
+    },
+    periods: periods.flatMap((period) =>
+      isRecord(period) &&
+      typeof period['start'] === 'string' &&
+      isFiniteNumber(period['requests']) &&
+      isFiniteNumber(period['credits'])
+        ? [{ start: period['start'], requests: period['requests'], credits: period['credits'] }]
+        : [],
+    ),
+    byWorkload: parseRows(value['byWorkload']),
+    byModel: parseRows(value['byModel']),
+    byProject: parseRows(value['byProject']),
+    freshness: {
+      asOf: String(freshness['asOf'] ?? ''),
+      latestActivityAt:
+        typeof freshness['latestActivityAt'] === 'string' ? freshness['latestActivityAt'] : null,
+      unsettledRequests: isFiniteNumber(freshness['unsettledRequests'])
+        ? freshness['unsettledRequests']
+        : 0,
+    },
+  };
+}
+
+function parseUsageLimits(value: unknown): UsageLimitsResponse | null {
+  if (!isRecord(value) || !Array.isArray(value['units']) || !isRecord(value['images'])) return null;
+  const images = value['images'];
+  if (typeof value['resetAt'] !== 'string' || !isFiniteNumber(images['images'])) return null;
+  const units = value['units'].flatMap((unit): LimitUnit[] => {
+    if (!isRecord(unit) || !isFiniteNumber(unit['consumed'])) return [];
+    const kind = unit['unit'];
+    if (kind !== 'voice_minutes' && kind !== 'video_seconds' && kind !== 'computer_use_requests') {
+      return [];
+    }
+    return [
+      {
+        unit: kind,
+        consumed: unit['consumed'],
+        hardLimit: isFiniteNumber(unit['hardLimit']) ? unit['hardLimit'] : null,
+        softLimit: isFiniteNumber(unit['softLimit']) ? unit['softLimit'] : null,
+      },
+    ];
+  });
+  const responses = value['responses'];
+  return {
+    planTier: String(value['planTier'] ?? ''),
+    periodStart: String(value['periodStart'] ?? ''),
+    resetAt: value['resetAt'],
+    units,
+    images: {
+      images: images['images'],
+      requests: isFiniteNumber(images['requests']) ? images['requests'] : 0,
+      credits: isFiniteNumber(images['credits']) ? images['credits'] : 0,
+    },
+    responses:
+      isRecord(responses) &&
+      isFiniteNumber(responses['limit']) &&
+      isFiniteNumber(responses['active'])
+        ? { limit: responses['limit'], active: responses['active'] }
+        : null,
+  };
+}
+
+interface Loadable<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+function useUsageResource<T>(
+  url: string | null,
+  parse: (value: unknown) => T | null,
+  failure: string,
+): Loadable<T> {
+  const [state, setState] = useState<Omit<Loadable<T>, 'reload'>>({
+    data: null,
+    loading: false,
+    error: null,
+  });
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!url) return;
+    const controller = new AbortController();
+    setState((previous) => ({ ...previous, loading: true, error: null }));
+    void (async () => {
+      try {
+        const response = await fetch(url, { credentials: 'include', signal: controller.signal });
+        if (!response.ok) throw new Error(String(response.status));
+        const data = parse(await response.json());
+        if (!data) throw new Error('unrecognised usage response');
+        setState({ data, loading: false, error: null });
+      } catch {
+        if (controller.signal.aborted) return;
+        setState({ data: null, loading: false, error: failure });
+      }
+    })();
+    return () => controller.abort();
+  }, [url, parse, failure, reloadToken]);
+
+  return { ...state, reload: () => setReloadToken((token) => token + 1) };
+}
+
+function RetryNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{message}</span>
+      <button type="button" onClick={onRetry} className={`${QUIET_BUTTON_CLASS} self-start`}>
+        Try again
+      </button>
+    </div>
+  );
+}
+
+function LoadingNotice({ label }: { label: string }) {
+  return (
+    <div role="status" style={{ ...DETAIL, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <Spinner size="sm" aria-hidden="true" />
+      {label}
+    </div>
+  );
+}
 
 function UsageBar({
   label,
@@ -58,70 +338,38 @@ function UsageBar({
   label: string;
   percent: number;
   detail: string;
-  /**
-   * No figure could be read from the server. Rendering the computed number
-   * here would claim a FULL allowance, because an absent percentage
-   * normalises to 0 used and the bar shows `100 - 0`. A usage meter that
-   * fails optimistic is worse than one that admits it does not know: the
-   * user plans around headroom they may not have.
-   */
   unknown?: boolean;
 }) {
+  const urgency = getUsageUrgency(percent);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 'var(--space-2)',
-        }}
-      >
+      <div style={ROW}>
         <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-        {/*
-          The headline number reads the SAME direction the bar fills. It used to
-          print the remaining share beside a bar that fills with the consumed
-          share, so a full allowance ("100% left") rendered as an empty bar and
-          an exhausted one ("None left") as a full bar. The remaining figure
-          still leads the detail line below, where the reset time gives it
-          meaning.
-        */}
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+        <span style={DETAIL}>
           {unknown ? 'Unavailable' : `${Math.max(0, Math.min(100, Math.round(percent)))}% used`}
         </span>
       </div>
-      {/*
-        Colour tracks the SAME severity ladder every other surface uses
-        (getUsageUrgency: >=95 critical, >=90 warning). This bar previously
-        painted the accent colour at every value, so a user one percent from
-        being cut off saw exactly what a user at 5% saw.
-      */}
       <Progress
         value={unknown ? 0 : percent}
         aria-label={unknown ? `${label} usage unavailable` : `${label} usage`}
         aria-valuetext={unknown ? 'Unavailable' : detail}
         className="h-2"
         indicatorClassName={
-          getUsageUrgency(percent) === 'critical'
+          urgency === 'critical'
             ? 'bg-[var(--chat-destructive)]'
-            : getUsageUrgency(percent) === 'warning'
+            : urgency === 'warning'
               ? 'bg-[var(--chat-warning)]'
               : 'bg-[var(--chat-accent-primary)]'
         }
         style={{ background: 'var(--chat-border-strong)' }}
       />
-      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+      <span style={DETAIL}>
         {unknown ? 'Could not read your usage. Retry to load it.' : detail}
       </span>
     </div>
   );
 }
 
-/**
- * Credits are the only unit a customer sees, so they lead the line whenever the
- * server states them. The percentage wording stays as the fallback for a plan
- * with no allowance to name and for a server older than the credits block.
- */
 function usageDetail(
   percentRemaining: number,
   resetAt: string | null,
@@ -132,148 +380,177 @@ function usageDetail(
     ? formatCreditWindowUsage(window.used, window.allowance)
     : formatUsageRemaining(percentRemaining);
   const resets = formatUsageResetIn(resetAt, nowMs);
-  if (!resets) return remaining;
-  return `${remaining} · ${resets} (${formatAbsolute(resetAt as string)})`;
+  if (!resets || !resetAt) return remaining;
+  return `${remaining} · ${resets} (${formatAbsolute(resetAt)})`;
 }
 
-interface UsageHistoryRow {
-  key: string;
-  requests: number;
-  costCents: number;
+function BalanceRow({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+      <div style={ROW}>
+        <dt style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</dt>
+        <dd style={{ fontSize: 13, color: 'var(--text-1)', margin: 0 }}>{value}</dd>
+      </div>
+      <dd style={{ ...DETAIL, margin: 0 }}>{detail}</dd>
+    </div>
+  );
 }
 
-interface UsageHistoryPayload {
-  from: string;
-  to: string;
-  totals: { requests: number; costCents: number };
-  daily: { day: string; requests: number; costCents: number }[];
-  byWorkload: UsageHistoryRow[];
-  byModel: UsageHistoryRow[];
-  freshness: { asOf: string; latestActivityAt: string | null; unsettledRequests: number };
-}
-
-interface UsageHistoryState {
-  history: UsageHistoryPayload | null;
-  loading: boolean;
-  error: string | null;
-}
-
-function historyRows(value: unknown): UsageHistoryRow[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((row) => {
-    if (!row || typeof row !== 'object') return [];
-    const { key, requests, costCents } = row as Record<string, unknown>;
-    if (typeof key !== 'string' || typeof requests !== 'number' || typeof costCents !== 'number') {
-      return [];
-    }
-    return [{ key, requests, costCents }];
-  });
-}
-
-/**
- * A body that is not this shape is not a smaller answer, it is a different
- * endpoint answering, and rendering it would state someone else's numbers as
- * this account's spend.
- */
-function parseUsageHistory(value: unknown): UsageHistoryPayload | null {
-  if (!value || typeof value !== 'object') return null;
-  const payload = value as Record<string, unknown>;
-  const totals = payload['totals'];
-  const freshness = payload['freshness'];
-  if (!totals || typeof totals !== 'object' || !freshness || typeof freshness !== 'object') {
-    return null;
+function bonusRow(bonus: AccountCredits['bonus']): { value: string; detail: string } {
+  if (bonus === null) {
+    return { value: 'Unavailable', detail: 'Could not read your bonus credits. Refresh to retry.' };
   }
-  const { requests, costCents } = totals as Record<string, unknown>;
-  const { unsettledRequests } = freshness as Record<string, unknown>;
-  if (typeof requests !== 'number' || typeof costCents !== 'number') return null;
-
-  const days = Array.isArray(payload['daily']) ? payload['daily'] : [];
+  if (bonus.remaining <= 0) {
+    return {
+      value: 'None',
+      detail: 'Credits from referrals and promotions show here with the date they expire.',
+    };
+  }
   return {
-    from: String(payload['from'] ?? ''),
-    to: String(payload['to'] ?? ''),
-    totals: { requests, costCents },
-    daily: historyRows(
-      days.map((day) => ({ ...(day as object), key: (day as Record<string, unknown>)?.['day'] })),
-    ).map((row) => ({ day: row.key, requests: row.requests, costCents: row.costCents })),
-    byWorkload: historyRows(payload['byWorkload']),
-    byModel: historyRows(payload['byModel']),
-    freshness: {
-      asOf: String((freshness as Record<string, unknown>)['asOf'] ?? ''),
-      latestActivityAt: null,
-      unsettledRequests: typeof unsettledRequests === 'number' ? unsettledRequests : 0,
-    },
+    value: formatCreditAmount(bonus.remaining),
+    detail: bonus.next_expiry_at
+      ? `${formatCreditAmount(bonus.next_expiry_credits)} expire ${formatAbsolute(bonus.next_expiry_at)}`
+      : 'No expiry date recorded.',
   };
 }
 
-function useAccountUsageHistory(enabled: boolean): UsageHistoryState & { reload: () => void } {
-  const [state, setState] = useState<UsageHistoryState>({
-    history: null,
-    loading: false,
-    error: null,
-  });
-  const [reloadToken, setReloadToken] = useState(0);
-
-  useEffect(() => {
-    if (!enabled) return;
-    const controller = new AbortController();
-    setState((previous) => ({ ...previous, loading: true, error: null }));
-    void (async () => {
-      try {
-        const response = await fetch('/api/usage/history', {
-          credentials: 'include',
-          signal: controller.signal,
-        });
-        if (!response.ok) throw new Error(String(response.status));
-        const history = parseUsageHistory(await response.json());
-        if (!history) throw new Error('unrecognised usage history');
-        setState({ history, loading: false, error: null });
-      } catch {
-        if (controller.signal.aborted) return;
-        setState({ history: null, loading: false, error: 'Could not load your usage history.' });
-      }
-    })();
-    return () => controller.abort();
-  }, [enabled, reloadToken]);
-
-  return { ...state, reload: () => setReloadToken((token) => token + 1) };
+function purchasedRow(purchased: AccountCredits['purchased']): { value: string; detail: string } {
+  if (purchased.remaining === null) {
+    return {
+      value: 'Unavailable',
+      detail: 'Could not read your purchased credits. Refresh to retry.',
+    };
+  }
+  return {
+    value: purchased.remaining > 0 ? formatCreditAmount(purchased.remaining) : 'None',
+    detail: "Purchased credits don't expire.",
+  };
 }
 
-const HISTORY_DAY_LIMIT = 14;
-const HISTORY_ROW_LIMIT = 8;
+function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
+  const bonus = bonusRow(credits.bonus);
+  const purchased = purchasedRow(credits.purchased);
+  return (
+    <section aria-labelledby="usage-balances-heading" style={CARD}>
+      <div style={CARD_HEADER}>
+        <h2 id="usage-balances-heading" style={CARD_TITLE}>
+          Credit balances
+        </h2>
+        <p style={CARD_NOTE}>
+          Once a plan limit is reached, bonus credits are used first, soonest to expire, then
+          purchased credits.
+        </p>
+      </div>
+      <dl style={CARD_BODY}>
+        <BalanceRow label="Bonus credits" value={bonus.value} detail={bonus.detail} />
+        <BalanceRow label="Purchased credits" value={purchased.value} detail={purchased.detail} />
+      </dl>
+    </section>
+  );
+}
 
-function formatDay(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+function AllowanceRow({ unit }: { unit: LimitUnit }) {
+  const copy = UNIT_COPY[unit.unit];
+  const limit = unit.hardLimit;
+  const used = formatCount(unit.consumed, copy.one, copy.many);
+  if (limit === null) {
+    return (
+      <div style={ROW}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{copy.label}</span>
+        <span style={DETAIL}>{`${used}, no monthly cap`}</span>
+      </div>
+    );
+  }
+  const percent = limit > 0 ? (unit.consumed / limit) * 100 : 100;
+  return (
+    <UsageBar
+      label={copy.label}
+      percent={percent}
+      detail={`${unit.consumed.toLocaleString()} of ${formatCount(limit, copy.one, copy.many)} used`}
+    />
+  );
+}
+
+function RunningResponsesRow({ reading }: { reading: UsageLimitsResponse['responses'] }) {
+  if (!reading) return null;
+  return (
+    <div style={ROW}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+        Responses running now
+      </span>
+      <span style={DETAIL}>{`${reading.active} of ${reading.limit} at a time`}</span>
+    </div>
+  );
+}
+
+function MonthlyAllowancesCard({ resource }: { resource: Loadable<UsageLimitsResponse> }) {
+  const { data, loading, error, reload } = resource;
+  if (!data && !loading && !error) return null;
+
+  const units =
+    data?.units.filter(
+      (unit) => unit.hardLimit !== null || unit.softLimit !== null || unit.consumed > 0,
+    ) ?? [];
+  const showImages = (data?.images.requests ?? 0) > 0;
+  if (data && units.length === 0 && !showImages) return null;
+
+  return (
+    <section aria-labelledby="usage-month-heading" style={CARD}>
+      <div style={CARD_HEADER}>
+        <h2 id="usage-month-heading" style={CARD_TITLE}>
+          This month
+        </h2>
+        {data && <p style={CARD_NOTE}>{`Resets ${formatAbsolute(data.resetAt)}`}</p>}
+      </div>
+      <div style={CARD_BODY}>
+        {loading && <LoadingNotice label="Loading this month’s usage" />}
+        {error && !loading && <RetryNotice message={error} onRetry={reload} />}
+        {data && !loading && !error && (
+          <>
+            {units.map((unit) => (
+              <AllowanceRow key={unit.unit} unit={unit} />
+            ))}
+            {showImages && (
+              <div style={ROW}>
+                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+                  Images
+                </span>
+                <span style={DETAIL}>
+                  {`${formatCount(data.images.images, 'image', 'images')} · ${formatCreditAmount(data.images.credits)}`}
+                </span>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function HistoryRows({
   caption,
   rows,
   labelFor,
+  limit = HISTORY_ROW_LIMIT,
 }: {
   caption: string;
-  rows: readonly UsageHistoryRow[];
-  labelFor?: (key: string) => string;
+  rows: readonly HistoryRow[];
+  labelFor: (row: HistoryRow) => string;
+  limit?: number;
 }) {
+  if (rows.length === 0) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{caption}</span>
-      {rows.map((row) => (
-        <div
-          key={row.key}
-          style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: 'var(--space-3)',
-            fontSize: 12,
-            color: 'var(--text-3)',
-          }}
-        >
-          <span style={{ color: 'var(--text-2)' }}>{labelFor ? labelFor(row.key) : row.key}</span>
-          <span>
-            {`${row.requests} ${row.requests === 1 ? 'turn' : 'turns'} · ${formatCredits(
-              creditsFromCents(row.costCents),
-            )}`}
+      <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>
+        {caption}
+      </h3>
+      {rows.slice(0, limit).map((row) => (
+        <div key={row.key} style={{ ...ROW, ...DETAIL }}>
+          <span style={{ color: 'var(--text-2)', minWidth: 0, overflowWrap: 'anywhere' }}>
+            {labelFor(row)}
+          </span>
+          <span style={{ flexShrink: 0 }}>
+            {`${formatCount(row.requests, 'request', 'requests')} · ${formatCreditAmount(row.credits)}`}
           </span>
         </div>
       ))}
@@ -281,113 +558,289 @@ function HistoryRows({
   );
 }
 
-/**
- * The meters above answer how much is left. This answers what it went on,
- * which is the next thing anyone asks when a meter surprises them, and until
- * this existed only a workspace administrator could see it.
- */
-function UsageHistorySection({ enabled }: { enabled: boolean }) {
-  const { history, loading, error, reload } = useAccountUsageHistory(enabled);
-  if (!enabled) return null;
+function DiscrepancyReportForm({
+  history,
+  onClose,
+}: {
+  history: AccountUsageHistoryResponse;
+  onClose: () => void;
+}) {
+  const [periodKey, setPeriodKey] = useState(REPORT_WINDOW);
+  const [requestId, setRequestId] = useState('');
+  const [reference, setReference] = useState('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [filed, setFiled] = useState<{ subject: string; staffNotified: boolean } | null>(null);
 
-  const dailyRows: UsageHistoryRow[] = (history?.daily ?? [])
-    .slice(-HISTORY_DAY_LIMIT)
-    .reverse()
-    .map((day) => ({ key: day.day, requests: day.requests, costCents: day.costCents }));
+  const periods = [...history.periods].reverse();
 
-  const isEmpty = history !== null && !loading && !error && history.totals.requests === 0;
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (submitting) return;
+    if (!message.trim()) {
+      setError('Describe what looks wrong so support knows what to check.');
+      return;
+    }
+    const window =
+      periodKey === REPORT_WINDOW
+        ? { from: history.from, to: history.to }
+        : { from: periodKey, to: periodEnd(periodKey, history.granularity) };
+    setSubmitting(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/usage/discrepancy', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          ...window,
+          message: message.trim(),
+          ...(requestId.trim() ? { requestId: requestId.trim() } : {}),
+          ...(reference.trim() ? { reference: reference.trim() } : {}),
+        }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const reason =
+          isRecord(payload) && isRecord(payload['error']) ? payload['error']['message'] : null;
+        throw new Error(typeof reason === 'string' ? reason : 'That report was not filed.');
+      }
+      const subject =
+        isRecord(payload) && isRecord(payload['ticket']) ? payload['ticket']['subject'] : null;
+      setFiled({
+        subject: typeof subject === 'string' ? subject : 'Billing report',
+        staffNotified: isRecord(payload) && payload['staffNotified'] === true,
+      });
+    } catch (submitError) {
+      setError(toUserMessage(submitError, 'That report was not filed.'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (filed) {
+    return (
+      <div
+        role="status"
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+      >
+        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          {`Report filed as “${filed.subject}”, with the usage record for that period attached.`}
+        </span>
+        <span style={DETAIL}>
+          {filed.staffNotified
+            ? 'Support has been notified. Replies and status updates appear under Help.'
+            : 'It is saved, but the notification to support did not send. Follow it under Help.'}
+        </span>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <SettingsSectionLink
+            section="help"
+            className="text-xs text-primary underline underline-offset-4"
+          >
+            Open Help
+          </SettingsSectionLink>
+          <button type="button" onClick={onClose} className={QUIET_BUTTON_CLASS}>
+            Done
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section
-      aria-labelledby="usage-history-heading"
-      style={{
-        border: '1px solid var(--settings-border)',
-        borderRadius: 'var(--radius-lg)',
-        background: 'var(--bg-elev)',
-        overflow: 'hidden',
-      }}
+    <form
+      onSubmit={submit}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
     >
-      <div
-        style={{
-          padding: 'var(--space-4) var(--space-5)',
-          borderBottom: '1px solid var(--settings-border)',
-        }}
-      >
-        <span
-          id="usage-history-heading"
-          style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">Period</span>
+        <select
+          className={FIELD_CLASS}
+          value={periodKey}
+          disabled={submitting}
+          onChange={(event) => setPeriodKey(event.target.value)}
         >
-          Where your usage went
+          <option value={REPORT_WINDOW}>{`Everything shown (${formatWindow(history)})`}</option>
+          {periods.map((period) => (
+            <option key={period.start} value={period.start}>
+              {`${formatPeriod(period.start, history.granularity)} · ${formatCreditAmount(period.credits)}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">Request ID (optional)</span>
+        <input
+          className={FIELD_CLASS}
+          value={requestId}
+          disabled={submitting}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="From the request_id column of the CSV"
+          onChange={(event) => setRequestId(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">
+          Invoice or charge reference (optional)
         </span>
-        <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
-          Settled usage from the last 30 days. Turns still settling are not counted yet.
-        </p>
+        <input
+          className={FIELD_CLASS}
+          value={reference}
+          disabled={submitting}
+          autoComplete="off"
+          placeholder="Invoice number, or the date and amount of the charge"
+          onChange={(event) => setReference(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">What looks wrong</span>
+        <textarea
+          className={`${FIELD_CLASS} resize-y`}
+          rows={4}
+          value={message}
+          disabled={submitting}
+          onChange={(event) => setMessage(event.target.value)}
+        />
+      </label>
+      {error && (
+        <span role="alert" style={{ fontSize: 12, color: 'var(--chat-destructive-text)' }}>
+          {error}
+        </span>
+      )}
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+        <button type="submit" disabled={submitting} className={PRIMARY_BUTTON_CLASS}>
+          {submitting ? 'Filing report…' : 'File report'}
+        </button>
+        <button
+          type="button"
+          disabled={submitting}
+          onClick={onClose}
+          className={QUIET_BUTTON_CLASS}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function UsageHistorySection({ enabled }: { enabled: boolean }) {
+  const [granularity, setGranularity] = useState<Granularity>('day');
+  const [reporting, setReporting] = useState(false);
+  const {
+    data: history,
+    loading,
+    error,
+    reload,
+  } = useUsageResource(
+    enabled ? `/api/usage/history?granularity=${granularity}` : null,
+    parseUsageHistory,
+    'Could not load your usage history.',
+  );
+  if (!enabled) return null;
+
+  const current = history?.granularity === granularity ? history : null;
+  const periods = [...(current?.periods ?? [])].reverse().map((period) => ({
+    key: period.start,
+    label: null,
+    requests: period.requests,
+    credits: period.credits,
+  }));
+  const shown = loading || error ? null : current;
+
+  return (
+    <section aria-labelledby="usage-history-heading" style={CARD}>
+      <div
+        style={{ ...CARD_HEADER, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+      >
+        <div>
+          <h2 id="usage-history-heading" style={CARD_TITLE}>
+            Where your usage went
+          </h2>
+          <p style={CARD_NOTE}>
+            {`Settled usage by ${GRANULARITY_UNIT[granularity]}${
+              current ? `, ${formatWindow(current)}` : ''
+            }. Requests still settling are not counted yet.`}
+          </p>
+        </div>
+        <SegmentedControl
+          aria-label="Group usage history by"
+          options={GRANULARITY_OPTIONS}
+          value={granularity}
+          onValueChange={(value) => {
+            setGranularity(value);
+            setReporting(false);
+          }}
+        />
       </div>
 
-      <div
-        style={{
-          padding: 'var(--space-5)',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--space-5)',
-        }}
-      >
-        {loading && (
-          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading usage history…</span>
+      <div style={CARD_BODY}>
+        {loading && <LoadingNotice label="Loading usage history" />}
+        {error && !loading && <RetryNotice message={error} onRetry={reload} />}
+
+        {shown && shown.totals.requests === 0 && (
+          <span style={DETAIL}>No settled usage in this period.</span>
         )}
 
-        {error && !loading && (
-          <div
-            role="alert"
-            style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
-          >
-            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{error}</span>
-            <button
-              type="button"
-              onClick={reload}
-              style={{
-                alignSelf: 'flex-start',
-                padding: 'var(--space-1) var(--space-2)',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-3)',
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {isEmpty && (
-          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-            No settled usage in the last 30 days.
-          </span>
-        )}
-
-        {history && !loading && !error && history.totals.requests > 0 && (
+        {shown && shown.totals.requests > 0 && (
           <>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              {`${formatCount(shown.totals.requests, 'request', 'requests')} · ${formatCreditAmount(shown.totals.credits)}`}
+            </span>
+            <HistoryRows
+              caption={GRANULARITY_CAPTION[shown.granularity]}
+              rows={periods}
+              limit={periods.length}
+              labelFor={(row) => formatPeriod(row.key, shown.granularity)}
+            />
             <HistoryRows
               caption="By product area"
-              rows={history.byWorkload.slice(0, HISTORY_ROW_LIMIT)}
-              labelFor={usageWorkloadLabel}
+              rows={shown.byWorkload}
+              labelFor={(row) => usageWorkloadLabel(row.key)}
             />
             <HistoryRows
               caption="By model"
-              rows={history.byModel.slice(0, HISTORY_ROW_LIMIT)}
-              labelFor={(key) => getModelMetadataById(key)?.name ?? key}
+              rows={shown.byModel}
+              labelFor={(row) => getModelMetadataById(row.key)?.name ?? row.key}
             />
-            <HistoryRows caption="By day" rows={dailyRows} labelFor={formatDay} />
-            {history.freshness.unsettledRequests > 0 && (
-              <span role="status" style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                {`${history.freshness.unsettledRequests} ${
-                  history.freshness.unsettledRequests === 1 ? 'turn is' : 'turns are'
-                } still settling and are not counted above.`}
+            <HistoryRows
+              caption="By project"
+              rows={shown.byProject}
+              labelFor={(row) => row.label ?? 'Deleted project'}
+            />
+            {shown.freshness.unsettledRequests > 0 && (
+              <span role="status" style={DETAIL}>
+                {`${formatCount(shown.freshness.unsettledRequests, 'request is', 'requests are')} still settling and not counted above.`}
               </span>
             )}
           </>
+        )}
+
+        {shown && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+            <a
+              href={`/api/usage/export?granularity=${granularity}`}
+              download
+              className={QUIET_BUTTON_CLASS}
+            >
+              Download CSV
+            </a>
+            {!reporting && (
+              <button
+                type="button"
+                onClick={() => setReporting(true)}
+                className={QUIET_BUTTON_CLASS}
+              >
+                Report a billing problem
+              </button>
+            )}
+          </div>
+        )}
+
+        {shown && reporting && (
+          <DiscrepancyReportForm history={shown} onClose={() => setReporting(false)} />
         )}
       </div>
     </section>
@@ -403,9 +856,6 @@ export function UsageSection() {
     return () => clearInterval(timer);
   }, []);
 
-  // A missing payload normalises to 0 used, which renders as a FULL allowance.
-  // Gate every bar on having actually read a figure rather than letting the
-  // fallback speak for the server.
   const usageUnknown = !usage;
   const usedPercent = normalizeUsagePercentage(usage?.usage_percentage);
   const sessionUsedPercent = normalizeUsagePercentage(usage?.session_usage_percentage);
@@ -416,6 +866,14 @@ export function UsageSection() {
 
   const credits = usage?.credits ?? null;
   const isFreePlan = usage ? isFreeBillingPlanTier(usage.plan_tier) : false;
+  const contractPriced = usage ? isContractPricedPlan(usage.plan_tier) : false;
+  const showFlagship = credits ? credits.flagship_weekly !== null : true;
+  const limits = useUsageResource(
+    usage !== null && !contractPriced ? '/api/usage/limits' : null,
+    parseUsageLimits,
+    LIMITS_FAILURE,
+  );
+
   const planAllowanceLine = useMemo(() => {
     if (!usage || !credits) return null;
     const tier = usage.plan_tier.trim().toLowerCase();
@@ -451,83 +909,29 @@ export function UsageSection() {
           Usage
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          {isFreePlan
-            ? 'Use free models now, or join the waitlist for a paid plan.'
-            : 'Your plan usage and reset schedule.'}
+          Your plan limits in credits, when each one resets, and where your credits went.
         </p>
       </div>
 
       {error && (
         <div
           role="alert"
-          style={{
-            border: '1px solid var(--settings-border)',
-            borderRadius: 'var(--radius-lg)',
-            background: 'var(--bg-elev)',
-            padding: 'var(--space-4)',
-            color: 'var(--text-2)',
-            fontSize: 13,
-          }}
+          style={{ ...CARD, padding: 'var(--space-4)', color: 'var(--text-2)', fontSize: 13 }}
         >
           {error}
         </div>
       )}
 
-      <section
-        style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: 'var(--space-4) var(--space-5)',
-            borderBottom: '1px solid var(--settings-border)',
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-            {isFreePlan ? 'Upgrade for higher capacity' : 'Plan usage limits'}
-          </span>
-          {!isFreePlan && planAllowanceLine && (
-            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
-              {planAllowanceLine}
-            </p>
-          )}
-          {!isFreePlan && credits && credits.purchased.remaining !== null && (
-            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
-              {`Purchased credits: ${formatCredits(credits.purchased.remaining)} remaining, separate from your plan allowance.`}
-            </p>
-          )}
+      <section aria-labelledby="usage-limits-heading" style={CARD}>
+        <div style={CARD_HEADER}>
+          <h2 id="usage-limits-heading" style={CARD_TITLE}>
+            Plan usage limits
+          </h2>
+          {planAllowanceLine && <p style={CARD_NOTE}>{planAllowanceLine}</p>}
         </div>
 
-        <div
-          style={{
-            padding: 'var(--space-5)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-5)',
-          }}
-        >
-          {/*
-            Labels, remaining-phrasing and reset wording all come from the shared
-            vocabulary in @agiworkforce/types. These four buckets are the same
-            server-side numbers mobile, desktop and the Chrome panel render, and
-            each surface previously named them differently, "Rolling 5 hours"
-            here, "Current session" on mobile, "Token Budget Usage" on desktop.
-            so the same limit was unrecognisable between surfaces.
-          */}
-          {isFreePlan ? (
-            <div className="space-y-3 text-sm text-[var(--text-2)]">
-              <SettingsPageLink
-                href="/pricing"
-                className="text-primary underline underline-offset-4"
-              >
-                Compare plans and join the upgrade waitlist
-              </SettingsPageLink>
-            </div>
-          ) : usage && isContractPricedPlan(usage.plan_tier) ? (
+        <div style={CARD_BODY}>
+          {contractPriced ? (
             <div className="space-y-3 text-sm text-[var(--text-2)]">
               <p>Your usage allowances and billing are set by your workspace contract.</p>
               <SettingsPageLink
@@ -535,6 +939,13 @@ export function UsageSection() {
                 className="text-primary underline underline-offset-4"
               >
                 View workspace usage
+              </SettingsPageLink>
+            </div>
+          ) : isFreePlan ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>{FREE_PLAN_NOTE}</p>
+              <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
+                Upgrade
               </SettingsPageLink>
             </div>
           ) : (
@@ -561,17 +972,19 @@ export function UsageSection() {
                   credits?.weekly,
                 )}
               />
-              <UsageBar
-                unknown={usageUnknown}
-                label={managedUsageBucketLabel('weeklyFlagship')}
-                percent={flagshipWeeklyUsedPercent}
-                detail={usageDetail(
-                  100 - flagshipWeeklyUsedPercent,
-                  usage?.flagship_weekly_reset_at ?? null,
-                  nowMs,
-                  credits?.flagship_weekly,
-                )}
-              />
+              {showFlagship && (
+                <UsageBar
+                  unknown={usageUnknown}
+                  label={managedUsageBucketLabel('weeklyFlagship')}
+                  percent={flagshipWeeklyUsedPercent}
+                  detail={usageDetail(
+                    100 - flagshipWeeklyUsedPercent,
+                    usage?.flagship_weekly_reset_at ?? null,
+                    nowMs,
+                    credits?.flagship_weekly,
+                  )}
+                />
+              )}
               <UsageBar
                 unknown={usageUnknown}
                 label={managedUsageBucketLabel('period')}
@@ -583,6 +996,7 @@ export function UsageSection() {
                   credits?.monthly,
                 )}
               />
+              <RunningResponsesRow reading={limits.data?.responses ?? null} />
             </>
           )}
         </div>
@@ -590,54 +1004,35 @@ export function UsageSection() {
         {!isFreePlan && (
           <div
             style={{
+              ...ROW,
+              alignItems: 'center',
               padding: 'var(--space-3) var(--space-5)',
               borderTop: '1px solid var(--settings-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 'var(--space-2)',
             }}
           >
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-              Last updated: {lastUpdatedLabel}
-            </span>
+            <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
             <button
               type="button"
-              onClick={() => void refresh()}
+              onClick={() => {
+                void refresh();
+                limits.reload();
+              }}
               disabled={loading}
               aria-label="Refresh usage data"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-                padding: 'var(--space-1) var(--space-2)',
-                background: 'transparent',
-                border: '1px solid var(--settings-border)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--text-3)',
-                fontSize: 12,
-                cursor: loading ? 'default' : 'pointer',
-                opacity: loading ? 0.5 : 1,
-              }}
+              className={QUIET_BUTTON_CLASS}
             >
-              <RefreshCw
-                size={12}
-                style={{ animation: loading ? 'spin 0.6s linear infinite' : 'none' }}
-              />
+              <RefreshCw size={12} aria-hidden="true" />
               Refresh
             </button>
           </div>
         )}
       </section>
 
-      {/*
-        A contract-priced workspace reads its usage in the workspace console,
-        where the same rows are grouped per member. Free has no account usage
-        allowance or history, so neither meters nor credit figures appear.
-      */}
-      <UsageHistorySection
-        enabled={usage !== null && !isFreePlan && !isContractPricedPlan(usage.plan_tier)}
-      />
+      {credits && !contractPriced && <CreditBalancesCard credits={credits} />}
+
+      <MonthlyAllowancesCard resource={limits} />
+
+      <UsageHistorySection enabled={usage !== null && !contractPriced && !isFreePlan} />
     </div>
   );
 }

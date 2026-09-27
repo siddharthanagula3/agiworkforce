@@ -79,6 +79,14 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   },
   { path: 'apps/web/app/api/checkout/', why: 'checkout starts the subscription the payer owns' },
   {
+    path: 'apps/web/features/billing/server/billing-account.ts',
+    why: 'billing management reads the Stripe and store ids on the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/lib/services/auto-reload-service.ts',
+    why: 'auto-reload charges the Stripe customer on the subscription the payer owns',
+  },
+  {
     path: 'apps/web/app/api/portal/',
     why: 'the Stripe portal manages the subscription the payer owns',
   },
@@ -90,6 +98,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   {
     path: 'apps/web/app/api/claim-offer/route.ts',
     why: 'an offer is claimed against the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/lib/services/code-trial-expiry.ts',
+    why: 'ends the code-granted trial rows themselves once their period is over',
   },
   {
     path: 'apps/web/app/api/mobile/iap/catalog/route.ts',
@@ -110,10 +122,6 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   {
     path: 'apps/web/lib/server/spendable-credits.ts',
     why: 'purchased credits and the overage opt-in live on the payer’s own row',
-  },
-  {
-    path: 'apps/web/lib/services/managed-usage-request-service.ts',
-    why: 'overage headroom reads the payer’s own overage opt-in',
   },
   {
     path: 'apps/web/lib/server/subscription-owner-handoff.ts',
@@ -150,12 +158,7 @@ const RAW_SUBSCRIPTION_READ_PATTERNS = Object.freeze([
   /\b(?:from|join)\s+(?:public\.)?subscriptions\b/gi,
 ]);
 
-export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([
-  {
-    path: 'apps/web/app/api/voice/live/sessions/route.ts',
-    why: 'voice minutes and reservation tier',
-  },
-]);
+export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([]);
 
 export const BILLING_PLAN_TIERS = Object.freeze([
   'local-only',

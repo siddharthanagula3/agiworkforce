@@ -226,7 +226,6 @@ const tsTargets = [
       'apps/desktop/src/features/agi/reflectionTypes.ts',
       'apps/desktop/src/features/analytics/CostDashboard.tsx',
       'apps/desktop/src/features/analytics/CostSidebarWidget.tsx',
-      'apps/desktop/src/features/analytics/UsageDashboard.tsx',
       'apps/desktop/src/features/analytics/index.ts',
       'apps/desktop/src/features/artifacts/ArtifactCategoryFilter.tsx',
       'apps/desktop/src/features/artifacts/ArtifactToolbar.tsx',
@@ -416,14 +415,13 @@ const tsTargets = [
       'apps/desktop/src/ui/Table.tsx',
       'apps/desktop/src/ui/index.ts',
       'apps/desktop/src/utils/autoCorrection.ts',
-      'apps/desktop/src/utils/credits.ts',
       'apps/desktop/src/utils/fileUtils.ts',
       'apps/desktop/src/utils/permissions.ts',
       'apps/desktop/src/utils/subscriptionGate.ts',
       'apps/desktop/src/utils/tokenCount.ts',
       'apps/desktop/src/utils/validation.ts',
     ],
-    maxKnownUnreachable: 233,
+    maxKnownUnreachable: 231,
   },
 ];
 

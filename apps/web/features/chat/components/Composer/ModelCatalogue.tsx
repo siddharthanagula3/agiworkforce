@@ -4,6 +4,11 @@ import { useMemo, useState } from 'react';
 import { Check, ChevronLeft, CircleHelp, Lock, Star } from '@agiworkforce/icons';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import type { ModelCatalogueDeveloper } from '@features/chat/lib/use-model-catalogue';
+import {
+  TYPICAL_MESSAGE_TOKENS,
+  creditsPerMillionTokens,
+  estimateMessageCredits,
+} from '@/lib/billing/credit-estimates';
 import { ProviderLogo } from './ProviderLogo';
 
 const FAVOURITES_RAIL_KEY = 'favourites';
@@ -30,6 +35,9 @@ const CHIP_GROUP_LABEL = 'Filter by capability';
 const UNAVAILABLE_TEXT = 'Temporarily unavailable';
 const NOT_OFFERED_TEXT = 'Not available in this app';
 const EVENT_TAG_LABEL = 'Free during event';
+const FREE_POOL_TAG_LABEL = 'Free';
+const FREE_POOL_COST_TEXT = 'Free, uses no credits';
+const TYPICAL_MESSAGE_NOTE = `A typical message is about ${TYPICAL_MESSAGE_TOKENS.input.toLocaleString()} tokens in and ${TYPICAL_MESSAGE_TOKENS.output.toLocaleString()} out.`;
 
 const RAIL_CLASS =
   'flex w-full shrink-0 flex-row gap-0.5 overflow-x-auto border-b border-[var(--chat-border)] p-1 sm:w-40 sm:flex-col sm:overflow-x-visible sm:overflow-y-auto sm:border-b-0 sm:border-r';
@@ -47,14 +55,7 @@ const CARD_LABEL_CLASS = 'text-xs text-muted-foreground';
 const CARD_VALUE_CLASS = 'text-sm text-foreground';
 
 type CapabilityChipKey =
-  | 'vision'
-  | 'reasoning'
-  | 'tools'
-  | 'search'
-  | 'codeExecution'
-  | 'imageOut'
-  | 'videoOut'
-  | 'audio';
+  'vision' | 'reasoning' | 'tools' | 'search' | 'codeExecution' | 'imageOut' | 'videoOut' | 'audio';
 
 const CAPABILITY_CHIPS: readonly {
   key: CapabilityChipKey;
@@ -118,6 +119,19 @@ function formatTokens(tokens: number | null): string {
   return String(tokens);
 }
 
+function formatMessageCredits(credits: number): string {
+  const amount = credits.toLocaleString(undefined, {
+    maximumFractionDigits: credits < 10 ? 2 : 0,
+  });
+  return `~${amount} ${credits === 1 ? 'credit' : 'credits'}`;
+}
+
+function messageCostLabel(entry: ModelCatalogueEntry, credits: number | null): string | null {
+  if (entry.freePool && !entry.eventAccess) return FREE_POOL_COST_TEXT.toLowerCase();
+  if (credits === null) return null;
+  return `about ${credits.toLocaleString(undefined, { maximumFractionDigits: 2 })} credits per typical message`;
+}
+
 function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
   return (
     <span
@@ -142,6 +156,8 @@ function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
 
 function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () => void }) {
   const capabilities = CAPABILITY_CHIPS.filter((chip) => chip.matches(entry));
+  const messageCredits = entry.freePool ? null : estimateMessageCredits(entry.id);
+  const rates = entry.freePool ? null : creditsPerMillionTokens(entry.id);
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
       <button
@@ -167,18 +183,23 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
           <dd className={CARD_VALUE_CLASS}>{entry.family ?? 'None'}</dd>
         </div>
         <div>
-          <dt className={CARD_LABEL_CLASS}>Price band</dt>
-          <dd className="flex h-5 items-center">
-            {entry.priceBand ? (
-              <span className="flex items-center gap-1.5">
-                <PriceBandMark filled={entry.priceBand.filled} scale={entry.priceBand.scale} />
-                <span className={CARD_VALUE_CLASS}>
-                  {`${entry.priceBand.filled} of ${entry.priceBand.scale}`}
-                </span>
-              </span>
-            ) : (
-              <span className={CARD_VALUE_CLASS}>{NOT_PUBLISHED_TEXT}</span>
-            )}
+          <dt className={CARD_LABEL_CLASS}>Typical message</dt>
+          <dd className={CARD_VALUE_CLASS}>
+            {entry.freePool
+              ? FREE_POOL_COST_TEXT
+              : messageCredits === null
+                ? NOT_PUBLISHED_TEXT
+                : formatMessageCredits(messageCredits)}
+          </dd>
+        </div>
+        <div>
+          <dt className={CARD_LABEL_CLASS}>Credits per 1M tokens</dt>
+          <dd className={CARD_VALUE_CLASS}>
+            {entry.freePool
+              ? FREE_POOL_COST_TEXT
+              : rates
+                ? `${rates.input.toLocaleString()} in · ${rates.output.toLocaleString()} out`
+                : NOT_PUBLISHED_TEXT}
           </dd>
         </div>
         <div>
@@ -198,6 +219,10 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
           <dd className={CARD_VALUE_CLASS}>{formatReleasedOn(entry.releasedOn)}</dd>
         </div>
       </dl>
+
+      {messageCredits !== null ? (
+        <p className={`${CARD_LABEL_CLASS} mt-2`}>{TYPICAL_MESSAGE_NOTE}</p>
+      ) : null}
 
       <p className={`${CARD_LABEL_CLASS} mt-3`}>Capabilities</p>
       <div className="mt-1 flex flex-wrap gap-1">
@@ -304,6 +329,11 @@ export function ModelCatalogue({
       (left, right) => (recentRank.get(left.id) ?? 0) - (recentRank.get(right.id) ?? 0),
     );
   }, [activeChips, entries, favourites, openWeightOnly, query, railKey, recentRank]);
+
+  const messageCredits = useMemo(
+    () => new Map(entries.map((entry) => [entry.id, estimateMessageCredits(entry.id)])),
+    [entries],
+  );
 
   const cardEntry = cardModelId ? entries.find((entry) => entry.id === cardModelId) : undefined;
 
@@ -457,6 +487,11 @@ export function ModelCatalogue({
                 const hardLocked =
                   comingSoon || environment.locked || entry.temporarilyUnavailable || notOffered;
                 const locked = planLocked || hardLocked;
+                const credits =
+                  entry.eventAccess || entry.freePool
+                    ? null
+                    : (messageCredits.get(entry.id) ?? null);
+                const costLabel = messageCostLabel(entry, credits);
                 return (
                   <div key={entry.id} className="flex items-center gap-0">
                     <button
@@ -484,7 +519,9 @@ export function ModelCatalogue({
                                 ? `${entry.displayName} - ${NOT_OFFERED_TEXT}`
                                 : planLocked && entry.minimumPlanLabel
                                   ? `${entry.displayName} - ${entry.minimumPlanLabel} and above`
-                                  : entry.displayName
+                                  : costLabel
+                                    ? `${entry.displayName}, ${costLabel}`
+                                    : entry.displayName
                       }
                       onClick={() => {
                         if (hardLocked) return;
@@ -528,12 +565,22 @@ export function ModelCatalogue({
                             {ROUTER_TAG_LABEL}
                           </span>
                         )}
-                        {entry.priceBand && (
+                        {entry.freePool && !entry.eventAccess ? (
+                          <span
+                            className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}
+                          >
+                            {FREE_POOL_TAG_LABEL}
+                          </span>
+                        ) : credits !== null ? (
+                          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+                            {formatMessageCredits(credits)}
+                          </span>
+                        ) : entry.priceBand && !entry.eventAccess && !entry.freePool ? (
                           <PriceBandMark
                             filled={entry.priceBand.filled}
                             scale={entry.priceBand.scale}
                           />
-                        )}
+                        ) : null}
                         {comingSoon && (
                           <span className={`${TAG_CLASS} bg-muted/50 text-muted-foreground`}>
                             {COMING_SOON_TAG_LABEL}

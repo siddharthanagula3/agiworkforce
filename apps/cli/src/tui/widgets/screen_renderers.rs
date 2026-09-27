@@ -631,6 +631,7 @@ pub struct UsageSummary {
     pub cache_read_tokens: u32,
     pub cache_write_tokens: u32,
     pub estimated_cost_usd: f64,
+    pub by_model: Vec<(String, f64)>,
     pub turn_count: u32,
     pub model: String,
     pub account_lines: Vec<String>,
@@ -664,11 +665,18 @@ pub fn render_usage(usage: &UsageSummary) -> String {
             fmt_number(usage.cache_write_tokens as u64)
         ),
         format!(
-            "    Estimated cost:      {:>9}",
-            format!("${:.4}", usage.estimated_cost_usd)
+            "    Estimated credits:   {:>9}",
+            crate::cost_ledger::format_usd_as_credits(usage.estimated_cost_usd)
         ),
         format!("    Turn count:          {:>9}", usage.turn_count),
         format!("    Model:               {}", usage.model),
+    ]);
+    body.extend(
+        crate::usage_summary::session_model_lines(&usage.by_model)
+            .into_iter()
+            .map(|line| format!("    {line}")),
+    );
+    body.extend([
         String::new(),
         "  Tip: see https://agiworkforce.com/pricing for plan details.".to_string(),
     ]);
@@ -1196,19 +1204,20 @@ mod tests {
             cache_read_tokens: 5_432,
             cache_write_tokens: 1_234,
             estimated_cost_usd: 0.2347,
+            by_model: Vec::new(),
             turn_count: 15,
             model: "fixture-render-model".into(),
             account_lines: vec![
                 "Account usage".into(),
-                "  Plan: Max 15x".into(),
-                "  Weekly: 450 of 2500 credits used, 2050 left, resets in 1d 12h".into(),
+                "  Plan: Max 20x".into(),
+                "  Weekly: 450 of 2,500 credits used, 2,050 left, resets in 1d 12h".into(),
             ],
         };
         let s = render_usage(&usage);
         assert!(s.contains("Usage"));
         assert!(s.contains("Account usage"));
-        assert!(s.contains("Plan: Max 15x"));
-        assert!(s.contains("2050 left"));
+        assert!(s.contains("Plan: Max 20x"));
+        assert!(s.contains("2,050 left"));
         assert!(s.contains("Session estimate"));
         assert!(s.contains("Input tokens:"));
         assert!(s.contains("12,345"));
@@ -1216,7 +1225,7 @@ mod tests {
         assert!(s.contains("8,910"));
         assert!(s.contains("Cache read"));
         assert!(s.contains("5,432"));
-        assert!(s.contains("$0.2347"));
+        assert!(s.contains("46.94 credits"));
         assert!(s.contains("Turn count:"));
         assert!(s.contains("15"));
         assert!(s.contains("fixture-render-model"));
