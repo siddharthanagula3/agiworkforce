@@ -64,6 +64,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
 
 import { GET, POST } from './route';
+import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 
 function request() {
   return new NextRequest('http://localhost/api/connectors/custom', {
@@ -106,7 +107,7 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
   });
 
   it('uses the Pro plan limit from the shared billing catalog', async () => {
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mocks.query.mockImplementation(async (sql: string) => {
       const text = String(sql);
       if (text.includes('user_custom_connectors')) return [{ count: '1' }];
@@ -133,22 +134,25 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
       String(sql).includes("assert_user_resource_limit('custom_connectors'"),
     ) as [string, unknown[]] | undefined;
     expect(insert, 'the insert must assert the plan limit').toBeDefined();
-    expect(insert![1]).toContain(25);
+    expect(insert![1]).toContain(getCustomRemoteMcpLimit('pro'));
   });
 
-  it('fails closed for an unknown subscription before network work', async () => {
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'starter' });
+  it.each([
+    ['an unrecognised tier', { plan_tier: 'starter', status: 'active' }],
+    ['a lapsed Pro subscription', { plan_tier: 'pro', status: 'canceled' }],
+  ])('holds %s to the Free connector limit before network work', async (_label, subscription) => {
+    mocks.getSubscription.mockResolvedValue(subscription);
     mocks.query.mockImplementation(async (sql: string) =>
-      String(sql).includes('user_custom_connectors') ? [{ count: '0' }] : [],
+      String(sql).includes('user_custom_connectors')
+        ? [{ count: String(getCustomRemoteMcpLimit('free')) }]
+        : [],
     );
 
     const response = await POST(request());
 
     expect(response.status).toBe(400);
     expect(mocks.connect).not.toHaveBeenCalled();
-    expect((await response.json()).error.message).toBe(
-      'Your current subscription does not allow custom connectors. Choose an eligible plan and try again.',
-    );
+    expect((await response.json()).error.message).toContain('1 custom connector');
   });
 });
 

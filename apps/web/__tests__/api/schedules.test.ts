@@ -50,6 +50,7 @@ describe('/api/schedules', () => {
     vi.mocked(assertScheduleQuota).mockResolvedValue(undefined);
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
       plan_tier: 'pro',
+      status: 'active',
     } as never);
   });
 
@@ -108,6 +109,28 @@ describe('/api/schedules', () => {
     expect(createSchedule).toHaveBeenCalledWith(tx, 'user-1', body, { planTier: 'pro' });
   });
 
+  it('holds a lapsed Pro subscription to the Free schedule allowance', async () => {
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
+      plan_tier: 'pro',
+      status: 'canceled',
+    } as never);
+    vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
+      new ScheduleLimitError('Free plans do not include scheduled tasks.', 'free', 0),
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/schedules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Daily briefing', prompt: 'Brief me' }),
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(assertScheduleQuota).toHaveBeenCalledWith(db, 'user-1', 'free');
+    expect(createSchedule).not.toHaveBeenCalled();
+  });
+
   it('refuses to arm another unattended run past the plan ceiling', async () => {
     vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
       new ScheduleLimitError('Free plans do not include scheduled tasks.', 'free', 0),
@@ -128,6 +151,7 @@ describe('/api/schedules', () => {
   it('returns the canonical plan-limit message before the workspace feature gate for Free', async () => {
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValueOnce({
       plan_tier: 'free',
+      status: 'active',
     } as never);
     vi.mocked(assertScheduleQuota).mockRejectedValueOnce(
       new ScheduleLimitError(

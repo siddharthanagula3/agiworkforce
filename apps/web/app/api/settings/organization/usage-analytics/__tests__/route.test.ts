@@ -37,7 +37,13 @@ function bind({ role = 'admin' as 'owner' | 'admin' | 'member' | 'viewer' } = {}
     if (/from public\.organization_members/i.test(text)) return [{ organization_id: ORG, role }];
     if (/from public\.managed_usage_requests/i.test(text)) {
       return [
-        { key: null, requests: 3, input_tokens: '100', output_tokens: '50', cost_cents: '75' },
+        {
+          key: null,
+          requests: 3,
+          input_tokens: '100',
+          output_tokens: '50',
+          cost_microusd: '750000',
+        },
       ];
     }
     return [];
@@ -67,14 +73,15 @@ describe('GET /api/settings/organization/usage-analytics', () => {
     expect((await GET(req() as never)).status).toBe(403);
   });
 
-  it('serves an admin', async () => {
+  it('serves an admin the exact settled charge in credits', async () => {
     bind({ role: 'admin' });
     const res = await GET(req() as never);
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as OrganizationUsageResponse;
     expect(body.usage.organizationId).toBe(ORG);
-    expect(body.usage.totals.costCents).toBe(75);
+    expect(body.usage.totals.credits).toBe(150);
+    expect(body.usage.totals).not.toHaveProperty('costCents');
   });
 
   it('clamps an open-ended window rather than scanning everything', async () => {

@@ -38,7 +38,7 @@ function bind({
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];
     if (/from public\.organization_members/i.test(text)) return [{ organization_id: ORG, role }];
     if (/date_trunc\('day'/.test(text)) {
-      return [{ day: '2026-08-22T00:00:00.000Z', requests: 4, cost_cents: '120' }];
+      return [{ day: '2026-08-22T00:00:00.000Z', requests: 4, cost_microusd: '1200000' }];
     }
     if (/unsettled_requests/.test(text)) {
       return [{ latest_activity_at: '2026-08-22T18:30:00.000Z', unsettled_requests: 2 }];
@@ -50,12 +50,14 @@ function bind({
           requests: 4,
           input_tokens: '90',
           output_tokens: '10',
-          cost_cents: '120',
+          cost_microusd: '1200000',
         },
       ];
     }
     if (/group by 1/.test(text)) return [];
-    return [{ key: null, requests: 4, input_tokens: '90', output_tokens: '10', cost_cents: '120' }];
+    return [
+      { key: null, requests: 4, input_tokens: '90', output_tokens: '10', cost_microusd: '1200000' },
+    ];
   });
 }
 
@@ -89,8 +91,9 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
     expect(body).toContain('# as_of');
     expect(body).toContain('# latest_activity_at,2026-08-22T18:30:00.000Z');
     expect(body).toContain('# unsettled_requests,2');
-    expect(body).toContain('day,requests,cost_cents');
-    expect(body).toContain('2026-08-22T00:00:00.000Z,4,120');
+    expect(body).toContain('day,requests,credits');
+    expect(body).toContain('2026-08-22T00:00:00.000Z,4,240');
+    expect(body).not.toContain('cost_cents');
   });
 
   it('exports the dimension that was asked for', async () => {
@@ -98,8 +101,8 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
 
     const body = await (await GET(req('?dimension=member') as never)).text();
 
-    expect(body).toContain('member,requests,input_tokens,output_tokens,cost_cents');
-    expect(body).toContain('user-a,4,90,10,120');
+    expect(body).toContain('member,requests,input_tokens,output_tokens,credits');
+    expect(body).toContain('user-a,4,90,10,240');
   });
 
   it('falls back to the daily sheet for an unknown dimension', async () => {
@@ -107,7 +110,7 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
 
     const body = await (await GET(req('?dimension=passwords') as never)).text();
 
-    expect(body).toContain('day,requests,cost_cents');
+    expect(body).toContain('day,requests,credits');
   });
 
   it('neutralises a key a spreadsheet would run as a formula', async () => {

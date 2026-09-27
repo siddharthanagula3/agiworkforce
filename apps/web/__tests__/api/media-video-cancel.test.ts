@@ -117,37 +117,51 @@ describe('POST /api/media/video/cancel', () => {
     mocks.scoped.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
   });
 
-  it('records Google cancellation without inventing an upstream cancellation call', async () => {
+  it.each([
+    ['Google', job()],
+    [
+      'OpenRouter',
+      job({
+        provider: 'openrouter',
+        model: 'catalog-video-model',
+        providerTaskId: 'synthetic-provider-task',
+      }),
+    ],
+  ])(
+    'ends a cancelled %s job at once and says the result will not be charged',
+    async (_provider, active) => {
+      const requested = job({ ...active, cancelRequestedAt: new Date().toISOString() });
+      const ended = job({
+        ...requested,
+        status: 'failed',
+        terminalAt: new Date().toISOString(),
+      });
+      mocks.getJob.mockResolvedValue(active);
+      mocks.requestCancel.mockResolvedValue(requested);
+      mocks.reconcile.mockResolvedValue(ended);
+
+      const response = await POST(request());
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data).toMatchObject({
+        task_id: JOB_ID,
+        status: 'failed',
+        cancel_requested: true,
+        provider_cancellation: 'unsupported',
+        message: expect.stringContaining('you will not be charged'),
+      });
+      expect(mocks.requestCancel).toHaveBeenCalledWith({ db, jobId: JOB_ID, userId: 'user-1' });
+      expect(mocks.reconcile).toHaveBeenCalledWith(db, requested);
+    },
+  );
+
+  it('still records the cancellation when the immediate settlement is deferred', async () => {
     const active = job();
     const requested = job({ cancelRequestedAt: new Date().toISOString() });
     mocks.getJob.mockResolvedValue(active);
     mocks.requestCancel.mockResolvedValue(requested);
-
-    const response = await POST(request());
-    const data = await response.json();
-
-    expect(response.status).toBe(202);
-    expect(data).toMatchObject({
-      task_id: JOB_ID,
-      cancel_requested: true,
-      provider_cancellation: 'unsupported',
-    });
-    expect(mocks.requestCancel).toHaveBeenCalledWith({ db, jobId: JOB_ID, userId: 'user-1' });
-    expect(mocks.reconcile).not.toHaveBeenCalled();
-  });
-
-  it('reports OpenRouter cancellation as unsupported without inventing provider egress', async () => {
-    const active = job({
-      provider: 'openrouter',
-      model: 'catalog-video-model',
-      providerTaskId: 'synthetic-provider-task',
-    });
-    const requested = job({
-      ...active,
-      cancelRequestedAt: new Date().toISOString(),
-    });
-    mocks.getJob.mockResolvedValue(active);
-    mocks.requestCancel.mockResolvedValue(requested);
+    mocks.reconcile.mockRejectedValue(new Error('claim held by another worker'));
 
     const response = await POST(request());
 
@@ -157,7 +171,6 @@ describe('POST /api/media/video/cancel', () => {
       cancel_requested: true,
       provider_cancellation: 'unsupported',
     });
-    expect(mocks.reconcile).not.toHaveBeenCalled();
   });
 
   it('routes a Runway request through the claimed shared reconciler', async () => {

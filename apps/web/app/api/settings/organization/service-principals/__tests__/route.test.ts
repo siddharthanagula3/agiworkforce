@@ -150,7 +150,9 @@ describe('organization service principals route', () => {
 
     const response = await GET(get({ authorization: `Bearer ${KEY_TOKEN}` }) as never);
     expect(response.status).toBe(403);
-    expect(await response.text()).toContain('identity.read');
+    const refusal = await response.text();
+    expect(refusal).toContain('not scoped for admin.identity.view');
+    expect(refusal).toContain('It carries admin.audit.view');
   });
 
   it('refuses a workspace API key on the write, whatever it is scoped for', async () => {

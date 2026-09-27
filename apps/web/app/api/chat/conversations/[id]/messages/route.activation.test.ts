@@ -31,6 +31,14 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('./lib/generate-title', () => ({ scheduleConversationTitleGeneration: vi.fn() }));
 vi.mock('./lib/index-artifacts', () => ({ scheduleArtifactIndexing: vi.fn() }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 const { POST } = await import('./route');
 
 const context = { params: Promise.resolve({ id: CONVERSATION_ID }) };
