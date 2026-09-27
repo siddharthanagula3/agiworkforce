@@ -223,6 +223,16 @@ pub(crate) fn session_persistence_enabled() -> bool {
     SESSION_PERSISTENCE_ENABLED.load(Ordering::Relaxed)
 }
 
+static MEMORY_ENABLED: AtomicBool = AtomicBool::new(true);
+
+pub(crate) fn set_memory_enabled(enabled: bool) {
+    MEMORY_ENABLED.store(enabled, Ordering::Relaxed);
+}
+
+pub(crate) fn memory_enabled() -> bool {
+    MEMORY_ENABLED.load(Ordering::Relaxed)
+}
+
 /// Serializes the tests that flip the process-wide policy against the tests
 /// that rely on the default. The policy is genuinely global, so the tests that
 /// mutate it must not run concurrently with the ones that read it.

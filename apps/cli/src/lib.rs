@@ -826,6 +826,9 @@ enum Command {
         /// Accept `?token=` for browser clients. Prefer headers because URLs are logged.
         #[arg(long)]
         allow_query_token: bool,
+        /// Run without saved memory: sessions neither read memories nor save new ones.
+        #[arg(long)]
+        no_memory: bool,
     },
     /// Continue previous session, from this device or from your account.
     Resume {
@@ -3647,7 +3650,9 @@ pub async fn run_main() -> Result<()> {
                 auth_token,
                 allowed_origin,
                 allow_query_token,
+                no_memory,
             } => {
+                cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
                 let host = std::sync::Arc::new(app_server::CliDeveloperSessionHost::new(
                     app_config.clone(),
