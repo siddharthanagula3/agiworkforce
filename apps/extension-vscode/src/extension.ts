@@ -4,16 +4,21 @@ import {
   PULL_CLOUD_TASK_COMMAND,
   parseCloudTaskHandoffQuery,
   pullCloudResultIntoCheckout,
+  readWorkspaceCloudSource,
   registerContextHandoffUriHandler,
   resolveGitCheckoutHost,
   type ContextHandoffTarget,
 } from './features/context-handoff';
 import {
+  CONTINUE_IN_CLOUD_COMMAND,
+  continueInCloud,
   OPEN_CLOUD_CODE_SESSION_COMMAND,
   resolveCloudCodeApi,
   showCloudCodeSession,
 } from './features/cloud-tasks';
 import { getCloudWebOrigin } from './utils/api';
+import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
+import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
@@ -189,6 +194,21 @@ export function activate(context: vscode.ExtensionContext): void {
             },
           });
         },
+      ),
+      vscode.commands.registerCommand(CONTINUE_IN_CLOUD_COMMAND, () =>
+        continueInCloud({
+          readSource: readWorkspaceCloudSource,
+          resolveApi: async () => {
+            const code = await resolveCloudCodeApi(context.secrets);
+            return code.status === 'ready' ? code.api : null;
+          },
+          modelId: () =>
+            resolveCloudCodeAgentModel(
+              normalizeConfiguredModelId(Config.model()),
+              resolveTierSync(context),
+            ),
+          titleFor: (goal) => goal.split('\n')[0]?.trim() ?? goal,
+        }),
       ),
     );
   });
