@@ -30,7 +30,8 @@ boundary from Local and BYOK. CLI access is a managed developer-surface
 benefit on Pro, Max 5x, Max 20x, Team, and Enterprise. Free and Basic accounts
 can keep using Local/BYOK, but the CLI does not present managed models as
 unlocked. Managed usage is counted in credits per 5-hour window, week and
-month; `agi usage` shows what is left in each.
+month; `agi usage` shows what is left in each, and `agi plans` shows what each
+plan includes.
 
 | Plan           | Public price                     | Credits per 5 hours / week / month | CLI Managed Cloud |
 | -------------- | -------------------------------- | ---------------------------------- | ----------------- |
