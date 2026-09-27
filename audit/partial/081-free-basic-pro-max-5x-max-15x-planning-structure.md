@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S81.01: Versioned plan catalog.
-
-- Done when: One plan catalog with a version number drives pricing and checkout, and each subscription records the catalog version it was sold under.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Store the catalog version on each subscription and read it back: the reader resolveSubscriberPlan has no caller and no subscription column holds the version, so the version is a constant only. | persistence |
-| desktop | partial | Same gap as web (desktop renders the hosted web app): catalog version is never recorded against a subscription. | persistence |
-
-Code: `packages/contracts/types/src/billing-plan-catalog.ts:11-16`, `apps/web/app/api/checkout/route.ts:157-164`, `apps/web/lib/services/plan-catalog-service.ts:69-88`
-
 ## S81.03: Basic-plan feature bundle.
 
 - Done when: The Basic plan has a defined, priced bundle (capabilities and limits) shown on pricing and in-app and enforced from the catalog.
@@ -70,15 +58,13 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 - Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
-| desktop | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
 | mobile | partial | Mobile has no plan comparison; it only tells a blocked user which plan a feature needs (paywall sheet). | ui |
 
-Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/app/pricing/page.tsx:206-217`, `packages/contracts/types/src/billing-catalog.ts:208-227`, `apps/web/app/api/media/image/generate/route.ts:223-226`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`
 
 ## S81.12: Separate context limits.
 
@@ -171,18 +157,6 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/we
 | vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:1091-1129`, `apps/web/app/api/billing/overage/route.ts:73-85`, `apps/web/lib/services/managed-usage-request-service.ts:425-445`, `apps/web/db/neon/0281_managed_usage_overage_classification.sql:1-27`
-
-## S81.22: Grandfathered plan versions.
-
-- Done when: Subscribers on a retired plan or price keep what they bought (price, plan and allowances) while new buyers are sent to the successor.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Keep a grandfathered subscriber's allowances and limits: only the Stripe price and stored tier survive a retirement, while credits and limits always follow today's catalog, and the catalog version sold is never recorded. | persistence, handler |
-| desktop | partial | Same as web (hosted web app). | persistence, handler |
-
-Code: `packages/contracts/types/src/billing-plan-catalog.ts:28-38`, `apps/web/app/api/stripe-webhook/lib/db.ts:900-905`, `apps/web/app/api/stripe-webhook/lib/db.ts:838-858`, `apps/web/app/api/cron/reconcile-billed-plans/route.ts:36-48`
 
 ## S81.23: Upgrade effective time.
 
