@@ -23,7 +23,9 @@ export const TIER_METERED_UNITS = [
 export type FreeDailyUnit =
   'message_writes' | 'conversation_creates' | 'egress_bytes' | 'email_sends' | 'vector_queries';
 
-export type TierMeteredUnit = (typeof TIER_METERED_UNITS)[number] | FreeDailyUnit;
+export type MonthlyMeteredUnit = (typeof TIER_METERED_UNITS)[number];
+
+export type TierMeteredUnit = MonthlyMeteredUnit | FreeDailyUnit;
 
 const FREE_DAILY_CAP_BY_UNIT: Readonly<Record<FreeDailyUnit, FreeDailyCap>> = Object.freeze({
   message_writes: 'messageWrites',
@@ -237,7 +239,7 @@ async function readConsumedTierUnits(
 }
 
 export interface TierUnitUsage extends TierUnitAllowance {
-  unit: TierMeteredUnit;
+  unit: MonthlyMeteredUnit;
   consumed: number;
 }
 
