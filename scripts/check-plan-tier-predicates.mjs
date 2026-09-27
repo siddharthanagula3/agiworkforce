@@ -124,10 +124,6 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'purchased credits and the overage opt-in live on the payer’s own row',
   },
   {
-    path: 'apps/web/lib/services/managed-usage-request-service.ts',
-    why: 'overage headroom reads the payer’s own overage opt-in',
-  },
-  {
     path: 'apps/web/lib/server/subscription-owner-handoff.ts',
     why: 'an ownership handoff moves the row itself',
   },
