@@ -65,6 +65,12 @@ const MEMBER_ROLE_PERMISSIONS = expandOrganizationPermissions(
   BUILT_IN_ORGANIZATION_ROLES.member.permissions,
 );
 
+export function roleGrantsAdministration(role: OrganizationRole): boolean {
+  return [...expandOrganizationPermissions(BUILT_IN_ORGANIZATION_ROLES[role].permissions)].some(
+    (permission) => !MEMBER_ROLE_PERMISSIONS.has(permission),
+  );
+}
+
 export function memberAdministrator(caller: {
   kind: 'member' | 'service_principal';
   actorUserId: string;
