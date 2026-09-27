@@ -29,9 +29,19 @@ connections, concurrent responses, sandboxes, connector tools and scheduled
 tasks all scale with the plan. The pricing page carries the current prices,
 regional prices and per-plan limits.
 
+## Monthly and yearly billing
+
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed
-monthly or yearly. A yearly Pro plan bought before 27 September 2026 keeps
-renewing yearly at its price until you change or cancel it.
+monthly or yearly.
+
+If you already pay yearly for Pro, nothing changes. Your subscription keeps its
+price and renews yearly until you switch to monthly or cancel. Once you switch
+to monthly, yearly billing is no longer available for that plan.
+
+**Switch to monthly billing** in Settings, Billing makes the switch when your
+yearly term ends. Upgrading to Max 5x or Max 20x moves you to that plan's
+monthly price straight away, and the unused part of your year is credited
+toward future invoices.
 
 ## Cancelling
 

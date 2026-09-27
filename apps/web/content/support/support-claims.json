@@ -1983,7 +1983,7 @@
     {
       "id": "billing-individual-plans-monthly-team-yearly",
       "doc": "billing-and-plans",
-      "section": "Upgrading",
+      "section": "Monthly and yearly billing",
       "kind": "prose",
       "sentence": "Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed monthly or yearly.",
       "implementation": [
@@ -2005,6 +2005,85 @@
           "kind": "test",
           "file": "apps/web/app/pricing/page.test.tsx",
           "name": "sells individual plans monthly only, with no annual toggle beside them"
+        }
+      ]
+    },
+    {
+      "id": "billing-yearly-pro-nothing-changes",
+      "doc": "billing-and-plans",
+      "section": "Monthly and yearly billing",
+      "kind": "prose",
+      "sentence": "If you already pay yearly for Pro, nothing changes.",
+      "implementation": [
+        "apps/web/lib/price-tier-mapping.ts#STRIPE_PRICE_PRO_YEARLY",
+        "packages/contracts/types/src/billing-plan-catalog.ts#WITHDRAWN_BILLING_INTERVALS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/stripe-plan-change.test.ts",
+          "name": "keeps renewing yearly and offers only monthly prices to move to"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-plan-catalog.test.ts",
+          "name": "tells a grandfathered yearly subscriber that nothing changes until they switch"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "keeps a yearly Pro subscriber on what they bought and says nothing changes"
+        }
+      ]
+    },
+    {
+      "id": "billing-no-way-back-to-yearly",
+      "doc": "billing-and-plans",
+      "section": "Monthly and yearly billing",
+      "kind": "prose",
+      "sentence": "Once you switch to monthly, yearly billing is no longer available for that plan.",
+      "implementation": [
+        "packages/contracts/types/src/billing-catalog.ts#planOffersBillingInterval",
+        "apps/web/lib/server/stripe-plan-change.ts#resolveTargetPrice"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/stripe-plan-change.test.ts",
+          "name": "refuses the same switch for a subscription already billed monthly"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/validations/__tests__/checkout.seats.test.ts",
+          "name": "refuses yearly for the individual plan %s"
+        }
+      ]
+    },
+    {
+      "id": "billing-switch-to-monthly-at-term-end",
+      "doc": "billing-and-plans",
+      "section": "Monthly and yearly billing",
+      "kind": "prose",
+      "sentence": "**Switch to monthly billing** in Settings, Billing makes the switch when your yearly term ends.",
+      "implementation": [
+        "apps/web/features/settings/sections/BillingSection.tsx#requestSwitchToMonthly",
+        "apps/web/lib/server/stripe-plan-change.ts#scheduleDowngrade"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
+          "name": "switches a yearly Pro subscriber to monthly billing at renewal after confirming"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/stripe-plan-change.test.ts",
+          "name": "schedules the switch to monthly Pro for the end of the yearly term"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/billing/components/BillingPlanNotices.tsx",
+          "text": "Switch to monthly billing"
         }
       ]
     },

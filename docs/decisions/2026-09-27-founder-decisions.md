@@ -19,12 +19,25 @@ The founder's billing decisions of 2026-09-27, in the shape of
   month against a $10 worst case, a 39.5% worst-case margin in
   `docs/research/unit-economics-2026-09-27.md`, while yearly Team at $20 a seat
   a month meets the ceiling exactly.
-- Existing subscribers: a yearly Pro subscription bought before this decision
-  keeps what it bought. Its Stripe Price stays mapped to Pro, so it keeps
-  renewing yearly at its price with Pro's allowances until the subscriber
-  changes or cancels it; nobody is moved. That is more than section 10 of the
-  terms promises, which is an annual subscription's price through the end of
-  its current term. No new yearly purchase of an individual plan is possible.
+- Existing subscribers: a legacy yearly Pro subscription keeps renewing yearly
+  at its price, with Pro's allowances, until the customer changes or cancels
+  it. Nobody is moved, so no customer's price changes and the 30-day notice in
+  section 10 of the terms is not triggered. No new yearly purchase of an
+  individual plan is possible. What a yearly subscriber sees, in Settings >
+  Billing, the plan change previews and the changelog: "If you already pay
+  yearly for Pro, nothing changes. Your subscription keeps its price and renews
+  yearly until you switch to monthly or cancel. Once you switch to monthly,
+  yearly billing is no longer available for that plan."
+- The paths open to a yearly subscriber: renewal stays yearly; upgrading to
+  Max 5x or Max 20x moves the subscription to that plan's monthly price at
+  once, with the usual proration preview and the unused part of the year
+  credited to the customer's Stripe balance for later invoices; Switch to
+  monthly billing in Settings > Billing, or a smaller plan, takes effect when
+  the yearly term ends; nothing offers a way back to yearly.
+- Not decided here: moving legacy yearly subscribers to monthly without their
+  asking. That changes their price, so it needs 30 days' notice on /pricing and
+  /changelog, an email and a Stripe schedule per subscription, and it is a
+  separate founder decision.
 - Follow-through:
   - the catalog publishes no yearly price for an individual plan and its type
     refuses one; `WITHDRAWN_BILLING_INTERVALS` records the withdrawal, and the
@@ -37,11 +50,22 @@ The founder's billing decisions of 2026-09-27, in the shape of
   - `STRIPE_PRICE_PRO_YEARLY` is no longer required or sold; it stays optional
     so renewals of existing yearly Pro subscriptions still resolve to Pro
     (`apps/web/lib/price-tier-mapping.ts`);
+  - `assertUpgradeBillingInterval` lets a yearly subscriber upgrade onto a plan
+    that is sold monthly only, and the preview clamps what is due today at zero
+    and shows the rest as credit (`apps/web/lib/server/stripe-plan-change.ts`,
+    `apps/web/app/api/upgrade/preview/route.ts`);
+  - `readPlanChangeState` offers the same plan's monthly price as
+    `cadenceSwitch`, and `scheduleDowngrade` schedules it for the end of the
+    yearly term (`apps/web/lib/server/stripe-plan-change.ts`);
   - the pricing page's only cadence toggle is Team's; the chat upgrade chooser,
     `/upgrade/[plan]` and the desktop plans modal price individual plans
-    monthly, Settings > Billing shows a yearly subscriber the yearly price they
-    pay and that Pro is now sold monthly only, and the mobile store catalog has
-    no yearly product (`packages/contracts/types/src/mobile-iap.ts`);
+    monthly; Settings > Billing shows a yearly subscriber the yearly price they
+    pay, the notice above and Switch to monthly billing; the mobile store
+    catalog has no yearly product (`packages/contracts/types/src/mobile-iap.ts`);
+  - `grandfatheredYearlyBillingNotice` in
+    `packages/contracts/types/src/billing-plan-catalog.ts` is the one source of
+    the notice, and the 2026-09-27 changelog entry repeats it
+    (`apps/web/lib/changelog-entries.ts`);
   - founder: archive the yearly Pro Price in Stripe, which stops new use while
     existing subscriptions keep renewing on it, and remove it from the billing
     portal's plan-switching products.
