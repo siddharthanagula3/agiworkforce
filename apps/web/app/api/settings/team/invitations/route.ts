@@ -129,6 +129,7 @@ async function handleCreate(request: NextRequest) {
     role: invitation.role,
     organizationName: await readOrganizationName(db, organizationId),
     expiresAt: String(invitation.expires_at),
+    sender: { db, userId },
   });
 
   logger.info(
