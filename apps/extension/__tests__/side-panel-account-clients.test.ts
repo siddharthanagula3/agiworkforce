@@ -112,6 +112,7 @@ function schedulesClient(
     deleteSchedule: vi.fn(),
     listRuns: vi.fn(),
     runNow: vi.fn(),
+    resolveRunApproval: vi.fn(),
     ...overrides,
   };
 }
