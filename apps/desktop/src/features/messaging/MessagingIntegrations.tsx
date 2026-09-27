@@ -184,9 +184,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-danger-fill/10 border border-danger-fill/30 rounded text-danger-text">
-          {error}
-        </div>
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded text-red-700">{error}</div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -242,7 +240,7 @@ export const MessagingIntegrations: React.FC<{ userId: string }> = ({ userId }) 
                   <span
                     className={`px-2 py-1 rounded text-xs ${
                       connection.is_active
-                        ? 'bg-success-fill/10 text-success-text'
+                        ? 'bg-green-100 text-green-700'
                         : 'bg-gray-100 text-gray-700'
                     }`}
                   >

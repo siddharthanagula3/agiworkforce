@@ -174,7 +174,7 @@ export function QRPairingCard() {
                 className="rounded-md p-2 text-slate-500 transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500"
               >
                 {copied ? (
-                  <Check className="h-4 w-4 text-success-text" aria-hidden="true" />
+                  <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
                 ) : (
                   <Copy className="h-4 w-4" aria-hidden="true" />
                 )}
@@ -191,7 +191,7 @@ export function QRPairingCard() {
         )}
 
         {error && (
-          <div className="rounded-md border border-danger-fill/30 bg-danger-fill/10 p-2 text-xs text-danger-text">
+          <div className="rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700">
             {error}
           </div>
         )}

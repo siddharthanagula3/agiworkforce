@@ -146,7 +146,7 @@ export function PlanCard({
             </span>
           )}
           {isFree && (
-            <span className="inline-flex items-center rounded-full bg-success-fill/10 px-2 py-0.5 text-[10px] font-semibold text-success-text">
+            <span className="inline-flex items-center rounded-full bg-green-500/12 px-2 py-0.5 text-[10px] font-semibold text-green-400">
               Always free
             </span>
           )}
@@ -158,7 +158,7 @@ export function PlanCard({
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (
           <li key={bullet} className="flex items-start gap-2 text-xs text-muted-foreground">
-            <Check size={12} className="mt-0.5 shrink-0 text-success-text" aria-hidden="true" />
+            <Check size={12} className="mt-0.5 shrink-0 text-green-500" aria-hidden="true" />
             {bullet}
           </li>
         ))}
