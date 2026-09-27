@@ -57,7 +57,7 @@ Code: `apps/cli/src/repl/mod.rs:214-231`, `apps/cli/src/tui/tui_app.rs:2555-2562
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | TUI code-block syntax highlighting and the loading shimmer emit 24-bit RGB without checking NO_COLOR, and --plain is not passed to the `colored` styles; route them through the no-colour check. | handler |
+| cli | partial | TUI code highlighting now honours NO_COLOR and the shimmer already did, but --plain is not passed to the `colored` styles; route them through the no-colour check. | handler |
 
 Code: `apps/cli/src/output.rs:64-71`, `apps/cli/src/tui/terminal_palette.rs:306-341`, `apps/cli/src/tui/markdown_renderer.rs:368-371`
 
