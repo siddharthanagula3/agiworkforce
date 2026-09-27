@@ -4,11 +4,14 @@ import * as Crypto from 'expo-crypto';
 import {
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleResponseSchema,
+  ManagedCloudScheduleRunApprovalResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   managedCloudSchedulePath,
+  managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
   type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleTask,
   type ManagedCloudScheduleRecurrence,
 } from '@agiworkforce/cloud-contracts';
@@ -79,6 +82,7 @@ function mapSchedule(task: ManagedCloudScheduleTask): Schedule {
     nextRunAt: task.nextExecutionAt,
     lastRunStatus:
       task.lastExecutedAt === null ? null : task.lastError === null ? 'success' : 'failed',
+    pausedReason: task.pausedReason ?? null,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
   };
@@ -99,6 +103,7 @@ function mapRun(run: ManagedCloudScheduleRun): ScheduleRun {
     completedAt: run.completedAt,
     result: resultText(run),
     error: run.error,
+    pendingApproval: run.pendingApproval ?? null,
   };
 }
 
@@ -169,6 +174,24 @@ export async function fetchScheduleRuns(scheduleId: string): Promise<ScheduleRun
     'Schedule run history returned an invalid response.',
   );
   return data.runs.map(mapRun);
+}
+
+export async function resolveScheduleRunApproval(
+  scheduleId: string,
+  runId: string,
+  approval: ManagedCloudScheduleRunApproval,
+): Promise<ScheduleRun> {
+  assertSchedulesAvailable();
+  const value = await api.post<unknown>(
+    managedCloudScheduleRunApprovalPath(scheduleId, runId),
+    approval,
+  );
+  const data = parseResponse(
+    ManagedCloudScheduleRunApprovalResponseSchema,
+    value,
+    'The approval returned an invalid response.',
+  );
+  return mapRun(data.run);
 }
 
 export async function triggerScheduleNow(id: string): Promise<ScheduleRun> {

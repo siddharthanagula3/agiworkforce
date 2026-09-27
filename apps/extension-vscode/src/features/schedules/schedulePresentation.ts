@@ -1,5 +1,6 @@
 import type {
   ManagedCloudScheduleRun,
+  ManagedCloudScheduleRunPendingApproval,
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 
@@ -25,7 +26,10 @@ const RUN_STATUS_FACES: Record<ScheduleRunStatus, ScheduleStatusFace> = {
   failed: { label: 'Failed', icon: 'error' },
   timeout: { label: 'Timed out', icon: 'clock' },
   cancelled: { label: 'Cancelled', icon: 'circle-slash' },
+  awaiting_approval: { label: 'Waiting for approval', icon: 'shield' },
 };
+
+const WAITING_FOR_APPROVAL = 'a run is waiting for your approval';
 
 export function scheduleStatusLabel(status: ScheduleStatus): string {
   return SCHEDULE_STATUS_FACES[status].label;
@@ -93,6 +97,7 @@ export function scheduleLastRunLabel(task: ManagedCloudScheduleTask): string {
 export function scheduleDescription(task: ManagedCloudScheduleTask, now = Date.now()): string {
   return [
     scheduleStatusLabel(task.status),
+    ...(task.pausedReason === 'approval_required' ? [WAITING_FOR_APPROVAL] : []),
     scheduleCadence(task),
     scheduleNextRunLabel(task, now),
     scheduleLastRunLabel(task),
@@ -107,6 +112,9 @@ export function scheduleTooltipLines(task: ManagedCloudScheduleTask, now = Date.
     scheduleLastRunLabel(task),
     `${task.executionCount} run${task.executionCount === 1 ? '' : 's'} so far`,
   ];
+  if (task.pausedReason === 'approval_required') {
+    lines.push(`Paused: ${WAITING_FOR_APPROVAL}. Open its runs to approve or deny it.`);
+  }
   if (task.model !== null && task.model.trim() !== '') lines.push(`Model: ${task.model}`);
   if (task.prompt !== null && task.prompt.trim() !== '') lines.push(task.prompt.trim());
   if (task.lastError !== null && task.lastError.trim() !== '') {
@@ -129,8 +137,21 @@ export function scheduleRunDetail(run: ManagedCloudScheduleRun): string {
     run.durationMs === null ? 'no duration reported' : formatDuration(run.durationMs),
   ];
   if (run.attemptCount > 1) parts.push(`attempt ${run.attemptCount}`);
+  if (run.pendingApproval) {
+    parts.push(run.pendingApproval.toolCalls.map((call) => call.summary).join('; '));
+  }
   if (run.error !== null && run.error.trim() !== '') parts.push(run.error.trim());
   return parts.join(' · ');
+}
+
+export function scheduleApprovalDetail(pending: ManagedCloudScheduleRunPendingApproval): string {
+  return [
+    ...pending.toolCalls.flatMap((call) => [
+      `${call.summary} (${call.name})`,
+      ...(call.input ? [call.input] : []),
+    ]),
+    `The request expires ${formatTimestamp(pending.expiresAt)}.`,
+  ].join('\n');
 }
 
 const SCHEDULE_FAILURE_REASON_MAX_LENGTH = 240;

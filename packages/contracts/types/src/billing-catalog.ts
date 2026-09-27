@@ -295,6 +295,10 @@ export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
 
 export const PLATFORM_SCHEDULE_RUNS_PER_SWEEP = 50;
 
+export const PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR = 30;
+
+export const PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY = 720;
+
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
   customMcpServers: BillingPlanLimit;

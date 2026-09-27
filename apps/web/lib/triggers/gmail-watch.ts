@@ -72,8 +72,7 @@ type GmailAccessFailure = { ok: false; error: string };
 type GmailSession = (resource: string, body?: Record<string, unknown>) => Promise<GmailCall>;
 
 type WatchOutcome =
-  | { ok: true; historyId: string; expiresAt: string | null }
-  | { ok: false; error: string };
+  { ok: true; historyId: string; expiresAt: string | null } | { ok: false; error: string };
 
 export interface GmailReadOutcome {
   matched: number;

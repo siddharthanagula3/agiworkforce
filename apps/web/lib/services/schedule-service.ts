@@ -3,9 +3,15 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
+  ManagedCloudScheduleRunApprovalToolCallSchema,
   type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleRunApprovalToolCall,
+  type ManagedCloudScheduleRunPendingApproval,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
+import type { ToolLoopApprovalCheckpoint } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import { APPROVAL_CHECKPOINT_TTL_HOURS } from '@/lib/services/cloud-agent-run-service';
 import {
   creditsFromMicrousd,
   formatCredits,
@@ -61,6 +67,7 @@ const MAX_BATCH_SIZE = 100;
 const MAX_PAGE_SIZE = 100;
 const MAX_ERROR_LENGTH = 2_000;
 const SCHEDULE_WORKER_NAME = 'scheduled-task';
+const APPROVAL_EXPIRED_MESSAGE = `Nobody approved or denied the step this run was waiting on within ${APPROVAL_CHECKPOINT_TTL_HOURS} hours, so the run stopped. Resume the schedule to run it again.`;
 
 export { UNATTENDED_RUN_DENIED_STATUSES } from '@/lib/auth/account-lifecycle';
 const MISSED_EXECUTION_GRACE_MS = 2 * SWEEP_INTERVAL_MS;
@@ -160,6 +167,31 @@ export interface ClaimedScheduleRun {
   task: ScheduleTask;
 }
 
+export interface ScheduledRunRoute {
+  provider: string;
+  providerModelId: string;
+  modelKey: string;
+  routeId: string;
+}
+
+export type ScheduledRunApprovalCheckpoint = Pick<
+  ToolLoopApprovalCheckpoint,
+  'sessionId' | 'turnId' | 'nextEventSequence' | 'completedSteps' | 'messages' | 'pendingToolCalls'
+> & {
+  route: ScheduledRunRoute;
+  sensitiveContextPresent: boolean;
+};
+
+export interface ScheduledRunApproval {
+  checkpoint: ScheduledRunApprovalCheckpoint;
+  toolCalls: ManagedCloudScheduleRunApprovalToolCall[];
+}
+
+export interface ScheduledRunResume {
+  checkpoint: ScheduledRunApprovalCheckpoint;
+  decision: ManagedCloudScheduleRunApproval['decision'];
+}
+
 export interface ScheduledExecutionResult {
   text: string;
   model: string;
@@ -167,6 +199,7 @@ export interface ScheduledExecutionResult {
   toolsUsed?: string[];
   usage?: Record<string, unknown>;
   billingStatus?: string;
+  approval?: ScheduledRunApproval;
 }
 
 export type ScheduledTaskExecutor = (
@@ -174,6 +207,7 @@ export type ScheduledTaskExecutor = (
   signal: AbortSignal,
   runId: string,
   scope: ClaimedUserScope & { db: DatabaseAdapter },
+  resume?: ScheduledRunResume,
 ) => Promise<ScheduledExecutionResult>;
 
 interface TaskRow extends Record<string, unknown> {
@@ -232,6 +266,10 @@ interface RunRow extends Record<string, unknown> {
   lease_expires_at: string | null;
   attempt_count: number;
   credits_used_microusd?: number | string | null;
+  approval_checkpoint?: Record<string, unknown> | null;
+  approval_request?: Record<string, unknown> | null;
+  approval_requested_at?: string | null;
+  approval_expires_at?: string | null;
 }
 
 type ClaimRow = TaskRow & {
@@ -251,7 +289,9 @@ function asTaskStatus(value: string): ScheduleTask['status'] {
 }
 
 function asRunStatus(value: string): ScheduleRunStatus {
-  if (['running', 'success', 'failed', 'timeout', 'cancelled'].includes(value)) {
+  if (
+    ['running', 'success', 'failed', 'timeout', 'cancelled', 'awaiting_approval'].includes(value)
+  ) {
     return value as ScheduleRunStatus;
   }
   throw new Error(`Invalid schedule run status: ${value}`);
@@ -312,7 +352,23 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
         ? null
         : creditsFromMicrousd(Number(row.credit_cap_microusd)),
     creditsUsed: creditsFromMicrousd(Number(row.credits_used_microusd ?? 0)),
-    pausedReason: row.paused_reason === 'credit_cap_reached' ? 'credit_cap_reached' : null,
+    pausedReason:
+      row.paused_reason === 'credit_cap_reached' || row.paused_reason === 'approval_required'
+        ? row.paused_reason
+        : null,
+  };
+}
+
+function pendingApprovalOf(row: RunRow): ManagedCloudScheduleRunPendingApproval | null {
+  if (row.status !== 'awaiting_approval') return null;
+  const toolCalls = ManagedCloudScheduleRunApprovalToolCallSchema.array()
+    .min(1)
+    .safeParse(row.approval_request?.['toolCalls']);
+  if (!toolCalls.success || !row.approval_requested_at || !row.approval_expires_at) return null;
+  return {
+    requestedAt: new Date(row.approval_requested_at).toISOString(),
+    expiresAt: new Date(row.approval_expires_at).toISOString(),
+    toolCalls: toolCalls.data,
   };
 }
 
@@ -331,6 +387,7 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     idempotencyKey: row.idempotency_key,
     leaseExpiresAt: row.lease_expires_at,
     attemptCount: row.attempt_count,
+    pendingApproval: pendingApprovalOf(row),
     ...(row.credits_used_microusd === undefined
       ? {}
       : {
@@ -1393,7 +1450,7 @@ export async function finalizeScheduleRun(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
   outcome: {
-    status: Exclude<ScheduleRunStatus, 'running'>;
+    status: Exclude<ScheduleRunStatus, 'running' | 'awaiting_approval'>;
     result?: Record<string, unknown> | ScheduledExecutionResult | null;
     error?: string | null;
     completedAt: Date;
@@ -1582,11 +1639,208 @@ async function announceScheduleRun(
   }
 }
 
+async function announceScheduleApproval(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+  approval: ScheduledRunApproval,
+): Promise<void> {
+  try {
+    await enqueueJob(db, {
+      kind: 'notifications.schedule-completed',
+      userId: claim.task.userId,
+      organizationId: claim.scope.organizationId,
+      idempotencyKey: `schedule-run:${claim.runId}:approval:${approval.checkpoint.completedSteps}`,
+      payload: {
+        taskId: claim.task.id,
+        taskName: claim.task.name,
+        status: 'awaiting_approval',
+        runId: claim.runId,
+        approvalStep: approval.checkpoint.completedSteps,
+        approvalSummary: approval.toolCalls.map((call) => call.summary).join('; '),
+      },
+    });
+  } catch (error) {
+    logger.warn({ error, taskId: claim.task.id }, 'Schedule approval notification was not queued');
+  }
+}
+
+async function awaitScheduleRunApproval(
+  db: DatabaseAdapter,
+  claim: ClaimedScheduleRun,
+  executed: ScheduledExecutionResult & { approval: ScheduledRunApproval },
+  requestedAt: Date,
+): Promise<ScheduleRun> {
+  const { approval, ...result } = executed;
+  const expiresAt = new Date(requestedAt.getTime() + APPROVAL_CHECKPOINT_TTL_HOURS * 3_600_000);
+  const run = await db.transaction(async (tx) => {
+    const [runRow] = await tx.query<RunRow>(
+      `update scheduled_task_runs
+          set status = 'awaiting_approval',
+              result = $3::jsonb,
+              approval_checkpoint = $4::jsonb,
+              approval_request = $5::jsonb,
+              approval_requested_at = $6,
+              approval_expires_at = $7,
+              lease_expires_at = null
+        where id = $1 and task_id = $2 and status = 'running'
+        returning *`,
+      [
+        claim.runId,
+        claim.task.id,
+        JSON.stringify(result),
+        JSON.stringify(approval.checkpoint),
+        JSON.stringify({ toolCalls: approval.toolCalls }),
+        requestedAt.toISOString(),
+        expiresAt.toISOString(),
+      ],
+    );
+    if (!runRow) {
+      const [existing] = await tx.query<RunRow>(
+        `select * from scheduled_task_runs where id = $1 and task_id = $2`,
+        [claim.runId, claim.task.id],
+      );
+      if (!existing) throw new ScheduleNotFoundError('Schedule run not found');
+      return { run: mapScheduleRun(existing), parked: false };
+    }
+    await tx.execute(
+      `update scheduled_tasks
+          set status = 'paused', is_enabled = false, next_execution_at = null,
+              paused_reason = 'approval_required', updated_at = now()
+        where id = $1 and user_id = $2 and status = 'active'`,
+      [claim.task.id, claim.task.userId],
+    );
+    return { run: mapScheduleRun(runRow), parked: true };
+  });
+  if (run.parked) await announceScheduleApproval(db, claim, approval);
+  return run.run;
+}
+
+function resumedNextExecutionAt(task: ScheduleTask, now: Date): string | null {
+  if (task.scheduleType === 'event') return null;
+  if (task.maxExecutions !== null && task.executionCount >= task.maxExecutions) return null;
+  try {
+    const next = getNextExecutionAt(scheduleTiming(task), now, now);
+    if (task.expiresAt && next >= new Date(task.expiresAt)) return null;
+    return next.toISOString();
+  } catch (error) {
+    if (error instanceof NoFurtherOccurrenceError) return null;
+    throw error;
+  }
+}
+
+function approvalCheckpointOf(value: unknown): ScheduledRunApprovalCheckpoint | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const checkpoint = value as Partial<ScheduledRunApprovalCheckpoint>;
+  if (
+    typeof checkpoint.sessionId !== 'string' ||
+    typeof checkpoint.turnId !== 'string' ||
+    typeof checkpoint.nextEventSequence !== 'number' ||
+    typeof checkpoint.completedSteps !== 'number' ||
+    !Array.isArray(checkpoint.messages) ||
+    !Array.isArray(checkpoint.pendingToolCalls) ||
+    checkpoint.pendingToolCalls.length === 0 ||
+    !checkpoint.route ||
+    typeof checkpoint.route.modelKey !== 'string'
+  ) {
+    return null;
+  }
+  return checkpoint as ScheduledRunApprovalCheckpoint;
+}
+
+export async function claimScheduleRunApproval(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    taskId: string;
+    runId: string;
+    approval: ManagedCloudScheduleRunApproval;
+    leaseSeconds?: number;
+    now?: Date;
+  },
+): Promise<{ claim: ClaimedScheduleRun; resume: ScheduledRunResume }> {
+  const leaseSeconds = clampInteger(input.leaseSeconds ?? DEFAULT_LEASE_SECONDS, 5, 300);
+  const now = input.now ?? new Date();
+  return db.transaction(async (tx) => {
+    const [taskRow] = await tx.query<TaskRow>(
+      `select * from scheduled_tasks where id = $1 and user_id = $2 for update`,
+      [input.taskId, input.userId],
+    );
+    if (!taskRow) throw new ScheduleNotFoundError();
+    const [runRow] = await tx.query<RunRow>(
+      `select * from scheduled_task_runs where id = $1 and task_id = $2 for update`,
+      [input.runId, input.taskId],
+    );
+    if (!runRow) throw new ScheduleNotFoundError('Schedule run not found');
+    if (runRow.status !== 'awaiting_approval') {
+      throw new ScheduleConflictError('This run is not waiting for approval');
+    }
+    if (!runRow.approval_expires_at || new Date(runRow.approval_expires_at) <= now) {
+      throw new ScheduleConflictError(APPROVAL_EXPIRED_MESSAGE);
+    }
+    const checkpoint = approvalCheckpointOf(runRow.approval_checkpoint);
+    if (!checkpoint) throw new ScheduleConflictError('This run can no longer be resumed');
+    const pending = checkpoint.pendingToolCalls.map((call) => call.id).sort();
+    const decided = [...new Set(input.approval.toolCallIds)].sort();
+    if (pending.length !== decided.length || pending.some((id, index) => id !== decided[index])) {
+      throw new ScheduleConflictError(
+        'The step waiting for approval has changed. Reload it and decide again.',
+      );
+    }
+    const [resumed] = await tx.query<RunRow>(
+      `update scheduled_task_runs
+          set status = 'running',
+              lease_expires_at = now() + make_interval(secs => $3),
+              approval_checkpoint = null,
+              approval_request = null,
+              approval_requested_at = null,
+              approval_expires_at = null
+        where id = $1 and task_id = $2 and status = 'awaiting_approval'
+        returning *`,
+      [input.runId, input.taskId, leaseSeconds],
+    );
+    if (!resumed) throw new ScheduleConflictError('This run is not waiting for approval');
+    let task = mapScheduleTask(taskRow);
+    if (task.pausedReason === 'approval_required') {
+      const [reactivated] = await tx.query<TaskRow>(
+        `update scheduled_tasks
+            set status = 'active', is_enabled = true, paused_reason = null,
+                next_execution_at = $4::timestamptz, updated_at = now()
+          where id = $1 and user_id = $2 and paused_reason = 'approval_required'
+            and not exists (
+              select 1 from scheduled_task_runs as other
+               where other.task_id = $1 and other.id <> $3
+                 and other.status = 'awaiting_approval'
+            )
+          returning *`,
+        [input.taskId, input.userId, input.runId, resumedNextExecutionAt(task, now)],
+      );
+      if (reactivated) task = mapScheduleTask(reactivated);
+    }
+    return {
+      claim: {
+        runId: resumed.id,
+        scheduledFor: resumed.scheduled_for ?? resumed.started_at,
+        triggerSource: asTriggerSource(resumed.trigger_source),
+        startedAt: resumed.started_at,
+        attemptCount: Number(resumed.attempt_count ?? 1),
+        scope: { userId: taskRow.user_id, organizationId: taskRow.organization_id ?? null },
+        task,
+      },
+      resume: { checkpoint, decision: input.approval.decision },
+    };
+  });
+}
+
 export function processClaimedScheduleRun(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
   execute: ScheduledTaskExecutor,
-  options: { timeoutMs: number; signal?: AbortSignal; now?: () => Date },
+  options: {
+    timeoutMs: number;
+    signal?: AbortSignal;
+    now?: () => Date;
+    resume?: ScheduledRunResume;
+  },
 ): Promise<ScheduleRun> {
   return withSpan(
     'schedule.run',
@@ -1704,7 +1958,12 @@ async function runClaimedSchedule(
   db: DatabaseAdapter,
   claim: ClaimedScheduleRun,
   execute: ScheduledTaskExecutor,
-  options: { timeoutMs: number; signal?: AbortSignal; now?: () => Date },
+  options: {
+    timeoutMs: number;
+    signal?: AbortSignal;
+    now?: () => Date;
+    resume?: ScheduledRunResume;
+  },
 ): Promise<ScheduleRun> {
   const now = options.now ?? (() => new Date());
   const timeoutController = new AbortController();
@@ -1752,7 +2011,7 @@ async function runClaimedSchedule(
         });
       }
     }
-    const missedExecution = detectMissedExecution(claim, now());
+    const missedExecution = options.resume ? null : detectMissedExecution(claim, now());
     if (missedExecution) {
       await auditMissedExecution(claim, missedExecution);
       if (missedExecution.policy === 'skip') {
@@ -1765,7 +2024,9 @@ async function runClaimedSchedule(
         });
       }
     }
-    const conditionCheck = await checkScheduleCondition(db, claim, signal, now());
+    const conditionCheck = options.resume
+      ? null
+      : await checkScheduleCondition(db, claim, signal, now());
     if (conditionCheck && !conditionCheck.met) {
       await releaseExecutionSlot(db, claim);
       return await finalizeScheduleRun(db, claim, {
@@ -1778,10 +2039,21 @@ async function runClaimedSchedule(
     const executed = await Promise.race([
       runWithinScheduleRun(
         { userId: claim.task.userId, taskId: claim.task.id, runId: claim.runId },
-        () => execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
+        () =>
+          options.resume
+            ? execute(claim.task, signal, claim.runId, { ...claim.scope, db }, options.resume)
+            : execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
       ),
       aborted,
     ]);
+    if (executed.approval) {
+      return await awaitScheduleRunApproval(
+        db,
+        claim,
+        { ...executed, approval: executed.approval },
+        now(),
+      );
+    }
     const result =
       missedExecution || conditionCheck
         ? {
@@ -1800,11 +2072,8 @@ async function runClaimedSchedule(
   } catch (error) {
     const externallyCancelled = options.signal?.aborted === true;
     const timedOut = timeoutController.signal.aborted && !externallyCancelled;
-    const status: Exclude<ScheduleRunStatus, 'running' | 'success'> = externallyCancelled
-      ? 'cancelled'
-      : timedOut
-        ? 'timeout'
-        : 'failed';
+    const status: Exclude<ScheduleRunStatus, 'running' | 'success' | 'awaiting_approval'> =
+      externallyCancelled ? 'cancelled' : timedOut ? 'timeout' : 'failed';
     if (!externallyCancelled) {
       captureWorkerFailure(error, { worker: SCHEDULE_WORKER_NAME, jobId: claim.runId });
     }
@@ -1840,6 +2109,45 @@ async function findExpiredClaims(
   return rows.map(mapClaim);
 }
 
+async function expireScheduleRunApprovals(db: DatabaseAdapter, limit: number): Promise<number> {
+  const expired = await db.query<{
+    run_id: string;
+    task_id: string;
+    user_id: string;
+    organization_id: string | null;
+  }>(
+    `select run.id as run_id, run.task_id, task.user_id, task.organization_id
+       from scheduled_task_runs as run
+       join scheduled_tasks as task on task.id = run.task_id
+      where run.status = 'awaiting_approval'
+        and run.approval_expires_at < now()
+      order by run.approval_expires_at asc, run.id asc
+      limit $1`,
+    [limit],
+  );
+  const ended = await Promise.all(
+    expired.map((row) =>
+      createClaimedUserScopedDb(db, {
+        userId: row.user_id,
+        organizationId: row.organization_id,
+      }).execute(
+        `update scheduled_task_runs
+            set status = 'cancelled',
+                completed_at = now(),
+                duration_ms = greatest(0, floor(extract(epoch from now() - started_at) * 1000))::integer,
+                error = $3,
+                approval_checkpoint = null,
+                approval_request = null,
+                approval_requested_at = null,
+                approval_expires_at = null
+          where id = $1 and task_id = $2 and status = 'awaiting_approval'`,
+        [row.run_id, row.task_id, APPROVAL_EXPIRED_MESSAGE],
+      ),
+    ),
+  );
+  return ended.reduce((total, affected) => total + affected, 0);
+}
+
 export interface ScheduleBatchSummary {
   claimed: number;
   succeeded: number;
@@ -1860,6 +2168,10 @@ export async function processDueScheduleRuns(options: {
   const limit = clampInteger(options.limit, 1, MAX_BATCH_SIZE);
   const concurrency = clampInteger(options.concurrency, 1, 10);
 
+  const expiredApprovals = await expireScheduleRunApprovals(db, limit);
+  if (expiredApprovals > 0) {
+    logger.info({ expiredApprovals }, 'Scheduled runs whose approval request lapsed were stopped');
+  }
   const expired = await findExpiredClaims(db, limit);
   await Promise.all(
     expired.map((claim) => {
