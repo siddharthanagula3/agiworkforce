@@ -1927,7 +1927,7 @@
         "api": {
           "state": "present",
           "via": "import",
-          "entry": "apps/web/lib/services/connector-policy-gate.ts",
+          "entry": "apps/web/features/plugins/server/directory/install-gate.ts",
           "mount": "apps/web/app/api/plugins/uploads/route.ts"
         }
       }
@@ -1985,7 +1985,7 @@
         "web": {
           "state": "present",
           "via": "import",
-          "entry": "apps/web/lib/services/connector-policy-gate.ts",
+          "entry": "apps/web/features/plugins/server/directory/install-gate.ts",
           "mount": "apps/web/app/api/plugins/uploads/route.ts"
         },
         "desktop": {
