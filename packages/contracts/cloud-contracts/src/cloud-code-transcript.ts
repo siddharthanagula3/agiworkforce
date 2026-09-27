@@ -1,7 +1,9 @@
-import type {
-  CloudCodeAgentStep,
-  CloudCodeAgentStopReason,
-  CloudCodeTerminalEntry,
+import {
+  cloudCodeStopReasonIsRetryable,
+  type CloudCodeAgentStep,
+  type CloudCodeAgentStopReason,
+  type CloudCodeAgentTurnRecord,
+  type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
 
 export interface CodeApprovalPrompt {
@@ -24,6 +26,20 @@ export interface CodeTurnRecord {
   steps: CloudCodeAgentStep[];
   /** A turn the reader can start again, unchanged, from the transcript. */
   retryable: boolean;
+}
+
+export function toCodeTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnRecord {
+  return {
+    id: record.turnId,
+    turnId: record.turnId,
+    at: record.createdAt,
+    goal: record.goal,
+    stopReason: record.stopReason,
+    finalMessage: record.finalMessage,
+    errorMessage: record.errorMessage,
+    steps: record.steps,
+    retryable: record.stopReason !== null && cloudCodeStopReasonIsRetryable(record.stopReason),
+  };
 }
 
 export type CodeTranscriptItem =

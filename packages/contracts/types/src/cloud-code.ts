@@ -1,4 +1,5 @@
 import type { AgentTaskState } from './generated/protocol/AgentTaskState';
+import { TOOL_APPROVAL_ACTION_LABELS } from './tool-approval-policy';
 
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
@@ -18,6 +19,15 @@ export const CLOUD_CODE_SESSION_STATES = [
   'closed',
 ] as const;
 export type CloudCodeSessionState = (typeof CLOUD_CODE_SESSION_STATES)[number];
+
+export const CLOUD_CODE_SESSION_STATE_LABELS: Readonly<Record<CloudCodeSessionState, string>> =
+  Object.freeze({
+    ready: 'Ready',
+    running: 'Running a command',
+    provisioning: 'Provisioning',
+    failed: 'Needs attention',
+    closed: 'Closed',
+  });
 
 /**
  * A sandbox image the account may build in. Sourced from the E2B team's own
@@ -83,6 +93,22 @@ export interface CloudCodeSession {
   closedAt: string | null;
 }
 
+export function cloudCodeSessionIsBusy(session: Pick<CloudCodeSession, 'state'>): boolean {
+  return session.state === 'running' || session.state === 'provisioning';
+}
+
+export function cloudCodeRepositoryLabel(repositoryUrl: string): string {
+  const trimmed = repositoryUrl.replace(/\.git$/, '').replace(/\/$/, '');
+  const parts = trimmed.split('/').filter(Boolean);
+  return parts.slice(-2).join('/') || trimmed;
+}
+
+export function cloudCodePullRequestLabel(
+  session: Pick<CloudCodeSession, 'pullRequestNumber'>,
+): string | null {
+  return session.pullRequestNumber === null ? null : `Pull request #${session.pullRequestNumber}`;
+}
+
 export interface CloudCodeTerminalEntry {
   id: string;
   sessionId: string;
@@ -120,6 +146,51 @@ export const CLOUD_CODE_STOP_REASON_AGENT_TASK_STATES: Readonly<
 export function agentTaskStateForStopReason(reason: CloudCodeAgentStopReason): AgentTaskState {
   return CLOUD_CODE_STOP_REASON_AGENT_TASK_STATES[reason];
 }
+
+export const CLOUD_CODE_STOP_REASON_LABELS: Readonly<Record<CloudCodeAgentStopReason, string>> =
+  Object.freeze({
+    done: 'Finished',
+    awaiting_approval: 'Waiting for your approval',
+    max_steps: 'Stopped at the step limit',
+    timeout: 'Timed out',
+    cancelled: 'Cancelled',
+    denied: 'Stopped, a command was denied',
+    error: 'Failed',
+  });
+
+export function cloudCodeStopReasonIsFailure(reason: CloudCodeAgentStopReason): boolean {
+  return reason === 'error' || reason === 'denied' || reason === 'timeout';
+}
+
+export function cloudCodeStopReasonIsRetryable(reason: CloudCodeAgentStopReason): boolean {
+  return cloudCodeStopReasonIsFailure(reason) || reason === 'cancelled';
+}
+
+export const CLOUD_CODE_SESSION_COPY = Object.freeze({
+  composerPlaceholder: 'Describe a task or ask a question',
+  runningPlaceholder: 'The agent is working. Your next task can wait here.',
+  stopTurn: 'Stop the task',
+  stoppingTurn: 'Stopping the task',
+  approvalHeading: 'Approval required',
+  approve: `${TOOL_APPROVAL_ACTION_LABELS.approve} and continue`,
+  reject: TOOL_APPROVAL_ACTION_LABELS.deny,
+  agentWorking: 'Working',
+  unarchiveSession: 'Unarchive',
+  archivedBanner: 'This session is archived. Unarchive it to keep working in this session.',
+});
+
+export function cloudCodeCommandRanLabel(count: number): string {
+  return count === 1 ? 'Ran a command' : `Ran ${count} commands`;
+}
+
+/**
+ * The function limit of the two routes that run an agent turn, the start and
+ * the approval that resumes one. Each holds its request open until the turn
+ * stops or pauses, so a client waiting on either must allow at least this
+ * long. The routes declare it as the literal `maxDuration = 300`, which
+ * Next.js cannot take from an import, and are kept in step by hand.
+ */
+export const CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS = 300_000;
 
 /**
  * One tool the agent ran, as the transcript shows it. `label` is the line the
@@ -207,6 +278,15 @@ export interface CloudCodePullRequestResponse {
  */
 export const CLOUD_CODE_SESSION_STATUS_FILTERS = ['open', 'closed', 'archived', 'all'] as const;
 export type CloudCodeSessionStatusFilter = (typeof CLOUD_CODE_SESSION_STATUS_FILTERS)[number];
+
+export const CLOUD_CODE_SESSION_STATUS_FILTER_LABELS: Readonly<
+  Record<CloudCodeSessionStatusFilter, string>
+> = Object.freeze({
+  open: 'Open',
+  closed: 'Closed',
+  archived: 'Archived',
+  all: 'All',
+});
 
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;

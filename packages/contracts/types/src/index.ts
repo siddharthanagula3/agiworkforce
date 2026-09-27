@@ -105,6 +105,7 @@ export * from './subscription-entitlement';
 export * from './managed-usage-balance';
 
 export * from './cloud-code';
+export * from './cloud-code-agent-model';
 
 export * from './scheduler';
 
