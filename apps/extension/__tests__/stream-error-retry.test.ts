@@ -179,3 +179,93 @@ describe('the wait and the reference the gateway put on the failure frame', () =
     );
   });
 });
+
+describe('a plan-limit failure', () => {
+  const limitSentence = 'You have used your 50 credits for this 5-hour window.';
+
+  it('says when the refusing limit resets, before the reference', () => {
+    expect(
+      streamFailureText(limitSentence, { resetLabel: 'Resets in 2 hours', requestId: 'req_limit' }),
+    ).toBe(`${limitSentence} Resets in 2 hours. Reference: req_limit`);
+    expect(streamFailureText(limitSentence, {})).toBe(limitSentence);
+  });
+
+  it('offers the recovery the server named beside Retry and opens it', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const recovery = { action: 'top_up' as const, href: '/settings/billing' };
+    applyStreamFailure(
+      messages,
+      'stream-limit',
+      streamFailureText(limitSentence, { resetLabel: 'Resets in 2 hours' }),
+      5,
+      undefined,
+      recovery,
+    );
+    expect(messages.at(-1)?.errorRecovery).toEqual(recovery);
+
+    const open = vi.fn();
+    const node = buildBubbleWithTools(messages.at(-1)!, {
+      onRetry: vi.fn(),
+      quotaRecovery: { label: () => 'Add credits', open },
+    });
+
+    expect(node.querySelector('.sp-bubble-error-text')?.textContent).toBe(
+      `${limitSentence} Resets in 2 hours.`,
+    );
+    const buttons = Array.from(
+      node.querySelectorAll<HTMLButtonElement>('.sp-bubble-error-footer button'),
+    );
+    expect(buttons.map((button) => button.textContent)).toEqual(['Retry', 'Add credits']);
+    buttons[1]!.click();
+    expect(open).toHaveBeenCalledWith(recovery);
+  });
+
+  it('pairs a model switch with the recovery when a standard model would clear the limit', () => {
+    const messages: SidePanelChatMessage[] = [];
+    applyStreamFailure(
+      messages,
+      'stream-flagship',
+      'You have used your weekly capacity for the most capable models.',
+      6,
+      'switch-model',
+      { action: 'upgrade', href: '/pricing' },
+    );
+
+    const node = buildBubbleWithTools(messages.at(-1)!, {
+      onRetry: vi.fn(),
+      onSwitchModel: vi.fn(),
+      quotaRecovery: { label: () => 'View plans', open: vi.fn() },
+    });
+
+    expect(
+      Array.from(node.querySelectorAll('.sp-bubble-error-footer button')).map(
+        (button) => button.textContent,
+      ),
+    ).toEqual(['Retry', 'Switch model', 'View plans']);
+  });
+
+  it('keeps the recovery on a failure that also produced tool activity', () => {
+    const node = buildBubbleWithTools(
+      failedMessage({
+        content: '[TOOL:search:success]done[/TOOL]',
+        errorRecovery: { action: 'view_usage', href: '/settings/usage' },
+      }),
+      { onRetry: vi.fn(), quotaRecovery: { label: () => 'View usage', open: vi.fn() } },
+    );
+
+    expect(
+      Array.from(node.querySelectorAll('.sp-bubble-error-footer button')).map(
+        (button) => button.textContent,
+      ),
+    ).toContain('View usage');
+  });
+
+  it('shows no recovery control a panel cannot act on', () => {
+    const node = buildBubbleWithTools(
+      failedMessage({ errorRecovery: { action: 'top_up', href: '/settings/billing' } }),
+      { onRetry: vi.fn() },
+    );
+
+    expect(node.querySelectorAll('.sp-bubble-error-footer button')).toHaveLength(1);
+  });
+});
