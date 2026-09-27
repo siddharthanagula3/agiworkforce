@@ -150,7 +150,7 @@ export const TokenCounter = ({
                 style={{ width: `${(inputTokens / maxTokens) * 100}%` }}
               />
               <div
-                className="absolute h-full bg-green-500 transition-all duration-moved"
+                className="absolute h-full bg-success-fill transition-all duration-moved"
                 style={{
                   left: `${(inputTokens / maxTokens) * 100}%`,
                   width: `${(outputTokens / maxTokens) * 100}%`,
@@ -178,7 +178,8 @@ export const TokenCounter = ({
                 <span className="w-2 h-2 rounded-full bg-blue-500" />↓ {formatTokens(inputTokens)}
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500" />↑ {formatTokens(outputTokens)}
+                <span className="w-2 h-2 rounded-full bg-success-fill" />↑{' '}
+                {formatTokens(outputTokens)}
               </span>
             </span>
           )}
@@ -206,7 +207,7 @@ export const TokenCounter = ({
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="w-2 h-2 rounded-full bg-success-fill" />
                   <span>Output tokens</span>
                 </div>
                 <div className="text-sm font-medium text-success-text">

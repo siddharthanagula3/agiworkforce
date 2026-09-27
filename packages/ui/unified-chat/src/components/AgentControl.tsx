@@ -39,7 +39,10 @@ function OverrideDot({ show }: OverrideDotProps) {
         <Tooltip.Trigger asChild>
           <span
             aria-hidden="true"
-            className={cn('absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full', 'bg-amber-500')}
+            className={cn(
+              'absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full',
+              'bg-warning-fill',
+            )}
           />
         </Tooltip.Trigger>
         <Tooltip.Portal>
@@ -143,7 +146,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-medium">{AGENT_MODE_LABEL[mode]}</span>
                           {mode === 'bypass' && (
-                            <span className="rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-red-500/15 text-red-500">
+                            <span className="rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-danger-fill/10 text-danger-text">
                               danger
                             </span>
                           )}

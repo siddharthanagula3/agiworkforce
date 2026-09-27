@@ -131,10 +131,10 @@ function defaultFormState(): CreateTriggerInput {
 function ExecutionEntry({ execution }: { execution: TriggerExecution }) {
   const statusColor =
     execution.status === 'success'
-      ? 'text-green-400'
+      ? 'text-success-text'
       : execution.status === 'failed'
-        ? 'text-red-400'
-        : 'text-amber-400';
+        ? 'text-danger-text'
+        : 'text-warning-text';
 
   return (
     <div className="flex flex-col gap-0.5 rounded-md border border-border/50 bg-surface-base px-3 py-2">
@@ -231,10 +231,10 @@ function TriggerCard({
           className={cn(
             'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
             trigger.type === 'cron'
-              ? 'bg-blue-500/10 text-blue-400'
+              ? 'bg-blue-500/10 text-blue-700 dark:text-blue-400'
               : trigger.type === 'webhook'
-                ? 'bg-purple-500/10 text-purple-400'
-                : 'bg-amber-500/10 text-amber-400',
+                ? 'bg-purple-500/10 text-purple-700 dark:text-purple-400'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
           )}
         >
           <TriggerTypeIcon type={trigger.type} className="h-4 w-4" />
@@ -278,7 +278,7 @@ function TriggerCard({
           <AlertDialogTrigger asChild>
             <button
               type="button"
-              className="flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/5 px-2.5 py-1 text-xs text-red-400 transition-colors hover:bg-red-500/20"
+              className="flex items-center gap-1 rounded-md border border-danger-fill/30 bg-danger-fill/5 px-2.5 py-1 text-xs text-danger-text transition-colors hover:bg-danger-fill/10"
             >
               <Trash2 className="h-3 w-3" />
               Delete
@@ -306,14 +306,14 @@ function TriggerCard({
         {/* Status pill */}
         <div className="ml-auto flex items-center gap-1">
           {trigger.enabled ? (
-            <Zap className="h-3 w-3 text-green-400" />
+            <Zap className="h-3 w-3 text-success-text" />
           ) : (
             <ZapOff className="h-3 w-3 text-muted-foreground" />
           )}
           <span
             className={cn(
               'text-[10px] font-medium',
-              trigger.enabled ? 'text-green-400' : 'text-muted-foreground',
+              trigger.enabled ? 'text-success-text' : 'text-muted-foreground',
             )}
           >
             {trigger.enabled ? 'Active' : 'Disabled'}
@@ -457,19 +457,19 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
               <SelectContent>
                 <SelectItem value="cron">
                   <span className="flex items-center gap-2">
-                    <Clock className="h-3.5 w-3.5 text-blue-400" />
+                    <Clock className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />
                     Cron schedule
                   </span>
                 </SelectItem>
                 <SelectItem value="webhook">
                   <span className="flex items-center gap-2">
-                    <Globe className="h-3.5 w-3.5 text-purple-400" />
+                    <Globe className="h-3.5 w-3.5 text-purple-700 dark:text-purple-400" />
                     Webhook
                   </span>
                 </SelectItem>
                 <SelectItem value="file_watcher">
                   <span className="flex items-center gap-2">
-                    <FileSearch className="h-3.5 w-3.5 text-amber-400" />
+                    <FileSearch className="h-3.5 w-3.5 text-amber-700 dark:text-amber-400" />
                     File watcher
                   </span>
                 </SelectItem>

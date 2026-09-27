@@ -41,9 +41,7 @@ export function BigStatCard({
               <div
                 className={cn(
                   'flex items-center text-sm font-medium',
-                  change > 0
-                    ? 'text-green-600 dark:text-green-500'
-                    : 'text-red-600 dark:text-red-500',
+                  change > 0 ? 'text-success-text' : 'text-danger-text',
                   change === 0 && 'text-muted-foreground',
                 )}
               >

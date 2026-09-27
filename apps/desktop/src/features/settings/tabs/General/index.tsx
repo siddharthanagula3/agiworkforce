@@ -65,7 +65,7 @@ function AppModeSection() {
           className={cn(
             'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors',
             mode === 'local'
-              ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/50 border-emerald-500/30'
+              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/50 border-emerald-500/30'
               : 'bg-background border-border text-muted-foreground hover:bg-accent hover:text-foreground',
           )}
         >

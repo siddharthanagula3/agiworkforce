@@ -24,19 +24,29 @@ const STATUS_ICONS: Record<
   ActionLogStatus,
   { icon: React.ElementType; color: string; bgColor: string; label: string }
 > = {
-  pending: { icon: Clock, color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', label: 'Pending' },
+  pending: {
+    icon: Clock,
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
+    label: 'Pending',
+  },
   running: { icon: Loader2, color: 'text-blue-400', bgColor: 'bg-blue-400/10', label: 'Running' },
   success: {
     icon: CheckCircle2,
-    color: 'text-green-400',
-    bgColor: 'bg-green-400/10',
+    color: 'text-success-text',
+    bgColor: 'bg-success-fill/10',
     label: 'Success',
   },
-  failed: { icon: XCircle, color: 'text-red-400', bgColor: 'bg-red-400/10', label: 'Failed' },
+  failed: {
+    icon: XCircle,
+    color: 'text-danger-text',
+    bgColor: 'bg-danger-fill/10',
+    label: 'Failed',
+  },
   blocked: {
     icon: AlertCircle,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Blocked',
   },
 };
@@ -131,21 +141,21 @@ function renderTaskStateBanner(task: AgentTask) {
     Record<AgentTaskStatus, { bg: string; border: string; text: string; label: string }>
   > = {
     paused: {
-      bg: 'bg-amber-500/10',
-      border: 'border-amber-500/30',
-      text: 'text-amber-400',
+      bg: 'bg-warning-fill/10',
+      border: 'border-warning-fill/30',
+      text: 'text-warning-text',
       label: 'Task paused',
     },
     awaiting_input: {
-      bg: 'bg-orange-500/10',
-      border: 'border-orange-500/30',
-      text: 'text-orange-400',
+      bg: 'bg-warning-fill/10',
+      border: 'border-warning-fill/30',
+      text: 'text-warning-text',
       label: 'Awaiting input',
     },
     ready_for_review: {
-      bg: 'bg-emerald-500/10',
-      border: 'border-emerald-500/30',
-      text: 'text-emerald-400',
+      bg: 'bg-success-fill/10',
+      border: 'border-success-fill/30',
+      text: 'text-success-text',
       label: 'Ready for review',
     },
   };
@@ -219,7 +229,7 @@ function TimelineRow({ entry }: TimelineRowProps) {
           <p
             className={cn(
               'mt-0.5 pl-5 text-[11px] leading-relaxed',
-              entry.error ? 'text-red-400/80' : 'text-muted-foreground',
+              entry.error ? 'text-danger-text' : 'text-muted-foreground',
             )}
           >
             {entry.error ?? entry.result ?? entry.description}
@@ -247,9 +257,9 @@ function TimelineRow({ entry }: TimelineRowProps) {
 
 function RiskBadge({ level }: { level: string }) {
   const cfg: Record<string, string> = {
-    high: 'bg-red-500/15 text-red-400 border-red-500/30',
-    medium: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    low: 'bg-green-500/15 text-green-400 border-green-500/30',
+    high: 'bg-danger-fill/10 text-danger-text border-danger-fill/30',
+    medium: 'bg-warning-fill/10 text-warning-text border-warning-fill/30',
+    low: 'bg-success-fill/10 text-success-text border-success-fill/30',
   };
   const cls = cfg[level] ?? cfg['low']!;
   return (

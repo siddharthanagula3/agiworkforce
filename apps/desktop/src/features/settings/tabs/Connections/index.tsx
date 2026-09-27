@@ -15,7 +15,7 @@ export function ConnectionsTab() {
       </header>
 
       <div className="flex items-start gap-3 rounded-lg border border-border/70 bg-muted/30 p-4">
-        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden="true" />
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-success-text" aria-hidden="true" />
         <div className="space-y-1">
           <h3 className="text-sm font-medium">Control this Mac</h3>
           <p className="text-xs leading-relaxed text-muted-foreground">

@@ -90,7 +90,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
               Pending: <span className="font-medium text-foreground">{pendingCount}</span>
             </span>
             <span className="text-muted-foreground">
-              Accepted: <span className="font-medium text-green-500">{acceptedCount}</span>
+              Accepted: <span className="font-medium text-success-text">{acceptedCount}</span>
             </span>
             <span className="text-muted-foreground">
               Rejected: <span className="font-medium text-destructive">{rejectedCount}</span>
@@ -163,7 +163,7 @@ export function FilesPanel({ className }: FilesPanelProps) {
                     className={cn(
                       'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium',
                       selectedFile.accepted
-                        ? 'bg-green-500/10 text-green-500'
+                        ? 'bg-success-fill/10 text-success-text'
                         : 'bg-destructive/10 text-destructive',
                     )}
                   >
@@ -243,7 +243,7 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
         isSelected
           ? 'border-primary bg-primary/10'
           : 'border-transparent hover:border-border hover:bg-accent/50',
-        file.accepted === true && 'bg-green-500/5',
+        file.accepted === true && 'bg-success-fill/5',
         file.accepted === false && 'bg-destructive/5',
       )}
       onClick={onSelect}
@@ -269,7 +269,7 @@ function FileListItem({ file, isSelected, onSelect }: FileListItemProps) {
         {file.accepted !== null && (
           <div className="shrink-0">
             {file.accepted ? (
-              <Check className="h-4 w-4 text-green-500" />
+              <Check className="h-4 w-4 text-success-text" />
             ) : (
               <X className="h-4 w-4 text-destructive" />
             )}
@@ -286,8 +286,8 @@ function getOperationConfig(operation: FileChange['operation']) {
       return {
         icon: FilePlus,
         label: 'Create',
-        bgColor: 'bg-green-500/10',
-        iconColor: 'text-green-500',
+        bgColor: 'bg-success-fill/10',
+        iconColor: 'text-success-text',
       };
     case 'modify':
       return {

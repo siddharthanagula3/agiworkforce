@@ -42,12 +42,12 @@ export const OutcomesDashboard: React.FC = () => {
 
   if (error) {
     return (
-      <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-        <p className="text-red-600">{error}</p>
+      <div className="p-4 bg-danger-fill/10 border border-danger-fill/30 rounded-lg">
+        <p className="text-danger-text">{error}</p>
         <button
           type="button"
           onClick={loadProcessStatistics}
-          className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+          className="mt-2 px-4 py-2 bg-danger-fill text-danger-on-fill rounded hover:brightness-95"
         >
           Retry
         </button>
@@ -136,19 +136,19 @@ function formatProcessType(processType: string): string {
 }
 
 function getSuccessRateColor(rate: number): string {
-  if (rate >= 0.8) return 'text-green-600';
-  if (rate >= 0.6) return 'text-yellow-600';
-  return 'text-red-600';
+  if (rate >= 0.8) return 'text-success-text';
+  if (rate >= 0.6) return 'text-warning-text';
+  return 'text-danger-text';
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 0.8) return 'text-green-600';
-  if (score >= 0.6) return 'text-yellow-600';
-  return 'text-red-600';
+  if (score >= 0.8) return 'text-success-text';
+  if (score >= 0.6) return 'text-warning-text';
+  return 'text-danger-text';
 }
 
 function getProgressBarColor(rate: number): string {
-  if (rate >= 0.8) return 'bg-green-500';
-  if (rate >= 0.6) return 'bg-yellow-500';
-  return 'bg-red-500';
+  if (rate >= 0.8) return 'bg-success-fill';
+  if (rate >= 0.6) return 'bg-warning-fill';
+  return 'bg-danger-fill';
 }

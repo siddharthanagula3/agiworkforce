@@ -3657,7 +3657,7 @@ const ChatComposerNewComponent = ({
       {localNotice && (
         <div
           role="alert"
-          className="mb-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-400/40 dark:bg-amber-950/40 dark:text-amber-100"
+          className="mb-2 rounded-xl border border-warning-fill/30 bg-warning-fill/10 px-3 py-2 text-xs text-warning-text"
         >
           {localNotice}
         </div>
@@ -3815,11 +3815,11 @@ const ChatComposerNewComponent = ({
       {/* Selected Skill Badge */}
       {selectedSkillName && (
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-success-fill/30 bg-success-fill/10 px-2.5 py-1 text-xs text-success-text">
             /{selectedSkillName}
             <button
               onClick={() => setSelectedSkillName(null)}
-              className="rounded-full p-0.5 hover:bg-emerald-500/20"
+              className="rounded-full p-0.5 hover:bg-success-fill/10"
               aria-label={`Remove ${selectedSkillName} skill`}
             >
               <X className="h-4 w-4" />
