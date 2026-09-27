@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { creditsFromMicrousd } from '@agiworkforce/types';
+import { creditsFromMicrousd, rateCardUsageLabel } from '@agiworkforce/types';
 
 import {
   BREAKDOWN_LIMIT,
@@ -151,7 +151,11 @@ function toTotals(row: CreditAggregateRow | undefined): AccountUsageTotals {
 }
 
 function toBreakdownRow(row: CreditAggregateRow): AccountUsageBreakdownRow {
-  return { key: row.key ?? 'unknown', label: row.label ?? null, ...toTotals(row) };
+  return {
+    key: row.key ?? 'unknown',
+    label: row.label ?? rateCardUsageLabel(row.key),
+    ...toTotals(row),
+  };
 }
 
 async function aggregateBy(

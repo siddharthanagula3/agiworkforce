@@ -231,6 +231,7 @@ export async function getManagedModelAccess(
 
 export interface ManagedModelUsage {
   modelId: string;
+  label: string | null;
   requests: number;
   credits: number;
 }
@@ -249,7 +250,8 @@ function readModelUsageRow(value: unknown): ManagedModelUsage | null {
   const credits = record['credits'];
   if (!modelId || typeof requests !== 'number' || typeof credits !== 'number') return null;
   if (!Number.isFinite(requests) || !Number.isFinite(credits)) return null;
-  return { modelId, requests, credits: Math.max(0, credits) };
+  const label = typeof record['label'] === 'string' && record['label'] ? record['label'] : null;
+  return { modelId, label, requests, credits: Math.max(0, credits) };
 }
 
 export async function getManagedUsageHistory(

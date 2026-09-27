@@ -484,8 +484,8 @@ describe('getManagedUsageHistory', () => {
       from: HISTORY.from,
       to: HISTORY.to,
       byModel: [
-        { modelId: 'fixture-model-a', requests: 30, credits: 250.25 },
-        { modelId: 'fixture-model-b', requests: 12, credits: 68.15 },
+        { modelId: 'fixture-model-a', label: null, requests: 30, credits: 250.25 },
+        { modelId: 'fixture-model-b', label: null, requests: 12, credits: 68.15 },
       ],
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -509,7 +509,9 @@ describe('getManagedUsageHistory', () => {
     );
 
     const history = await getManagedUsageHistory('session-token');
-    expect(history.byModel).toEqual([{ modelId: 'fixture-model-a', requests: 1, credits: 0 }]);
+    expect(history.byModel).toEqual([
+      { modelId: 'fixture-model-a', label: null, requests: 1, credits: 0 },
+    ]);
   });
 
   it('fails instead of showing a partial or invented history', async () => {

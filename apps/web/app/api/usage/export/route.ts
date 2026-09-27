@@ -18,6 +18,7 @@ import {
   type AccountUsageRecord,
 } from '@/lib/services/account-usage-history-service';
 import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
+import { rateCardUsageLabel } from '@agiworkforce/types';
 
 export const runtime = 'nodejs';
 
@@ -70,7 +71,7 @@ async function handler(request: NextRequest) {
       record.requestId,
       record.workload ?? '',
       record.operation ?? '',
-      record.model,
+      rateCardUsageLabel(record.model) ?? record.model,
       record.projectName ?? record.projectId ?? '',
       record.inputTokens,
       record.outputTokens,

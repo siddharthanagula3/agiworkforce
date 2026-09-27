@@ -30,7 +30,6 @@ import {
  * token cost, and a user can still run those every turn all month.
  */
 export const FREE_PLAN_MONTHLY_SEARCH_CALLS = 20;
-export const PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS = 300;
 export const SEARCH_BOUND_WINDOW_DAYS = 30;
 
 export const SEARCH_RATE_CARD_FEATURES = [
@@ -65,9 +64,7 @@ export function resolveSearchCallerKind(input: {
 }
 
 export function includedMonthlySearchCalls(planTier: string | null | undefined): number {
-  return isFreePlanTier(planTier)
-    ? FREE_PLAN_MONTHLY_SEARCH_CALLS
-    : PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS;
+  return isFreePlanTier(planTier) ? FREE_PLAN_MONTHLY_SEARCH_CALLS : 0;
 }
 
 export type SearchBudgetDecision =
@@ -129,18 +126,20 @@ export async function readSearchAllowance(
 
 /**
  * Whether this search call is included, charged, or refused, before it runs.
- * A count that cannot be read fails OPEN as included: a metering outage must
- * not silently start charging, nor block every search-enabled turn.
+ * Paid plans and automated callers pay for every call. Free is bounded by a
+ * rolling count; a count that cannot be read fails open for Free, whose calls
+ * still draw on the Free usage windows.
  */
 export async function resolveSearchBudget(input: SearchBudgetInput): Promise<SearchBudgetDecision> {
-  if (input.callerKind === 'automated') return { outcome: 'charge' };
+  if (input.callerKind === 'automated' || !isFreePlanTier(input.planTier)) {
+    return { outcome: 'charge' };
+  }
 
   const used = await readSearchCallCount(input);
   if (used === null) return { outcome: 'included' };
-
-  if (used < includedMonthlySearchCalls(input.planTier)) return { outcome: 'included' };
-  if (isFreePlanTier(input.planTier)) return { outcome: 'blocked', reason: 'plan_bound' };
-  return { outcome: 'charge' };
+  return used < FREE_PLAN_MONTHLY_SEARCH_CALLS
+    ? { outcome: 'included' }
+    : { outcome: 'blocked', reason: 'plan_bound' };
 }
 
 export interface SearchCharge {
