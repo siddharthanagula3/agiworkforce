@@ -19,6 +19,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
@@ -454,6 +455,10 @@ async function pushMessages(
   });
 }
 
+function countNewSyncItems(items: ReadonlyArray<{ baseVersion: string }>): number {
+  return items.filter((item) => Number(item.baseVersion) === 0).length;
+}
+
 async function handlePush(request: NextRequest) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
@@ -485,6 +490,14 @@ async function handlePush(request: NextRequest) {
   const { conversations = [], messages = [], artifacts = [] } = parsed.data;
 
   await assertProjectsBelongToActiveWorkspace(db, userId, organizationId, conversations);
+  await assertFreeDailyAllowance({
+    db,
+    userId,
+    requested: {
+      conversation_creates: countNewSyncItems(conversations),
+      message_writes: countNewSyncItems(messages),
+    },
+  });
 
   const applied = {
     conversations: [] as Array<{ id: string; server_version: string }>,

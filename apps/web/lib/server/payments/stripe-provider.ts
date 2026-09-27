@@ -13,8 +13,12 @@ import {
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
 
 import type {
+  NormalizedBalanceEntry,
   NormalizedBillingInstrument,
   NormalizedCard,
+  NormalizedChargeAttribution,
+  NormalizedCostActivity,
+  NormalizedInvoiceDiscount,
   NormalizedMoney,
   NormalizedPayment,
   NormalizedPaymentStatus,
@@ -287,6 +291,144 @@ export async function listStripeCustomerPayments(
     ...(createdSince ? { created: { gte: Math.floor(createdSince.getTime() / 1000) } } : {}),
   });
   return page.data.map(normalizeStripePaymentIntent);
+}
+
+const COST_ACTIVITY_PAGE = 100;
+const PAYMENT_TYPE_METADATA_KEY = 'type';
+const TOP_UP_PAYMENT_TYPE = 'credit_topup';
+
+function unixSeconds(date: Date): number {
+  return Math.floor(date.getTime() / 1000);
+}
+
+function chargeSourceOf(transaction: Stripe.BalanceTransaction): Stripe.Charge | null {
+  const source = transaction.source;
+  if (!source || typeof source === 'string' || source.object !== 'charge') return null;
+  return source;
+}
+
+function subscriptionAttributionOf(
+  payment: Stripe.InvoicePayment,
+): NormalizedChargeAttribution | null {
+  const invoice = payment.invoice;
+  if (typeof invoice === 'string' || invoice.deleted === true) return null;
+  const details = invoice.parent?.subscription_details;
+  const reference = referenceOf(details?.subscription as string | { id?: string } | undefined);
+  if (!details || !reference) return null;
+  return {
+    kind: 'subscription',
+    reference,
+    ownerReference: details.metadata?.[OWNER_METADATA_KEY]?.trim() || null,
+  };
+}
+
+function topUpAttributionOf(charge: Stripe.Charge): NormalizedChargeAttribution | null {
+  if (charge.metadata?.[PAYMENT_TYPE_METADATA_KEY] !== TOP_UP_PAYMENT_TYPE) return null;
+  return {
+    kind: 'top_up',
+    reference: referenceOf(charge.payment_intent as string | { id?: string } | null) ?? charge.id,
+    ownerReference: charge.metadata[OWNER_METADATA_KEY]?.trim() || null,
+  };
+}
+
+async function subscriptionAttributionForPayment(
+  stripe: Stripe,
+  paymentIntentReference: string,
+): Promise<NormalizedChargeAttribution | null> {
+  const found: NormalizedChargeAttribution[] = [];
+  await stripe.invoicePayments
+    .list({
+      payment: { type: 'payment_intent', payment_intent: paymentIntentReference },
+      expand: ['data.invoice'],
+      limit: 1,
+    })
+    .autoPagingEach((payment) => {
+      const attribution = subscriptionAttributionOf(payment);
+      if (attribution) found.push(attribution);
+    });
+  return found[0] ?? null;
+}
+
+async function attributeCharge(
+  stripe: Stripe,
+  charge: Stripe.Charge,
+  subscriptionPayments: Map<string, NormalizedChargeAttribution>,
+): Promise<NormalizedChargeAttribution | null> {
+  const topUp = topUpAttributionOf(charge);
+  if (topUp) return topUp;
+  const paymentIntentReference = referenceOf(
+    charge.payment_intent as string | { id?: string } | null,
+  );
+  if (!paymentIntentReference) return null;
+  const known = subscriptionPayments.get(paymentIntentReference);
+  if (known) return known;
+  const looked = await subscriptionAttributionForPayment(stripe, paymentIntentReference);
+  if (looked) subscriptionPayments.set(paymentIntentReference, looked);
+  return looked;
+}
+
+export async function readStripeCostActivity(window: {
+  since: Date;
+  until: Date;
+}): Promise<NormalizedCostActivity | null> {
+  const stripe = getStripeClientOrNull();
+  if (!stripe) return null;
+  const created = { gte: unixSeconds(window.since), lt: unixSeconds(window.until) };
+
+  const transactions: Stripe.BalanceTransaction[] = [];
+  await stripe.balanceTransactions
+    .list({ created, limit: COST_ACTIVITY_PAGE, expand: ['data.source'] })
+    .autoPagingEach((transaction) => {
+      transactions.push(transaction);
+    });
+
+  const subscriptionPayments = new Map<string, NormalizedChargeAttribution>();
+  await stripe.invoicePayments
+    .list({ created, status: 'paid', expand: ['data.invoice'], limit: COST_ACTIVITY_PAGE })
+    .autoPagingEach((payment) => {
+      const reference = referenceOf(
+        payment.payment.payment_intent as string | { id?: string } | undefined,
+      );
+      const attribution = subscriptionAttributionOf(payment);
+      if (reference && attribution) subscriptionPayments.set(reference, attribution);
+    });
+
+  const balanceEntries: NormalizedBalanceEntry[] = [];
+  for (const transaction of transactions) {
+    const charge = chargeSourceOf(transaction);
+    balanceEntries.push({
+      reference: transaction.id,
+      type: transaction.type,
+      occurredAt: new Date(transaction.created * 1000),
+      currency: transaction.currency,
+      amountMinorUnits: transaction.amount,
+      feeMinorUnits: transaction.fee,
+      chargeReference: charge?.id ?? null,
+      attribution:
+        charge && transaction.fee > 0
+          ? await attributeCharge(stripe, charge, subscriptionPayments)
+          : null,
+    });
+  }
+
+  const invoiceDiscounts: NormalizedInvoiceDiscount[] = [];
+  await stripe.invoices.list({ created, limit: COST_ACTIVITY_PAGE }).autoPagingEach((invoice) => {
+    const lines = invoice.total_discount_amounts ?? [];
+    const discountMinorUnits = lines.reduce((total, line) => total + Math.max(0, line.amount), 0);
+    if (discountMinorUnits <= 0) return;
+    invoiceDiscounts.push({
+      invoiceReference: invoice.id,
+      occurredAt: new Date(invoice.created * 1000),
+      currency: invoice.currency,
+      discountMinorUnits,
+      discountReferences: lines.flatMap((line) => {
+        const reference = referenceOf(line.discount as string | { id?: string });
+        return reference ? [reference] : [];
+      }),
+    });
+  });
+
+  return { balanceEntries, invoiceDiscounts };
 }
 
 export const stripePaymentProvider: PollablePaymentProvider = {

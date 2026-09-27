@@ -9,6 +9,7 @@ import {
   type RateCardFeature,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { NormalizedBalanceEntry, NormalizedCostActivity } from '@/lib/server/payments/domain';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
@@ -34,6 +35,10 @@ export const COGS_CAPABILITIES = [
   'connector',
   'artifact',
   'decision',
+  'hosting',
+  'auth',
+  'cache',
+  'observability',
 ] as const;
 
 export const COGS_UNIT_BASES = [
@@ -44,6 +49,7 @@ export const COGS_UNIT_BASES = [
   'request',
   'gibibyte',
   'gibibyte_month',
+  'active_user_month',
 ] as const;
 
 export const COGS_ADJUSTMENT_KINDS = [
@@ -54,13 +60,17 @@ export const COGS_ADJUSTMENT_KINDS = [
   'discount',
   'support_adjustment',
   'tax',
+  'store_commission',
 ] as const;
+
+export const COGS_ADJUSTMENT_ATTRIBUTION_KINDS = ['subscription', 'top_up'] as const;
 
 export const COGS_TASK_OUTCOMES = ['delivered', 'undelivered'] as const;
 
 export type CogsCapability = (typeof COGS_CAPABILITIES)[number];
 export type CogsUnitBasis = (typeof COGS_UNIT_BASES)[number];
 export type CogsAdjustmentKind = (typeof COGS_ADJUSTMENT_KINDS)[number];
+export type CogsAdjustmentAttributionKind = (typeof COGS_ADJUSTMENT_ATTRIBUTION_KINDS)[number];
 export type CogsTaskOutcome = (typeof COGS_TASK_OUTCOMES)[number];
 
 export interface TokenClassDimensions {
@@ -126,6 +136,11 @@ export interface ProviderCostEvent extends CostEventAttribution {
   tokenClasses?: TokenClassDimensions;
 }
 
+export interface CogsAdjustmentAttribution {
+  kind: CogsAdjustmentAttributionKind;
+  ref: string;
+}
+
 export interface CogsAdjustment {
   userId?: string | null;
   kind: CogsAdjustmentKind;
@@ -134,6 +149,7 @@ export interface CogsAdjustment {
   sourceRef: string;
   occurredAt?: Date;
   metadata?: Record<string, unknown>;
+  attribution?: CogsAdjustmentAttribution | null;
 }
 
 export interface CogsSummary {
@@ -152,6 +168,7 @@ export interface CogsSummary {
   compactionSavedUnits: number;
   cacheSavingsCents: number;
   cacheWritePremiumCents: number;
+  storeCommissionCents: number;
 }
 
 export const SANDBOX_COMPUTE_OPERATION = 'e2b_sandbox_compute';
@@ -196,13 +213,12 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   connector: 'request',
   artifact: 'gibibyte_month',
   decision: 'token',
+  hosting: 'active_user_month',
+  auth: 'active_user_month',
+  cache: 'active_user_month',
+  observability: 'active_user_month',
 };
 
-/**
- * The rate-card row each non-model capability is metered against. Every one of
- * them is `deployment_metered`, so the amount is whatever the deployment's own
- * override says and never a number stated here.
- */
 const RATE_CARD_FEATURE_BY_CAPABILITY = {
   storage: 'object_storage_gib_month',
   database: 'database_compute_second',
@@ -620,11 +636,6 @@ export async function recordCacheHitCostEvent(
   }
 }
 
-/**
- * One metered unit of infrastructure the platform bought for itself. The cost
- * is resolved from the rate card, which publishes no rate until the deployment
- * sets one, so an unpriced row still records what was consumed.
- */
 export async function recordInfrastructureCostEvent(
   input: CostEventAttribution & {
     userId?: string | null;
@@ -674,10 +685,22 @@ export async function recordCogsAdjustment(
 ): Promise<void> {
   await db.execute(
     `insert into public.cogs_adjustments (
-       user_id, kind, amount_cents, currency, source_ref, occurred_at, metadata
-     ) values ($1, $2, $3, $4, $5, coalesce($6::timestamptz, now()), $7::jsonb)
+       user_id, kind, amount_cents, currency, source_ref, occurred_at, metadata,
+       attribution_kind, attribution_ref
+     )
+     select (select profile.id from public.profiles profile where profile.id = $1::text),
+            $2::text, $3::integer, $4::text, $5::text, coalesce($6::timestamptz, now()),
+            $7::jsonb, $8::text, $9::text
      on conflict (kind, source_ref)
-     do update set amount_cents = greatest(public.cogs_adjustments.amount_cents, excluded.amount_cents)`,
+     do update set
+       amount_cents = greatest(public.cogs_adjustments.amount_cents, excluded.amount_cents),
+       user_id = case
+         when public.cogs_adjustments.attribution_kind is null
+           then coalesce(public.cogs_adjustments.user_id, excluded.user_id)
+         else public.cogs_adjustments.user_id
+       end,
+       attribution_kind = coalesce(public.cogs_adjustments.attribution_kind, excluded.attribution_kind),
+       attribution_ref = coalesce(public.cogs_adjustments.attribution_ref, excluded.attribution_ref)`,
     [
       adjustment.userId ?? null,
       adjustment.kind,
@@ -686,11 +709,11 @@ export async function recordCogsAdjustment(
       adjustment.sourceRef,
       adjustment.occurredAt?.toISOString() ?? null,
       JSON.stringify(adjustment.metadata ?? {}),
+      adjustment.attribution?.kind ?? null,
+      adjustment.attribution?.ref ?? null,
     ],
   );
 }
-
-const BALANCE_TRANSACTION_PAGE = 100;
 
 const ADJUSTMENT_KIND_BY_BALANCE_TYPE: Record<string, CogsAdjustmentKind> = {
   refund: 'refund',
@@ -707,92 +730,64 @@ const ADJUSTMENT_KIND_BY_BALANCE_TYPE: Record<string, CogsAdjustmentKind> = {
 export interface StripeCogsImportSummary {
   examined: number;
   feesRecorded: number;
+  feesAttributed: number;
   adjustmentsRecorded: number;
   discountsRecorded: number;
 }
 
-interface StripeCogsSource {
-  balanceTransactions: {
-    list(params: { created: { gte: number; lt: number }; limit: number }): {
-      autoPagingEach(handler: (entry: StripeBalanceTransaction) => void): Promise<void>;
-    };
-  };
-  invoices: {
-    list(params: { created: { gte: number; lt: number }; limit: number }): {
-      autoPagingEach(handler: (invoice: StripeInvoice) => void): Promise<void>;
-    };
-  };
-}
-
-interface StripeInvoice {
-  id: string;
-  currency: string;
-  created: number;
-  total_discount_amounts?: Array<{
-    amount: number;
-    discount: string | { id: string };
-  }> | null;
-}
-
-interface StripeBalanceTransaction {
-  id: string;
-  amount: number;
-  fee: number;
-  currency: string;
-  created: number;
-  type: string;
+function processingFeeCents(entry: NormalizedBalanceEntry): number {
+  if (entry.feeMinorUnits > 0) return entry.feeMinorUnits;
+  return ADJUSTMENT_KIND_BY_BALANCE_TYPE[entry.type] === 'stripe_fee' && entry.amountMinorUnits < 0
+    ? Math.abs(entry.amountMinorUnits)
+    : 0;
 }
 
 export async function importStripeCogsAdjustments(input: {
-  stripe: StripeCogsSource;
-  since: Date;
-  until: Date;
+  activity: NormalizedCostActivity;
   db?: DatabaseAdapter;
 }): Promise<StripeCogsImportSummary> {
   const db = input.db ?? getNeonDb();
-  const pending: StripeBalanceTransaction[] = [];
-
-  await input.stripe.balanceTransactions
-    .list({
-      created: {
-        gte: Math.floor(input.since.getTime() / 1000),
-        lt: Math.floor(input.until.getTime() / 1000),
-      },
-      limit: BALANCE_TRANSACTION_PAGE,
-    })
-    .autoPagingEach((entry) => {
-      pending.push(entry);
-    });
+  const { balanceEntries, invoiceDiscounts } = input.activity;
 
   let feesRecorded = 0;
+  let feesAttributed = 0;
   let adjustmentsRecorded = 0;
 
-  for (const entry of pending) {
-    const occurredAt = new Date(entry.created * 1000);
-    if (entry.fee > 0) {
+  for (const entry of balanceEntries) {
+    const sourceRef = `balance_txn:${entry.reference}`;
+    const feeCents = processingFeeCents(entry);
+    if (feeCents > 0) {
       await recordCogsAdjustment(
         {
+          userId: entry.attribution?.ownerReference ?? null,
           kind: 'stripe_fee',
-          amountCents: entry.fee,
+          amountCents: feeCents,
           currency: entry.currency,
-          sourceRef: `balance_txn:${entry.id}`,
-          occurredAt,
-          metadata: { balanceTransactionType: entry.type },
+          sourceRef,
+          occurredAt: entry.occurredAt,
+          metadata: {
+            balanceTransactionType: entry.type,
+            ...(entry.chargeReference ? { chargeId: entry.chargeReference } : {}),
+          },
+          attribution: entry.attribution
+            ? { kind: entry.attribution.kind, ref: entry.attribution.reference }
+            : null,
         },
         db,
       );
       feesRecorded += 1;
+      if (entry.attribution) feesAttributed += 1;
     }
 
     const kind = ADJUSTMENT_KIND_BY_BALANCE_TYPE[entry.type];
-    if (kind && kind !== 'stripe_fee' && entry.amount < 0) {
+    if (kind && kind !== 'stripe_fee' && entry.amountMinorUnits < 0) {
       await recordCogsAdjustment(
         {
           kind,
-          amountCents: Math.abs(entry.amount),
+          amountCents: Math.abs(entry.amountMinorUnits),
           currency: entry.currency,
-          sourceRef: `balance_txn:${entry.id}`,
-          occurredAt,
+          sourceRef,
+          occurredAt: entry.occurredAt,
           metadata: { balanceTransactionType: entry.type },
         },
         db,
@@ -801,48 +796,26 @@ export async function importStripeCogsAdjustments(input: {
     }
   }
 
-  const invoices: StripeInvoice[] = [];
-  await input.stripe.invoices
-    .list({
-      created: {
-        gte: Math.floor(input.since.getTime() / 1000),
-        lt: Math.floor(input.until.getTime() / 1000),
-      },
-      limit: BALANCE_TRANSACTION_PAGE,
-    })
-    .autoPagingEach((invoice) => {
-      invoices.push(invoice);
-    });
-
-  let discountsRecorded = 0;
-  for (const invoice of invoices) {
-    const lines = invoice.total_discount_amounts ?? [];
-    const discountCents = lines.reduce((total, line) => total + Math.max(0, line.amount), 0);
-    if (discountCents <= 0) continue;
-
+  for (const discount of invoiceDiscounts) {
     await recordCogsAdjustment(
       {
         kind: 'discount',
-        amountCents: discountCents,
-        currency: invoice.currency,
-        sourceRef: `invoice:${invoice.id}`,
-        occurredAt: new Date(invoice.created * 1000),
-        metadata: {
-          discountIds: lines.map((line) =>
-            typeof line.discount === 'string' ? line.discount : line.discount.id,
-          ),
-        },
+        amountCents: discount.discountMinorUnits,
+        currency: discount.currency,
+        sourceRef: `invoice:${discount.invoiceReference}`,
+        occurredAt: discount.occurredAt,
+        metadata: { discountIds: discount.discountReferences },
       },
       db,
     );
-    discountsRecorded += 1;
   }
 
   return {
-    examined: pending.length + invoices.length,
+    examined: balanceEntries.length + invoiceDiscounts.length,
     feesRecorded,
+    feesAttributed,
     adjustmentsRecorded,
-    discountsRecorded,
+    discountsRecorded: invoiceDiscounts.length,
   };
 }
 
@@ -992,6 +965,7 @@ interface CogsSummaryRow {
   compaction_saved_units: number | string | null;
   cache_savings_cents: number | string | null;
   cache_write_premium_cents: number | string | null;
+  store_commission_cents: number | string | null;
 }
 
 function numberFrom(value: number | string | null | undefined): number {
@@ -1025,6 +999,7 @@ export async function summarizeCogs(
     compactionSavedUnits: numberFrom(row?.compaction_saved_units),
     cacheSavingsCents: numberFrom(row?.cache_savings_cents),
     cacheWritePremiumCents: numberFrom(row?.cache_write_premium_cents),
+    storeCommissionCents: numberFrom(row?.store_commission_cents),
   };
 }
 

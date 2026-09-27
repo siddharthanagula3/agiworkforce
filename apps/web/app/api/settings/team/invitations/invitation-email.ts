@@ -7,6 +7,10 @@ import {
   isNotificationEmailConfigured,
   TRANSACTIONAL_EMAIL_FOOTER_STYLE,
 } from '@/lib/services/notification-email-service';
+import {
+  assertFreeDailyAllowance,
+  FreeDailyLimitError,
+} from '@/lib/services/tier-unit-quota-service';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
 export interface InvitationDelivery {
@@ -21,6 +25,7 @@ export interface InvitationEmailInput {
   organizationName: string | null;
   expiresAt: string;
   replacesPreviousLink?: boolean;
+  sender: { db: DatabaseAdapter; userId: string };
 }
 
 const MANUAL_DELIVERY =
@@ -92,6 +97,17 @@ export async function sendInvitationEmail(
     };
   }
 
+  try {
+    await assertFreeDailyAllowance({
+      db: input.sender.db,
+      userId: input.sender.userId,
+      requested: { email_sends: 1 },
+    });
+  } catch (error) {
+    if (!(error instanceof FreeDailyLimitError)) throw error;
+    return { emailSent: false, reason: `${error.message} ${manualReason}` };
+  }
+
   const workspace = workspaceLabel(input.organizationName);
   const expires = new Date(input.expiresAt);
   const expiresLabel = Number.isNaN(expires.getTime())
@@ -121,7 +137,14 @@ export async function sendInvitationEmail(
     .filter(Boolean)
     .join('');
 
-  const result = await sendTransactionalEmail({ from, to: input.to, subject, text, html });
+  const result = await sendTransactionalEmail({
+    from,
+    to: input.to,
+    subject,
+    text,
+    html,
+    userId: input.sender.userId,
+  });
 
   if (result.delivered) return { emailSent: true };
 

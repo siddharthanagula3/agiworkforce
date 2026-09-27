@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { readStripeCostActivity } from '@/lib/server/payments/stripe-provider';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { CreditService, type CreditSettlementQueueSummary } from '@/lib/services/credit-service';
 import { deliverDueVideoIncidentAlerts } from '@/lib/services/video-incident-alert-service';
@@ -167,16 +168,13 @@ async function runStripeReconciliation(): Promise<StripeReconciliationSummary | 
 const COGS_IMPORT_LOOKBACK_MS = 3 * 24 * 60 * 60 * 1000;
 
 async function runCogsImport(): Promise<StripeCogsImportSummary | null> {
-  const stripe = getStripeClientOrNull();
-  if (!stripe) return null;
-
   const until = new Date();
-  return importStripeCogsAdjustments({
-    stripe,
+  const activity = await readStripeCostActivity({
     since: new Date(until.getTime() - COGS_IMPORT_LOOKBACK_MS),
     until,
-    db: getNeonDb(),
   });
+  if (!activity) return null;
+  return importStripeCogsAdjustments({ activity, db: getNeonDb() });
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {

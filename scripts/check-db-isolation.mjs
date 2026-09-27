@@ -108,6 +108,13 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
       'the scheduler worker writes back to the task id it claimed from the due-set; there is no ' +
       'request workspace to constrain by',
   },
+  {
+    match: /lib\/services\/tier-unit-quota-service\.ts$/,
+    reason:
+      'a Free daily cap limits the account, not one workspace: it counts the messages and ' +
+      'conversations the account wrote today in every workspace it holds, and each count is ' +
+      'constrained by user_id and returns only a number',
+  },
 ];
 
 function workspaceScopeExempt(relativePath) {
@@ -205,6 +212,16 @@ const ALLOWLIST = [
       'routing_decision_traces table, not a weaker one. The insert is keyed by the decision id ' +
       'the host minted, and the delete is a time-based fleet sweep on the retention window run ' +
       'from the model-rollout cron, which has no caller to constrain by.',
+  },
+  {
+    match: /lib\/services\/infrastructure-allocation-service\.ts$/,
+    tables: ['infrastructure_vendor_bills'],
+    reason:
+      'the table holds one vendor bill total per month and has no tenant column to constrain ' +
+      'by: a bill is the platform paying Vercel, Neon or Clerk, not a row any account owns. ' +
+      '0303 turns RLS on and revokes app_rls as defence in depth. It is read and written only ' +
+      'by the monthly allocation cron, which has no caller to constrain by and keys every ' +
+      'write by the bill id it has just locked.',
   },
   {
     match: /lib\/server\/data-region\.ts$/,

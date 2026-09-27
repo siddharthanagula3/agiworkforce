@@ -161,3 +161,44 @@ export interface MobileIapVerifyResponse {
   currentPeriodEnd?: string | null;
   unitsGranted?: number;
 }
+
+export const BASIS_POINTS_PER_WHOLE = 10_000;
+
+export interface MobileIapStoreCommission {
+  subscriptionFirstYearBasisPoints: number;
+  subscriptionAfterFirstYearBasisPoints: number;
+  oneTimeBasisPoints: number;
+  source: string;
+  verifiedOn: string;
+}
+
+export const MOBILE_IAP_STORE_COMMISSION: Readonly<
+  Record<MobileIapPlatform, MobileIapStoreCommission>
+> = Object.freeze({
+  ios: {
+    subscriptionFirstYearBasisPoints: 3_000,
+    subscriptionAfterFirstYearBasisPoints: 1_500,
+    oneTimeBasisPoints: 3_000,
+    source: 'https://developer.apple.com/app-store/subscriptions/',
+    verifiedOn: '2026-09-27',
+  },
+  android: {
+    subscriptionFirstYearBasisPoints: 1_500,
+    subscriptionAfterFirstYearBasisPoints: 1_500,
+    oneTimeBasisPoints: 1_500,
+    source: 'https://support.google.com/googleplay/android-developer/answer/112622',
+    verifiedOn: '2026-09-27',
+  },
+});
+
+export function mobileIapStoreCommissionBasisPoints(input: {
+  platform: MobileIapPlatform;
+  kind: MobileIapProductKind;
+  afterFirstYear: boolean;
+}): number {
+  const commission = MOBILE_IAP_STORE_COMMISSION[input.platform];
+  if (input.kind === 'top_up') return commission.oneTimeBasisPoints;
+  return input.afterFirstYear
+    ? commission.subscriptionAfterFirstYearBasisPoints
+    : commission.subscriptionFirstYearBasisPoints;
+}

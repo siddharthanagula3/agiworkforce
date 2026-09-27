@@ -3,6 +3,8 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { MobileIapCatalogProduct, MobileIapPlatform } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { recordMobileIapStoreCommission } from './mobile-iap-ledger-service';
 import { SubscriptionService } from './subscription-service';
 
 export interface MobileIapLifecycleEvent {
@@ -30,10 +32,42 @@ interface ReceiptAnchor {
   refunded_amount_cents: number;
 }
 
+type LifecycleOutcome = 'processed' | 'duplicate' | 'unknown_purchase';
+
 export async function processMobileIapLifecycleEvent(input: {
   db: DatabaseAdapter;
   event: MobileIapLifecycleEvent;
-}): Promise<'processed' | 'duplicate' | 'unknown_purchase'> {
+}): Promise<LifecycleOutcome> {
+  const { outcome, renewedUserId } = await applyMobileIapLifecycleEvent(input);
+  if (renewedUserId) {
+    try {
+      await recordMobileIapStoreCommission(input.db, {
+        userId: renewedUserId,
+        platform: input.event.platform,
+        product: input.event.product,
+        storeTransactionId: input.event.storeTransactionId,
+        originalTransactionId: input.event.originalTransactionId,
+        purchasedAt: input.event.purchasedAt,
+      });
+    } catch (error) {
+      logger.error(
+        {
+          event: 'store_commission_not_recorded',
+          error: error instanceof Error ? error.message : String(error),
+          platform: input.event.platform,
+          storeTransactionId: input.event.storeTransactionId,
+        },
+        'The store commission on a renewal is missing from the COGS ledger',
+      );
+    }
+  }
+  return outcome;
+}
+
+async function applyMobileIapLifecycleEvent(input: {
+  db: DatabaseAdapter;
+  event: MobileIapLifecycleEvent;
+}): Promise<{ outcome: LifecycleOutcome; renewedUserId: string | null }> {
   return input.db.transaction(async (tx) => {
     const [notification] = await tx.query<{ notification_id: string }>(
       `insert into public.mobile_iap_notification_receipts (platform, notification_id)
@@ -42,7 +76,7 @@ export async function processMobileIapLifecycleEvent(input: {
        returning notification_id`,
       [input.event.platform, input.event.notificationId],
     );
-    if (!notification) return 'duplicate';
+    if (!notification) return { outcome: 'duplicate', renewedUserId: null };
 
     const [anchor] = await tx.query<ReceiptAnchor>(
       `select receipt.id, receipt.user_id, account.app_account_token,
@@ -72,7 +106,7 @@ export async function processMobileIapLifecycleEvent(input: {
           where platform = $1 and notification_id = $2`,
         [input.event.platform, input.event.notificationId],
       );
-      return 'unknown_purchase';
+      return { outcome: 'unknown_purchase', renewedUserId: null };
     }
     if (anchor.app_account_token !== input.event.appAccountToken) {
       throw createError.forbidden('Store notification account binding does not match.');
@@ -189,6 +223,8 @@ export async function processMobileIapLifecycleEvent(input: {
         where platform = $1 and notification_id = $2`,
       [input.event.platform, input.event.notificationId],
     );
-    return 'processed';
+    const renewed =
+      input.event.product.kind === 'subscription' && input.event.entitlementStatus === 'active';
+    return { outcome: 'processed', renewedUserId: renewed ? anchor.user_id : null };
   });
 }
