@@ -118,6 +118,8 @@ export interface InlinePaywallCardProps {
   freeCapacity?: FreeCapacityRecovery;
   onUpgrade: () => void;
   onDismiss: () => void;
+  alternativeModel?: { id: string; name: string };
+  onSwitchModel?: (modelId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +369,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   freeCapacity,
   onUpgrade,
   onDismiss,
+  alternativeModel,
+  onSwitchModel,
 }: InlinePaywallCardProps) {
   const alreadyEntitled = tierAtLeast(
     normalizeUIPlanTier(currentTier, 'free'),
@@ -427,7 +431,21 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
         {/* rendering-conditional-render: ternary, not && */}
         {reason !== EMPTY_REASON ? <p className="text-sm text-muted-foreground">{reason}</p> : null}
         {/* GOV-20: the two other ways out, shown only when they actually apply. */}
-        {suggestStandardModel ? (
+        {suggestStandardModel && alternativeModel && onSwitchModel ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <p className="text-sm text-muted-foreground">
+              {`${alternativeModel.name} is not limited by this and can answer now.`}
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onSwitchModel(alternativeModel.id)}
+            >
+              {`Switch to ${alternativeModel.name}`}
+            </Button>
+          </div>
+        ) : suggestStandardModel ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Switching to a standard (non-flagship) model clears this now.
           </p>
