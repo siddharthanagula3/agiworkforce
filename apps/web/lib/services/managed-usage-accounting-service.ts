@@ -112,7 +112,8 @@ function hostedCodeExecutionMicrousd(
   evidence: HostedCodeExecutionEvidence,
   dynamicFilteringWebTool: boolean,
 ): number {
-  const provider = hostedCodeExecutionProviderOf(normalizeProviderId(evidence.provider));
+  const normalized = normalizeProviderId(evidence.provider);
+  const provider = normalized ? hostedCodeExecutionProviderOf(normalized) : null;
   if (!provider) return 0;
   return priceHostedCodeExecution({
     provider,
