@@ -36,7 +36,7 @@ import {
   listAvailableManagedProviderIds,
   resolveServerProviderCredentials,
 } from '@/lib/services/provider-adapter-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 
 const EMBEDDING_SLOT = 'embedding_default';
 const EMBEDDING_LEASE_SECONDS = 120;
@@ -206,10 +206,16 @@ export async function embedTextsMetered(
     throw new RetrievalEmbeddingError('No embedding route is configured.', 'no_route');
   }
 
-  const subscription = await SubscriptionService.getSubscription(input.db, input.userId);
-  const access = await evaluateManagedComputeAccess(input.db, input.userId, subscription, 'web', {
-    organizationId: input.organizationId,
-  });
+  const entitlement = await resolveEntitlementBundle(input.db, input.userId);
+  const access = await evaluateManagedComputeAccess(
+    input.db,
+    input.userId,
+    entitlement.subscription,
+    'web',
+    {
+      organizationId: input.organizationId,
+    },
+  );
   if (!access.allowed) {
     throw new RetrievalEmbeddingError(access.reason, 'not_entitled');
   }
@@ -234,7 +240,7 @@ export async function embedTextsMetered(
       model: route.model.id,
       estimatedCostMicrousd: estimateEmbeddingCostMicrousd(route.model, estimatedTokens),
       leaseSeconds: EMBEDDING_LEASE_SECONDS,
-      planTier: subscription?.plan_tier ?? 'free',
+      planTier: entitlement.plan,
       isFlagship: false,
       ...(input.attribution ? { attribution: input.attribution } : {}),
     });

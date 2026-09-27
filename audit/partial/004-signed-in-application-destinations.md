@@ -75,17 +75,15 @@ Code: `apps/extension-vscode/src/features/projects/projectActions.ts:92-106`, `a
 
 - Done when: Within a project, a files/sources view lists the project's knowledge files and lets the user add and remove them.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Uploads are refused for accounts with no subscriptions row (never-paid Free users, Team seat members): the storage cap resolves to 0 bytes (knowledge-files/route.ts:381-404, billing-catalog.ts:377-380); resolve the cap from the effective plan. | handler |
-| desktop | partial | Uploads are refused for accounts with no subscriptions row (never-paid Free users, Team seat members): the storage cap resolves to 0 bytes (knowledge-files/route.ts:381-404, billing-catalog.ts:377-380); resolve the cap from the effective plan. | handler |
-| mobile | partial | Uploads are refused for accounts with no subscriptions row (never-paid Free users, Team seat members): the storage cap resolves to 0 bytes (knowledge-files/route.ts:381-404, billing-catalog.ts:377-380); resolve the cap from the effective plan. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | The project quick pick lists knowledge files read-only and sends the user to the web to add or remove them ("Knowledge files and project settings are edited there"). | surface-only |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1241-1242`, `apps/web/features/projects/components/SourcesPanel.tsx:128-136`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-404`, `apps/mobile/app/(app)/projects/[id].tsx:321-322`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `apps/extension-vscode/src/features/projects/projectActions.ts:134-137`
 
 ## S4.10: Project instructions.
 

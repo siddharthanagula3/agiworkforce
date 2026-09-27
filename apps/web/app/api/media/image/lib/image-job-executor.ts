@@ -41,6 +41,7 @@ import {
   describeImageFailureFromProviderMessage,
   estimateImageCostMicrousd,
   generateImages,
+  imageProviderCostMicrousd,
   ImageProviderHttpError,
   isRetryableImageFailure,
   resolveImageRefBytes,
@@ -107,7 +108,7 @@ async function recordUndeliveredImageCost(
   generatedCount: number,
   reason: string,
 ): Promise<void> {
-  const providerCostMicrousd = estimateImageCostMicrousd(
+  const providerCostMicrousd = imageProviderCostMicrousd(
     job.provider,
     generatedCount,
     job.plan.quality,
@@ -118,6 +119,7 @@ async function recordUndeliveredImageCost(
     provider: job.provider,
     model: job.model,
     actualCostCents: ledgerCentsFromMicrousd(providerCostMicrousd),
+    providerEstimatedCostMicrousd: providerCostMicrousd,
     sourceRef: `image_job:${job.id}:attempt:${job.attempts}`,
     taskOutcome: 'undelivered',
     taskRef: `image_job:${job.id}`,
@@ -751,6 +753,12 @@ async function executeImageGenerationJobAttempt(input: {
       ...reservationForImageJob(input.db, job),
       outcome: 'completed',
       actualCostMicrousd,
+      providerCostMicrousd: imageProviderCostMicrousd(
+        job.provider,
+        persisted.images.length,
+        job.plan.quality,
+        job.model,
+      ),
       usage: usageFor(job, { outputCount: persisted.images.length }),
     });
     billingSettlementStatus = settlement.settlementStatus;

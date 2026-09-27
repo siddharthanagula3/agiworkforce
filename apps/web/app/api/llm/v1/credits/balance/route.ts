@@ -5,7 +5,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { getCorsHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { toPublicUsagePercentage } from '@/lib/server/managed-usage-policy';
@@ -32,17 +32,18 @@ async function handleGetBalance(request: NextRequest) {
 
   const { db, userId } = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
 
-  const [subscriptionResult, balanceResult] = await Promise.allSettled([
-    SubscriptionService.getSubscription(db, userId),
+  const [entitlementResult, balanceResult] = await Promise.allSettled([
+    resolveEntitlementBundle(db, userId),
     CreditService.getBalance(db, userId),
   ]);
 
-  const subscription = subscriptionResult.status === 'fulfilled' ? subscriptionResult.value : null;
+  const entitlement = entitlementResult.status === 'fulfilled' ? entitlementResult.value : null;
+  const subscription = entitlement?.subscription ?? null;
   const balance = balanceResult.status === 'fulfilled' ? balanceResult.value : null;
 
-  if (subscriptionResult.status === 'rejected') {
+  if (entitlementResult.status === 'rejected') {
     logger.error(
-      { error: subscriptionResult.reason, userId: userId },
+      { error: entitlementResult.reason, userId: userId },
       'Failed to fetch subscription',
     );
   }
@@ -50,7 +51,7 @@ async function handleGetBalance(request: NextRequest) {
     logger.error({ error: balanceResult.reason, userId: userId }, 'Failed to fetch balance');
   }
 
-  if (!subscription) {
+  if (!entitlement || !subscription) {
     return NextResponse.json(
       {
         error: {
@@ -79,7 +80,7 @@ async function handleGetBalance(request: NextRequest) {
   const allocated = balance?.credits_allocated_cents ?? 0;
   const used = balance?.credits_used_cents ?? 0;
   const remaining = balance?.credits_remaining_cents ?? 0;
-  const isFreePlan = isFreeBillingPlanTier(subscription.plan_tier.toLowerCase());
+  const isFreePlan = isFreeBillingPlanTier(entitlement.plan);
   const freeUsage = isFreePlan ? await getFreeTrialPublicUsage(db, userId) : null;
   const resetAt = freeUsage?.resetAt ?? nextMonthReset?.toISOString() ?? null;
   const resetDate = resetAt ? new Date(resetAt) : null;
@@ -91,7 +92,7 @@ async function handleGetBalance(request: NextRequest) {
   // Never for Free: the allowance is an undisclosed company COGS ceiling, and
   // stating it together with the spend against it publishes the ceiling twice.
   // A Free caller gets the percentage, the reset and whether anything is left.
-  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(subscription.plan_tier);
+  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(entitlement.plan);
   const monthlyCredits = planAllowance
     ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
     : null;

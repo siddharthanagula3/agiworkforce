@@ -270,6 +270,95 @@ export function scanMoneyPaths({ repoRoot = REPO_ROOT, filePaths, accepted = ACC
   return { violations, stale };
 }
 
+export const RATE_CARD_PATH = 'packages/contracts/types/src/rate-card.ts';
+
+function objectLiteralBody(source, marker) {
+  const start = source.indexOf(marker);
+  if (start === -1) return null;
+  const open = source.indexOf('{', start);
+  if (open === -1) return null;
+  let depth = 0;
+  for (let index = open; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === '{') depth += 1;
+    else if (character === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(open + 1, index);
+    }
+  }
+  return null;
+}
+
+export function readRateCard(source) {
+  const table = objectLiteralBody(source, 'export const FEATURE_RATE_CARD');
+  const overrides = objectLiteralBody(source, 'export const RATE_CARD_PROVIDER_COGS_ENV');
+  if (table === null || overrides === null) return null;
+  const overrideEnv = new Map(
+    [...overrides.matchAll(/^\s*([a-z0-9_]+):\s*'([A-Z0-9_]+)'/gm)].map((match) => [
+      match[1],
+      match[2],
+    ]),
+  );
+  const starts = [...table.matchAll(/^ {2}([a-z0-9_]+):\s*(\{|infrastructureRate\()/gm)];
+  return starts.map((match, index) => {
+    const body = table.slice(match.index, starts[index + 1]?.index ?? table.length);
+    const figure = /providerCogsMicrousd:\s*(null|[0-9_.]+)/.exec(body)?.[1];
+    return {
+      feature: match[1],
+      providerCogsMicrousd:
+        match[2] !== '{' || figure === undefined || figure === 'null'
+          ? null
+          : Number(figure.replaceAll('_', '')),
+      overrideEnv: overrideEnv.get(match[1]) ?? null,
+    };
+  });
+}
+
+export function isDeployedEnvironment(env = process.env) {
+  return (
+    env.VERCEL_ENV === 'production' || env.VERCEL_ENV === 'preview' || env.NODE_ENV === 'production'
+  );
+}
+
+function positiveOverride(env, name) {
+  const value = Number.parseFloat(env[name] ?? '');
+  return Number.isFinite(value) && value > 0;
+}
+
+export function scanRateCard({ repoRoot = REPO_ROOT, env = process.env } = {}) {
+  let source;
+  try {
+    source = readFileSync(path.join(repoRoot, RATE_CARD_PATH), 'utf8');
+  } catch {
+    return [`${RATE_CARD_PATH} could not be read`];
+  }
+  const rows = readRateCard(source);
+  if (rows === null || rows.length === 0) return [`${RATE_CARD_PATH} declares no readable rows`];
+  const deployed = isDeployedEnvironment(env);
+  const failures = [];
+  for (const row of rows) {
+    const overrideSet = row.overrideEnv !== null && (env[row.overrideEnv] ?? '').trim() !== '';
+    if (deployed && overrideSet && !positiveOverride(env, row.overrideEnv)) {
+      failures.push(`${row.feature}: ${row.overrideEnv} must be a positive microUSD rate`);
+      continue;
+    }
+    if (row.providerCogsMicrousd !== null) {
+      if (!(row.providerCogsMicrousd > 0)) {
+        failures.push(`${row.feature} publishes a provider cost of ${row.providerCogsMicrousd}`);
+      }
+      continue;
+    }
+    if (row.overrideEnv === null) {
+      failures.push(`${row.feature} has no provider cost and no override variable to supply one`);
+      continue;
+    }
+    if (deployed && !overrideSet) {
+      failures.push(`${row.feature} has no provider cost: set ${row.overrideEnv}`);
+    }
+  }
+  return failures;
+}
+
 export function discoverRepositoryFiles(repoRoot = REPO_ROOT) {
   const output = execFileSync(
     'git',
@@ -308,12 +397,17 @@ function main() {
     console.error('\nThese accepted hazards no longer match the code; remove them:\n');
     for (const key of stale) console.error(`  ${key}`);
   }
-  if (violations.length > 0 || stale.length > 0) {
+  const unpriced = scanRateCard({ repoRoot });
+  if (unpriced.length > 0) {
+    console.error('\nA rate card row has no provider cost to charge from:\n');
+    for (const failure of unpriced) console.error(`  ${failure}`);
+  }
+  if (violations.length > 0 || stale.length > 0 || unpriced.length > 0) {
     process.exitCode = 1;
     return;
   }
   console.log(
-    `check-money-paths: no float on a money path (${tables.length} money tables, ${ACCEPTED_HAZARDS.length} accepted)`,
+    `check-money-paths: no float on a money path (${tables.length} money tables, ${ACCEPTED_HAZARDS.length} accepted); every rate card row priced${isDeployedEnvironment() ? '' : ' or deployment-supplied'}`,
   );
 }
 
