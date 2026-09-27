@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { z } from 'zod';
 import {
+  BILLING_PLAN_CAPABILITY_LABELS,
   BILLING_PLAN_PRICING,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   canAccessModelForSubscriptionTier,
@@ -34,6 +35,7 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
   type BillingInterval,
+  type BillingPlanCapability,
   type BillingPlanLimit,
   type BillingPlanTier,
   type SelfServeIndividualPlanTier,
@@ -134,15 +136,17 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['price', 'Price'],
   ['billingInterval', 'Billing'],
   ['usageCapacity', 'Managed usage'],
+  ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
   ['projects', 'Projects'],
   ['customMcp', 'Custom MCP'],
-  ['skillsConnectors', 'Skills & connectors'],
-  ['agiWork', 'AGI Work'],
-  ['imageGeneration', 'Images'],
-  ['videoGeneration', 'Video'],
-  ['apiAccess', 'Managed API'],
-  ['developerSurfaces', 'Developer surfaces'],
-  ['teamControls', 'Team controls'],
+  ['skillsConnectors', BILLING_PLAN_CAPABILITY_LABELS.skills_connectors],
+  ['agiWork', BILLING_PLAN_CAPABILITY_LABELS.agi_work],
+  ['imageGeneration', BILLING_PLAN_CAPABILITY_LABELS.image_generation],
+  ['videoGeneration', BILLING_PLAN_CAPABILITY_LABELS.video_generation],
+  ['apiAccess', BILLING_PLAN_CAPABILITY_LABELS.managed_api],
+  ['developerSurfaces', BILLING_PLAN_CAPABILITY_LABELS.developer_surfaces],
+  ['teamAdmin', BILLING_PLAN_CAPABILITY_LABELS.team_admin],
+  ['enterpriseControls', BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls],
   ['trainingData', 'Trains on your content'],
   ['bestFor', 'Best for'],
 ];
@@ -181,6 +185,7 @@ interface CompareRow {
   price: string;
   billingInterval: string;
   usageCapacity: string;
+  managedChat: string;
   projects: string;
   customMcp: string;
   skillsConnectors: string;
@@ -189,7 +194,8 @@ interface CompareRow {
   videoGeneration: string;
   apiAccess: string;
   developerSurfaces: string;
-  teamControls: string;
+  teamAdmin: string;
+  enterpriseControls: string;
   trainingData: string;
   bestFor: string;
   highlighted?: boolean;
@@ -208,29 +214,24 @@ function formatLimit(limit: BillingPlanLimit, singular: string, plural: string):
   return `${limit} ${limit === 1 ? singular : plural}`;
 }
 
+function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability): string {
+  return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
+}
+
 function managedPlanCapabilities(plan: BillingPlanTier) {
   const limits = getBillingPlanProductLimits(plan);
   return {
+    managedChat: capabilityCell(plan, 'managed_chat'),
     projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
     customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
-    skillsConnectors: canUseBillingPlanCapability(plan, 'skills_connectors') ? 'Yes' : 'No',
-    agiWork: canUseBillingPlanCapability(plan, 'agi_work') ? 'Yes' : 'No',
-    imageGeneration: canUseBillingPlanCapability(plan, 'image_generation') ? 'Yes' : 'No',
-    videoGeneration: canUseBillingPlanCapability(plan, 'video_generation') ? 'Yes' : 'No',
-    apiAccess: canUseBillingPlanCapability(plan, 'managed_api') ? 'Yes' : 'No',
-    developerSurfaces: canUseBillingPlanCapability(plan, 'developer_surfaces')
-      ? 'CLI, Chrome & VS Code'
-      : 'No managed access',
-    // SSO and SCIM directory sync are implemented and entitlement-gated on
-    // `enterprise_controls` (apps/web/features/admin/pages/AdminConsolePage.tsx's
-    // "Implemented, entitlement-gated" Identity row; live routes at
-    // /api/admin/sso and /api/scim/v2), which today only the Enterprise plan
-    // carries. Team gets the underlying `team_admin` controls without those.
-    teamControls: canUseBillingPlanCapability(plan, 'enterprise_controls')
-      ? 'SSO, SCIM & admin'
-      : canUseBillingPlanCapability(plan, 'team_admin')
-        ? 'Yes'
-        : 'No',
+    skillsConnectors: capabilityCell(plan, 'skills_connectors'),
+    agiWork: capabilityCell(plan, 'agi_work'),
+    imageGeneration: capabilityCell(plan, 'image_generation'),
+    videoGeneration: capabilityCell(plan, 'video_generation'),
+    apiAccess: capabilityCell(plan, 'managed_api'),
+    developerSurfaces: capabilityCell(plan, 'developer_surfaces'),
+    teamAdmin: capabilityCell(plan, 'team_admin'),
+    enterpriseControls: capabilityCell(plan, 'enterprise_controls'),
     trainingData: isFreeOfChargePlanTier(plan)
       ? FREE_PLAN_TRAINING_DATA_DISCLOSURE
       : TRAINING_DATA_DISCLOSURE,
@@ -822,15 +823,17 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareLocalUsage'),
+      managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited local',
       skillsConnectors: 'Local',
       agiWork: 'Local',
       imageGeneration: 'Model-dependent',
       videoGeneration: 'Model-dependent',
-      apiAccess: 'No managed access',
-      developerSurfaces: 'CLI',
-      teamControls: 'No',
+      apiAccess: 'No',
+      developerSurfaces: 'Local in the CLI',
+      teamAdmin: 'No',
+      enterpriseControls: 'No',
       trainingData: TRAINING_DATA_DISCLOSURE,
       bestFor: t('compareLocalBestFor'),
     },
@@ -840,6 +843,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareByokUsage'),
+      managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited custom',
       skillsConnectors: 'Local',
@@ -847,8 +851,9 @@ export default function PricingPage() {
       imageGeneration: 'Provider-dependent',
       videoGeneration: 'Provider-dependent',
       apiAccess: 'Your provider API',
-      developerSurfaces: 'CLI · VS Code coming soon',
-      teamControls: 'No',
+      developerSurfaces: 'Your keys in the CLI',
+      teamAdmin: 'No',
+      enterpriseControls: 'No',
       trainingData: TRAINING_DATA_DISCLOSURE,
       bestFor: t('compareByokBestFor'),
     },
@@ -1420,7 +1425,8 @@ export default function PricingPage() {
                           textTransform: 'uppercase',
                           fontFamily: 'var(--agi-font-mono)',
                           fontWeight: 500,
-                          whiteSpace: 'nowrap',
+                          verticalAlign: 'bottom',
+                          minWidth: '9rem',
                         }}
                       >
                         {label}
@@ -1479,6 +1485,7 @@ export default function PricingPage() {
                         {row.usageCapacity}
                       </td>
                       {[
+                        row.managedChat,
                         row.projects,
                         row.customMcp,
                         row.skillsConnectors,
@@ -1487,7 +1494,8 @@ export default function PricingPage() {
                         row.videoGeneration,
                         row.apiAccess,
                         row.developerSurfaces,
-                        row.teamControls,
+                        row.teamAdmin,
+                        row.enterpriseControls,
                         row.trainingData,
                       ].map((value, index) => (
                         <td
