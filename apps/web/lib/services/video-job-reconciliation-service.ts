@@ -515,21 +515,17 @@ async function reconcileVideoGenerationJobCore(
       );
     }
     completedProviderCostCents = provider.actualCostCents ?? claimed.estimatedCostCents;
-    if (claimed.provider === 'runway' && claimed.cancelRequestedAt) {
+    if (claimed.cancelRequestedAt) {
       return finishFailed(
         db,
         claimed,
         claimToken,
-        'Runway completed after cancellation was requested. AGI did not deliver the result.',
+        'The video finished after it was cancelled, so it was not delivered or charged.',
         completedProviderCostCents,
       );
     }
     const beforePersistence = await getVideoGenerationJobForSystem(db, claimed.id);
-    if (
-      beforePersistence?.provider === 'runway' &&
-      beforePersistence.cancelRequestedAt &&
-      !claimed.cancelRequestedAt
-    ) {
+    if (beforePersistence?.cancelRequestedAt && !claimed.cancelRequestedAt) {
       return deferVideoGenerationJob({
         db,
         jobId: claimed.id,
