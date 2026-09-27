@@ -167,3 +167,19 @@ describe('pricing locale bundles, enterprise capacity claims', () => {
     }
   });
 });
+
+describe('pricing locale bundles, seat totals', () => {
+  it('states the seat total without a plural form, so every language reads it at any count', () => {
+    for (const [locale, bundle] of pricingBundles()) {
+      for (const key of ['seatTotal', 'seatTotalAnnual']) {
+        expect(bundle[key], `${locale}/pricing.json ${key}`).toContain('{{seats}}');
+        expect(bundle[key], `${locale}/pricing.json ${key}`).toContain('{{total}}');
+        expect(bundle[key], `${locale}/pricing.json ${key}`).not.toContain('{{count}}');
+      }
+      expect(
+        Object.keys(bundle).filter((key) => /^seatTotal(Annual)?_/u.test(key)),
+        `${locale}/pricing.json keeps plural seat total keys`,
+      ).toEqual([]);
+    }
+  });
+});

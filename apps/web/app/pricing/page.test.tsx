@@ -53,10 +53,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
       if (key === 'seatTotal') {
-        return `${String(values?.['count'])} seats · ${String(values?.['total'])}/mo`;
+        return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/mo`;
       }
       if (key === 'seatTotalAnnual') {
-        return `${String(values?.['count'])} seats · ${String(values?.['total'])}/yr`;
+        return `Seats: ${String(values?.['seats'])} · ${String(values?.['total'])}/yr`;
       }
       if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
       if (key === 'usageMultiplierAll') {
@@ -288,14 +288,14 @@ describe('PricingPage', () => {
     expect(card.getByText('$25')).toBeVisible();
     expect(card.getByText('perSeatPricingSub')).toBeVisible();
     expect(card.getByText('billedMonthly')).toBeVisible();
-    expect(card.getByText('2 seats · $50/mo')).toBeVisible();
+    expect(card.getByText('Seats: 2 · $50/mo')).toBeVisible();
 
     fireEvent.change(card.getByRole('spinbutton', { name: 'seatCountLabel' }), {
       target: { value: '7' },
     });
 
     expect(card.getByText('$25')).toBeVisible();
-    expect(card.getByText('7 seats · $175/mo')).toBeVisible();
+    expect(card.getByText('Seats: 7 · $175/mo')).toBeVisible();
     expect(card.queryByText('$175')).toBeNull();
   });
 
@@ -305,7 +305,7 @@ describe('PricingPage', () => {
     render(<PricingPage />);
 
     expect(await screen.findByRole('spinbutton', { name: 'seatCountLabel' })).toHaveValue(5);
-    expect(screen.getByText('5 seats · $125/mo')).toBeVisible();
+    expect(screen.getByText('Seats: 5 · $125/mo')).toBeVisible();
   });
 
   it('preserves the chosen Team seat count after waitlist-code access', async () => {
@@ -338,7 +338,7 @@ describe('PricingPage', () => {
     const seatInput = await screen.findByRole('spinbutton', { name: 'seatCountLabel' });
     fireEvent.change(seatInput, { target: { value: '14' } });
 
-    expect(await screen.findByText('14 seats · $280/mo')).toBeVisible();
+    expect(await screen.findByText('Seats: 14 · $280/mo')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());
@@ -383,7 +383,7 @@ describe('PricingPage', () => {
     expect(card.getByText('$20').closest('p')!.textContent).toBe(
       '$20 perSeatPricingSub billedYearly',
     );
-    expect(card.getByText('2 seats · $480/yr')).toBeVisible();
+    expect(card.getByText('Seats: 2 · $480/yr')).toBeVisible();
     expect(card.queryByText('$240')).toBeNull();
     expect(card.queryByText('$480')).toBeNull();
 
@@ -416,7 +416,7 @@ describe('PricingPage', () => {
     expect(card.getByText('$25')).toBeVisible();
     expect(card.getByText('perSeatPricingSub')).toBeVisible();
     expect(card.getByText('billedMonthly')).toBeVisible();
-    expect(card.getByText('2 seats · $50/mo')).toBeVisible();
+    expect(card.getByText('Seats: 2 · $50/mo')).toBeVisible();
 
     const teamCta = screen.getByRole('button', { name: 'teamCta' });
     await waitFor(() => expect(teamCta).toBeEnabled());

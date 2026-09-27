@@ -1108,8 +1108,8 @@ export default function PricingPage() {
                 style={{ margin: 0, fontSize: 13, color: 'var(--agi-ink-quiet)' }}
               >
                 {teamInterval === 'yearly'
-                  ? t('seatTotalAnnual', { count: teamSeats, total: teamYearlyTotalPrice })
-                  : t('seatTotal', { count: teamSeats, total: teamTotalPrice })}
+                  ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
+                  : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
               </p>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(
