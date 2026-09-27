@@ -49,7 +49,7 @@ export function MobileCompanionPanel() {
           <h2 className="text-base font-semibold text-foreground">Remote</h2>
         </div>
         {isPaired ? (
-          <Badge className="bg-emerald-100 text-emerald-700 gap-1">
+          <Badge className="bg-success-fill/10 text-success-text gap-1">
             <Wifi className="h-3 w-3" />
             Connected
           </Badge>
@@ -63,13 +63,13 @@ export function MobileCompanionPanel() {
 
       {/* Connected device section */}
       {isPaired ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+        <div className="rounded-lg border border-success-fill/30 bg-success-fill/10 p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow shadow-emerald-500/40 animate-pulse" />
-            <span className="text-sm font-medium text-emerald-800">Mobile device connected</span>
+            <span className="h-2.5 w-2.5 rounded-full bg-success-fill shadow shadow-emerald-500/40 animate-pulse" />
+            <span className="text-sm font-medium text-success-text">Mobile device connected</span>
           </div>
           {pendingApprovals.length > 0 && (
-            <p className="text-xs text-emerald-700">
+            <p className="text-xs text-success-text">
               {pendingApprovals.length} pending approval{pendingApprovals.length !== 1 ? 's' : ''}{' '}
               from agent
             </p>
@@ -77,7 +77,7 @@ export function MobileCompanionPanel() {
           <Button
             variant="outline"
             size="sm"
-            className="border-emerald-300 text-emerald-700 hover:bg-emerald-100"
+            className="border-success-fill/30 text-success-text hover:bg-success-fill/10"
             onClick={() => stopSession()}
           >
             Disconnect

@@ -17,16 +17,16 @@ function ActivityIcon({ type, status }: ActivityIconProps) {
 
   if (type === 'milestone_achieved') {
     Icon = Trophy;
-    colorClass = 'text-yellow-600 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-950';
+    colorClass = 'text-yellow-800 bg-yellow-100 dark:text-yellow-300 dark:bg-yellow-950';
   } else if (type === 'goal_completed') {
     Icon = CheckCircle2;
-    colorClass = 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-950';
+    colorClass = 'text-success-text bg-success-fill/10';
   } else if (type === 'automation_run' && status === 'failed') {
     Icon = XCircle;
-    colorClass = 'text-red-600 bg-red-100 dark:text-red-400 dark:bg-red-950';
+    colorClass = 'text-danger-text bg-danger-fill/10';
   } else if (type === 'automation_run' && status === 'partial') {
     Icon = AlertCircle;
-    colorClass = 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-950';
+    colorClass = 'text-warning-text bg-warning-fill/10';
   }
 
   return (
@@ -101,7 +101,7 @@ function ActivityItemComponent({ activity }: ActivityItemComponentProps) {
           {activity.costSavedUsd !== undefined && activity.costSavedUsd > 0 && (
             <>
               <span className="text-muted-foreground/50">•</span>
-              <div className="flex items-center gap-1 text-green-600 dark:text-green-500">
+              <div className="flex items-center gap-1 text-success-text">
                 <DollarSign className="h-3 w-3" />
                 <span>{formatCurrency(activity.costSavedUsd)}</span>
               </div>

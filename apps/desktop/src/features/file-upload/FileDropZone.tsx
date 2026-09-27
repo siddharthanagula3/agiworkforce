@@ -173,18 +173,18 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       {/* Error Display */}
       {error && (
         <div
-          className="mt-3 flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg"
+          className="mt-3 flex items-center gap-2 p-3 bg-danger-fill/10 border border-danger-fill/30 rounded-lg"
           role="alert"
         >
-          <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <AlertCircle className="w-4 h-4 text-danger-text shrink-0" />
+          <p className="text-sm text-danger-text">{error}</p>
           <button
             type="button"
             onClick={() => setError(null)}
-            className="ml-auto p-1 hover:bg-red-100 dark:hover:bg-red-800 rounded"
+            className="ml-auto p-1 hover:bg-danger-fill/10 rounded"
             aria-label="Dismiss error"
           >
-            <X className="w-3 h-3 text-red-500" />
+            <X className="w-3 h-3 text-danger-text" />
           </button>
         </div>
       )}
@@ -215,7 +215,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
                 <button
                   type="button"
                   onClick={() => handleRemoveFile(index)}
-                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors text-gray-500 hover:text-red-500"
+                  className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors text-gray-500 hover:text-danger-text"
                   aria-label={`Remove ${file.name}`}
                 >
                   <X className="w-4 h-4" />

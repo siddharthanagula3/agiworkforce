@@ -160,14 +160,12 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           };
         });
 
-      const custom = customCommands.map(
-        (command): CommandSuggestion => ({
-          id: command.id,
-          command: `/${command.name}`,
-          description: command.description || command.template.slice(0, 60),
-          icon: <Terminal className="h-4 w-4 text-muted-foreground" />,
-        }),
-      );
+      const custom = customCommands.map((command): CommandSuggestion => ({
+        id: command.id,
+        command: `/${command.name}`,
+        description: command.description || command.template.slice(0, 60),
+        icon: <Terminal className="h-4 w-4 text-muted-foreground" />,
+      }));
 
       const toSuggestion = (skill: SkillMeta): CommandSuggestion => {
         const note = skillRequirementNote(skill.requiredTools);
@@ -177,7 +175,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           description: note
             ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
             : skill.description,
-          icon: <Sparkles className="h-4 w-4 text-amber-400" />,
+          icon: <Sparkles className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
           isSkill: true,
         };
       };

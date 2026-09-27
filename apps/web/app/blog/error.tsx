@@ -21,8 +21,8 @@ export default function BlogError({
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4 text-center">
-      <div className="w-20 h-20 rounded-full bg-red-500/10 mx-auto mb-6 flex items-center justify-center">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
+      <div className="w-20 h-20 rounded-full bg-danger-fill/10 mx-auto mb-6 flex items-center justify-center">
+        <AlertTriangle className="h-10 w-10 text-danger-text" />
       </div>
 
       <h1 className="text-2xl font-bold text-foreground mb-3">Unable to Load Blog</h1>

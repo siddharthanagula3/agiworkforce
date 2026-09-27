@@ -228,8 +228,8 @@ function getStepStatusConfig(status: ExecutionStep['status']) {
     case 'completed':
       return {
         icon: Check,
-        bgColor: 'bg-green-500/10',
-        iconColor: 'text-green-500',
+        bgColor: 'bg-success-fill/10',
+        iconColor: 'text-success-text',
         textColor: 'text-foreground',
         animate: '',
       };

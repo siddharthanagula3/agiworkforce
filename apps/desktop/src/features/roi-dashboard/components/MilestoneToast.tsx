@@ -17,7 +17,7 @@ function MilestoneToastContent({ milestone, onAcknowledge, onShare }: MilestoneT
     <div className="flex flex-col gap-3 w-full">
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Trophy className="h-5 w-5 text-yellow-500" />
+          <Trophy className="h-5 w-5 text-yellow-700 dark:text-yellow-500" />
           <div>
             <p className="font-semibold text-foreground">Milestone Achieved!</p>
             <p className="text-sm text-muted-foreground">{milestone.message}</p>

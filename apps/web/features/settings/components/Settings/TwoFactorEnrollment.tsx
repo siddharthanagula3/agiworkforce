@@ -274,7 +274,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
           {enabled ? (
-            <ShieldCheck className="h-4 w-4 text-emerald-500" aria-hidden="true" />
+            <ShieldCheck className="h-4 w-4 text-success-text" aria-hidden="true" />
           ) : (
             <ShieldOff className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           )}

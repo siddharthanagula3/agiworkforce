@@ -110,13 +110,13 @@ function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div
-            className={`rounded-full p-2 ${isConfigured ? (isUnlocked ? 'bg-green-500/10' : 'bg-orange-500/10') : 'bg-muted'}`}
+            className={`rounded-full p-2 ${isConfigured ? (isUnlocked ? 'bg-success-fill/10' : 'bg-warning-fill/10') : 'bg-muted'}`}
           >
             {isConfigured ? (
               isUnlocked ? (
-                <LockOpen className="h-4 w-4 text-green-500" />
+                <LockOpen className="h-4 w-4 text-success-text" />
               ) : (
-                <Lock className="h-4 w-4 text-orange-500" />
+                <Lock className="h-4 w-4 text-warning-text" />
               )
             ) : (
               <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -166,11 +166,9 @@ function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: 
       )}
 
       {needsMigration && isUnlocked && (
-        <div className="rounded-md border border-orange-500/30 bg-orange-500/10 p-3 flex items-start justify-between gap-3">
+        <div className="rounded-md border border-warning-fill/30 bg-warning-fill/10 p-3 flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-medium text-orange-700 dark:text-orange-400">
-              Migration available
-            </p>
+            <p className="text-xs font-medium text-warning-text">Migration available</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Re-encrypt your secrets with your master password for stronger protection.
             </p>

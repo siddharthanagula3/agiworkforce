@@ -21,11 +21,11 @@ const STATUS_LABELS: Record<BackgroundAgentStatus, string> = {
 };
 
 const STATUS_STYLES: Record<BackgroundAgentStatus, string> = {
-  queued: 'text-yellow-400 bg-yellow-400/10',
+  queued: 'text-warning-text bg-warning-fill/10',
   running: 'text-blue-400 bg-blue-400/10',
-  paused: 'text-amber-400 bg-amber-400/10',
-  completed: 'text-green-400 bg-green-400/10',
-  failed: 'text-red-400 bg-red-400/10',
+  paused: 'text-warning-text bg-warning-fill/10',
+  completed: 'text-success-text bg-success-fill/10',
+  failed: 'text-danger-text bg-danger-fill/10',
   cancelled: 'text-slate-400 bg-slate-400/10',
   taken_over: 'text-teal-400 bg-teal-400/10',
 };
@@ -77,7 +77,7 @@ function BackgroundAgentRow({ agent }: { agent: BackgroundAgent }) {
         </p>
       </div>
 
-      {agent.error ? <p className="mt-2 text-xs text-red-400">{agent.error}</p> : null}
+      {agent.error ? <p className="mt-2 text-xs text-danger-text">{agent.error}</p> : null}
 
       <div className="mt-3 flex flex-wrap gap-2">
         {agent.status === 'paused' ? (
@@ -158,7 +158,7 @@ export function BackgroundAgentsPanel() {
         </button>
       </div>
 
-      {error ? <p className="text-xs text-red-400">{error}</p> : null}
+      {error ? <p className="text-xs text-danger-text">{error}</p> : null}
 
       {agents.length === 0 ? (
         <p className="text-sm text-slate-500">

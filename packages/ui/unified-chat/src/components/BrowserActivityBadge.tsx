@@ -67,10 +67,10 @@ export function BrowserActivityBadge({
         !extensionConnected
           ? 'border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:bg-zinc-800'
           : agentStatus === 'planning' || agentStatus === 'executing'
-            ? 'border-blue-500/30 bg-blue-500/10 text-blue-300 hover:bg-blue-500/15'
+            ? 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/15'
             : hasError
-              ? 'border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15'
-              : 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15',
+              ? 'border-danger-fill/20 bg-danger-fill/5 text-danger-text hover:bg-danger-fill/10'
+              : 'border-success-fill/20 bg-success-fill/5 text-success-text hover:bg-success-fill/10',
       )}
       title={lastAction ?? currentPageTitle ?? label}
       aria-label={`${label}, open browser activity`}

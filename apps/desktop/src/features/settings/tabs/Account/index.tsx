@@ -32,7 +32,7 @@ export function AccountTab({ scope = 'local' }: { scope?: 'local' | 'cloud' }) {
         </div>
         <div className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success-fill/10 text-success-text">
               <Shield className="h-4 w-4" />
             </div>
             <div className="min-w-0 flex-1">

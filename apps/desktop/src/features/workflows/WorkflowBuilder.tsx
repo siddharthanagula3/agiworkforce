@@ -753,7 +753,7 @@ function NodePropertiesPanel({ node, onUpdateData, onDelete }: NodePropertiesPan
       <button
         type="button"
         onClick={() => onDelete(node.id)}
-        className="mt-auto flex items-center justify-center gap-1.5 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-500/20"
+        className="mt-auto flex items-center justify-center gap-1.5 rounded-md border border-danger-fill/30 bg-danger-fill/10 px-3 py-1.5 text-xs font-medium text-danger-text transition hover:border-danger-fill/60"
       >
         <Trash2 className="h-3.5 w-3.5" />
         Delete node

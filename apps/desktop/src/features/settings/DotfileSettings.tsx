@@ -434,7 +434,7 @@ function EcosystemSection() {
                   </span>
                 )}
                 {tool.has_skills && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-success-fill/10 text-success-text">
                     Skills
                   </span>
                 )}

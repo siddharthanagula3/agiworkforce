@@ -22,12 +22,7 @@ import { useConfirm } from '@/ui/ConfirmDialog';
 import { openExternalUrl } from '../../utils/navigation';
 
 type ExtensionStatus =
-  | 'disabled'
-  | 'enabled'
-  | 'running'
-  | 'error'
-  | 'updating'
-  | 'pending_removal';
+  'disabled' | 'enabled' | 'running' | 'error' | 'updating' | 'pending_removal';
 
 interface ExtensionInfo {
   id: string;
@@ -440,7 +435,7 @@ export function ExtensionsSettings() {
     switch (status) {
       case 'running':
         return (
-          <Badge className="bg-green-500/10 text-green-600 border-green-500/30">
+          <Badge className="bg-success-fill/10 text-success-text border-success-fill/30">
             <Play className="h-3 w-3 mr-1" />
             Running
           </Badge>
@@ -468,7 +463,7 @@ export function ExtensionsSettings() {
         );
       case 'updating':
         return (
-          <Badge className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+          <Badge className="bg-warning-fill/10 text-warning-text border-warning-fill/30">
             <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
             Updating
           </Badge>
@@ -600,7 +595,7 @@ export function ExtensionsSettings() {
                           {extension.requiresConfig && !extension.configComplete && (
                             <Badge
                               variant="outline"
-                              className="text-yellow-600 border-yellow-500/50"
+                              className="text-warning-text border-warning-fill/50"
                             >
                               Config Required
                             </Badge>

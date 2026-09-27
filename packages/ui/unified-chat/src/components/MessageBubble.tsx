@@ -452,10 +452,10 @@ function ToolCallRow({ toolCall }: { toolCall: ToolCall }) {
           className={cn(
             'shrink-0 rounded-full px-2 py-0.5 text-caption font-medium',
             toolCall.status === 'failed'
-              ? 'bg-red-500/10 text-red-300'
+              ? 'bg-danger-fill/10 text-danger-text'
               : toolCall.status === 'completed'
-                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                : 'bg-blue-500/10 text-blue-300',
+                ? 'bg-success-fill/10 text-success-text'
+                : 'bg-blue-500/10 text-blue-700 dark:text-blue-300',
           )}
         >
           {toolCall.status ?? 'running'}
@@ -574,7 +574,7 @@ function UserMessageAttachments({ attachments }: { attachments: Attachment[] }) 
               )}
             </div>
             {downloadErrors[attachment.id] && (
-              <p role="alert" className="mt-1 text-right text-xs text-red-400">
+              <p role="alert" className="mt-1 text-right text-xs text-danger-text">
                 {downloadErrors[attachment.id]}
               </p>
             )}
