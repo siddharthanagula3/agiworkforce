@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only the plan name; it never lists what Basic includes, and in-app purchase is off (FEATURES.billing false; native store catalog needs MOBILE_IAP_ENABLED). | ui, flag-off |
+| mobile | partial | Basic's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED (lead switches FEATURES.billing on at run end; MOBILE_IAP_ENABLED is an owner setting). | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
 
 ## S81.04: Pro-plan feature bundle.
 
@@ -26,9 +26,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only the plan name; it never lists what Pro includes, and in-app purchase is off (FEATURES.billing false; native store catalog needs MOBILE_IAP_ENABLED). | ui, flag-off |
+| mobile | partial | Pro's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
 
 ## S81.05: Max 5x feature bundle.
 
@@ -38,9 +38,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only the plan name; it never lists what Max 5x includes, and in-app purchase is off (FEATURES.billing false; native store catalog needs MOBILE_IAP_ENABLED). | ui, flag-off |
+| mobile | partial | Max 5x's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
 
 ## S81.06: Max 15x feature bundle.
 
@@ -50,21 +50,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only the plan name; it never lists what Max 15x includes, and in-app purchase is off (FEATURES.billing false; native store catalog needs MOBILE_IAP_ENABLED). | ui, flag-off |
+| mobile | partial | The top Max tier's bundle is now listed in the app; buying it in the app needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
-
-## S81.09: Separate feature-access differences.
-
-- Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile has no plan comparison; it only tells a blocked user which plan a feature needs (paywall sheet). | ui |
-
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:44-44`, `apps/mobile/src/features/settings/plans/index.tsx:31-31`, `apps/mobile/src/features/settings/plans/index.tsx:37-37`
 
 ## S81.14: Separate generation settings.
 
@@ -139,15 +127,3 @@ Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/u
 | mobile | partial | Mobile copy now says an upgrade starts a new billing period that day; upgrading in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED, which the lead switches on at run end. | flag-off |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:388-388`
-
-## S81.28: Plan-specific feature explanations.
-
-- Done when: Each plan explains its own features (what it adds over the current plan, and why a blocked feature needs a given plan).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile names the plan a blocked feature needs but never lists what each paid plan includes. | ui |
-
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`

@@ -14,9 +14,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Build a plan comparison in the app; mobile shows only the current plan, and the native product list (name, interval, price, no features) is gated off by MOBILE_IAP_ENABLED. | ui, flag-off |
+| mobile | partial | Comparison built and reached from the paywall; the Billing screen row is in post-codex/no-yearly-s83-mobile-billing.patch (cloud-billing/index.tsx is Codex-held); in-app purchase needs FEATURES.billing and MOBILE_IAP_ENABLED. | flag-off |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:416-430`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
+Code: `apps/mobile/src/features/settings/plans/index.tsx:59-59`, `apps/mobile/src/features/settings/plans/index.tsx:70-70`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:129-129`
 
 ## S83.03: Upgrade checkout.
 
@@ -75,9 +75,9 @@ Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows a trialing plan as 'Renews <date>' with no trial terms. | ui |
+| mobile | partial | Trial copy (Free trial ends <date>, then renews unless you cancel) is in post-codex/no-yearly-s83-mobile-billing.patch; cloud-billing/index.tsx is Codex-held. Apply after Codex lands. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-321`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
 
 ## S83.09: Payment-method entry.
 
@@ -171,9 +171,9 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows only 'Cancels <date>'. | ui |
+| mobile | partial | End-of-term copy (Access ends <date>, you keep the plan until then) is in post-codex/no-yearly-s83-mobile-billing.patch; Codex-held file. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-321`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-318`
 
 ## S83.25: Mobile purchase restoration.
 
