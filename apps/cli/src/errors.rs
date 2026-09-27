@@ -180,7 +180,11 @@ pub enum CliError {
     /// No AGI Workforce session, and no other route can run the model.
     AccountSignedOut { model: String },
     /// Signed in, but the account's plan does not include the model.
-    PlanExcludesModel { model: String, tier: String },
+    PlanExcludesModel {
+        model: String,
+        tier: String,
+        alternative_model: Option<String>,
+    },
     /// On the plan, but the hosted list withholds the model right now.
     ModelUnavailable { model: String },
     /// AGI Workforce managed-cloud paywall, user's tier cap reached.
@@ -342,7 +346,7 @@ impl fmt::Display for CliError {
                     model
                 )
             }
-            CliError::PlanExcludesModel { model, tier } => {
+            CliError::PlanExcludesModel { model, tier, .. } => {
                 write!(
                     f,
                     "Your {} plan does not include '{}', and no provider key for it is set.",
@@ -559,10 +563,19 @@ impl CliError {
                 "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
                     .to_string()
             }
-            CliError::PlanExcludesModel { .. } => format!(
-                "Choose a model your plan includes, or set that provider's own key. \
-                 {PAID_UPGRADES_ARE_STAGED}"
-            ),
+            CliError::PlanExcludesModel {
+                alternative_model, ..
+            } => match alternative_model {
+                Some(model) => format!(
+                    "Choose a model your plan includes, such as {} (`--model {model}`), or set \
+                     that provider's own key. {PAID_UPGRADES_ARE_STAGED}",
+                    crate::model_catalog::display_name(model)
+                ),
+                None => format!(
+                    "Choose a model your plan includes, or set that provider's own key. \
+                     {PAID_UPGRADES_ARE_STAGED}"
+                ),
+            },
             CliError::ModelUnavailable { .. } => {
                 "Choose another model, or try again shortly; `agi models list` shows what is \
                  available now."
@@ -1350,6 +1363,7 @@ mod tests {
             CliError::PlanExcludesModel {
                 model: "fixture-model".to_string(),
                 tier: "free".to_string(),
+                alternative_model: None,
             }
             .hint(),
         ] {
@@ -1815,6 +1829,7 @@ mod tests {
             CliError::PlanExcludesModel {
                 model: "m".into(),
                 tier: "free".into(),
+                alternative_model: None,
             },
             CliError::ModelUnavailable { model: "m".into() },
             CliError::paywall("chat", "pro", "quota"),
