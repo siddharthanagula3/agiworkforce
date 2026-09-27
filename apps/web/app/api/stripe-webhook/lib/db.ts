@@ -26,7 +26,7 @@ import {
   applySubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { topUpChargedCents } from '@agiworkforce/types';
+import { purchasedCreditMetadata, topUpChargedCents } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
   auditUnknownStripePriceIfEnterpriseConfigured,
@@ -197,7 +197,12 @@ export async function handleCreditTopUp(
     );
   }
 
-  await grantCreditTopUp(db, { userId, creditAmountCents, receiptId: session.id });
+  await grantCreditTopUp(db, {
+    userId,
+    creditAmountCents,
+    receiptId: session.id,
+    purchaseCountry: session.customer_details?.address?.country ?? null,
+  });
 }
 
 function creditTopUpDescription(receiptId: string): string {
@@ -220,7 +225,12 @@ export async function isCreditTopUpApplied(
 
 export async function grantCreditTopUp(
   db: DatabaseAdapter,
-  grant: { userId: string; creditAmountCents: number; receiptId: string },
+  grant: {
+    userId: string;
+    creditAmountCents: number;
+    receiptId: string;
+    purchaseCountry?: string | null;
+  },
 ): Promise<void> {
   const { userId, creditAmountCents } = grant;
   const transactionDescription = creditTopUpDescription(grant.receiptId);
@@ -271,12 +281,13 @@ export async function grantCreditTopUp(
 
     const previousBalance = await readRemainingMicrousd();
 
-    await db.execute('select add_credits_microusd($1, $2, $3, $4, $5)', [
+    await db.execute('select add_credits_microusd($1, $2, $3, $4, $5, $6)', [
       userId,
       creditAccount.id,
       creditAmountCents * MICROUSD_PER_LEDGER_CENT,
       transactionDescription,
       'purchase',
+      JSON.stringify(purchasedCreditMetadata(grant.purchaseCountry, new Date())),
     ]);
 
     const newBalance = await readRemainingMicrousd();
