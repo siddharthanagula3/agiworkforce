@@ -31,10 +31,19 @@ export interface MemoryFact {
 
 export type MemorySyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
 
+export interface MemoryProjectScope {
+  id: string;
+  name: string;
+}
+
 interface MemoryState {
   facts: MemoryFact[];
   syncStatus: MemorySyncStatus;
-  add: (text: string, sourceConversationId?: string) => Promise<MemoryFact | null>;
+  add: (
+    text: string,
+    sourceConversationId?: string,
+    project?: MemoryProjectScope,
+  ) => Promise<MemoryFact | null>;
   update: (id: string, text: string) => Promise<void>;
   setPinned: (id: string, pinned: boolean) => Promise<void>;
   remove: (id: string) => Promise<void>;
@@ -155,11 +164,11 @@ async function fetchServerMemories(): Promise<ServerMemoryRow[]> {
   return rows;
 }
 
-async function createServerMemory(text: string): Promise<CreatedServerMemory> {
+async function createServerMemory(text: string, projectId?: string): Promise<CreatedServerMemory> {
   return memoryRequest<CreatedServerMemory>(MEMORY_API_BASE, {
     method: 'POST',
     headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ content: text, source: 'web' }),
+    body: JSON.stringify({ content: text, source: 'web', ...(projectId ? { projectId } : {}) }),
   });
 }
 
@@ -210,7 +219,8 @@ function factFromServer(row: ServerMemoryRow, id: string = randomId()): MemoryFa
 }
 
 function withServerRow(fact: MemoryFact, row: ServerMemoryRow): MemoryFact {
-  return { ...factFromServer(row, fact.id), pending: false };
+  const saved = factFromServer(row, fact.id);
+  return { ...saved, projectName: saved.projectName ?? fact.projectName ?? null, pending: false };
 }
 
 export const useMemoryStore = create<MemoryState>()(
@@ -219,16 +229,21 @@ export const useMemoryStore = create<MemoryState>()(
       facts: [],
       syncStatus: canSyncToServer() ? 'idle' : 'unavailable',
 
-      add: async (text, sourceConversationId) => {
+      add: async (text, sourceConversationId, project) => {
         const trimmed = text.trim();
         if (!trimmed) return null;
-        const dupe = get().facts.find((f) => f.text.toLowerCase() === trimmed.toLowerCase());
+        const dupe = get().facts.find(
+          (f) =>
+            f.text.toLowerCase() === trimmed.toLowerCase() &&
+            (f.projectId ?? null) === (project?.id ?? null),
+        );
         if (dupe) return dupe;
         const now = new Date().toISOString();
         const fact: MemoryFact = {
           id: randomId(),
           text: trimmed,
           ...(sourceConversationId ? { sourceConversationId } : {}),
+          ...(project ? { projectId: project.id, projectName: project.name } : {}),
           createdAt: now,
           updatedAt: now,
           ...(canSyncToServer() ? { pending: true } : {}),
@@ -238,7 +253,7 @@ export const useMemoryStore = create<MemoryState>()(
 
         let created: CreatedServerMemory;
         try {
-          created = await createServerMemory(trimmed);
+          created = await createServerMemory(trimmed, project?.id);
         } catch (error) {
           set((state) => ({ facts: state.facts.filter((f) => f.id !== fact.id) }));
           throw error;
