@@ -34,6 +34,7 @@ import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
 export const runtime = 'nodejs';
 
 const NOTE_MAX_CHARS = MAX_TICKET_MESSAGE_CHARS / 2;
+const REFERENCE_MAX_CHARS = 200;
 const RECORD_ROW_LIMIT = 12;
 const EARLIEST_REQUEST_LOOKUP = new Date(0).toISOString();
 
@@ -41,6 +42,7 @@ const ReportSchema = z.object({
   from: z.string().datetime({ offset: true }),
   to: z.string().datetime({ offset: true }),
   requestId: z.string().uuid().optional(),
+  reference: z.string().trim().min(1).max(REFERENCE_MAX_CHARS).optional(),
   message: z.string().trim().min(1).max(NOTE_MAX_CHARS),
 });
 
@@ -183,6 +185,7 @@ async function handleCreate(request: NextRequest) {
     subject: `Billing discrepancy: usage from ${day(window.from)} to ${day(window.to)}`,
     message: [
       parsed.data.message,
+      ...(parsed.data.reference ? [`Charge or invoice reference: ${parsed.data.reference}`] : []),
       usageRecord({ history, summary, request: disputed[0] ?? null }),
     ].join('\n\n'),
   });

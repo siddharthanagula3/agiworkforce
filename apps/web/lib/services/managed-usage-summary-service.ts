@@ -126,8 +126,8 @@ export async function getManagedUsageSummary(
           getRollingUsage(db, userId, ROLLING_WEEKLY_WINDOW_HOURS, true),
         ])
       : [
-          { usedMicrousd: freeUsage?.fiveHourUsedMicrousd ?? 0, usedCents: 0, oldestAt: null },
-          { usedMicrousd: freeUsage?.weeklyUsedMicrousd ?? 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
+          { usedMicrousd: 0, usedCents: 0, oldestAt: null },
           { usedMicrousd: 0, usedCents: 0, oldestAt: null },
         ];
 
@@ -148,13 +148,12 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  const monthlyUsedMicrousd = freeUsage ? freeUsage.monthlyUsedMicrousd : creditsUsed;
-  const planAllowance = resolvePlanCreditAllowance(planTier);
+  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(planTier);
   const credits: AccountUsageCredits | null = planAllowance
     ? {
         monthly: creditWindow(
           planAllowance.monthly,
-          creditsFromMicrousd(monthlyUsedMicrousd),
+          creditsFromMicrousd(creditsUsed),
           usageResetAt,
         ),
         weekly: creditWindow(
