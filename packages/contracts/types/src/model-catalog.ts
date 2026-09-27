@@ -2956,6 +2956,21 @@ export function getSurfaceManualModelOptions(runtimeProfileId: string): CoreMode
     .map(toCoreModelOption);
 }
 
+export function getPlanContextWindowTokens(plan: string | null | undefined): number | null {
+  if (!plan) return null;
+  const roster = new Set([
+    ...getAllowedModelsForTier('economy'),
+    ...getAllowedModelsForTier('pro_additions'),
+    ...getAllowedModelsForTier('flagship_additions'),
+  ]);
+  let largest = 0;
+  for (const modelId of roster) {
+    if (!canAccessModelForSubscriptionTier(modelId, plan)) continue;
+    largest = Math.max(largest, getModelMetadataById(modelId)?.contextWindow ?? 0);
+  }
+  return largest > 0 ? largest : null;
+}
+
 export function getModelContextLimits(modelIds?: string[]): Record<string, number> {
   const ids = modelIds?.length ? normalizeModelList(modelIds) : Object.keys(modelsCatalog.models);
   const entries: Array<[string, number]> = [];
