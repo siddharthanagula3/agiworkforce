@@ -70,6 +70,10 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => {
     assertTierUnitAllowance: (...args: unknown[]) => mocks.assertTierUnitAllowance(...args),
   };
 });
+vi.mock('@/lib/voice/live-voice-tools', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  resolveLiveVoiceFunctionTools: vi.fn(async () => ({ tools: [], names: [] })),
+}));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
   return {
