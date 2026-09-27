@@ -7,16 +7,20 @@ import { PageHero } from '@/features/marketing/components/pages/surfaces/shared'
 import { CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
 import { buildMetadata } from '@/lib/seo/metadata';
 
-import { CopyrightNoticeForm } from './CopyrightNoticeForm';
+import { CopyrightNoticeForm, type NoticeType } from './CopyrightNoticeForm';
 
 export const metadata = buildMetadata({
-  title: 'Report infringing content',
+  title: 'Report infringing or impersonating content',
   description:
-    'Send a copyright or trademark notice about a shared conversation or published artifact hosted here, and get a reference for it.',
+    'Send a copyright, trademark or impersonation report about a shared conversation or published artifact hosted here, and get a reference for it.',
   path: '/copyright/report',
 });
 
 const PUBLIC_PREFIXES = ['/share/', '/shared-artifact/'];
+
+function noticeTypeFrom(raw: string | undefined): NoticeType {
+  return raw === 'trademark' || raw === 'impersonation' ? raw : 'copyright';
+}
 
 function safeReportedUrl(raw: string | undefined): string {
   if (!raw) return '';
@@ -33,9 +37,9 @@ function safeReportedUrl(raw: string | undefined): string {
 export default async function CopyrightReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ url?: string }>;
+  searchParams: Promise<{ url?: string; type?: string }>;
 }) {
-  const { url } = await searchParams;
+  const { url, type } = await searchParams;
 
   return (
     <div data-design="agi" className="agi-ds-page">
@@ -43,14 +47,15 @@ export default async function CopyrightReportPage({
       <main id="main-content">
         <PageHero
           id="agi-copyright-report-title"
-          eyebrow="Copyright · notice and takedown"
-          title="Report infringing content."
+          eyebrow="Copyright, trademark and impersonation"
+          title="Report infringing or impersonating content."
           lede={
             <>
               This form is for material published here at a public URL: a shared conversation under
-              /share, or a published artifact under /shared-artifact. It records the notice, gives
-              you a reference, and forwards it to the contact who can disable the link. The policy
-              behind it, including counter-notices and repeat infringers, is on{' '}
+              /share, or a published artifact under /shared-artifact, that infringes a copyright or
+              trademark or impersonates a person or organisation. It records the report, gives you a
+              reference, and forwards it to the contact who can disable the link. The policy behind
+              it, including counter-notices and repeat infringers, is on{' '}
               <Link href="/copyright" className="agi-ds-link">
                 /copyright
               </Link>
@@ -69,7 +74,10 @@ export default async function CopyrightReportPage({
             <h2 className="agi-ds-h2" id="agi-copyright-report-notice-title">
               Your notice.
             </h2>
-            <CopyrightNoticeForm reportedUrl={safeReportedUrl(url)} />
+            <CopyrightNoticeForm
+              reportedUrl={safeReportedUrl(url)}
+              initialType={noticeTypeFrom(type)}
+            />
           </Stack>
         </Section>
       </main>
