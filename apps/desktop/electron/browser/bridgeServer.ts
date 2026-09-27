@@ -55,8 +55,7 @@ const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 export type BrowserChatHandoff =
-  | { kind: 'page-capture'; png: Buffer }
-  | { kind: 'selection'; text: string; url: string };
+  { kind: 'page-capture'; png: Buffer } | { kind: 'selection'; text: string; url: string };
 
 interface PendingPairRequest {
   extensionId: string;

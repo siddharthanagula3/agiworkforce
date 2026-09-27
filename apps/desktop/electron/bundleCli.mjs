@@ -24,6 +24,7 @@ export default async function bundleCli(context) {
   if (!target) {
     throw new Error(`No AGI CLI build is defined for ${context.electronPlatformName} ${arch}.`);
   }
+  run('rustup', ['toolchain', 'install']);
   run('rustup', ['target', 'add', target]);
   run('cargo', [
     'build',
