@@ -32,6 +32,10 @@ const APP_ROOT = appRoot();
 const REMOVAL_PATHS = [
   { file: 'app/api/settings/team/[memberId]/route.ts', what: 'an admin removing a member' },
   {
+    file: 'app/api/settings/organization/members/[userId]/route.ts',
+    what: 'an admin or a workspace API key removing a member through the admin API',
+  },
+  {
     file: 'app/api/settings/organization/leave/route.ts',
     what: 'a member leaving a workspace themselves',
   },
@@ -100,6 +104,7 @@ describe('deprovision covers every removal path', () => {
     // loudly: the administrator walks away believing the person is cut off.
     for (const file of [
       'app/api/settings/team/[memberId]/route.ts',
+      'app/api/settings/organization/members/[userId]/route.ts',
       'app/api/settings/organization/leave/route.ts',
     ]) {
       const text = source(file);
