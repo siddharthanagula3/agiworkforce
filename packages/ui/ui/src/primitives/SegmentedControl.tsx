@@ -62,7 +62,7 @@ export function SegmentedControl<T extends string>({
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
               selected
                 ? 'border-foreground bg-accent text-accent-foreground'
-                : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+                : 'border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground active:scale-[0.98]',
             )}
           >
             {option.label}

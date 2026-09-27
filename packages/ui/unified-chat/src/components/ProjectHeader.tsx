@@ -136,7 +136,7 @@ export function ProjectHeader({ presentation, className, compact = false }: Proj
             <div className="flex items-center gap-2">
               <h2
                 title={presentation.title}
-                className="truncate text-base font-semibold text-[var(--chat-text-primary)]"
+                className="truncate text-h4 text-[var(--chat-text-primary)]"
               >
                 {presentation.title}
               </h2>

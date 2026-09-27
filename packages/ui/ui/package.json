@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./agi-mark": "./src/AgiMark.tsx",
     "./button": "./src/primitives/Button.tsx",
+    "./cn": "./src/cn.ts",
     "./dialog": "./src/primitives/Dialog.tsx",
     "./label": "./src/primitives/Label.tsx",
     "./sheet": "./src/primitives/Sheet.tsx",

@@ -207,9 +207,7 @@ export function ProjectGallery({
     <div className={cn('flex h-full flex-col gap-4', className)}>
       {(title || description) && (
         <div className="flex flex-col gap-1">
-          {title ? (
-            <h2 className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</h2>
-          ) : null}
+          {title ? <h2 className="text-h4 text-[var(--chat-text-primary)]">{title}</h2> : null}
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}

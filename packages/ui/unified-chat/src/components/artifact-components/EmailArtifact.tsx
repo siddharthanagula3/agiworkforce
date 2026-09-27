@@ -104,10 +104,7 @@ export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <h3
-                className="truncate text-sm font-semibold text-foreground"
-                data-testid="email-subject"
-              >
+              <h3 className="truncate text-h5 text-foreground" data-testid="email-subject">
                 {parsed.headers.subject || artifact.title || 'Email draft'}
               </h3>
             </div>

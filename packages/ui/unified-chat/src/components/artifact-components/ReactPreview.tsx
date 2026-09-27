@@ -272,7 +272,7 @@ export function ReactPreview({
     <div
       className={cn(
         'flex flex-col',
-        isExpanded && 'fixed inset-4 z-[var(--z-modal)] bg-card rounded-lg shadow-2xl',
+        isExpanded && 'fixed inset-4 z-[var(--z-modal)] bg-card rounded-lg shadow-e4',
         className,
       )}
     >

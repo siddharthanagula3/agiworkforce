@@ -202,7 +202,7 @@ export function ProjectCard({
                     ref={menuPanelRef}
                     role="menu"
                     aria-label={`Options for ${project.name}`}
-                    className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-lg"
+                    className="absolute right-0 top-full z-[var(--z-content-sticky)] mt-1 min-w-[152px] rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] py-1 shadow-e3"
                   >
                     {/* Order matches the leaders' project row menu: share,
                         edit (rename + settings), archive, delete. Star lives

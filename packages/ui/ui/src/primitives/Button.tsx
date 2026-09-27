@@ -6,16 +6,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../cn';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors active:scale-[0.98] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-accent hover:text-accent-foreground',
-        link: 'text-primary underline-offset-4 hover:underline',
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90 active:brightness-90',
+        destructive:
+          'bg-destructive text-destructive-foreground hover:bg-destructive/90 active:brightness-90',
+        outline:
+          'border border-input bg-background hover:bg-accent hover:text-accent-foreground active:bg-surface-active',
+        secondary:
+          'bg-secondary text-secondary-foreground hover:bg-secondary/80 active:brightness-95',
+        ghost: 'hover:bg-accent hover:text-accent-foreground active:bg-surface-active',
+        link: 'text-primary underline-offset-4 hover:underline active:decoration-2',
       },
       size: {
         default: 'h-10 px-4 py-2',
