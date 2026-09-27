@@ -14,6 +14,8 @@ import {
   BROWSER_COMMAND_PROTOCOL_VERSION,
   BROWSER_COMMAND_TIMEOUT_MS,
   BRIDGE_TOKEN_HEADER,
+  MAX_CONTEXT_HANDOFF_SELECTION_CHARS,
+  MAX_CONTEXT_HANDOFF_URL_CHARS,
   MAX_PAIR_CONFIRM_ATTEMPTS,
   MAX_PENDING_PAIR_REQUESTS,
   NATIVE_BROWSER_POLL_MESSAGE,
@@ -44,6 +46,17 @@ import { bridgeToken, clearPairing, hostToken, readPairing, savePairing } from '
 const MAX_PAIR_BODY_BYTES = 4 * 1024;
 const MAX_NATIVE_BODY_BYTES = 32 * 1024 * 1024;
 const CONNECTION_IDLE_MS = 40_000;
+
+const NATIVE_CONNECT_MESSAGE = 'connect';
+const NATIVE_PING_MESSAGE = 'ping';
+const NATIVE_PAGE_CAPTURE_MESSAGE = 'page_capture';
+const NATIVE_SELECTED_TEXT_MESSAGE = 'selected_text_query';
+const PNG_DATA_URL_PREFIX = 'data:image/png;base64,';
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+export type BrowserChatHandoff =
+  | { kind: 'page-capture'; png: Buffer }
+  | { kind: 'selection'; text: string; url: string };
 
 interface PendingPairRequest {
   extensionId: string;
@@ -76,6 +89,7 @@ export interface BridgeDependencies {
     args: Record<string, unknown>,
     caller: { name: string; subject: string; folder: string | null; path: string | null },
   ) => Promise<{ ok: boolean; value?: unknown; error?: string; code?: string }>;
+  deliverToChat?: (handoff: BrowserChatHandoff) => Promise<void>;
 }
 
 let server: Server | null = null;
@@ -388,11 +402,72 @@ function handleCommandResult(body: Record<string, unknown>): void {
   }
 }
 
-function handleNativeMessageRoute(
+function readPageCapture(message: Record<string, unknown>): BrowserChatHandoff | string {
+  const dataUrl = message['dataUrl'];
+  if (typeof dataUrl !== 'string' || !dataUrl.startsWith(PNG_DATA_URL_PREFIX)) {
+    return 'The captured page was not a PNG image.';
+  }
+  const png = Buffer.from(dataUrl.slice(PNG_DATA_URL_PREFIX.length), 'base64');
+  if (!png.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+    return 'The captured page was not a PNG image.';
+  }
+  return { kind: 'page-capture', png };
+}
+
+function readSelection(message: Record<string, unknown>): BrowserChatHandoff | string {
+  const text = message['selectedText'];
+  const url = message['url'];
+  if (
+    typeof text !== 'string' ||
+    text.trim() === '' ||
+    text.length > MAX_CONTEXT_HANDOFF_SELECTION_CHARS
+  ) {
+    return 'The selected text was empty or too long.';
+  }
+  if (typeof url !== 'string' || url.length > MAX_CONTEXT_HANDOFF_URL_CHARS) {
+    return 'The selection did not name the page it came from.';
+  }
+  let protocol: string;
+  try {
+    protocol = new URL(url).protocol;
+  } catch {
+    return 'The selection did not name the page it came from.';
+  }
+  if (protocol !== 'https:' && protocol !== 'http:') {
+    return 'Only text selected on a web page can be sent to AGI Cloud.';
+  }
+  return { kind: 'selection', text: text.trim(), url };
+}
+
+async function deliverChatHandoff(
+  response: ServerResponse,
+  handoff: BrowserChatHandoff | string,
+): Promise<void> {
+  if (typeof handoff === 'string') {
+    sendJson(response, 200, { success: false, error: handoff });
+    return;
+  }
+  const deliver = deps?.deliverToChat;
+  if (!deliver) {
+    sendJson(response, 200, { success: false, error: 'This desktop app cannot open a chat.' });
+    return;
+  }
+  try {
+    await deliver(handoff);
+    sendJson(response, 200, { success: true });
+  } catch (error) {
+    sendJson(response, 200, {
+      success: false,
+      error: error instanceof Error ? error.message : 'AGI Cloud could not open the chat.',
+    });
+  }
+}
+
+async function handleNativeMessageRoute(
   request: IncomingMessage,
   response: ServerResponse,
   body: Record<string, unknown>,
-): void {
+): Promise<void> {
   const supplied = request.headers[NATIVE_HOST_TOKEN_HEADER];
   const expected = hostToken();
   const provided = typeof supplied === 'string' ? supplied : '';
@@ -440,7 +515,25 @@ function handleNativeMessageRoute(
     sendJson(response, 200, { success: true });
     return;
   }
-  sendJson(response, 200, { success: true });
+  if (type === NATIVE_CONNECT_MESSAGE || type === NATIVE_PING_MESSAGE) {
+    sendJson(response, 200, { success: true });
+    return;
+  }
+  if (type === NATIVE_PAGE_CAPTURE_MESSAGE) {
+    await deliverChatHandoff(response, readPageCapture(message as Record<string, unknown>));
+    return;
+  }
+  if (type === NATIVE_SELECTED_TEXT_MESSAGE) {
+    await deliverChatHandoff(response, readSelection(message as Record<string, unknown>));
+    return;
+  }
+  sendJson(response, 200, {
+    success: false,
+    error:
+      typeof type === 'string'
+        ? `AGI Cloud does not handle ${type.slice(0, 64)} messages from the browser.`
+        : 'The browser sent a message without a type.',
+  });
 }
 
 /**
@@ -604,7 +697,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (isNative) {
-    handleNativeMessageRoute(request, response, body);
+    await handleNativeMessageRoute(request, response, body);
     return;
   }
   if (path === BROWSER_BRIDGE_ROUTES.pairRequest) {
