@@ -16,7 +16,7 @@ import {
   type CloudCodeAgentStopReason,
 } from '@agiworkforce/types';
 import { getModelMetadata } from '@shared/config/llm';
-import type { CodeApprovalPrompt, CodeTranscriptItem } from './code-transcript';
+import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 
 export const LOCAL_CODE_COPY = {
   heading: 'On this device',
