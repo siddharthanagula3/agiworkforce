@@ -55,7 +55,10 @@ import {
   redactSecretsFromValue,
   SecretRedactionIncompleteError,
 } from '@/lib/security/secrets-audit';
-import { checkpointRequestForResume } from '../lib/approval-checkpoint-request';
+import {
+  checkpointRequestForResume,
+  checkpointTurnAttachments,
+} from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_RESUME_MESSAGE =
   'This resume was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
@@ -230,6 +233,7 @@ async function handleToolInputResume(request: NextRequest, authResult: AuthGateS
   const processed: ProcessedRequest = processResult;
 
   processed.llmRequest.messages = claim.checkpoint.messages;
+  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
