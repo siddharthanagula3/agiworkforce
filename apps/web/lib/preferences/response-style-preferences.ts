@@ -13,6 +13,9 @@ export const PREFERRED_FORMATTINGS = [
 ] as const;
 export type PreferredFormatting = (typeof PREFERRED_FORMATTINGS)[number];
 
+export const PREFERRED_LENGTHS = ['default', 'shorter', 'longer'] as const;
+export type PreferredLength = (typeof PREFERRED_LENGTHS)[number];
+
 /**
  * 'auto' means answer in the language the user wrote in. It is the default
  * because the display language is a different preference: someone reading the
@@ -25,6 +28,7 @@ export interface ResponseStylePreference {
   style: ResponseStyle;
   technicalLevel: TechnicalLevel;
   preferredFormatting: PreferredFormatting;
+  preferredLength: PreferredLength;
   responseLanguage: string;
   traits: Readonly<Record<string, number>>;
 }
@@ -33,14 +37,23 @@ export const RESPONSE_STYLE_PREFERENCE_DEFAULTS: ResponseStylePreference = Objec
   style: 'default',
   technicalLevel: 'unspecified',
   preferredFormatting: 'unspecified',
+  preferredLength: 'default',
   responseLanguage: RESPONSE_LANGUAGE_AUTO,
   traits: Object.freeze({}),
 });
 
-const STYLE_GUIDANCE: Readonly<Record<Exclude<ResponseStyle, 'default'>, string>> = {
-  concise: 'Keep responses short and direct. Lead with the answer.',
-  explanatory: 'Explain your reasoning and give context, as if teaching.',
-  formal: 'Use a formal register. Avoid contractions and casual phrasing.',
+export const RESPONSE_STYLE_GUIDANCE: Readonly<Record<Exclude<ResponseStyle, 'default'>, string>> =
+  {
+    concise: 'Keep responses short and direct. Lead with the answer.',
+    explanatory: 'Explain your reasoning and give context, as if teaching.',
+    formal: 'Use a formal register. Avoid contractions and casual phrasing.',
+  };
+
+export const PREFERRED_LENGTH_GUIDANCE: Readonly<
+  Record<Exclude<PreferredLength, 'default'>, string>
+> = {
+  shorter: 'Keep answers as short as the question allows. Expand only when the user asks for more.',
+  longer: 'Give fuller answers with background, edge cases and worked examples.',
 };
 
 const TECHNICAL_LEVEL_GUIDANCE: Readonly<Record<Exclude<TechnicalLevel, 'unspecified'>, string>> = {
@@ -117,6 +130,7 @@ export function normalizeResponseStylePreference(
       PREFERRED_FORMATTINGS,
       'unspecified',
     ),
+    preferredLength: pick(namespace['preferredLength'], PREFERRED_LENGTHS, 'default'),
     responseLanguage: readResponseLanguage(namespace['responseLanguage']),
     traits: readTraits(namespace),
   };
@@ -150,7 +164,10 @@ export function responseStyleLines(preference: ResponseStylePreference): string[
     lines.push(FORMATTING_GUIDANCE[preference.preferredFormatting]);
   }
   if (preference.style !== 'default') {
-    lines.push(STYLE_GUIDANCE[preference.style]);
+    lines.push(RESPONSE_STYLE_GUIDANCE[preference.style]);
+  }
+  if (preference.preferredLength !== 'default') {
+    lines.push(PREFERRED_LENGTH_GUIDANCE[preference.preferredLength]);
   }
   for (const [key, copy] of Object.entries(TRAIT_GUIDANCE)) {
     const value = preference.traits[key];
