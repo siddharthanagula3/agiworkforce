@@ -155,19 +155,11 @@ export function getStripeConfig() {
   };
 }
 
-export async function upgradeToProPlan(data: {
-  userId: string;
-  userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
+export async function upgradeToProPlan(data: { userId: string; userEmail: string }): Promise<void> {
   return upgradeToPlan({ ...data, plan: 'pro' });
 }
 
-export async function upgradeToMaxPlan(data: {
-  userId: string;
-  userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
+export async function upgradeToMaxPlan(data: { userId: string; userEmail: string }): Promise<void> {
   return upgradeToPlan({ ...data, plan: 'max' });
 }
 

@@ -112,17 +112,19 @@ describe('UpgradeConfirmDialog', () => {
     paymentMocks.previewUpgrade.mockResolvedValueOnce({
       amountDueNowCents: 500,
       currency: 'usd',
-      previewToken: 'tok_pro_yearly',
+      previewToken: 'tok_team_yearly',
     });
 
     render(
       <UpgradeConfirmDialog
-        request={{ plan: 'pro', billingInterval: 'yearly' }}
+        request={{ plan: 'team', billingInterval: 'yearly', seats: 3 }}
         onCancel={vi.fn()}
         onConfirmed={vi.fn()}
       />,
     );
 
-    expect(await screen.findByText(/After that, Pro renews at \$200\/year plus tax/i)).toBeTruthy();
+    expect(
+      await screen.findByText(/After that, Team renews at \$720\/year plus tax/i),
+    ).toBeTruthy();
   });
 });

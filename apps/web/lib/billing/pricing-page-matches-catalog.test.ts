@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
   getPlanPriceInr,
-  getPublishedPlanPriceUsd,
+  getPublishedPlanPriceCents,
   listPlansForProduct,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -83,7 +83,7 @@ describe('the published pricing page cannot state a price the catalog does not',
         const expected =
           plan.currency === 'inr'
             ? Math.round((getPlanPriceInr(tier) ?? 0) * 100)
-            : Math.round(getPublishedPlanPriceUsd(tier, plan.interval) * 100);
+            : getPublishedPlanPriceCents(tier, plan.interval);
         expect(plan.priceMinorUnits, `${tier} ${plan.interval} ${plan.currency}`).toBe(expected);
       }
     }
