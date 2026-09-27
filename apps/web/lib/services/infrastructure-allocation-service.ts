@@ -98,10 +98,10 @@ const ALLOCATE_SQL = `with ${ACTIVE_ACCOUNTS_CTE},
       customer_canonical_microusd, customer_credits,
       provider_estimated_cost_microusd, provider_reported_cost_microusd, reconciliation_status
     )
-    select $1::timestamptz, ranked.user_id, $3, $4, 'active_user_month', 1,
+    select $1::timestamptz, ranked.user_id, $3::text, $4::text, 'active_user_month'::text, 1,
            ($5::bigint / ranked.population
              + (ranked.position <= $5::bigint % ranked.population)::int)::integer,
-           0, $6 || ranked.user_id, $7::jsonb, 0, 0,
+           0, $6::text || ranked.user_id, $7::jsonb, 0, 0,
            $8::bigint / ranked.population
              + (ranked.position <= $8::bigint % ranked.population)::int,
            case when $9::boolean

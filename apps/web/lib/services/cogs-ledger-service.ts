@@ -688,7 +688,8 @@ export async function recordCogsAdjustment(
        attribution_kind, attribution_ref
      )
      select (select profile.id from public.profiles profile where profile.id = $1::text),
-            $2, $3, $4, $5, coalesce($6::timestamptz, now()), $7::jsonb, $8, $9
+            $2::text, $3::integer, $4::text, $5::text, coalesce($6::timestamptz, now()),
+            $7::jsonb, $8::text, $9::text
      on conflict (kind, source_ref)
      do update set
        amount_cents = greatest(public.cogs_adjustments.amount_cents, excluded.amount_cents),
@@ -795,21 +796,17 @@ interface StripeBalanceTransaction {
   currency: string;
   created: number;
   type: string;
-  source?: string | StripeBalanceSource | null;
+  source?: unknown;
 }
 
 interface StripeInvoicePayment {
   payment: { payment_intent?: string | StripeReference };
-  invoice:
-    | string
-    | {
-        parent?: {
-          subscription_details?: {
-            subscription: string | StripeReference;
-            metadata: Record<string, string> | null;
-          } | null;
-        } | null;
-      };
+  invoice: unknown;
+}
+
+interface StripeSubscriptionDetails {
+  subscription?: string | StripeReference | null;
+  metadata?: Record<string, string> | null;
 }
 
 interface AttributedFee {
@@ -830,14 +827,20 @@ function createdRange(since: Date, until: Date): StripeCreatedRange {
 }
 
 function chargeOf(entry: StripeBalanceTransaction): StripeBalanceSource | null {
-  const source = entry.source;
-  if (!source || typeof source === 'string' || source.object !== 'charge') return null;
-  return source;
+  if (!entry.source || typeof entry.source !== 'object') return null;
+  const source = entry.source as StripeBalanceSource;
+  return source.object === 'charge' && typeof source.id === 'string' ? source : null;
+}
+
+function subscriptionDetailsOf(invoice: unknown): StripeSubscriptionDetails | null {
+  if (!invoice || typeof invoice !== 'object') return null;
+  const parent = (invoice as { parent?: { subscription_details?: unknown } | null }).parent;
+  const details = parent?.subscription_details;
+  return details && typeof details === 'object' ? (details as StripeSubscriptionDetails) : null;
 }
 
 function subscriptionFeeOf(payment: StripeInvoicePayment): AttributedFee | null {
-  if (typeof payment.invoice === 'string') return null;
-  const details = payment.invoice.parent?.subscription_details;
+  const details = subscriptionDetailsOf(payment.invoice);
   const subscriptionId = stripeId(details?.subscription);
   if (!details || !subscriptionId) return null;
   return {
@@ -847,9 +850,10 @@ function subscriptionFeeOf(payment: StripeInvoicePayment): AttributedFee | null 
 }
 
 function topUpFeeOf(charge: StripeBalanceSource): AttributedFee | null {
-  if (charge.metadata?.['type'] !== TOP_UP_CHARGE_TYPE) return null;
+  const metadata = charge.metadata;
+  if (!metadata || metadata['type'] !== TOP_UP_CHARGE_TYPE) return null;
   return {
-    userId: charge.metadata[USER_ID_METADATA_KEY] ?? null,
+    userId: metadata[USER_ID_METADATA_KEY] ?? null,
     attribution: { kind: 'top_up', ref: stripeId(charge.payment_intent) ?? charge.id },
   };
 }
