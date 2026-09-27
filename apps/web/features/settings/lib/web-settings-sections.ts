@@ -27,6 +27,7 @@ export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'shared-links',
   'billing',
   'usage',
+  'referrals',
   'capabilities',
   'memory',
   'notifications',
