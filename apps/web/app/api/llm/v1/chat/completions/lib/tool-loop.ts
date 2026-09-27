@@ -1116,17 +1116,6 @@ function interactiveCardEvent(card: InteractiveCard, responseModel: string): Sse
 const MAX_INPUT_REQUEST_ENTRIES = 32;
 const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
 
-const MCP_INPUT_PAUSE_ENV = 'AGI_MCP_INPUT_PAUSE';
-
-// Off unless explicitly enabled: the server half of the MCP `input_required`
-// pause is complete (checkpoint, `input-requested` events, /resume-input), but
-// no client surface calls /resume-input yet, so a real pause would strand the
-// turn with no way to answer it. Until a client ships, an `input_required`
-// result takes the fail-safe branch below and the turn finishes cleanly.
-function isMcpInputPauseEnabled(): boolean {
-  return process.env[MCP_INPUT_PAUSE_ENV] === '1';
-}
-
 // Remote `input_required` definitions are UNTRUSTED. Only a JSON object of a
 // bounded field count and serialized size is safe to persist, stream, and later
 // render as a form; anything else settles the call rather than pausing on it.
@@ -2751,7 +2740,7 @@ export async function* runToolLoop(
   // Attended runs opt connector calls into MCP `input_required`. An unattended
   // run (a scheduled task, no human to answer) must never invite a pause it can
   // only fail-safe out of, so it never sets this.
-  const allowConnectorInputRequired = !unattended && isMcpInputPauseEnabled();
+  const allowConnectorInputRequired = !unattended;
   // Set by runAndStreamToolCalls when a connector call paused for input and the
   // loop suspended; every caller returns after seeing it.
   let suspendedForInput = false;
