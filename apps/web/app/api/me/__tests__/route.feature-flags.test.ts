@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
@@ -25,6 +26,7 @@ vi.mock('@/lib/services/org-sharing-service', () => ({
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
 
 vi.mock('@/lib/csrf', () => ({
@@ -101,10 +103,10 @@ function versionRule(id: string, range: Record<string, string>) {
 }
 
 function makeGetRequest(headers: Record<string, string> = {}) {
-  return new Request('http://localhost:3000/api/me?surface=desktop', {
+  return new NextRequest('http://localhost:3000/api/me?surface=desktop', {
     method: 'GET',
     headers,
-  }) as never;
+  });
 }
 
 describe('GET /api/me, evaluated rollout flags', () => {
@@ -190,7 +192,7 @@ describe('GET /api/me, evaluated rollout flags', () => {
     ]);
 
     const response = await GET(
-      new Request('http://localhost:3000/api/me?surface=desktop&channel=beta') as never,
+      new NextRequest('http://localhost:3000/api/me?surface=desktop&channel=beta'),
     );
     const body = await response.json();
 
