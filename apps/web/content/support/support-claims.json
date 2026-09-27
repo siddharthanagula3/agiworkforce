@@ -2099,6 +2099,26 @@
       ]
     },
     {
+      "id": "billing-team-seats-keep-renewal",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Adding seats to a Team plan keeps the renewal date and charges only for the rest of the current period.",
+      "implementation": ["apps/web/lib/server/stripe-plan-change.ts#planChangeAnchor"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/upgrade/route.seats.test.ts",
+          "name": "co-terms added seats with the current renewal, at the instant the preview quoted"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/upgrade/preview/route.test.ts",
+          "name": "co-terms a seat increase and quotes only the prorated seats due today"
+        }
+      ]
+    },
+    {
       "id": "billing-store-subscriptions-not-changeable-here",
       "doc": "billing-and-plans",
       "section": "Subscriptions bought in an app store",
