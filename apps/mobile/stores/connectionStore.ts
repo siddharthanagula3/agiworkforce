@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { SignalingClient } from '@agiworkforce/utils/signaling';
+import { SignalingClient, endsPairing } from '@agiworkforce/utils/signaling';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
 import * as Crypto from 'expo-crypto';
@@ -1089,6 +1089,25 @@ export const useConnectionStore = create<ConnectionState>()(
 
                 case 'error':
                   clearConnectWatchdog();
+                  if (endsPairing(event.error)) {
+                    invalidateConnectionAttempt();
+                    forgetPairingSecret();
+                    pendingControlQueue.length = 0;
+                    clearPendingControlAcks();
+                    set({
+                      status: 'error',
+                      error: friendlyErrorMessage(event.error),
+                      pairingCode: null,
+                      pairToken: null,
+                      desktopName: null,
+                      desktopMetadata: null,
+                      connectionQuality: 'disconnected',
+                      reconnectStartedAt: null,
+                    });
+                    cleanupPeerConnection();
+                    signalingClient = null;
+                    break;
+                  }
                   set({
                     status: 'error',
                     error: friendlyErrorMessage(event.error),
@@ -1327,6 +1346,11 @@ function friendlyErrorMessage(raw: string): string {
       return 'This pairing session already has two devices connected.';
     case 'rate_limited':
       return 'Too many attempts. Please wait a moment.';
+    case 'device_revoked':
+      return 'Remote Control was turned off for this phone in your account settings. Scan a new QR code to pair again.';
+    case 'pairing_not_found':
+    case 'pairing_expired':
+      return 'This pairing has ended. Scan a new QR code on your computer to pair again.';
     default:
       return raw || 'An unexpected error occurred.';
   }
