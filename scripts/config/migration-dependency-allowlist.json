@@ -12,11 +12,6 @@
       "reason": "Deletes the account's bonus_credit_grants rows. Before 0295 is applied the delete sees an absent table and is recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
     },
     {
-      "file": "apps/web/lib/services/auto-reload-service.ts",
-      "migration": 295,
-      "reason": "Counts unexpired bonus credit toward the auto-reload threshold and ships with 0295: the deploy applies 0295 before this release reaches production."
-    },
-    {
       "file": "apps/web/lib/services/bonus-credit-service.ts",
       "migration": 295,
       "reason": "Owns bonus_credit_grants and ships with 0295: the deploy applies 0295 before this release reaches production."
