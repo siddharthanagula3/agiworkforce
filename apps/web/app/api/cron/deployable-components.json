@@ -52,6 +52,24 @@
   },
   "components": [
     {
+      "name": "allocate-infrastructure-costs",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A row lock on one vendor bill while its allocation rows are written. An interrupted run commits nothing for that bill, and the next run allocates it.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: spreads each vendor's monthly bill, less what per-use rows already priced, across that month's active accounts in the COGS ledger."
+        }
+      ]
+    },
+    {
       "name": "drain-audit-streams",
       "role": "queue-drain",
       "version": "1.0.0",

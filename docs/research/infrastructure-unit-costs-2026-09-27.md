@@ -70,3 +70,18 @@ Three rows are marked `estimate: true`:
   `MAX_CANDIDATES` in `retrieval-search-service.ts`.
 - **Notification deliveries and connector calls** cost the vendor nothing; the
   only cost is the Vercel function that sends them, charged at one invocation.
+
+The monthly allocation tops each vendor up to its bill, so a per-use estimate
+that runs low is made whole there; one that runs high leaves that vendor's
+ledger total above its bill, which errs toward overstating cost.
+
+## Monthly allocation
+
+`/api/cron/allocate-infrastructure-costs` spreads each vendor's bill for the
+previous month, less what that vendor's per-use rows already priced, across the
+month's active accounts. An active account is one with a `provider_cost_events`
+row or a Free usage reservation in the month. A recorded invoice wins over the
+committed estimate; the procedure is in
+`docs/runbooks/infrastructure-cost-allocation.md`. Infrastructure is cost of
+goods, never a credit charge: every infrastructure row is
+`includedInPlans: 'all_plans'`.
