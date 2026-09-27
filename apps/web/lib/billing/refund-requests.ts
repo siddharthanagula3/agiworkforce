@@ -18,7 +18,7 @@ export const REFUND_REQUEST_REASON_LABELS: Readonly<Record<RefundRequestReason, 
   technical_problem: 'A technical problem stopped me using it',
   duplicate_charge: 'I was charged twice',
   unrecognized_charge: 'I do not recognize this charge',
-  statutory_withdrawal: 'I am withdrawing within 14 days (EU, EEA, UK or Turkey)',
+  statutory_withdrawal: 'I am withdrawing within 14 days (EU, EEA or UK)',
   other: 'Something else',
 };
 
@@ -52,6 +52,7 @@ export interface RefundableChargeView {
   billingCountry: string | null;
   disputed: boolean;
   withdrawalEligible: boolean;
+  withdrawalRefundCents: number | null;
   receiptUrl: string | null;
 }
 
@@ -65,6 +66,7 @@ export interface RefundRequestView {
   reason: RefundRequestReason;
   details: string | null;
   assessment: RefundAssessment;
+  assessedRefundCents: number | null;
   status: RefundRequestStatus;
   refundAmountCents: number | null;
   decisionNote: string | null;

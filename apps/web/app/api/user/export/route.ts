@@ -1166,6 +1166,7 @@ const billingRefundRequestExportSchema = z.object({
   statutory_withdrawal: z.boolean(),
   billing_country: z.string().nullable(),
   assessment: z.string(),
+  assessed_refund_cents: numericSchema.nullable(),
   status: z.string(),
   refund_amount_cents: numericSchema.nullable(),
   decision_note: z.string().nullable(),
@@ -1672,7 +1673,8 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     table: 'billing_refund_requests',
     sql: `select id, charge_id, charge_kind, charge_amount_cents, charge_currency,
                  charge_created_at, reason, details, statutory_withdrawal, billing_country,
-                 assessment, status, refund_amount_cents, decision_note, decided_at, created_at
+                 assessment, assessed_refund_cents, status, refund_amount_cents, decision_note,
+                 decided_at, created_at
           from billing_refund_requests
           where user_id = $1`,
     schema: billingRefundRequestExportSchema,
