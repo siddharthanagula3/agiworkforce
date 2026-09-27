@@ -488,7 +488,14 @@ export function PrivacySection() {
             >
               /subprocessors
             </SettingsPageLink>
-            .
+            . On the Free plan, requests are served by providers&rsquo; free models, and those
+            providers&rsquo; terms may allow them to train on what you send.
+          </p>
+          <p style={{ margin: 'var(--space-2) 0 0' }}>
+            How long we keep it: a chat stays in your history until you delete it, and a deleted
+            chat stays in Recently deleted until you restore it. A temporary chat and its
+            attachments are removed after 30 days. When you delete your account, erasure starts 24
+            hours after you confirm, and you can cancel until then.
           </p>
         </ExpandableSection>
 
