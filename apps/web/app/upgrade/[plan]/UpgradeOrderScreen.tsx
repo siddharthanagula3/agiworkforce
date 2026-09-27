@@ -10,7 +10,6 @@ import type { SelfServeIndividualPlanTier } from '@agiworkforce/types';
 import {
   getBillingPlanDisplay,
   formatCatalogPrice,
-  formatPlanCreditWindows,
   planUsageComparisonLabel,
 } from '@features/billing/lib/plan-display';
 
@@ -24,7 +23,7 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
 
   const capacities = MAX_CAPACITIES.includes(plan) ? MAX_CAPACITIES : [];
   const display = getBillingPlanDisplay(selected);
-  const selectedCredits = formatPlanCreditWindows(selected);
+  const selectedUsage = planUsageComparisonLabel(selected);
 
   async function handleUpgraded() {
     setUpgraded(true);
@@ -58,8 +57,8 @@ export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier
           ← Upgrade
         </Link>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight">{display.pricing.label}</h1>
-        {selectedCredits ? (
-          <p className="mt-2 text-sm text-muted-foreground">{selectedCredits}</p>
+        {selectedUsage && capacities.length === 0 ? (
+          <p className="mt-2 text-sm text-muted-foreground">{selectedUsage}</p>
         ) : null}
       </div>
 
