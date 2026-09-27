@@ -614,7 +614,11 @@ pub async fn start_pkce_flow(
     ))
 }
 
-pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Result<OAuthToken> {
+pub async fn refresh_token(
+    token: &OAuthToken,
+    oauth_cfg: &OAuthConfig,
+    server_url: &str,
+) -> Result<OAuthToken> {
     let refresh = token
         .refresh_token
         .as_deref()
@@ -644,15 +648,17 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
         .unwrap_or_default();
     let endpoint = checked_endpoint(token_url, "token endpoint", anchor).await?;
     let client = pinned_client(&endpoint, "refresh")?;
+    let resource = match token.resource.clone() {
+        Some(resource) => resource,
+        None => canonical_resource(server_url)?,
+    };
 
     let mut form: Vec<(&str, &str)> = vec![
         ("grant_type", "refresh_token"),
         ("refresh_token", refresh),
         ("client_id", client_id),
+        ("resource", &resource),
     ];
-    if let Some(resource) = token.resource.as_deref() {
-        form.push(("resource", resource));
-    }
     if let Some(secret) = client_secret {
         form.push(("client_secret", secret));
     }
@@ -682,7 +688,7 @@ pub async fn refresh_token(token: &OAuthToken, oauth_cfg: &OAuthConfig) -> Resul
             client_id,
             requested_scope: token.scope.as_deref(),
             issuer: token.issuer.as_deref(),
-            resource: token.resource.as_deref(),
+            resource: Some(&resource),
         },
     );
     if refreshed.refresh_token.is_none() {
@@ -1316,7 +1322,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_private_token_url() {
         let token = token_with("http://10.0.0.5/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("a private-network token endpoint must not receive the refresh token");
         let msg = format!("{err:#}");
@@ -1326,7 +1332,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_cleartext_remote_token_url() {
         let token = token_with("http://as.example.com/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("credentials must not cross the network in cleartext");
         assert!(format!("{err:#}").contains("must use HTTPS"));
@@ -1340,7 +1346,7 @@ mod tests {
             client_secret: Some("s3cret".into()),
             ..Default::default()
         };
-        let err = refresh_token(&token, &cfg)
+        let err = refresh_token(&token, &cfg, REMOTE_SERVER)
             .await
             .expect_err("a poisoned cached token endpoint must not override the configured one");
         assert!(format!("{err:#}").contains("does not match the pinned origin"));
@@ -1349,7 +1355,7 @@ mod tests {
     #[tokio::test]
     async fn refresh_refuses_a_loopback_token_url_when_the_server_is_remote() {
         let token = token_with("http://127.0.0.1:9200/token");
-        let err = refresh_token(&token, &OAuthConfig::default())
+        let err = refresh_token(&token, &OAuthConfig::default(), REMOTE_SERVER)
             .await
             .expect_err("a remote server's token must never be refreshed against this machine");
         let msg = format!("{err:#}");
@@ -1364,7 +1370,7 @@ mod tests {
             client_secret: Some("configured-secret".into()),
             ..Default::default()
         };
-        let err = refresh_token(&token, &cfg)
+        let err = refresh_token(&token, &cfg, REMOTE_SERVER)
             .await
             .expect_err("a user-held secret must not go to a discovered endpoint");
         assert!(format!("{err:#}").contains("set [auth.token_url]"));
@@ -1385,7 +1391,7 @@ mod tests {
         let addr = spawn(app).await;
         let local_server = format!("http://{addr}/mcp");
         let token = token_from(&local_server, &format!("http://{addr}/token"));
-        let refreshed = refresh_token(&token, &OAuthConfig::default())
+        let refreshed = refresh_token(&token, &OAuthConfig::default(), &local_server)
             .await
             .expect("loopback refresh must keep working");
         assert_eq!(refreshed.access_token, "fresh-access");
