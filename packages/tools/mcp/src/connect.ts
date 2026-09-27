@@ -838,7 +838,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
         };
       }
 
-      const task = await parseCreateTaskResult(res);
+      const task = parseCreateTaskResult(res);
       if (task) return { ...(app ? { app } : {}), task, content: [] };
 
       const isError = typeof res.isError === 'boolean' ? res.isError : undefined;
