@@ -177,6 +177,7 @@ export function checkProtocolTypes(root = repoRoot) {
 export const CLI_USAGE_SUMMARY = path.join('apps', 'cli', 'src', 'usage_summary.rs');
 export const CLI_COST_LEDGER = path.join('apps', 'cli', 'src', 'cost_ledger.rs');
 export const CLI_TIER_CACHE = path.join('apps', 'cli', 'src', 'tier_cache.rs');
+export const LLM_ERROR = path.join('crates', 'agiworkforce-llm', 'src', 'error.rs');
 export const MANAGED_USAGE_BALANCE = path.join(
   'packages',
   'contracts',
@@ -300,6 +301,16 @@ export function rustTierLabels(source) {
   return byTier;
 }
 
+export function tsUsageLimitCodes(source) {
+  const body = source.match(
+    /const MANAGED_QUOTA_BLOCKS[\s\S]*?Object\.freeze\(\s*\{([\s\S]*?)\n\s*\}\s*,?\s*\);/,
+  )?.[1];
+  if (body === undefined) return null;
+  const blocks = [...body.matchAll(/^\s*(\w+): \{\s*kind: '(\w+)'/gm)];
+  if (blocks.length === 0) return null;
+  return blocks.filter((block) => block[2] !== 'rate_limit').map((block) => block[1]);
+}
+
 export function tsPlanLabels(source) {
   const labels = new Map(
     [...source.matchAll(/id: '([\w-]+)',\s*label: '([^']+)'/g)].map((match) => [
@@ -361,6 +372,21 @@ export function checkCliUsageMirror(root = repoRoot) {
     problems.push(
       `ENTITLED_SUBSCRIPTION_STATUSES: the CLI lists ${mirroredStatuses.join(', ')}, the contract ${ownedStatuses.join(', ')}`,
     );
+  }
+
+  const ownedCodes = tsUsageLimitCodes(read(BILLING_CATALOG) ?? '');
+  const mirroredCodes = rustConstStrings(read(LLM_ERROR) ?? '', 'MANAGED_USAGE_LIMIT_CODES');
+  if (ownedCodes === null || mirroredCodes === null) {
+    problems.push('MANAGED_USAGE_LIMIT_CODES: the quota codes could not be read on both sides');
+  } else {
+    for (const code of ownedCodes.filter((code) => !mirroredCodes.includes(code))) {
+      problems.push(
+        `MANAGED_USAGE_LIMIT_CODES: ${code} is a plan limit the engine reports as rate limiting`,
+      );
+    }
+    for (const code of mirroredCodes.filter((code) => !ownedCodes.includes(code))) {
+      problems.push(`MANAGED_USAGE_LIMIT_CODES: ${code} is no longer a managed quota code`);
+    }
   }
 
   const ownedLabels = tsPlanLabels(read(BILLING_CATALOG) ?? '');
