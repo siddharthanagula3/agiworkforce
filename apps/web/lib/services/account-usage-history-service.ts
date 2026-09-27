@@ -186,13 +186,16 @@ async function aggregateByProject(
             sum(own.cost_microusd)::bigint as cost_microusd
        from (
          select usage->>'projectId' as project_id,
+                organization_id,
                 ${TOKENS} as input_tokens,
                 ${OUT_TOKENS} as output_tokens,
                 coalesce(actual_cost_microusd, 0) as cost_microusd
          ${OWN_SETTLED_ROWS}
             and usage->>'projectId' is not null
        ) own
-       left join public.user_projects project on project.id::text = own.project_id
+       left join public.user_projects project
+         on project.id::text = own.project_id
+        and project.organization_id is not distinct from own.organization_id
       group by own.project_id
       order by cost_microusd desc, requests desc
       limit ${BREAKDOWN_LIMIT}`,
@@ -265,6 +268,7 @@ export async function readAccountUsageRecords(
     `select own.*, project.name as project_name
        from (
          select id::text as id,
+                organization_id,
                 created_at,
                 finalized_at,
                 usage->>'workload' as workload,
@@ -279,7 +283,9 @@ export async function readAccountUsageRecords(
           order by created_at desc
           limit ${limit}
        ) own
-       left join public.user_projects project on project.id::text = own.project_id
+       left join public.user_projects project
+         on project.id::text = own.project_id
+        and project.organization_id is not distinct from own.organization_id
       order by own.created_at desc`,
     [userId, window.from, window.to, options.requestId ?? null],
   );
