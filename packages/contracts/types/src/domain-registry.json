@@ -144,6 +144,8 @@
       "capabilities": ["canUseBilling"],
       "concepts": ["credit-bucket"],
       "tables": [
+        "billing_disputes",
+        "billing_refund_requests",
         "cogs_adjustments",
         "credit_idempotency_keys",
         "credit_settlement_jobs",

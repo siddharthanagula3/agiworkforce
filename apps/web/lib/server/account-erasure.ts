@@ -112,6 +112,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'mobile_iap_accounts', column: 'user_id' },
   { table: 'video_generation_jobs', column: 'user_id' },
   { table: 'image_generation_jobs', column: 'user_id' },
+  { table: 'billing_refund_requests', column: 'user_id' },
   { table: 'managed_usage_requests', column: 'user_id' },
   { table: 'credit_transactions', column: 'user_id' },
   { table: 'token_credits', column: 'user_id' },
@@ -283,6 +284,12 @@ export const ANONYMIZED_USER_COLUMNS: ReadonlyArray<{
     column: 'user_id',
     reason:
       'Processing fees, refunds and chargebacks are financial records; the amount survives, the subject does not.',
+  },
+  {
+    table: 'billing_disputes',
+    column: 'user_id',
+    reason:
+      'A chargeback is a financial record the card network and the processor keep as well; the dispute and its outcome survive, the subject does not.',
   },
 ];
 

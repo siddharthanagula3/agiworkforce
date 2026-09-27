@@ -17,9 +17,29 @@
       "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version. Stripe redelivers the event once 0300 is applied."
     },
     {
+      "file": "apps/web/app/api/stripe-webhook/lib/dispute-events.ts",
+      "migration": 299,
+      "reason": "Owns billing_disputes and ships with 0299: the deploy applies 0299 before this release reaches production. Before it, a dispute event fails and Stripe redelivers it, so no dispute is processed without its record."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 299,
+      "reason": "Reads the account's refund requests and disputes for their own export sections. Before 0299 is applied those queries fail and the export ledger marks only those sections unavailable, as it does for any absent table."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 299,
+      "reason": "Deletes the account's refund requests and detaches its disputes. Before 0299 is applied both statements see an absent table and are recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
+    },
+    {
       "file": "apps/web/lib/services/credit-service.ts",
       "migration": 300,
       "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 299,
+      "reason": "Names billing_disputes and billing_refund_requests only as strings in its retention classification and issues no query, so it runs unchanged before and after 0299."
     },
     {
       "file": "apps/web/lib/services/entitlement-resolution.ts",
