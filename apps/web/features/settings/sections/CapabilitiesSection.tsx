@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { ToolApprovalDefaultsPanel } from '../components/ToolApprovalDefaultsPanel';
+import { ApprovalHistoryPanel } from '../components/ApprovalHistoryPanel';
 import { LockdownModePanel } from '@/features/settings/components/LockdownModePanel';
 import {
   BrowserPairingSection,
@@ -93,6 +94,8 @@ export function CapabilitiesSection() {
       <RemoteControlSection />
 
       <ToolApprovalDefaultsPanel />
+
+      <ApprovalHistoryPanel />
 
       <LockdownModePanel />
 
