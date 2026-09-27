@@ -1,4 +1,5 @@
 import { api } from '@/services/api';
+import { isHistoryVisibleConversation } from '@/src/features/chat/utils/conversationMode';
 import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
@@ -82,10 +83,15 @@ function cachedCandidates(
   const titles = new Map(
     conversations.map((conversation) => [conversation.id, conversation.title]),
   );
+  const hidden = new Set(
+    conversations
+      .filter((conversation) => !isHistoryVisibleConversation(conversation))
+      .map((conversation) => conversation.id),
+  );
   const candidates: PastChatExcerpt[] = [];
 
   for (const [conversationId, conversationMessages] of Object.entries(messages)) {
-    if (conversationId === currentConversationId) continue;
+    if (conversationId === currentConversationId || hidden.has(conversationId)) continue;
     for (const message of conversationMessages) {
       if (message.role !== 'user' && message.role !== 'assistant') continue;
       const content = messageText(message);
