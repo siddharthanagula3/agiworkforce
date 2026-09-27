@@ -120,7 +120,8 @@ interface GitRepositoryApi {
   state: {
     workingTreeChanges: Array<{ uri: vscode.Uri }>;
     indexChanges: Array<{ uri: vscode.Uri }>;
-    remotes: Array<{ fetchUrl?: string }>;
+    remotes: Array<{ name: string; fetchUrl?: string }>;
+    HEAD?: { name?: string; upstream?: { remote: string; name: string }; ahead?: number };
   };
   fetch: () => Promise<void>;
   checkout: (branch: string) => Promise<void>;
@@ -155,6 +156,38 @@ export async function workspaceGitHubRepositories(): Promise<string[]> {
   return repository.state.remotes
     .map((remote) => (remote.fetchUrl ? githubRepositoryName(remote.fetchUrl) : null))
     .filter((name): name is string => name !== null);
+}
+
+export interface WorkspaceCloudSource {
+  repository: string;
+  repositoryUrl: string;
+  branch: string | null;
+  upstream: string | null;
+  unpushedCommits: number;
+  dirtyPaths: string[];
+}
+
+export async function readWorkspaceCloudSource(): Promise<WorkspaceCloudSource | null> {
+  const repository = await workspaceGitRepository();
+  if (repository === null) return null;
+  const head = repository.state.HEAD;
+  const remotes = repository.state.remotes;
+  const preferred =
+    remotes.find((remote) => remote.name === head?.upstream?.remote) ??
+    remotes.find((remote) => remote.name === 'origin') ??
+    remotes[0];
+  const name = preferred?.fetchUrl ? githubRepositoryName(preferred.fetchUrl) : null;
+  if (name === null) return null;
+  return {
+    repository: name,
+    repositoryUrl: `https://github.com/${name}`,
+    branch: head?.name ?? null,
+    upstream: head?.upstream ? `${head.upstream.remote}/${head.upstream.name}` : null,
+    unpushedCommits: head?.ahead ?? 0,
+    dirtyPaths: [...repository.state.workingTreeChanges, ...repository.state.indexChanges].map(
+      (change) => vscode.workspace.asRelativePath(change.uri),
+    ),
+  };
 }
 
 /** The workspace's own git repository, through the editor's git extension. */
