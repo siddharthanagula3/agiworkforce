@@ -93,22 +93,21 @@ struct Palette {
     cloud: (u8, u8, u8),
     brand: (u8, u8, u8),
     status_bar_bg: (u8, u8, u8),
-    on_dark: (u8, u8, u8),
-    on_light: (u8, u8, u8),
+    on_status_bar: (u8, u8, u8),
+    on_fill: (u8, u8, u8),
 }
 
-/// Dark = the existing AGI v3 brand defaults, so the default look is unchanged.
 const PALETTE_DARK: Palette = Palette {
-    accent: V3_TEAL,
-    muted: (128, 128, 128),
+    accent: (0x26, 0x94, 0xa2),
+    muted: (135, 135, 135),
     success: V3_SUCCESS,
     warning: V3_WARNING,
-    danger: V3_DANGER,
+    danger: (0xe4, 0x57, 0x57),
     cloud: V3_TERRACOTTA,
-    brand: V3_TEAL,
+    brand: (0x26, 0x94, 0xa2),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (255, 255, 255),
+    on_fill: (15, 15, 14),
 };
 
 /// Light terminals: darker accents/text so foreground reads on a bright bg.
@@ -118,72 +117,70 @@ const PALETTE_LIGHT: Palette = Palette {
     success: (0x15, 0x80, 0x3d),
     warning: (0xb4, 0x53, 0x09),
     danger: (0xb9, 0x1c, 0x1c),
-    cloud: (0xc2, 0x4a, 0x2c),
+    cloud: (0xbe, 0x49, 0x2b),
     brand: (0x1a, 0x66, 0x70),
     status_bar_bg: (222, 222, 216),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (15, 15, 14),
+    on_fill: (255, 255, 255),
 };
 
 /// Pure 16-color ANSI approximations for low-color terminals.
 const PALETTE_ANSI: Palette = Palette {
     accent: (0, 170, 170),
-    muted: (128, 128, 128),
+    muted: (170, 170, 170),
     success: (0, 170, 0),
-    warning: (170, 85, 0),
-    danger: (170, 0, 0),
-    cloud: (170, 0, 170),
+    warning: (255, 255, 85),
+    danger: (255, 85, 85),
+    cloud: (255, 85, 255),
     brand: (0, 170, 170),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (0, 0, 0),
+    on_status_bar: (255, 255, 255),
+    on_fill: (0, 0, 0),
 };
 
-/// Solarized (Ethan Schoonover), dark variant.
-const PALETTE_SOLARIZED_DARK: Palette = Palette {
-    accent: (38, 139, 210),
-    muted: (88, 110, 117),
-    success: (133, 153, 0),
-    warning: (181, 137, 0),
-    danger: (220, 50, 47),
-    cloud: (203, 75, 22),
-    brand: (42, 161, 152),
-    status_bar_bg: (7, 54, 66),
-    on_dark: (253, 246, 227),
-    on_light: (0, 43, 54),
+const PALETTE_HIGH_CONTRAST_DARK: Palette = Palette {
+    accent: (47, 184, 202),
+    muted: (168, 168, 168),
+    success: (26, 193, 88),
+    warning: (248, 142, 18),
+    danger: (237, 142, 142),
+    cloud: (226, 149, 123),
+    brand: (47, 184, 202),
+    status_bar_bg: (48, 48, 48),
+    on_status_bar: (255, 255, 255),
+    on_fill: (0, 0, 0),
 };
 
-/// Solarized, light variant (light base, same accents).
-const PALETTE_SOLARIZED_LIGHT: Palette = Palette {
-    accent: (38, 139, 210),
-    muted: (101, 123, 131),
-    success: (133, 153, 0),
-    warning: (181, 137, 0),
-    danger: (220, 50, 47),
-    cloud: (203, 75, 22),
-    brand: (42, 161, 152),
-    status_bar_bg: (238, 232, 213),
-    on_dark: (253, 246, 227),
-    on_light: (0, 43, 54),
+const PALETTE_HIGH_CONTRAST_LIGHT: Palette = Palette {
+    accent: (23, 91, 100),
+    muted: (83, 83, 83),
+    success: (16, 96, 46),
+    warning: (135, 62, 7),
+    danger: (165, 25, 25),
+    cloud: (143, 55, 32),
+    brand: (23, 91, 100),
+    status_bar_bg: (214, 214, 214),
+    on_status_bar: (0, 0, 0),
+    on_fill: (255, 255, 255),
 };
 
 /// Deuteranopia-friendly: blue/orange/vermillion instead of green/red so the
 /// success↔danger distinction survives red-green color blindness (Wong palette).
 const PALETTE_COLORBLIND: Palette = Palette {
-    accent: (0, 114, 178),
-    muted: (128, 128, 128),
+    accent: (0, 141, 220),
+    muted: (135, 135, 135),
     success: (0, 158, 115),
     warning: (230, 159, 0),
-    danger: (213, 94, 0),
+    danger: (221, 98, 0),
     cloud: (86, 180, 233),
-    brand: (0, 114, 178),
+    brand: (0, 141, 220),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (255, 255, 255),
+    on_fill: (15, 15, 14),
 };
 
 /// Active theme index. Matches `ThemeChoice` declaration order
-/// (Dark=0, Light=1, Ansi=2, SolarizedDark=3, SolarizedLight=4, Colorblind=5).
+/// (Dark=0, Light=1, Ansi=2, HighContrastDark=3, HighContrastLight=4, Colorblind=5).
 static ACTIVE_THEME: AtomicU8 = AtomicU8::new(0);
 
 /// Apply a theme by index; subsequent `ui_*` calls resolve through it. Bumps the
@@ -203,8 +200,8 @@ fn palette_for(idx: u8) -> Palette {
     match idx {
         1 => PALETTE_LIGHT,
         2 => PALETTE_ANSI,
-        3 => PALETTE_SOLARIZED_DARK,
-        4 => PALETTE_SOLARIZED_LIGHT,
+        3 => PALETTE_HIGH_CONTRAST_DARK,
+        4 => PALETTE_HIGH_CONTRAST_LIGHT,
         5 => PALETTE_COLORBLIND,
         _ => PALETTE_DARK,
     }
@@ -254,14 +251,14 @@ pub fn ui_status_bar_bg() -> Color {
     best_color(active_palette().status_bar_bg)
 }
 
-/// Foreground for dark semantic backgrounds.
+/// Foreground for the status bar and the default mode badge drawn on it.
 pub fn ui_on_dark() -> Color {
-    best_color(active_palette().on_dark)
+    best_color(active_palette().on_status_bar)
 }
 
-/// Foreground for light semantic backgrounds.
+/// Foreground for text drawn on an accent or status fill.
 pub fn ui_on_light() -> Color {
-    best_color(active_palette().on_light)
+    best_color(active_palette().on_fill)
 }
 
 /// Badge background for the default chat mode.
@@ -789,7 +786,7 @@ mod theme_tests {
 
     #[test]
     fn every_theme_index_resolves_to_a_distinct_dark_or_light_base() {
-        // Dark/Ansi/SolarizedDark/Colorblind are dark-based; Light/SolarizedLight
+        // Dark/Ansi/HighContrastDark/Colorblind are dark-based; Light/HighContrastLight
         // are light-based, their status-bar backgrounds must differ accordingly.
         let lightness = |(r, g, b): (u8, u8, u8)| r as u16 + g as u16 + b as u16;
         assert!(

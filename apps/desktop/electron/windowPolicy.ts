@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron';
 import { shell } from 'electron';
+import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
 import { CLOUD_APP_ORIGIN, RENDERER_MODE, RENDERER_ORIGIN } from './config';
 
@@ -43,10 +44,14 @@ function matchesHost(hostname: string, hosts: readonly string[]): boolean {
   return hosts.some((host) => (host.startsWith('.') ? hostname.endsWith(host) : hostname === host));
 }
 
+function isEditorHandoff(parsed: URL): boolean {
+  return parsed.protocol === 'vscode:' && parsed.host === VSCODE_CONTEXT_HANDOFF_AUTHORITY;
+}
+
 export function openExternally(url: string): void {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:' || isEditorHandoff(parsed)) {
       void shell.openExternal(parsed.toString());
     }
   } catch {

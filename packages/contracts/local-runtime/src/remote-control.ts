@@ -6,7 +6,7 @@ export const REMOTE_CONTROL_COMMANDS = [
 
 export type RemoteControlCommand = (typeof REMOTE_CONTROL_COMMANDS)[number];
 
-export type RemoteControlStatus = 'idle' | 'waiting' | 'connected' | 'error';
+export type RemoteControlStatus = 'idle' | 'waiting' | 'connected' | 'reconnecting' | 'error';
 
 export interface RemoteControlState {
   status: RemoteControlStatus;

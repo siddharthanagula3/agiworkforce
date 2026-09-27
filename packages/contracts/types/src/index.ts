@@ -194,6 +194,7 @@ export * from './file-model';
 
 export * from './browser-bridge';
 export * from './context-handoff-uri';
+export * from './cloud-task-handoff-uri';
 export * from './capabilities';
 export * from './client-failures';
 export * from './network-state';

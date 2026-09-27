@@ -20,6 +20,7 @@ const HOW_TO_PAIR =
   'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
 const PAIR_FAILED = 'Pairing could not start.';
 const STOP_FAILED = 'Remote Control could not be stopped.';
+const RECONNECTING = 'Connection lost. Reconnecting so your phone can pick up where it left off.';
 const DISCONNECT_CONSEQUENCE =
   'The phone is disconnected from this computer and can no longer follow or steer its sessions. To connect it again, pair it with a new code.';
 
@@ -188,6 +189,13 @@ export function RemoteControlSection() {
         </div>
       ) : null}
 
+      {status === 'reconnecting' ? (
+        <div className="flex items-center gap-2" aria-live="polite">
+          <Spinner aria-label={RECONNECTING} />
+          <p className="text-xs text-foreground">{RECONNECTING}</p>
+        </div>
+      ) : null}
+
       {status === 'connected' ? (
         <p className="text-xs text-foreground" aria-live="polite">
           {`Connected to ${state?.phoneName ?? 'your phone'}`}
@@ -213,7 +221,7 @@ export function RemoteControlSection() {
             className={BUTTON_CLASS}
             disabled={busy}
             onClick={() =>
-              status === 'connected'
+              status === 'connected' || status === 'reconnecting'
                 ? confirm({
                     title: `Disconnect ${state?.phoneName ?? 'your phone'}?`,
                     description: DISCONNECT_CONSEQUENCE,
@@ -223,7 +231,11 @@ export function RemoteControlSection() {
                 : void onStop()
             }
           >
-            {status === 'connected' ? 'Disconnect phone' : 'Cancel pairing'}
+            {status === 'connected'
+              ? 'Disconnect phone'
+              : status === 'reconnecting'
+                ? 'Stop Remote Control'
+                : 'Cancel pairing'}
           </button>
         )}
       </div>

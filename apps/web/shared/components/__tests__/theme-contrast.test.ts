@@ -1115,6 +1115,10 @@ describe('status colour has no role-less legacy token', () => {
       expect(block).not.toMatch(/^\s*--(success|warning)(-foreground)?:/m);
     }
   });
+
+  it('paints text-destructive-text with the danger text role', () => {
+    expect(globalsCss).toMatch(/^\s*--color-destructive-text:\s*var\(--danger-text\);/m);
+  });
 });
 
 describe('chat status text roles clear AA on every chat surface and on their own tints', () => {
