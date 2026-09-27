@@ -113,26 +113,19 @@ const AGI_WORK_TIERS = extractCapabilityTiers(billingCatalogText, 'agi_work');
 // the hard stop a real account hits regardless of what this script's profile
 // assumptions say, so every profile's modeled COGS is checked against it.
 const managedUsageCapsText = readText('apps/web/lib/billing/managed-usage-caps.ts');
-const managedUsagePolicyText = readText('apps/web/lib/server/managed-usage-policy.ts');
 
-function extractMonthlyUnits(text, tierKey) {
-  const pattern = new RegExp(`'?${tierKey}'?: \\{[\\s\\S]{0,20}?monthlyUnits: ([0-9_]+)`);
+function extractMonthlyCredits(text, tierKey) {
+  const pattern = new RegExp(`'?${tierKey}'?: \\{[\\s\\S]{0,20}?monthlyCredits: ([0-9_]+)`);
   const match = text.match(pattern);
   if (!match)
-    throw new Error(`could not find monthlyUnits for ${tierKey} in managed-usage-caps.ts`);
+    throw new Error(`could not find monthlyCredits for ${tierKey} in managed-usage-caps.ts`);
   return Number(match[1].replace(/_/g, ''));
 }
-
-const INTERNAL_USAGE_UNITS_PER_LEDGER_CENT = extractNumberConst(
-  managedUsagePolicyText,
-  'INTERNAL_USAGE_UNITS_PER_LEDGER_CENT',
-  'apps/web/lib/server/managed-usage-policy.ts',
-);
 
 const PLAN_MONTHLY_COGS_CEILING_CENTS = {};
 for (const tierKey of Object.keys(PLAN_MONTHLY_PRICE_USD)) {
   PLAN_MONTHLY_COGS_CEILING_CENTS[tierKey] =
-    extractMonthlyUnits(managedUsageCapsText, tierKey) / INTERNAL_USAGE_UNITS_PER_LEDGER_CENT;
+    extractMonthlyCredits(managedUsageCapsText, tierKey) / CREDITS_PER_CENT;
 }
 
 // ---------------------------------------------------------------------------

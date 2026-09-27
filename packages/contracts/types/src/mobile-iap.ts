@@ -3,7 +3,7 @@ import {
   type BillingInterval,
   type SelfServeIndividualPlanTier,
 } from './billing-catalog';
-import { TOP_UP_PRESET_AMOUNTS_USD, topUpUnitsForUsd } from './billing-topups';
+import { topUpUnitsForUsd } from './billing-topups';
 
 export type MobileIapPlatform = 'ios' | 'android';
 export type MobileIapProductKind = 'subscription' | 'top_up';
@@ -15,6 +15,8 @@ export const MOBILE_IAP_SUBSCRIPTION_PRODUCT_KEYS = [
   'subscription_max_monthly',
   'subscription_max_15x_monthly',
 ] as const;
+
+export const MOBILE_IAP_TOP_UP_AMOUNTS_USD = [10, 20, 50, 100] as const;
 
 export const MOBILE_IAP_TOP_UP_PRODUCT_KEYS = [
   'top_up_10',
@@ -38,7 +40,7 @@ export interface MobileIapSubscriptionDefinition {
 export interface MobileIapTopUpDefinition {
   key: MobileIapTopUpProductKey;
   kind: 'top_up';
-  amountUsd: (typeof TOP_UP_PRESET_AMOUNTS_USD)[number];
+  amountUsd: (typeof MOBILE_IAP_TOP_UP_AMOUNTS_USD)[number];
   units: number;
 }
 
@@ -53,7 +55,7 @@ function requirePlanPriceUsd(tier: SelfServeIndividualPlanTier, interval: Billin
   return amount;
 }
 
-function requireTopUpUnits(amountUsd: (typeof TOP_UP_PRESET_AMOUNTS_USD)[number]): number {
+function requireTopUpUnits(amountUsd: (typeof MOBILE_IAP_TOP_UP_AMOUNTS_USD)[number]): number {
   const units = topUpUnitsForUsd(amountUsd);
   if (units === null) {
     throw new Error(`Mobile IAP definition references an invalid $${amountUsd} top-up.`);

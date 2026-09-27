@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isFreeBillingPlanTier,
+  topUpBudgetCentsForCredits,
   type MobileIapVerifyResponse,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
@@ -173,7 +174,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
       await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
         input.userId,
         balance.account_id,
-        intendedAmountCents * MICROUSD_PER_LEDGER_CENT,
+        topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
         `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
         'purchase',
       ]);

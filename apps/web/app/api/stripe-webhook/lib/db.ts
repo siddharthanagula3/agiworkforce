@@ -26,7 +26,7 @@ import {
   applySubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { isValidTopUpPurchase } from '@agiworkforce/types';
+import { topUpChargedCents } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
   auditUnknownStripePriceIfEnterpriseConfigured,
@@ -93,8 +93,17 @@ export async function handleCreditTopUp(
   const userId = session.metadata?.['user_id'];
   const creditAmountCents = parseInt(session.metadata?.['credit_amount_cents'] || '0', 10);
   const topUpUnits = parseInt(session.metadata?.['top_up_units'] || '0', 10);
+  const purchase = {
+    conversion: session.metadata?.['conversion'],
+    amountCents: creditAmountCents,
+    units: topUpUnits,
+    priceCents: parseInt(session.metadata?.['price_cents'] || '0', 10),
+    amountUsd: parseInt(session.metadata?.['amount_usd'] || '0', 10),
+    autoReload: session.metadata?.['auto_reload'] === 'true',
+  };
+  const chargedCents = topUpChargedCents(purchase);
 
-  if (!userId || !isValidTopUpPurchase({ amountCents: creditAmountCents, units: topUpUnits })) {
+  if (!userId || chargedCents === null) {
     logger.error(
       { sessionId: session.id, userId, creditAmountCents, topUpUnits },
       'Invalid required metadata for credit top-up',
@@ -102,7 +111,7 @@ export async function handleCreditTopUp(
     throw new Error('Invalid credit top-up metadata');
   }
 
-  if (session.currency !== 'usd' || session.amount_subtotal !== creditAmountCents) {
+  if (session.currency !== 'usd' || session.amount_subtotal !== chargedCents) {
     throw new Error('Credit top-up session amount or currency does not match its purchase');
   }
 

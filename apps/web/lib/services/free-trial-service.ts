@@ -5,7 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { MICROUSD_PER_CREDIT, getModelMetadataById } from '@agiworkforce/types';
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
@@ -15,7 +15,6 @@ import {
   type EventBudgetReservation,
 } from '@/lib/server/event-budget';
 import {
-  getInternalUsageUnitMicrousd,
   getPlanFiveHourUsageBudgetMicrousd,
   getPlanMonthlyUsageBudgetMicrousd,
   getPlanWeeklyUsageBudgetMicrousd,
@@ -23,7 +22,7 @@ import {
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
-  unitMicrousd: getInternalUsageUnitMicrousd(),
+  unitMicrousd: MICROUSD_PER_CREDIT,
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
   fiveHourWindowHours: 5,
   weeklyBudgetMicrousd: getPlanWeeklyUsageBudgetMicrousd('free'),
@@ -54,8 +53,7 @@ type FreeTrialReservationRow = {
 };
 
 type ReserveResult =
-  | { ok: true; reservation: FreeTrialReservation }
-  | { ok: false; code: 'budget_reached' };
+  { ok: true; reservation: FreeTrialReservation } | { ok: false; code: 'budget_reached' };
 
 export type FreeTrialPublicUsage = {
   usagePercentage: number;
@@ -71,8 +69,7 @@ export type FreeTrialPublicUsage = {
 };
 
 type FreeTrialBudgetResult =
-  | { ok: true; maxOutputTokens: number }
-  | { ok: false; code: 'budget_reached' };
+  { ok: true; maxOutputTokens: number } | { ok: false; code: 'budget_reached' };
 
 export function estimateConservativeFreeInputTokens(input: {
   model: string;

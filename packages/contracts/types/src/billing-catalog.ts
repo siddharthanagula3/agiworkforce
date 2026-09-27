@@ -106,7 +106,7 @@ export const BILLING_PLAN_PRICING = {
   },
   max_15x: {
     id: 'max_15x',
-    label: 'Max 15x',
+    label: 'Max 20x',
     monthlyPriceUsd: 200,
     yearlyPriceUsd: 0,
     monthlyPriceInr: 24999,
