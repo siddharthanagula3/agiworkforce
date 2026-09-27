@@ -57,6 +57,20 @@ export const RATE_CARD_FEATURES = [
 
 export type RateCardFeature = (typeof RATE_CARD_FEATURES)[number];
 
+export const AGENTIC_SEARCH_LABEL = 'Agentic search';
+
+const AGENTIC_SEARCH_FEATURES: ReadonlySet<string> = new Set<RateCardFeature>([
+  'web_search_perplexity',
+  'web_search_grounding',
+  'web_search_anthropic',
+  'web_search_openai',
+  'places_text_search',
+]);
+
+export function rateCardUsageLabel(key: string | null | undefined): string | null {
+  return key && AGENTIC_SEARCH_FEATURES.has(key) ? AGENTIC_SEARCH_LABEL : null;
+}
+
 export const RATE_CARD_UNITS = [
   'request',
   'image',

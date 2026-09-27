@@ -8588,7 +8588,7 @@ function buildUI(): void {
     }
     for (const row of rows) {
       const line = el('div', { class: 'sp-quota-bar-row' });
-      line.appendChild(el('span', {}, getModelBadgeLabel(row.modelId)));
+      line.appendChild(el('span', {}, row.label ?? getModelBadgeLabel(row.modelId)));
       line.appendChild(el('span', { class: 'sp-quota-window-value' }, formatCredits(row.credits)));
       quotaModelsEl.appendChild(line);
     }

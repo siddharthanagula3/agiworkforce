@@ -200,6 +200,10 @@ capabilities hidden or clearly unavailable, never presented as working.
   API, CLI, VS Code, agents, AGI Work and deep research meter provider search
   cost by the existing policy; limits stay config and catalogue driven; the
   duplicate withdrawn migration is never applied.
+- Superseded for paid plans on 2026-09-27: paid plans include no free
+  searches; every search is charged in credits at provider cost and shown as
+  "Agentic search". Free keeps its 20 searches per 30 days, drawn from the Free
+  usage windows.
 
 ## D-2026-09-15-17 Stripe live cutover
 

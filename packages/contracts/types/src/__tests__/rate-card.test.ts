@@ -9,6 +9,7 @@ import {
   MICROUSD_PER_CREDIT,
   RATE_CARD_FEATURES,
   RATE_CARD_PROVIDER_COGS_ENV,
+  rateCardUsageLabel,
   resolveFeatureRate,
   unpricedRateCardFeatures,
 } from '../rate-card';
@@ -131,5 +132,25 @@ describe('credit conversion', () => {
     expect(centsFromMicrousdCeil(1)).toBe(1);
     expect(centsFromMicrousdCeil(5_000)).toBe(1);
     expect(centsFromMicrousdCeil(14_000)).toBe(2);
+  });
+});
+
+describe('rateCardUsageLabel', () => {
+  it('labels every search charge as agentic search', () => {
+    for (const feature of [
+      'web_search_perplexity',
+      'web_search_grounding',
+      'web_search_anthropic',
+      'web_search_openai',
+      'places_text_search',
+    ]) {
+      expect(rateCardUsageLabel(feature)).toBe('Agentic search');
+    }
+  });
+
+  it('leaves models and other rows to their own labels', () => {
+    expect(rateCardUsageLabel('voice_live_minute')).toBeNull();
+    expect(rateCardUsageLabel('claude-sonnet-5')).toBeNull();
+    expect(rateCardUsageLabel(null)).toBeNull();
   });
 });

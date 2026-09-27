@@ -808,7 +808,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
             <HistoryRows
               caption="By model"
               rows={shown.byModel}
-              labelFor={(row) => getModelMetadataById(row.key)?.name ?? row.key}
+              labelFor={(row) => row.label ?? getModelMetadataById(row.key)?.name ?? row.key}
             />
             <HistoryRows
               caption="By project"

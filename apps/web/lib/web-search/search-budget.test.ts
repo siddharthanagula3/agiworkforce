@@ -61,8 +61,8 @@ import {
 } from '@/lib/services/cogs-ledger-service';
 import {
   FREE_PLAN_MONTHLY_SEARCH_CALLS,
+  includedMonthlySearchCalls,
   INCLUDED_SEARCH_ADMISSION,
-  PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS,
   readSearchAllowance,
   reserveSearchCharge,
   resolveSearchBudget,
@@ -263,20 +263,8 @@ describe('automated and developer surfaces', () => {
   });
 });
 
-describe('paid plan interactive bound', () => {
-  it('includes an interactive search under the paid bound', async () => {
-    countUserFeatureUnitsSince.mockResolvedValue(PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS - 1);
-    const decision = await resolveSearchBudget({
-      userId: 'user-1',
-      planTier: 'pro',
-      callerKind: 'interactive',
-      db,
-    });
-    expect(decision).toEqual({ outcome: 'included' });
-  });
-
-  it('charges rather than blocks past the paid bound', async () => {
-    countUserFeatureUnitsSince.mockResolvedValue(PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS);
+describe('paid plan interactive search', () => {
+  it('charges every interactive search on a paid plan without reading a count', async () => {
     const decision = await resolveSearchBudget({
       userId: 'user-1',
       planTier: 'pro',
@@ -284,17 +272,13 @@ describe('paid plan interactive bound', () => {
       db,
     });
     expect(decision).toEqual({ outcome: 'charge' });
+    expect(countUserFeatureUnitsSince).not.toHaveBeenCalled();
   });
 
-  it('never charges from a count it could not read', async () => {
-    countUserFeatureUnitsSince.mockRejectedValue(new Error('ledger down'));
-    const decision = await resolveSearchBudget({
-      userId: 'user-1',
-      planTier: 'pro',
-      callerKind: 'interactive',
-      db,
-    });
-    expect(decision).toEqual({ outcome: 'included' });
+  it('includes no searches in a paid plan', () => {
+    expect(includedMonthlySearchCalls('pro')).toBe(0);
+    expect(includedMonthlySearchCalls('max_15x')).toBe(0);
+    expect(includedMonthlySearchCalls('free')).toBe(FREE_PLAN_MONTHLY_SEARCH_CALLS);
   });
 });
 
@@ -440,8 +424,9 @@ describe('settleSearchCall', () => {
         sourceRef: 'perplexity_search:turn-1:1',
       }),
     );
-    const usage = (recordSettledProviderCost.mock.calls[0]?.[0] as { usage: Record<string, unknown> })
-      .usage;
+    const usage = (
+      recordSettledProviderCost.mock.calls[0]?.[0] as { usage: Record<string, unknown> }
+    ).usage;
     expect(resolveCogsCapability(usage)).toBe('tool');
     expect(resolveCogsUnits('tool', usage)).toEqual({ unitBasis: 'request', units: 2 });
   });
