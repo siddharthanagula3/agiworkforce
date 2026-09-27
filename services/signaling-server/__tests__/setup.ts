@@ -27,6 +27,7 @@ vi.mock('../src/db.js', () => ({
   bindSessionDevice: vi.fn().mockResolvedValue({ data: null, error: null }),
   extendSessionExpiry: vi.fn().mockResolvedValue({ error: null }),
   insertSession: vi.fn().mockResolvedValue({ error: null }),
+  listStoredSessionCodes: vi.fn().mockResolvedValue({ data: [], error: null }),
 }));
 
 beforeAll(() => {
