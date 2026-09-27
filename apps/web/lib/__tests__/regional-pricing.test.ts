@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getPublishedPlanPriceCents } from '@agiworkforce/types';
+import { getPublishedMonthlyPriceCents } from '@agiworkforce/types';
 import {
   formatLocalizedPrice,
   getCurrencyForCountry,
@@ -53,7 +53,7 @@ describe('regional pricing', () => {
   });
 
   it('never lets a Stripe USD amount override the published USD price', () => {
-    const published = getPublishedPlanPriceCents('pro', 'monthly');
+    const published = getPublishedMonthlyPriceCents('pro');
     const liveCatalogPrice = {
       currency: 'usd',
       unit_amount: published + 999,

@@ -5,7 +5,7 @@ import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
   creditAmount,
-  getPublishedPlanPriceUsd,
+  getPublishedMonthlyPriceUsd,
   isFreePlan,
   isSelfServePaidPlanTier,
   managedUsageComparisonLabel,
@@ -54,7 +54,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   basic: {
-    price: `$${getPublishedPlanPriceUsd('basic', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('basic')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -65,19 +65,19 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('pro')} / mo`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max')} / mo`,
     bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPublishedPlanPriceUsd('max_15x', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max_15x')} / mo`,
     bullets: [
       'Highest individual usage limits',
       'Every flagship model included',
