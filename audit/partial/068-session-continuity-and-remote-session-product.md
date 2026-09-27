@@ -321,16 +321,16 @@ Code: `apps/web/app/api/pair/initiate/route.ts:72-73`, `apps/web/features/deskto
 
 - Done when: The user revokes a pairing from either side and it stops working at once.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Account settings can remove a linked device; a live relay session is stopped from the desktop, not from here. | surface-only |
-| desktop | partial | Stop Remote Control ends the relay from the desktop side. | surface-only |
-| mobile | partial | The phone can disconnect, but that drops the connection rather than revoking the pairing. | surface-only |
+| desktop | partial | Remote control now ends as soon as the web revokes the device or the relay ends the pairing (remoteControlHost.ts). Stop Remote Control on the desktop still ends only the session and does not revoke the pairing itself. | surface-only |
+| mobile | partial | The phone now clears a pairing the relay ended instead of retrying it (connectionStore.ts). Disconnecting on the phone still drops the connection rather than revoking the pairing. | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:174-176`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:136-139`, `apps/web/features/desktop-host/components/RemoteControlSection.tsx:140-140`, `apps/desktop/electron/runtime/dispatcher.ts:876-877`
+Code: `apps/web/features/desktop-host/components/RemoteControlSection.tsx:140-140`, `apps/desktop/electron/runtime/dispatcher.ts:876-877`, `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:21-26`, `apps/mobile/app/(app)/companion/index.tsx:259-259`
 
 ## S68.25: Device-offline explanation.
 
