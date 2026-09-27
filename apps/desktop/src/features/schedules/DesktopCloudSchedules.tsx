@@ -13,11 +13,13 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
+import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { ApprovalCard } from '@agiworkforce/ui';
 import type {
   ManagedCloudScheduleMutation,
   ManagedCloudScheduleRecurrence,
   ManagedCloudScheduleRun,
+  ManagedCloudScheduleRunApproval,
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
@@ -715,6 +717,42 @@ function AuthenticatedDesktopCloudSchedules({
     });
   };
 
+  const resolveApproval = (
+    schedule: ManagedCloudScheduleTask,
+    run: ManagedCloudScheduleRun,
+    decision: ManagedCloudScheduleRunApproval['decision'],
+  ) => {
+    const pending = run.pendingApproval;
+    if (!pending) return;
+    return runOperation(schedule, 'approval', async (signal) => {
+      const resolved = await api.resolveRunApproval(
+        schedule.id,
+        run.id,
+        { decision, toolCallIds: pending.toolCalls.map((call) => call.id) },
+        signal,
+      );
+      assertRequestActive(signal);
+      setHistoryById((all) => {
+        const current = all[schedule.id] ?? EMPTY_HISTORY;
+        return {
+          ...all,
+          [schedule.id]: {
+            ...current,
+            status: 'success',
+            runs: current.runs.map((candidate) =>
+              candidate.id === resolved.id ? resolved : candidate,
+            ),
+          },
+        };
+      });
+      const refreshed = await api.getSchedule(schedule.id, signal);
+      assertRequestActive(signal);
+      setSchedules((current) =>
+        current.map((candidate) => (candidate.id === refreshed.id ? refreshed : candidate)),
+      );
+    });
+  };
+
   const createBlockedReason = !schedulesEnabled
     ? plan === null
       ? 'Scheduling is disabled until your Cloud plan is confirmed.'
@@ -1010,6 +1048,15 @@ function AuthenticatedDesktopCloudSchedules({
                         unbreakable tokens (URLs, ids), so without a wrap rule they
                         ran outside the card. Clamped as well: a stack-trace-length
                         error should not push the card's actions off screen. */}
+                    {schedule.pausedReason === 'approval_required' ? (
+                      <p
+                        role="status"
+                        className="mt-3 rounded-lg bg-[var(--chat-warning-bg)] px-3 py-2 text-xs text-[var(--chat-text-primary)]"
+                      >
+                        Paused: a run needed your approval. Approve or deny it in its run history;
+                        if the request expired, resume the schedule to run it again.
+                      </p>
+                    ) : null}
                     {schedule.lastError ? (
                       <p className="mt-3 line-clamp-4 rounded-lg bg-[var(--chat-destructive)]/5 px-3 py-2 text-xs text-[var(--chat-destructive)] [overflow-wrap:anywhere]">
                         Last error: {schedule.lastError}
@@ -1053,10 +1100,14 @@ function AuthenticatedDesktopCloudSchedules({
                                       ? 'font-medium text-[var(--chat-success-text)]'
                                       : run.status === 'running'
                                         ? 'font-medium text-[var(--chat-info-text)]'
-                                        : 'font-medium text-[var(--chat-destructive-text)]'
+                                        : run.status === 'awaiting_approval'
+                                          ? 'font-medium text-[var(--warning-text)]'
+                                          : 'font-medium text-[var(--chat-destructive-text)]'
                                   }
                                 >
-                                  {run.status}
+                                  {run.status === 'awaiting_approval'
+                                    ? 'needs approval'
+                                    : run.status}
                                 </span>
                                 <span className="text-[var(--chat-text-muted)]">
                                   {dateTimeLabel(run.startedAt)} · {durationLabel(run.durationMs)}
@@ -1066,6 +1117,34 @@ function AuthenticatedDesktopCloudSchedules({
                                 <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--chat-text-secondary)]">
                                   {runResultText(run)}
                                 </p>
+                              ) : null}
+                              {run.status === 'awaiting_approval' && run.pendingApproval ? (
+                                <ApprovalCard
+                                  className="mt-2"
+                                  title="Waiting for your approval"
+                                  requests={run.pendingApproval.toolCalls.map((call) => ({
+                                    id: call.id,
+                                    name: call.summary,
+                                    detail: call.name,
+                                  }))}
+                                  approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+                                  denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+                                  onApprove={() => void resolveApproval(schedule, run, 'approved')}
+                                  onDeny={() => void resolveApproval(schedule, run, 'rejected')}
+                                  pending={Boolean(busy)}
+                                  meta={`Expires ${dateTimeLabel(run.pendingApproval.expiresAt)}`}
+                                >
+                                  {run.pendingApproval.toolCalls.map((call) =>
+                                    call.input ? (
+                                      <pre
+                                        key={call.id}
+                                        className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--chat-surface-base)] p-2 font-mono text-xs text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]"
+                                      >
+                                        {call.input}
+                                      </pre>
+                                    ) : null,
+                                  )}
+                                </ApprovalCard>
                               ) : null}
                               {run.error ? (
                                 <p className="mt-2 text-xs text-[var(--chat-destructive)]">

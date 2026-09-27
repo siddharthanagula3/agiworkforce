@@ -1,7 +1,17 @@
 'use client';
 
-import { Badge, Button, Skeleton } from '@agiworkforce/ui';
-import { AlertCircle, CheckCircle2, Clock3, Coins, Loader2, XCircle } from 'lucide-react';
+import { ApprovalCard, Badge, Button, Skeleton } from '@agiworkforce/ui';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import type { ManagedCloudScheduleRunApproval } from '@agiworkforce/cloud-contracts';
+import {
+  AlertCircle,
+  CheckCircle2,
+  Clock3,
+  Coins,
+  Loader2,
+  ShieldQuestion,
+  XCircle,
+} from 'lucide-react';
 import type { ScheduleRun } from '../types';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
 import {
@@ -23,11 +33,19 @@ export interface ScheduleHistoryState {
   loadingMore: boolean;
 }
 
+export type ScheduleApprovalDecision = ManagedCloudScheduleRunApproval['decision'];
+
 interface ScheduleRunHistoryProps {
   state: ScheduleHistoryState;
   timezone: string;
   onRetry: () => void;
   onLoadMore: () => void;
+  onResolveApproval: (run: ScheduleRun, decision: ScheduleApprovalDecision) => void;
+  approvalPending: boolean;
+}
+
+function runStatusLabel(status: ScheduleRun['status']): string {
+  return status === 'awaiting_approval' ? 'needs approval' : status;
 }
 
 function runStatusIcon(run: ScheduleRun) {
@@ -47,11 +65,25 @@ function runStatusIcon(run: ScheduleRun) {
   if (run.status === 'cancelled') {
     return <AlertCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;
   }
+  if (run.status === 'awaiting_approval') {
+    return <ShieldQuestion className="h-4 w-4 text-warning-text" aria-hidden="true" />;
+  }
   return <XCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
 }
 
-function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
+function RunRow({
+  run,
+  timezone,
+  onResolveApproval,
+  approvalPending,
+}: {
+  run: ScheduleRun;
+  timezone: string;
+  onResolveApproval: (run: ScheduleRun, decision: ScheduleApprovalDecision) => void;
+  approvalPending: boolean;
+}) {
   const resultText = scheduleResultText(run);
+  const pendingApproval = run.status === 'awaiting_approval' ? run.pendingApproval : null;
   const usage = scheduleRunUsage(run);
   return (
     <li className="rounded-xl border border-border/70 bg-background/70 p-3">
@@ -60,7 +92,7 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
         <Badge
           variant={run.status === 'failed' || run.status === 'timeout' ? 'destructive' : 'outline'}
         >
-          {run.status}
+          {runStatusLabel(run.status)}
         </Badge>
         <span>{formatDateTime(run.startedAt, timezone)}</span>
         <span aria-hidden="true">·</span>
@@ -99,6 +131,34 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
           </>
         )}
       </div>
+      {pendingApproval ? (
+        <ApprovalCard
+          className="mt-2"
+          title="Waiting for your approval"
+          requests={pendingApproval.toolCalls.map((call) => ({
+            id: call.id,
+            name: call.summary,
+            detail: call.name,
+          }))}
+          approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+          denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+          onApprove={() => onResolveApproval(run, 'approved')}
+          onDeny={() => onResolveApproval(run, 'rejected')}
+          pending={approvalPending}
+          meta={`Expires ${formatDateTime(pendingApproval.expiresAt, timezone)}`}
+        >
+          {pendingApproval.toolCalls.map((call) =>
+            call.input ? (
+              <pre
+                key={call.id}
+                className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 font-mono text-caption text-muted-foreground"
+              >
+                {call.input}
+              </pre>
+            ) : null,
+          )}
+        </ApprovalCard>
+      ) : null}
       {run.error && (
         <p className="mt-2 break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">
           {scheduleErrorMessage(run.error)}
@@ -123,6 +183,8 @@ export function ScheduleRunHistory({
   timezone,
   onRetry,
   onLoadMore,
+  onResolveApproval,
+  approvalPending,
 }: ScheduleRunHistoryProps) {
   if (state.status === 'loading') {
     return (
@@ -156,7 +218,13 @@ export function ScheduleRunHistory({
     <div className="space-y-3">
       <ol className="space-y-2">
         {state.runs.map((run) => (
-          <RunRow key={run.id} run={run} timezone={timezone} />
+          <RunRow
+            key={run.id}
+            run={run}
+            timezone={timezone}
+            onResolveApproval={onResolveApproval}
+            approvalPending={approvalPending}
+          />
         ))}
       </ol>
       {state.error && (
