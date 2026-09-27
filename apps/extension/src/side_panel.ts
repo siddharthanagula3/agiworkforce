@@ -3565,7 +3565,8 @@ function injectStyles(): void {
       text-overflow: ellipsis;
     }
     .sp-cloud-user-tier {
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--agi-ext-text-muted);
     }
     .sp-cloud-signout-btn {
