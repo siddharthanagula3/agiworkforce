@@ -55,7 +55,7 @@ function isoDay(date: Date): string {
 
 function formatUsd(microusd: number | null): string {
   if (microusd === null) return UNKNOWN;
-  return (microusd / MICROUSD_PER_USD).toLocaleString('en-US', {
+  return (microusd / MICROUSD_PER_USD).toLocaleString(undefined, {
     style: 'currency',
     currency: 'USD',
     maximumFractionDigits: 2,

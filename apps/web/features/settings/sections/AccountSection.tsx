@@ -33,7 +33,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return ', ';
-  return value.toLocaleString('en-US', {
+  return value.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
