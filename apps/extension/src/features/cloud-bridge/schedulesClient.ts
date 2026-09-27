@@ -2,6 +2,8 @@ import {
   createManagedCloudSchedulesClient,
   ManagedCloudSchedulesHttpError,
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
   type ManagedCloudSchedulesClient,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
@@ -31,6 +33,9 @@ export type ChromeScheduleResult =
   { status: 'success'; schedule: ManagedCloudScheduleTask } | ChromeSchedulesError;
 
 export type ChromeScheduleRunResult = { status: 'success'; replay: boolean } | ChromeSchedulesError;
+
+export type ChromeScheduleApprovalResult =
+  { status: 'success'; run: ManagedCloudScheduleRun | null } | ChromeSchedulesError;
 
 function createDefaultClient(token: string): ManagedCloudSchedulesClient {
   return createManagedCloudSchedulesClient({
@@ -127,4 +132,40 @@ export async function runChromeScheduleNow(
   );
   if (result.status === 'error') return result;
   return { status: 'success', replay: result.value.replay };
+}
+
+export async function readChromeScheduleApproval(
+  scheduleId: string,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleApprovalResult> {
+  const result = await withSchedulesClient(dependencies, options.signal, (client) =>
+    client.listRuns(scheduleId, {
+      limit: CHROME_SCHEDULE_PAGE_SIZE,
+      offset: 0,
+      ...(options.signal ? { signal: options.signal } : {}),
+    }),
+  );
+  if (result.status === 'error') return result;
+  return {
+    status: 'success',
+    run:
+      result.value.runs.find(
+        (run) => run.status === 'awaiting_approval' && Boolean(run.pendingApproval),
+      ) ?? null,
+  };
+}
+
+export async function resolveChromeScheduleApproval(
+  scheduleId: string,
+  runId: string,
+  approval: ManagedCloudScheduleRunApproval,
+  options: { signal?: AbortSignal } = {},
+  dependencies: Partial<ChromeSchedulesDependencies> = {},
+): Promise<ChromeScheduleApprovalResult> {
+  const result = await withSchedulesClient(dependencies, options.signal, (client) =>
+    client.resolveRunApproval(scheduleId, runId, approval, options.signal),
+  );
+  if (result.status === 'error') return result;
+  return { status: 'success', run: result.value };
 }
