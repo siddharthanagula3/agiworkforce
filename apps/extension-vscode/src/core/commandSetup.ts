@@ -101,6 +101,7 @@ import { installCli } from '../integrations/cliInstaller';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
+  describeHandoffReview,
 } from '../integrations/developerSessionHandoff';
 import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
 import {
@@ -449,6 +450,8 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   );
 }
 
+const CONTINUE_HANDOFF_HERE = 'Continue here';
+
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
@@ -494,6 +497,13 @@ async function continueCliSessionHere(
     );
     return;
   }
+  const review = describeHandoffReview(handoff, outcome.admission);
+  const choice = await vscode.window.showInformationMessage(
+    review.message,
+    { modal: true, detail: review.detail },
+    CONTINUE_HANDOFF_HERE,
+  );
+  if (choice !== CONTINUE_HANDOFF_HERE) return;
   accepted.add(outcome.receipt);
   await runtime.acceptHandoff(handoff);
   await vscode.commands.executeCommand('agi-workforce.chat');

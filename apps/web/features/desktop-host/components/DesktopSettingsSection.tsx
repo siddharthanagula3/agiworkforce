@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  DEFAULT_SESSION_COMPLETION_ALERTS,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
   HOST_SHORTCUT_PREFERENCE_KEYS,
   NO_HOST_SHORTCUT,
+  SESSION_COMPLETION_ALERT_LABELS,
+  SESSION_COMPLETION_ALERTS,
   describeAccelerator,
   describeHostPlatform,
   type HostPreferences,
@@ -13,6 +16,7 @@ import {
   type HostShortcutKey,
   type DeveloperRuntimeStatus,
   type HostShortcutStatus,
+  type SessionCompletionAlerts,
 } from '@agiworkforce/local-runtime-contract';
 import { Switch } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -29,6 +33,12 @@ const STARTUP_LABEL = 'Run on startup';
 const STARTUP_HINT = 'Start AGI Cloud when you log in to this computer.';
 const MENU_BAR_LABEL = 'Menu bar';
 const MENU_BAR_HINT = 'Show AGI Cloud in the menu bar.';
+const COMPLETION_ALERTS_LABEL = 'Task finished alerts';
+const COMPLETION_ALERTS_HINT =
+  'Show a notification when a coding session on this computer finishes or stops.';
+const APPROVAL_ALERTS_LABEL = 'Approval alerts';
+const APPROVAL_ALERTS_HINT =
+  'Show a notification when a coding session on this computer needs your approval.';
 const CLI_PATH_LABEL = 'AGI CLI path';
 const CLI_PATH_HINT = 'Leave empty to use the agi on this computer’s PATH.';
 const CLI_PATH_PLACEHOLDER = 'agi';
@@ -218,6 +228,33 @@ export function DesktopSettingsSection() {
             disabled={!preferences}
             onCheckedChange={(checked) => write({ showInMenuBar: checked })}
             aria-label={MENU_BAR_LABEL}
+          />
+        </Row>
+
+        <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
+          <select
+            value={preferences?.sessionCompletionAlerts ?? DEFAULT_SESSION_COMPLETION_ALERTS}
+            disabled={!preferences}
+            aria-label={COMPLETION_ALERTS_LABEL}
+            onChange={(event) =>
+              write({ sessionCompletionAlerts: event.target.value as SessionCompletionAlerts })
+            }
+            className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          >
+            {SESSION_COMPLETION_ALERTS.map((mode) => (
+              <option key={mode} value={mode}>
+                {SESSION_COMPLETION_ALERT_LABELS[mode]}
+              </option>
+            ))}
+          </select>
+        </Row>
+
+        <Row label={APPROVAL_ALERTS_LABEL} hint={APPROVAL_ALERTS_HINT}>
+          <Switch
+            checked={preferences?.sessionApprovalAlerts ?? false}
+            disabled={!preferences}
+            onCheckedChange={(checked) => write({ sessionApprovalAlerts: checked })}
+            aria-label={APPROVAL_ALERTS_LABEL}
           />
         </Row>
 

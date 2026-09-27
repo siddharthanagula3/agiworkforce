@@ -214,7 +214,8 @@ export function TimeFocusSection() {
               Quiet hours
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-              Add light friction when you open AGI during time you set aside.
+              Hold notifications, and add light friction when you open AGI, during time you set
+              aside. Approval requests and failures still come through.
             </div>
           </div>
           <Switch

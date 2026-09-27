@@ -499,6 +499,11 @@
         "icon": "$(cloud-download)"
       },
       {
+        "command": "agi-workforce.openCloudCodeSession",
+        "title": "AGI Workforce: Open AGI Code Session",
+        "icon": "$(cloud)"
+      },
+      {
         "command": "agi-workforce.showSchedules",
         "title": "AGI Workforce: Show Schedules",
         "icon": "$(watch)"
@@ -964,6 +969,10 @@
         },
         {
           "command": "agi-workforce.pullCloudTaskIntoWorkspace",
+          "when": "false"
+        },
+        {
+          "command": "agi-workforce.openCloudCodeSession",
           "when": "false"
         },
         {

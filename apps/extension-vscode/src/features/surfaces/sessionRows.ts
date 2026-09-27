@@ -1,4 +1,6 @@
-export type SessionSource = 'local' | 'cloud';
+export type SessionSource = 'local' | 'cloud' | 'cloud-code';
+
+export type SessionListSource = Exclude<SessionSource, 'cloud-code'>;
 
 /** Which surface started the session, as the protocol's `createdBy` reports it. */
 export type SessionOrigin = 'cli' | 'vscode' | 'desktop' | 'unknown';
@@ -24,6 +26,7 @@ export interface SessionRow {
 const SOURCE_LABELS: Record<SessionSource, string> = {
   local: 'Local',
   cloud: 'Cloud',
+  'cloud-code': 'AGI Code',
 };
 
 /**

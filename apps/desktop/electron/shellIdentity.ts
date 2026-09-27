@@ -91,7 +91,7 @@ export async function readShellIdentity(): Promise<ShellIdentity | null> {
   return { signedIn: true, email: typeof body?.email === 'string' ? body.email : null };
 }
 
-async function csrfToken(endpoint: ShellEndpoint): Promise<Record<string, string>> {
+async function csrfToken(endpoint: ShellEndpoint): Promise<Record<string, string> | null> {
   if (endpoint.token) return {};
   const response = await shellSession().fetch(`${endpoint.base}/api/csrf`, {
     method: 'GET',
@@ -100,27 +100,40 @@ async function csrfToken(endpoint: ShellEndpoint): Promise<Record<string, string
     signal: AbortSignal.timeout(IDENTITY_TIMEOUT_MS),
   });
   const body = (await response.json().catch(() => null)) as { token?: unknown } | null;
-  if (!response.ok || typeof body?.token !== 'string') {
-    throw new Error('This app could not prepare an approval for the AGI CLI.');
-  }
+  if (!response.ok || typeof body?.token !== 'string') return null;
   return { 'x-csrf-token': body.token };
 }
 
-export async function approveDeviceCode(userCode: string): Promise<void> {
+/**
+ * A write the shell makes as the signed-in account. Null means the request
+ * could not be prepared, because the account refused a CSRF token.
+ */
+export async function postAsShellAccount(path: string, body: unknown): Promise<Response | null> {
   const endpoint = await shellEndpoint();
-  const response = await shellSession().fetch(`${endpoint.base}/api/auth/device/approve`, {
+  const csrf = await csrfToken(endpoint);
+  if (!csrf) return null;
+  return shellSession().fetch(`${endpoint.base}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
       ...shellRequestHeaders(),
       ...bearer(endpoint),
-      ...(await csrfToken(endpoint)),
+      ...csrf,
     },
-    body: JSON.stringify({ user_code: userCode, action: 'approve', surface: 'desktop' }),
+    body: JSON.stringify(body),
     cache: 'no-store',
     signal: AbortSignal.timeout(IDENTITY_TIMEOUT_MS),
   });
+}
+
+export async function approveDeviceCode(userCode: string): Promise<void> {
+  const response = await postAsShellAccount('/api/auth/device/approve', {
+    user_code: userCode,
+    action: 'approve',
+    surface: 'desktop',
+  });
+  if (!response) throw new Error('This app could not prepare an approval for the AGI CLI.');
   if (response.ok) return;
   throw new Error(
     readError(
