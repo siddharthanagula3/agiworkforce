@@ -64,7 +64,7 @@ export const TOOL_APPROVAL_POLICY_OPTIONS: readonly ToolApprovalPolicyOption[] =
     label: 'Skip approvals',
     hint: 'Tools run on their own. Destructive and unknown actions still ask.',
     description:
-      'Tool actions run without waiting for you. Four things still stop and ask: anything AGI classifies as destructive or irreversible, such as a delete, a message or post other people receive, or a write it cannot undo; every connector tool AGI does not know; any action reached after untrusted web content entered the conversation; and anything your workspace blocks, which stays blocked. Your per-tool Deny choices in Connectors still win.',
+      'Tool actions run without waiting for you. Three things still stop and ask: anything AGI classifies as destructive or irreversible, such as a delete, a message or post other people receive, or a write it cannot undo; every connector tool AGI does not know; and an action that could send data out after untrusted content, such as a web page or an uploaded file, entered a conversation where private data is in reach. Anything your workspace blocks stays blocked, and your per-tool Deny choices in Connectors still win.',
   },
 ];
 
