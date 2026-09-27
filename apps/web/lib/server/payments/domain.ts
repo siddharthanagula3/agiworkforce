@@ -132,6 +132,38 @@ export type OffSessionChargeResult =
   | { outcome: 'rejected'; code: string | null; message: string }
   | { outcome: 'unknown'; error: unknown };
 
+export type NormalizedChargeAttributionKind = 'subscription' | 'top_up';
+
+export interface NormalizedChargeAttribution {
+  kind: NormalizedChargeAttributionKind;
+  reference: string;
+  ownerReference: string | null;
+}
+
+export interface NormalizedBalanceEntry {
+  reference: string;
+  type: string;
+  occurredAt: Date;
+  currency: string;
+  amountMinorUnits: number;
+  feeMinorUnits: number;
+  chargeReference: string | null;
+  attribution: NormalizedChargeAttribution | null;
+}
+
+export interface NormalizedInvoiceDiscount {
+  invoiceReference: string;
+  occurredAt: Date;
+  currency: string;
+  discountMinorUnits: number;
+  discountReferences: string[];
+}
+
+export interface NormalizedCostActivity {
+  balanceEntries: NormalizedBalanceEntry[];
+  invoiceDiscounts: NormalizedInvoiceDiscount[];
+}
+
 export interface PurchaseVerificationInput {
   reference: string;
   ownerReference?: string | null;
