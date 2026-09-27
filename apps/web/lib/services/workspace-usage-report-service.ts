@@ -74,9 +74,11 @@ export function resolveUsageReportWindow(
   now: Date = new Date(),
 ): UsageReportWindow {
   const start = startOfUtcDay(parseInstant(params.from, 'from'));
-  const end = endOfUtcDay(params.to === null ? now : parseInstant(params.to, 'to'));
+  const requestedEnd = endOfUtcDay(params.to === null ? now : parseInstant(params.to, 'to'));
+  const today = endOfUtcDay(now);
+  const end = requestedEnd > today ? today : requestedEnd;
   if (start >= end) {
-    throw createError.validation('from must be before to.');
+    throw createError.validation('from must be before to and not in the future.');
   }
   if (end.getTime() - start.getTime() > USAGE_MAX_WINDOW_DAYS * DAY_MS) {
     throw createError.validation(
