@@ -25,8 +25,9 @@ export function chargeMicrousdForProviderCost(providerMicrousd: number): number 
 export const RATE_CARD_FEATURES = [
   'web_search_perplexity',
   'web_search_grounding',
-  'web_search_anthropic_native',
-  'web_search_openai_native',
+  'web_search_anthropic',
+  'web_search_openai',
+  'places_text_search',
   'image_generation_openai_low',
   'image_generation_openai_medium',
   'image_generation_openai_high',
@@ -122,21 +123,29 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
     source: 'https://ai.google.dev/gemini-api/docs/pricing',
     verifiedOn: '2026-09-08',
   },
-  web_search_anthropic_native: {
+  web_search_anthropic: {
     unit: 'request',
     providerCogsMicrousd: 10_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
-    source: 'https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool',
+    source: 'https://platform.claude.com/docs/en/about-claude/pricing',
     verifiedOn: '2026-09-27',
   },
-  web_search_openai_native: {
+  web_search_openai: {
     unit: 'request',
     providerCogsMicrousd: 10_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
     source: 'https://developers.openai.com/api/docs/pricing',
     verifiedOn: '2026-09-27',
+  },
+  places_text_search: {
+    unit: 'request',
+    providerCogsMicrousd: 35_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'no_plan',
+    source: 'https://developers.google.com/maps/billing-and-pricing/pricing',
+    verifiedOn: '2026-09-05',
   },
   image_generation_openai_low: {
     unit: 'image',
@@ -226,7 +235,8 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
     providerCogsMicrousd: 50_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
-    source: 'https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool',
+    source:
+      'https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool (an upper bound: the 1,550 free organization hours a month cannot be tracked from one response)',
     verifiedOn: '2026-09-27',
   },
   object_storage_gib_month: infrastructureRate('gibibyte_month'),
@@ -242,6 +252,7 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
 export const RATE_CARD_PROVIDER_COGS_ENV = {
   web_search_perplexity: 'AGI_PERPLEXITY_SEARCH_MICROUSD_PER_CALL',
   web_search_grounding: 'AGI_GOOGLE_GROUNDING_MICROUSD_PER_CALL',
+  places_text_search: 'AGI_PLACES_SEARCH_MICROUSD_PER_CALL',
   object_storage_gib_month: 'AGI_OBJECT_STORAGE_MICROUSD_PER_GIB_MONTH',
   database_compute_second: 'AGI_DATABASE_COMPUTE_MICROUSD_PER_SECOND',
   vector_query_request: 'AGI_VECTOR_QUERY_MICROUSD_PER_REQUEST',
