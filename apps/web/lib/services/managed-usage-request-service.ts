@@ -38,6 +38,10 @@ import {
   rollingResetAt,
   toIsoTimestamp,
 } from '@/lib/server/capability-limit-resets';
+import {
+  resolvePlanLimitAlternativeModel,
+  type PlanLimitAlternativeKind,
+} from '@/lib/server/plan-limit-alternative';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -50,6 +54,7 @@ const PROVIDER_OPERATION_KEY_PATTERN = /^provider:[1-9]\d{0,8}$/;
 
 export interface ManagedUsageLimitContext {
   resetsAt: string | null;
+  alternativeModel: string | null;
 }
 
 export class ManagedUsageRequestError extends Error {
@@ -103,6 +108,9 @@ export function createManagedUsageErrorBody(
       code: error.code,
       contract_version: error.contractVersion,
       ...(error.limitContext?.resetsAt ? { resets_at: error.limitContext.resetsAt } : {}),
+      ...(error.limitContext?.alternativeModel
+        ? { alternative_model: error.limitContext.alternativeModel }
+        : {}),
       ...(recovery ? { recovery } : {}),
     },
   };
@@ -438,7 +446,8 @@ function reservationError(decision: string): ManagedUsageRequestError {
 }
 
 type PlanLimitWindow =
-  { kind: 'rolling'; hours: number; flagshipOnly: boolean } | { kind: 'billing_period' };
+  | { kind: 'rolling'; hours: number; flagshipOnly: boolean; alternative: PlanLimitAlternativeKind }
+  | { kind: 'billing_period'; alternative: PlanLimitAlternativeKind };
 
 const PLAN_LIMIT_WINDOWS: ReadonlyMap<string, PlanLimitWindow> = new Map<string, PlanLimitWindow>([
   [
@@ -447,6 +456,7 @@ const PLAN_LIMIT_WINDOWS: ReadonlyMap<string, PlanLimitWindow> = new Map<string,
       kind: 'rolling',
       hours: ROLLING_SESSION_WINDOW_HOURS,
       flagshipOnly: false,
+      alternative: 'free_pool',
     },
   ],
   [
@@ -455,6 +465,7 @@ const PLAN_LIMIT_WINDOWS: ReadonlyMap<string, PlanLimitWindow> = new Map<string,
       kind: 'rolling',
       hours: ROLLING_WEEKLY_WINDOW_HOURS,
       flagshipOnly: false,
+      alternative: 'free_pool',
     },
   ],
   [
@@ -463,9 +474,10 @@ const PLAN_LIMIT_WINDOWS: ReadonlyMap<string, PlanLimitWindow> = new Map<string,
       kind: 'rolling',
       hours: ROLLING_WEEKLY_WINDOW_HOURS,
       flagshipOnly: true,
+      alternative: 'standard',
     },
   ],
-  ['declined', { kind: 'billing_period' }],
+  ['declined', { kind: 'billing_period', alternative: 'free_pool' }],
 ]);
 
 async function readPlanLimitResetAt(
@@ -482,13 +494,23 @@ async function readPlanLimitResetAt(
 
 async function planLimitRefusal(
   decision: string,
-  input: { db: DatabaseAdapter; userId: string },
+  input: { db: DatabaseAdapter; userId: string; planTier: string; model: string | undefined },
 ): Promise<ManagedUsageRequestError> {
   const error = reservationError(decision);
   const window = PLAN_LIMIT_WINDOWS.get(decision);
   if (!window) return error;
   try {
-    error.limitContext = { resetsAt: await readPlanLimitResetAt(input.db, input.userId, window) };
+    const [resetsAt, alternativeModel] = await Promise.all([
+      readPlanLimitResetAt(input.db, input.userId, window),
+      input.model
+        ? resolvePlanLimitAlternativeModel({
+            planTier: input.planTier,
+            refusedModelId: input.model,
+            kind: window.alternative,
+          })
+        : Promise.resolve(null),
+    ]);
+    error.limitContext = { resetsAt, alternativeModel };
   } catch (contextError) {
     logger.warn(
       { error: contextError, userId: input.userId, decision },
@@ -586,7 +608,12 @@ export async function reserveManagedUsageRequest(
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';
   if (decision !== 'acquired') {
-    throw await planLimitRefusal(decision, { db: input.db, userId: input.userId });
+    throw await planLimitRefusal(decision, {
+      db: input.db,
+      userId: input.userId,
+      planTier: input.planTier,
+      model: input.model,
+    });
   }
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
@@ -669,7 +696,12 @@ export async function reserveManagedUsageProviderStep(
 
   const decision = typeof row['extension_decision'] === 'string' ? row['extension_decision'] : '';
   if (decision !== 'covered' && decision !== 'extended' && decision !== 'already_extended') {
-    throw await planLimitRefusal(decision, { db: reservation.db, userId: reservation.userId });
+    throw await planLimitRefusal(decision, {
+      db: reservation.db,
+      userId: reservation.userId,
+      planTier: input.planTier,
+      model: reservation.model,
+    });
   }
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (row['request_status'] !== 'provider_started' || reservedMicrousd === null) {

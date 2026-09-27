@@ -160,6 +160,15 @@
               "code": {
                 "type": "string",
                 "nullable": true
+              },
+              "resets_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "On a plan-limit refusal, when the refusing window resets: the oldest usage leaving a rolling 5-hour or weekly window, the end of the billing period, or the start of the next month for a monthly allowance."
+              },
+              "alternative_model": {
+                "type": "string",
+                "description": "On a plan-limit refusal, a model the caller's plan can use now: a standard model when a flagship limit refused, or a free-pool model when a usage window or the billing period refused. Absent when none is eligible."
               }
             }
           }
