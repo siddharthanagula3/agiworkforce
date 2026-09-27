@@ -65,21 +65,12 @@ const MCP_LOGIN_TIMEOUT_MS = 5 * 60_000;
 const SHUTDOWN_EXIT_TIMEOUT_MS = 2_000;
 const HARD_KILL_TIMEOUT_MS = 2_000;
 const CLI_PATH_SETTING = 'agiWorkforce.cliPath';
-const CLI_NPM_PACKAGE = '@agiworkforce/cli';
-
-// `apps/cli/npm/package.json` scaffolds CLI_NPM_PACKAGE, but the public npm
-// registry still 404s for it, so the install command below would fail for every
-// user who ran it. Flip this to true in the same commit that publishes the
-// package; nothing else needs to change to surface the command.
-const CLI_IS_PUBLISHED: boolean = false;
 
 export const CLI_NOT_FOUND_MARKER = 'AGI_CLI_NOT_FOUND';
 export const CLI_NOT_EXECUTABLE_MARKER = 'AGI_CLI_NOT_EXECUTABLE';
 
 export function cliAcquisitionHint(): string {
-  return CLI_IS_PUBLISHED
-    ? `Install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer with \`npm install -g ${CLI_NPM_PACKAGE}\`, then set ${CLI_PATH_SETTING} if the binary is not on your PATH.`
-    : `The AGI CLI is not published yet, so there is no install command. Build it from source and set ${CLI_PATH_SETTING} to the resulting binary, which must report version ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer.`;
+  return `Run "AGI Workforce: Install AGI CLI" to install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer, or set ${CLI_PATH_SETTING} to one you already have.`;
 }
 
 function describeSpawnFailure(cliPath: string, error: Error, environmentLabel?: string): Error {
