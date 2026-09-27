@@ -9,19 +9,24 @@
  * honest instead: the SDK is reachable from this adapter and nowhere else.
  */
 import { verifyToken as clerkVerifyToken } from '@clerk/backend';
+import { isClerkAPIResponseError } from '@clerk/backend/errors';
 import * as clerkServer from '@clerk/nextjs/server';
 
 import { APP_URL_ENV, resolveDeploymentOrigin } from '../deployment-origin';
 import { clerkHasBrowserSessionCookie } from '../session-cookie';
 import {
   IdentityConfigError,
+  IdentityRequestRejectedError,
   type IdentityClaims,
   type IdentityCspOrigins,
+  type IdentityEmailAddress,
   type IdentityEmailVerification,
+  type IdentityFactorAge,
   type IdentityMembership,
   type IdentityMiddlewareSupport,
   type IdentityProvider,
   type IdentityRequestAuth,
+  type IdentitySecondFactorRegistration,
   type IdentitySession,
   type IdentitySessionActivity,
   type IdentitySessionPage,
@@ -55,6 +60,12 @@ type ClerkClient = Awaited<ReturnType<typeof clerkServer.clerkClient>>;
 type ClerkUser = Awaited<ReturnType<ClerkClient['users']['getUser']>>;
 type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
 type ClerkSessionActivity = NonNullable<ClerkSession['latestActivity']>;
+type ClerkEmailAddress = ClerkUser['emailAddresses'][number];
+
+const CLIENT_ERROR_STATUS_MIN = 400;
+const SERVER_ERROR_STATUS_MIN = 500;
+const RATE_LIMITED_STATUS = 429;
+const LOCKED_ACCOUNT_CODE = 'user_locked';
 
 export interface ClerkIdentityConfig {
   secretKey?: string | undefined;
@@ -110,6 +121,49 @@ export function clerkFrontendApiOrigin(publishableKey: string | undefined): stri
 
 const VERIFIED_STATUS = 'verified';
 
+function toFactorAge(value: unknown): IdentityFactorAge | null {
+  if (!Array.isArray(value) || value.length !== 2) return null;
+  const [first, second] = value as unknown[];
+  if (typeof first !== 'number' || typeof second !== 'number') return null;
+  return {
+    firstFactorMinutes: first < 0 ? null : first,
+    secondFactorMinutes: second < 0 ? null : second,
+  };
+}
+
+function toEmailAddress(address: ClerkEmailAddress): IdentityEmailAddress {
+  return {
+    id: address.id,
+    emailAddress: address.emailAddress,
+    verified: address.verification?.status === VERIFIED_STATUS,
+  };
+}
+
+function rejectionOf(error: unknown): IdentityRequestRejectedError | null {
+  if (!isClerkAPIResponseError(error)) return null;
+  const { status } = error;
+  if (
+    status < CLIENT_ERROR_STATUS_MIN ||
+    status >= SERVER_ERROR_STATUS_MIN ||
+    status === RATE_LIMITED_STATUS
+  ) {
+    return null;
+  }
+  const first = error.errors[0];
+  return new IdentityRequestRejectedError(
+    first?.longMessage ?? first?.message ?? error.message,
+    first?.code ?? null,
+  );
+}
+
+async function rejectingInput<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    throw rejectionOf(error) ?? error;
+  }
+}
+
 function toEmailVerification(primary: ClerkUser['primaryEmailAddress']): IdentityEmailVerification {
   const status = primary?.verification?.status ?? null;
   if (status === VERIFIED_STATUS) return 'verified';
@@ -125,7 +179,11 @@ function toUser(user: ClerkUser): IdentityUser {
     id: user.id,
     primaryEmail: optional(user.primaryEmailAddress?.emailAddress) ?? emails[0] ?? null,
     primaryEmailVerification: toEmailVerification(user.primaryEmailAddress),
+    primaryEmailAddressId: optional(user.primaryEmailAddressId),
     emails,
+    emailAddresses: (user.emailAddresses ?? [])
+      .filter((address) => Boolean(address.id))
+      .map(toEmailAddress),
     firstName: optional(user.firstName),
     lastName: optional(user.lastName),
     fullName: optional([user.firstName, user.lastName].filter(Boolean).join(' ')),
@@ -135,7 +193,10 @@ function toUser(user: ClerkUser): IdentityUser {
     privateMetadata: readRecord(user.privateMetadata),
     banned: user.banned,
     locked: user.locked,
+    passwordEnabled: user.passwordEnabled === true,
     twoFactorEnabled: user.twoFactorEnabled,
+    totpEnabled: user.totpEnabled === true,
+    backupCodesEnabled: user.backupCodeEnabled === true,
     createdAt: user.createdAt,
     lastSignInAt: user.lastSignInAt,
     enterpriseAccounts: (user.enterpriseAccounts ?? []).map((account) => ({
@@ -252,6 +313,7 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
       organizationId: readStringClaim(claims, 'org_id'),
       organizationRole: readStringClaim(claims, 'org_role'),
       email: readStringClaim(claims, 'email'),
+      factorAge: toFactorAge(claims['fva']),
       raw: claims,
     };
   }
@@ -264,6 +326,7 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
       organizationId: session.orgId ?? null,
       organizationRole: session.orgRole ?? null,
       isSignedIn: Boolean(session.userId),
+      factorAge: toFactorAge(session.factorVerificationAge),
       getToken: async () => (await session.getToken()) ?? null,
     };
   }
@@ -312,6 +375,68 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
       organizationName: optional(membership.organization.name),
       role: membership.role,
     }));
+  }
+
+  async registerSecondFactor(
+    userId: string,
+    registration: IdentitySecondFactorRegistration,
+  ): Promise<void> {
+    const client = await this.apiClient();
+    await rejectingInput(() =>
+      client.users.updateUser(userId, {
+        ...(registration.totpSecret ? { totpSecret: registration.totpSecret } : {}),
+        ...(registration.backupCodes ? { backupCodes: [...registration.backupCodes] } : {}),
+      }),
+    );
+  }
+
+  async removeSecondFactor(userId: string): Promise<void> {
+    await (await this.apiClient()).users.disableUserMFA(userId);
+  }
+
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    const client = await this.apiClient();
+    try {
+      await client.users.verifyPassword({ userId, password });
+      return true;
+    } catch (error) {
+      const rejection = rejectionOf(error);
+      if (!rejection || rejection.code === LOCKED_ACCOUNT_CODE) throw rejection ?? error;
+      return false;
+    }
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    const client = await this.apiClient();
+    await rejectingInput(() => client.users.updateUser(userId, { password }));
+  }
+
+  async addEmailAddress(userId: string, emailAddress: string): Promise<IdentityEmailAddress> {
+    const client = await this.apiClient();
+    const created = await rejectingInput(() =>
+      client.emailAddresses.createEmailAddress({
+        userId,
+        emailAddress,
+        verified: false,
+        primary: false,
+      }),
+    );
+    return toEmailAddress(created);
+  }
+
+  async setPrimaryEmailAddress(userId: string, emailAddressId: string): Promise<void> {
+    const client = await this.apiClient();
+    await rejectingInput(() =>
+      client.users.updateUser(userId, {
+        primaryEmailAddressID: emailAddressId,
+        notifyPrimaryEmailAddressChanged: true,
+      }),
+    );
+  }
+
+  async removeEmailAddress(emailAddressId: string): Promise<void> {
+    const client = await this.apiClient();
+    await rejectingInput(() => client.emailAddresses.deleteEmailAddress(emailAddressId));
   }
 
   /**

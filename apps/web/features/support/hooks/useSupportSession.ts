@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useStepUp } from '@/features/settings/hooks/use-step-up';
 import {
   SUPPORT_MAX_QUESTION_LENGTH,
   type SupportActionOutcome,
@@ -42,14 +43,11 @@ export interface SupportSessionState {
   startHandoff: (options: { reason: HandoffReason; contactEmail?: string }) => void;
   dismissHandoff: () => void;
   reset: () => void;
+  stepUpDialog: ReactElement | null;
 }
 
 export type HandoffReason =
-  | 'user_requested'
-  | 'hard_abstain'
-  | 'low_confidence'
-  | 'no_citation'
-  | 'action_refused';
+  'user_requested' | 'hard_abstain' | 'low_confidence' | 'no_citation' | 'action_refused';
 
 let turnCounter = 0;
 function nextTurnId(prefix: string): string {
@@ -63,6 +61,8 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
   const [actionFlows, setActionFlows] = useState<Record<string, SupportActionFlow>>({});
   const [handoff, setHandoff] = useState<SupportHandoffView | null>(null);
   const [handoffPending, setHandoffPending] = useState(false);
+  const { withStepUp, dialog: stepUpDialog } = useStepUp();
+  const stepUpRunner = surface === 'app' ? withStepUp : null;
 
   const turnsRef = useRef<SupportTurn[]>([]);
   turnsRef.current = turns;
@@ -120,20 +120,28 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     [surface],
   );
 
-  const confirmProposal = useCallback((turnId: string) => {
-    setActionFlows((prev) => {
-      const current = prev[turnId];
-      if (!current || current.phase !== 'confirming') return prev;
-      const { proposal, actionId } = current;
+  const confirmProposal = useCallback(
+    (turnId: string) => {
+      setActionFlows((prev) => {
+        const current = prev[turnId];
+        if (!current || current.phase !== 'confirming') return prev;
+        const { proposal, actionId } = current;
 
-      void confirmAction(proposal.proposalId, proposal.confirmationToken).then((outcome) => {
-        if (!mounted.current) return;
-        setActionFlows((inner) => ({ ...inner, [turnId]: { phase: 'done', actionId, outcome } }));
+        void confirmAction(proposal.proposalId, proposal.confirmationToken, stepUpRunner).then(
+          (outcome) => {
+            if (!mounted.current) return;
+            setActionFlows((inner) => ({
+              ...inner,
+              [turnId]: { phase: 'done', actionId, outcome },
+            }));
+          },
+        );
+
+        return { ...prev, [turnId]: { phase: 'running', actionId, proposal } };
       });
-
-      return { ...prev, [turnId]: { phase: 'running', actionId, proposal } };
-    });
-  }, []);
+    },
+    [stepUpRunner],
+  );
 
   const cancelAction = useCallback((turnId: string) => {
     setActionFlows((prev) => {
@@ -247,6 +255,7 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     startHandoff,
     dismissHandoff,
     reset,
+    stepUpDialog,
   };
 }
 

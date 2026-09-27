@@ -22,35 +22,26 @@ describe('Mobile account security service', () => {
   });
 
   it('loads and validates the account-owned authenticator status', async () => {
-    apiMock.get.mockResolvedValueOnce({
-      enabled: true,
-      enabled_at: '2026-07-30T12:00:00.000Z',
-      backup_codes_remaining: 4,
-    });
+    apiMock.get.mockResolvedValueOnce({ enabled: true, backup_codes_ready: true });
     const controller = new AbortController();
 
     await expect(fetchAccountSecurityStatus(controller.signal)).resolves.toEqual({
       twoFactorEnabled: true,
-      enabledAt: '2026-07-30T12:00:00.000Z',
-      backupCodesRemaining: 4,
+      backupCodesReady: true,
     });
     expect(apiMock.get).toHaveBeenCalledWith('/api/settings/2fa', {
       signal: controller.signal,
     });
   });
 
-  it.each([
-    null,
-    {},
-    { enabled: 'yes', backup_codes_remaining: 0 },
-    { enabled: false, backup_codes_remaining: -1 },
-    { enabled: true, enabled_at: 'not-a-date', backup_codes_remaining: 2 },
-    { enabled: true, enabled_at: null, backup_codes_remaining: 1.5 },
-  ])('rejects malformed status payload %# instead of fabricating security state', (payload) => {
-    expect(() => parseAccountSecurityStatus(payload)).toThrow(
-      'Account security returned an invalid response.',
-    );
-  });
+  it.each([null, {}, [], { enabled: 'yes', backup_codes_ready: true }])(
+    'rejects malformed status payload %# instead of fabricating security state',
+    (payload) => {
+      expect(() => parseAccountSecurityStatus(payload)).toThrow(
+        'Account security returned an invalid response.',
+      );
+    },
+  );
 
   it('reads the account device list from the server rather than the local session', async () => {
     apiMock.get.mockResolvedValueOnce({

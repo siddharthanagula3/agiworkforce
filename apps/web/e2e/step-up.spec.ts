@@ -49,7 +49,7 @@ async function api(
 const STEP_UP_REFUSAL = {
   error: {
     code: 'STEP_UP_REQUIRED',
-    message: 'Confirm it is you with a second factor before completing this action.',
+    message: 'Confirm it is you before completing this action.',
     details: {
       reason: 'step_up_required',
       action: 'two_factor.disable',
@@ -105,46 +105,96 @@ test.describe('high-risk routes refuse a session that has not re-authenticated',
   });
 });
 
+interface StubbedResponse {
+  status: number;
+  body: unknown;
+}
+
+const VERIFICATION_REQUIRED = {
+  error: {
+    code: 'STEP_UP_VERIFICATION_REQUIRED',
+    message: 'Confirm it is you with your authenticator app or a backup code.',
+    details: { action: 'two_factor.disable', level: 'second_factor' },
+  },
+};
+
+async function routeTwoFactorDisable(
+  page: Page,
+  onDelete: (attempt: number) => StubbedResponse | null,
+) {
+  let attempts = 0;
+  await page.route('**/api/settings/2fa', async (route) => {
+    const request = route.request();
+    if (request.method() === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ enabled: true, backup_codes_ready: true }),
+      });
+    }
+    if (request.method() !== 'DELETE') return route.continue();
+    attempts += 1;
+    const replay = onDelete(attempts);
+    if (replay) {
+      return route.fulfill({
+        status: replay.status,
+        contentType: 'application/json',
+        body: JSON.stringify(replay.body),
+      });
+    }
+    return route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify(STEP_UP_REFUSAL),
+    });
+  });
+  return () => attempts;
+}
+
 test.describe('the refusal reaches the person, not the console', () => {
-  test('the control opens the challenge and replays the request with the proof', async ({
+  test('a freshly verified session replays the request with the proof and no prompt', async ({
     page,
   }) => {
     await signIn(page);
 
-    let disableAttempts = 0;
     let replayCarriedProof = false;
-
-    await page.route('**/api/settings/2fa', async (route) => {
-      const request = route.request();
-      if (request.method() === 'GET') {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ enabled: true, backup_codes_remaining: 3 }),
-        });
-      }
-      if (request.method() !== 'DELETE') return route.continue();
-      disableAttempts += 1;
-      if (disableAttempts === 1) {
-        return route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: JSON.stringify(STEP_UP_REFUSAL),
-        });
-      }
-      replayCarriedProof = request.headers()['x-step-up-token'] === 'e2e-grant';
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
-      });
+    const attempts = await routeTwoFactorDisable(page, (attempt) => {
+      if (attempt === 1) return null;
+      return { status: 200, body: { success: true } };
     });
-
+    await page.route('**/api/settings/2fa', async (route) => {
+      if (route.request().method() === 'DELETE') {
+        replayCarriedProof ||= route.request().headers()['x-step-up-token'] === 'e2e-grant';
+      }
+      return route.fallback();
+    });
     await page.route('**/api/auth/step-up', (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ token: 'e2e-grant', method: 'totp' }),
+        body: JSON.stringify({ token: 'e2e-grant', method: 'second_factor' }),
+      }),
+    );
+
+    await page.goto('/settings/security', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: /turn off two-factor/i }).click();
+
+    await expect.poll(attempts).toBe(2);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    expect(replayCarriedProof, 'the replay must carry the minted grant').toBe(true);
+  });
+
+  test('a stale session opens the confirmation, and dismissing it changes nothing', async ({
+    page,
+  }) => {
+    await signIn(page);
+
+    const attempts = await routeTwoFactorDisable(page, () => null);
+    await page.route('**/api/auth/step-up', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify(VERIFICATION_REQUIRED),
       }),
     );
 
@@ -154,49 +204,11 @@ test.describe('the refusal reaches the person, not the console', () => {
     const dialog = page.getByRole('dialog');
     await expect(dialog).toContainText('Two-factor authentication is switched off');
 
-    const code = page.getByLabel(/authenticator or backup code/i);
-    await expect(code).toBeVisible();
-    await code.fill('123456');
-    await page.getByRole('button', { name: /^confirm$/i }).click();
-
-    await expect(dialog).toBeHidden();
-    expect(disableAttempts, 'the request must be replayed exactly once').toBe(2);
-    expect(replayCarriedProof, 'the replay must carry the minted grant').toBe(true);
-  });
-
-  test('dismissing the challenge leaves two-factor on and says nothing alarming', async ({
-    page,
-  }) => {
-    await signIn(page);
-
-    let disableAttempts = 0;
-    await page.route('**/api/settings/2fa', async (route) => {
-      const request = route.request();
-      if (request.method() === 'GET') {
-        return route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ enabled: true, backup_codes_remaining: 3 }),
-        });
-      }
-      if (request.method() !== 'DELETE') return route.continue();
-      disableAttempts += 1;
-      return route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify(STEP_UP_REFUSAL),
-      });
-    });
-
-    await page.goto('/settings/security', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: /turn off two-factor/i }).click();
-    await expect(page.getByRole('dialog')).toBeVisible();
-
     await page.keyboard.press('Escape');
 
-    await expect(page.getByRole('dialog')).toBeHidden();
+    await expect(dialog).toBeHidden();
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /turn off two-factor/i })).toBeEnabled();
-    expect(disableAttempts).toBe(1);
+    expect(attempts()).toBe(1);
   });
 });

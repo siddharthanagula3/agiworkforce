@@ -31,6 +31,23 @@ function readApiError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+export const CLOUD_ACCOUNT_SETTINGS_PATH = '/settings/account';
+
+export class CloudStepUpRequiredError extends Error {
+  constructor() {
+    super(
+      'This needs you to confirm it is you, and AGI Desktop cannot ask for your password or authenticator code. Finish it in your account settings on agiworkforce.com.',
+    );
+    this.name = 'CloudStepUpRequiredError';
+  }
+}
+
+function isStepUpRefusal(response: Response, body: unknown): boolean {
+  if (response.status !== 403 || !isRecord(body)) return false;
+  const error = body['error'];
+  return isRecord(error) && error['code'] === 'STEP_UP_REQUIRED';
+}
+
 async function failure(
   request: ManagedCloudRequestContext,
   response: Response,
@@ -38,6 +55,7 @@ async function failure(
 ): Promise<Error> {
   const body: unknown = await response.json().catch(() => null);
   request.assertBoundary();
+  if (isStepUpRefusal(response, body)) return new CloudStepUpRequiredError();
   return new Error(readApiError(body, `${fallback} (HTTP ${response.status})`));
 }
 
@@ -177,7 +195,7 @@ export async function deleteCloudConversation(conversationId: string): Promise<v
 
 export interface CloudTwoFactorStatus {
   enabled: boolean;
-  backupCodesRemaining: number;
+  backupCodesReady: boolean;
 }
 
 export async function getCloudTwoFactorStatus(): Promise<CloudTwoFactorStatus> {
@@ -192,11 +210,9 @@ export async function getCloudTwoFactorStatus(): Promise<CloudTwoFactorStatus> {
   if (!isRecord(payload)) {
     throw new Error('The Cloud security service returned an invalid response.');
   }
-  const remaining = payload['backup_codes_remaining'];
   return {
     enabled: payload['enabled'] === true,
-    backupCodesRemaining:
-      typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : 0,
+    backupCodesReady: payload['backup_codes_ready'] === true,
   };
 }
 

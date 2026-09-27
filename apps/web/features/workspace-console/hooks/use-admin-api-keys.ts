@@ -5,6 +5,8 @@ import type { OrganizationPermission } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
+import { useStepUp } from '@/features/settings/hooks/use-step-up';
 
 export interface WorkspaceApiKey {
   id: string;
@@ -74,16 +76,29 @@ export function useWorkspaceApiKeys(): UseQueryResult<WorkspaceApiKeysResult | n
 
 export function useCreateWorkspaceApiKey() {
   const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (input: {
+  const { withStepUp, dialog } = useStepUp();
+  const mutation = useMutation({
+    mutationFn: async ({
+      organizationId,
+      ...input
+    }: {
+      organizationId: string;
       name: string;
       scopes: OrganizationPermission[];
       expiresInDays: number | null;
-    }) => (await (await send('POST', input)).json()) as { key: string; record: WorkspaceApiKey },
+    }) => {
+      const res = await withStepUp(
+        (headers) => sendAuthorizedJson(ENDPOINT, { method: 'POST', body: input }, headers),
+        organizationId,
+      );
+      if (!res.ok) throw new Error(await readApiError(res));
+      return (await res.json()) as { key: string; record: WorkspaceApiKey };
+    },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ADMIN_API_KEYS_QUERY_KEY });
     },
   });
+  return { ...mutation, stepUpDialog: dialog };
 }
 
 export function useRevokeWorkspaceApiKey() {

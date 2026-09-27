@@ -18,16 +18,9 @@ const TOTP_CONFIG = {
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
-export interface TOTPSetupResult {
-  secret: string;
-  otpauthUrl: string;
-  backupCodes: string[];
-}
-
 export interface TwoFactorStatus {
   enabled: boolean;
-  enabledAt?: string;
-  backupCodesRemaining?: number;
+  backupCodesReady: boolean;
 }
 
 async function readTwoFactorError(res: Response): Promise<string> {
@@ -231,13 +224,9 @@ function constantTimeCompare(a: string, b: string): boolean {
   return result === 0;
 }
 
-/**
- * Generate secure random backup codes
- * Returns array of human-readable codes in format XXXX-XXXX
- */
 function generateBackupCodes(): string[] {
   const codes: string[] = [];
-  const charset = '0123456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const charset = 'abcdefghjkmnpqrstuvwxyz23456789';
 
   for (let i = 0; i < TOTP_CONFIG.BACKUP_CODE_COUNT; i++) {
     const buffer = new Uint8Array(TOTP_CONFIG.BACKUP_CODE_LENGTH);
@@ -246,65 +235,12 @@ function generateBackupCodes(): string[] {
     let code = '';
     for (let j = 0; j < buffer.length; j++) {
       code += charset[buffer[j]! % charset.length]!;
-      if (j === 3) code += '-';
     }
 
     codes.push(code);
   }
 
   return codes;
-}
-
-const KEYED_BACKUP_CODE_PREFIX = 'h1.';
-
-function normalizeBackupCode(code: string): string {
-  return code.replace(/[-\s]/g, '').toUpperCase();
-}
-
-function toHex(bytes: ArrayBuffer): string {
-  return Array.from(new Uint8Array(bytes))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-async function legacyBackupCodeDigest(code: string): Promise<string> {
-  const data = new TextEncoder().encode(normalizeBackupCode(code));
-  return toHex(await crypto.subtle.digest('SHA-256', data));
-}
-
-// An 8-character code has ~40 bits of entropy, so an unkeyed digest is reversible offline by
-// anyone who reads the table; keying it under the TOTP key removes that attack.
-async function hashBackupCode(code: string): Promise<string> {
-  const pepper = typeof process !== 'undefined' ? process.env['TOTP_ENCRYPTION_KEY'] : undefined;
-  if (!pepper) return legacyBackupCodeDigest(code);
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(pepper) as unknown as ArrayBuffer,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign(
-    'HMAC',
-    key,
-    new TextEncoder().encode(normalizeBackupCode(code)),
-  );
-  return `${KEYED_BACKUP_CODE_PREFIX}${toHex(signature)}`;
-}
-
-async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<number> {
-  const keyedHash = await hashBackupCode(code);
-  const legacyHash = await legacyBackupCodeDigest(code);
-
-  for (let i = 0; i < hashedCodes.length; i++) {
-    const stored = hashedCodes[i]!;
-    const candidate = stored.startsWith(KEYED_BACKUP_CODE_PREFIX) ? keyedHash : legacyHash;
-    if (constantTimeCompare(candidate, stored)) {
-      return i;
-    }
-  }
-
-  return -1;
 }
 
 class SettingsService {
@@ -479,25 +415,6 @@ class SettingsService {
     }
   }
 
-  async changePassword(newPassword: string): Promise<{ error?: string }> {
-    try {
-      const clerkUser = (
-        window as unknown as Record<string, unknown> & {
-          Clerk?: { user?: { updatePassword?: (opts: { newPassword: string }) => Promise<void> } };
-        }
-      )?.Clerk?.user;
-      if (!clerkUser?.updatePassword) {
-        return { error: 'Password update is not available' };
-      }
-      await clerkUser.updatePassword({ newPassword });
-      return {};
-    } catch (error) {
-      return {
-        error: toUserMessage(error, 'Something went wrong. Try again.'),
-      };
-    }
-  }
-
   async getAPIKeys(signal?: AbortSignal): Promise<{ data: APIKey[]; error?: string }> {
     try {
       const token = await getAuthToken();
@@ -521,49 +438,6 @@ class SettingsService {
     } catch (error) {
       return {
         data: [],
-        error: toUserMessage(error, 'Something went wrong. Try again.'),
-      };
-    }
-  }
-
-  async createAPIKey(
-    name: string,
-    scopes: ApiKeyScope[],
-  ): Promise<{ data: APIKey | null; error?: string; fullKey?: string }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) {
-        return { data: null, error: 'User not authenticated' };
-      }
-
-      const csrfToken = await getCsrfToken();
-
-      const res = await fetch('/api/settings/api-keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify({ name, scopes }),
-      });
-
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        return {
-          data: null,
-          error: toUserMessage(
-            new Error(String(err.error ?? '')),
-            `Could not reach the server (HTTP ${res.status}).`,
-          ),
-        };
-      }
-
-      const json = (await res.json()) as { api_key: APIKey; full_key: string };
-      return { data: json.api_key, fullKey: json.full_key };
-    } catch (error) {
-      return {
-        data: null,
         error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
@@ -612,68 +486,29 @@ class SettingsService {
 
       const res = await fetch('/api/settings/2fa', { headers });
       if (!res.ok) {
-        return { data: { enabled: false }, error: await readTwoFactorError(res) };
+        return {
+          data: { enabled: false, backupCodesReady: false },
+          error: await readTwoFactorError(res),
+        };
       }
-      const json = (await res.json()) as {
-        enabled: boolean;
-        enabled_at?: string;
-        backup_codes_remaining?: number;
-      };
+      const json = (await res.json()) as { enabled: boolean; backup_codes_ready?: boolean };
       return {
-        data: {
-          enabled: json.enabled,
-          enabledAt: json.enabled_at,
-          backupCodesRemaining: json.backup_codes_remaining,
-        },
+        data: { enabled: json.enabled, backupCodesReady: json.backup_codes_ready === true },
       };
     } catch (error) {
       return {
-        data: { enabled: false },
+        data: { enabled: false, backupCodesReady: false },
         error: toUserMessage(error, 'Something went wrong. Try again.'),
       };
     }
   }
 
-  async setup2FA(): Promise<{ data?: TOTPSetupResult; error?: string; status?: number }> {
+  async verify2FA(
+    code: string,
+  ): Promise<{ backupCodes?: string[]; error?: string; status?: number }> {
     try {
       const token = await getAuthToken();
       if (!token) return { error: 'User not authenticated' };
-
-      const res = await fetch('/api/settings/2fa/setup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': await getCsrfToken(),
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!res.ok) {
-        return { error: await readTwoFactorError(res), status: res.status };
-      }
-
-      const json = (await res.json()) as {
-        secret: string;
-        otpauth_url: string;
-        backup_codes: string[];
-      };
-      return {
-        data: {
-          secret: json.secret,
-          otpauthUrl: json.otpauth_url,
-          backupCodes: json.backup_codes,
-        },
-      };
-    } catch (error) {
-      return { error: toUserMessage(error, 'Something went wrong. Try again.') };
-    }
-  }
-
-  async verify2FA(code: string): Promise<{ success: boolean; error?: string; status?: number }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) return { success: false, error: 'User not authenticated' };
 
       const res = await fetch('/api/settings/2fa/verify', {
         method: 'POST',
@@ -686,92 +521,6 @@ class SettingsService {
       });
 
       if (!res.ok) {
-        return { success: false, error: await readTwoFactorError(res), status: res.status };
-      }
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
-    }
-  }
-
-  async validateTOTPCode(code: string): Promise<{
-    valid: boolean;
-    usedBackupCode?: boolean;
-    error?: string;
-    status?: number;
-  }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) return { valid: false, error: 'User not authenticated' };
-
-      const res = await fetch('/api/settings/2fa/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': await getCsrfToken(),
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      if (!res.ok) {
-        return { valid: false, error: await readTwoFactorError(res), status: res.status };
-      }
-
-      const json = (await res.json().catch(() => ({}))) as {
-        valid?: boolean;
-        used_backup_code?: boolean;
-      };
-      return { valid: json.valid ?? false, usedBackupCode: json.used_backup_code };
-    } catch (error) {
-      return { valid: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
-    }
-  }
-
-  async disable2FA(code: string): Promise<{ success: boolean; error?: string; status?: number }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) return { success: false, error: 'User not authenticated' };
-
-      const res = await fetch('/api/settings/2fa', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': await getCsrfToken(),
-        },
-        body: JSON.stringify({ code }),
-      });
-
-      if (!res.ok) {
-        return { success: false, error: await readTwoFactorError(res), status: res.status };
-      }
-      return { success: true };
-    } catch (error) {
-      return { success: false, error: toUserMessage(error, 'Something went wrong. Try again.') };
-    }
-  }
-
-  async regenerateBackupCodes(totpCode: string): Promise<{
-    backupCodes?: string[];
-    error?: string;
-    status?: number;
-  }> {
-    try {
-      const token = await getAuthToken();
-      if (!token) return { error: 'User not authenticated' };
-
-      const res = await fetch('/api/settings/2fa/backup-codes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': await getCsrfToken(),
-        },
-        body: JSON.stringify({ code: totpCode }),
-      });
-
-      if (!res.ok) {
         return { error: await readTwoFactorError(res), status: res.status };
       }
       const json = (await res.json()) as { backup_codes: string[] };
@@ -779,27 +528,6 @@ class SettingsService {
     } catch (error) {
       return { error: toUserMessage(error, 'Something went wrong. Try again.') };
     }
-  }
-
-  /**
-   * @deprecated Use setup2FA() and verify2FA() instead
-   * Legacy method for backwards compatibility - now initiates full 2FA setup
-   */
-  async enable2FA(): Promise<{
-    error?: string;
-    secret?: string;
-    otpauthUrl?: string;
-    backupCodes?: string[];
-  }> {
-    const result = await this.setup2FA();
-    if (result.error) {
-      return { error: result.error };
-    }
-    return {
-      secret: result.data?.secret,
-      otpauthUrl: result.data?.otpauthUrl,
-      backupCodes: result.data?.backupCodes,
-    };
   }
 }
 
@@ -812,9 +540,6 @@ export {
   generateOTPAuthURL,
   generateTOTPCode,
   verifyTOTPCode,
-  verifyTOTPStep,
   generateBackupCodes,
-  hashBackupCode,
-  verifyBackupCode,
   TOTP_CONFIG,
 };
