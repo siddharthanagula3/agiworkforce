@@ -8,19 +8,19 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { isSelfServePaidPlanTier, type SelfServePaidPlanTier } from '@agiworkforce/types';
+import {
+  isSelfServePaidPlanTier,
+  planOffersBillingInterval,
+  type SelfServePaidPlanTier,
+} from '@agiworkforce/types';
 
 import { pseudonymizeEmail as hashEmail } from '@/lib/server/email-pseudonym';
+import { BillingIntervalSchema, unsoldBillingIntervalMessage } from '@/lib/validations/checkout';
 
 type WaitlistPlan = SelfServePaidPlanTier;
-type BillingInterval = 'monthly' | 'yearly';
 
 function isWaitlistPlan(value: unknown): value is WaitlistPlan {
   return typeof value === 'string' && isSelfServePaidPlanTier(value);
-}
-
-function isBillingInterval(value: unknown): value is BillingInterval {
-  return value === 'monthly' || value === 'yearly';
 }
 
 type WaitlistPlanRow = { plan: string };
@@ -68,9 +68,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Choose a paid plan to join its waitlist.');
   }
 
-  const billingInterval = isBillingInterval(payload.billingInterval)
-    ? payload.billingInterval
-    : ('yearly' as const);
+  const billingInterval = BillingIntervalSchema.catch('monthly').parse(payload.billingInterval);
+  if (!planOffersBillingInterval(payload.plan, billingInterval)) {
+    throw createError.validation(unsoldBillingIntervalMessage(payload.plan, billingInterval));
+  }
   const source = typeof payload.source === 'string' ? payload.source.slice(0, 100) : 'pricing';
   const emailHash = email != null ? hashEmail(email) : null;
   const db = getNeonDb();

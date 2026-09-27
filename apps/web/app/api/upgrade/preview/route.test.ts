@@ -331,6 +331,16 @@ describe('POST /api/upgrade/preview', () => {
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });
 
+  it('refuses yearly billing for an individual plan before reading billing state', async () => {
+    const response = await POST(makeRequest('yearly'));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringContaining('Max 20x is not sold with yearly billing') },
+    });
+    expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+  });
+
   it('fails closed when subscription state cannot be verified', async () => {
     dbMocks.query.mockReset().mockRejectedValue(new Error('database unavailable'));
 

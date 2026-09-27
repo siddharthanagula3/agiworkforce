@@ -29,8 +29,19 @@ describe('Stripe billing cadence', () => {
       assertSameCheckoutBillingInterval(
         { interval: 'month', interval_count: 1 } as never,
         'yearly',
+        'team',
       ),
     ).toThrow(/charged only the prorated difference/i);
+  });
+
+  it('sends a yearly subscriber to billing management for a plan sold monthly only', () => {
+    expect(() =>
+      assertSameCheckoutBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'max',
+      ),
+    ).toThrow(/^Mid-cycle upgrades keep your current yearly billing cadence, and Max 5x is not sold with yearly billing/);
   });
 });
 

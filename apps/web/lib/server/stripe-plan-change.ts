@@ -6,6 +6,7 @@ import {
   isPerSeatBillingPlan,
   isSelfServeIndividualPlanTier,
   normalizeBillingPlanTier,
+  planOffersBillingInterval,
   type BillingInterval,
   type BillingPlanTier,
   type SelfServeIndividualPlanTier,
@@ -37,16 +38,21 @@ export function checkoutBillingIntervalFromStripePrice(
 export function assertSameCheckoutBillingInterval(
   recurring: Stripe.Price.Recurring | null | undefined,
   requestedInterval: CheckoutBillingInterval,
+  targetPlan: string,
 ): void {
   const currentInterval = checkoutBillingIntervalFromStripePrice(recurring);
   if (!currentInterval) {
     throw new Error('The current Stripe billing interval could not be verified');
   }
-  if (currentInterval !== requestedInterval) {
+  if (currentInterval === requestedInterval) return;
+  if (!planOffersBillingInterval(targetPlan, currentInterval)) {
     throw new Error(
-      `Mid-cycle upgrades must keep your current ${currentInterval} billing cadence so you are charged only the prorated difference for the remaining period. Select ${currentInterval} or change cadence in billing management.`,
+      `Mid-cycle upgrades keep your current ${currentInterval} billing cadence, and ${getBillingPlanPricing(targetPlan).label} is not sold with ${currentInterval} billing. Change plans in billing management.`,
     );
   }
+  throw new Error(
+    `Mid-cycle upgrades must keep your current ${currentInterval} billing cadence so you are charged only the prorated difference for the remaining period. Select ${currentInterval} or change cadence in billing management.`,
+  );
 }
 
 export const TIER_ORDER: Readonly<Record<string, number>> = Object.freeze({
@@ -245,7 +251,9 @@ async function resolveTargetPrice(
   current: RecurringPrice,
 ): Promise<ResolvedTargetPrice | null> {
   const intervals: BillingInterval[] =
-    current.interval === 'yearly' ? ['yearly', 'monthly'] : ['monthly'];
+    current.interval === 'yearly' && planOffersBillingInterval(plan, 'yearly')
+      ? ['yearly', 'monthly']
+      : ['monthly'];
   for (const interval of intervals) {
     const selection = await getPriceSelectionForCurrency(plan, interval, current.currency);
     if (selection && selection.currency.toLowerCase() === current.currency.toLowerCase()) {
