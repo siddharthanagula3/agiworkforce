@@ -69,7 +69,7 @@ export const GoalOutcomes: React.FC<GoalOutcomesProps> = ({ goalId }) => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Outcome Tracking</h3>
+        <h3 className="text-h3">Outcome Tracking</h3>
         <div
           className={`px-3 py-1 rounded-full text-sm font-medium ${
             overallSuccess

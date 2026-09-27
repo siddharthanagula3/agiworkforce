@@ -59,7 +59,7 @@ export function EmptyState({
 
       {/* Display headline, single line, serif display per spec §8.1 + §2 */}
       <h1
-        className="text-[28px] leading-[36px] font-normal tracking-tight"
+        className="text-display font-normal"
         style={{
           color: 'var(--chat-text-primary)',
           fontFamily: "'Crimson Pro', 'IBM Plex Serif', Georgia, 'Times New Roman', serif",

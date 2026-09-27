@@ -42,7 +42,7 @@ export function BrandedGreeting({
       </div>
 
       <h1
-        className="text-[28px] font-normal leading-[36px] tracking-tight"
+        className="text-display font-normal"
         style={{
           color: 'var(--chat-text-primary)',
           fontFamily: 'var(--chat-font-display)',

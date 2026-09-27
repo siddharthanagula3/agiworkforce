@@ -163,7 +163,7 @@ export default function WorkspaceDeletionPage() {
       {confirmDialog}
       <main className="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-12">
         <header>
-          <h1 className="text-2xl font-medium text-foreground">Delete this workspace</h1>
+          <h1 className="text-h1 text-foreground">Delete this workspace</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">
             Deleting a workspace erases everything inside it for every member. It is deliberately
             slow: you type the workspace name to schedule it, and it stays cancellable here until
@@ -196,7 +196,7 @@ export default function WorkspaceDeletionPage() {
 
         {workspace ? (
           <section className="rounded-md border border-border bg-card p-5">
-            <h2 className="text-base font-medium text-foreground">{workspace.name}</h2>
+            <h2 className="text-h4 text-foreground">{workspace.name}</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               {workspace.slug} · {workspace.memberCount}{' '}
               {workspace.memberCount === 1 ? 'member' : 'members'}

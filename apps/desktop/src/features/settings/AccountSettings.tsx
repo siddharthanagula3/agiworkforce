@@ -198,7 +198,7 @@ export function AccountSettings() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-base font-semibold text-foreground">Account</h3>
+        <h3 className="text-h4 text-foreground">Account</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Your AGI Cloud identity, plan, and this device&apos;s link.
         </p>
@@ -265,7 +265,7 @@ function CreditsSection({ credits }: { credits: CreditBalance }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-sm font-medium text-foreground">Credits</h3>
+      <h3 className="text-h5 text-foreground">Credits</h3>
       <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border bg-card/40">
         {hasDaily && (
           <CreditMeter

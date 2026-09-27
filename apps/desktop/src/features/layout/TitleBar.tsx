@@ -82,7 +82,7 @@ const TitleBar = ({
         </button>
         <AgiMark size={18} className="shrink-0 text-foreground" />
         <div className="flex flex-col min-w-0 overflow-hidden" data-tauri-drag-region>
-          <h1 className="text-sm font-semibold leading-none truncate">AGI Workforce</h1>
+          <h1 className="text-h5 truncate">AGI Workforce</h1>
           <div className="text-[11px] text-muted-foreground leading-none mt-0.5 flex items-center gap-1.5">
             {isAuthenticated && user?.name ? (
               <>

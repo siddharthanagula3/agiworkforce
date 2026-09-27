@@ -69,7 +69,7 @@ export function DailyBudgetSettings() {
     <div className="pt-6 border-t border-border">
       <div className="mb-4 flex items-center justify-between gap-4">
         <div>
-          <h3 className="text-lg font-semibold">Daily Spend Cap</h3>
+          <h3 className="text-h3">Daily Spend Cap</h3>
           <p className="text-sm text-muted-foreground">
             Refuses new model calls once the day&apos;s spend against your own keys reaches this
             amount. Resets at 00:00 UTC.

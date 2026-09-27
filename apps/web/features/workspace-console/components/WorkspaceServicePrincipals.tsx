@@ -167,7 +167,7 @@ export function WorkspaceServicePrincipals() {
         <div>
           <h3
             id="workspace-service-principals-heading"
-            className="text-sm font-medium"
+            className="text-h5"
             style={{ color: 'var(--text-1)' }}
           >
             Service principals

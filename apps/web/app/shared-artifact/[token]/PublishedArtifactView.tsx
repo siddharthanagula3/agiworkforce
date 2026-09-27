@@ -66,7 +66,7 @@ export function PublishedArtifactView({
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-4 px-4 py-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold text-foreground">{heading}</h1>
+        <h1 className="text-h2 text-foreground">{heading}</h1>
         <p className="text-xs text-muted-foreground">
           {publishedLabel
             ? `${t('artifactPublish.publishedOn', 'Published {{date}}', { date: publishedLabel })} · `

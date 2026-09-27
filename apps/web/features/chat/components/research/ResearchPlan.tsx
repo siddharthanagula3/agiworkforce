@@ -134,7 +134,7 @@ export function ResearchPlan({
   return (
     <section className={cn('space-y-3', className)} aria-labelledby="research-plan-heading">
       <div>
-        <h3 id="research-plan-heading" className="text-sm font-medium text-foreground">
+        <h3 id="research-plan-heading" className="text-h5 text-foreground">
           {HEADING}
         </h3>
         {editable ? <p className="mt-0.5 text-xs text-muted-foreground">{EXPLANATION}</p> : null}

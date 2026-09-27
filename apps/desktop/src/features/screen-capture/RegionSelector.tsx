@@ -125,7 +125,7 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex gap-2 rounded-lg bg-background p-2 shadow-lg">
+        <div className="flex gap-2 rounded-lg bg-background p-2 shadow-e3">
           <Button size="sm" variant="outline" onClick={onCancel} className="gap-2">
             <X className="h-4 w-4" />
             Cancel (Esc)
@@ -149,7 +149,7 @@ export function RegionSelector({ onConfirm, onCancel }: RegionSelectorProps) {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="rounded-lg bg-background px-4 py-2 text-sm shadow-lg">
+          <div className="rounded-lg bg-background px-4 py-2 text-sm shadow-e3">
             Click and drag to select a region
           </div>
         </div>

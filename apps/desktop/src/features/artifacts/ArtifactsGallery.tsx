@@ -1,4 +1,3 @@
-
 import { formatDistanceToNow } from 'date-fns';
 import { Copy, Layers, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -178,10 +177,7 @@ function ArtifactCard({ summary, onOpen, onDelete, onDuplicate }: ArtifactCardPr
       {/* Card body */}
       <div className="p-3 space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <h3
-            className="text-sm font-medium text-white leading-tight truncate"
-            title={summary.title}
-          >
+          <h3 className="text-h5 text-white truncate" title={summary.title}>
             {summary.title}
           </h3>
         </div>
@@ -265,7 +261,7 @@ function InspirationCard({ item }: InspirationCardProps) {
 
       {/* Card body */}
       <div className="p-3 space-y-2">
-        <h3 className="text-sm font-medium text-white leading-tight">{item.title}</h3>
+        <h3 className="text-h5 text-white">{item.title}</h3>
         <p className="text-[11px] text-white/50 leading-relaxed line-clamp-2">{item.description}</p>
 
         <div className="flex items-center gap-1.5">
@@ -437,7 +433,7 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
     <div className={cn('flex flex-col h-full bg-zinc-900', className)}>
       {/* Header */}
       <div className="px-6 pt-6 pb-0 shrink-0">
-        <h1 className="text-xl font-semibold text-white mb-4">Artifacts</h1>
+        <h1 className="text-h2 text-white mb-4">Artifacts</h1>
 
         {/* Tabs */}
         <div className="flex items-center gap-0 border-b border-white/10">

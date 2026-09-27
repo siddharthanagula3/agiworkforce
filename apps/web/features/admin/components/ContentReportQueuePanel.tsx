@@ -94,7 +94,7 @@ export default function ContentReportQueuePanel() {
           <p className="font-mono text-xs uppercase text-sky-700 dark:text-sky-300">
             Trust and safety
           </p>
-          <h2 id="content-report-queue-title" className="mt-1 text-xl font-medium text-foreground">
+          <h2 id="content-report-queue-title" className="mt-1 text-h2 text-foreground">
             Content report queue
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
