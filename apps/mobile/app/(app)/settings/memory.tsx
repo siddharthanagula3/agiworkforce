@@ -63,13 +63,6 @@ export default function MemoryScreen() {
     ? setCloudGenerateMemory
     : setLocalGenerateMemory;
 
-  const handleMemoryEnabledChange = useCallback(
-    (enabled: boolean) => {
-      setMemoryEnabled(enabled);
-      setReferencePastChats(enabled);
-    },
-    [setMemoryEnabled, setReferencePastChats],
-  );
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [editingMemory, setEditingMemory] = useState<MemoryEntry | null>(null);
@@ -279,7 +272,7 @@ export default function MemoryScreen() {
         memoryEnabled={memoryEnabled}
         referencePastChats={referencePastChats}
         generateMemoryFromHistory={generateMemoryFromHistory}
-        onMemoryEnabledChange={handleMemoryEnabledChange}
+        onMemoryEnabledChange={setMemoryEnabled}
         onReferencePastChatsChange={setReferencePastChats}
         onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
       />

@@ -1366,21 +1366,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
     const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
-    const memoryContextEnabled =
-      memorySettings.memoryEnabled && memorySettings.referencePastChats && !isTemporaryChat;
+    const memoryReadsEnabled = memorySettings.memoryEnabled && !isTemporaryChat;
 
     try {
-      const [memFacts, pastChatContext] = memoryContextEnabled
-        ? await Promise.all([
-            retrieveMemoryContext(content, 5),
-            retrievePastChatContext({
-              executionMode,
-              query: content,
-              currentConversationId: conversationId,
-              enabled: true,
-            }),
-          ])
-        : [[], null];
+      const [memFacts, pastChatContext] = await Promise.all([
+        memoryReadsEnabled ? retrieveMemoryContext(content, 5) : [],
+        retrievePastChatContext({
+          executionMode,
+          query: content,
+          currentConversationId: conversationId,
+          enabled: memorySettings.referencePastChats && !isTemporaryChat,
+        }),
+      ]);
       if (!isTurnAccountCurrent()) return false;
       const blocks = buildPersonalContextBlocks({
         personalization: memorySettings.personalization,
@@ -1400,7 +1397,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
       executionMode,
       isTemporaryChat,
-      memoryEnabled: memorySettings.memoryEnabled && memorySettings.referencePastChats,
+      memoryEnabled: memorySettings.memoryEnabled,
       generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
     });
     let completedLocalMemoryCaptured = false;
