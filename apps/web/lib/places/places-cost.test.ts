@@ -1,115 +1,203 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  FEATURE_RATE_CARD,
+  PLACES_SEARCH_TOOL_NAME,
+  RATE_CARD_PROVIDER_COGS_ENV,
+  chargeMicrousdForProviderCost,
+} from '@agiworkforce/types';
 
-const recordSettledProviderCost = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>();
-  return { ...actual, recordSettledProviderCost };
+vi.mock('server-only', () => ({}));
+
+const reserveSearchCharge = vi.hoisted(() => vi.fn());
+const settleSearchCall = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/web-search/search-budget', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/web-search/search-budget')>()),
+  reserveSearchCharge,
+  settleSearchCall,
+}));
+
+import type { FreeTrialToolSpend } from '@/lib/services/free-trial-service';
+import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
+import { INCLUDED_SEARCH_ADMISSION } from '@/lib/web-search/search-budget';
+
+import { PLACES_SEARCH_FEATURE, placesSearchMicrousdPerCall } from './places-config';
+import {
+  reservePlacesSearchCharge,
+  settlePlacesSearchCall,
+  type PlacesSearchBilling,
+} from './places-cost';
+
+const OVERRIDE_ENV = RATE_CARD_PROVIDER_COGS_ENV.places_text_search;
+const PUBLISHED_MICROUSD_PER_CALL = FEATURE_RATE_CARD.places_text_search
+  .providerCogsMicrousd as number;
+const db = {} as never;
+
+function billing(overrides: Partial<PlacesSearchBilling> = {}): PlacesSearchBilling {
+  return {
+    userId: 'user_1',
+    organizationId: 'org_1',
+    planTier: 'pro',
+    requestId: 'req-1',
+    turnRef: 'turn-1',
+    surface: 'web',
+    db,
+    ...overrides,
+  };
+}
+
+function freeSpend(canHold: boolean): FreeTrialToolSpend {
+  return {
+    hold: vi.fn(() => canHold),
+    settle: vi.fn(),
+    exhausted: vi.fn(() => !canHold),
+  };
+}
+
+beforeEach(() => {
+  vi.stubEnv(OVERRIDE_ENV, '');
+  reserveSearchCharge.mockReset();
+  reserveSearchCharge.mockResolvedValue({
+    outcome: 'admitted',
+    admission: INCLUDED_SEARCH_ADMISSION,
+  });
+  settleSearchCall.mockReset();
+  settleSearchCall.mockResolvedValue(undefined);
 });
 
-import { resolveCogsCapability, resolveCogsUnits } from '@/lib/services/cogs-ledger-service';
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
-import { PLACES_UNIT_PRICE_ENV, placesSearchCostCents } from './places-config';
-import { recordPlacesSearchCost } from './places-cost';
-
-/** 35,000 microUSD per call, rounded once over the whole batch rather than per call. */
-const PUBLISHED_CENTS_PER_CALL = 4;
-const PUBLISHED_CENTS_PER_FIVE_CALLS = 18;
-
-describe('placesSearchCostCents', () => {
-  const previous = process.env[PLACES_UNIT_PRICE_ENV];
-
-  afterEach(() => {
-    if (previous === undefined) delete process.env[PLACES_UNIT_PRICE_ENV];
-    else process.env[PLACES_UNIT_PRICE_ENV] = previous;
-  });
-
+describe('placesSearchMicrousdPerCall', () => {
   it('prices a call from the published rate when nothing is configured', () => {
-    delete process.env[PLACES_UNIT_PRICE_ENV];
-    expect(placesSearchCostCents(1)).toBe(PUBLISHED_CENTS_PER_CALL);
-    expect(placesSearchCostCents(5)).toBe(PUBLISHED_CENTS_PER_FIVE_CALLS);
+    expect(PUBLISHED_MICROUSD_PER_CALL).toBeGreaterThan(0);
+    expect(placesSearchMicrousdPerCall()).toBe(PUBLISHED_MICROUSD_PER_CALL);
   });
 
   it('honours a configured unit price', () => {
-    process.env[PLACES_UNIT_PRICE_ENV] = '20000';
-    expect(placesSearchCostCents(1)).toBe(2);
+    vi.stubEnv(OVERRIDE_ENV, '20000');
+    expect(placesSearchMicrousdPerCall()).toBe(20_000);
   });
 
   it('falls back to the published rate on an unusable override', () => {
-    process.env[PLACES_UNIT_PRICE_ENV] = 'not-a-number';
-    expect(placesSearchCostCents(1)).toBe(PUBLISHED_CENTS_PER_CALL);
-  });
-
-  it('prices nothing for a call that never happened', () => {
-    expect(placesSearchCostCents(0)).toBe(0);
-    expect(placesSearchCostCents(-1)).toBe(0);
+    vi.stubEnv(OVERRIDE_ENV, 'not-a-number');
+    expect(placesSearchMicrousdPerCall()).toBe(PUBLISHED_MICROUSD_PER_CALL);
   });
 });
 
-describe('recordPlacesSearchCost', () => {
-  beforeEach(() => {
-    recordSettledProviderCost.mockReset();
-    recordSettledProviderCost.mockResolvedValue(undefined);
-  });
+describe('reservePlacesSearchCharge', () => {
+  it('reserves a paid call at its provider cost before the search runs', async () => {
+    await expect(
+      reservePlacesSearchCharge(billing(), { providerId: 'google_places', toolCallId: 'call-1' }),
+    ).resolves.toEqual({ outcome: 'admitted', admission: INCLUDED_SEARCH_ADMISSION });
 
-  it('records the call as a per-request tool cost in the ledger', async () => {
-    await recordPlacesSearchCost({
+    expect(reserveSearchCharge).toHaveBeenCalledWith({
       userId: 'user_1',
       organizationId: 'org_1',
-      providerId: 'google_places',
-      toolCallId: 'call-1',
-      calls: 1,
-      delivered: true,
+      planTier: 'pro',
+      requestId: 'req-1',
+      callRef: 'call-1',
+      feature: PLACES_SEARCH_FEATURE,
+      provider: 'google_places',
+      chargeMicrousd: chargeMicrousdForProviderCost(PUBLISHED_MICROUSD_PER_CALL),
+      scope: 'places',
+      db,
     });
-
-    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(event['provider']).toBe('google_places');
-    expect(event['sourceRef']).toBe('places_search:call-1');
-    expect(event['taskOutcome']).toBe('delivered');
-    expect(event['actualCostCents']).toBe(PUBLISHED_CENTS_PER_CALL);
-
-    const usage = event['usage'] as Record<string, unknown>;
-    expect(resolveCogsCapability(usage)).toBe('tool');
-    expect(resolveCogsUnits('tool', usage)).toEqual({ unitBasis: 'request', units: 1 });
   });
 
-  it('records an undelivered outcome without throwing', async () => {
-    await recordPlacesSearchCost({
-      userId: 'user_1',
-      providerId: 'google_places',
-      toolCallId: 'call-2',
-      calls: 2,
-      delivered: false,
-    });
-
-    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(event['taskOutcome']).toBe('undelivered');
-    expect(resolveCogsUnits('tool', event['usage'] as Record<string, unknown>).units).toBe(2);
-  });
-
-  it('writes nothing when no call was made', async () => {
-    await recordPlacesSearchCost({
-      userId: 'user_1',
-      providerId: 'google_places',
-      toolCallId: 'call-3',
-      calls: 0,
-      delivered: true,
-    });
-
-    expect(recordSettledProviderCost).not.toHaveBeenCalled();
-  });
-
-  it('swallows a ledger failure rather than failing the tool call', async () => {
-    recordSettledProviderCost.mockRejectedValueOnce(new Error('ledger down'));
+  it('holds a Free call on the turn Free spend instead of the paid ledger', async () => {
+    const spend = freeSpend(true);
 
     await expect(
-      recordPlacesSearchCost({
-        userId: 'user_1',
+      reservePlacesSearchCharge(billing({ planTier: 'free', freeTrial: spend }), {
         providerId: 'google_places',
-        toolCallId: 'call-4',
-        calls: 1,
-        delivered: true,
+        toolCallId: 'call-2',
       }),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ outcome: 'admitted', admission: INCLUDED_SEARCH_ADMISSION });
+
+    expect(spend.hold).toHaveBeenCalledWith(PUBLISHED_MICROUSD_PER_CALL);
+    expect(reserveSearchCharge).not.toHaveBeenCalled();
+  });
+
+  it('refuses a Free call the Free windows cannot cover', async () => {
+    const outcome = await reservePlacesSearchCharge(
+      billing({ planTier: 'free', freeTrial: freeSpend(false) }),
+      { providerId: 'google_places', toolCallId: 'call-3' },
+    );
+
+    expect(outcome.outcome).toBe('refused');
+    if (outcome.outcome !== 'refused') return;
+    expect(outcome.error).toBeInstanceOf(ManagedUsageRequestError);
+    expect(outcome.error.status).toBe(429);
+    expect(outcome.error.code).toBe('free_trial_token_budget_reached');
+    expect(reserveSearchCharge).not.toHaveBeenCalled();
+  });
+});
+
+describe('settlePlacesSearchCall', () => {
+  it('settles an answered call at provider cost through the search owner', async () => {
+    await settlePlacesSearchCall(billing(), {
+      admission: INCLUDED_SEARCH_ADMISSION,
+      providerId: 'google_places',
+      toolCallId: 'call-1',
+      billableCalls: 1,
+      answered: true,
+    });
+
+    expect(settleSearchCall).toHaveBeenCalledWith({
+      userId: 'user_1',
+      organizationId: 'org_1',
+      admission: INCLUDED_SEARCH_ADMISSION,
+      feature: PLACES_SEARCH_FEATURE,
+      provider: 'google_places',
+      tool: PLACES_SEARCH_TOOL_NAME,
+      calls: 1,
+      providerCostMicrousd: PUBLISHED_MICROUSD_PER_CALL,
+      charged: true,
+      delivered: true,
+      costRef: 'places_search:call-1',
+      taskRef: 'turn-1',
+      surface: 'web',
+      db,
+    });
+  });
+
+  it('never charges an unanswered call and counts nothing for a call that never happened', async () => {
+    await settlePlacesSearchCall(billing({ organizationId: undefined, surface: undefined }), {
+      admission: INCLUDED_SEARCH_ADMISSION,
+      providerId: 'google_places',
+      toolCallId: 'call-2',
+      billableCalls: 0,
+      answered: false,
+    });
+
+    expect(settleSearchCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: null,
+        calls: 0,
+        providerCostMicrousd: 0,
+        charged: false,
+        delivered: false,
+        surface: null,
+      }),
+    );
+  });
+
+  it('releases the Free hold and records what the call actually spent', async () => {
+    const spend = freeSpend(true);
+
+    await settlePlacesSearchCall(billing({ planTier: 'free', freeTrial: spend }), {
+      admission: INCLUDED_SEARCH_ADMISSION,
+      providerId: 'google_places',
+      toolCallId: 'call-3',
+      billableCalls: 1,
+      answered: true,
+    });
+
+    expect(spend.settle).toHaveBeenCalledWith(
+      PUBLISHED_MICROUSD_PER_CALL,
+      PUBLISHED_MICROUSD_PER_CALL,
+    );
+    expect(settleSearchCall).toHaveBeenCalledTimes(1);
   });
 });

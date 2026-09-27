@@ -216,23 +216,23 @@ describe('executeWebSearch, happy path', () => {
     if (outcome.ok) expect(outcome.results).toEqual([]);
   });
 
-  it('does not record a cost when the caller carries no identity', async () => {
+  it('reports each successful Perplexity request as one billable call and leaves settlement to its caller', async () => {
     const fetchImpl = fetchReturning(jsonResponse({ results: [] }));
-    await executeWebSearch({ query: 'x' }, { fetchImpl, apiKey: 'k' });
+    const outcome = await executeWebSearch({ query: 'x' }, { fetchImpl, apiKey: 'k' });
+
+    expect(outcome.billableCalls).toBe(1);
     expect(recordSettledProviderCost).not.toHaveBeenCalled();
   });
 
-  it('records a Perplexity search cost through the same COGS path as other tools', async () => {
-    const fetchImpl = fetchReturning(jsonResponse({ results: [] }));
-    await executeWebSearch(
-      { query: 'x' },
-      { fetchImpl, apiKey: 'k', userId: 'user_1', organizationId: 'org_1', turnRef: 'turn-1' },
+  it('reports no billable call for a request the provider refused', async () => {
+    const fetchImpl = fetchReturning(
+      new Response('unauthorized', { status: 401, headers: { 'content-type': 'text/plain' } }),
     );
+    const outcome = await executeWebSearch({ query: 'x' }, { fetchImpl, apiKey: 'bad-key' });
 
-    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(event['provider']).toBe('perplexity');
-    expect(event['sourceRef']).toBe('perplexity_search:turn-1');
+    expect(outcome.ok).toBe(false);
+    expect(outcome.billableCalls).toBe(0);
+    expect(recordSettledProviderCost).not.toHaveBeenCalled();
   });
 });
 

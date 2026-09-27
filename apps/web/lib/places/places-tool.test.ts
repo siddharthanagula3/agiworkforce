@@ -1,9 +1,15 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolStatusPhrase } from '@agiworkforce/provider-protocol';
 import { PLACES_SEARCH_TOOL_NAME, type PlaceRecord } from '@agiworkforce/types';
 
-import type { recordPlacesSearchCost } from './places-cost';
+vi.mock('server-only', () => ({}));
+
+const reservePlacesSearchCharge = vi.hoisted(() => vi.fn());
+const settlePlacesSearchCall = vi.hoisted(() => vi.fn());
+vi.mock('./places-cost', () => ({ reservePlacesSearchCharge, settlePlacesSearchCall }));
+
+import type { PlacesSearchBilling } from './places-cost';
 import type { PlacesProvider, PlacesSearchQuery } from './places-provider';
 import {
   executePlacesSearch,
@@ -52,6 +58,27 @@ function stubProvider(
 
 const FIXED_NOW = new Date('2026-09-05T04:30:00.000Z');
 
+const RESERVED_ADMISSION = {
+  kind: 'reserved' as const,
+  charge: {
+    idempotencyKey: 'search:req-1:places:call',
+    chargeMicrousd: 35_000,
+    provider: 'stub_places',
+    feature: 'places_text_search' as const,
+  },
+  requestHash: 'hash',
+  leaseToken: 'lease',
+};
+
+const BILLING: PlacesSearchBilling = {
+  userId: 'user_1',
+  organizationId: 'org_1',
+  planTier: 'pro',
+  requestId: 'req-1',
+  turnRef: 'turn-1',
+  db: {} as never,
+};
+
 describe('placesSearchToolDef', () => {
   it('publishes the brief schema under a provider-safe function name', () => {
     const def = placesSearchToolDef();
@@ -77,37 +104,43 @@ describe('placesSearchToolDef', () => {
 });
 
 describe('executePlacesSearch', () => {
-  let recordCost: Mock<typeof recordPlacesSearchCost>;
-
   beforeEach(() => {
-    recordCost = vi.fn<typeof recordPlacesSearchCost>().mockResolvedValue(undefined);
+    reservePlacesSearchCharge.mockReset();
+    reservePlacesSearchCharge.mockResolvedValue({
+      outcome: 'admitted',
+      admission: RESERVED_ADMISSION,
+    });
+    settlePlacesSearchCall.mockReset();
+    settlePlacesSearchCall.mockResolvedValue(undefined);
   });
 
   it('rejects an unusable argument without buying anything', async () => {
     const provider = stubProvider();
     const outcome = await executePlacesSearch(
       { query: '   ' },
-      { toolCallId: 'call-1', provider, recordCost },
+      { toolCallId: 'call-1', provider, billing: BILLING },
     );
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.errorCode).toBe('invalid_tool_input');
-    expect(recordCost).not.toHaveBeenCalled();
+    expect(reservePlacesSearchCharge).not.toHaveBeenCalled();
+    expect(settlePlacesSearchCall).not.toHaveBeenCalled();
   });
 
   it('reports places search as unavailable when no provider key is configured', async () => {
     const provider = stubProvider({ configured: () => false });
     const outcome = await executePlacesSearch(
       { query: 'coffee' },
-      { toolCallId: 'call-2', provider, recordCost, userId: 'user_1' },
+      { toolCallId: 'call-2', provider, billing: BILLING },
     );
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.errorCode).toBe('not_configured');
     expect(outcome.message).toContain('Places search is unavailable');
-    expect(recordCost).not.toHaveBeenCalled();
+    expect(reservePlacesSearchCharge).not.toHaveBeenCalled();
+    expect(settlePlacesSearchCall).not.toHaveBeenCalled();
     expect(formatPlacesResultForModel(outcome)).toBe(outcome.message);
   });
 
@@ -120,8 +153,7 @@ describe('executePlacesSearch', () => {
       {
         toolCallId: 'call-3',
         provider,
-        recordCost,
-        userId: 'user_1',
+        billing: BILLING,
         timeZone: 'America/Los_Angeles',
         now: () => FIXED_NOW,
       },
@@ -150,7 +182,6 @@ describe('executePlacesSearch', () => {
       {
         toolCallId: 'call-4',
         provider,
-        recordCost,
         timeZone: 'Mars/Olympus',
         now: () => FIXED_NOW,
       },
@@ -162,30 +193,45 @@ describe('executePlacesSearch', () => {
     expect(outcome.payload.localTime).toBeUndefined();
   });
 
-  it('records one tool cost event per billable upstream call', async () => {
-    const provider = stubProvider();
+  it('reserves the charge before the provider runs and settles the billable call it answered', async () => {
+    const order: string[] = [];
+    reservePlacesSearchCharge.mockImplementation(async () => {
+      order.push('reserved');
+      return { outcome: 'admitted', admission: RESERVED_ADMISSION };
+    });
+    const provider = stubProvider({
+      search: async () => {
+        order.push('searched');
+        return {
+          ok: true,
+          providerId: 'stub_places',
+          attribution: 'Powered by the stub',
+          places: [RECORDED_PLACE],
+          billableCalls: 1,
+        };
+      },
+    });
+
     await executePlacesSearch(
       { query: 'coffee' },
-      {
-        toolCallId: 'call-5',
-        provider,
-        recordCost,
-        userId: 'user_1',
-        organizationId: 'org_1',
-      },
+      { toolCallId: 'call-5', provider, billing: BILLING },
     );
 
-    expect(recordCost).toHaveBeenCalledWith({
-      userId: 'user_1',
-      organizationId: 'org_1',
+    expect(order).toEqual(['reserved', 'searched']);
+    expect(reservePlacesSearchCharge).toHaveBeenCalledWith(BILLING, {
       providerId: 'stub_places',
       toolCallId: 'call-5',
-      calls: 1,
-      delivered: true,
+    });
+    expect(settlePlacesSearchCall).toHaveBeenCalledWith(BILLING, {
+      admission: RESERVED_ADMISSION,
+      providerId: 'stub_places',
+      toolCallId: 'call-5',
+      billableCalls: 1,
+      answered: true,
     });
   });
 
-  it('records an undelivered cost event when the provider call failed after being billed', async () => {
+  it('settles an unanswered call the provider billed after it failed', async () => {
     const provider = stubProvider({
       search: async () => ({
         ok: false,
@@ -198,19 +244,58 @@ describe('executePlacesSearch', () => {
 
     const outcome = await executePlacesSearch(
       { query: 'coffee' },
-      { toolCallId: 'call-6', provider, recordCost, userId: 'user_1' },
+      { toolCallId: 'call-6', provider, billing: BILLING },
     );
 
     expect(outcome.ok).toBe(false);
-    expect(recordCost).toHaveBeenCalledWith(
-      expect.objectContaining({ calls: 1, delivered: false, toolCallId: 'call-6' }),
+    expect(settlePlacesSearchCall).toHaveBeenCalledWith(
+      BILLING,
+      expect.objectContaining({ billableCalls: 1, answered: false, toolCallId: 'call-6' }),
     );
   });
 
-  it('does not attempt to bill an anonymous caller', async () => {
+  it('refuses a search the account cannot pay for without calling the provider', async () => {
+    reservePlacesSearchCharge.mockResolvedValue({
+      outcome: 'refused',
+      error: new Error('no credits'),
+    });
+    const search = vi.fn();
+    const provider = stubProvider({ search });
+
+    const outcome = await executePlacesSearch(
+      { query: 'coffee' },
+      { toolCallId: 'call-7', provider, billing: BILLING },
+    );
+
+    expect(outcome).toMatchObject({ ok: false, errorCode: 'unaffordable' });
+    expect(search).not.toHaveBeenCalled();
+    expect(settlePlacesSearchCall).not.toHaveBeenCalled();
+  });
+
+  it('releases the hold with nothing billed when the provider throws', async () => {
+    const provider = stubProvider({
+      search: async () => {
+        throw new Error('socket hang up');
+      },
+    });
+
+    await expect(
+      executePlacesSearch({ query: 'coffee' }, { toolCallId: 'call-8', provider, billing: BILLING }),
+    ).rejects.toThrow('socket hang up');
+    expect(settlePlacesSearchCall).toHaveBeenCalledWith(BILLING, {
+      admission: RESERVED_ADMISSION,
+      providerId: 'stub_places',
+      toolCallId: 'call-8',
+      billableCalls: 0,
+      answered: false,
+    });
+  });
+
+  it('does not attempt to bill a caller with no billing context', async () => {
     const provider = stubProvider();
-    await executePlacesSearch({ query: 'coffee' }, { toolCallId: 'call-7', provider, recordCost });
-    expect(recordCost).not.toHaveBeenCalled();
+    await executePlacesSearch({ query: 'coffee' }, { toolCallId: 'call-9', provider });
+    expect(reservePlacesSearchCharge).not.toHaveBeenCalled();
+    expect(settlePlacesSearchCall).not.toHaveBeenCalled();
   });
 });
 
@@ -220,10 +305,8 @@ describe('formatPlacesResultForModel', () => {
     const outcome = await executePlacesSearch(
       { query: 'best coffee', near: 'Union Square', open_now: true },
       {
-        toolCallId: 'call-8',
+        toolCallId: 'call-10',
         provider,
-        userId: 'user_1',
-        recordCost: vi.fn<typeof recordPlacesSearchCost>(),
         timeZone: 'America/Los_Angeles',
         now: () => FIXED_NOW,
       },
@@ -254,7 +337,7 @@ describe('formatPlacesResultForModel', () => {
 
     const outcome = await executePlacesSearch(
       { query: 'coffee' },
-      { toolCallId: 'call-9', provider, recordCost: vi.fn() },
+      { toolCallId: 'call-11', provider },
     );
 
     expect(formatPlacesResultForModel(outcome)).toContain('No places matched');
