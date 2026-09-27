@@ -273,15 +273,11 @@ Code: `apps/web/lib/services/workspace-posture-service.ts:1040-1065`, `apps/web/
 
 - Done when: Where offered, an administrator connects a customer-managed encryption key, rotates or revokes it from the console, and workspace data is sealed under it.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
-| desktop | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/organization/keys/route.ts:359-363`, `apps/web/app/api/settings/organization/keys/route.ts:112-121`, `apps/web/lib/server/organization-encryption-keys.ts:622-637`
 
 ## S87.26: Network/IP restrictions.
 

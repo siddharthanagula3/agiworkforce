@@ -240,6 +240,21 @@
       "file": "apps/web/lib/server/copyright-notices.ts",
       "migration": 312,
       "reason": "Writes and reads the notice_type column 0312 adds to copyright_notices. The deploy applies 0312 before this code reaches production."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
+    },
+    {
+      "file": "apps/web/lib/connectors/mcp-custom-connections.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
+    },
+    {
+      "file": "apps/web/lib/user-connector-tools.ts",
+      "migration": 313,
+      "reason": "Reads the custom connector OAuth client and sign-in columns 0313 adds to user_custom_connectors. The deploy applies 0313 before this code reaches production; GET /api/connectors fails without it."
     }
   ]
 }
