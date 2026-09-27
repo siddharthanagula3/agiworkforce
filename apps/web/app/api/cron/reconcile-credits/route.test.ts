@@ -78,6 +78,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     importCogs.mockResolvedValue({
       examined: 0,
       feesRecorded: 0,
+      feesAttributed: 0,
       adjustmentsRecorded: 0,
       discountsRecorded: 0,
     });
@@ -239,6 +240,7 @@ describe('GET /api/cron/reconcile-credits · Stripe settlement reconciliation', 
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
@@ -359,6 +361,7 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
