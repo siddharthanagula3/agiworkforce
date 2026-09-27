@@ -30,7 +30,6 @@ export * from './voice';
 
 export * from './visual-session';
 export * from './visual-session-capture';
-export * from './visual-usage';
 
 export * from './time-focus';
 export * from './tool-approval-policy';
