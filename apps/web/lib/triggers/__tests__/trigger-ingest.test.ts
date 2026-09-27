@@ -59,13 +59,14 @@ function database(fixture: Fixture = {}): DatabaseAdapter {
     if (sql.includes("verification_status = 'verified'")) return 1;
     return 1;
   });
-  return {
+  const adapter = {
     query,
     execute,
-    transaction: vi.fn(),
+    transaction: vi.fn(async (run: (tx: unknown) => Promise<unknown>) => run(adapter)),
     withUser: vi.fn(),
     dispose: vi.fn(),
   } as unknown as DatabaseAdapter;
+  return adapter;
 }
 
 function event(overrides: Partial<TriggerEvent> = {}): TriggerEvent {
