@@ -164,6 +164,11 @@ export interface NormalizedCostActivity {
   invoiceDiscounts: NormalizedInvoiceDiscount[];
 }
 
+export interface NormalizedWithdrawalConsent {
+  version: string;
+  acceptedAt: Date;
+}
+
 export interface NormalizedCharge {
   reference: string;
   paymentReference: string | null;
@@ -178,6 +183,12 @@ export interface NormalizedCharge {
   cardCountry: string | null;
   receiptUrl: string | null;
   purchasedLedgerCents: number | null;
+  withdrawalConsent: NormalizedWithdrawalConsent | null;
+}
+
+export interface NormalizedSubscriptionPayment {
+  servicePeriod: NormalizedPeriod | null;
+  withdrawalConsent: NormalizedWithdrawalConsent | null;
 }
 
 export type NormalizedRefundReason = 'requested_by_customer' | 'duplicate' | 'fraudulent';
