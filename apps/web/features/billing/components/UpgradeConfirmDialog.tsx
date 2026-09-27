@@ -75,6 +75,7 @@ export function UpgradeConfirmDialog({
     currency: string;
     previewToken: string;
     charge: UpgradeChargeBreakdown | null;
+    grandfatheredNotice: string | null;
   } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -110,6 +111,7 @@ export function UpgradeConfirmDialog({
             currency: r.currency,
             previewToken: r.previewToken,
             charge: r.charge,
+            grandfatheredNotice: r.grandfatheredNotice,
           });
         }
       })
@@ -275,6 +277,14 @@ export function UpgradeConfirmDialog({
                   {formatMoney(amountDue.charge.totalDueTodayCents, amountDue.currency)}
                 </dd>
               </div>
+              {amountDue.charge.creditToBalanceCents > 0 ? (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[color:var(--text-2)]">Credit toward future invoices</dt>
+                  <dd className="tabular-nums">
+                    {formatMoney(amountDue.charge.creditToBalanceCents, amountDue.currency)}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
             {/*
               Always stated, date or not. What recurs afterwards is the part a
@@ -287,6 +297,10 @@ export function UpgradeConfirmDialog({
                 : `Then ${recurringPrice} plus tax at each renewal.`}
             </p>
           </section>
+        ) : null}
+
+        {amountDue?.grandfatheredNotice ? (
+          <p className="text-sm text-[color:var(--text-2)]">{amountDue.grandfatheredNotice}</p>
         ) : null}
 
         {error ? <p className="text-sm text-danger">{error}</p> : null}

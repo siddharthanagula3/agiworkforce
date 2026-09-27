@@ -84,6 +84,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
   const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const [replacesScheduledChange, setReplacesScheduledChange] = useState(false);
+  const [grandfatheredNotice, setGrandfatheredNotice] = useState<string | null>(null);
   const [promotion, setPromotion] = useState<UpgradePromotionSummary | null>(null);
   const [promotionOpen, setPromotionOpen] = useState(false);
   const [promotionInput, setPromotionInput] = useState('');
@@ -120,6 +121,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
           charge: r.charge,
         });
         setReplacesScheduledChange(r.replacesScheduledChange);
+        setGrandfatheredNotice(r.grandfatheredNotice);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -327,6 +329,14 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
               <dt>Total due today</dt>
               <dd className="tabular-nums">{formatMoney(charge.totalDueTodayCents, currency)}</dd>
             </div>
+            {charge.creditToBalanceCents > 0 ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">Credit toward future invoices</dt>
+                <dd className="tabular-nums">
+                  {formatMoney(charge.creditToBalanceCents, currency)}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         ) : amountDue ? (
           <dl className="flex justify-between gap-4 font-semibold">
@@ -406,8 +416,12 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
 
       {!previewing && replacesScheduledChange ? (
         <p className="text-sm text-muted-foreground">
-          Upgrading cancels your scheduled switch to a smaller plan.
+          Upgrading cancels the plan change you scheduled for your renewal.
         </p>
+      ) : null}
+
+      {!previewing && grandfatheredNotice && !checkoutRequired ? (
+        <p className="text-sm text-muted-foreground">{grandfatheredNotice}</p>
       ) : null}
 
       {!previewing && (charge || amountDue || checkoutRequired) ? (
