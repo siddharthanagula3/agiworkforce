@@ -31,7 +31,7 @@ export default async function SupportHandoffOperatorPage() {
         <Link href="/operator" className="text-xs text-muted-foreground hover:underline">
           Operator dashboard
         </Link>
-        <h1 className="mt-2 text-xl font-medium">Live support handoff</h1>
+        <h1 className="mt-2 text-h2">Live support handoff</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Visitors who asked for a person and are still inside their wait deadline.
         </p>

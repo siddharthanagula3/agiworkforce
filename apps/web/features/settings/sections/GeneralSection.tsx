@@ -469,7 +469,7 @@ export function GeneralSection() {
     <div className="flex flex-col gap-8">
       {/* Profile section */}
       <div>
-        <h2 className="mb-4 text-base font-semibold text-foreground">Profile</h2>
+        <h2 className="mb-4 text-h4 text-foreground">Profile</h2>
 
         <div className="flex flex-col gap-5">
           {/* Avatar row */}
@@ -814,7 +814,7 @@ export function GeneralSection() {
 
       {/* Preferences section */}
       <div>
-        <h2 className="mb-4 text-base font-semibold text-foreground">Preferences</h2>
+        <h2 className="mb-4 text-h4 text-foreground">Preferences</h2>
 
         <div className="flex flex-col gap-5">
           <PreferenceSyncNotice />
@@ -879,7 +879,7 @@ export function GeneralSection() {
 
       {/* Custom slash commands */}
       <div>
-        <h2 className="mb-1 text-base font-semibold text-foreground">Custom commands</h2>
+        <h2 className="mb-1 text-h4 text-foreground">Custom commands</h2>
         <p className="mb-4 text-xs leading-relaxed text-muted-foreground">
           Commands you define here appear in the composer&apos;s slash menu alongside the built-in
           ones.

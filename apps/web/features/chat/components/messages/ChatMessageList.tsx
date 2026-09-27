@@ -344,7 +344,7 @@ const ScrollToBottomButton = memo(({ onClick }: { onClick: () => void }) => {
       exit={prefersReducedMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
       transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.15 }}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-md backdrop-blur-sm transition-colors hover:bg-muted"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-border/60 bg-popover/95 shadow-e2 backdrop-blur-sm transition-colors hover:bg-muted"
       aria-label="Scroll to bottom"
     >
       <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

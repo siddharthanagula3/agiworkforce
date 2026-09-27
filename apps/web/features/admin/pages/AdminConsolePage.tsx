@@ -211,9 +211,7 @@ export default function AdminConsolePage() {
             <p className="font-mono text-xs uppercase text-emerald-700 dark:text-emerald-300">
               Enterprise control plane
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-normal text-foreground">
-              Admin readiness
-            </h1>
+            <h1 className="mt-2 text-display text-foreground">Admin readiness</h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
               Operational surface for teams, policy, identity, auditability, support, and
               managed-compute commercial gates.
@@ -262,7 +260,7 @@ export default function AdminConsolePage() {
               className="h-4 w-4 text-sky-600 dark:text-sky-300"
               aria-hidden="true"
             />
-            <h2 id="admin-controls-title" className="text-sm font-medium text-foreground">
+            <h2 id="admin-controls-title" className="text-h5 text-foreground">
               Admin controls
             </h2>
           </div>
@@ -299,7 +297,7 @@ export default function AdminConsolePage() {
           <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
               <DatabaseZap className="h-4 w-4 text-success-text" aria-hidden="true" />
-              <h2 id="readiness-ledger-title" className="text-sm font-medium text-foreground">
+              <h2 id="readiness-ledger-title" className="text-h5 text-foreground">
                 Live policy state
               </h2>
             </div>
@@ -348,7 +346,7 @@ export default function AdminConsolePage() {
         <section className="grid gap-3 md:grid-cols-3">
           <div className="rounded-md border border-border bg-card p-4">
             <KeyRound className="h-5 w-5 text-success-text" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-foreground">Identity</h2>
+            <h2 className="mt-4 text-h4 text-foreground">Identity</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Organization, SSO, and directory-sync configuration have canonical migrations and RLS.
               Enterprise SSO sign-in (Clerk enterprise connections, /api/admin/sso) and SCIM 2.0
@@ -358,7 +356,7 @@ export default function AdminConsolePage() {
           </div>
           <div className="rounded-md border border-border bg-card p-4">
             <ShieldCheck className="h-5 w-5 text-success-text" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-foreground">Policy</h2>
+            <h2 className="mt-4 text-h4 text-foreground">Policy</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Admin, provider, connector, and retention policies are separate so agents can own
               future work without editing the same file.
@@ -366,7 +364,7 @@ export default function AdminConsolePage() {
           </div>
           <div className="rounded-md border border-border bg-card p-4">
             <LifeBuoy className="h-5 w-5 text-success-text" aria-hidden="true" />
-            <h2 className="mt-4 text-base font-medium text-foreground">Feedback</h2>
+            <h2 className="mt-4 text-h4 text-foreground">Feedback</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Support and feedback cases can link to fixes and releases, which is the base for
               future customer-feedback-to-PR automation.

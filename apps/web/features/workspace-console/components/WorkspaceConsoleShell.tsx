@@ -27,7 +27,7 @@ function EmptyFrame({
       >
         {icon}
       </div>
-      <h1 className="text-xl font-semibold" style={{ color: 'var(--text-1)' }}>
+      <h1 className="text-h2" style={{ color: 'var(--text-1)' }}>
         {title}
       </h1>
       <p className="text-sm leading-relaxed" style={{ color: 'var(--text-3)' }}>
@@ -103,10 +103,7 @@ export function WorkspaceConsoleShell({
           >
             Administration
           </p>
-          <h2
-            className="mt-1 hidden text-base font-semibold md:block"
-            style={{ color: 'var(--text-1)' }}
-          >
+          <h2 className="mt-1 hidden text-h4 md:block" style={{ color: 'var(--text-1)' }}>
             Workspace
           </h2>
         </div>
