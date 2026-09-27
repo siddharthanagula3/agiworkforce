@@ -1,5 +1,6 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
@@ -395,8 +396,8 @@ export async function updateConnectorOAuthGrantTokens(
   connectorId: string,
   tokens: Omit<StoredGrantTokens, 'tokenEndpoint'>,
   accountKey?: string | null,
+  db: DatabaseAdapter = getNeonDb(),
 ): Promise<void> {
-  const db = getNeonDb();
   const values = [
     userId,
     connectorId,
@@ -468,15 +469,83 @@ interface GrantRow {
   is_default: boolean | null;
 }
 
+const GRANT_COLUMNS = `connector_id, access_token_enc, refresh_token_enc, token_type,
+                granted_scopes, access_token_expires_at, token_endpoint,
+                issuer, resource_url, mcp_url,
+                connected_at, updated_at`;
 const GRANT_ACCOUNT_COLUMNS = 'account_key, account_label, account_scope, is_default';
 const GRANT_ACCOUNT_DEFAULTS =
   `'${DEFAULT_CONNECTOR_ACCOUNT_KEY}' as account_key, null as account_label, ` +
   `'personal' as account_scope, true as is_default`;
 
+const PG_QUERY_CANCELED = '57014';
+const PG_LOCK_NOT_AVAILABLE = '55P03';
+
+function isLockWaitCut(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as Record<string, unknown>)['code'];
+  return code === PG_QUERY_CANCELED || code === PG_LOCK_NOT_AVAILABLE;
+}
+
 export class ConnectorGrantDecryptionError extends Error {
   constructor() {
     super('Stored authorization for this connector could not be decrypted');
     this.name = 'ConnectorGrantDecryptionError';
+  }
+}
+
+export class ConnectorGrantLockTimeoutError extends Error {
+  constructor() {
+    super('Another refresh of this connector authorization did not finish in time');
+    this.name = 'ConnectorGrantLockTimeoutError';
+  }
+}
+
+export interface LockedConnectorOAuthGrant {
+  grant: ConnectorOAuthGrant | null;
+  saveTokens(tokens: Omit<StoredGrantTokens, 'tokenEndpoint'>): Promise<void>;
+  revoke(): Promise<boolean>;
+}
+
+export async function withLockedConnectorOAuthGrant<T>(
+  userId: string,
+  connectorId: string,
+  accountKey: string,
+  run: (locked: LockedConnectorOAuthGrant) => Promise<T>,
+): Promise<T> {
+  const key = normalizeConnectorAccountKey(accountKey);
+  try {
+    return await withAccountColumns((accountAware) =>
+      getNeonDb().transaction(async (tx) => {
+        let rows: GrantRow[];
+        try {
+          rows = await tx.query<GrantRow>(
+            `select ${GRANT_COLUMNS},
+                    ${accountAware ? GRANT_ACCOUNT_COLUMNS : GRANT_ACCOUNT_DEFAULTS}
+               from public.connector_oauth_grants
+              where user_id = $1 and connector_id = $2 and revoked_at is null${
+                accountAware ? ' and account_key = $3' : ''
+              }
+              limit 1
+              for update`,
+            accountAware ? [userId, connectorId, key] : [userId, connectorId],
+          );
+        } catch (error) {
+          if (isLockWaitCut(error)) throw new ConnectorGrantLockTimeoutError();
+          throw error;
+        }
+        const row = rows[0];
+        return run({
+          grant: row?.access_token_enc ? decodeGrantRow(row) : null,
+          saveTokens: (tokens) =>
+            updateConnectorOAuthGrantTokens(userId, connectorId, tokens, key, tx),
+          revoke: () => revokeConnectorOAuthGrant(userId, connectorId, key, tx),
+        });
+      }),
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) throw new ConnectorOAuthStoreUnavailableError();
+    throw error;
   }
 }
 
@@ -491,10 +560,7 @@ export async function getConnectorOAuthGrant(
     rows = await withAccountColumns((accountAware) => {
       const scoped = accountAware && accountKey !== undefined && accountKey !== null;
       return db.query<GrantRow>(
-        `select connector_id, access_token_enc, refresh_token_enc, token_type,
-                granted_scopes, access_token_expires_at, token_endpoint,
-                issuer, resource_url, mcp_url,
-                connected_at, updated_at,
+        `select ${GRANT_COLUMNS},
                 ${accountAware ? GRANT_ACCOUNT_COLUMNS : GRANT_ACCOUNT_DEFAULTS}
            from public.connector_oauth_grants
           where user_id = $1 and connector_id = $2 and revoked_at is null${
@@ -750,8 +816,8 @@ export async function revokeConnectorOAuthGrant(
   userId: string,
   connectorId: string,
   accountKey?: string | null,
+  db: DatabaseAdapter = getNeonDb(),
 ): Promise<boolean> {
-  const db = getNeonDb();
   try {
     return await withAccountColumns(async (accountAware) => {
       const scoped = accountAware && accountKey !== undefined && accountKey !== null;
