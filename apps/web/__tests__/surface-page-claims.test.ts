@@ -463,7 +463,9 @@ describe('/docs, the Chrome card names the route the panel actually answers on',
 
 describe('/support chrome-extension, managed chat is on every cloud plan', () => {
   const plans = Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[];
-  const cloudPlans = plans.filter((plan) => !isLocalOnlyPlanTier(plan) && !isByokPlanTier(plan));
+  const cloudPlans: BillingPlanTier[] = plans.filter(
+    (plan) => !isLocalOnlyPlanTier(plan) && !isByokPlanTier(plan),
+  );
 
   it('gives the Chrome side panel managed chat on every cloud plan, Free included', () => {
     expect(cloudPlans).toContain('free');

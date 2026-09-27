@@ -123,9 +123,9 @@ describe('verified mobile IAP ledger', () => {
       verified: { ...verified(), purchaseCountry: 'JP' },
     });
 
-    const grant = h.execute.mock.calls.find(([sql]) =>
-      String(sql).includes('add_credits_microusd'),
-    ) as unknown as [string, unknown[]] | undefined;
+    const grant = (h.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
+      sql.includes('add_credits_microusd'),
+    );
     expect(JSON.parse(String(grant?.[1][5]))).toEqual({
       purchase_country: 'JP',
       purchase_expires_at: '2027-02-01T00:00:00.000Z',

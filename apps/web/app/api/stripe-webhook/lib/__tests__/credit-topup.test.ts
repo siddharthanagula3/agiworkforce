@@ -115,9 +115,9 @@ describe('credit top-up settlement', () => {
       topUpSession({ customer_details: { address: { country: 'JP' } } }),
     );
 
-    const grant = db.execute.mock.calls.find(([sql]) =>
-      String(sql).includes('add_credits_microusd'),
-    ) as unknown as [string, unknown[]] | undefined;
+    const grant = (db.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
+      sql.includes('add_credits_microusd'),
+    );
     expect(JSON.parse(String(grant?.[1][5]))).toEqual({
       purchase_country: 'JP',
       purchase_expires_at: '2027-03-27T12:00:00.000Z',
