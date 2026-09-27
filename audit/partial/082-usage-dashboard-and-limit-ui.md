@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: Users can see usage broken down by model (at least the flagship-model cap and per-model spend).
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add a by-model breakdown on mobile; it shows only the flagship-class weekly bar although /api/usage/history (callable with the mobile token) returns spend by model. | ui |
-| cli | partial | CLI shows the flagship-weekly window and the session model, but no spend by model. | ui |
-| vscode | partial | VS Code shows the flagship bucket row but no spend by model. | ui |
-| chrome | partial | Chrome already fetches /api/usage (which carries the flagship-weekly figure) but shows only one overall percentage. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/mobile/services/usage.ts:45-49`, `apps/cli/src/usage_summary.rs:232-258`, `apps/cli/src/usage_summary.rs:146-170`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.05: Per-feature usage.
 
@@ -85,15 +82,13 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 - Done when: Users can see how much of their usage went to coding and agentic work.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add the coding/work share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
-| cli | partial | CLI shows this session's tokens and a locally priced estimate (/usage, /cost); account-level coding and work usage is only on web. | surface-only |
-| vscode | partial | VS Code shows session tokens and a rough session estimate; account-level coding/work usage is only on web. | surface-only |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.11: Storage usage.
 
