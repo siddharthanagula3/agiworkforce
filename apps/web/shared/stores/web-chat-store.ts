@@ -33,6 +33,7 @@ import type {
 import type { InteractiveCard, ProjectFileCitation, ResearchStep } from '@agiworkforce/types';
 import type { PastChatCitation } from '@/lib/past-chat-citation';
 import type { CloudWorkMode } from '@agiworkforce/types';
+import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 import type {
   PaywallSlot,
   SendReplayMetadata,
@@ -85,6 +86,10 @@ export interface ComposerToggleState {
    * catalog owns the body.
    */
   selectedSkillName: string | null;
+  pendingImageSettings: {
+    modelId: string | null;
+    aspectRatio: ManagedMediaImageAspectRatio | null;
+  } | null;
 }
 
 /**
@@ -104,6 +109,7 @@ export const DEFAULT_COMPOSER_TOGGLES: ComposerToggleState = Object.freeze({
   imageMode: false,
   videoMode: false,
   selectedSkillName: null,
+  pendingImageSettings: null,
 });
 
 /**
