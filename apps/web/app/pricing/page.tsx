@@ -18,6 +18,7 @@ import {
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   getModelMetadataById,
+  getPlanContextWindowTokens,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
@@ -136,6 +137,7 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['price', 'Price'],
   ['billingInterval', 'Billing'],
   ['usageCapacity', 'Managed usage'],
+  ['contextWindow', 'Context window'],
   ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
   ['projects', 'Projects'],
   ['customMcp', 'Custom MCP'],
@@ -185,6 +187,7 @@ interface CompareRow {
   price: string;
   billingInterval: string;
   usageCapacity: string;
+  contextWindow: string;
   managedChat: string;
   projects: string;
   customMcp: string;
@@ -218,9 +221,22 @@ function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability
   return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
 }
 
+const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 2,
+});
+
+function contextWindowCell(plan: BillingPlanTier): string {
+  const tokens = getPlanContextWindowTokens(plan);
+  return tokens === null
+    ? 'Model-dependent'
+    : `Up to ${CONTEXT_WINDOW_FORMAT.format(tokens)} tokens`;
+}
+
 function managedPlanCapabilities(plan: BillingPlanTier) {
   const limits = getBillingPlanProductLimits(plan);
   return {
+    contextWindow: contextWindowCell(plan),
     managedChat: capabilityCell(plan, 'managed_chat'),
     projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
     customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
@@ -803,6 +819,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareLocalUsage'),
+      contextWindow: 'Model-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited local',
@@ -823,6 +840,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareByokUsage'),
+      contextWindow: 'Provider-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited custom',
@@ -1427,6 +1445,7 @@ export default function PricingPage() {
                         {row.usageCapacity}
                       </td>
                       {[
+                        row.contextWindow,
                         row.managedChat,
                         row.projects,
                         row.customMcp,
