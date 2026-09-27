@@ -159,7 +159,7 @@ function ConfigEditorSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">Configuration</h3>
+      <h3 className="text-h3 mb-1">Configuration</h3>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Shared settings from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/config.toml</code>
@@ -267,7 +267,7 @@ function McpServersSection() {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-semibold">MCP Servers</h3>
+        <h3 className="text-h3">MCP Servers</h3>
         <Button variant="outline" size="sm" onClick={() => setShowAdd(!showAdd)}>
           <Plus className="mr-1.5 h-3.5 w-3.5" />
           Add
@@ -391,7 +391,7 @@ function EcosystemSection() {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-semibold">Ecosystem</h3>
+        <h3 className="text-h3">Ecosystem</h3>
         <Button
           variant="outline"
           size="sm"
@@ -476,7 +476,7 @@ function SkillsBrowserSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">Skills</h3>
+      <h3 className="text-h3 mb-1">Skills</h3>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Discovered in{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/skills/</code>
@@ -563,7 +563,7 @@ function InstructionsEditorSection() {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold mb-1">Instructions</h3>
+      <h3 className="text-h3 mb-1">Instructions</h3>
       <p className="flex items-center gap-1.5 text-sm text-muted-foreground mb-4">
         Global instructions from{' '}
         <code className="text-xs bg-muted px-1 py-0.5 rounded">
@@ -627,7 +627,7 @@ function MemoryViewerSection() {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <h3 className="text-lg font-semibold">Memories</h3>
+        <h3 className="text-h3">Memories</h3>
         {content && (
           <button
             type="button"
@@ -675,7 +675,7 @@ export function DotfileSettings() {
             <Settings className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">CLI Configuration</h3>
+            <h3 className="text-h3">CLI Configuration</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Manage the shared{' '}
               <code className="text-xs bg-muted px-1 py-0.5 rounded">~/.agiworkforce/</code> dotfile

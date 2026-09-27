@@ -489,9 +489,7 @@ function PresentationRenderer({ data }: { data: PresentationRenderData }) {
       {slide && (
         <div className="p-6 min-h-[300px]">
           {slide.title && (
-            <h2 className="text-xl font-bold mb-4 text-zinc-900 dark:text-zinc-100">
-              {slide.title}
-            </h2>
+            <h2 className="text-h2 mb-4 text-zinc-900 dark:text-zinc-100">{slide.title}</h2>
           )}
           <div className="prose prose-sm dark:prose-invert max-w-none">
             <ReactMarkdown>{slide.content}</ReactMarkdown>

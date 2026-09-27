@@ -219,7 +219,7 @@ export function ComputerUseSettings() {
             <Monitor className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold">Computer Use</h3>
+            <h3 className="text-h3">Computer Use</h3>
             <p className="text-sm text-muted-foreground">
               Let the agent control your mouse, keyboard, and take screenshots. This computer asks
               once per app session before the first action; turning this off withdraws it

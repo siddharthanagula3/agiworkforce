@@ -85,7 +85,7 @@ export const ResearchReport = memo(function ResearchReport({
       <div className="rounded-lg border border-white/10 bg-white/5 p-4 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">{result.query}</h3>
+            <h3 className="text-h5 text-white">{result.query}</h3>
             <p className="mt-0.5 text-xs text-slate-500">
               Completed in {durationFormatted} &bull; {result.sources_examined} sources examined
               &bull; {result.sources_cited} cited
