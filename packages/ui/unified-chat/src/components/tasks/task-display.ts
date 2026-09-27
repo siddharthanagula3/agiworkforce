@@ -1,5 +1,5 @@
 import type { CloudAgentRun, CloudAgentWorkMode } from '@agiworkforce/cloud-contracts';
-import { agentTaskStateLabel } from '@agiworkforce/types';
+import { agentTaskStateLabel, creditsFromCents, formatCredits } from '@agiworkforce/types';
 
 // The run-state enum isn't exported as a standalone type from cloud-contracts;
 export type AgentTaskState = CloudAgentRun['state'];
@@ -28,7 +28,7 @@ export function workModeLabel(mode: CloudAgentWorkMode): string {
 }
 
 export function formatTaskCost(costCents: number): string {
-  return `$${(costCents / 100).toFixed(2)}`;
+  return formatCredits(creditsFromCents(costCents), { maximumFractionDigits: 2 });
 }
 
 export function formatTaskTokens(tokens: number): string {
