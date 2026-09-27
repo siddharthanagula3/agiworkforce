@@ -221,6 +221,7 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `
 
 - Done when: Images are processed at a resolution suited to the task, with a high-detail vs reduced-detail choice honoured end to end.
 - Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -230,6 +231,5 @@ Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:85-87`, `
 | cli | partial | Images are always resized to fit before sending; there is no high-detail option. | ui |
 | vscode | partial | The local app-server resizes local images to fit; no detail choice in the webview. | ui |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | image_url.detail (low/high/auto) is accepted but never forwarded to a provider; make it change the resolution sent. | handler |
 
 Code: `apps/cli/src/lib.rs:4695-4703`, `apps/cli/src/tui/tui_app.rs:3703-3710`, `apps/cli/src/app_server/developer_host.rs:855-861`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4962-4967`
