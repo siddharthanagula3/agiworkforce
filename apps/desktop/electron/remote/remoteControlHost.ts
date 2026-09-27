@@ -268,7 +268,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
 
   function stop(): RemoteControlState {
     generation += 1;
-    client?.close();
+    client?.close({ endPairing: true });
     client = null;
     dispatch = null;
     pairingSecret = null;
