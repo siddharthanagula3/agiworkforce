@@ -1,9 +1,7 @@
 import { create } from 'zustand';
-import * as Crypto from 'expo-crypto';
 import { memoryRelevanceScore, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
-  insertMemoryFact,
   listMemoryFacts,
   deleteAllMemoryFacts,
   deleteMemoryFact,
@@ -15,6 +13,7 @@ import {
 import type { MemoryFact, MemoryFactSource } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
+import { writeLocalMemoryFact } from '@/src/features/memory/services/localMemoryWriter';
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { api } from '@/services/api';
 import { markMemoryForSync, syncNow } from '@/services/cloudSyncEngine';
@@ -56,6 +55,13 @@ interface MemoryState {
 
 const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
 const MIN_IMPORTED_FACT_CHARS = 3;
+const ALREADY_SAVED_MESSAGE = 'That memory is already saved.';
+
+function keptExistingMessage(keeper: string | undefined): string {
+  return keeper
+    ? `Kept “${keeper}” instead, because it outranks the new fact. Unpin or edit it to change what is remembered.`
+    : 'Kept an existing memory instead, because it outranks the new fact.';
+}
 const MAX_IMPORT_BATCH = 500;
 
 interface CloudImportResult {
@@ -192,26 +198,29 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           };
         });
       } else {
-        const id = Crypto.randomUUID();
-        const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
-          id,
-          fact: fact.trim(),
-          source_conversation_id: null,
-          pinned: false,
-          created_at: Date.now(),
-          source: 'typed',
-        };
-        await insertMemoryFact(newFact);
+        const result = await writeLocalMemoryFact({ fact: fact.trim(), source: 'typed' });
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
+        if (result.outcome === 'already_known' || !result.fact) {
+          set({ error: ALREADY_SAVED_MESSAGE });
+          return;
+        }
+        if (result.outcome === 'kept_existing') {
+          const keeper = get().entries.find((entry) => entry.id === result.fact?.superseded_by);
+          set({ error: keptExistingMessage(keeper?.fact) });
+          return;
+        }
+        const entry = result.fact;
+        const replaced = new Set(result.replacedIds);
         set((state) => {
-          const entry = { ...newFact, pinned: false };
           const q = state.searchQuery.trim().toLowerCase();
           const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
+          const remaining = state.entries.filter((existing) => !replaced.has(existing.id));
+          const remainingFiltered = state.filteredEntries.filter(
+            (existing) => !replaced.has(existing.id),
+          );
           return {
-            entries: [entry, ...state.entries],
-            filteredEntries: matchesSearch
-              ? [entry, ...state.filteredEntries]
-              : state.filteredEntries,
+            entries: [entry, ...remaining],
+            filteredEntries: matchesSearch ? [entry, ...remainingFiltered] : remainingFiltered,
           };
         });
       }
@@ -441,26 +450,19 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       return { inserted, skipped };
     }
 
-    const known = new Set(
-      (await listMemoryFacts({ limit: 5_000 })).map((entry) => normalizeMemoryKey(entry.fact)),
-    );
+    let known = await listMemoryFacts({ limit: 5_000 });
     for (const trimmed of candidates) {
-      const key = normalizeMemoryKey(trimmed);
-      if (!key || known.has(key)) {
-        skipped++;
-        continue;
-      }
-      known.add(key);
       try {
-        const id = Crypto.randomUUID();
-        await insertMemoryFact({
-          id,
-          fact: trimmed,
-          source_conversation_id: null,
-          pinned: false,
-          created_at: Date.now(),
-          source: 'imported',
-        });
+        const result = await writeLocalMemoryFact({ fact: trimmed, source: 'imported', known });
+        if (!result.fact) {
+          skipped++;
+          continue;
+        }
+        const written = result.fact;
+        known = [
+          ...known.filter((entry) => !result.replacedIds.includes(entry.id)),
+          ...(result.outcome === 'inserted' ? [written] : []),
+        ];
         inserted++;
       } catch {
         skipped++;

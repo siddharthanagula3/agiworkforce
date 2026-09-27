@@ -1,9 +1,7 @@
 import { Alert } from 'react-native';
-import * as Crypto from 'expo-crypto';
 import {
   explicitForgetHandler,
   explicitRememberHandler,
-  normalizeMemoryKey,
   parseExplicitMemoryCommand,
   type ExplicitMemoryPorts,
   type MemoryCommandKind,
@@ -12,19 +10,13 @@ import {
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 import { syncNow } from '@/services/cloudSyncEngine';
-import {
-  deleteMemoryFact,
-  getMemoryFact,
-  insertMemoryFact,
-  listMemoryFacts,
-  searchMemoryByText,
-} from '@/storage/memory';
+import { deleteMemoryFact, getMemoryFact, searchMemoryByText } from '@/storage/memory';
 import type { StatusStep } from '@/types/chat';
+import { writeLocalMemoryFact } from './localMemoryWriter';
 
 const MEMORY_COMMANDS_PATH = '/api/memory/commands';
 const MIN_FORGET_SUBJECT_CHARS = 3;
 const MAX_FORGET_MATCHES = 25;
-const MAX_KNOWN_FACTS = 500;
 const MEMORY_STEP_ID = 'memory-command';
 const MEMORY_OFF_MESSAGE = 'Memory is turned off in your settings.';
 const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
@@ -74,20 +66,10 @@ function localMemoryPorts(memoryEnabled: boolean): ExplicitMemoryPorts {
         ? { eligible: true }
         : { eligible: false, reason: 'memory_disabled', message: MEMORY_OFF_MESSAGE },
     store: async ({ fact }) => {
-      const key = normalizeMemoryKey(fact);
-      const known = await listMemoryFacts({ limit: MAX_KNOWN_FACTS });
-      if (known.some((entry) => normalizeMemoryKey(entry.fact) === key)) {
-        return { stored: false, alreadyKnown: true };
-      }
-      await insertMemoryFact({
-        id: Crypto.randomUUID(),
-        fact,
-        source_conversation_id: null,
-        pinned: false,
-        created_at: Date.now(),
-        source: 'typed',
-      });
-      return { stored: true, alreadyKnown: false };
+      const result = await writeLocalMemoryFact({ fact, source: 'typed' });
+      return result.outcome === 'already_known'
+        ? { stored: false, alreadyKnown: true }
+        : { stored: true, alreadyKnown: false };
     },
     find: async (subject) => {
       const trimmed = subject.trim();

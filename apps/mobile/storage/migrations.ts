@@ -134,4 +134,11 @@ export const MIGRATION_SQL: Migration[] = [
       UPDATE memory_facts SET updated_at = created_at WHERE updated_at IS NULL;
     `,
   },
+  {
+    version: 5,
+    sql: `
+      ALTER TABLE memory_facts ADD COLUMN superseded_by TEXT;
+      ALTER TABLE memory_facts ADD COLUMN superseded_at INTEGER;
+    `,
+  },
 ];
