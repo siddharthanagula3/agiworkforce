@@ -148,6 +148,7 @@ import {
   buildTrustReviewItems,
   scheduledCancellationDate,
 } from '../features/account-auth/accountPresentation';
+import { showPlanComparison } from '../features/account-auth/planComparison';
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
@@ -1992,6 +1993,16 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   );
 
   context.subscriptions.push(
+    register('agi-workforce.comparePlans', async () => {
+      const identity = await fetchAccountIdentity(context.secrets);
+      await showPlanComparison(
+        identity?.tier ?? context.globalState.get<string>('tierStatus.cachedTier'),
+        `${getCloudWebOrigin()}/pricing?from=vscode-extension-plans`,
+      );
+    }),
+  );
+
+  context.subscriptions.push(
     register('agi-workforce.showAccountUsage', async () => {
       const { getTokenCounter, formatBilledCredits, formatSessionCreditEstimate } =
         await import('../data/tokenCounter');
@@ -2037,6 +2048,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'settings'
         | 'reset-counter'
         | 'manage-usage'
+        | 'compare-plans'
         | 'manage-billing'
         | 'add-credits'
         | 'connectors'
@@ -2072,7 +2084,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
         },
         {
-          label: `$(credit-card) Billed for editor actions`,
+          label: `$(credit-card) Billed this session`,
           description: formatBilledCredits(counter),
         },
       );
@@ -2132,10 +2144,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           const summary = summarizeUsageHistory(usageHistory.history);
           items.push(
             {
-              label: `Usage by model, ${summary.rangeLabel}`,
+              label: `Usage history, ${summary.rangeLabel}`,
               kind: vscode.QuickPickItemKind.Separator,
             },
             { label: `$(graph) Total: ${summary.total}`, description: summary.totalRequests },
+            ...(summary.byWorkload.length === 0
+              ? []
+              : [{ label: 'By product area', kind: vscode.QuickPickItemKind.Separator }]),
+            ...summary.byWorkload.map((row) => ({
+              label: `$(briefcase) ${row.label}`,
+              description: `${row.credits} · ${row.requests}`,
+            })),
+            ...(summary.byModel.length === 0
+              ? []
+              : [{ label: 'By model', kind: vscode.QuickPickItemKind.Separator }]),
             ...summary.byModel.map((row) => ({
               label: `$(symbol-namespace) ${row.label}`,
               description: `${row.credits} · ${row.requests}`,
@@ -2144,7 +2166,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           );
         } else {
           items.push(
-            { label: 'Usage by model', kind: vscode.QuickPickItemKind.Separator },
+            { label: 'Usage history', kind: vscode.QuickPickItemKind.Separator },
             { label: '$(warning) Usage history unavailable', description: usageHistory.reason },
           );
         }
@@ -2167,6 +2189,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           label: '$(graph) Manage Cloud usage on Web',
           description: 'Plan usage, reset windows, and billing details',
           action: 'manage-usage',
+        });
+        items.push({
+          label: '$(list-unordered) Compare plans',
+          description: 'Credits per window and what each plan adds',
+          action: 'compare-plans',
         });
         if (tierInfo?.creditBalanceCents !== undefined) {
           items.push({
@@ -2231,6 +2258,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await vscode.commands.executeCommand('agi-workforce.signOut');
       } else if (pick?.action === 'settings') {
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'general');
+      } else if (pick?.action === 'compare-plans') {
+        await vscode.commands.executeCommand('agi-workforce.comparePlans');
       } else if (pick?.action === 'manage-usage') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/settings/usage?from=vscode-extension'),

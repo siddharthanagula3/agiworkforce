@@ -16,6 +16,11 @@ export interface AdapterLlmResponse {
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
   cachedInputTokens?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: string[];
+  providerElapsedMs: number;
   citations?: unknown[];
   search_results?: unknown[];
 }
@@ -28,6 +33,7 @@ export async function drainToLlmResponse(
 ): Promise<AdapterLlmResponse> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const usage = createUsageAccumulator();
+  const startedAt = Date.now();
   let firstError: Extract<StreamChunk, { type: 'error' }> | undefined;
 
   for await (const chunk of chunks) {
@@ -65,6 +71,11 @@ export async function drainToLlmResponse(
     cacheCreationInputTokens: usage.cacheCreationInputTokens,
     cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
     cachedInputTokens: usage.cacheReadInputTokens,
+    webSearchRequests: usage.webSearchRequests,
+    webFetchRequests: usage.webFetchRequests,
+    codeExecutionRequests: usage.codeExecutionRequests,
+    codeExecutionContainerIds: usage.codeExecutionContainerIds,
+    providerElapsedMs: Date.now() - startedAt,
     citations: response['citations'] as unknown[] | undefined,
     search_results: response['search_results'] as unknown[] | undefined,
   };

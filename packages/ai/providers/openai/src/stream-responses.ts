@@ -11,6 +11,7 @@ import type {
 
 const OPENAI_TRACKING_PARAM = 'utm_source';
 const OPENAI_TRACKING_VALUE = 'openai';
+const CODE_INTERPRETER_CALL = 'code_interpreter_call';
 
 interface OpenItem {
   type: 'message' | 'function_call' | 'reasoning' | 'web_search_call';
@@ -64,6 +65,35 @@ function isWebSearchItem(item: ResponseOutputItem): item is ResponseWebSearchCal
 
 function incrementCount(counts: Record<string, number>, key: string): void {
   counts[key] = (counts[key] ?? 0) + 1;
+}
+
+function countWebSearchCalls(output: readonly ResponseOutputItem[]): {
+  searches: number;
+  pageActions: number;
+} {
+  let searches = 0;
+  let pageActions = 0;
+  for (const item of output) {
+    if (!isWebSearchItem(item) || item.status === 'failed' || !item.action) continue;
+    if (item.action.type === 'search') searches += 1;
+    else pageActions += 1;
+  }
+  return { searches, pageActions };
+}
+
+function codeInterpreterCalls(output: readonly ResponseOutputItem[]): {
+  calls: number;
+  containerIds: string[];
+} {
+  let calls = 0;
+  const containerIds = new Set<string>();
+  for (const item of output) {
+    if (item.type !== CODE_INTERPRETER_CALL) continue;
+    calls += 1;
+    const containerId = item['container_id'];
+    if (typeof containerId === 'string' && containerId.length > 0) containerIds.add(containerId);
+  }
+  return { calls, containerIds: [...containerIds] };
 }
 
 function stripOpenAITrackingParam(url: string): string {
@@ -511,6 +541,8 @@ export async function* translateOpenAIResponsesStream(
         }
         const usage = ev.response.usage;
         if (usage) {
+          const webSearchCalls = countWebSearchCalls(ev.response.output ?? []);
+          const codeInterpreter = codeInterpreterCalls(ev.response.output ?? []);
           const usageChunk: StreamChunk = {
             type: 'usage',
             ...(usage.input_tokens !== undefined ? { inputTokens: usage.input_tokens } : {}),
@@ -523,6 +555,14 @@ export async function* translateOpenAIResponsesStream(
               : {}),
             ...(usage.output_tokens_details?.reasoning_tokens !== undefined
               ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
+              : {}),
+            ...(webSearchCalls.searches > 0 ? { webSearchRequests: webSearchCalls.searches } : {}),
+            ...(webSearchCalls.pageActions > 0
+              ? { webFetchRequests: webSearchCalls.pageActions }
+              : {}),
+            ...(codeInterpreter.calls > 0 ? { codeExecutionRequests: codeInterpreter.calls } : {}),
+            ...(codeInterpreter.containerIds.length > 0
+              ? { codeExecutionContainerIds: codeInterpreter.containerIds }
               : {}),
           };
           yield usageChunk;

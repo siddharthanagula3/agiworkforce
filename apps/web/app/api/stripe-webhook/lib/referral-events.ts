@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { formatCredits } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
@@ -15,6 +14,7 @@ import { isNotificationEmailConfigured } from '@/lib/services/notification-email
 import { recordNotification } from '@/lib/services/notification-service';
 import { REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 import { referralDeviceOrNetworkBlock } from '@/lib/services/referral-service';
+import type { Stripe } from '@/lib/stripe-types';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
 const DAY_MS = 86_400_000;

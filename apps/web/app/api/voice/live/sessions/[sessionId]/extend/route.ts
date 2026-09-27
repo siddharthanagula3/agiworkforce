@@ -13,9 +13,10 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
+  estimateMicrousdOf,
   ManagedUsageRequestError,
-  reserveManagedUsageProviderStep,
   type ManagedUsageRequestReservation,
+  reserveManagedUsageProviderStep,
 } from '@/lib/services/managed-usage-request-service';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
@@ -180,7 +181,7 @@ async function handleExtendLiveSession(
         logger.warn({ error, userId, sessionId }, 'Voice session could not be marked as seen');
       },
     );
-    return covered(extended.estimatedCostMicrousd);
+    return covered(estimateMicrousdOf(extended));
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return voiceUsageErrorResponse(request, error, resetsAt);

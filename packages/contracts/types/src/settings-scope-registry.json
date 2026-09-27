@@ -37,6 +37,10 @@
       "scope": "organization",
       "why": "the rule version an effective value is quoted against",
       "ruleVersionColumn": "revision"
+    },
+    "auto_reload_settings": {
+      "scope": "account",
+      "why": "auto-reload charges the payer's own saved card for their own purchased credits, so it follows the person on every surface"
     }
   },
   "unscopedTables": []

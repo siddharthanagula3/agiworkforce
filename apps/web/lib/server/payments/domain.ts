@@ -68,6 +68,102 @@ export interface NormalizedPurchase {
   environment: NormalizedEnvironment;
 }
 
+export type NormalizedPaymentStatus =
+  | 'succeeded'
+  | 'processing'
+  | 'requires_action'
+  | 'requires_payment_method'
+  | 'requires_confirmation'
+  | 'requires_capture'
+  | 'canceled'
+  | 'unknown';
+
+export interface NormalizedPayment {
+  reference: string;
+  status: NormalizedPaymentStatus;
+  amountReceived: NormalizedMoney | null;
+  metadata: Readonly<Record<string, string>>;
+  failureCode: string | null;
+  declineCode: string | null;
+}
+
+export interface NormalizedCard {
+  reference: string;
+  brand: string;
+  last4: string;
+}
+
+export interface NormalizedBillingInstrument {
+  currency: string | null;
+  card: NormalizedCard | null;
+  billingEmail: string | null;
+}
+
+export interface NormalizedTaxCalculation {
+  reference: string;
+  total: NormalizedMoney;
+  taxMinorUnits: number;
+  country: string | null;
+}
+
+export type TaxCalculationResult =
+  | { outcome: 'calculated'; calculation: NormalizedTaxCalculation }
+  | { outcome: 'location_missing' };
+
+export interface OffSessionChargeInput {
+  customerReference: string;
+  paymentMethodReference: string;
+  amount: NormalizedMoney;
+  description: string;
+  metadata: Readonly<Record<string, string>>;
+  receiptEmail: string | null;
+  taxCalculationReference: string;
+  idempotencyKey: string;
+}
+
+export type OffSessionChargeResult =
+  | { outcome: 'created'; payment: NormalizedPayment }
+  | {
+      outcome: 'declined';
+      payment: NormalizedPayment | null;
+      failureCode: string | null;
+      declineCode: string | null;
+    }
+  | { outcome: 'rejected'; code: string | null; message: string }
+  | { outcome: 'unknown'; error: unknown };
+
+export type NormalizedChargeAttributionKind = 'subscription' | 'top_up';
+
+export interface NormalizedChargeAttribution {
+  kind: NormalizedChargeAttributionKind;
+  reference: string;
+  ownerReference: string | null;
+}
+
+export interface NormalizedBalanceEntry {
+  reference: string;
+  type: string;
+  occurredAt: Date;
+  currency: string;
+  amountMinorUnits: number;
+  feeMinorUnits: number;
+  chargeReference: string | null;
+  attribution: NormalizedChargeAttribution | null;
+}
+
+export interface NormalizedInvoiceDiscount {
+  invoiceReference: string;
+  occurredAt: Date;
+  currency: string;
+  discountMinorUnits: number;
+  discountReferences: string[];
+}
+
+export interface NormalizedCostActivity {
+  balanceEntries: NormalizedBalanceEntry[];
+  invoiceDiscounts: NormalizedInvoiceDiscount[];
+}
+
 export interface PurchaseVerificationInput {
   reference: string;
   ownerReference?: string | null;

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { recordNotificationDelivery } from '@/lib/observability/metrics';
+import { recordEmailSend } from '@/lib/services/infrastructure-cost';
 import { getHandoffConfig, isValidEmail } from './config';
 
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
@@ -25,6 +26,7 @@ export interface SendEmailInput {
   html: string;
   replyTo?: string;
   idempotencyKey?: string;
+  userId?: string | null;
 }
 
 export interface TransactionalEmailInput extends SendEmailInput {
@@ -97,6 +99,13 @@ export async function sendTransactionalEmail(
   input: TransactionalEmailInput,
 ): Promise<SendEmailResult> {
   const result = await postTransactionalEmail(input);
+  if (result.delivered) {
+    recordEmailSend({
+      userId: input.userId ?? null,
+      provider: 'resend',
+      providerMessageId: result.providerMessageId,
+    });
+  }
   recordNotificationDelivery({
     channel: 'email',
     outcome: result.delivered

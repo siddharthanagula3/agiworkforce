@@ -70,15 +70,13 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 - Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
 - Wave: 3
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
 | desktop | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
 | mobile | partial | Mobile has no plan comparison; it only tells a blocked user which plan a feature needs (paywall sheet). | ui |
-| cli | partial | CLI shows the plan a blocked feature needs and links to web pricing; it cannot list per-plan feature access itself. | surface-only |
-| vscode | partial | VS Code paywall warning names the gate and opens web pricing/billing; no in-extension feature comparison. | surface-only |
-| chrome | partial | Chrome side panel shows a paid-plan-required state and links to web pricing; no feature comparison in the panel. | surface-only |
 
 Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/app/pricing/page.tsx:206-217`, `packages/contracts/types/src/billing-catalog.ts:208-227`, `apps/web/app/api/media/image/generate/route.ts:223-226`
 
@@ -121,13 +119,13 @@ Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/lib/validations/checkou
 
 - Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
 - Wave: 2
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No plan sets trialDays, so checkout never offers a trial; the invite-code trial route (/api/claim-offer) has no web caller; and nothing expires a code-granted trialing subscription when its period ends. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
+| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
+| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
 | mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code into a trialing plan via /api/claim-offer, but nothing ends that trial: a code-granted trialing row is never moved to expired, so plan features stay unlocked. | states |
 
 Code: `apps/web/app/api/checkout/route.ts:83-106`, `packages/contracts/types/src/billing-catalog.ts:43-52`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`
 
@@ -203,13 +201,10 @@ Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/st
 
 - Done when: Each plan explains its own features (what it adds over the current plan, and why a blocked feature needs a given plan).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile names the plan a blocked feature needs but never lists what each paid plan includes. | ui |
-| cli | partial | CLI paywall names the required plan and reason, then links to web pricing for the details. | surface-only |
-| vscode | partial | VS Code paywall names the gate and opens web pricing; no per-plan explanation in the extension. | surface-only |
-| chrome | partial | Chrome shows a plan-required state and links to web pricing; no per-plan explanation in the panel. | surface-only |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`, `apps/cli/src/errors.rs:348-360`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:86-91`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`

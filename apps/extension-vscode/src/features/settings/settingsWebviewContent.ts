@@ -2073,8 +2073,9 @@ ${capabilityAvailabilityRows}
           range.textContent =
             'Settled usage in the ' + summary.rangeLabel + ': ' + summary.total +
             ' across ' + summary.totalRequests + '.';
+          appendUsageHistoryList(body, 'By product area', summary.byWorkload);
           appendUsageHistoryList(body, 'By model', summary.byModel);
-          appendUsageHistoryList(body, 'By day', summary.byDay);
+          appendUsageHistoryList(body, summary.periodCaption, summary.byPeriod);
           if (summary.unsettled) {
             var pending = document.createElement('p');
             pending.className = 'status plan-status';
