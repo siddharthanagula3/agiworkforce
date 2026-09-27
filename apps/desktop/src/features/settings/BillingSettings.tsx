@@ -128,7 +128,7 @@ export function BillingSettings() {
 
           <p className="text-sm text-muted-foreground">{ownerPolicy.description}</p>
 
-          {error && <p className="text-sm text-danger-text">{error}</p>}
+          {error && <p className="text-sm text-rose-400">{error}</p>}
 
           {ownerPolicy.canOpenStripePortal ? (
             <Button onClick={() => void handleManageBilling()} disabled={opening}>
