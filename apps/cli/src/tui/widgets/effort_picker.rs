@@ -19,7 +19,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem};
 
 use crate::design_system::Effort;
-use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
+use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light, ui_surface_elevated};
 
 // ---------------------------------------------------------------------------
 // Public state
@@ -152,6 +152,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
+        .style(Style::default().bg(ui_surface_elevated()))
         .title(" Effort ");
     frame.render_widget(block, popup_area);
 

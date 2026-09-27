@@ -23,10 +23,13 @@ pub(crate) fn shimmer_spans(text: &str) -> Vec<Span<'static>> {
     if chars.is_empty() {
         return Vec::new();
     }
+    if super::motion::reduced() {
+        return vec![Span::raw(text.to_string())];
+    }
     // Use time-based sweep synchronized to process start.
     let padding = 10usize;
     let period = chars.len() + padding * 2;
-    let sweep_seconds = 2.0f32;
+    let sweep_seconds = super::motion::SHIMMER_SWEEP.as_secs_f32();
     let pos_f =
         (elapsed_since_start().as_secs_f32() % sweep_seconds) / sweep_seconds * (period as f32);
     let pos = pos_f as usize;
