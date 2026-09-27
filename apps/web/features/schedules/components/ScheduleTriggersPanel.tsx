@@ -12,12 +12,12 @@ import {
   type TriggerSource,
 } from '@/lib/triggers/trigger-types';
 import {
-  conditionDraftsFrom,
-  conditionsFromDrafts,
-  describeConditions,
-  TriggerConditionsEditor,
+  describeTriggerConditions,
+  triggerConditionDraftsFrom,
+  triggerConditionsFromDrafts,
   type TriggerConditionDraft,
-} from './TriggerConditionsEditor';
+} from '@agiworkforce/cloud-contracts';
+import { TriggerConditionsEditor } from './TriggerConditionsEditor';
 
 interface ScheduleTriggersPanelProps {
   scheduleId: string;
@@ -150,7 +150,7 @@ export default function ScheduleTriggersPanel({
   }, [opened, load]);
 
   async function createTrigger() {
-    const parsedConditions = conditionsFromDrafts(conditions);
+    const parsedConditions = triggerConditionsFromDrafts(conditions);
     if (!parsedConditions.ok) {
       setError(parsedConditions.error);
       return;
@@ -224,7 +224,7 @@ export default function ScheduleTriggersPanel({
   }
 
   async function saveConditions(trigger: EventTrigger, drafts: TriggerConditionDraft[]) {
-    const parsed = conditionsFromDrafts(drafts);
+    const parsed = triggerConditionsFromDrafts(drafts);
     if (!parsed.ok) {
       setError(parsed.error);
       return;
@@ -465,7 +465,7 @@ export default function ScheduleTriggersPanel({
                   </p>
                   {trigger.conditions.length > 0 ? (
                     <p className="break-words text-xs text-muted-foreground">
-                      Only when {describeConditions(trigger.conditions, trigger.source)}
+                      Only when {describeTriggerConditions(trigger.conditions, trigger.source)}
                     </p>
                   ) : null}
                   {watchNotice ? (
@@ -507,7 +507,10 @@ export default function ScheduleTriggersPanel({
                           ? null
                           : {
                               triggerId: trigger.id,
-                              drafts: conditionDraftsFrom(trigger.conditions, trigger.source),
+                              drafts: triggerConditionDraftsFrom(
+                                trigger.conditions,
+                                trigger.source,
+                              ),
                             },
                       )
                     }

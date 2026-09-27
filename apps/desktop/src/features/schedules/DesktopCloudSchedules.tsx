@@ -12,6 +12,7 @@ import {
   RotateCcw,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { ApprovalCard } from '@agiworkforce/ui';
@@ -33,6 +34,7 @@ import {
   type DesktopCloudSchedulesApi,
 } from '../../services/desktopCloudSchedules';
 import { DesktopScheduleAccessFields } from './DesktopScheduleAccessFields';
+import { DesktopScheduleTriggersPanel } from './DesktopScheduleTriggersPanel';
 
 const SCHEDULE_PAGE_SIZE = 50;
 const RUN_PAGE_SIZE = 20;
@@ -462,6 +464,7 @@ function AuthenticatedDesktopCloudSchedules({
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [expandedTriggersId, setExpandedTriggersId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, HistoryState>>({});
   const [discoveredModels, setDiscoveredModels] = useState<CloudModelInfo[]>([]);
   const [modelStatus, setModelStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -933,6 +936,7 @@ function AuthenticatedDesktopCloudSchedules({
             {schedules.map((schedule) => {
               const busy = operation[schedule.id];
               const expanded = expandedHistoryId === schedule.id;
+              const triggersExpanded = expandedTriggersId === schedule.id;
               const historyState = historyById[schedule.id] ?? EMPTY_HISTORY;
               return (
                 <article
@@ -1026,6 +1030,24 @@ function AuthenticatedDesktopCloudSchedules({
                         </button>
                         <button
                           type="button"
+                          onClick={() =>
+                            setExpandedTriggersId((current) =>
+                              current === schedule.id ? null : schedule.id,
+                            )
+                          }
+                          className={SECONDARY_BUTTON}
+                          aria-expanded={triggersExpanded}
+                        >
+                          <Zap className="h-3.5 w-3.5" aria-hidden />
+                          Triggers
+                          {triggersExpanded ? (
+                            <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
@@ -1074,6 +1096,15 @@ function AuthenticatedDesktopCloudSchedules({
                       </p>
                     ) : null}
                   </div>
+
+                  {triggersExpanded ? (
+                    <div className="border-t border-[var(--chat-border)] px-4 py-3">
+                      <DesktopScheduleTriggersPanel
+                        scheduleId={schedule.id}
+                        scheduleName={schedule.name}
+                      />
+                    </div>
+                  ) : null}
 
                   {expanded ? (
                     <div className="border-t border-[var(--chat-border)] px-4 py-3">
