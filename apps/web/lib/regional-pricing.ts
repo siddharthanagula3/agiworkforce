@@ -44,10 +44,12 @@ export function resolveLocalizedPlanPrice(
   interval: BillingInterval,
   requestedCurrency: string,
   stripePrice: StripePriceLike | null,
-): LocalizedPlanPrice {
+): LocalizedPlanPrice | null {
+  const publishedMinor = getPublishedPlanPriceCents(plan, interval);
+  if (publishedMinor === null) return null;
   const currency = requestedCurrency.trim().toLowerCase();
   const publishedUsd: LocalizedPlanPrice = {
-    amountMinor: getPublishedPlanPriceCents(plan, interval),
+    amountMinor: publishedMinor,
     currency: 'usd',
     localized: false,
   };

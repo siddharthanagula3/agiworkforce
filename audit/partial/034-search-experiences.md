@@ -25,16 +25,13 @@ Code: `apps/cli/src/command_registry.rs:209-209`
 
 - Done when: The user can search past conversations by title and message text and open a matching chat; only conversations the user can see in history are returned.
 - Wave: 3
-- Already works on: cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Exclude temporary chats from history search: /api/search filters titles and messages without is_temporary (the chat list does filter it), and the first turn of a new temporary chat is still saved, so temporary chats show up in search (LQA-01). | handler |
-| desktop | partial | Same as web (hosted): Exclude temporary chats from history search: /api/search filters titles and messages without is_temporary (the chat list does filter it), and the first turn of a new temporary chat is still saved, so temporary chats show up in search (LQA-01). | handler |
-| mobile | partial | Uses the same /api/search as web, so temporary chats leak into mobile history search too (LQA-01); exclude is_temporary in the route. | handler |
 | vscode | partial | Session search matches titles only (sessions sheet and Sessions History quick pick); message content is not searched, and the box appears only after 10 sessions. | handler |
 
-Code: `apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx:384-384`, `apps/web/features/chat/services/global-search-service.ts:178-178`, `apps/web/app/api/search/route.ts:256-262`, `apps/web/app/api/search/route.ts:305-313`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2257-2257`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4153-4158`, `apps/extension-vscode/src/core/commandSetup.ts:1268-1274`
 
 ## S34.03: Search Projects.
 

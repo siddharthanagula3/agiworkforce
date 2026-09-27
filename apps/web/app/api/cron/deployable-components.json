@@ -246,6 +246,24 @@
       ]
     },
     {
+      "name": "expire-code-trials",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; a trial past its end is moved to Free under a row lock, so an interrupted run leaves the rest for the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: ends code-granted trials whose period is over and moves the account to Free."
+        }
+      ]
+    },
+    {
       "name": "expire-memories",
       "role": "cleanup",
       "version": "1.0.0",
@@ -278,24 +296,6 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
-        }
-      ]
-    },
-    {
-      "name": "expire-code-trials",
-      "role": "billing",
-      "version": "1.0.0",
-      "produces": [],
-      "consumes": [],
-      "inFlightWork": {
-        "holds": "Nothing; a trial past its end is moved to Free under a row lock, so an interrupted run leaves the rest for the next tick.",
-        "recovery": "next-tick"
-      },
-      "changelog": [
-        {
-          "version": "1.0.0",
-          "date": "2026-09-27",
-          "change": "Added: ends code-granted trials whose period is over and moves the account to Free."
         }
       ]
     },
@@ -570,6 +570,24 @@
       ]
     },
     {
+      "name": "reconcile-billed-plans",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; the report is derived from subscription rows and Stripe on every run, and it repairs nothing.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-18",
+          "change": "Compares the plan and amount Stripe charges against the plan this deployment entitles, and reports the drift."
+        }
+      ]
+    },
+    {
       "name": "reconcile-credits",
       "role": "billing",
       "version": "1.0.0",
@@ -602,24 +620,6 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
-        }
-      ]
-    },
-    {
-      "name": "reconcile-billed-plans",
-      "role": "billing",
-      "version": "1.0.0",
-      "produces": [],
-      "consumes": [],
-      "inFlightWork": {
-        "holds": "Nothing; the report is derived from subscription rows and Stripe on every run, and it repairs nothing.",
-        "recovery": "next-tick"
-      },
-      "changelog": [
-        {
-          "version": "1.0.0",
-          "date": "2026-09-18",
-          "change": "Compares the plan and amount Stripe charges against the plan this deployment entitles, and reports the drift."
         }
       ]
     },
@@ -692,6 +692,24 @@
           "version": "1.0.0",
           "date": "2026-09-27",
           "change": "Added: emails a trial two days before it converts to a paid plan, with a one-click cancel."
+        }
+      ]
+    },
+    {
+      "name": "renew-gmail-watches",
+      "role": "connector-sync",
+      "version": "1.0.0",
+      "produces": ["event-triggers"],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing. Each Gmail watch is renewed on its own call, a failed renewal is recorded on its trigger, and the next run starts again from the watches closest to expiry.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: renews the Gmail mailbox watch behind each Gmail trigger before it lapses and queues any mail received since the last read."
         }
       ]
     },

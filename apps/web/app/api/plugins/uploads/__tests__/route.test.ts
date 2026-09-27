@@ -11,6 +11,12 @@ const { csrfMock, rateLimitMock, userScopedDbMock, storeOwnedPluginSourceMock, p
     pluginPolicyMock: vi.fn(),
   }));
 
+const featureGateMock = vi.hoisted(() =>
+  vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
+);
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
+}));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));

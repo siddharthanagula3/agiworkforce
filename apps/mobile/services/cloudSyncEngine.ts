@@ -418,7 +418,9 @@ async function push(account: CloudAccountEpoch): Promise<void> {
   const { dirtyConversationIds, dirtyMessages } = useCloudSyncStateStore.getState();
   if (dirtyConversationIds.length === 0 && dirtyMessages.length === 0) return;
 
+  const temporaryConversationIds = dirtyConversationIds.filter(isTemporaryCloudConversation);
   const conversationSnapshots = dirtyConversationIds
+    .filter((id) => !isTemporaryCloudConversation(id))
     .map((id) => conversationPort.get(id))
     .filter((c): c is SyncConversationRecord => Boolean(c));
   const conversations = conversationSnapshots.map((c) => toConversationPushItem(c));
@@ -433,7 +435,12 @@ async function push(account: CloudAccountEpoch): Promise<void> {
   for (const ref of dirtyMessages) {
     const msg = (cloud.messages[ref.conversationId] ?? []).find((m) => m.id === ref.messageId);
     const role = msg?.role;
-    if (!msg || !role || !isSyncableMessageRole(role)) {
+    if (
+      !msg ||
+      !role ||
+      !isSyncableMessageRole(role) ||
+      isTemporaryCloudConversation(ref.conversationId)
+    ) {
       deadRefs.push(ref);
       continue;
     }
@@ -452,7 +459,7 @@ async function push(account: CloudAccountEpoch): Promise<void> {
     messages.push(toMessagePushItem(ref.conversationId, snapshot));
   }
 
-  const resolvedConversationIds = new Set<string>();
+  const resolvedConversationIds = new Set<string>(temporaryConversationIds);
   const resolvedMessageIds = new Set<string>();
   if (conversations.length > 0 || messages.length > 0) {
     const raw = await api.post<unknown>(SYNC_PATH, {
@@ -887,11 +894,20 @@ export function stopCloudSyncLoop(): void {
   }
 }
 
+function isTemporaryCloudConversation(id: string): boolean {
+  return (
+    useChatCloudMessageStore.getState().conversations.find((conversation) => conversation.id === id)
+      ?.temporary === true
+  );
+}
+
 export function markConversationForSync(id: string): void {
+  if (isTemporaryCloudConversation(id)) return;
   useCloudSyncStateStore.getState().markConversationDirty(id);
 }
 
 export function markMessageForSync(conversationId: string, messageId: string): void {
+  if (isTemporaryCloudConversation(conversationId)) return;
   useCloudSyncStateStore.getState().markMessageDirty(conversationId, messageId);
 }
 

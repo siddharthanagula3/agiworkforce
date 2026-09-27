@@ -259,6 +259,7 @@ async function handleGet(request: NextRequest) {
     'title ilike $2',
     'organization_id is not distinct from $3::uuid',
     'deleted_at is null',
+    'coalesce(is_temporary, false) = false',
   ];
   if (!includeArchived) sessionClauses.push('archived = false');
   if (startDate) {
@@ -293,6 +294,7 @@ async function handleGet(request: NextRequest) {
     "(coalesce(metadata->>'filename','') ilike $2 or coalesce(prompt,'') ilike $2)",
     'organization_id is not distinct from $3::uuid',
     'deleted_at is null',
+    'not temporary_chat',
   ];
   if (startDate) {
     fileClauses.push(`created_at >= $${fileParams.length + 1}`);
@@ -308,6 +310,7 @@ async function handleGet(request: NextRequest) {
     'm.content ilike $2',
     'c.organization_id is not distinct from $3::uuid',
     'c.deleted_at is null',
+    'coalesce(c.is_temporary, false) = false',
     'm.deleted_at is null',
   ];
   if (!includeArchived) msgClauses.push('c.archived = false');

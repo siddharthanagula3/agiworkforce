@@ -27,14 +27,14 @@ function reservedRightGutterRem(from: HTMLElement, root: HTMLElement): number {
 }
 
 describe('UpgradePlanDialog header, close control has its own space', () => {
-  it('reserves at least the close button footprint to the right of the billing toggle', () => {
+  it('reserves at least the close button footprint to the right of the heading', () => {
     render(
       <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,
     );
 
     const dialog = screen.getByRole('dialog');
     const close = screen.getByRole('button', { name: 'Close upgrade plan dialog' });
-    const annual = screen.getByRole('button', { name: 'Annual' });
+    const lede = screen.getByText(/sign in and start now/i);
 
     expect(close.parentElement).toBe(dialog);
     expect(close.className).toContain('absolute');
@@ -42,7 +42,7 @@ describe('UpgradePlanDialog header, close control has its own space', () => {
     const closeFootprintRem = spacing(close.className, ['right']) + spacing(close.className, ['w']);
     expect(closeFootprintRem).toBeGreaterThan(0);
 
-    const headerRow = annual.closest('.flex.items-start.justify-between') as HTMLElement | null;
+    const headerRow = lede.closest('.flex.items-start.justify-between') as HTMLElement | null;
     expect(headerRow).not.toBeNull();
 
     const reserved = reservedRightGutterRem(headerRow!, dialog);

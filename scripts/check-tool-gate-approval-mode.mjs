@@ -32,12 +32,7 @@ const SCAN_ROOTS = ['apps/web'];
  * Call sites that pass the literal 'auto' today. Each entry states why, and the
  * guard fails on any call site not named here, so the list can only shrink.
  */
-export const AUTO_MODE_BASELINE = new Map([
-  [
-    'apps/web/lib/services/scheduled-agent-executor.ts',
-    "a scheduled run pins 'auto' instead of asking classifyToolLoopInputs, which it already imports, so the account's Tool Approvals policy does not reach the gate on the one path that runs unattended",
-  ],
-]);
+export const AUTO_MODE_BASELINE = new Map();
 
 export function approvalModeArgument(callText) {
   const found = new RegExp(`\\b${OPTION}\\s*:\\s*([^,}\\n]+)`, 'u').exec(callText);

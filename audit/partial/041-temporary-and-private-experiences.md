@@ -34,17 +34,13 @@ nothing is left.
 
 - Done when: The product explains accurately what is and is not kept from a temporary chat, and the explanation matches what happens.
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The copy promises nothing is written to history and that ending a chat removes every message, but the first turn of a new temporary chat is persisted (client flag computed from the placeholder id; free-pool routes save user_message unchecked), and /api/search returns temporary titles and messages. | handler, states |
-| desktop | partial | The copy promises nothing is written to history and that ending a chat removes every message, but the first turn of a new temporary chat is persisted (client flag computed from the placeholder id; free-pool routes save user_message unchecked), and /api/search returns temporary titles and messages. | handler, states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:366-368`, `apps/web/features/settings/sections/PrivacySection.tsx:736-744`, `apps/web/lib/temporary-chat-policy.ts:24-34`, `apps/web/lib/hooks/useChatStream.ts:3247-3251`
 
 ## S41.04: Memory-read choice where offered.
 
@@ -242,15 +238,13 @@ Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-744`, `apps/we
 
 - Done when: The product explains, in context, what each privacy setting does.
 - Wave: 3
-- Already works on: mobile, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Privacy copy explains each setting, but the temporary-chat text ('No message ... is written to your history') is not true for the first turn of a new temporary chat (LQA-01). | states |
-| desktop | partial | Privacy copy explains each setting, but the temporary-chat text ('No message ... is written to your history') is not true for the first turn of a new temporary chat (LQA-01). | states |
 | vscode | partial | Only a one-line note that local history stays local; no explanation of what each privacy-relevant setting does. | ui |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:438-441`, `apps/web/features/settings/components/WebSettingsModal.tsx:199-199`, `apps/web/features/settings/sections/PrivacySection.tsx:739-743`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2709-2711`
+Code: `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`
 
 ## S41.20: Per-feature processing-location disclosure.
 

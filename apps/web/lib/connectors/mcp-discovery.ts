@@ -9,6 +9,8 @@ import {
 } from '@modelcontextprotocol/client';
 
 import { logger } from '@/lib/logger';
+import { createDeadline } from '@/lib/url-fetch/guarded-fetch';
+import { TOKEN_REQUEST_TIMEOUT_MS } from '@/lib/connectors/oauth-client';
 import { generateOAuthState } from '@/lib/connectors/pkce';
 import {
   McpOAuthClientProvider,
@@ -369,8 +371,16 @@ export async function refreshDiscoveredGrant(input: {
     },
   });
 
+  const deadline = createDeadline(TOKEN_REQUEST_TIMEOUT_MS);
   try {
-    await auth(provider, { serverUrl: input.mcpUrl });
+    await auth(provider, {
+      serverUrl: input.mcpUrl,
+      fetchFn: (url, init) =>
+        fetch(url, {
+          ...init,
+          signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal,
+        }),
+    });
   } catch (error) {
     if (error instanceof AuthorizationServerMismatchError) {
       logger.warn(
@@ -383,6 +393,8 @@ export async function refreshDiscoveredGrant(input: {
       status: 'failed',
       message: error instanceof Error ? error.message : 'Token refresh failed.',
     };
+  } finally {
+    deadline.release();
   }
 
   const tokens = provider.resolvedTokens as

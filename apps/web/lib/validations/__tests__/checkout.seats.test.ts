@@ -58,13 +58,22 @@ describe('checkout seat validation', () => {
     expect(result.success && result.data.seats).toBe(5);
   });
 
-  it('still refuses yearly for a truly monthly-only plan (max)', () => {
-    const result = CheckoutRequestSchema.safeParse({
-      plan: 'max',
-      billingInterval: 'yearly',
-    });
+  it.each(['basic', 'pro', 'max', 'max_15x'])('refuses yearly for the individual plan %s', (plan) => {
+    const result = CheckoutRequestSchema.safeParse({ plan, billingInterval: 'yearly' });
     expect(result.success).toBe(false);
     expect(issuePaths(result)).toContain('billingInterval');
+  });
+
+  it('names the cadence an individual plan is sold with when refusing yearly', () => {
+    const result = UpgradeApplyRequestSchema.safeParse({
+      plan: 'pro',
+      billingInterval: 'yearly',
+      previewToken: 'preview',
+    });
+    expect(result.success).toBe(false);
+    expect(result.success ? [] : result.error.issues.map((issue) => issue.message)).toContain(
+      'Pro is not sold with yearly billing. Choose monthly billing.',
+    );
   });
 
   it('still refuses unknown fields on the strict schema', () => {

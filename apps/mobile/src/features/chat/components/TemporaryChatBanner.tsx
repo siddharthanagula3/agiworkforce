@@ -38,8 +38,8 @@ export function TemporaryChatBanner() {
     >
       <EyeOff size={14} color={colors.purple} style={{ marginTop: 1 }} />
       <Text style={{ flex: 1, fontSize: 12, lineHeight: 17, color: colors.textSecondary }}>
-        This chat won&apos;t appear in history, use memory, or train models. May be retained briefly
-        for safety.
+        This chat won&apos;t appear in your history or search, and it won&apos;t use or update
+        memory. Anything kept to run it is deleted after 30 days.
       </Text>
       <Pressable
         onPress={() => setVisible(false)}
