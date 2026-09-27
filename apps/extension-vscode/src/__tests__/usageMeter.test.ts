@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { fetchTierInfo } from '../utils/api';
 import {
-  formatManagedUsageLabel,
+  formatBucketCreditsLeft,
   formatUsageMeterFallbackLabel,
   resolvePlanTier,
   resolveUsageMeter,
@@ -122,8 +122,77 @@ describe('usageMeter', () => {
     });
   });
 
-  it('formats labels with reported token counts when provided', () => {
-    expect(formatManagedUsageLabel(0.75, 100_000, 25_000)).toBe('25.0k/100.0k tokens');
+  it('states what is left of a window in credits, never in tokens', () => {
+    expect(
+      formatBucketCreditsLeft({
+        bucket: 'session',
+        percentRemaining: 25,
+        resetAt: null,
+        allowanceCredits: 50,
+        usedCredits: 37.5,
+      }),
+    ).toBe('12.5 of 50 credits left');
+    expect(
+      formatBucketCreditsLeft({
+        bucket: 'period',
+        percentRemaining: 60,
+        resetAt: null,
+        allowanceCredits: 2_000,
+        usedCredits: 800,
+      }),
+    ).toBe('1,200 of 2,000 credits left');
+  });
+
+  it('never states a negative balance once usage passes the allowance', () => {
+    expect(
+      formatBucketCreditsLeft({
+        bucket: 'weekly',
+        percentRemaining: 0,
+        resetAt: null,
+        allowanceCredits: 500,
+        usedCredits: 540,
+      }),
+    ).toBe('0 of 500 credits left');
+  });
+
+  it('claims no credit figure when the server published none for the window', () => {
+    expect(
+      formatBucketCreditsLeft({ bucket: 'session', percentRemaining: 40, resetAt: null }),
+    ).toBeNull();
+    expect(
+      formatBucketCreditsLeft({
+        bucket: 'weeklyFlagship',
+        percentRemaining: 100,
+        resetAt: null,
+        allowanceCredits: 0,
+        usedCredits: 0,
+      }),
+    ).toBeNull();
+  });
+
+  it('carries the credit windows from account usage onto a managed meter', async () => {
+    const credits = {
+      monthly: { allowance: 2_000, used: 800, remaining: 1_200, reset_at: null },
+      weekly: { allowance: 500, used: 125, remaining: 375, reset_at: null },
+      five_hour: { allowance: 50, used: 10, remaining: 40, reset_at: null },
+      flagship_weekly: null,
+      purchased: { remaining: 250, overage_enabled: true },
+    };
+    vi.mocked(fetchTierInfo).mockResolvedValue({
+      tier: 'pro',
+      usagePercentage: 40,
+      resetsAt: '2026-06-01T00:00:00.000Z',
+      creditBalanceCents: 125,
+      overageEnabled: true,
+      credits,
+    });
+
+    await expect(resolveUsageMeter(secrets, 0)).resolves.toMatchObject({
+      source: 'managed-plan',
+      credits,
+      creditBalanceCents: 125,
+      overageEnabled: true,
+    });
   });
 
   it('formats fallback labels from the canonical trust mode vocabulary', () => {
