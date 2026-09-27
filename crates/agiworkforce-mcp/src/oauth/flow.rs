@@ -2,7 +2,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
 
 use super::pkce::{generate_pkce, generate_random_string};
 use crate::config::OAuthConfig;
@@ -12,6 +12,7 @@ use crate::security::{self, ValidatedEndpoint};
 pub const CLIENT_METADATA_DOCUMENT_PATH: &str = "/.well-known/oauth-client-metadata";
 
 const OAUTH_INTERACTIVE_TIMEOUT: Duration = Duration::from_secs(120);
+const CALLBACK_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const CALLBACK_PATH: &str = "/callback";
 
 pub fn client_metadata_document_url(origin: &str, surface: &str) -> Option<String> {
@@ -575,14 +576,21 @@ pub async fn start_pkce_flow(
         );
     }
 
-    let response = tokio::time::timeout(OAUTH_INTERACTIVE_TIMEOUT, wait_for_callback(listener))
-        .await
-        .map_err(|_| {
-            anyhow!(
-                "OAuth flow timed out after {}s waiting for the browser sign-in",
-                OAUTH_INTERACTIVE_TIMEOUT.as_secs()
-            )
-        })??;
+    let redirect_path = reqwest::Url::parse(&redirect_uri)
+        .with_context(|| format!("parse redirect URI {redirect_uri}"))?
+        .path()
+        .to_string();
+    let response = tokio::time::timeout(
+        OAUTH_INTERACTIVE_TIMEOUT,
+        wait_for_callback(listener, &redirect_path),
+    )
+    .await
+    .map_err(|_| {
+        anyhow!(
+            "OAuth flow timed out after {}s waiting for the browser sign-in",
+            OAUTH_INTERACTIVE_TIMEOUT.as_secs()
+        )
+    })??;
     let code = accept_authorization_response(
         response,
         &state,
@@ -794,13 +802,49 @@ struct AuthorizationResponse {
     error_description: Option<String>,
 }
 
-async fn wait_for_callback(listener: TcpListener) -> Result<AuthorizationResponse> {
-    let (mut stream, _peer) = listener
-        .accept()
-        .await
-        .context("accept loopback OAuth callback")?;
-    let (read_half, mut write_half) = stream.split();
-    let mut reader = BufReader::new(read_half);
+async fn wait_for_callback(
+    listener: TcpListener,
+    redirect_path: &str,
+) -> Result<AuthorizationResponse> {
+    loop {
+        let (mut stream, _peer) = listener
+            .accept()
+            .await
+            .context("accept loopback OAuth callback")?;
+        let Ok(Ok(request_line)) =
+            tokio::time::timeout(CALLBACK_READ_TIMEOUT, read_request_head(&mut stream)).await
+        else {
+            continue;
+        };
+        if !is_redirect_request(&request_line, redirect_path) {
+            let _ = stream
+                .write_all(
+                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                )
+                .await;
+            let _ = stream.shutdown().await;
+            continue;
+        }
+
+        let body = "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:3rem;\">\
+                    <h1>Authorization complete</h1>\
+                    <p>You can close this tab and return to your terminal.</p>\
+                    </body></html>";
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\
+             Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = stream.write_all(resp.as_bytes()).await;
+        let _ = stream.shutdown().await;
+
+        return parse_authorization_response(&request_line);
+    }
+}
+
+async fn read_request_head(stream: &mut TcpStream) -> Result<String> {
+    let mut reader = BufReader::new(stream);
     let mut request_line = String::new();
     reader
         .read_line(&mut request_line)
@@ -818,21 +862,15 @@ async fn wait_for_callback(listener: TcpListener) -> Result<AuthorizationRespons
             break;
         }
     }
+    Ok(request_line)
+}
 
-    let body = "<!doctype html><html><body style=\"font-family:system-ui;text-align:center;padding:3rem;\">\
-                <h1>Authorization complete</h1>\
-                <p>You can close this tab and return to your terminal.</p>\
-                </body></html>";
-    let resp = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\
-         Content-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    );
-    let _ = write_half.write_all(resp.as_bytes()).await;
-    let _ = write_half.shutdown().await;
-
-    parse_authorization_response(&request_line)
+fn is_redirect_request(request_line: &str, redirect_path: &str) -> bool {
+    let mut parts = request_line.split_whitespace();
+    parts.next() == Some("GET")
+        && parts
+            .next()
+            .is_some_and(|target| target.split('?').next() == Some(redirect_path))
 }
 
 fn parse_authorization_response(request_line: &str) -> Result<AuthorizationResponse> {
