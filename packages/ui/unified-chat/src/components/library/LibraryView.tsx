@@ -64,6 +64,7 @@ import {
   type GeneratedFile,
   type GeneratedFileKind,
   type SourceSurface,
+  isAcceptedAttachmentType,
 } from '@agiworkforce/types';
 import { FileKindIcon } from './FileKindIcon';
 
@@ -1627,7 +1628,8 @@ function ItemMenu({
                   Remix
                 </button>
               ) : null}
-              {actions.onAddToProject ? (
+              {actions.onAddToProject &&
+              isAcceptedAttachmentType(item.file_name, item.mime_type) ? (
                 <button
                   type="button"
                   role="menuitem"
