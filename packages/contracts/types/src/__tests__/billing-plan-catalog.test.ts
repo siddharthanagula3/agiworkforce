@@ -5,6 +5,7 @@ import {
   BILLING_PLAN_CATALOG_VERSION,
   SPEND_CAP_UNLIMITED,
   WITHDRAWN_BILLING_PLANS,
+  grandfatheredYearlyBillingNotice,
   isGrandfatheredBillingInterval,
   isGrandfatheredSubscriber,
   isPlanOnSale,
@@ -57,6 +58,13 @@ describe('plan catalog versioning', () => {
     expect(isGrandfatheredBillingInterval('pro', 'yearly')).toBe(true);
     expect(isGrandfatheredBillingInterval('pro', 'monthly')).toBe(false);
     expect(isGrandfatheredBillingInterval('team', 'yearly')).toBe(false);
+  });
+
+  it('tells a grandfathered yearly subscriber that nothing changes until they switch', () => {
+    expect(grandfatheredYearlyBillingNotice('pro')).toBe(
+      'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+    );
+    expect(grandfatheredYearlyBillingNotice('team')).toBeNull();
   });
 
   it('sends a new buyer to the plan itself while it is on sale', () => {
