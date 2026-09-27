@@ -104,7 +104,10 @@ import {
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
-import type { ManagedCloudScheduleRunApprovalToolCall } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  type ManagedCloudScheduleRunApprovalToolCall,
+} from '@agiworkforce/cloud-contracts';
 import type {
   ScheduleTask,
   ScheduledExecutionResult,
@@ -213,6 +216,8 @@ async function buildScheduledToolPlan(input: {
   planTier: string;
   provider: string;
   model: string;
+  webAllowed: boolean;
+  connectors: readonly string[] | null;
 }): Promise<ScheduledToolPlan> {
   const capabilities = getModelMetadataById(input.model)?.capabilities;
   const policy = getTierPolicy(input.planTier);
@@ -230,7 +235,7 @@ async function buildScheduledToolPlan(input: {
   const provider = input.provider.toLowerCase();
   let tools: unknown[] = [];
   let webSearch = false;
-  if (policy.allowSearch) {
+  if (policy.allowSearch && input.webAllowed) {
     const nativeSearch = appendWebSearchTool(provider, [], capabilities) ?? [];
     const searchTools = shouldOfferGenericWebSearchTool({
       providerLower: provider,
@@ -279,7 +284,7 @@ async function buildScheduledToolPlan(input: {
     connectorPermissions,
     toolApprovalPolicy,
     webSearch,
-    webFetch: policy.allowSearch,
+    webFetch: policy.allowSearch && input.webAllowed,
     codeExecution: codeTools.length > 0,
     withheldTools,
   };
@@ -295,7 +300,11 @@ async function buildScheduledToolPlan(input: {
     }),
   ]);
   const mcpTools = [...operatorTools, ...connectorCatalog.tools].filter(
-    (tool) => !connectorPermissions.isDenied(tool.qualifiedName),
+    (tool) =>
+      !connectorPermissions.isDenied(tool.qualifiedName) &&
+      (tool.origin !== 'connector' ||
+        input.connectors === null ||
+        input.connectors.includes(tool.serverId)),
   );
   return {
     ...base,
@@ -387,6 +396,7 @@ async function resolveScheduledContext(input: {
   runId: string;
   scope: Parameters<ScheduledTaskExecutor>[3];
   projectContext: LoadedProjectContext | null;
+  includeMemory: boolean;
 }): Promise<{ projectPrompt: string | null; memoryPrompt: string | null }> {
   const { scope, task } = input;
   const [contextPolicy, memoryPolicy, memoryScope] = await Promise.all([
@@ -414,7 +424,7 @@ async function resolveScheduledContext(input: {
     policy: contextPolicy,
     loaders: [
       ...(input.projectContext ? projectContextLoaders(input.projectContext) : []),
-      memoryLoader,
+      ...(input.includeMemory ? [memoryLoader] : []),
     ],
     store: createPostgresContextManifestStore(scope.db),
     onLoaderError: (sourceClass, error) => {
@@ -725,6 +735,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 
+  const sources = task.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES;
   const plan = await buildScheduledToolPlan({
     db: scope.db,
     userId: scope.userId,
@@ -732,6 +743,8 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     planTier: subscriptionTier,
     provider: dispatchProvider,
     model: route.modelKey,
+    webAllowed: sources.web,
+    connectors: task.connectors ?? null,
   });
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
@@ -747,13 +760,21 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     promptChars = JSON.stringify(messages).length;
     sensitiveContextPresent = resume.checkpoint.sensitiveContextPresent;
   } else {
-    const projectContext = task.projectId
-      ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
-      : null;
-    if (task.projectId && !projectContext) {
+    const readsProject = Boolean(task.projectId) && sources.project;
+    const projectContext =
+      task.projectId && readsProject
+        ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
+        : null;
+    if (task.projectId && readsProject && !projectContext) {
       throw new ScheduledProjectContextUnavailableError(task.projectId);
     }
-    const resolved = await resolveScheduledContext({ task, runId, scope, projectContext });
+    const resolved = await resolveScheduledContext({
+      task,
+      runId,
+      scope,
+      projectContext,
+      includeMemory: sources.memory,
+    });
     const systemPrompt = [
       resolved.projectPrompt,
       resolved.memoryPrompt,
