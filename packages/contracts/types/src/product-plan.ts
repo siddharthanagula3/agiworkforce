@@ -3,6 +3,7 @@ import {
   BILLING_PLAN_PRICING,
   BILLING_PLAN_PRODUCT_LIMITS,
   SELF_SERVE_PAID_PLAN_TIERS,
+  billingIntervalsForPlan,
   getBillingPlanPricing,
   getPlanPriceCents,
   getPlanPriceInr,
@@ -129,12 +130,9 @@ export function listPlansForProduct(productId: string | null | undefined): Plan[
   const perSeat = isPerSeatBillingPlan(id);
   const trialDays = getPlanTrialDays(id);
   const plans: Plan[] = [];
-  for (const interval of ['monthly', 'yearly'] as const) {
+  for (const interval of billingIntervalsForPlan(id)) {
     const priceMinorUnits = getPlanPriceCents(id, interval);
     if (priceMinorUnits === null) continue;
-    if (interval === 'yearly' && priceMinorUnits === 0 && getPlanPriceCents(id, 'monthly') !== 0) {
-      continue;
-    }
     plans.push({ productId: id, interval, currency: 'usd', priceMinorUnits, perSeat, trialDays });
   }
 
