@@ -1,7 +1,56 @@
 import * as Crypto from 'expo-crypto';
-import { extractPassiveMemoryFacts, normalizeMemoryKey } from '@agiworkforce/agent-core';
+import {
+  classifyMemoryCategory,
+  extractPassiveMemoryFacts,
+  normalizeMemoryKey,
+} from '@agiworkforce/agent-core';
+import { isMemoryCategory, MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
 import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
-import type { MemoryFact } from '@/storage/types';
+import type { MemoryFact, MemoryFactSource } from '@/storage/types';
+
+const MEMORY_TOPIC_TITLES = {
+  preference: 'Preferences',
+  fact: 'About you',
+  decision: 'Decisions',
+  context: 'Context',
+  summary: 'Summaries',
+  skill: 'Skills',
+} satisfies Record<MemoryCategory, string>;
+
+export interface MemoryTopicGroup {
+  key: MemoryCategory;
+  title: string;
+  data: MemoryFact[];
+}
+
+export function memoryFactOrigin(entry: MemoryFact): MemoryFactSource {
+  if (entry.source) return entry.source;
+  return entry.source_conversation_id ? 'learned' : 'typed';
+}
+
+export function memoryFactTopic(entry: MemoryFact): MemoryCategory {
+  const stored = entry.category?.trim().toLowerCase();
+  return isMemoryCategory(stored) ? stored : classifyMemoryCategory(entry.fact);
+}
+
+export function groupMemoryFactsByTopic(entries: MemoryFact[]): MemoryTopicGroup[] {
+  const groups = new Map<MemoryCategory, MemoryFact[]>();
+  for (const entry of entries) {
+    const topic = memoryFactTopic(entry);
+    groups.set(topic, [...(groups.get(topic) ?? []), entry]);
+  }
+  return MEMORY_CATEGORIES.filter((key) => groups.has(key)).map((key) => ({
+    key,
+    title: MEMORY_TOPIC_TITLES[key],
+    data: groups.get(key) ?? [],
+  }));
+}
+
+function lastChangedAt(entry: MemoryFact): number {
+  return typeof entry.updated_at === 'number' && Number.isFinite(entry.updated_at)
+    ? Math.max(entry.updated_at, entry.created_at)
+    : entry.created_at;
+}
 
 export function dedupeAgainstExisting(candidates: string[], existing: MemoryFact[]): string[] {
   const seen = new Set(existing.map((f) => normalizeMemoryKey(f.fact)));
@@ -86,7 +135,7 @@ export function summarizeMemoryFacts(entries: MemoryFact[]): MemorySummary {
     }
     if (entry.pinned) {
       buckets.pinned.push(entry);
-    } else if (entry.source_conversation_id) {
+    } else if (memoryFactOrigin(entry) === 'learned') {
       buckets['from-chats'].push(entry);
     } else {
       buckets['added-by-you'].push(entry);
@@ -119,7 +168,8 @@ export function describeMemoryFreshness(
   let newestAt: number | null = null;
   for (const entry of entries) {
     if (typeof entry.created_at !== 'number' || !Number.isFinite(entry.created_at)) continue;
-    newestAt = newestAt === null ? entry.created_at : Math.max(newestAt, entry.created_at);
+    const changedAt = lastChangedAt(entry);
+    newestAt = newestAt === null ? changedAt : Math.max(newestAt, changedAt);
   }
   if (newestAt === null) return null;
 
@@ -155,6 +205,7 @@ export async function consolidateFactsFromTurn(params: {
           source_conversation_id: conversationId,
           pinned: false,
           created_at: Date.now(),
+          source: 'learned',
         });
         inserted += 1;
       } catch {

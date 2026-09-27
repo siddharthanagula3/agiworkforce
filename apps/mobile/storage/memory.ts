@@ -1,5 +1,11 @@
 import { getDb } from './db';
-import type { MemoryFact } from './types';
+import type { MemoryFact, MemoryFactSource } from './types';
+
+const MEMORY_FACT_SOURCES: ReadonlySet<string> = new Set<MemoryFactSource>([
+  'typed',
+  'learned',
+  'imported',
+]);
 
 function row2fact(r: Record<string, unknown>): MemoryFact {
   return {
@@ -8,6 +14,11 @@ function row2fact(r: Record<string, unknown>): MemoryFact {
     source_conversation_id: (r.source_conversation_id as string | null) ?? null,
     pinned: !!(r.pinned as number),
     created_at: r.created_at as number,
+    updated_at: typeof r.updated_at === 'number' ? r.updated_at : (r.created_at as number),
+    source:
+      typeof r.source === 'string' && MEMORY_FACT_SOURCES.has(r.source)
+        ? (r.source as MemoryFactSource)
+        : null,
   };
 }
 
@@ -18,14 +29,16 @@ export async function insertMemoryFact(
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at)
-       VALUES (?, ?, ?, ?, ?);`,
+      `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at, updated_at, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?);`,
       [
         fact.id,
         fact.fact,
         fact.source_conversation_id ?? null,
         fact.pinned ? 1 : 0,
         fact.created_at,
+        fact.updated_at ?? fact.created_at,
+        fact.source ?? null,
       ],
     );
     if (embedding) {
@@ -112,7 +125,11 @@ export async function searchMemoryByEmbedding(
 
 export async function updateMemoryFact(id: string, fact: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync('UPDATE memory_facts SET fact = ? WHERE id = ?;', [fact, id]);
+  await db.runAsync('UPDATE memory_facts SET fact = ?, updated_at = ? WHERE id = ?;', [
+    fact,
+    Date.now(),
+    id,
+  ]);
 }
 
 export async function togglePinMemoryFact(id: string, pinned: boolean): Promise<void> {

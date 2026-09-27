@@ -126,4 +126,12 @@ export const MIGRATION_SQL: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    sql: `
+      ALTER TABLE memory_facts ADD COLUMN updated_at INTEGER;
+      ALTER TABLE memory_facts ADD COLUMN source TEXT;
+      UPDATE memory_facts SET updated_at = created_at WHERE updated_at IS NULL;
+    `,
+  },
 ];

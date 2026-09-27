@@ -37,6 +37,9 @@ describe('mapMemoryWireDelta', () => {
       createdAt: T,
       updatedAt: T,
       serverVersion: '1',
+      origin: 'mobile',
+      sourceConversationId: null,
+      sourceConversationTitle: null,
     });
   });
 

@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Alert, View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
+import {
+  Alert,
+  View,
+  TextInput,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  SectionList,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -11,7 +19,13 @@ import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { SettingsGroup, SettingsRow } from '@/src/features/settings/common';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
-import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
+import {
+  describeMemoryFreshness,
+  groupMemoryFactsByTopic,
+  type MemoryTopicGroup,
+} from '@/src/features/memory/services/consolidation';
+import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
@@ -127,6 +141,13 @@ export default function MemoryScreen() {
 
   const memoryFreshness = useMemo(() => describeMemoryFreshness(entries), [entries]);
 
+  const localConversations = useChatMessageStore((state) => state.conversations);
+  const cloudConversations = useChatCloudMessageStore((state) => state.conversations);
+  const conversationTitles = useMemo(() => {
+    const conversations = currentIsCloud ? cloudConversations : localConversations;
+    return new Map(conversations.map((conversation) => [conversation.id, conversation.title]));
+  }, [cloudConversations, currentIsCloud, localConversations]);
+
   const displayedEntries = useMemo(() => {
     const source = searchQuery.trim() ? filteredEntries : entries;
 
@@ -134,6 +155,12 @@ export default function MemoryScreen() {
 
     return source.filter((e) => e.pinned);
   }, [entries, filteredEntries, searchQuery, activeFilter]);
+
+  const topicGroups = useMemo<MemoryTopicGroup[] | null>(() => {
+    if (activeFilter !== 'All' || searchQuery.trim()) return null;
+    const groups = groupMemoryFactsByTopic(displayedEntries);
+    return groups.length > 1 ? groups : null;
+  }, [activeFilter, displayedEntries, searchQuery]);
 
   const handleSearchChange = useCallback(
     (text: string) => {
@@ -227,6 +254,38 @@ export default function MemoryScreen() {
     [deleteMemory, isScopeCurrent],
   );
 
+  const handleSwipeDelete = useCallback(
+    (id: string) => {
+      const actionScope = activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
+      Alert.alert(
+        'Delete memory?',
+        currentIsCloud
+          ? 'This removes the memory from your account and every synced device.'
+          : 'This removes the memory from this device.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (!isScopeCurrent(actionScope)) return;
+              void deleteMemory(id);
+            },
+          },
+        ],
+      );
+    },
+    [currentIsCloud, deleteMemory, isScopeCurrent],
+  );
+
+  const handleOpenConversation = useCallback(
+    (conversationId: string) => {
+      router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+    },
+    [router],
+  );
+
   const handleSave = useCallback(
     (content: string, _category?: string) => {
       if (!isScopeCurrent(editorScopeRef.current)) return;
@@ -247,12 +306,40 @@ export default function MemoryScreen() {
     ({ item }: { item: MemoryEntry }) => (
       <MemoryItem
         memory={item}
+        conversationTitle={
+          (item.source_conversation_id
+            ? conversationTitles.get(item.source_conversation_id)
+            : null) ??
+          item.source_conversation_title ??
+          null
+        }
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={handleSwipeDelete}
         onTogglePin={handleTogglePin}
+        onOpenConversation={handleOpenConversation}
       />
     ),
-    [handleEdit, handleDelete, handleTogglePin],
+    [conversationTitles, handleEdit, handleOpenConversation, handleSwipeDelete, handleTogglePin],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: MemoryTopicGroup }) => (
+      <Text
+        accessibilityRole="header"
+        style={{
+          color: colors.textMuted,
+          fontSize: 12,
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          paddingTop: 8,
+          paddingBottom: 6,
+          backgroundColor: colors.surfaceBase,
+        }}
+      >
+        {section.title}
+      </Text>
+    ),
+    [colors.surfaceBase, colors.textMuted],
   );
 
   const keyExtractor = useCallback((item: MemoryEntry) => item.id, []);
@@ -433,6 +520,23 @@ export default function MemoryScreen() {
             hasSearch={searchText.length > 0}
             isPinnedFilter={activeFilter === 'Pinned'}
             colors={colors}
+          />
+        ) : topicGroups ? (
+          <SectionList
+            sections={topicGroups}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            keyExtractor={keyExtractor}
+            stickySectionHeadersEnabled={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading && entries.length > 0}
+                onRefresh={handleRefresh}
+                tintColor={colors.teal}
+              />
+            }
           />
         ) : (
           <FlatList
