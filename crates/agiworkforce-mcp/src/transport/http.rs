@@ -213,7 +213,7 @@ impl HttpConn {
         let cfg = self.oauth.as_ref()?;
         let cached = self.hooks.token_store.get(&self.url)?;
         cached.refresh_token.as_ref()?;
-        match refresh_token(&cached, cfg).await {
+        match refresh_token(&cached, cfg, &self.url).await {
             Ok(refreshed) => {
                 let access = refreshed.access_token.clone();
                 if let Err(e) = self.hooks.token_store.set(&self.url, refreshed) {
@@ -664,7 +664,7 @@ async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Op
         return Some(cached.access_token);
     }
 
-    match refresh_token(&cached, cfg).await {
+    match refresh_token(&cached, cfg, url).await {
         Ok(refreshed) => {
             let access = refreshed.access_token.clone();
             let merged = OAuthToken {
