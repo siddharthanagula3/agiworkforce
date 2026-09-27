@@ -70,15 +70,13 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 - Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
 - Wave: 3
+- Already works on: cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
 | desktop | partial | Listed difference not enforced: getCloudChatSurfaceCapability returns managed_chat for 'chrome' (free-chat-surface-policy 95-96), so Free/Basic use Chrome managed chat while pricing (developerSurfaces column), plan-display and the dead auth-gate message say Chrome requires Pro. The auditor noted this under S81.04 but still marked S81.09 done. |  |
 | mobile | partial | Mobile has no plan comparison; it only tells a blocked user which plan a feature needs (paywall sheet). | ui |
-| cli | partial | CLI shows the plan a blocked feature needs and links to web pricing; it cannot list per-plan feature access itself. | surface-only |
-| vscode | partial | VS Code paywall warning names the gate and opens web pricing/billing; no in-extension feature comparison. | surface-only |
-| chrome | partial | Chrome side panel shows a paid-plan-required state and links to web pricing; no feature comparison in the panel. | surface-only |
 
 Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/app/pricing/page.tsx:206-217`, `packages/contracts/types/src/billing-catalog.ts:208-227`, `apps/web/app/api/media/image/generate/route.ts:223-226`
 
@@ -203,13 +201,10 @@ Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/st
 
 - Done when: Each plan explains its own features (what it adds over the current plan, and why a blocked feature needs a given plan).
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile names the plan a blocked feature needs but never lists what each paid plan includes. | ui |
-| cli | partial | CLI paywall names the required plan and reason, then links to web pricing for the details. | surface-only |
-| vscode | partial | VS Code paywall names the gate and opens web pricing; no per-plan explanation in the extension. | surface-only |
-| chrome | partial | Chrome shows a plan-required state and links to web pricing; no per-plan explanation in the panel. | surface-only |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`, `apps/cli/src/errors.rs:348-360`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:86-91`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`
