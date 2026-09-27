@@ -217,6 +217,7 @@ import {
   type PurchasedCreditsView,
   type UsageWindowView,
 } from './features/side-panel/usageWindows';
+import { planComparisonViews } from './features/side-panel/planComparison';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   getClerkAccountProfile,
@@ -3552,6 +3553,32 @@ function injectStyles(): void {
       font-size: 10px;
       font-weight: 600;
       color: var(--agi-ext-text);
+    }
+    .sp-plan-compare > summary {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+    }
+    .sp-plan-compare-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .sp-plan-compare-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .sp-plan-compare-name {
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    .sp-plan-compare-detail {
+      color: var(--agi-ext-text-muted);
     }
     .sp-cloud-link-hint {
       color: var(--agi-ext-text-muted);
@@ -8367,6 +8394,34 @@ function buildUI(): void {
   quotaWrap.appendChild(quotaNoticeEl);
   const quotaModelsEl = el('div', { class: 'sp-quota-models', id: 'sp-quota-models' });
   quotaWrap.appendChild(quotaModelsEl);
+  const planCompareEl = el(
+    'details',
+    { class: 'sp-plan-compare', id: 'sp-plan-compare' },
+    el('summary', {}, t('spPlansHeading')),
+  );
+  const planCompareListEl = el('div', { class: 'sp-plan-compare-list' });
+  const planComparePricingBtn = el(
+    'button',
+    { class: 'sp-quota-upgrade-btn', type: 'button' },
+    t('spPlansPricing'),
+  );
+  planComparePricingBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: agiWebUrl('/pricing') }).catch(() => {});
+  });
+  planCompareEl.appendChild(planCompareListEl);
+  planCompareEl.appendChild(planComparePricingBtn);
+  quotaWrap.appendChild(planCompareEl);
+
+  function renderPlanComparison(currentPlan: string | null | undefined): void {
+    clearChildren(planCompareListEl);
+    for (const view of planComparisonViews(currentPlan)) {
+      const row = el('div', { class: 'sp-plan-compare-row' });
+      row.appendChild(el('span', { class: 'sp-plan-compare-name' }, view.label));
+      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.credits));
+      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.features));
+      planCompareListEl.appendChild(row);
+    }
+  }
 
   const quotaUpgradeRow = el('div', {
     class: 'sp-quota-upgrade-row',
@@ -8573,6 +8628,7 @@ function buildUI(): void {
     clearChildren(quotaWindowsEl);
     for (const view of views) quotaWindowsEl.appendChild(buildQuotaWindowRow(view));
     if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
+    renderPlanComparison(access.subscriptionTier);
     quotaLabelEl.textContent = t('spQuotaHeading');
     quotaBadgeEl.classList.add('visible');
 
@@ -8822,6 +8878,7 @@ function buildUI(): void {
     }
 
     clearManagedUsagePresentation();
+    renderPlanComparison(access.subscriptionTier);
     quotaWrap.style.display = '';
     quotaLabelEl.textContent = t('spQuotaProRequired');
     quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
