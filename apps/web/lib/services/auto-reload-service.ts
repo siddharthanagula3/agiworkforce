@@ -176,6 +176,14 @@ function toIso(value: string | Date): string {
   return (value instanceof Date ? value : new Date(value)).toISOString();
 }
 
+function runAfterResponse(task: Promise<void>): void {
+  try {
+    after(task);
+  } catch {
+    void task;
+  }
+}
+
 function failureMessage(reason: string): string {
   return Object.hasOwn(FAILURE_MESSAGES, reason)
     ? FAILURE_MESSAGES[reason as AutoReloadFailureReason]
@@ -521,11 +529,13 @@ export async function saveAutoReloadSettings(
     previous.threshold_credits !== update.thresholdCredits ||
     previous.consent_version !== AUTO_RELOAD_CONSENT_VERSION;
   if (termsChanged) {
-    await emailReloadConsent(
-      userId,
-      instrument.billingEmail ?? (await readProfileEmail(db, userId)),
-      consentText,
-      row.consent_accepted_at,
+    const to = instrument.billingEmail ?? (await readProfileEmail(db, userId));
+    runAfterResponse(
+      emailReloadConsent(userId, to, consentText, row.consent_accepted_at).catch(
+        (error: unknown) => {
+          logger.error({ error, userId }, 'Auto-reload confirmation email failed');
+        },
+      ),
     );
   }
   return { status: 'saved', settings: toAutoReloadSettings(row, instrument.card) };
@@ -1148,17 +1158,14 @@ async function runAutoReload(userId: string): Promise<AutoReloadOutcome> {
 }
 
 export function maybeTriggerAutoReload(userId: string): void {
-  const task = runAutoReload(userId).then(
-    () => undefined,
-    (error: unknown) => {
-      logger.error({ error, userId }, 'Auto-reload check after a settled charge failed');
-    },
+  runAfterResponse(
+    runAutoReload(userId).then(
+      () => undefined,
+      (error: unknown) => {
+        logger.error({ error, userId }, 'Auto-reload check failed');
+      },
+    ),
   );
-  try {
-    after(task);
-  } catch {
-    void task;
-  }
 }
 
 export async function sweepAutoReloads(deadline: number): Promise<AutoReloadSweepReport> {
