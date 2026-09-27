@@ -61,6 +61,131 @@
           }
         }
       },
+      "UpgradePreviewRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["basic", "pro", "max", "max_15x", "team"],
+            "description": "The plan to move the active subscription to. For team, the same plan with a larger seats value adds seats."
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"],
+            "description": "Must match the current subscription's cadence when the target plan sells that cadence; a mismatch answers 400."
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 999999,
+            "description": "Licensed seat count for team. Seats can only increase; added seats keep the renewal date and are charged for the rest of the current period."
+          },
+          "promotionCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Optional customer-facing promotion code, checked with Stripe before it is quoted."
+          }
+        }
+      },
+      "UpgradePreview": {
+        "type": "object",
+        "description": "The exact charge an upgrade would make. A tier upgrade starts a new billing period today: the new plan's price minus a credit for the unused time on the current plan. A seat increase keeps the renewal date and charges only for the rest of the period.",
+        "properties": {
+          "plan": { "type": "string" },
+          "billingInterval": { "type": "string", "enum": ["monthly", "yearly"] },
+          "currency": { "type": "string" },
+          "amountDueNowCents": {
+            "type": "integer",
+            "description": "What is charged today, after tax and any balance."
+          },
+          "charge": {
+            "type": "object",
+            "description": "Itemized receipt: lineItems, subtotalCents, discountCents, taxCents, totalCents, appliedBalanceCents, totalDueTodayCents, creditToBalanceCents and renewsAt."
+          },
+          "grandfatheredNotice": { "type": "string", "nullable": true },
+          "recurringAmountCents": {
+            "type": "integer",
+            "description": "What renews each period after the upgrade, before tax."
+          },
+          "seats": { "type": "integer" },
+          "promotion": {
+            "type": "object",
+            "nullable": true,
+            "description": "The applied promotion code and its discount, when one was sent."
+          },
+          "replacesScheduledChange": { "type": "boolean" },
+          "previewToken": {
+            "type": "string",
+            "description": "Signed quote to send to POST /upgrade. It binds the plan, cadence, seats, promotion and proration time."
+          }
+        }
+      },
+      "UpgradeCheckoutRequired": {
+        "type": "object",
+        "description": "The account has no paid subscription to credit, so the plan must be bought through POST /checkout. `checkout` quotes that purchase.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "type": { "type": "string" },
+              "code": { "type": "string", "enum": ["checkout_required"] }
+            }
+          },
+          "checkout": {
+            "type": "object",
+            "properties": {
+              "amountDueNowCents": { "type": "integer" },
+              "currency": { "type": "string" },
+              "recurringAmountCents": { "type": "integer" },
+              "seats": { "type": "integer" },
+              "trial": { "type": "object", "nullable": true }
+            }
+          }
+        }
+      },
+      "UpgradeRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval", "previewToken"],
+        "properties": {
+          "plan": { "type": "string", "enum": ["basic", "pro", "max", "max_15x", "team"] },
+          "billingInterval": { "type": "string", "enum": ["monthly", "yearly"] },
+          "seats": { "type": "integer", "minimum": 2, "maximum": 999999 },
+          "previewToken": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "The previewToken from POST /upgrade/preview for the same plan, cadence, seats and promotion."
+          },
+          "promotionCode": { "type": "string", "maxLength": 64, "pattern": "^[A-Za-z0-9]+$" }
+        }
+      },
+      "UpgradeResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "newPlan": { "type": "string" },
+          "billingInterval": { "type": "string", "enum": ["monthly", "yearly"] },
+          "seats": { "type": "integer" },
+          "activation": {
+            "type": "string",
+            "enum": ["webhook_pending"],
+            "description": "Stripe has charged; the plan is written when its subscription event arrives, usually within seconds."
+          }
+        }
+      },
+      "UpgradePaymentActionRequired": {
+        "type": "object",
+        "description": "The bank asked for authentication. Finish the payment at paymentUrl, or confirm clientSecret with Stripe.js, before the plan activates.",
+        "properties": {
+          "success": { "type": "boolean", "enum": [false] },
+          "paymentActionRequired": { "type": "boolean", "enum": [true] },
+          "message": { "type": "string" },
+          "paymentUrl": { "type": "string", "format": "uri" },
+          "clientSecret": { "type": "string" }
+        }
+      },
       "DeviceLinkRequest": {
         "type": "object",
         "required": ["device_id", "device_type"],
@@ -2694,6 +2819,120 @@
                   "$ref": "#/components/schemas/RateLimitError"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "/upgrade/preview": {
+      "post": {
+        "summary": "Quote an upgrade or a seat increase",
+        "description": "Prices a change to the caller's active Stripe subscription without charging: a tier upgrade, or more seats on Team. Returns an itemized charge and a previewToken for POST /upgrade. An account with no paid subscription to credit answers 409 checkout_required and buys through POST /checkout.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpgradePreviewRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote for the change",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UpgradePreview" } }
+            }
+          },
+          "400": {
+            "description": "Invalid request, a cadence the upgrade must keep, fewer seats, or a promotion code that does not apply",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required, with a checkout quote), or a cancellation is pending",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UpgradeCheckoutRequired" }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was changed",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          }
+        }
+      }
+    },
+    "/upgrade": {
+      "post": {
+        "summary": "Apply a quoted upgrade or seat increase",
+        "description": "Charges the saved payment method for the change quoted by POST /upgrade/preview and updates the subscription. The previewToken must match the plan, cadence, seats and promotion, and the charge is the one the quote stated.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/UpgradeRequest" } }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charged; the plan activates when the subscription event arrives",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/UpgradeResult" } }
+            }
+          },
+          "400": {
+            "description": "Invalid request, an expired or mismatched previewToken, or a change the plan does not allow",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "402": {
+            "description": "The bank asked for authentication before the charge completes",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UpgradePaymentActionRequired" }
+              }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required) or a cancellation is pending",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/RateLimitError" } }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was charged",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } }
             }
           }
         }

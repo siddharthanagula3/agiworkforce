@@ -379,7 +379,9 @@ export function BillingSection() {
             ? 'Resolve the current billing status in Manage billing before changing plans.'
             : 'Billing ownership is not verified. Refresh your account before changing plans.';
   const hasStripeBilling = billingInitialized && billingSource === 'stripe';
-  const canBuyTopUps = isManagedPaid && billingSource === 'stripe';
+  const canBuyTopUps =
+    isManagedPaid &&
+    (billingSource === 'stripe' || billingSource === 'apple' || billingSource === 'google');
   const readsPlanState = hasStripeBilling && isManagedPaid;
   const endingSoon = planState
     ? planState.cancelAt !== null
@@ -939,7 +941,7 @@ export function BillingSection() {
 
       {canBuyTopUps || isFreeTier ? <TopUpPanel tier={tier} canBuy={canBuyTopUps} /> : null}
 
-      {canBuyTopUps ? (
+      {canBuyTopUps && billingSource === 'stripe' ? (
         <AutoReloadPanel
           onAddPaymentMethod={() => void openPortal()}
           portalPending={portalPending}
