@@ -1,15 +1,12 @@
 import { Check, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
-  PLAN_CREDIT_ALLOWANCES,
   PLAN_LABEL,
   PLAN_DESCRIPTION,
-  creditAmount,
   getPublishedMonthlyPriceUsd,
   getPublishedPlanPricePerMonthUsd,
   isFreePlan,
-  isSelfServePaidPlanTier,
-  managedUsageComparisonLabel,
+  managedUsageComparisonLines,
   type UIPlanTier,
 } from '@agiworkforce/types';
 
@@ -101,16 +98,8 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   },
 };
 
-function planCreditBullets(tier: UIPlanTier): string[] {
-  if (!isSelfServePaidPlanTier(tier)) return [];
-  const allowance = PLAN_CREDIT_ALLOWANCES[tier];
-  if (allowance.unlimited || allowance.monthly <= 0) return [];
-  const comparison =
-    tier === 'pro' ? null : managedUsageComparisonLabel(tier, 'pro', PLAN_LABEL.pro);
-  return [
-    `${creditAmount(allowance.fiveHour)} credits per 5 hours, ${creditAmount(allowance.weekly)} per week, ${creditAmount(allowance.monthly)} per month`,
-    ...(comparison ? [comparison] : []),
-  ];
+function planUsageBullets(tier: UIPlanTier): string[] {
+  return tier === 'local' ? [] : managedUsageComparisonLines(tier);
 }
 
 export interface PlanCardProps {
@@ -135,7 +124,7 @@ export function PlanCard({
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
   const isFree = isFreePlan(tier);
-  const bullets = [...planCreditBullets(tier), ...content.bullets];
+  const bullets = [...planUsageBullets(tier), ...content.bullets];
 
   return (
     <div
