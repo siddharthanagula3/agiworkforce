@@ -109,17 +109,8 @@ pub fn format_tokens(count: u32) -> String {
     }
 }
 
-/// Compact dollar figure for a single-line status chip: full cents above a
-/// dollar, four decimals below so a sub-cent session total does not just
-/// read `$0.00`.
-///
-/// Examples: `0.0421` → `"$0.0421"`, `1.2345` → `"$1.23"`.
-pub fn format_cost_compact(total_usd: f64) -> String {
-    if total_usd >= 1.0 {
-        format!("${total_usd:.2}")
-    } else {
-        format!("${total_usd:.4}")
-    }
+pub fn format_session_credits(total_usd: f64) -> String {
+    crate::cost_ledger::format_usd_as_credits(total_usd)
 }
 
 /// Format a duration in milliseconds to a human-readable string.
@@ -503,7 +494,13 @@ pub fn format_model_pricing_report(model: &str) -> String {
     format!("Model '{model}' pricing:\n{}", bands.join("\n"))
 }
 
-/// Format a cost summary string.
+fn provider_billing_suffix(access: crate::design_system::AccessMode) -> &'static str {
+    match access {
+        crate::design_system::AccessMode::Byok => ", billed by your provider",
+        crate::design_system::AccessMode::Local | crate::design_system::AccessMode::Cloud => "",
+    }
+}
+
 pub fn format_cost(
     model: &str,
     input_tokens: u32,
@@ -511,11 +508,11 @@ pub fn format_cost(
     access: crate::design_system::AccessMode,
 ) -> String {
     let rates = crate::cost_ledger::rates_for_input(model, input_tokens);
-    let input_cost = (input_tokens as f64 / 1_000_000.0) * rates.input_per_mtok;
-    let output_cost = (output_tokens as f64 / 1_000_000.0) * rates.output_per_mtok;
-    let total = input_cost + output_cost;
+    let input_usd = (input_tokens as f64 / 1_000_000.0) * rates.input_per_mtok;
+    let output_usd = (output_tokens as f64 / 1_000_000.0) * rates.output_per_mtok;
+    let total_usd = input_usd + output_usd;
 
-    if total == 0.0 {
+    if total_usd == 0.0 {
         format!(
             "Tokens: {} in / {} out ({})",
             input_tokens,
@@ -524,15 +521,17 @@ pub fn format_cost(
         )
     } else {
         format!(
-            "Tokens: {} in / {} out | Cost: ${:.4} (${:.4} in + ${:.4} out)",
-            input_tokens, output_tokens, total, input_cost, output_cost
+            "Tokens: {} in / {} out | {} ({} in + {} out){}",
+            input_tokens,
+            output_tokens,
+            crate::cost_ledger::format_usd_as_credits(total_usd),
+            crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(input_usd)),
+            crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(output_usd)),
+            provider_billing_suffix(access)
         )
     }
 }
 
-/// Format tokens alongside a cost already resolved per provider request. Never
-/// recompute `recorded_usd` from the aggregate token fields: a tool loop may
-/// contain several requests on different models or pricing tiers.
 pub fn format_recorded_cost(
     total_input_tokens: u32,
     total_output_tokens: u32,
@@ -548,8 +547,11 @@ pub fn format_recorded_cost(
         )
     } else {
         format!(
-            "Tokens: {} in / {} out | Cost: ${:.4}",
-            total_input_tokens, total_output_tokens, recorded_usd
+            "Tokens: {} in / {} out | {}{}",
+            total_input_tokens,
+            total_output_tokens,
+            crate::cost_ledger::format_usd_as_credits(recorded_usd),
+            provider_billing_suffix(access)
         )
     }
 }
@@ -564,11 +566,12 @@ pub fn format_accumulated_cost(
     format_recorded_cost(total_input_tokens, total_output_tokens, total_usd, access)
 }
 
-/// Format a cost summary for subscription-routed requests ($0.00).
 pub fn format_subscription_cost(input_tokens: u32, output_tokens: u32) -> String {
     format!(
-        "Tokens: {} in / {} out | Cost: $0.00 (subscription, included in plan)",
-        input_tokens, output_tokens
+        "Tokens: {} in / {} out | {} (subscription, included in plan)",
+        input_tokens,
+        output_tokens,
+        crate::cost_ledger::format_credits(0.0)
     )
 }
 
@@ -1136,9 +1139,18 @@ mod tests {
         );
         assert!(result.contains(&format!("{input_tokens} in")));
         assert!(result.contains("500000 out"));
-        assert!(result.contains(&format!("${:.4}", input_cost + output_cost)));
-        assert!(result.contains(&format!("${input_cost:.4} in")));
-        assert!(result.contains(&format!("${output_cost:.4} out")));
+        assert!(result.contains(&crate::cost_ledger::format_usd_as_credits(
+            input_cost + output_cost
+        )));
+        assert!(result.contains(&format!(
+            "{} in",
+            crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(input_cost))
+        )));
+        assert!(result.contains(&format!(
+            "{} out",
+            crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(output_cost))
+        )));
+        assert!(!result.contains('$'));
     }
 
     #[test]
@@ -1222,8 +1234,10 @@ mod tests {
             recorded,
             crate::design_system::AccessMode::Local,
         );
-        assert!(result.contains(&format!("${recorded:.4}")));
-        assert!(!result.contains(&format!("${retroactively_repriced:.4}")));
+        assert!(result.contains(&crate::cost_ledger::format_usd_as_credits(recorded)));
+        assert!(!result.contains(&crate::cost_ledger::format_usd_as_credits(
+            retroactively_repriced
+        )));
     }
 
     // -- format_subscription_cost tests ------------------------------------
@@ -1231,7 +1245,7 @@ mod tests {
     #[test]
     fn test_format_subscription_cost_contains_zero() {
         let result = format_subscription_cost(10_000, 5_000);
-        assert!(result.contains("$0.00"));
+        assert!(result.contains("0 credits"));
         assert!(result.contains("subscription"));
         assert!(result.contains("10000 in"));
         assert!(result.contains("5000 out"));
@@ -1240,7 +1254,7 @@ mod tests {
     #[test]
     fn test_format_subscription_cost_zero_tokens() {
         let result = format_subscription_cost(0, 0);
-        assert!(result.contains("$0.00"));
+        assert!(result.contains("0 credits"));
         assert!(result.contains("0 in"));
         assert!(result.contains("0 out"));
     }
@@ -1483,18 +1497,12 @@ mod tests {
         assert_eq!(format_tokens(128_000_000), "128.0M");
     }
 
-    // -- format_cost_compact tests -------------------------------------------
-
     #[test]
-    fn test_format_cost_compact_sub_dollar_keeps_four_decimals() {
-        assert_eq!(format_cost_compact(0.0), "$0.0000");
-        assert_eq!(format_cost_compact(0.0421), "$0.0421");
-    }
-
-    #[test]
-    fn test_format_cost_compact_dollar_and_above_uses_two_decimals() {
-        assert_eq!(format_cost_compact(1.0), "$1.00");
-        assert_eq!(format_cost_compact(12.345), "$12.35");
+    fn session_credits_convert_provider_cost_at_the_credit_rate() {
+        assert_eq!(format_session_credits(0.0), "0 credits");
+        assert_eq!(format_session_credits(0.005), "1 credit");
+        assert_eq!(format_session_credits(0.0421), "8.42 credits");
+        assert_eq!(format_session_credits(12.345), "2,469 credits");
     }
 
     // -- format_duration_ms tests ------------------------------------------
