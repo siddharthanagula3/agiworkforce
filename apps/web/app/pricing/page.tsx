@@ -465,6 +465,10 @@ export default function PricingPage() {
     ['active', 'trialing'].includes(billing.status ?? '');
   const stripeSubscriber =
     hasActivePaidPlan && accountSubscription?.subscription_source === 'stripe';
+  const paymentOverdue =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['past_due', 'unpaid'].includes(billing.status ?? '');
 
   useEffect(() => {
     if (!stripeSubscriber) return;
@@ -521,7 +525,7 @@ export default function PricingPage() {
   }
 
   const unavailableCheckoutPlans: CheckoutPlan[] =
-    user && !hasActivePaidPlan && pricingStatus === 'ready'
+    user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'ready'
       ? SELF_SERVE_PAID_PLAN_TIERS.filter((plan) => !isPlanCheckoutReady(plan))
       : [];
 
@@ -575,6 +579,13 @@ export default function PricingPage() {
         <button type="button" className="agi-tier-cta" disabled>
           Checking account…
         </button>
+      );
+    }
+    if (paymentOverdue) {
+      return (
+        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
+          Update payment
+        </Link>
       );
     }
     const relationship = planRelationship(plan);
@@ -1185,7 +1196,17 @@ export default function PricingPage() {
         >
           <h2 className="sr-only">{t('audienceIndividual')}</h2>
 
-          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+          {paymentOverdue ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
+              Your last payment didn&rsquo;t go through. Pay the open invoice or update your payment
+              method in{' '}
+              <Link href="/settings/billing" className="agi-ds-link">
+                Billing
+              </Link>{' '}
+              before you change plans.
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'loading' ? (
             <p
               role="status"
               className="agi-fl-section-lede"
@@ -1194,7 +1215,7 @@ export default function PricingPage() {
               Loading checkout availability…
             </p>
           ) : null}
-          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'error' ? (
             <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
               Checkout availability could not be verified. Refresh this page to try again.
             </p>
