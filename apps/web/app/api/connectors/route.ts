@@ -64,9 +64,11 @@ import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
+  CONNECTOR_BLOCKED_CODE,
   CONNECTOR_UNREACHABLE_CODE,
   customConnectorId,
   deleteCustomConnectorRows,
+  edgeBlockedMessage,
   insertCustomConnector,
   isUndefinedTableError,
   McpProbeError,
@@ -122,8 +124,15 @@ interface ConnectorSetupEntry {
   message: string;
 }
 
-function unreachableResponse(serverName: string, detail: string): NextResponse {
-  const message = `${serverName} could not be reached: ${detail}`;
+function unreachableResponse(serverName: string, error: McpProbeError): NextResponse {
+  if (error.edgeBlocked) {
+    const message = edgeBlockedMessage(serverName);
+    return NextResponse.json(
+      { error: { code: CONNECTOR_BLOCKED_CODE, message }, message },
+      { status: 502 },
+    );
+  }
+  const message = `${serverName} could not be reached: ${error.message}`;
   return NextResponse.json(
     { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
     { status: 502 },
@@ -410,7 +419,7 @@ async function connectDirectoryTarget(
       authorizationContext: mcpAuthorizationContext.userCustomUrl(userId, url),
     });
   } catch (error) {
-    if (error instanceof McpProbeError) return unreachableResponse(target.name, error.message);
+    if (error instanceof McpProbeError) return unreachableResponse(target.name, error);
     throw error;
   }
 

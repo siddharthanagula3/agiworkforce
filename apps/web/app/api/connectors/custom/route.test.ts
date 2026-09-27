@@ -55,6 +55,9 @@ vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
   resolveDirectoryTarget: vi.fn(async () => null),
   findDirectoryTargetByRemoteUrl: (...args: unknown[]) => mocks.directoryByUrl(...args),
 }));
+vi.mock('@/lib/connectors/mcp-discovery', () => ({
+  mcpServerPublishesProtectedResource: vi.fn(async () => false),
+}));
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
   getMcpStatelessRuntime: vi.fn(async () => ({})),
   mcpAuthorizationContext: {
