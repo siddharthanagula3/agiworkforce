@@ -16,6 +16,8 @@ const USAGE_PATH: &str = "/api/usage";
 const USAGE_HISTORY_PATH: &str = "/api/usage/history";
 const BILLING_PATH: &str = "/settings/billing";
 const PRICING_PATH: &str = "/pricing";
+const USAGE_SETTINGS_PATH: &str = "/settings/usage";
+const FLAGSHIP_LIMIT_CODE: &str = "flagship_weekly_limit_reached";
 const ENTITLED_SUBSCRIPTION_STATUSES: [&str; 2] = ["active", "trialing"];
 const PAYMENT_FAILED_SUBSCRIPTION_STATUSES: [&str; 3] = ["past_due", "unpaid", "incomplete"];
 const HISTORY_MODEL_LIMIT: usize = 8;
@@ -126,6 +128,78 @@ pub fn parse_usage_history(body: &str) -> Result<UsageHistory, serde_json::Error
 
 fn web_link(path: &str) -> String {
     format!("{}{path}", tier_cache::default_api_base())
+}
+
+pub fn recovery_sentence(href: &str) -> String {
+    let url = web_link(href);
+    match href {
+        BILLING_PATH => format!("Add credits or fix billing at {url}."),
+        PRICING_PATH => format!("Compare plans at {url}."),
+        USAGE_SETTINGS_PATH => format!("See every usage window at {url}."),
+        _ => format!("More options at {url}."),
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct UsageLimitContext {
+    pub resets_in: Option<String>,
+    pub alternative_model: Option<String>,
+}
+
+fn limit_window_reset<'a>(usage: &'a AccountUsage, code: &str) -> Option<&'a str> {
+    let credits = usage.credits.as_ref();
+    match code {
+        "rolling_five_hour_limit_reached" => credits
+            .and_then(|credits| credits.five_hour.reset_at.as_deref())
+            .or(usage.session_reset_at.as_deref()),
+        "rolling_weekly_limit_reached" => credits
+            .and_then(|credits| credits.weekly.reset_at.as_deref())
+            .or(usage.weekly_reset_at.as_deref()),
+        FLAGSHIP_LIMIT_CODE => credits
+            .and_then(|credits| credits.flagship_weekly.as_ref())
+            .and_then(|window| window.reset_at.as_deref())
+            .or(usage.flagship_weekly_reset_at.as_deref()),
+        "insufficient_credits"
+        | "monthly_limit_exceeded"
+        | "monthly_credit_limit_reached"
+        | "free_trial_token_budget_reached" => credits
+            .and_then(|credits| credits.monthly.reset_at.as_deref())
+            .or(usage.usage_reset_at.as_deref()),
+        _ => None,
+    }
+}
+
+fn time_until(reset_at: &str, now: DateTime<Utc>) -> Option<String> {
+    let seconds = DateTime::parse_from_rfc3339(reset_at)
+        .ok()?
+        .with_timezone(&Utc)
+        .signed_duration_since(now)
+        .num_seconds();
+    (seconds > 0).then(|| fmt_duration(seconds))
+}
+
+pub fn usage_limit_context_from(
+    usage: &AccountUsage,
+    code: &str,
+    now: DateTime<Utc>,
+) -> UsageLimitContext {
+    let alternative_model = if code == FLAGSHIP_LIMIT_CODE {
+        tier_cache::parse_tier(&usage.plan_tier)
+            .and_then(|tier| crate::model_catalog::standard_model_for_tier(&tier))
+    } else {
+        None
+    };
+    UsageLimitContext {
+        resets_in: limit_window_reset(usage, code).and_then(|reset_at| time_until(reset_at, now)),
+        alternative_model,
+    }
+}
+
+pub async fn usage_limit_context(jwt: &str, code: &str) -> UsageLimitContext {
+    match fetch_account_usage(jwt).await {
+        Ok(usage) => usage_limit_context_from(&usage, code, Utc::now()),
+        Err(_) => UsageLimitContext::default(),
+    }
 }
 
 #[derive(Debug)]
