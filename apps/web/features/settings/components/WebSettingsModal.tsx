@@ -39,6 +39,7 @@ import { DeletedChatsSection } from '../sections/DeletedChatsSection';
 import { SharedLinksSection } from '../sections/SharedLinksSection';
 import { BillingSection } from '../sections/BillingSection';
 import { UsageSection } from '../sections/UsageSection';
+import { ReferralsSection } from '../sections/ReferralsSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
 import { MemorySection } from '../sections/MemorySection';
 import { NotificationsSection } from '../sections/NotificationsSection';
@@ -202,6 +203,7 @@ export function WebSettingsModal({
     'shared-links': <SharedLinksSection />,
     billing: <BillingSection />,
     usage: <UsageSection />,
+    referrals: <ReferralsSection />,
     capabilities: <CapabilitiesSection />,
     memory: <MemorySection />,
     notifications: <NotificationsSection />,

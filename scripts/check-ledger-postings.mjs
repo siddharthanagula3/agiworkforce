@@ -34,6 +34,12 @@ export const LEDGER_WRITE_PROTECTION = Object.freeze({
     table: 'credit_transactions',
     why: 'The purchased grant carries the Checkout Session in its description, once per session.',
   },
+  post_bonus_credit_adjustment: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_bonus_credit_event',
+    table: 'credit_transactions',
+    why: 'Each bonus grant, spend or expiry posts once per grant event.',
+  },
   deduct_credits_microusd: {
     kind: 'idempotency_key',
     why: 'The caller supplies the key and a replay returns the stored result.',

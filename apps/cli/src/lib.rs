@@ -915,6 +915,12 @@ enum Command {
     Onboarding,
     /// Show the account's managed allowance from the shared usage ledger.
     Usage,
+    /// Print your referral link. Friends who join with it get a Pro trial, and you both earn bonus credits.
+    Invite {
+        /// Emit the link as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Manage the account's scheduled agent tasks in AGI cloud.
     Schedules {
         #[command(subcommand)]
@@ -4049,6 +4055,18 @@ pub async fn run_main() -> Result<()> {
             Command::Usage => {
                 println!("{}", usage_summary::account_lines().await.join("\n"));
                 Ok(())
+            }
+
+            Command::Invite { json } => {
+                let invite = cloud::referrals::invite()
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                render_structured(
+                    serde_json::to_value(&invite)?,
+                    cloud::referrals::invite_text(&invite),
+                    *json,
+                    cli.output,
+                )
             }
 
             // --- Schedules ---
