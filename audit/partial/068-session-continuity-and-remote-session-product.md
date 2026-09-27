@@ -13,11 +13,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code sessions live only in the web app (and desktop hosted web); CLI, VS Code and mobile cannot open them, and local threads never appear on web. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| mobile | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| cli | partial | Managed-mode CLI sessions sync to the account after each turn and resume from it (agi resume --cloud <id>), so the id is shared with web and mobile chat; app-server threads (VS Code, desktop, phone) and web cloud Code sessions stay separate stores. | surface-only |
-| vscode | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
+| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
+| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| mobile | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
 Code: `apps/web/features/code/CloudCodePage.tsx:809-809`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:74-78`
 
@@ -28,11 +28,11 @@ Code: `apps/web/features/code/CloudCodePage.tsx:809-809`, `apps/web/features/cod
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code sessions live only in the web app (and desktop hosted web); CLI, VS Code and mobile cannot open them, and local threads never appear on web. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| mobile | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| cli | partial | Managed-mode CLI history reaches the web and mobile chat lists through the account sync and can be pulled back into the CLI; app-server threads (VS Code, desktop, phone) and web cloud Code sessions keep separate histories. | surface-only |
-| vscode | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
+| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
+| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| mobile | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
 Code: `apps/web/features/code/CloudCodePage.tsx:334-336`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:74-78`
 
@@ -43,11 +43,11 @@ Code: `apps/web/features/code/CloudCodePage.tsx:334-336`, `apps/web/features/cod
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code sessions live only in the web app (and desktop hosted web); CLI, VS Code and mobile cannot open them, and local threads never appear on web. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| mobile | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| vscode | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
+| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
+| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| mobile | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
 Code: `apps/web/features/code/components/CodeChangesPanel.tsx:136-136`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:74-78`
 
@@ -58,11 +58,11 @@ Code: `apps/web/features/code/components/CodeChangesPanel.tsx:136-136`, `apps/we
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud Code sessions live only in the web app (and desktop hosted web); CLI, VS Code and mobile cannot open them, and local threads never appear on web. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| mobile | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| cli | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
-| vscode | partial | Local AGI Code threads share one agi thread store across CLI, VS Code, desktop and the paired phone, but cloud Code sessions (web) are a separate store none of the local clients can open, so it is not the same on every client. | surface-only |
+| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
+| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| mobile | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
+| vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
 Code: `apps/web/features/code/CloudCodePage.tsx:1058-1058`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/mobile/src/features/companion/components/CodeSessionsCard.tsx:74-78`
 
@@ -150,7 +150,7 @@ Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/desk
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | The phone attaches to a desktop session and watches it, but attach always grants steer/stop/approve; there is no read-only mode. | ui |
+| mobile | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
@@ -231,16 +231,13 @@ Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:39
 ## S68.17: Bring cloud results back to local workspace.
 
 - Done when: Results of cloud work come back into the user's local workspace.
-- Wave: 2
+- Wave: 3
+- Already works on: web, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud sessions commit and push a working branch (or open a PR) the user can pull locally; nothing syncs results into a local client directly. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, handler |
 | desktop | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Pull Cloud Task Into Workspace exists but is hidden (commandPalette when:false) and nothing links to it. | mount |
-
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:281-285`, `apps/extension-vscode/src/features/context-handoff/index.ts:23-23`
 
 ## S68.18: File/environment transfer review.
 
@@ -291,16 +288,15 @@ Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:104-104`, `a
 
 - Done when: Each machine advertises what it can host (local models, browser, MCP, computer use, code sessions).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Device rows list capabilities, but desktop self-reports localModels:false while it has a local model chat path. | handler |
-| desktop | partial | Registry profile lists capabilities but hard-codes localModels:false and localMcp:false. | handler |
 | mobile | partial | Only the code-sessions capability gates the AGI Code card. | surface-only |
 | cli | partial | CLI registers its device profile, but no client shows host capabilities for picking a host. | ui |
 | vscode | partial | The extension heartbeats its device profile only. | ui |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:110-114`, `apps/desktop/electron/runtime/dispatcher.ts:687-693`, `apps/desktop/electron/runtime/dispatcher.ts:678-695`, `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`
+Code: `apps/mobile/src/features/companion/components/DesktopInfoCard.tsx:73-76`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/cli/src/device_registry.rs:32-34`, `apps/extension-vscode/src/features/device-registry/deviceHeartbeat.ts:35-37`
 
 ## S68.22: Device pairing.
 
@@ -332,30 +328,30 @@ Code: `apps/web/app/api/pair/initiate/route.ts:72-73`, `apps/web/features/deskto
 
 - Done when: When the remote machine is offline, the client says so and explains what that means.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Device list marks a device offline with last seen; no session view explains it. | surface-only |
 | desktop | partial | Hosted-web device list only. | surface-only |
-| mobile | partial | Disconnected banner and a "Desktop Disconnected" notification; the AGI Code view says only "Reconnect to Desktop". | surface-only |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:52-52`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`, `apps/mobile/app/(app)/companion/index.tsx:236-236`, `apps/mobile/services/companionNotifications.ts:77-80`
+Code: `apps/web/features/settings/components/LinkedDevicesPanel.tsx:52-52`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:152-152`
 
 ## S68.26: Resume after reconnect.
 
 - Done when: After a dropped connection, the client reconnects and resumes the same session state.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Desktop keeps running; the relay re-sends a session snapshot when the phone re-attaches. | surface-only |
 | mobile | partial | Auto-reconnect with countdown and manual retry; the code view re-attaches on open. Only for the paired desktop. | surface-only |
 | cli | partial | The app-server advertises reconnect support for its clients; a restarted CLI resumes via agi resume. | surface-only |
 | vscode | partial | Restart Local Runtime reconnects to the runtime and the thread can be reopened from history. | surface-only |
 
-Code: `apps/desktop/electron/remote/codeRemoteController.ts:198-200`, `apps/mobile/app/(app)/companion/index.tsx:242-242`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/cli/src/app_server/developer_host.rs:386-386`
+Code: `apps/mobile/app/(app)/companion/index.tsx:242-242`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`, `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:829-835`
 
 ## S68.27: Session export.
 
@@ -382,8 +378,8 @@ Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:36
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Continuation drafts carry a selected, budgeted slice of the transcript; there is no summary-only choice. | ui |
-| vscode | partial | Handoff admission distinguishes resume from seed starts, but the user is never offered the choice. | ui |
+| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
+| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
 
 Code: `apps/cli/src/claude_parity.rs:405-407`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:214-214`
 
@@ -397,8 +393,8 @@ Code: `apps/cli/src/claude_parity.rs:405-407`, `apps/extension-vscode/src/integr
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | agi fork / /fork branch a thread, but fork is not offered as a transfer option to another client. | surface-only |
-| vscode | partial | Fork Conversation branches a thread locally; not offered as a transfer option. | surface-only |
+| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
+| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
 
 Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `apps/extension-vscode/src/core/commandSetup.ts:1210-1215`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:910-912`
 
