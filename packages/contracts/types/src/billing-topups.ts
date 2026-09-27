@@ -7,6 +7,9 @@ export const MIN_TOP_UP_AMOUNT_USD = 20;
 export const MAX_TOP_UP_AMOUNT_USD = 1_000;
 export const DAILY_TOP_UP_LIMIT_USD = 2_000;
 export const AUTO_RELOAD_EXTRA_DISCOUNT_PERCENT = 5;
+export const AUTO_RELOAD_MIN_THRESHOLD_CREDITS = 100;
+export const AUTO_RELOAD_MAX_THRESHOLD_CREDITS = 100_000;
+export const AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS = 500;
 export const TOP_UP_PRESET_AMOUNTS_USD = [20, 50, 100, 250, 1_000] as const;
 export const TOP_UP_CONVERSION = 'usd_1_to_credits_50_v2';
 export const LEGACY_TOP_UP_CONVERSION = 'usd_1_to_units_50_v1';
@@ -112,4 +115,37 @@ export function topUpChargedCents(record: TopUpPurchaseRecord): number | null {
   if (!isValidTopUpPurchase(record)) return null;
   if (record.conversion === TOP_UP_CONVERSION) return record.priceCents as number;
   return record.amountCents as number;
+}
+
+export function isAutoReloadThresholdCredits(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isSafeInteger(value) &&
+    value >= AUTO_RELOAD_MIN_THRESHOLD_CREDITS &&
+    value <= AUTO_RELOAD_MAX_THRESHOLD_CREDITS
+  );
+}
+
+export interface AutoReloadSettings {
+  enabled: boolean;
+  thresholdCredits: number;
+  amountUsd: number;
+  paymentMethod: { brand: string; last4: string } | null;
+  lastFailure: { at: string; reason: string } | null;
+}
+
+export interface AutoReloadSettingsUpdate {
+  enabled: boolean;
+  thresholdCredits: number;
+  amountUsd: number;
+}
+
+export function isValidAutoReloadSettingsUpdate(value: unknown): value is AutoReloadSettingsUpdate {
+  if (!value || typeof value !== 'object') return false;
+  const update = value as Record<string, unknown>;
+  return (
+    typeof update['enabled'] === 'boolean' &&
+    isAutoReloadThresholdCredits(update['thresholdCredits']) &&
+    isTopUpAmountUsd(update['amountUsd'])
+  );
 }
