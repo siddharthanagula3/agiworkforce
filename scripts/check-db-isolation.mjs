@@ -610,6 +610,17 @@ const ALLOWLIST = [
       'the accounts it found rather than scoping the read to one of them.',
   },
   {
+    match: /lib\/services\/purchased-credit-expiry-service\.ts$/,
+    tables: ['expiring_credit_purchases'],
+    functions: ['expireDuePurchasedCredits', 'remindExpiringPurchasedCredits'],
+    reason:
+      'the daily purchased credit expiry sweep, reached only from api/cron/expire-purchased-credits: ' +
+      'it lists purchases under a local-law expiry that are due or within their reminder window ' +
+      'by date alone, then reminds or reconciles each account by its own id. It would otherwise ' +
+      'pass on the user_id it groups or selects, which names the accounts it found rather than ' +
+      'scoping the read to one of them.',
+  },
+  {
     match: /lib\/server\/copyright-notices\.ts$/,
     tables: ['copyright_notices'],
     functions: ['recordCopyrightNotice'],

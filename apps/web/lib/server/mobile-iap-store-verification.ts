@@ -9,7 +9,12 @@ import {
 } from '@apple/app-store-server-library';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import type { MobileIapCatalogProduct, MobileIapPlatform } from '@agiworkforce/types';
+import {
+  normalizePurchaseCountry,
+  purchaseCountryFromAppStoreStorefront,
+  type MobileIapCatalogProduct,
+  type MobileIapPlatform,
+} from '@agiworkforce/types';
 import { isProductionRuntime } from '@/lib/config/runtime-environment';
 import { createError } from '@/lib/errors';
 import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
@@ -39,6 +44,7 @@ const GoogleProductPurchaseSchema = z.object({
   purchaseStateContext: z.object({ purchaseState: z.string() }),
   orderId: z.string().min(1),
   obfuscatedExternalAccountId: z.string().min(1),
+  regionCode: z.string().optional(),
   purchaseCompletionTime: z.string().datetime({ offset: true }),
   acknowledgementState: z.string().optional(),
   testPurchaseContext: z.unknown().optional(),
@@ -75,6 +81,7 @@ export interface VerifiedMobileIapPurchase {
   expiresAt: Date | null;
   environment: NormalizedEnvironment;
   entitlementStatus: 'active' | 'expired' | 'revoked';
+  purchaseCountry?: string | null;
 }
 
 export function hashMobileIapPurchaseToken(token: string): string {
@@ -221,6 +228,7 @@ async function verifyApplePurchase(input: {
     expiresAt,
     environment: normalizeEnvironment(environment),
     entitlementStatus: revoked ? 'revoked' : expired ? 'expired' : 'active',
+    purchaseCountry: purchaseCountryFromAppStoreStorefront(transaction.storefront),
   };
 }
 
@@ -321,6 +329,7 @@ async function verifyGooglePurchase(input: {
         response.data.testPurchaseContext ? 'sandbox' : 'production',
       ),
       entitlementStatus: grantable ? 'active' : 'revoked',
+      purchaseCountry: normalizePurchaseCountry(response.data.regionCode),
     };
   }
 
