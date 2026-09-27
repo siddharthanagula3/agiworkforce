@@ -104,6 +104,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
     role: invitation.role,
     organizationName: await readOrganizationName(caller.db, caller.organizationId),
     expiresAt: String(invitation.expires_at),
+    sender: { db: caller.db, userId: caller.actorUserId },
   });
 
   await recordAuditEvent({
