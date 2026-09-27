@@ -6,32 +6,19 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S8.01: Primary buttons.
-
-- Done when: The main action in a view uses a visually emphasised primary button style, applied in shipped UI, whose label meets contrast on its fill.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Primary buttons draw white text on the terra-cotta accent, 3.11:1 in the light theme (e.g. the workflow Save button); add an on-accent colour that reaches 4.5:1. | states |
-
-Code: `apps/extension/src/side_panel.ts:2508-2508`, `apps/extension/src/side_panel.ts:2124-2124`
-
 ## S8.03: Destructive buttons.
 
 - Done when: Irreversible actions use a distinct destructive button style (danger colour before hover) whose label meets contrast.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The destructive variant draws red #dc2626 text on a 10% red tint: 4.13:1 on white and 3.87:1 on the #f7f7f7 page in light mode; darken the text or strengthen the fill. | states |
 | cli | partial | The "Deny All" choice in the approval row is styled like every other choice; give destructive choices a danger colour. | ui |
 | vscode | partial | Destructive actions confirm through VS Code's modal warning, whose buttons the extension cannot style; the webview itself has no danger button style. | ui |
 | chrome | partial | Delete buttons are muted grey and turn red only on hover, so a destructive action is not distinguishable at rest or on touch. | ui |
 
-Code: `apps/mobile/components/ui/button.tsx:82-87`, `apps/mobile/components/ui/button.tsx:101-101`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:309-309`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:311-311`
+Code: `apps/cli/src/tui/widgets/approval_overlay.rs:76-76`, `apps/cli/src/tui/widgets/approval_overlay.rs:248-248`, `apps/extension-vscode/src/core/commandSetup.ts:1171-1175`, `apps/extension/src/side_panel.ts:2480-2481`
 
 ## S8.06: Toggle buttons.
 
@@ -59,14 +46,13 @@ Code: `apps/mobile/src/features/chat/components/ModeToggle.tsx:78-78`, `apps/mob
 
 - Done when: Links in text are visibly styled as links and open their destination when activated.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Markdown links render as underlined accent text, but the renderer discards the URL (Tag::Link { .. }) and emits no OSC 8 hyperlink, so the reader can neither see nor open the destination. | handler |
-| chrome | partial | Links are underlined and open in a new tab, but their terra-cotta colour measures 2.95:1 on the light panel; use a text-role accent that reaches 4.5:1. | states |
 
-Code: `apps/cli/src/tui/markdown_renderer.rs:138-143`, `apps/cli/src/tui/markdown_renderer.rs:194-197`, `apps/extension/src/features/side-panel/markdown.ts:128-128`, `apps/extension/src/side_panel.ts:1470-1470`
+Code: `apps/cli/src/tui/markdown_renderer.rs:138-143`, `apps/cli/src/tui/markdown_renderer.rs:194-197`
 
 ## S8.13: One-time-code fields.
 
