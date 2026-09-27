@@ -48,7 +48,9 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy } from '../lib/tool-approval-policy';
+import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../lib/tool-approval-policy';
+import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
+import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import { checkpointRequestForResume } from '../lib/approval-checkpoint-request';
 
@@ -290,7 +292,12 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   }
 
   const { mcpTools, permissions: connectorPermissions } = discovery;
-  const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
+  const toolApprovalPolicy =
+    processed.toolApprovalPolicy ?? (await loadToolApprovalPolicy(db, userId));
+  processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    genericBackendConfigured: webSearchBackendConfigured(),
+  });
 
   // Transport, not authorization. Every gate above still stands, auth, managed
   // compute, organization policy, spend limit, and the tenant-scoped checkpoint
