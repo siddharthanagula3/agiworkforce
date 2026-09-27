@@ -1,11 +1,48 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
+import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
 import { useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
 
 const MAX_FACT_CHARS = 280;
+const LEARNED_SOURCE = 'auto';
+const IMPORTED_SOURCE_PREFIX = 'imported:';
+const OTHER_GROUP = 'other';
+
+const CATEGORY_LABELS = {
+  preference: 'Preferences',
+  fact: 'About you',
+  decision: 'Decisions',
+  context: 'Context',
+  summary: 'Summaries',
+  skill: 'Skills',
+} satisfies Record<MemoryCategory, string>;
+
+interface FactGroup {
+  key: string;
+  label: string;
+  facts: MemoryFact[];
+}
+
+function groupFacts(facts: MemoryFact[]): FactGroup[] {
+  const groups = new Map<string, MemoryFact[]>();
+  for (const fact of facts) {
+    const category = fact.category?.trim().toLowerCase() ?? '';
+    const key = (MEMORY_CATEGORIES as readonly string[]).includes(category)
+      ? category
+      : OTHER_GROUP;
+    groups.set(key, [...(groups.get(key) ?? []), fact]);
+  }
+  return [...MEMORY_CATEGORIES, OTHER_GROUP]
+    .filter((key) => groups.has(key))
+    .map((key) => ({
+      key,
+      label: key === OTHER_GROUP ? 'Other' : CATEGORY_LABELS[key as MemoryCategory],
+      facts: groups.get(key) ?? [],
+    }));
+}
 
 export interface MemoryEditorProps {
   title?: string | null;
@@ -13,6 +50,7 @@ export interface MemoryEditorProps {
   hideClearAll?: boolean;
   className?: string;
   adapter?: MemoryEditorDataAdapter;
+  conversationHref?: (conversationId: string) => string;
 }
 
 export type MemoryEditorSyncStatus = 'unavailable' | 'idle' | 'syncing' | 'synced' | 'error';
@@ -35,6 +73,7 @@ export function MemoryEditor({
   hideClearAll = false,
   className,
   adapter,
+  conversationHref,
 }: MemoryEditorProps) {
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const localFacts = useMemoryStore((s) => s.facts);
@@ -74,6 +113,7 @@ export function MemoryEditor({
         .sort((a, b) => Number(b.pinned === true) - Number(a.pinned === true)),
     [facts, query],
   );
+  const groups = useMemo(() => (query ? [] : groupFacts(visibleFacts)), [query, visibleFacts]);
 
   // An optimistic adapter has already applied the change by the time this
   // awaits, so `mutating` gates only the control that started the request. It
@@ -154,6 +194,127 @@ export function MemoryEditor({
       onConfirm: () => runMutation(() => clear()),
     });
   }, [facts.length, confirm, clear, runMutation]);
+
+  const renderFact = (fact: MemoryFact) => {
+    const isEditing = editingId === fact.id;
+    return (
+      <li
+        key={fact.id}
+        className="flex flex-col gap-1 rounded-md border bg-[var(--chat-surface-base)] px-3 py-2"
+        style={{ borderColor: 'var(--chat-border)' }}
+      >
+        {isEditing ? (
+          <>
+            <textarea
+              value={editDraft}
+              onChange={(e) => setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
+              aria-label={`Editing memory: ${fact.text}`}
+              rows={2}
+              className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
+            />
+            <div className="mt-1 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={onCancelEdit}
+                className="rounded-compact px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void onSaveEdit(fact.id)}
+                disabled={fact.pending}
+                className="rounded-compact bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
+              >
+                Save
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => onBeginEdit(fact)}
+              disabled={fact.pending}
+              className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-default"
+              aria-label={`Edit memory: ${fact.text}`}
+            >
+              {fact.text}
+            </button>
+            {/*
+                A fact confined to a project reads as applying
+                everywhere unless it says otherwise. The badge is the
+                only thing distinguishing it from a global memory in
+                this list.
+              */}
+            {fact.projectId ? (
+              <span
+                className="self-start rounded-compact px-1.5 py-0.5 text-caption text-[var(--chat-text-secondary)]"
+                style={{ background: 'var(--chat-surface-hover)' }}
+              >
+                Only in {fact.projectName ?? 'a project'}
+              </span>
+            ) : null}
+            <div className="flex items-center justify-between text-caption text-[var(--chat-text-muted)]">
+              <span>
+                {fact.pending ? (
+                  'Saving…'
+                ) : fact.unsaved ? (
+                  'Not saved to your account. Delete it or add it again.'
+                ) : (
+                  <>
+                    <FactOrigin fact={fact} conversationHref={conversationHref} />{' '}
+                    {formatRelativeDate(fact.createdAt)}
+                    {fact.updatedAt !== fact.createdAt
+                      ? ` · edited ${formatRelativeDate(fact.updatedAt)}`
+                      : ''}
+                  </>
+                )}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => runMutation(() => setPinned(fact.id, !fact.pinned))}
+                  disabled={fact.pending}
+                  aria-pressed={fact.pinned === true}
+                  aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
+                  className={cn(
+                    'rounded-compact p-1 hover:bg-[var(--chat-surface-hover)]',
+                    fact.pinned
+                      ? 'text-[var(--chat-accent-primary-text)]'
+                      : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
+                  )}
+                >
+                  {fact.pinned ? (
+                    <PinOff size={13} strokeWidth={1.75} />
+                  ) : (
+                    <Pin size={13} strokeWidth={1.75} />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    confirm({
+                      title: 'Delete this memory?',
+                      description:
+                        'The assistant stops using this fact in future conversations. It cannot be restored, it would have to be saved again.',
+                      confirmLabel: 'Delete memory',
+                      onConfirm: () => runMutation(() => remove(fact.id)),
+                    })
+                  }
+                  disabled={fact.pending}
+                  className="rounded-compact p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
+                  aria-label={`Delete memory fact`}
+                >
+                  <Trash2 size={13} strokeWidth={1.75} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className={cn('flex h-full flex-col gap-4 p-6', className)}>
@@ -238,125 +399,22 @@ export function MemoryEditor({
           >
             {`No memory matches “${search.trim()}”.`}
           </p>
+        ) : groups.length > 1 ? (
+          <div className="flex flex-col gap-4">
+            {groups.map((group) => (
+              <section key={group.key} className="flex flex-col gap-2">
+                <h4 className="text-xs font-medium text-[var(--chat-text-secondary)]">
+                  {group.label}
+                </h4>
+                <ul aria-label={group.label} className="flex flex-col gap-2">
+                  {group.facts.map(renderFact)}
+                </ul>
+              </section>
+            ))}
+          </div>
         ) : (
           <ul aria-label="Memory facts" className="flex flex-col gap-2">
-            {visibleFacts.map((fact) => {
-              const isEditing = editingId === fact.id;
-              return (
-                <li
-                  key={fact.id}
-                  className="flex flex-col gap-1 rounded-md border bg-[var(--chat-surface-base)] px-3 py-2"
-                  style={{ borderColor: 'var(--chat-border)' }}
-                >
-                  {isEditing ? (
-                    <>
-                      <textarea
-                        value={editDraft}
-                        onChange={(e) => setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS))}
-                        aria-label={`Editing memory: ${fact.text}`}
-                        rows={2}
-                        className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
-                      />
-                      <div className="mt-1 flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={onCancelEdit}
-                          className="rounded-compact px-2 py-1 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void onSaveEdit(fact.id)}
-                          disabled={fact.pending}
-                          className="rounded-compact bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
-                        >
-                          Save
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onBeginEdit(fact)}
-                        disabled={fact.pending}
-                        className="text-left text-sm text-[var(--chat-text-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-default"
-                        aria-label={`Edit memory: ${fact.text}`}
-                      >
-                        {fact.text}
-                      </button>
-                      {/*
-                        A fact confined to a project reads as applying
-                        everywhere unless it says otherwise. The badge is the
-                        only thing distinguishing it from a global memory in
-                        this list.
-                      */}
-                      {fact.projectId ? (
-                        <span
-                          className="self-start rounded-compact px-1.5 py-0.5 text-caption text-[var(--chat-text-secondary)]"
-                          style={{ background: 'var(--chat-surface-hover)' }}
-                        >
-                          Only in {fact.projectName ?? 'a project'}
-                        </span>
-                      ) : null}
-                      <div className="flex items-center justify-between text-caption text-[var(--chat-text-muted)]">
-                        <span>
-                          {fact.pending ? (
-                            'Saving…'
-                          ) : (
-                            <>
-                              Added {formatRelativeDate(fact.createdAt)}
-                              {fact.updatedAt !== fact.createdAt
-                                ? ` · edited ${formatRelativeDate(fact.updatedAt)}`
-                                : ''}
-                            </>
-                          )}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => runMutation(() => setPinned(fact.id, !fact.pinned))}
-                            disabled={fact.pending}
-                            aria-pressed={fact.pinned === true}
-                            aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
-                            className={cn(
-                              'rounded-compact p-1 hover:bg-[var(--chat-surface-hover)]',
-                              fact.pinned
-                                ? 'text-[var(--chat-accent-primary-text)]'
-                                : 'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
-                            )}
-                          >
-                            {fact.pinned ? (
-                              <PinOff size={13} strokeWidth={1.75} />
-                            ) : (
-                              <Pin size={13} strokeWidth={1.75} />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              confirm({
-                                title: 'Delete this memory?',
-                                description:
-                                  'The assistant stops using this fact in future conversations. It cannot be restored, it would have to be saved again.',
-                                confirmLabel: 'Delete memory',
-                                onConfirm: () => runMutation(() => remove(fact.id)),
-                              })
-                            }
-                            disabled={fact.pending}
-                            className="rounded-compact p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
-                            aria-label={`Delete memory fact`}
-                          >
-                            <Trash2 size={13} strokeWidth={1.75} />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </li>
-              );
-            })}
+            {visibleFacts.map(renderFact)}
           </ul>
         )}
       </div>
@@ -379,6 +437,34 @@ export function MemoryEditor({
       ) : null}
     </div>
   );
+}
+
+function FactOrigin({
+  fact,
+  conversationHref,
+}: {
+  fact: MemoryFact;
+  conversationHref?: (conversationId: string) => string;
+}) {
+  if (fact.source === LEARNED_SOURCE) {
+    const title = fact.sourceConversationTitle?.trim();
+    if (fact.sourceConversationId && conversationHref) {
+      return (
+        <>
+          Learned from{' '}
+          <a
+            href={conversationHref(fact.sourceConversationId)}
+            className="underline hover:text-[var(--chat-text-primary)]"
+          >
+            {title ? `“${title}”` : 'a chat'}
+          </a>
+        </>
+      );
+    }
+    return <>Learned from a chat</>;
+  }
+  if (fact.source?.startsWith(IMPORTED_SOURCE_PREFIX)) return <>Imported</>;
+  return <>{fact.source ? 'Added by you' : 'Added'}</>;
 }
 
 function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolean): string {

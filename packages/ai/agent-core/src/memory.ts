@@ -183,17 +183,22 @@ export function parseExplicitMemoryCommand(message: string): ExplicitMemoryComma
   return null;
 }
 
+export function passiveMemoryText(message: string, rememberAnswered: boolean): string {
+  if (!message || typeof message !== 'string') return '';
+  return splitMemorySentences(message)
+    .filter((sentence) => {
+      const command = matchExplicitCommand(sentence);
+      return command === null || (command.kind === 'remember' && !rememberAnswered);
+    })
+    .join(' ');
+}
+
 /**
  * Passive extraction with the explicit commands taken out, so a turn that asked
- * for something is never also silently observed. Callers that have not adopted
- * the command handlers keep using {@link extractCandidateMemoryFacts}.
+ * for something is never also silently observed.
  */
 export function extractPassiveMemoryFacts(message: string): string[] {
-  if (!message || typeof message !== 'string') return [];
-  const passive = splitMemorySentences(message)
-    .filter((sentence) => matchExplicitCommand(sentence) === null)
-    .join(' ');
-  return extractCandidateMemoryFacts(passive);
+  return extractCandidateMemoryFacts(passiveMemoryText(message, true));
 }
 
 export type MemoryCommandRefusalReason = 'ineligible' | 'excluded' | 'memory_disabled';

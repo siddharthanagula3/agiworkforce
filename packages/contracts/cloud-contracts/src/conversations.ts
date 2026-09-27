@@ -256,6 +256,8 @@ export type ManagedCloudCreateConversationBranchResponse = z.infer<
 
 const ManagedCloudReflectDateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
+export const MANAGED_CLOUD_REFLECT_MAX_ONGOING_WORK = 6;
+
 export const ManagedCloudReflectRecapSchema = z.object({
   range: ManagedCloudReflectRangeSchema,
   generatedAt: z.string().datetime(),
@@ -307,6 +309,19 @@ export const ManagedCloudReflectRecapSchema = z.object({
       }),
     )
     .max(4),
+  ongoingWork: z
+    .array(
+      z.object({
+        conversationId: z.string().min(1),
+        title: z.string().min(1).max(200),
+        projectName: z.string().min(1).max(200).nullable(),
+        spanDays: z.number().int().positive(),
+        followUps: z.number().int().nonnegative(),
+        lastActiveAt: z.string().datetime(),
+      }),
+    )
+    .max(MANAGED_CLOUD_REFLECT_MAX_ONGOING_WORK)
+    .optional(),
   sampled: z.boolean(),
   sampledConversationCount: z.number().int().nonnegative(),
 });

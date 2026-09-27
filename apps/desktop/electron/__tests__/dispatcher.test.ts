@@ -624,7 +624,7 @@ describe('device registry and remote control commands', () => {
         capabilities: {
           browser: true,
           computerUse: true,
-          localModels: false,
+          localModels: true,
           localMcp: false,
           remoteControl: true,
         },

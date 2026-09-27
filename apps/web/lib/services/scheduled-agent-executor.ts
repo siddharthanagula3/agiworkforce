@@ -38,7 +38,12 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
-import { loadMcpToolDefs, runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import {
+  canonicalToolSummary,
+  loadMcpToolDefs,
+  runToolLoop,
+  type ToolLoopApprovalCheckpoint,
+} from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import {
   classifyToolLoopInputs,
   functionToolName,
@@ -85,6 +90,7 @@ import {
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { URL_FETCH_TOOL } from '@/lib/url-fetch/url-fetch-tool';
+import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import {
   WEB_SEARCH_TOOL,
   webSearchBackendConfigured,
@@ -98,15 +104,19 @@ import {
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
+import type { ManagedCloudScheduleRunApprovalToolCall } from '@agiworkforce/cloud-contracts';
 import type {
   ScheduleTask,
   ScheduledExecutionResult,
+  ScheduledRunResume,
+  ScheduledRunRoute,
   ScheduledTaskExecutor,
 } from './schedule-service';
 
 const MAX_PROMPT_LENGTH = 50_000;
 const MAX_OUTPUT_CHARS = 100_000;
 const MAX_OUTPUT_TOKENS = 4_096;
+const MAX_APPROVAL_INPUT_CHARS = 4_000;
 
 const SCHEDULED_TASK_DIRECTIVE =
   'Complete the scheduled task now. Return the final result directly. ' +
@@ -154,7 +164,6 @@ interface ScheduledToolPlan {
   webFetch: boolean;
   codeExecution: boolean;
   withheldTools: string[];
-  withheldConnectorTools: number;
 }
 
 const NO_SCHEDULED_TOOLS: ScheduledToolPlan = {
@@ -166,12 +175,10 @@ const NO_SCHEDULED_TOOLS: ScheduledToolPlan = {
   webFetch: false,
   codeExecution: false,
   withheldTools: [],
-  withheldConnectorTools: 0,
 };
 
 const HEADLINE_WITHHELD_TOOLS: ReadonlyArray<readonly [string, string]> = [
   [WEB_SEARCH_TOOL, 'search the web'],
-  [URL_FETCH_TOOL, 'fetch web pages'],
   [EXECUTE_CODE_TOOL, 'run code'],
 ];
 
@@ -217,32 +224,31 @@ async function buildScheduledToolPlan(input: {
       ? Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS)
       : loadConnectorToolPermissions(input.db, input.userId),
   ]);
-  const unasked = (name: string) =>
-    runsWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
+  const asks = (name: string) => !runsWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
   const withheldTools: string[] = [];
 
   const provider = input.provider.toLowerCase();
   let tools: unknown[] = [];
-  const webSearch = policy.allowSearch && unasked(WEB_SEARCH_TOOL);
-  if (webSearch) {
-    tools = appendWebSearchTool(provider, tools, capabilities) ?? tools;
-    if (
-      shouldOfferGenericWebSearchTool({
-        providerLower: provider,
-        toolsCapable: true,
-        stream: true,
-        freeTrial: false,
-        backendConfigured: webSearchBackendConfigured(),
-      })
-    ) {
-      tools = [...tools, webSearchToolDef()];
-    }
-  } else if (policy.allowSearch) {
-    withheldTools.push(WEB_SEARCH_TOOL);
-  }
-
-  const webFetch = policy.allowSearch && unasked(URL_FETCH_TOOL);
-  if (webFetch) {
+  let webSearch = false;
+  if (policy.allowSearch) {
+    const nativeSearch = appendWebSearchTool(provider, [], capabilities) ?? [];
+    const searchTools = shouldOfferGenericWebSearchTool({
+      providerLower: provider,
+      toolsCapable: true,
+      stream: true,
+      freeTrial: false,
+      backendConfigured: webSearchBackendConfigured(),
+    })
+      ? [...nativeSearch, webSearchToolDef()]
+      : nativeSearch;
+    const offeredSearch =
+      substituteGatedWebSearchTool(searchTools, {
+        approvalRequired: asks(WEB_SEARCH_TOOL),
+        genericBackendConfigured: webSearchBackendConfigured(),
+      }) ?? [];
+    if (offeredSearch.length === 0 && searchTools.length > 0) withheldTools.push(WEB_SEARCH_TOOL);
+    webSearch = offeredSearch.length > 0;
+    tools = [...tools, ...offeredSearch];
     tools =
       resolveWebFetchTools({
         providerLower: provider,
@@ -250,9 +256,8 @@ async function buildScheduledToolPlan(input: {
         tools,
         toolsCapable: true,
         stream: true,
+        nativeFetchPermitted: !asks(URL_FETCH_TOOL),
       }) ?? tools;
-  } else if (policy.allowSearch) {
-    withheldTools.push(URL_FETCH_TOOL);
   }
 
   const codeExecution = resolveTurnCodeExecutionTools({
@@ -262,30 +267,23 @@ async function buildScheduledToolPlan(input: {
     toolsCapable: true,
     codeExecutionCapable: capabilities.codeExecution === true,
   });
-  let codeExecutionOffered = false;
-  for (const tool of codeExecution.tools) {
-    const name = functionToolName(tool) || EXECUTE_CODE_TOOL;
-    if (unasked(name)) {
-      tools = [...tools, tool];
-      codeExecutionOffered = true;
-    } else if (!withheldTools.includes(name)) {
-      withheldTools.push(name);
-    }
-  }
+  const codeAsks = asks(EXECUTE_CODE_TOOL);
+  const codeTools = codeExecution.tools.filter(
+    (tool) => functionToolName(tool) !== '' || !codeAsks,
+  );
+  if (codeTools.length < codeExecution.tools.length) withheldTools.push(EXECUTE_CODE_TOOL);
+  tools = [...tools, ...codeTools];
 
-  if (policy.allowMCP === false) {
-    return {
-      tools,
-      mcpTools: [],
-      connectorPermissions,
-      toolApprovalPolicy,
-      webSearch,
-      webFetch,
-      codeExecution: codeExecutionOffered,
-      withheldTools,
-      withheldConnectorTools: 0,
-    };
-  }
+  const base = {
+    tools,
+    connectorPermissions,
+    toolApprovalPolicy,
+    webSearch,
+    webFetch: policy.allowSearch,
+    codeExecution: codeTools.length > 0,
+    withheldTools,
+  };
+  if (policy.allowMCP === false) return { ...base, mcpTools: [] };
 
   const [operatorTools, connectorCatalog] = await Promise.all([
     loadMcpToolDefs(),
@@ -296,37 +294,26 @@ async function buildScheduledToolPlan(input: {
       isToolDenied: connectorPermissions.isConnectorToolDenied,
     }),
   ]);
-  const catalog = [...operatorTools, ...connectorCatalog.tools];
-  const mcpTools = catalog.filter((tool) => unasked(tool.qualifiedName));
-
+  const mcpTools = [...operatorTools, ...connectorCatalog.tools].filter(
+    (tool) => !connectorPermissions.isDenied(tool.qualifiedName),
+  );
   return {
-    tools,
+    ...base,
     mcpTools,
-    connectorPermissions,
     ...(mcpTools.some((tool) => tool.origin === 'connector')
       ? { connectorExecutor: makeUserConnectorExecutor(input.userId, input.organizationId) }
       : {}),
-    toolApprovalPolicy,
-    webSearch,
-    webFetch,
-    codeExecution: codeExecutionOffered,
-    withheldTools,
-    withheldConnectorTools: catalog.length - mcpTools.length,
   };
 }
 
 function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
-  const withheld = [
-    ...plan.withheldTools,
-    ...(plan.withheldConnectorTools > 0 ? ['connector tools not set to Always allow'] : []),
-  ];
-  if (withheld.length === 0) return null;
+  if (plan.withheldTools.length === 0) return null;
   const { label } = toolApprovalPolicyOption(plan.toolApprovalPolicy);
   return (
-    `These tools were not offered to this run: ${withheld.join(', ')}. Under the account's ` +
-    `Tool approvals setting ("${label}") each would need the user's approval, and nobody is ` +
-    'present to give it. If the task needed one of them, say in the result which step was ' +
-    'skipped and why.'
+    `These tools were not offered to this run: ${plan.withheldTools.join(', ')}. Under the ` +
+    `account's Tool approvals setting ("${label}") each needs the user's approval, and with ` +
+    "this model they run inside the provider's turn, where the run cannot pause to ask. If " +
+    'the task needed one of them, say in the result which step was skipped and why.'
   );
 }
 
@@ -343,8 +330,9 @@ function withheldCapabilityNote(plan: {
   const list = new Intl.ListFormat('en', { style: 'long', type: 'disjunction' }).format(actions);
   return (
     `This run could not ${list}: under your Tool approvals setting ("${label}") each needs ` +
-    `your approval, and nobody is present to approve a scheduled run. Choose "${readOnly}" in ` +
-    'Settings → Capabilities → Tool approvals to let scheduled runs do this.'
+    "your approval, and with this model they run inside the provider's turn, where the run " +
+    `cannot pause to ask you. Choose "${readOnly}" in Settings → Capabilities → Tool ` +
+    'approvals to let scheduled runs do this.'
   );
 }
 
@@ -461,13 +449,16 @@ interface ScheduledCompletion {
   totalTokens: number;
   costMicrousd: number;
   toolsUsed: string[];
+  approval?: ToolLoopApprovalCheckpoint;
 }
+
+type ScheduledMessages = ProcessedRequest['llmRequest']['messages'];
 
 function buildScheduledProcessedRequest(input: {
   task: ScheduleTask;
   runId: string;
   prompt: string;
-  systemPrompt: string;
+  messages: ScheduledMessages;
   plan: ScheduledToolPlan;
   route: { provider: string; modelKey: string };
   subscriptionTier: string;
@@ -479,13 +470,9 @@ function buildScheduledProcessedRequest(input: {
   reservation: ManagedUsageRequestReservation;
   sensitiveContextPresent: boolean;
 }): ProcessedRequest {
-  const messages = [
-    { role: 'system' as const, content: input.systemPrompt },
-    { role: 'user' as const, content: input.prompt },
-  ];
   const chatRequest: ChatCompletionRequest = {
     model: input.route.modelKey,
-    messages,
+    messages: [{ role: 'user', content: input.prompt }],
     stream: true,
     web_search: input.plan.webSearch,
     web_fetch: input.plan.webFetch,
@@ -519,7 +506,7 @@ function buildScheduledProcessedRequest(input: {
     indicResult: detectIndicScript(input.prompt),
     llmRequest: {
       model: input.route.modelKey,
-      messages,
+      messages: input.messages,
       max_tokens: MAX_OUTPUT_TOKENS,
       stream: true,
       tools: input.plan.tools,
@@ -534,12 +521,14 @@ async function runScheduledToolLoop(input: {
   userId: string;
   signal: AbortSignal;
   usage: ObservedProviderUsage;
+  resume?: ScheduledRunResume;
 }): Promise<ScheduledCompletion> {
   const usage = input.usage;
   const toolsUsed: string[] = [];
   let text = '';
   let reportedError: string | undefined;
-  let approvalRequired = false;
+  let approval: ToolLoopApprovalCheckpoint | undefined;
+  const resume = input.resume;
 
   const loop = runToolLoop(input.processed, {
     mcpTools: input.plan.mcpTools,
@@ -551,8 +540,23 @@ async function runScheduledToolLoop(input: {
     ...(input.plan.connectorExecutor ? { connectorExecutor: input.plan.connectorExecutor } : {}),
     usage,
     signal: input.signal,
-    onApprovalCheckpoint: async () => {
-      approvalRequired = true;
+    ...(resume
+      ? {
+          resume: {
+            approvals: resume.checkpoint.pendingToolCalls.map((call) => ({
+              toolCallId: call.id,
+              decision: resume.decision,
+            })),
+          },
+          eventSessionId: resume.checkpoint.sessionId,
+          eventTurnId: resume.checkpoint.turnId,
+          initialEventSequence: resume.checkpoint.nextEventSequence,
+          initialCompletedSteps: resume.checkpoint.completedSteps,
+          invocationContinuation: false,
+        }
+      : {}),
+    onApprovalCheckpoint: async (checkpoint) => {
+      approval = checkpoint;
     },
   });
 
@@ -564,12 +568,7 @@ async function runScheduledToolLoop(input: {
     }
   }
 
-  if (approvalRequired) {
-    throw new Error(
-      'Scheduled execution stopped: a tool call needed approval, which an unattended run cannot grant',
-    );
-  }
-  if (reportedError) throw new Error(reportedError);
+  if (reportedError && !approval) throw new Error(reportedError);
 
   return {
     text: text.trim(),
@@ -583,28 +582,20 @@ async function runScheduledToolLoop(input: {
         })
       : 0,
     toolsUsed,
+    ...(approval ? { approval } : {}),
   };
 }
 
 async function runScheduledCompletion(input: {
-  prompt: string;
-  systemPrompt: string;
-  route: {
-    provider: string;
-    providerModelId: string;
-    modelKey: string;
-    routeId: string;
-  };
+  messages: ScheduledMessages;
+  route: ScheduledRunRoute;
   signal: AbortSignal;
 }): Promise<ScheduledCompletion> {
   const dispatchProvider = dispatchProviderForSelectedRoute(input.route);
   const adapter = buildServerProviderAdapter(dispatchProvider);
   const chatRequest = openAIWireRequestToChatRequest({
     model: input.route.providerModelId,
-    messages: [
-      { role: 'system', content: input.systemPrompt },
-      { role: 'user', content: input.prompt },
-    ],
+    messages: input.messages.map((message) => ({ role: message.role, content: message.content })),
     max_tokens: MAX_OUTPUT_TOKENS,
     stream: false,
   });
@@ -636,11 +627,68 @@ async function runScheduledCompletion(input: {
   };
 }
 
+function selectScheduledRoute(
+  task: ScheduleTask,
+  taskType: ReturnType<typeof classifyTaskLocally>['type'],
+  subscriptionTier: string,
+): ScheduledRunRoute {
+  const route = resolveAutoRoute({
+    selection: task.model ?? 'auto',
+    taskType,
+    subscriptionTier,
+    trustMode: 'managed_cloud',
+    runtimeProfileId: 'web/cloud-chat',
+  });
+  if (route.status === 'unavailable') {
+    throw new Error('The selected model is not available for scheduled managed execution');
+  }
+  if (route.harnessId.endsWith('/media')) {
+    throw new Error('Scheduled media generation is unavailable');
+  }
+  return {
+    provider: route.provider,
+    providerModelId: route.providerModelId,
+    modelKey: route.modelKey,
+    routeId: route.routeId,
+  };
+}
+
+function resumedRoute(route: ScheduledRunRoute): ScheduledRunRoute {
+  if (!getModelMetadataById(route.modelKey)) {
+    throw new Error('The model this run started with is no longer available, so it cannot resume');
+  }
+  return route;
+}
+
+function approvalToolCalls(
+  checkpoint: ToolLoopApprovalCheckpoint,
+): ManagedCloudScheduleRunApprovalToolCall[] {
+  return checkpoint.pendingToolCalls.map((call) => {
+    const requested = checkpoint.events
+      .map((envelope) => envelope.event)
+      .find((event) => event.type === 'approval-requested' && event.toolCallId === call.id);
+    const input = Object.keys(call.args).length > 0 ? JSON.stringify(call.args, null, 2) : null;
+    return {
+      id: call.id,
+      name: call.qualifiedName,
+      summary:
+        requested?.type === 'approval-requested'
+          ? requested.summary
+          : canonicalToolSummary(call.qualifiedName, 'other', call.args),
+      input:
+        input && input.length > MAX_APPROVAL_INPUT_CHARS
+          ? `${input.slice(0, MAX_APPROVAL_INPUT_CHARS - 1)}…`
+          : input,
+    };
+  });
+}
+
 export const executeScheduledAgent: ScheduledTaskExecutor = async function executeScheduledAgent(
   task: ScheduleTask,
   signal: AbortSignal,
   runId: string,
   scope,
+  resume,
 ): Promise<ScheduledExecutionResult> {
   const prompt = validateAgentTask(task);
   if (task.userId !== scope.userId) {
@@ -671,19 +719,9 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   }
 
   const taskType = classifyTaskLocally(prompt, []).type;
-  const route = resolveAutoRoute({
-    selection: task.model ?? 'auto',
-    taskType,
-    subscriptionTier,
-    trustMode: 'managed_cloud',
-    runtimeProfileId: 'web/cloud-chat',
-  });
-  if (route.status === 'unavailable') {
-    throw new Error('The selected model is not available for scheduled managed execution');
-  }
-  if (route.harnessId.endsWith('/media')) {
-    throw new Error('Scheduled media generation is unavailable');
-  }
+  const route = resume
+    ? resumedRoute(resume.checkpoint.route)
+    : selectScheduledRoute(task, taskType, subscriptionTier);
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 
@@ -697,31 +735,52 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   });
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
-  const projectContext = task.projectId
-    ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
-    : null;
-  if (task.projectId && !projectContext) {
-    throw new ScheduledProjectContextUnavailableError(task.projectId);
+  if (resume && !toolLoopRunnable) {
+    throw new Error('This run cannot resume: its model can no longer call tools');
   }
-  const resolved = await resolveScheduledContext({ task, runId, scope, projectContext });
-  const systemPrompt = [
-    resolved.projectPrompt,
-    resolved.memoryPrompt,
-    buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
-    withheldToolsDirective(plan),
-    SCHEDULED_TASK_DIRECTIVE,
-  ]
-    .filter((block): block is string => Boolean(block))
-    .join('\n\n');
 
-  const estimatedPromptTokens = Math.ceil((prompt.length + systemPrompt.length) / 3.5) + 32;
+  let messages: ScheduledMessages;
+  let promptChars: number;
+  let sensitiveContextPresent: boolean;
+  if (resume) {
+    messages = resume.checkpoint.messages;
+    promptChars = JSON.stringify(messages).length;
+    sensitiveContextPresent = resume.checkpoint.sensitiveContextPresent;
+  } else {
+    const projectContext = task.projectId
+      ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
+      : null;
+    if (task.projectId && !projectContext) {
+      throw new ScheduledProjectContextUnavailableError(task.projectId);
+    }
+    const resolved = await resolveScheduledContext({ task, runId, scope, projectContext });
+    const systemPrompt = [
+      resolved.projectPrompt,
+      resolved.memoryPrompt,
+      buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
+      withheldToolsDirective(plan),
+      SCHEDULED_TASK_DIRECTIVE,
+    ]
+      .filter((block): block is string => Boolean(block))
+      .join('\n\n');
+    messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt },
+    ];
+    promptChars = prompt.length + systemPrompt.length;
+    sensitiveContextPresent = projectContext !== null || resolved.memoryPrompt !== null;
+  }
+
+  const estimatedPromptTokens = Math.ceil(promptChars / 3.5) + 32;
   const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
     route.provider,
     route.modelKey,
     estimatedPromptTokens,
     MAX_OUTPUT_TOKENS,
   );
-  const idempotencyKey = `schedule-run:${runId}`;
+  const idempotencyKey = resume
+    ? `schedule-run:${runId}:resume:${resume.checkpoint.completedSteps}`
+    : `schedule-run:${runId}`;
   const requestHash = fingerprintManagedUsageRequest({
     kind: 'scheduled_agent_execution',
     taskId: task.id,
@@ -732,6 +791,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     provider: route.provider,
     model: route.modelKey,
     providerModelId: route.providerModelId,
+    ...(resume ? { resumeStep: resume.checkpoint.completedSteps, decision: resume.decision } : {}),
   });
   const reservation = await reserveManagedUsageRequest({
     db: scope.db,
@@ -757,7 +817,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             task,
             runId,
             prompt,
-            systemPrompt,
+            messages,
             plan,
             route: { ...route, provider: dispatchProvider },
             subscriptionTier,
@@ -767,16 +827,19 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             taskType,
             organizationId: scope.organizationId,
             reservation,
-            sensitiveContextPresent: projectContext !== null,
+            sensitiveContextPresent,
           }),
           plan,
           approvalMode: loopInputs.approvalMode,
           userId: scope.userId,
           signal,
           usage: observedUsage,
+          resume,
         })
-      : await runScheduledCompletion({ prompt, systemPrompt, route, signal });
-    if (!completion.text) throw new Error('Scheduled provider response contained no text');
+      : await runScheduledCompletion({ messages, route, signal });
+    if (!completion.approval && !completion.text) {
+      throw new Error('Scheduled provider response contained no text');
+    }
     providerCompleted = true;
 
     const finalization = await finalizeManagedUsageRequest({
@@ -793,10 +856,11 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
         completionTokens: completion.completionTokens,
         totalTokens: completion.totalTokens,
         toolCalls: completion.toolsUsed.length,
+        ...(completion.approval ? { awaitingApproval: true } : {}),
       },
     });
 
-    const note = withheldCapabilityNote(plan);
+    const note = completion.approval ? null : withheldCapabilityNote(plan);
     return {
       text: note
         ? `${completion.text.slice(0, MAX_OUTPUT_CHARS - note.length - 2)}\n\n${note}`
@@ -810,6 +874,23 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
         totalTokens: completion.totalTokens,
       },
       billingStatus: finalization.settlementStatus ?? finalization.requestStatus,
+      ...(completion.approval
+        ? {
+            approval: {
+              checkpoint: {
+                sessionId: completion.approval.sessionId,
+                turnId: completion.approval.turnId,
+                nextEventSequence: completion.approval.nextEventSequence,
+                completedSteps: completion.approval.completedSteps,
+                messages: completion.approval.messages,
+                pendingToolCalls: completion.approval.pendingToolCalls,
+                route,
+                sensitiveContextPresent,
+              },
+              toolCalls: approvalToolCalls(completion.approval),
+            },
+          }
+        : {}),
     };
   } catch (error) {
     if (!providerCompleted) {

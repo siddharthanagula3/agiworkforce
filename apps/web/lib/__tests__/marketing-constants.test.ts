@@ -24,13 +24,14 @@ describe('marketing plan matrix', () => {
           planId: 'max_15x',
           label: 'Max 20x',
           price: '$200/mo',
-          usageCapacity: '20x Pro per 5 hours, 10x per week',
+          usageCapacity: '20x more usage per session and 10x more weekly usage than Pro',
         }),
         expect.objectContaining({
           planId: 'team',
           label: 'Team',
           price: '$25/seat/mo',
           billingInterval: 'Self-serve monthly; annual only where checkout offers it',
+          usageCapacity: 'Same usage as Pro for every seat',
         }),
       ]),
     );

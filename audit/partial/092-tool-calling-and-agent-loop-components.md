@@ -90,6 +90,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts:14-25`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Approvals queue and resume, but the connector input_required pause is off by default (AGI_MCP_INPUT_PAUSE must be 1) and no client calls /resume-input, so connector questions fail safe instead of waiting. | flag-off |
+| platform | partial | The connector input_required pause is on for every attended turn (tool-loop.ts:2744; AGI_MCP_INPUT_PAUSE is deleted). Still open: no client answers the pause yet; the web input form and resume call are being built in the connector lane. | flag-off |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1077-1085`, `apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql:8-12`

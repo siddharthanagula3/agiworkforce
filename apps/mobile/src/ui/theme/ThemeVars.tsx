@@ -17,6 +17,8 @@ export function ThemeVars({ children }: { children: ReactNode }) {
           '--agi-surface-overlay': colors.surfaceOverlay,
           '--agi-surface-hover': colors.surfaceHover,
           '--agi-fg': colors.textPrimary,
+          '--agi-fg-secondary': colors.textSecondary,
+          '--agi-fg-muted': colors.textMuted,
         }),
       ]}
     >

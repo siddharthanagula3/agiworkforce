@@ -119,7 +119,7 @@ function ActionRow({
       </View>
       <View className="flex-1">
         <Text className="text-sm text-white font-medium">{label}</Text>
-        <Text className="text-xs text-white/50 mt-0.5">{description}</Text>
+        <Text className="text-xs text-fg-muted mt-0.5">{description}</Text>
       </View>
     </View>
   );
@@ -172,7 +172,7 @@ export default function WidgetSetupScreen() {
           <Text className="text-base font-semibold text-white text-center">
             Reach AGI Workforce from anywhere
           </Text>
-          <Text className="text-sm text-white/50 text-center px-4">
+          <Text className="text-sm text-fg-muted text-center px-4">
             {isIOS
               ? 'Trigger AGI Workforce with Siri, share text or links from other apps, and open agiworkforce.com links directly in the app.'
               : 'Share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
@@ -184,23 +184,23 @@ export default function WidgetSetupScreen() {
             {/* iOS Section 1: Siri & Shortcuts */}
             <Card>
               <SectionHeader icon={Mic} title="Siri & Shortcuts" step={1} />
-              <Text className="text-xs text-white/50 mb-3">
+              <Text className="text-xs text-fg-muted mb-3">
                 These actions register automatically in the{' '}
-                <Text className="text-xs text-white/70 font-medium">Shortcuts</Text> app under AGI
-                Workforce, no setup needed. Trigger them by voice or combine them into your own
+                <Text className="text-xs text-fg-secondary font-medium">Shortcuts</Text> app under
+                AGI Workforce, no setup needed. Trigger them by voice or combine them into your own
                 shortcuts.
               </Text>
               <View
                 className="rounded-xl p-3 gap-2 mb-3"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
                   Example phrases
                 </Text>
                 {SIRI_EXAMPLES.map((example) => (
                   <View key={example} className="flex-row items-start gap-2">
-                    <Text className="text-white/30 text-xs mt-0.5">•</Text>
-                    <Text className="text-xs text-white/70 flex-1 italic">{example}</Text>
+                    <Text className="text-fg-muted text-xs mt-0.5">•</Text>
+                    <Text className="text-xs text-fg-secondary flex-1 italic">{example}</Text>
                   </View>
                 ))}
               </View>
@@ -219,29 +219,30 @@ export default function WidgetSetupScreen() {
             {/* iOS Section 2: native Share Extension */}
             <Card>
               <SectionHeader icon={Share2} title="Share Sheet" step={2} />
-              <Text className="text-xs text-white/50 mb-3">
+              <Text className="text-xs text-fg-muted mb-3">
                 Share text or a web link from another app, choose{' '}
-                <Text className="text-xs text-white/70 font-medium">Share to AGI</Text>, and review
-                the content twice: once while saving and once after you open AGI Workforce.
+                <Text className="text-xs text-fg-secondary font-medium">Share to AGI</Text>, and
+                review the content twice: once while saving and once after you open AGI Workforce.
               </Text>
               <View
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
-                <Text className="text-xs text-white/40">
+                <Text className="text-xs text-fg-muted">
                   1. In Safari, Notes, or another app, tap{' '}
-                  <Text className="text-xs text-white/60 font-medium">Share</Text>
+                  <Text className="text-xs text-fg-secondary font-medium">Share</Text>
                 </Text>
-                <Text className="text-xs text-white/40">
-                  2. Choose <Text className="text-xs text-white/60 font-medium">Share to AGI</Text>
+                <Text className="text-xs text-fg-muted">
+                  2. Choose{' '}
+                  <Text className="text-xs text-fg-secondary font-medium">Share to AGI</Text>
                 </Text>
-                <Text className="text-xs text-white/40">
+                <Text className="text-xs text-fg-muted">
                   3. Preview it, tap{' '}
-                  <Text className="text-xs text-white/60 font-medium">Save for AGI Review</Text>,
-                  then open AGI Workforce and decide whether to send it
+                  <Text className="text-xs text-fg-secondary font-medium">Save for AGI Review</Text>
+                  , then open AGI Workforce and decide whether to send it
                 </Text>
               </View>
             </Card>
@@ -251,7 +252,7 @@ export default function WidgetSetupScreen() {
             {/* Android Section 1: Share sheet */}
             <Card>
               <SectionHeader icon={Share2} title="Share From Any App" step={1} />
-              <Text className="text-xs text-white/50 mb-3">
+              <Text className="text-xs text-fg-muted mb-3">
                 Send text or links to AGI Workforce through the Android share sheet. You always
                 review the content before anything is sent to a model.
               </Text>
@@ -259,20 +260,22 @@ export default function WidgetSetupScreen() {
                 className="rounded-xl p-3 gap-2"
                 style={{ backgroundColor: colors.surfaceElevated }}
               >
-                <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-1">
+                <Text className="text-[11px] text-fg-muted uppercase tracking-wider mb-1">
                   How to share
                 </Text>
-                <Text className="text-xs text-white/40">
+                <Text className="text-xs text-fg-muted">
                   1. In any app, tap{' '}
-                  <Text className="text-xs text-white/60 font-medium">Share</Text> on text or a link
+                  <Text className="text-xs text-fg-secondary font-medium">Share</Text> on text or a
+                  link
                 </Text>
-                <Text className="text-xs text-white/40">
-                  2. Choose <Text className="text-xs text-white/60 font-medium">AGI Workforce</Text>{' '}
-                  from the share sheet
+                <Text className="text-xs text-fg-muted">
+                  2. Choose{' '}
+                  <Text className="text-xs text-fg-secondary font-medium">AGI Workforce</Text> from
+                  the share sheet
                 </Text>
-                <Text className="text-xs text-white/40">
+                <Text className="text-xs text-fg-muted">
                   3. Review the preview, then tap{' '}
-                  <Text className="text-xs text-white/60 font-medium">Send to Chat</Text>
+                  <Text className="text-xs text-fg-secondary font-medium">Send to Chat</Text>
                 </Text>
               </View>
             </Card>
@@ -280,11 +283,11 @@ export default function WidgetSetupScreen() {
             {/* Android Section 2: Selected text action */}
             <Card>
               <SectionHeader icon={TextCursorInput} title="Act On Selected Text" step={2} />
-              <Text className="text-xs text-white/50 mb-3">
+              <Text className="text-xs text-fg-muted mb-3">
                 Select text anywhere, then pick{' '}
-                <Text className="text-xs text-white/70 font-medium">AGI Workforce</Text> from the
-                text-selection menu (it may be under the{' '}
-                <Text className="text-xs text-white/70 font-medium">⋮ More</Text> overflow). The
+                <Text className="text-xs text-fg-secondary font-medium">AGI Workforce</Text> from
+                the text-selection menu (it may be under the{' '}
+                <Text className="text-xs text-fg-secondary font-medium">⋮ More</Text> overflow). The
                 selection opens in the same review screen as a share.
               </Text>
             </Card>
@@ -294,12 +297,12 @@ export default function WidgetSetupScreen() {
         {/* Both platforms: links open in the app */}
         <Card>
           <SectionHeader icon={Link2} title="Links Open In The App" step={3} />
-          <Text className="text-xs text-white/50">
-            Links to <Text className="text-xs text-white/70 font-medium">agiworkforce.com</Text>{' '}
+          <Text className="text-xs text-fg-muted">
+            Links to <Text className="text-xs text-fg-secondary font-medium">agiworkforce.com</Text>{' '}
             open directly in the app when it is installed
             {isIOS ? ' (universal links)' : ' (verified app links)'}, and{' '}
-            <Text className="text-xs text-white/70 font-medium">agiworkforce://</Text> deep links
-            work from any app that can open URLs.
+            <Text className="text-xs text-fg-secondary font-medium">agiworkforce://</Text> deep
+            links work from any app that can open URLs.
           </Text>
         </Card>
       </ScrollView>

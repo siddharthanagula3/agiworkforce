@@ -2,6 +2,7 @@ import {
   createManagedCloudSchedulesClient,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleTask,
   type ManagedCloudSchedulesClient,
   type ManagedCloudSchedulesPageInput,
@@ -86,6 +87,17 @@ export const desktopCloudSchedules = {
   ): Promise<{ run: ManagedCloudScheduleRun; replay: boolean }> {
     return withSchedulesClient('Managed Cloud schedule manual run', (client) =>
       client.runNow(scheduleId, idempotencyKey, signal),
+    );
+  },
+
+  resolveRunApproval(
+    scheduleId: string,
+    runId: string,
+    approval: ManagedCloudScheduleRunApproval,
+    signal?: AbortSignal,
+  ): Promise<ManagedCloudScheduleRun> {
+    return withSchedulesClient('Managed Cloud schedule run approval', (client) =>
+      client.resolveRunApproval(scheduleId, runId, approval, signal),
     );
   },
 };
