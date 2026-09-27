@@ -2,18 +2,30 @@ import { z } from 'zod';
 import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
 import type { SelfServeIndividualPlanTier } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { apiErrorMessage } from '../lib/api-error';
+import { apiErrorCode, apiErrorMessage } from '../lib/api-error';
 import {
+  AutoReloadSettingsSchema,
   BillingRefundSchema,
   PlanChangeStateSchema,
   TopUpReceiptSchema,
+  type AutoReloadSettings,
+  type AutoReloadUpdate,
   type BillingRefund,
   type PlanChangeState,
   type TopUpReceipt,
 } from '../lib/billing-account-types';
 
 const PLAN_CHANGE_PATH = '/api/billing/downgrade-preview';
+const AUTO_RELOAD_PATH = '/api/billing/auto-reload';
+const PAYMENT_METHOD_REQUIRED = 'payment_method_required';
 const UNEXPECTED_SHAPE = 'Billing returned an unexpected answer. Refresh and try again.';
+
+export class PaymentMethodRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PaymentMethodRequiredError';
+  }
+}
 
 const ReceiptsResponseSchema = z.object({ receipts: z.array(TopUpReceiptSchema) });
 const RefundsResponseSchema = z.object({ refunds: z.array(BillingRefundSchema) });
@@ -76,6 +88,35 @@ export async function fetchTopUpReceipts(): Promise<TopUpReceipt[]> {
     'Your credit purchase receipts could not be loaded.',
   );
   return parseWith(ReceiptsResponseSchema, body).receipts;
+}
+
+export async function fetchAutoReload(): Promise<AutoReloadSettings> {
+  return parseWith(
+    AutoReloadSettingsSchema,
+    await requestJson(AUTO_RELOAD_PATH, {}, 'Your auto-reload settings could not be loaded.'),
+  );
+}
+
+export async function saveAutoReload(update: AutoReloadUpdate): Promise<AutoReloadSettings> {
+  const response = await fetch(AUTO_RELOAD_PATH, {
+    method: 'PUT',
+    credentials: 'include',
+    cache: 'no-store',
+    headers: await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      [IDEMPOTENCY_KEY_HEADER]: `agi.billing.web.${crypto.randomUUID()}`,
+    }),
+    body: JSON.stringify(update),
+  });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = apiErrorMessage(body, 'Your auto-reload settings were not saved.');
+    if (apiErrorCode(body) === PAYMENT_METHOD_REQUIRED) {
+      throw new PaymentMethodRequiredError(message);
+    }
+    throw new Error(message);
+  }
+  return parseWith(AutoReloadSettingsSchema, body);
 }
 
 export async function fetchRefunds(): Promise<BillingRefund[]> {

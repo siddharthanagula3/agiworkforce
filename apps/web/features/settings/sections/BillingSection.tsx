@@ -24,6 +24,7 @@ import {
 import { BillingPaymentHistory } from '@/features/billing/components/BillingPaymentHistory';
 import { DowngradeReviewDialog } from '@/features/billing/components/DowngradeReviewDialog';
 import { TopUpPanel } from '@/features/billing/components/TopUpPanel';
+import { AutoReloadPanel } from '@/features/billing/components/AutoReloadPanel';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   getBillingPlanPricing,
@@ -894,6 +895,13 @@ export function BillingSection() {
       )}
 
       {canBuyTopUps || isFreeTier ? <TopUpPanel tier={tier} canBuy={canBuyTopUps} /> : null}
+
+      {canBuyTopUps ? (
+        <AutoReloadPanel
+          onAddPaymentMethod={() => void openPortal()}
+          portalPending={portalPending}
+        />
+      ) : null}
 
       {canBuyTopUps && (
         <div
