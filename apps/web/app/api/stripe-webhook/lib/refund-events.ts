@@ -74,11 +74,11 @@ async function coversCurrentPeriod(
       expand: ['data.invoice'],
     });
     const invoice = payments.data[0]?.invoice;
-    const line =
-      invoice && typeof invoice !== 'string' && !invoice.deleted
-        ? invoice.lines.data[0]
-        : undefined;
-    if (line) return line.period.end === periodEnd;
+    const lines =
+      invoice && typeof invoice !== 'string' && !invoice.deleted ? invoice.lines.data : [];
+    if (lines.length > 0) {
+      return Math.max(...lines.map((line) => line.period.end)) === periodEnd;
+    }
   }
   return charge.created >= periodStart && charge.created < periodEnd;
 }

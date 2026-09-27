@@ -76,6 +76,9 @@ function planUpdates(calls: Call[]): Call[] {
 }
 
 const NOW = Math.floor(Date.now() / 1000);
+const PERIOD_START = new Date((NOW - 24 * 60 * 60) * 1000).toISOString();
+const PERIOD_END = new Date((NOW + 29 * 24 * 60 * 60) * 1000).toISOString();
+const PLAN_ALLOWANCE_MICROUSD = 12_000_000;
 
 function refundEvent(charge: Partial<Stripe.Charge>): Stripe.Event {
   return {
@@ -88,6 +91,7 @@ function refundEvent(charge: Partial<Stripe.Charge>): Stripe.Event {
         amount: 2000,
         amount_refunded: 2000,
         refunded: true,
+        created: NOW,
         metadata: {},
         ...charge,
       },
@@ -95,17 +99,46 @@ function refundEvent(charge: Partial<Stripe.Charge>): Stripe.Event {
   } as unknown as Stripe.Event;
 }
 
+function planRefundDb(alreadyRevokedMicrousd = 0) {
+  return makeDb((sql) => {
+    if (sql.includes('from profiles')) return [{ id: 'user_123' }];
+    if (sql.includes('from subscriptions')) {
+      return [
+        {
+          subscription_id: 'sub_row',
+          plan_tier: 'pro',
+          current_period_start: PERIOD_START,
+          current_period_end: PERIOD_END,
+        },
+      ];
+    }
+    if (sql.includes('from token_credits')) {
+      return [
+        {
+          id: 'account_1',
+          credits_allocated_microusd: PLAN_ALLOWANCE_MICROUSD,
+          top_up_allocated_microusd: 0,
+        },
+      ];
+    }
+    if (sql.includes('from credit_transactions')) {
+      return [{ revoked: String(alreadyRevokedMicrousd) }];
+    }
+    return [];
+  });
+}
+
+function planRevocations(calls: Call[]): unknown[] {
+  return calls
+    .filter((call) => call.sql.includes('revoke_plan_allowance_microusd'))
+    .map((call) => call.params[2]);
+}
+
 describe('charge.refunded revokes the entitlement the refund paid for', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('downgrades the plan when the whole charge is refunded', async () => {
-    const { db, calls } = makeDb((sql) =>
-      sql.includes('from profiles')
-        ? [{ id: 'user_123' }]
-        : sql.includes('select plan_tier from subscriptions')
-          ? [{ plan_tier: 'pro' }]
-          : [],
-    );
+    const { db, calls } = planRefundDb();
 
     await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
 
@@ -113,6 +146,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     expect(update).toBeDefined();
     expect(update!.sql).toContain("status = 'past_due'");
     expect(update!.params).toEqual(['cus_123']);
+    expect(planRevocations(calls)).toEqual([PLAN_ALLOWANCE_MICROUSD]);
     expect(recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'plan_changed',
@@ -122,9 +156,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   });
 
   it('never writes the terminal canceled status, which would block later renewals', async () => {
-    const { db, calls } = makeDb((sql) =>
-      sql.includes('from profiles') ? [{ id: 'user_123' }] : [],
-    );
+    const { db, calls } = planRefundDb();
 
     await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
 
@@ -132,9 +164,7 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
   });
 
   it('leaves the plan alone on a partial refund', async () => {
-    const { db, calls } = makeDb((sql) =>
-      sql.includes('from profiles') ? [{ id: 'user_123' }] : [],
-    );
+    const { db, calls } = planRefundDb();
 
     await dispatchStripeEvent(
       db,
@@ -143,24 +173,11 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     );
 
     expect(planUpdates(calls)).toHaveLength(0);
-    expect(calls.some((call) => call.sql.includes('handle_refund'))).toBe(true);
+    expect(planRevocations(calls)).toEqual([3_000_000]);
   });
 
-  function refundLedgerDb(alreadyRevokedCents: number) {
-    return makeDb((sql) => {
-      if (sql.includes('from profiles')) return [{ id: 'user_123' }];
-      if (sql.includes('from credit_transactions'))
-        return [{ revoked_cents: String(alreadyRevokedCents) }];
-      return [];
-    });
-  }
-
-  function handleRefundAmounts(calls: Call[]): unknown[] {
-    return calls.filter((call) => call.sql.includes('handle_refund')).map((call) => call.params[1]);
-  }
-
   it('revokes only the new money on a second partial refund', async () => {
-    const { db, calls } = refundLedgerDb(300);
+    const { db, calls } = planRefundDb(3_000_000);
 
     await dispatchStripeEvent(
       db,
@@ -168,11 +185,11 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
       refundEvent({ amount: 1200, amount_refunded: 600, refunded: false }),
     );
 
-    expect(handleRefundAmounts(calls)).toEqual([300]);
+    expect(planRevocations(calls)).toEqual([3_000_000]);
   });
 
   it('revokes nothing when a stale or replayed event repeats money already clawed back', async () => {
-    const { db, calls } = refundLedgerDb(600);
+    const { db, calls } = planRefundDb(6_000_000);
 
     await dispatchStripeEvent(
       db,
@@ -180,11 +197,11 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
       refundEvent({ amount: 1200, amount_refunded: 300, refunded: false }),
     );
 
-    expect(handleRefundAmounts(calls)).toEqual([]);
+    expect(planRevocations(calls)).toEqual([]);
   });
 
-  it('still revokes the full amount for the first refund on a charge', async () => {
-    const { db, calls } = refundLedgerDb(0);
+  it('still revokes the full share for the first refund on a charge', async () => {
+    const { db, calls } = planRefundDb(0);
 
     await dispatchStripeEvent(
       db,
@@ -192,11 +209,11 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
       refundEvent({ amount: 1200, amount_refunded: 500, refunded: false }),
     );
 
-    expect(handleRefundAmounts(calls)).toEqual([500]);
+    expect(planRevocations(calls)).toEqual([5_000_000]);
   });
 
   it('scopes the already-revoked lookup to this user and this charge', async () => {
-    const { db, calls } = refundLedgerDb(0);
+    const { db, calls } = planRefundDb(0);
 
     await dispatchStripeEvent(db, {} as Stripe, refundEvent({}));
 
