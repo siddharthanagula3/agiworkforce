@@ -22,8 +22,8 @@ function chipClass(tone: 'neutral' | 'warning' | 'danger' = 'neutral') {
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
     tone === 'neutral' &&
       'border-[var(--chat-border)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]',
-    tone === 'warning' && 'border-amber-500/40 bg-amber-500/10 text-amber-600',
-    tone === 'danger' && 'border-red-500/40 bg-red-500/10 text-red-600',
+    tone === 'warning' && 'border-warning-fill/40 bg-warning-fill/10 text-warning-text',
+    tone === 'danger' && 'border-danger-fill/40 bg-danger-fill/10 text-danger-text',
   );
 }
 

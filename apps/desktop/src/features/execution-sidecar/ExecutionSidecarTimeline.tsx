@@ -30,7 +30,7 @@ function TimelineEntry({ entry, onClickEntry }: TimelineEntryProps) {
       className={cn(
         'w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs font-mono text-left transition-colors',
         'hover:bg-white/5',
-        isError ? 'text-red-400' : 'text-muted-foreground',
+        isError ? 'text-danger-text' : 'text-muted-foreground',
       )}
     >
       {/* Status icon */}
@@ -40,9 +40,9 @@ function TimelineEntry({ entry, onClickEntry }: TimelineEntryProps) {
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-violet-400" />
         </span>
       ) : isError ? (
-        <X className="w-3 h-3 text-red-400 shrink-0" />
+        <X className="w-3 h-3 text-danger-text shrink-0" />
       ) : (
-        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+        <Check className="w-3 h-3 text-success-text shrink-0" />
       )}
 
       {/* Tool icon */}

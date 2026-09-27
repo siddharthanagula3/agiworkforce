@@ -87,12 +87,12 @@ export function MessageLimitCard({ block, onRetry, onUpgrade, className }: Messa
       aria-label="Usage limit reached"
       className={cn(
         'mt-2 rounded-xl border px-4 py-3',
-        'border-amber-500/40 bg-amber-500/10',
+        'border-warning-fill/40 bg-warning-fill/10',
         className,
       )}
     >
       <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" aria-hidden="true" />
+        <Icon className="mt-0.5 h-5 w-5 shrink-0 text-warning-text" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-[var(--chat-text-primary)]">{headline}</p>
           {block.reason ? (

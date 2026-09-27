@@ -5,13 +5,7 @@
  * Displays safety warnings before enabling computer use capabilities.
  */
 import { AlertTriangle, Shield } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { Button } from '@/ui/Button';
 
 interface ComputerUseConsentDialogProps {
@@ -36,8 +30,8 @@ export function ComputerUseConsentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 mb-3">
-            <Shield className="h-6 w-6 text-amber-500" />
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-warning-fill/10 mb-3">
+            <Shield className="h-6 w-6 text-warning-text" />
           </div>
           <DialogTitle className="text-center text-lg">Turn on computer use?</DialogTitle>
         </DialogHeader>
@@ -51,7 +45,7 @@ export function ComputerUseConsentDialog({
           <div className="space-y-3">
             {WARNINGS.map((warning) => (
               <div key={warning} className="flex items-start gap-3">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
                 <span className="text-sm text-muted-foreground">{warning}</span>
               </div>
             ))}

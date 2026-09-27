@@ -1395,7 +1395,7 @@ if (__AgiApp) {
               >
                 {copied ? (
                   <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
+                    <Check className="h-3.5 w-3.5 text-success-text" />
                     <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
                   </>
                 ) : (
@@ -1730,9 +1730,9 @@ if (__AgiApp) {
         {/* AUDIT-FIX ART-6: honest, per-renderer security notice (see
             securityNotice above). */}
         {securityNotice && (
-          <Alert className="m-4 shrink-0 border-yellow-500 bg-yellow-50">
-            <Shield className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-800">
+          <Alert className="m-4 shrink-0 border-warning-fill/40 bg-warning-fill/10">
+            <Shield className="h-4 w-4 text-warning-text" />
+            <AlertDescription className="text-warning-text">
               <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
             </AlertDescription>
           </Alert>
@@ -1950,7 +1950,7 @@ if (__AgiApp) {
             >
               {copied ? (
                 <>
-                  <Check className="h-3.5 w-3.5 text-green-500" />
+                  <Check className="h-3.5 w-3.5 text-success-text" />
                   <span className="ml-1 hidden text-xs @[30rem]:inline">Copied</span>
                 </>
               ) : (
@@ -2074,9 +2074,9 @@ if (__AgiApp) {
       {/* AUDIT-FIX ART-6: see securityNotice, the copy now matches the
           mitigation the renderer actually performed. */}
       {securityNotice && (
-        <Alert className="m-4 border-yellow-500 bg-yellow-50">
-          <Shield className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
+        <Alert className="m-4 border-warning-fill/40 bg-warning-fill/10">
+          <Shield className="h-4 w-4 text-warning-text" />
+          <AlertDescription className="text-warning-text">
             <strong>Security Notice:</strong> {SECURITY_NOTICE_TEXT[securityNotice]}
           </AlertDescription>
         </Alert>

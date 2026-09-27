@@ -89,14 +89,14 @@ export function AgentsSettings() {
               <Label htmlFor="agents-autoApprove" className="flex items-center gap-2">
                 Auto-Approve All Tools
                 {chatPreferences.autoApproveTools && (
-                  <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
+                  <span className="rounded-full bg-warning-fill/10 px-2 py-0.5 text-[10px] font-semibold text-warning-text">
                     ACTIVE
                   </span>
                 )}
               </Label>
               <p className="text-xs text-muted-foreground">
                 Skip all confirmation dialogs. Every tool call executes without asking.{' '}
-                <strong className="text-orange-600 dark:text-orange-400">Use with caution.</strong>
+                <strong className="text-warning-text">Use with caution.</strong>
               </p>
             </div>
             <Switch

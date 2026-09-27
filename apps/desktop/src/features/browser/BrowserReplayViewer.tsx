@@ -63,8 +63,13 @@ function formatDurationMs(ms: number): string {
 
 function getStatusConfig(success: boolean) {
   return success
-    ? { icon: CheckCircle2, color: 'text-green-400', bgColor: 'bg-green-400/10', label: 'Success' }
-    : { icon: XCircle, color: 'text-red-400', bgColor: 'bg-red-400/10', label: 'Failed' };
+    ? {
+        icon: CheckCircle2,
+        color: 'text-success-text',
+        bgColor: 'bg-success-fill/10',
+        label: 'Success',
+      }
+    : { icon: XCircle, color: 'text-danger-text', bgColor: 'bg-danger-fill/10', label: 'Failed' };
 }
 
 interface ScreenshotModalProps {
@@ -215,7 +220,7 @@ function ActionRow({ action, index, screenshotData, onViewScreenshot }: ActionRo
               </div>
             )}
             {action.details.error && (
-              <div className="flex items-start gap-1.5 rounded bg-red-900/20 px-2 py-1.5 text-xs text-red-400">
+              <div className="flex items-start gap-1.5 rounded bg-danger-fill/10 px-2 py-1.5 text-xs text-danger-text">
                 <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
                 {action.details.error}
               </div>
@@ -329,12 +334,12 @@ export function BrowserReplayViewer({ className }: BrowserReplayViewerProps) {
           <span className="text-xs font-medium text-muted-foreground">
             {actions.length} action{actions.length !== 1 ? 's' : ''}
           </span>
-          <span className="flex items-center gap-1 text-xs text-green-400">
+          <span className="flex items-center gap-1 text-xs text-success-text">
             <CheckCircle2 className="h-3 w-3" />
             {successCount}
           </span>
           {failedCount > 0 && (
-            <span className="flex items-center gap-1 text-xs text-red-400">
+            <span className="flex items-center gap-1 text-xs text-danger-text">
               <XCircle className="h-3 w-3" />
               {failedCount}
             </span>

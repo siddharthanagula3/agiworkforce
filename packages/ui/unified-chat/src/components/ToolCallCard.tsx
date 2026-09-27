@@ -184,14 +184,14 @@ function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
   return (
     <div
       data-testid="tool-file-diff"
-      className="rounded-compact border border-white/8 bg-black/20 overflow-hidden"
+      className="rounded-compact border border-[var(--chat-border)] bg-[var(--chat-code-bg)] overflow-hidden"
     >
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-white/8">
+      <div className="flex items-center gap-2 px-2 py-1 border-b border-[var(--chat-border)]">
         <span className="flex-1 truncate font-mono text-caption text-muted-foreground">
           {filePath ?? 'diff'}
         </span>
-        <span className="font-mono text-caption text-green-500">+{additions}</span>
-        <span className="font-mono text-caption text-red-500">-{deletions}</span>
+        <span className="font-mono text-caption text-success-text">+{additions}</span>
+        <span className="font-mono text-caption text-danger-text">-{deletions}</span>
       </div>
       <div className="max-h-48 overflow-auto font-mono text-caption leading-snug">
         {visible.map((line, index) => (
@@ -200,8 +200,8 @@ function FileDiffBlock({ filePath, lines, additions, deletions }: FileDiff) {
             data-diff-line={line.type}
             className={cn(
               'flex',
-              line.type === 'add' && 'bg-green-500/10 text-green-700 dark:text-green-400',
-              line.type === 'remove' && 'bg-red-500/10 text-red-700 dark:text-red-400',
+              line.type === 'add' && 'bg-success-fill/10 text-success-text',
+              line.type === 'remove' && 'bg-danger-fill/10 text-danger-text',
               line.type === 'meta' && 'text-blue-600 dark:text-blue-400',
               line.type === 'context' && 'text-muted-foreground',
             )}
@@ -467,9 +467,9 @@ const ToolCallCardComponent = ({
         )}
 
         {showApprovalPrompt && (
-          <div className="flex items-center gap-2 p-2 rounded-compact bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
-            <AlertCircle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-            <p className="flex-1 text-xs text-yellow-900 dark:text-yellow-100">
+          <div className="flex items-center gap-2 p-2 rounded-compact bg-warning-fill/10 border border-warning-fill/30">
+            <AlertCircle className="h-3.5 w-3.5 text-warning-text flex-shrink-0" />
+            <p className="flex-1 text-xs text-warning-text">
               This tool requires approval before execution.
             </p>
             <div className="flex gap-1.5">
@@ -477,7 +477,7 @@ const ToolCallCardComponent = ({
                 <button
                   type="button"
                   onClick={() => onApprove(id)}
-                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded-compact bg-green-700 hover:bg-green-800 text-white transition-colors"
+                  className="flex items-center gap-1 h-6 px-2 text-xs font-medium rounded-compact bg-success-fill hover:brightness-95 text-success-on-fill transition-colors"
                 >
                   <Play className="h-2.5 w-2.5" />
                   {TOOL_APPROVAL_ACTION_LABELS.allow}
@@ -506,7 +506,7 @@ const ToolCallCardComponent = ({
             ) : requestDiff ? (
               <FileDiffBlock {...requestDiff} />
             ) : commandText ? (
-              <pre className="font-mono text-caption leading-snug p-2 rounded-compact bg-black/20 border border-white/8 overflow-x-auto max-h-48 overflow-y-auto select-text">
+              <pre className="font-mono text-caption leading-snug p-2 rounded-compact bg-[var(--chat-code-bg)] border border-[var(--chat-border)] overflow-x-auto max-h-48 overflow-y-auto select-text">
                 {commandText}
               </pre>
             ) : (
@@ -537,7 +537,7 @@ const ToolCallCardComponent = ({
             <p className="text-caption uppercase tracking-wider text-muted-foreground mb-1 ml-0.5">
               Error
             </p>
-            <pre className="overflow-auto max-h-48 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-red-400 scrollbar-thin">
+            <pre className="overflow-auto max-h-48 rounded-compact bg-muted/50 p-2.5 text-xs font-mono leading-relaxed text-danger-text scrollbar-thin">
               {displayError}
             </pre>
           </div>
@@ -554,8 +554,7 @@ const ToolCallCardComponent = ({
       <div
         className={cn(
           'group relative my-0.5',
-          showApprovalPrompt &&
-            'rounded-lg border border-yellow-300/40 dark:border-yellow-700/40 bg-yellow-50/30 dark:bg-yellow-950/10 px-1',
+          showApprovalPrompt && 'rounded-lg border border-warning-fill/40 bg-warning-fill/10 px-1',
           showExpiredApproval && 'rounded-lg border border-border bg-muted/20 px-1',
         )}
       >
@@ -605,7 +604,7 @@ const ToolCallCardComponent = ({
                     className="h-6 w-6 text-muted-foreground hover:bg-muted hover:text-foreground pointer-coarse:h-11 pointer-coarse:w-11"
                   >
                     {copied ? (
-                      <Check className="h-3 w-3 text-green-500" />
+                      <Check className="h-3 w-3 text-success-text" />
                     ) : (
                       <Copy className="h-3 w-3" />
                     )}

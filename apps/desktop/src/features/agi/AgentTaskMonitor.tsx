@@ -42,8 +42,8 @@ const STATUS_CONFIG: Record<
 > = {
   queued: {
     icon: Clock,
-    color: 'text-yellow-400',
-    bgColor: 'bg-yellow-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Queued',
   },
   running: {
@@ -54,14 +54,14 @@ const STATUS_CONFIG: Record<
   },
   completed: {
     icon: CheckCircle2,
-    color: 'text-green-400',
-    bgColor: 'bg-green-400/10',
+    color: 'text-success-text',
+    bgColor: 'bg-success-fill/10',
     label: 'Completed',
   },
   failed: {
     icon: XCircle,
-    color: 'text-red-400',
-    bgColor: 'bg-red-400/10',
+    color: 'text-danger-text',
+    bgColor: 'bg-danger-fill/10',
     label: 'Failed',
   },
   cancelled: {
@@ -72,20 +72,20 @@ const STATUS_CONFIG: Record<
   },
   paused: {
     icon: Pause,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Paused',
   },
   awaiting_input: {
     icon: AlertCircle,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Awaiting input',
   },
   ready_for_review: {
     icon: CheckCircle2,
-    color: 'text-emerald-400',
-    bgColor: 'bg-emerald-400/10',
+    color: 'text-success-text',
+    bgColor: 'bg-success-fill/10',
     label: 'Ready for review',
   },
   archived: {
@@ -102,8 +102,8 @@ const STATUS_CONFIG: Record<
   },
   awaiting_approval: {
     icon: AlertCircle,
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Waiting for approval',
   },
   resuming: {
@@ -114,14 +114,14 @@ const STATUS_CONFIG: Record<
   },
   partial: {
     icon: AlertCircle,
-    color: 'text-amber-400',
-    bgColor: 'bg-amber-400/10',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Partially completed',
   },
   timed_out: {
     icon: XCircle,
-    color: 'text-red-400',
-    bgColor: 'bg-red-400/10',
+    color: 'text-danger-text',
+    bgColor: 'bg-danger-fill/10',
     label: 'Timed out',
   },
 };
@@ -302,14 +302,14 @@ function TaskRow({ task }: { task: AgentTask }) {
                 )}
 
                 {task.result && (
-                  <div className="rounded-md bg-green-900/20 p-2 text-green-300">
+                  <div className="rounded-md bg-success-fill/10 p-2 text-success-text">
                     <span className="font-medium">Result: </span>
                     {task.result}
                   </div>
                 )}
 
                 {task.error && (
-                  <div className="flex items-start gap-2 rounded-md bg-red-900/20 p-2 text-red-300">
+                  <div className="flex items-start gap-2 rounded-md bg-danger-fill/10 p-2 text-danger-text">
                     <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                     {task.error}
                   </div>
@@ -355,7 +355,7 @@ function TaskRow({ task }: { task: AgentTask }) {
                   <button
                     type="button"
                     onClick={() => void handleCancel()}
-                    className="mt-2 rounded-md bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-600/30"
+                    className="mt-2 rounded-md bg-danger-fill/5 px-3 py-1.5 text-xs font-medium text-danger-text transition hover:bg-danger-fill/10"
                   >
                     Cancel Task
                   </button>
@@ -373,16 +373,31 @@ const BG_STATUS_CONFIG: Record<
   BgTask['status'],
   { icon: React.ElementType; color: string; bgColor: string; label: string }
 > = {
-  Queued: { icon: Clock, color: 'text-yellow-400', bgColor: 'bg-yellow-400/10', label: 'Queued' },
+  Queued: {
+    icon: Clock,
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
+    label: 'Queued',
+  },
   Running: { icon: Loader2, color: 'text-blue-400', bgColor: 'bg-blue-400/10', label: 'Running' },
-  Paused: { icon: Pause, color: 'text-amber-400', bgColor: 'bg-amber-400/10', label: 'Paused' },
+  Paused: {
+    icon: Pause,
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
+    label: 'Paused',
+  },
   Completed: {
     icon: CheckCircle2,
-    color: 'text-green-400',
-    bgColor: 'bg-green-400/10',
+    color: 'text-success-text',
+    bgColor: 'bg-success-fill/10',
     label: 'Done',
   },
-  Failed: { icon: XCircle, color: 'text-red-400', bgColor: 'bg-red-400/10', label: 'Failed' },
+  Failed: {
+    icon: XCircle,
+    color: 'text-danger-text',
+    bgColor: 'bg-danger-fill/10',
+    label: 'Failed',
+  },
   Cancelled: {
     icon: StopCircle,
     color: 'text-slate-400',
@@ -456,7 +471,7 @@ function BgTaskRow({ task }: { task: BgTask }) {
             </div>
 
             {task.result?.error && (
-              <div className="flex items-start gap-2 rounded-md bg-red-900/20 p-2 text-red-300">
+              <div className="flex items-start gap-2 rounded-md bg-danger-fill/10 p-2 text-danger-text">
                 <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                 {task.result.error}
               </div>
@@ -467,7 +482,7 @@ function BgTaskRow({ task }: { task: BgTask }) {
                 <button
                   type="button"
                   onClick={() => void pauseTask(task.id)}
-                  className="rounded-md bg-amber-600/20 px-3 py-1.5 text-xs font-medium text-amber-400 transition hover:bg-amber-600/30"
+                  className="rounded-md bg-warning-fill/5 px-3 py-1.5 text-xs font-medium text-warning-text transition hover:bg-warning-fill/10"
                 >
                   <Pause className="inline h-3 w-3 mr-1" />
                   Pause
@@ -489,7 +504,7 @@ function BgTaskRow({ task }: { task: BgTask }) {
                 <button
                   type="button"
                   onClick={() => void cancelTask(task.id)}
-                  className="rounded-md bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 transition hover:bg-red-600/30"
+                  className="rounded-md bg-danger-fill/5 px-3 py-1.5 text-xs font-medium text-danger-text transition hover:bg-danger-fill/10"
                 >
                   Cancel
                 </button>

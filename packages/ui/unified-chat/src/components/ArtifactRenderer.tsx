@@ -452,7 +452,7 @@ function HtmlArtifact({ artifact }: { artifact: Artifact }) {
           className="flex-1 flex flex-col items-center justify-center gap-2 px-6 text-center"
           data-testid="html-artifact-error"
         >
-          <AlertTriangle className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          <AlertTriangle className="h-5 w-5 text-warning-text" aria-hidden="true" />
           <p className="text-sm text-foreground">
             This HTML couldn&apos;t be prepared for preview.
           </p>
@@ -611,7 +611,7 @@ export function ArtifactRenderer({
             className="h-8 w-8 flex items-center justify-center rounded-compact hover:bg-accent text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
           >
             {copied ? (
-              <Check className="h-3.5 w-3.5 text-green-500" />
+              <Check className="h-3.5 w-3.5 text-success-text" />
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
@@ -672,7 +672,7 @@ export function ArtifactRenderer({
                           }}
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                         >
-                          <FileText className="h-4 w-4 text-red-500" />
+                          <FileText className="h-4 w-4 text-red-700 dark:text-red-300" />
                           Export as PDF
                         </button>
                       )}
@@ -711,7 +711,7 @@ export function ArtifactRenderer({
                       }}
                       className="flex w-full items-center gap-2 px-3 py-1.5 text-sm text-foreground hover:bg-accent transition-colors"
                     >
-                      <FileSpreadsheet className="h-4 w-4 text-green-500" />
+                      <FileSpreadsheet className="h-4 w-4 text-green-700 dark:text-green-300" />
                       Export as Excel
                     </button>
                   )}

@@ -19,7 +19,7 @@ export function LiveIndicator({ connected, lastUpdate, updateCount }: LiveIndica
         <div
           className={cn(
             'h-2 w-2 rounded-full transition-colors',
-            connected ? 'bg-green-500 animate-pulse' : 'bg-red-500',
+            connected ? 'bg-success-fill animate-pulse' : 'bg-danger-fill',
           )}
         />
         <span className="text-sm font-medium text-muted-foreground">

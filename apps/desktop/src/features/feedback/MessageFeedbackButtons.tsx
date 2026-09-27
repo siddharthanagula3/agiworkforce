@@ -71,8 +71,8 @@ export function MessageFeedbackButtons({
           disabled={submitting}
           className={`p-1 rounded transition-colors ${
             feedbackState === 'positive'
-              ? 'text-green-500 bg-green-500/10'
-              : 'text-muted-foreground/40 hover:text-green-500 hover:bg-green-500/10'
+              ? 'text-success-text bg-success-fill/10'
+              : 'text-muted-foreground/40 hover:text-success-text hover:bg-success-fill/10'
           }`}
           title="Good response"
         >
@@ -83,8 +83,8 @@ export function MessageFeedbackButtons({
           disabled={submitting}
           className={`p-1 rounded transition-colors ${
             feedbackState === 'negative' || feedbackState === 'correction'
-              ? 'text-red-500 bg-red-500/10'
-              : 'text-muted-foreground/40 hover:text-red-500 hover:bg-red-500/10'
+              ? 'text-danger-text bg-danger-fill/10'
+              : 'text-muted-foreground/40 hover:text-danger-text hover:bg-danger-fill/10'
           }`}
           title="Bad response"
         >
@@ -139,8 +139,8 @@ export function MessageFeedbackButtons({
           disabled={submitting}
           className={`p-1.5 rounded-md transition-colors ${
             feedbackState === 'positive'
-              ? 'text-green-500 bg-green-500/10 border border-green-500/30'
-              : 'text-muted-foreground hover:text-green-500 hover:bg-green-500/10 border border-transparent'
+              ? 'text-success-text bg-success-fill/10 border border-success-fill/30'
+              : 'text-muted-foreground hover:text-success-text hover:bg-success-fill/10 border border-transparent'
           }`}
         >
           <ThumbsUp className="h-4 w-4" />
@@ -150,8 +150,8 @@ export function MessageFeedbackButtons({
           disabled={submitting}
           className={`p-1.5 rounded-md transition-colors ${
             feedbackState === 'negative' || feedbackState === 'correction'
-              ? 'text-red-500 bg-red-500/10 border border-red-500/30'
-              : 'text-muted-foreground hover:text-red-500 hover:bg-red-500/10 border border-transparent'
+              ? 'text-danger-text bg-danger-fill/10 border border-danger-fill/30'
+              : 'text-muted-foreground hover:text-danger-text hover:bg-danger-fill/10 border border-transparent'
           }`}
         >
           <ThumbsDown className="h-4 w-4" />
@@ -179,7 +179,7 @@ export function MessageFeedbackButtons({
       )}
 
       {feedbackState === 'positive' && (
-        <span className="text-xs text-green-500">Thanks for your feedback!</span>
+        <span className="text-xs text-success-text">Thanks for your feedback!</span>
       )}
       {feedbackState === 'correction' && (
         <span className="text-xs text-blue-500">

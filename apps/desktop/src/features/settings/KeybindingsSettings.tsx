@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Keyboard, RotateCcw, Search, AlertTriangle, X, Eye } from 'lucide-react';
 import { toast } from 'sonner';
@@ -113,7 +112,7 @@ function ShortcutRow({
 
         {conflict && (
           <span
-            className="flex items-center gap-1 text-xs text-yellow-600"
+            className="flex items-center gap-1 text-xs text-warning-text"
             title={`Conflicts with: ${conflict}`}
           >
             <AlertTriangle className="h-3 w-3" />

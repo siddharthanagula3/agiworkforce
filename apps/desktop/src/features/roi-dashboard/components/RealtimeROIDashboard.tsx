@@ -107,7 +107,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-red-500">
+        <div className="text-danger-text">
           <p className="text-lg font-semibold">Error loading metrics</p>
           <p className="text-sm">{error}</p>
           <button
@@ -127,7 +127,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Your ROI Dashboard</h1>
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <div className="w-2 h-2 bg-success-fill rounded-full animate-pulse" />
           <span className="text-sm text-gray-600 dark:text-gray-400">Live</span>
         </div>
       </div>
@@ -209,7 +209,7 @@ const RealtimeROIDashboardComponent: React.FC = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-bold text-green-600">
+                  <p className="font-bold text-success-text">
                     {formatCurrency(automation.total_cost_saved_usd)}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
