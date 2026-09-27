@@ -47,6 +47,12 @@ export const RATE_CARD_FEATURES = [
   'network_egress_gib',
   'connector_call_request',
   'artifact_storage_gib_month',
+  'hosting_platform_month',
+  'auth_platform_month',
+  'auth_active_user_month',
+  'cache_command_request',
+  'observability_platform_month',
+  'email_platform_month',
 ] as const;
 
 export type RateCardFeature = (typeof RATE_CARD_FEATURES)[number];
@@ -60,6 +66,8 @@ export const RATE_CARD_UNITS = [
   'session',
   'gibibyte',
   'gibibyte_month',
+  'month',
+  'active_user_month',
 ] as const;
 export type RateCardUnit = (typeof RATE_CARD_UNITS)[number];
 
@@ -68,17 +76,23 @@ export type RateCardUnit = (typeof RATE_CARD_UNITS)[number];
  * `derived_from_model` means the row carries a reference figure only and the
  * live amount comes from the model catalogue's per-unit pricing for whichever
  * model served the call.
- * `deployment_metered` means this repository publishes no per-unit rate at all:
- * the number is whatever the deployment's infrastructure vendors bill it, read
- * from the row's override env var. A row on this basis prices nothing until
- * that variable is set, which is the honest state for a cost the code cannot
- * know.
  */
-export const RATE_CARD_BASES = ['rate_card', 'derived_from_model', 'deployment_metered'] as const;
+export const RATE_CARD_BASES = ['rate_card', 'derived_from_model'] as const;
 export type RateCardBasis = (typeof RATE_CARD_BASES)[number];
 
 export const RATE_CARD_INCLUSIONS = ['all_plans', 'interactive_chat', 'no_plan'] as const;
 export type RateCardInclusion = (typeof RATE_CARD_INCLUSIONS)[number];
+
+export const INFRASTRUCTURE_VENDORS = [
+  'vercel',
+  'neon',
+  'cloudflare_r2',
+  'upstash',
+  'clerk',
+  'resend',
+  'sentry',
+] as const;
+export type InfrastructureVendor = (typeof INFRASTRUCTURE_VENDORS)[number];
 
 export interface RateCardEntry {
   readonly unit: RateCardUnit;
@@ -88,23 +102,11 @@ export interface RateCardEntry {
   readonly source: string;
   readonly verifiedOn: string;
   readonly estimate?: true;
+  readonly vendor?: InfrastructureVendor;
+  readonly includedPerMonth?: number;
 }
 
 const CATALOGUE_SOURCE = 'packages/contracts/types/src/models.json';
-
-const DEPLOYMENT_METERED_SOURCE =
-  'deployment-metered: this repository publishes no per-unit rate; the deployment supplies it through the row override env var';
-
-function infrastructureRate(unit: RateCardUnit): RateCardEntry {
-  return {
-    unit,
-    providerCogsMicrousd: null,
-    providerCogsBasis: 'deployment_metered',
-    includedInPlans: 'no_plan',
-    source: DEPLOYMENT_METERED_SOURCE,
-    verifiedOn: '2026-09-17',
-  };
-}
 
 export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>> = {
   web_search_perplexity: {
@@ -239,14 +241,143 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
       'https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool (an upper bound: the 1,550 free organization hours a month cannot be tracked from one response)',
     verifiedOn: '2026-09-27',
   },
-  object_storage_gib_month: infrastructureRate('gibibyte_month'),
-  database_compute_second: infrastructureRate('second'),
-  vector_query_request: infrastructureRate('request'),
-  notification_delivery_request: infrastructureRate('request'),
-  email_message_request: infrastructureRate('request'),
-  network_egress_gib: infrastructureRate('gibibyte'),
-  connector_call_request: infrastructureRate('request'),
-  artifact_storage_gib_month: infrastructureRate('gibibyte_month'),
+  object_storage_gib_month: {
+    unit: 'gibibyte_month',
+    providerCogsMicrousd: 16_106.13,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://developers.cloudflare.com/r2/pricing/ (Standard storage $0.015 per GB-month, converted to GiB)',
+    verifiedOn: '2026-09-27',
+    vendor: 'cloudflare_r2',
+  },
+  database_compute_second: {
+    unit: 'second',
+    providerCogsMicrousd: 61.67,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://neon.com/pricing (Scale compute $0.222 per CU-hour, per CU-second)',
+    verifiedOn: '2026-09-27',
+    vendor: 'neon',
+  },
+  vector_query_request: {
+    unit: 'request',
+    providerCogsMicrousd: 3.08,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://neon.com/pricing (pgvector runs on Neon compute: 50 ms of one CU at $0.222 per CU-hour)',
+    verifiedOn: '2026-09-27',
+    estimate: true,
+    vendor: 'neon',
+  },
+  notification_delivery_request: {
+    unit: 'request',
+    providerCogsMicrousd: 0.6,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://vercel.com/docs/functions/usage-and-pricing (Expo, FCM and Web Push deliver free; one Vercel invocation at $0.60 per million)',
+    verifiedOn: '2026-09-27',
+    estimate: true,
+    vendor: 'vercel',
+  },
+  email_message_request: {
+    unit: 'request',
+    providerCogsMicrousd: 900,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://resend.com/pricing (Pro overage $0.90 per 1,000 emails)',
+    verifiedOn: '2026-09-27',
+    vendor: 'resend',
+  },
+  network_egress_gib: {
+    unit: 'gibibyte',
+    providerCogsMicrousd: 225_485.78,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://vercel.com/docs/pricing/regional-pricing/iad1 (Fast Data Transfer $0.15 plus Fast Origin Transfer $0.06 per GB, converted to GiB)',
+    verifiedOn: '2026-09-27',
+    vendor: 'vercel',
+  },
+  connector_call_request: {
+    unit: 'request',
+    providerCogsMicrousd: 0.6,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://vercel.com/docs/functions/usage-and-pricing (the connected account bills its own owner; one Vercel invocation at $0.60 per million)',
+    verifiedOn: '2026-09-27',
+    estimate: true,
+    vendor: 'vercel',
+  },
+  artifact_storage_gib_month: {
+    unit: 'gibibyte_month',
+    providerCogsMicrousd: 16_106.13,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://developers.cloudflare.com/r2/pricing/ (Standard storage $0.015 per GB-month, converted to GiB)',
+    verifiedOn: '2026-09-27',
+    vendor: 'cloudflare_r2',
+  },
+  hosting_platform_month: {
+    unit: 'month',
+    providerCogsMicrousd: 20_000_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://vercel.com/docs/pricing (Pro plan, one paid seat at $20 a month)',
+    verifiedOn: '2026-09-27',
+    vendor: 'vercel',
+  },
+  auth_platform_month: {
+    unit: 'month',
+    providerCogsMicrousd: 25_000_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://clerk.com/pricing (Pro plan $25 a month, billed monthly)',
+    verifiedOn: '2026-09-27',
+    vendor: 'clerk',
+  },
+  auth_active_user_month: {
+    unit: 'active_user_month',
+    providerCogsMicrousd: 20_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source:
+      'https://clerk.com/pricing (Pro plan includes 50,000 monthly retained users, then $0.02 each)',
+    verifiedOn: '2026-09-27',
+    vendor: 'clerk',
+    includedPerMonth: 50_000,
+  },
+  cache_command_request: {
+    unit: 'request',
+    providerCogsMicrousd: 2,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://upstash.com/pricing/redis (pay as you go $0.20 per 100K commands)',
+    verifiedOn: '2026-09-27',
+    vendor: 'upstash',
+  },
+  observability_platform_month: {
+    unit: 'month',
+    providerCogsMicrousd: 26_000_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://sentry.io/pricing/ (Team plan $26 a month)',
+    verifiedOn: '2026-09-27',
+    vendor: 'sentry',
+  },
+  email_platform_month: {
+    unit: 'month',
+    providerCogsMicrousd: 20_000_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'all_plans',
+    source: 'https://resend.com/pricing (Pro plan $20 a month for 50,000 emails)',
+    verifiedOn: '2026-09-27',
+    vendor: 'resend',
+  },
 };
 
 export const RATE_CARD_PROVIDER_COGS_ENV = {
@@ -261,6 +392,12 @@ export const RATE_CARD_PROVIDER_COGS_ENV = {
   network_egress_gib: 'AGI_EGRESS_MICROUSD_PER_GIB',
   connector_call_request: 'AGI_CONNECTOR_CALL_MICROUSD_PER_REQUEST',
   artifact_storage_gib_month: 'AGI_ARTIFACT_STORAGE_MICROUSD_PER_GIB_MONTH',
+  hosting_platform_month: 'AGI_HOSTING_PLATFORM_MICROUSD_PER_MONTH',
+  auth_platform_month: 'AGI_AUTH_PLATFORM_MICROUSD_PER_MONTH',
+  auth_active_user_month: 'AGI_AUTH_MICROUSD_PER_ACTIVE_USER',
+  cache_command_request: 'AGI_CACHE_MICROUSD_PER_COMMAND',
+  observability_platform_month: 'AGI_OBSERVABILITY_PLATFORM_MICROUSD_PER_MONTH',
+  email_platform_month: 'AGI_EMAIL_PLATFORM_MICROUSD_PER_MONTH',
 } as const satisfies Partial<Record<RateCardFeature, string>>;
 
 function providerCogsEnvName(feature: RateCardFeature): string | undefined {
