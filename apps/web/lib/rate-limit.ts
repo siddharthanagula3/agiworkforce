@@ -125,6 +125,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'code-session-activity': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
   'web-push': {
     limit: 10,
     window: '1 m', // 10 browser registrations per minute, one browser only ever needs a few
