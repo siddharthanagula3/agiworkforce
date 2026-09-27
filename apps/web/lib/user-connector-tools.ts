@@ -830,6 +830,7 @@ export interface UserCustomConnectorSummary {
   transport: string;
   createdAt: string;
   updatedAt: string;
+  signInRequired: boolean;
   credentialUnreadable?: true;
 }
 
@@ -855,10 +856,12 @@ export async function getUserCustomConnectorSummaries(
       url: string;
       transport: string;
       auth_header_enc: string | null;
+      sign_in_required: boolean;
       created_at: string;
       updated_at: string;
     }>(
-      `select id, short_id, name, url, transport, auth_header_enc, created_at, updated_at
+      `select id, short_id, name, url, transport, auth_header_enc, sign_in_required,
+              created_at, updated_at
          from user_custom_connectors
         where user_id = $1
         order by created_at desc`,
@@ -872,6 +875,7 @@ export async function getUserCustomConnectorSummaries(
       transport: r.transport,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      signInRequired: r.sign_in_required,
       ...(credentialReadable(r.auth_header_enc) ? {} : { credentialUnreadable: true as const }),
     }));
   } catch (error) {
@@ -958,6 +962,22 @@ function customRowToMcpConfig(row: CustomConnectorRow): McpServerConfig {
   };
 }
 
+async function personalCustomRowConfig(
+  userId: string,
+  row: CustomConnectorRow,
+): Promise<McpServerConfig> {
+  const config = customRowToMcpConfig(row);
+  if (row.auth_header_enc) return config;
+  const access = await resolveConnectorAccessToken(userId, customServerId(row.short_id), {
+    discovered: true,
+  });
+  if (access.status !== 'ready') return config;
+  return {
+    ...config,
+    headers: { Authorization: `${access.tokenType || 'Bearer'} ${access.accessToken}` },
+  };
+}
+
 interface CustomCatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
@@ -1004,7 +1024,7 @@ async function buildCustomConnectorCatalog(
   try {
     const { catalog, handles } = await buildMcpToolCatalog(
       {
-        [serverId]: customRowToMcpConfig(row),
+        [serverId]: await personalCustomRowConfig(userId, row),
       },
       MCP_EGRESS_POLICY,
       {
@@ -1062,7 +1082,7 @@ async function executeCustomConnectorTool(
     handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: customServerId(row.short_id),
-      config: customRowToMcpConfig(row),
+      config: await personalCustomRowConfig(userId, row),
       ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(row.url, `user:${userId}:custom:${row.id}`)),
     });
@@ -1112,6 +1132,18 @@ async function executeCustomConnectorTool(
           ),
           isError: true,
         };
+      }
+      if (!row.auth_header_enc) {
+        const granted = (await getUserConnectorOAuthGrantSummaries(userId)).some(
+          (grant) => grant.connectorId === serverId,
+        );
+        return connectRequiredResult({
+          connectorId: serverId,
+          connectorLabel: row.name,
+          connectable: true,
+          toolName,
+          reason: granted ? 'authorization_expired' : 'not_connected',
+        });
       }
       return {
         handled: true,
@@ -2095,7 +2127,7 @@ export async function withUserConnectorMcpHandle<T>(
         connectorLabel: row.name,
         url: row.url,
         authorizationContext: `user:${userId}:custom:${row.id}`,
-        config: customRowToMcpConfig(row),
+        config: await personalCustomRowConfig(userId, row),
         isCustom: true,
       };
     }
@@ -2156,7 +2188,7 @@ export async function withUserConnectorMcpHandle<T>(
           connectorLabel: customRow.name,
           url: customRow.url,
           authorizationContext: `user:${userId}:custom:${customRow.id}`,
-          config: customRowToMcpConfig(customRow),
+          config: await personalCustomRowConfig(userId, customRow),
           isCustom: true,
         };
       } else if (directory) {
