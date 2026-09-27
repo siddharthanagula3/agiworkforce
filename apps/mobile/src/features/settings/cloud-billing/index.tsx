@@ -385,7 +385,7 @@ export default function CloudBillingScreen() {
         <>
           <SettingsInfo
             title="How plan upgrades are charged"
-            body="For this Web-billed plan, a same-cadence upgrade shows the exact prorated charge for the rest of your current billing period before you confirm. Your renewal date stays the same, and your existing usage does not reset."
+            body="For this Web-billed plan, an upgrade shows the exact charge before you confirm: the new plan's price, minus a credit for the unused time on your current plan. It starts a new billing period that day, and your existing usage does not reset."
             icon={CreditCard}
           />
           <SettingsInfo
