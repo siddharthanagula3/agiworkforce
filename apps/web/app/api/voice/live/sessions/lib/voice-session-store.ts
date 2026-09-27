@@ -229,6 +229,21 @@ export async function closeVoiceSession(input: {
   return row ? toRecord(row) : null;
 }
 
+export async function touchVoiceSession(input: {
+  db: VoiceSessionDb;
+  userId: string;
+  providerSessionId: string;
+}): Promise<VoiceSessionRecord | null> {
+  const [row] = await input.db.query<VoiceSessionRow>(
+    `update public.voice_sessions
+        set last_seen_at = now()
+      where user_id = $1 and provider_session_id = $2 and status = 'active'
+      returning ${COLUMNS}`,
+    [input.userId, input.providerSessionId],
+  );
+  return row ? toRecord(row) : null;
+}
+
 /**
  * A session that outlived the block it could be billed for is over, whatever
  * the tab that opened it managed to report. Closing it here is what stops a
@@ -245,7 +260,7 @@ export async function closeExpiredVoiceSessions(input: {
         set status = 'closed', close_reason = $3, closed_at = now(), last_seen_at = now()
       where user_id = $1
         and status = 'active'
-        and started_at <= now() - make_interval(secs => $2)
+        and last_seen_at <= now() - make_interval(secs => $2)
       returning id`,
     [
       input.userId,

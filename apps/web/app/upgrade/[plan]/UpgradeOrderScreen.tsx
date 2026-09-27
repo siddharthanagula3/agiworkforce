@@ -7,7 +7,12 @@ import { queryKeys } from '@shared/stores/query-client';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { UpgradeOrderPanel } from '@features/billing/components/UpgradeOrderPanel';
 import type { SelfServeIndividualPlanTier } from '@agiworkforce/types';
-import { getBillingPlanDisplay, formatCatalogPrice } from '@features/billing/lib/plan-display';
+import {
+  getBillingPlanDisplay,
+  formatCatalogPrice,
+  formatPlanCreditWindows,
+  planUsageComparisonLabel,
+} from '@features/billing/lib/plan-display';
 
 const MAX_CAPACITIES: readonly SelfServeIndividualPlanTier[] = ['max', 'max_15x'];
 
@@ -18,8 +23,6 @@ export function UpgradeOrderScreen({
   plan: SelfServeIndividualPlanTier;
   billingInterval: 'monthly' | 'yearly';
 }) {
-  // Max is one product sold at two capacities, so landing on either one keeps
-  // the other switchable here instead of sending the user back to choose again.
   const [selected, setSelected] = useState<SelfServeIndividualPlanTier>(plan);
   const [upgraded, setUpgraded] = useState(false);
   const queryClient = useQueryClient();
@@ -27,6 +30,7 @@ export function UpgradeOrderScreen({
 
   const capacities = MAX_CAPACITIES.includes(plan) ? MAX_CAPACITIES : [];
   const display = getBillingPlanDisplay(selected);
+  const selectedCredits = formatPlanCreditWindows(selected);
 
   async function handleUpgraded() {
     setUpgraded(true);
@@ -60,6 +64,9 @@ export function UpgradeOrderScreen({
           ← Upgrade
         </Link>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight">{display.pricing.label}</h1>
+        {selectedCredits ? (
+          <p className="mt-2 text-sm text-muted-foreground">{selectedCredits}</p>
+        ) : null}
       </div>
 
       {capacities.length > 0 ? (
@@ -67,6 +74,7 @@ export function UpgradeOrderScreen({
           {capacities.map((capacity) => {
             const capacityDisplay = getBillingPlanDisplay(capacity);
             const price = capacityDisplay.monthlyPriceUsd;
+            const comparison = planUsageComparisonLabel(capacity);
             return (
               <button
                 key={capacity}
@@ -83,6 +91,9 @@ export function UpgradeOrderScreen({
                 <span className="mt-1 block text-muted-foreground">
                   {price === null ? 'Contact sales' : `${formatCatalogPrice(price)}/month + tax`}
                 </span>
+                {comparison ? (
+                  <span className="mt-1 block text-xs text-muted-foreground">{comparison}</span>
+                ) : null}
               </button>
             );
           })}

@@ -20,6 +20,7 @@ import {
   formatCatalogPrice,
   type SelectablePaidPlan,
 } from '../lib/plan-display';
+import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeOrderPanelProps {
@@ -31,21 +32,11 @@ export interface UpgradeOrderPanelProps {
 }
 
 function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
+  return formatBillingMoney(cents, currency);
 }
 
 function formatRenewalDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? ''
-    : new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }).format(date);
+  return formatBillingDate(iso) ?? '';
 }
 
 /**

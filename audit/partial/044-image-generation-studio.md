@@ -10,16 +10,11 @@ nothing is left.
 
 - Done when: User enters an image mode, types a prompt, and gets a generated image back in the conversation.
 - Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| desktop | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| mobile | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
-| cli | partial | seat users (Team/Enterprise) without their own subscriptions row are refused: entitlement reads the caller's raw subscriptions row, not the resolved plan | api |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:71-73`, `apps/web/features/chat/pages/WebChatPage.tsx:2459-2466`, `apps/web/lib/hooks/useMediaGeneration.ts:252-259`, `apps/web/app/api/media/image/generate/route.ts:118-123`
 
 ## S44.02: Image-model picker.
 
@@ -327,16 +322,16 @@ Code: `apps/web/features/chat/components/ImageGenerationCard.tsx:439-445`, `apps
 
 - Done when: User adds a generated image to a Project.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Library "Add to project" uploads the file as project knowledge, but the storage-cap check reads the member's own subscription row, so Free and Team-seat users are refused (§24). | handler |
 | desktop | partial | Hosted web: same storage-cap defect. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1634-1639`, `apps/web/features/library/components/LibraryView.tsx:211-218`
+Code: `apps/web/features/library/components/LibraryView.tsx:211-218`
 
 ## S44.29: Download full-quality image.
 

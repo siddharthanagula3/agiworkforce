@@ -40,16 +40,12 @@ Code: `apps/web/app/chat/projects/[id]/page.tsx:43-43`, `apps/web/app/chat/proje
 
 - Done when: The user can add files (PDF, docs, text) to a notebook as sources and they are indexed for its chats.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Upload works, but the storage cap reads only the uploader's own subscriptions row, so a never-paid Free user or a Team seat member gets a 0-byte cap and every source upload is refused. | handler |
-| desktop | partial | Upload works, but the storage cap reads only the uploader's own subscriptions row, so a never-paid Free user or a Team seat member gets a 0-byte cap and every source upload is refused. | handler |
-| mobile | partial | Mobile adds picked files through the same upload route, so the storage cap reads only the uploader's own subscriptions row, so a never-paid Free user or a Team seat member gets a 0-byte cap and every source upload is refused. | handler |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1242-1242`, `apps/web/features/projects/components/SourcesPanel.tsx:127-127`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:227-228`, `packages/contracts/types/src/billing-catalog.ts:379-379`
 
 ## S37.10: Add connected document.
 
@@ -70,16 +66,13 @@ Code: `apps/web/features/projects/components/AddSourcesModal.tsx:279-279`, `apps
 
 - Done when: The user can write or paste a note and add it to the notebook as a source.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | "Text input" saves pasted text as a .txt knowledge file, but the storage cap reads only the uploader's own subscriptions row, so a never-paid Free user or a Team seat member gets a 0-byte cap and every source upload is refused. | handler |
-| desktop | partial | "Text input" saves pasted text as a .txt knowledge file, but the storage cap reads only the uploader's own subscriptions row, so a never-paid Free user or a Team seat member gets a 0-byte cap and every source upload is refused. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/AddSourcesModal.tsx:364-364`, `apps/web/features/projects/components/SourcesPanel.tsx:149-149`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:227-228`
 
 ## S37.14: Source-grounded chat.
 

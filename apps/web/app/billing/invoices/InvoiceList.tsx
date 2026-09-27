@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
+import { formatBillingDate, formatBillingMoney } from '@features/billing/lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
 interface Invoice {
@@ -20,18 +21,12 @@ type ListState =
   | { status: 'ready'; invoices: Invoice[] }
   | { status: 'error'; message: string };
 
-const MINOR_UNITS_PER_UNIT = 100;
-
 function formatAmount(minorUnits: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(minorUnits / MINOR_UNITS_PER_UNIT);
+  return formatBillingMoney(minorUnits, currency);
 }
 
 function formatDate(iso: string): string {
-  const parsed = new Date(iso);
-  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleDateString() : iso;
+  return formatBillingDate(iso) ?? iso;
 }
 
 export function InvoiceList() {
@@ -94,7 +89,7 @@ export function InvoiceList() {
   if (state.invoices.length === 0) {
     return (
       <p className="py-6 text-sm text-muted-foreground">
-        No invoices yet. A paid plan or a credit purchase produces one, and it appears here.
+        No invoices yet. A paid plan produces one each billing period, and it appears here.
       </p>
     );
   }

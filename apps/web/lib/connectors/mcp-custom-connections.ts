@@ -16,7 +16,7 @@ import {
   getCustomRemoteMcpLimitErrorMessage,
   isUserResourceLimitError,
 } from '@/lib/services/free-plan-entitlements';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
 export type CustomConnectorTransport = 'sse' | 'streamable-http';
 
@@ -209,8 +209,7 @@ export async function assertCustomConnectorCapacity(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<CustomConnectorCapacity> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = subscription?.plan_tier;
+  const planTier = await resolveEntitledPlanTier(db, userId);
   const connectorLimit = getCustomRemoteMcpLimit(planTier);
   if (connectorLimit === 0) {
     throw createError.validation(getCustomRemoteMcpLimitErrorMessage(planTier));
@@ -322,7 +321,7 @@ async function currentPlanTier(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<string | null | undefined> {
-  return (await SubscriptionService.getSubscription(db, userId))?.plan_tier;
+  return resolveEntitledPlanTier(db, userId);
 }
 
 export async function updateCustomConnectorCredential(

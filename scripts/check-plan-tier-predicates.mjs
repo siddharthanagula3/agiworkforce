@@ -52,6 +52,106 @@ const OWNER_PATH_SET = new Set(OWNER_PATHS.map((entry) => entry.file));
 
 export const SCAN_ROOTS = Object.freeze(['apps/web', 'packages/contracts/types']);
 
+export const ENTITLEMENT_RESOLVER_PATH = 'apps/web/lib/services/entitlement-resolution.ts';
+
+export const RAW_SUBSCRIPTION_READ_ROOTS = Object.freeze(['apps/web']);
+
+export const RAW_SUBSCRIPTION_READERS = Object.freeze([
+  {
+    path: 'apps/web/lib/services/subscription-service.ts',
+    why: 'reads and repairs the subscriptions row itself',
+  },
+  {
+    path: ENTITLEMENT_RESOLVER_PATH,
+    why: 'the resolver: the caller’s own row, then the seat an organization owner’s row grants',
+  },
+  {
+    path: 'apps/web/lib/services/effective-subscription-service.ts',
+    why: 'the seat ledger sweep skips members who hold a row of their own',
+  },
+  {
+    path: 'apps/web/lib/services/org-entitlements.ts',
+    why: 'an organization is entitled by its owner’s row, read on the privileged connection',
+  },
+  {
+    path: 'apps/web/app/api/billing/',
+    why: 'top-up, payment methods and overage act on the subscription the payer owns',
+  },
+  { path: 'apps/web/app/api/checkout/', why: 'checkout starts the subscription the payer owns' },
+  {
+    path: 'apps/web/app/api/portal/',
+    why: 'the Stripe portal manages the subscription the payer owns',
+  },
+  { path: 'apps/web/app/api/upgrade/', why: 'upgrade changes the subscription the payer owns' },
+  {
+    path: 'apps/web/app/api/stripe-webhook/',
+    why: 'the webhook writes the rows Stripe reports on',
+  },
+  {
+    path: 'apps/web/app/api/claim-offer/route.ts',
+    why: 'an offer is claimed against the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/app/api/mobile/iap/catalog/route.ts',
+    why: 'the store catalog is priced against the store subscription the user owns',
+  },
+  {
+    path: 'apps/web/app/api/cron/reset-credits/route.ts',
+    why: 'the period reset sweeps every row, not one caller’s entitlement',
+  },
+  {
+    path: 'apps/web/app/api/user/export/route.ts',
+    why: 'the data export returns the rows the user owns',
+  },
+  {
+    path: 'apps/web/app/api/user/delete-account/route.ts',
+    why: 'account deletion cancels the subscription the user owns',
+  },
+  {
+    path: 'apps/web/lib/server/spendable-credits.ts',
+    why: 'purchased credits and the overage opt-in live on the payer’s own row',
+  },
+  {
+    path: 'apps/web/lib/services/managed-usage-request-service.ts',
+    why: 'overage headroom reads the payer’s own overage opt-in',
+  },
+  {
+    path: 'apps/web/lib/server/subscription-owner-handoff.ts',
+    why: 'an ownership handoff moves the row itself',
+  },
+  {
+    path: 'apps/web/lib/services/billing-invoice-service.ts',
+    why: 'invoices belong to the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/lib/services/billing-reconciliation.ts',
+    why: 'reconciliation compares rows with Stripe',
+  },
+  {
+    path: 'apps/web/lib/services/stripe-settlement-reconciliation-service.ts',
+    why: 'settlement reconciliation compares rows with Stripe',
+  },
+  {
+    path: 'apps/web/lib/services/enterprise-billing-service.ts',
+    why: 'enterprise billing maps a Stripe subscription to the user who owns it',
+  },
+  {
+    path: 'apps/web/lib/services/mobile-iap-ledger-service.ts',
+    why: 'the store ledger writes the row a purchase creates',
+  },
+  {
+    path: 'apps/web/features/admin/services/',
+    why: 'operator analytics aggregate every row',
+  },
+]);
+
+const RAW_SUBSCRIPTION_READ_PATTERNS = Object.freeze([
+  /\bSubscriptionService\.getSubscription\s*\(/g,
+  /\b(?:from|join)\s+(?:public\.)?subscriptions\b/gi,
+]);
+
+export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([]);
+
 export const BILLING_PLAN_TIERS = Object.freeze([
   'local-only',
   'byok',
@@ -115,17 +215,27 @@ export function findRawTierComparisons(text) {
   return hits;
 }
 
-export function scanTierPredicateFiles({
-  repoRoot = REPO_ROOT,
-  filePaths,
-  scanRoots = SCAN_ROOTS,
-}) {
-  const violations = [];
+export function findRawSubscriptionReads(text) {
+  const lines = text.split('\n');
+  const hits = [];
+  for (const pattern of RAW_SUBSCRIPTION_READ_PATTERNS) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const line = text.slice(0, match.index).split('\n').length;
+      if (isCommentLine(lines[line - 1])) continue;
+      hits.push({ line, text: lines[line - 1].trim() });
+    }
+  }
+  return hits.sort((left, right) => left.line - right.line);
+}
+
+function productionSources({ repoRoot, filePaths, scanRoots }) {
+  const sources = [];
   for (const filePath of [...new Set(filePaths)].sort()) {
     const relativePath = path.relative(repoRoot, filePath).split(path.sep).join('/');
     if (!scanRoots.some((root) => relativePath === root || relativePath.startsWith(`${root}/`)))
       continue;
-    if (OWNER_PATH_SET.has(relativePath)) continue;
     if (!SOURCE_EXTENSIONS.has(path.extname(relativePath))) continue;
     if (isNonProductionPath(relativePath)) continue;
     if (relativePath.split('/').some((segment) => SKIP_PATH_SEGMENTS.has(segment))) continue;
@@ -137,12 +247,49 @@ export function scanTierPredicateFiles({
       if (error?.code === 'ENOENT') continue;
       throw error;
     }
-
-    for (const hit of findRawTierComparisons(text)) {
-      violations.push({ file: relativePath, ...hit });
-    }
+    sources.push({ relativePath, text });
   }
-  return violations;
+  return sources;
+}
+
+export function scanTierPredicateFiles({
+  repoRoot = REPO_ROOT,
+  filePaths,
+  scanRoots = SCAN_ROOTS,
+}) {
+  return productionSources({ repoRoot, filePaths, scanRoots })
+    .filter(({ relativePath }) => !OWNER_PATH_SET.has(relativePath))
+    .flatMap(({ relativePath, text }) =>
+      findRawTierComparisons(text).map((hit) => ({ file: relativePath, ...hit })),
+    );
+}
+
+function declaredReaderFor(relativePath, readers) {
+  return readers.find((entry) =>
+    entry.path.endsWith('/') ? relativePath.startsWith(entry.path) : relativePath === entry.path,
+  );
+}
+
+export function scanRawSubscriptionReads({
+  repoRoot = REPO_ROOT,
+  filePaths,
+  scanRoots = RAW_SUBSCRIPTION_READ_ROOTS,
+  readers = [...RAW_SUBSCRIPTION_READERS, ...UNCONVERTED_ENTITLEMENT_READS],
+}) {
+  const violations = [];
+  const exercised = new Set();
+  for (const { relativePath, text } of productionSources({ repoRoot, filePaths, scanRoots })) {
+    const hits = findRawSubscriptionReads(text);
+    if (hits.length === 0) continue;
+    const reader = declaredReaderFor(relativePath, readers);
+    if (reader) {
+      exercised.add(reader.path);
+      continue;
+    }
+    for (const hit of hits) violations.push({ file: relativePath, ...hit });
+  }
+  const staleReaders = readers.filter((entry) => !exercised.has(entry.path));
+  return { violations, staleReaders };
 }
 
 export function discoverRepositoryFiles(repoRoot = REPO_ROOT) {
@@ -162,9 +309,9 @@ export function discoverRepositoryFiles(repoRoot = REPO_ROOT) {
 }
 
 function main() {
-  const violations = scanTierPredicateFiles({
-    filePaths: discoverRepositoryFiles(REPO_ROOT),
-  });
+  const filePaths = discoverRepositoryFiles(REPO_ROOT);
+  const violations = scanTierPredicateFiles({ filePaths });
+  const rawReads = scanRawSubscriptionReads({ filePaths });
 
   if (violations.length > 0) {
     console.error('Raw BillingPlanTier string comparisons found outside billing-catalog.ts:\n');
@@ -179,12 +326,43 @@ function main() {
         'that file when none of the existing ones fit. If the comparison is against an ' +
         'unrelated tier concept (SubscriptionAccessTier, model tierPolicy.minTier), that concept ' +
         `is owned by ${SUBSCRIPTION_ACCESS_TIER_OWNER_PATH}; add the file to OWNER_PATHS only if ` +
-        'it is the canonical owner of that concept, not to silence an unrelated call site.',
+        'it is the canonical owner of that concept, not to silence an unrelated call site.\n',
     );
+  }
+
+  if (rawReads.violations.length > 0) {
+    console.error('Entitlement read from the raw subscriptions row:\n');
+    for (const violation of rawReads.violations) {
+      console.error(`  ${violation.file}:${violation.line}  ${violation.text.slice(0, 140)}`);
+    }
+    console.error(
+      '\nA Team or Enterprise seat member owns no subscriptions row, so reading it directly ' +
+        'answers Free for them. Resolve entitlement through ' +
+        `${ENTITLEMENT_RESOLVER_PATH} (resolveEntitlementBundle, resolveEffectiveSubscription, ` +
+        'resolveEntitledPlanTier), passing { includeSeats: false } only when the question is ' +
+        'what the person holds in their own right. Add the file to RAW_SUBSCRIPTION_READERS ' +
+        'only when the action is about the row itself, such as checkout, the portal or the ' +
+        'webhook, and say why.\n',
+    );
+  }
+
+  if (rawReads.staleReaders.length > 0) {
+    console.error('Declared raw subscriptions readers that no longer read the row:\n');
+    for (const reader of rawReads.staleReaders) console.error(`  ${reader.path}`);
+    console.error(
+      '\nRemove each entry from RAW_SUBSCRIPTION_READERS or UNCONVERTED_ENTITLEMENT_READS.\n',
+    );
+  }
+
+  if (violations.length > 0 || rawReads.violations.length > 0 || rawReads.staleReaders.length > 0) {
     process.exit(1);
   }
 
-  console.log(`check-plan-tier-predicates: OK (${OWNER_PATHS.length} owner file(s) exempted)`);
+  console.log(
+    `check-plan-tier-predicates: OK (${OWNER_PATHS.length} owner file(s) exempted, ` +
+      `${RAW_SUBSCRIPTION_READERS.length} raw subscriptions reader(s) declared, ` +
+      `${UNCONVERTED_ENTITLEMENT_READS.length} entitlement read(s) still to move to the resolver)`,
+  );
 }
 
 if (path.resolve(process.argv[1] ?? '') === path.resolve(fileURLToPath(import.meta.url))) {

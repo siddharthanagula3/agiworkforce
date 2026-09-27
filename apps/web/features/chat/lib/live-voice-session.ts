@@ -1,3 +1,4 @@
+import { formatUsageResetIn } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { ANALYSER_FFT_SIZE, readAnalyserLevel } from '@features/chat/lib/dictation-machine';
 
@@ -45,7 +46,6 @@ export interface LiveSessionSettlement {
   idempotencyKey: string;
   leaseToken: string;
   requestHash: string;
-  estimatedCostCents: number;
   ceilingSeconds: number;
 }
 
@@ -157,7 +157,19 @@ function isUsageRefusal(status: number): boolean {
   return status === 402 || status === 429;
 }
 
-async function readErrorMessage(response: Response): Promise<LiveVoiceSessionError> {
+const LIMIT_REACHED: Readonly<Record<string, string>> = {
+  rolling_five_hour_limit_reached: '5-hour limit reached',
+  rolling_weekly_limit_reached: 'Weekly limit reached',
+  insufficient_credits: 'Monthly limit reached',
+};
+
+function limitNotice(code: string | undefined, resetsAt: string | undefined): string | null {
+  const reached = code ? LIMIT_REACHED[code] : undefined;
+  const reset = formatUsageResetIn(resetsAt);
+  return reached && reset ? `${reached}. ${reset}.` : null;
+}
+
+export async function readLiveSessionError(response: Response): Promise<LiveVoiceSessionError> {
   const fallback = isUsageRefusal(response.status)
     ? LIVE_SESSION_MESSAGE.usageExhausted
     : LIVE_SESSION_MESSAGE.sessionRejected;
@@ -166,9 +178,10 @@ async function readErrorMessage(response: Response): Promise<LiveVoiceSessionErr
     : `http_${response.status}`;
   try {
     const body = (await response.json()) as {
-      error?: { message?: string; code?: string };
+      error?: { message?: string; code?: string; resets_at?: string };
     };
-    const message = body.error?.message?.trim();
+    const message =
+      limitNotice(body.error?.code, body.error?.resets_at) ?? body.error?.message?.trim();
     return new LiveVoiceSessionError(message || fallback, body.error?.code ?? fallbackCode);
   } catch {
     return new LiveVoiceSessionError(fallback, fallbackCode);
@@ -320,7 +333,7 @@ export class LiveVoiceSession {
           surface: 'web',
         }),
       });
-      if (!response.ok) throw await readErrorMessage(response);
+      if (!response.ok) throw await readLiveSessionError(response);
       const created = (await response.json()) as CreateSessionResponse;
       await peer.setRemoteDescription({ type: 'answer', sdp: created.sdp });
       session = new LiveVoiceSession(microphone, peer, channel, audio, created, options.callbacks);

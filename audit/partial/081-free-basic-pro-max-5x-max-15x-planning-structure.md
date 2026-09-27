@@ -66,30 +66,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`
 
-## S81.07: Explicit definition of the baseline behind “5x” and “15x.”
-
-- Done when: Pricing states what "1x" means: the baseline plan behind 5x/15x and its concrete allowance.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Publish the baseline's concrete allowance: pricing says '15x Pro usage' (computed) and '5x Pro usage', but Pro itself is only '5x Basic usage' and Basic is 'Base paid usage', so 1x is never stated in credits before purchase. | ui |
-| desktop | partial | Same as web (hosted web app): the baseline is named (Pro) but never quantified. | ui |
-
-Code: `apps/web/app/pricing/page.tsx:706-708`, `apps/web/lib/billing/managed-usage-caps.ts:66-90`, `apps/web/features/settings/sections/BillingSection.tsx:511-517`
-
-## S81.08: Explicit identification of the allowance being multiplied.
-
-- Done when: Plan copy names exactly which allowance a multiplier scales (e.g. managed-usage credits per 5-hour, weekly and monthly window).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Say on pricing that Nx scales the managed-usage credit allowance in each window (5-hour, weekly, monthly) and that flagship-weekly is 30% of weekly; pricing only says 'Managed usage: 5x Pro usage'. Settings > Usage names the windows for your own plan only. | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
-
-Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/lib/billing/managed-usage-caps.ts:29-49`, `apps/web/features/settings/sections/UsageSection.tsx:419-428`
-
 ## S81.09: Separate feature-access differences.
 
 - Done when: Plans differ in feature access (not just usage), the differences are listed, and each gate is enforced server-side.
@@ -105,18 +81,6 @@ Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/lib/billing/managed-usa
 | chrome | partial | Chrome side panel shows a paid-plan-required state and links to web pricing; no feature comparison in the panel. | surface-only |
 
 Code: `apps/web/app/pricing/page.tsx:127-143`, `apps/web/app/pricing/page.tsx:206-217`, `packages/contracts/types/src/billing-catalog.ts:208-227`, `apps/web/app/api/media/image/generate/route.ts:223-226`
-
-## S81.11: Separate storage limits.
-
-- Done when: Each plan has its own storage limit, stated to users and enforced when files are added.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Cap is read via SubscriptionService.getSubscription, which returns null when the user has no subscriptions row; getKnowledgeStorageLimitBytes(undefined) -> toEnforceableBillingPlanLimit(undefined) -> 0, so usedBytes + byteCount > 0 rejects every upload for row-less Free users and seat members. No signup path inserts a free row (only Stripe/IAP/claim_beta_invite insert). Route tests mock getSubscription as pro. Auditor note ("seat members get no cap") has the direction wrong. |  |
-| desktop | partial | Cap is read via SubscriptionService.getSubscription, which returns null when the user has no subscriptions row; getKnowledgeStorageLimitBytes(undefined) -> toEnforceableBillingPlanLimit(undefined) -> 0, so usedBytes + byteCount > 0 rejects every upload for row-less Free users and seat members. No signup path inserts a free row (only Stripe/IAP/claim_beta_invite insert). Route tests mock getSubscription as pro. Auditor note ("seat members get no cap") has the direction wrong. |  |
-
-Code: `apps/web/app/pricing/page.tsx:1225-1233`, `packages/contracts/types/src/billing-catalog.ts:300-304`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-406`
 
 ## S81.12: Separate context limits.
 
@@ -237,31 +201,17 @@ Code: `packages/contracts/types/src/billing-plan-catalog.ts:28-38`, `apps/web/ap
 
 Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/stripe-plan-change.ts:50-78`, `apps/web/app/api/upgrade/route.ts:273-283`, `apps/web/features/billing/components/UpgradeOrderPanel.tsx:289-292`
 
-## S81.24: Downgrade effective time.
-
-- Done when: A downgrade takes effect at a stated time (e.g. end of period), shown to the user before they confirm, with access kept until then.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Add a downgrade review that states when the lower plan starts: the app hands every downgrade to the Stripe Customer Portal, whose configuration (not in this repo) decides immediate vs period-end, and no app screen says which. | ui, handler |
-| desktop | partial | Same as web (hosted web app); the portal opens in the system browser. | ui, handler |
-
-Code: `apps/web/app/pricing/page.tsx:565-587`, `apps/web/lib/server/stripe-plan-change.ts:126-133`
-
 ## S81.25: Grace-period behavior.
 
 - Done when: When a renewal payment fails, the plan follows a defined grace rule and the user is told what access remains and how to fix it.
 - Wave: 3
-- Already works on: mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Tell past-due users the real rule: self-serve paid features stop at the first failed renewal (no grace), yet Billing says access 'can be' suspended and links to /payment-failure, which says no subscription was created and nothing was charged. | states |
-| desktop | partial | Same as web (hosted web app). | states |
 | cli | partial | CLI never shows the subscription status; a blocked request only says 'plan payment required' with a pricing link rather than a billing fix. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/web/app/payment-failure/page.tsx:35-38`, `apps/web/lib/services/subscription-access-policy.ts:17-29`, `packages/contracts/types/src/subscription-entitlement.ts:16-30`
+Code: `apps/cli/src/usage_summary.rs:107-113`
 
 ## S81.28: Plan-specific feature explanations.
 

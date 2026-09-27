@@ -15,8 +15,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { assertWorkspaceCodeAccess } from '@/lib/services/organization-policy-code-gate';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
-import { effectivePlanTier } from '@agiworkforce/types';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   reviewLineComments,
   reviewPullRequestDiff,
@@ -488,8 +488,8 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       return;
     }
 
-    const subscription = await SubscriptionService.getSubscription(db, installation.user_id).catch(
-      () => null,
+    const planTier = await resolveEntitledPlanTier(db, installation.user_id).catch(() =>
+      normalizeBillingPlanTier(null),
     );
     const postedCommentBodies = await listPrReviewCommentBodies(token, owner, repo, prNumber).catch(
       (error: unknown) => {
@@ -504,7 +504,7 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
       prNumber,
-      planTier: effectivePlanTier(subscription?.plan_tier, subscription?.status),
+      planTier,
       postedCommentBodies,
       preferredModel: installation.review_model,
     });
