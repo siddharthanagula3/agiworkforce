@@ -26,12 +26,12 @@ describe('regional pricing', () => {
   });
 
   it('keeps founder-set India monthly prices exact', () => {
-    expect(resolveLocalizedPlanPrice('basic', 'monthly', 'inr', null).amountMinor).toBe(39_900);
-    expect(resolveLocalizedPlanPrice('pro', 'monthly', 'inr', proStripePrice).amountMinor).toBe(
+    expect(resolveLocalizedPlanPrice('basic', 'monthly', 'inr', null)?.amountMinor).toBe(39_900);
+    expect(resolveLocalizedPlanPrice('pro', 'monthly', 'inr', proStripePrice)?.amountMinor).toBe(
       199_900,
     );
-    expect(resolveLocalizedPlanPrice('max', 'monthly', 'inr', null).amountMinor).toBe(999_900);
-    expect(resolveLocalizedPlanPrice('max_15x', 'monthly', 'inr', null).amountMinor).toBe(
+    expect(resolveLocalizedPlanPrice('max', 'monthly', 'inr', null)?.amountMinor).toBe(999_900);
+    expect(resolveLocalizedPlanPrice('max_15x', 'monthly', 'inr', null)?.amountMinor).toBe(
       2_499_900,
     );
   });

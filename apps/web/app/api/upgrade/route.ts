@@ -204,7 +204,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    assertSameCheckoutBillingInterval(stripeItem.price.recurring, billingInterval);
+    assertSameCheckoutBillingInterval(stripeItem.price.recurring, billingInterval, targetPlan);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Billing cadence could not be verified';

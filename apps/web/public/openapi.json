@@ -51,7 +51,7 @@
           "billingInterval": {
             "type": "string",
             "enum": ["monthly", "yearly"],
-            "description": "Billing cycle interval"
+            "description": "Billing cycle interval. Individual plans (basic, pro, max, max_15x) are sold monthly only and refuse yearly with a 400; team is sold monthly or yearly."
           },
           "seats": {
             "type": "integer",
