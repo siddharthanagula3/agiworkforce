@@ -1,4 +1,4 @@
--- Reversal of 0309 : scheduled runs can no longer pause for approval.
+-- Reversal of 0308 : scheduled runs can no longer pause for approval.
 --
 -- WHAT THIS COSTS: every run still waiting for its owner's approval is ended
 -- as cancelled and its resume state is dropped, so those steps never run;
@@ -34,6 +34,6 @@ alter table public.scheduled_task_runs
     check (status = any (array['running', 'success', 'failed', 'timeout', 'cancelled']));
 
 delete from public.schema_migrations
- where filename = '0309_schedule_run_approval.sql';
+ where filename = '0308_schedule_run_approval.sql';
 
 commit;
