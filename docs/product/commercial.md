@@ -115,9 +115,12 @@ The current enterprise control-plane foundation is the first step, not the final
 ## Plan Change, Proration, And Subscription State Transitions
 
 Upgrade (paid to strictly larger paid allowance) runs through `apps/web/app/api/upgrade`.
-Stripe is called with `proration_behavior: 'always_invoice'` and the same signed
-`proration_date` for both preview and apply, so the customer is invoiced only the
-prorated difference for the remainder of the period and the renewal date is preserved.
+Stripe is called with `proration_behavior: 'always_invoice'` and the anchor
+`planChangeAnchor` in `apps/web/lib/server/stripe-plan-change.ts` picks for both preview
+and apply. A tier upgrade uses `billing_cycle_anchor: 'now'`: a new billing period starts
+that day, and the customer pays the new plan's price minus a credit for the unused time
+on the old one. A seat increase keeps the renewal date, and the preview and the charge
+share one signed `proration_date`.
 Raw usage survives the change: `SubscriptionService.carryCreditsForUpgradePeriod`
 refuses any non-upgrade delta and `CreditService.carryUsageIntoUpgradedPeriod` mutates
 the existing `token_credits` row in place, `credits_used_cents` is never reset and
@@ -173,6 +176,18 @@ balance was spent. Operators refund from `/admin/refunds`, and customers request
 on `/refund-policy`; both issue the refund in Stripe, and the `charge.refunded` webhook is
 the only path that changes credits or plan.
 
+An EU, EEA or UK customer who asks within 14 days of a plan payment or a top-up gets the
+payment back prorated by the credits used, as Claude does
+(support.claude.com/en/articles/12386328): a plan payment by the share of the period's
+plan credits not used, a top-up by the share of its credits not spent.
+`apps/web/lib/services/billing-refund-service.ts` issues it on request, cancels a
+withdrawn plan in Stripe, and records the amount in
+`billing_refund_requests.assessed_refund_cents`; an operator settling that request cannot
+refund less. The country is the payment's billing address, then the Stripe customer's
+address or tax location, then the card's issuing country. Checkout collects no consent to
+immediate performance, so no waiver reduces the refund. Both paths reach Stripe only
+through `apps/web/lib/server/payments/stripe-provider.ts`.
+
 ## Allowance And Purchased Balance Are Distinct Entitlements
 
 `public.token_credits` carries two balances in one cents ledger:
@@ -202,9 +217,12 @@ A subscription records the billing plan catalog version it was sold under,
 `subscriptions.plan_catalog_version` (0300). Checkout sends the current
 `BILLING_PLAN_CATALOG_VERSION`; the webhook records it at purchase, keeps it at each
 renewal while the subscription stays on the same Stripe price, and records the current
-version when the price changes. Each credit period records the version it was allocated
-under in `token_credits.plan_catalog_version`, which is what the reservation path reads
-for the 5-hour and weekly caps. Allowances per version live in
+version when the price changes. `resolveEntitlementBundle` reads the subscription
+through `resolveSubscriberPlan` in `apps/web/lib/services/plan-catalog-service.ts`, so
+every entitlement answer carries the plan and the version the subscriber holds. Each
+credit period records the version it was allocated under in
+`token_credits.plan_catalog_version`, which is what the reservation path reads for the
+5-hour and weekly caps. Allowances per version live in
 `packages/contracts/types/src/managed-usage-limits.ts` and resolve through
 `managedUsageLimitsForCatalogVersion`, so a reprice or a new allowance table reaches new
 buyers while an existing subscriber keeps what they bought for as long as they stay on
