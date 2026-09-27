@@ -190,7 +190,7 @@ function TierBadge({ tier, className }: TierBadgeProps) {
       <span
         className={cn(
           'inline-flex items-center gap-0.5 rounded-compact px-1.5 py-0.5 text-caption font-medium',
-          'bg-[var(--chat-info)]/15 text-[var(--chat-info)]',
+          'bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]',
           className,
         )}
       >
@@ -832,7 +832,7 @@ export function ModelSelector({
                                     {m.name}
                                   </span>
                                   {m.isLocal && (
-                                    <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-info)]/15 text-[var(--chat-info)]">
+                                    <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]">
                                       local
                                     </span>
                                   )}

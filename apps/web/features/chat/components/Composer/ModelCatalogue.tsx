@@ -555,7 +555,7 @@ export function ModelCatalogue({
                       <span className="ml-auto flex shrink-0 items-center gap-1.5">
                         {isNewRelease(entry, now) && (
                           <span
-                            className={`${TAG_CLASS} bg-[var(--chat-info)]/15 text-[var(--chat-info)]`}
+                            className={`${TAG_CLASS} bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
                           >
                             {NEW_TAG_LABEL}
                           </span>
@@ -593,7 +593,7 @@ export function ModelCatalogue({
                         )}
                         {entry.eventAccess && !entry.temporarilyUnavailable && (
                           <span
-                            className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info)]`}
+                            className={`${TAG_CLASS} whitespace-nowrap bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]`}
                           >
                             {EVENT_TAG_LABEL}
                           </span>

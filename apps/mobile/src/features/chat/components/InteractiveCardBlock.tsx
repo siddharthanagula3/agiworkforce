@@ -190,7 +190,7 @@ function MapTiles({
                 borderColor: colors.cameraOverlayText,
               }}
             >
-              <Text style={{ color: colors.cameraOverlayText, fontSize: 11, fontWeight: '700' }}>
+              <Text style={{ color: colors.accentText, fontSize: 11, fontWeight: '700' }}>
                 {index + 1}
               </Text>
             </View>
@@ -265,7 +265,7 @@ function MapSearchCard({
                 justifyContent: 'center',
               }}
             >
-              <Text style={{ color: colors.cameraOverlayText, fontSize: 10, fontWeight: '700' }}>
+              <Text style={{ color: colors.accentText, fontSize: 10, fontWeight: '700' }}>
                 {index + 1}
               </Text>
             </View>
@@ -309,8 +309,8 @@ function MapSearchCard({
               backgroundColor: colors.teal,
             }}
           >
-            <Navigation size={14} color={colors.cameraOverlayText} />
-            <Text style={{ color: colors.cameraOverlayText, fontSize: 13, fontWeight: '600' }}>
+            <Navigation size={14} color={colors.accentText} />
+            <Text style={{ color: colors.accentText, fontSize: 13, fontWeight: '600' }}>
               {places.length > 1 ? 'Open route' : 'Open in Maps'}
             </Text>
           </Pressable>

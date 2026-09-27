@@ -24,7 +24,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
     }
   >
     <View
-      color="#60a5fa"
+      color="#64a8fa"
       size={14}
       testID="icon-cloud"
     />
@@ -114,7 +114,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
     }
   >
     <View
-      color="#10a37f"
+      color="#11ad87"
       size={14}
       testID="icon-hard-drive"
     />
@@ -274,7 +274,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
     }
   >
     <View
-      color="#60a5fa"
+      color="#64a8fa"
       size={14}
       testID="icon-cloud"
     />

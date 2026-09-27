@@ -61,7 +61,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-filter[aria-pressed='true'] {
     border-color: var(--agi-ext-accent);
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
   }
 
   .sp-runs-icon-btn {
@@ -77,7 +77,7 @@ export const CLOUD_RUNS_PANEL_CSS =
 
   .sp-runs-icon-btn:hover {
     border-color: var(--agi-ext-accent);
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
   }
 
   .sp-runs-icon-btn:disabled {
@@ -103,18 +103,18 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-runs-status[data-kind='error'] {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
   }
 
   .sp-runs-status[data-kind='success'] {
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
   }
 
   .sp-runs-status-action {
     margin-left: 6px;
     padding: 0;
     font: inherit;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     background: none;
     border: none;
     text-decoration: underline;
@@ -181,25 +181,25 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-badge[data-tone='active'] {
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     border-color: color-mix(in srgb, var(--agi-ext-accent) 40%, transparent);
     background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
   }
 
   .sp-run-badge[data-tone='attention'] {
-    color: var(--agi-ext-warning);
+    color: var(--agi-ext-warning-text);
     border-color: color-mix(in srgb, var(--agi-ext-warning) 40%, transparent);
     background: color-mix(in srgb, var(--agi-ext-warning) 12%, transparent);
   }
 
   .sp-run-badge[data-tone='success'] {
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
     border-color: var(--agi-ext-success-border);
     background: var(--agi-ext-success-bg);
   }
 
   .sp-run-badge[data-tone='danger'] {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
     background: var(--agi-ext-danger-bg);
   }
@@ -327,7 +327,7 @@ export const CLOUD_RUNS_PANEL_CSS =
   }
 
   .sp-run-entry[data-kind='error'] .sp-run-entry-title {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
   }
 
   .sp-run-entry-detail {

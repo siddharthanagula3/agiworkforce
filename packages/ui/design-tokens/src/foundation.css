@@ -153,19 +153,19 @@
     --accent-on-fill: var(--n-0);
     --focus-ring: #3a6bdf; /* 4.65 on background, clears the 3:1 for a control boundary */
 
-    --danger-text: #d72d33; /* 4.70 */
+    --danger-text: #c2252b; /* 4.63 */
     --danger-fill: #c9252b;
     --danger-on-fill: var(--n-0);
 
-    --warning-text: #8a5d0f; /* 5.54 */
+    --warning-text: #8a5d0f; /* 4.71 */
     --warning-fill: #a06c11;
     --warning-on-fill: var(--n-0);
 
-    --success-text: #1f7a4f; /* 5.12 */
+    --success-text: #1e744b; /* 4.60 */
     --success-fill: #1b6b45;
     --success-on-fill: var(--n-0);
 
-    --info-text: #1d75b4; /* 4.76 */
+    --info-text: #1a6aa4; /* 4.64 */
     --info-fill: #1a689e;
     --info-on-fill: var(--n-0);
 

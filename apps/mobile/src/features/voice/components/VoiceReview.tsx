@@ -132,7 +132,7 @@ export function VoiceReview({
           accessibilityRole="button"
           accessibilityState={{ disabled: !editedText.trim() }}
         >
-          <Check size={22} color={colors.white} />
+          <Check size={22} color={colors.accentText} />
         </Pressable>
       </View>
     </Animated.View>

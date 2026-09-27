@@ -227,7 +227,7 @@ function ToolRow({
                     opacity: onResolveApproval ? 1 : 0.5,
                   }}
                 >
-                  <Text style={{ color: colors.white, fontSize: 12, fontWeight: '600' }}>
+                  <Text style={{ color: colors.accentText, fontSize: 12, fontWeight: '600' }}>
                     {TOOL_APPROVAL_ACTION_LABELS.allow}
                   </Text>
                 </View>
