@@ -32,15 +32,15 @@ const CancelVideoSchema = z
 function cancellationState(
   job: VideoGenerationJob,
 ):
-  | 'not_applicable'
-  | 'unsupported'
-  | 'requested'
-  | 'provider_request_acknowledged'
-  | 'unconfirmed' {
+  'not_applicable' | 'unsupported' | 'requested' | 'provider_request_acknowledged' | 'unconfirmed' {
   if (!job.cancelRequestedAt) return 'not_applicable';
   if (job.provider !== 'runway') return 'unsupported';
   if (job.providerCancelAcknowledgedAt) return 'provider_request_acknowledged';
   return job.providerCancelAttemptedAt || job.cancelAttempts >= 5 ? 'unconfirmed' : 'requested';
+}
+
+function isTerminalJob(job: VideoGenerationJob): boolean {
+  return job.status === 'completed' || job.status === 'failed' || job.status === 'outcome_unknown';
 }
 
 function responseForCancellation(request: NextRequest, job: VideoGenerationJob, status: number) {
@@ -54,7 +54,7 @@ function responseForCancellation(request: NextRequest, job: VideoGenerationJob, 
       provider_cancellation: cancellationState(job),
       message:
         job.provider !== 'runway' && job.cancelRequestedAt
-          ? 'Cancellation was recorded, but this provider exposes no verified cancellation operation. AGI will keep reconciling the task and bill only a deliverable result.'
+          ? 'Cancelled. This provider cannot stop a video it has started, so the result will not be delivered and you will not be charged for it.'
           : job.providerCancelAcknowledgedAt
             ? 'Runway acknowledged the task-management request. AGI will verify the terminal provider state before settling the billing reservation.'
             : job.cancelRequestedAt
@@ -91,13 +91,7 @@ async function handleCancelVideo(request: NextRequest): Promise<NextResponse> {
   if (scoped.userId !== userId) throw createError.forbidden('Video job tenant mismatch.');
   const snapshot = await getVideoGenerationJob(scoped.db, parsed.data.task_id, userId);
   if (!snapshot) throw createError.notFound('Video generation task not found.');
-  if (
-    snapshot.status === 'completed' ||
-    snapshot.status === 'failed' ||
-    snapshot.status === 'outcome_unknown'
-  ) {
-    return responseForCancellation(request, snapshot, 200);
-  }
+  if (isTerminalJob(snapshot)) return responseForCancellation(request, snapshot, 200);
 
   const requested = await requestVideoGenerationCancellation({
     db: scoped.db,
@@ -110,13 +104,11 @@ async function handleCancelVideo(request: NextRequest): Promise<NextResponse> {
     return responseForCancellation(request, current, 200);
   }
 
-  if (requested.provider === 'runway') {
-    try {
-      const reconciled = await reconcileVideoGenerationJob(scoped.db, requested);
-      return responseForCancellation(request, reconciled, 202);
-    } catch (error) {
-      logger.warn({ error, jobId: requested.id }, 'Immediate video cancellation attempt deferred');
-    }
+  try {
+    const reconciled = await reconcileVideoGenerationJob(scoped.db, requested);
+    return responseForCancellation(request, reconciled, isTerminalJob(reconciled) ? 200 : 202);
+  } catch (error) {
+    logger.warn({ error, jobId: requested.id }, 'Immediate video cancellation attempt deferred');
   }
   return responseForCancellation(request, requested, 202);
 }

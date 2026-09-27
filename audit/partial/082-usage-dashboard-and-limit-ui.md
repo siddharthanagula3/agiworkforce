@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: Every signed-in surface shows the account's current plan, read from the server.
 - Wave: 3
-- Already works on: cli, chrome, api
+- Already works on: web, desktop, mobile, cli, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | BillingSection's plan comes from /api/me, which reads only the user's own subscriptions row (getSubscription); seat members hold none (entitlement-resolution comment), so Billing says 'Free plan' while UsageSection, fed by the seat-aware /api/usage, says Team. |  |
-| desktop | partial | Hosted-web mirror of web: Settings > Billing shows /api/me's own-row plan, so Team seat members see 'Free plan'. |  |
-| mobile | partial | The Subscription row and cloud-billing screen take the tier from /api/me (own row only), so seat members see Free; only the Usage screen (from /api/usage) shows the effective plan. |  |
-| vscode | partial | The account row shows planName from /api/me (own row, raw tier key capitalised, e.g. 'Max_15x'), while the same quick pick's 'Plan:' comes from /api/usage; a seat member sees 'Plan: team' and '... Free plan' together. |  |
+| vscode | partial | Seat members now receive their organization's plan from /api/me; VS Code still shows the raw tier key capitalised (for example Max_15x) instead of plan.display_name. |  |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:671-676`, `apps/web/features/settings/sections/UsageSection.tsx:419-428`, `apps/web/lib/hooks/useManagedUsageSummary.ts:64-77`, `apps/web/lib/services/managed-usage-summary-service.ts:123-148`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:2085-2090`, `apps/extension-vscode/src/core/commandSetup.ts:2051-2057`, `apps/extension-vscode/src/utils/api.ts:837-861`
 
 ## S82.04: Per-model usage.
 
@@ -122,14 +119,13 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 - Done when: Users can see storage used against their plan storage limit.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Same own-row lookup as S81.11: getSubscription returns null without a row, getKnowledgeStorageLimitBytes(undefined) is 0, so the meter shows a zero limit for row-less Free users and seat members instead of their plan's. |  |
-| desktop | partial | Hosted-web mirror of web: the storage meter shows a zero limit for row-less users. |  |
 | mobile | partial | Show cloud knowledge storage used vs the plan limit on mobile; mobile's Storage screen covers only on-device data, while the knowledge-files API already returns usedBytes/limitBytes. | ui |
 
-Code: `apps/web/features/projects/components/KnowledgeFilesPanel.tsx:232-244`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:261-267`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:232-250`, `apps/mobile/app/(app)/settings/storage.tsx:33-33`
+Code: `apps/mobile/app/(app)/settings/storage.tsx:33-33`
 
 ## S82.12: Active-job count.
 

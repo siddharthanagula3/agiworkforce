@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { ProjectsSyncPushRequestSchema, ServerVersionSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -8,7 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   getProjectLimit,
   getProjectLimitErrorMessage,
@@ -86,8 +85,7 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ applied: [], conflicts: [], cursor: '0' });
   }
 
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = subscription?.plan_tier;
+  const planTier = await resolveEntitledPlanTier(db, userId);
   const projectLimit = getProjectLimit(planTier);
   if (projectLimit === 0) {
     throw createError.validation(getProjectLimitErrorMessage(planTier));
