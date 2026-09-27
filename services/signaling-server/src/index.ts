@@ -22,15 +22,23 @@ import {
   verifyPairToken as checkPairToken,
 } from './pair-token.js';
 import {
+  bindSessionDevice,
   deleteSessionByCode,
+  deleteSessionsForDevice,
   getSessionByCode,
   getSessionExpiresAtByCode,
   extendSessionExpiry,
   insertSession,
 } from './db.js';
+import {
+  deviceIdSchema,
+  pairingDeviceId,
+  pairingDeviceIds,
+  withPairingDevice,
+} from './pairing-device.js';
 import { isProxyTrusted, resolveClientIp, resolveTrustedProxyHops } from './client-ip.js';
 import { logger, generateCorrelationId } from './logger.js';
-import { connectionManager } from './connection-manager.js';
+import { DEVICE_REVOKED_REASON, connectionManager } from './connection-manager.js';
 import { metrics } from './metrics.js';
 import { buildInfoMetric, canonicalEndpoint, releaseIdentity } from './release.js';
 import { buildConfigBackup, persistConfigBackup } from './config-backup.js';
@@ -65,6 +73,7 @@ import {
   RATE_LIMIT_PAIRING_CREATE,
   RATE_LIMIT_PAIRING_LOOKUP,
   RATE_LIMIT_PAIRING_DELETE,
+  RATE_LIMIT_DEVICE_REVOKE,
   RATE_LIMIT_HEALTH_CHECK,
   RATE_LIMIT_METRICS,
   RATE_LIMIT_ADMIN,
@@ -303,6 +312,18 @@ const pairingDeleteLimiter = rateLimit({
   },
 });
 
+const deviceRevokeLimiter = rateLimit({
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_DEVICE_REVOKE,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'RATE_LIMIT_EXCEEDED',
+    message: `Too many revocation requests. Please try again after ${RATE_LIMIT_RETRY_AFTER_SECONDS} seconds.`,
+    retryAfter: RATE_LIMIT_RETRY_AFTER_SECONDS,
+  },
+});
+
 const healthLimiter = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_HEALTH_CHECK,
@@ -360,17 +381,28 @@ const metadataSchema = z
   })
   .optional();
 
+const pairingRoleSchema = z.enum(['desktop', 'mobile']);
+
 const pairingRequestSchema = z.object({
   ttlSeconds: z.number().min(30).max(900).optional(),
   metadata: metadataSchema,
+  device: z.object({ role: pairingRoleSchema, id: deviceIdSchema }).strict().optional(),
 });
 
 const manualPairingClaimSchema = z
   .object({
     role: z.literal('mobile'),
     accountId: z.string().min(1).max(200),
+    deviceId: deviceIdSchema.optional(),
   })
   .strict();
+
+const deviceRevocationSchema = z.object({
+  reason: z
+    .string()
+    .regex(/^[a-z_]{1,64}$/)
+    .optional(),
+});
 
 const pairingCodeSchema = z
   .string()
@@ -382,7 +414,7 @@ const pairingCodeSchema = z
 const registerMessageSchema = z.object({
   type: z.literal('register'),
   code: pairingCodeSchema,
-  role: z.union([z.literal('desktop'), z.literal('mobile')]),
+  role: pairingRoleSchema,
   metadata: metadataSchema,
   pairToken: z.string().min(1).max(512).optional(),
 });
@@ -555,7 +587,7 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
     return res.status(400).json({ error: z.treeifyError(parseResult.error) });
   }
 
-  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata } = parseResult.data;
+  const { ttlSeconds = DEFAULT_TTL_SECONDS, metadata, device } = parseResult.data;
 
   const accountId = pairingAccountId(metadata);
   if (!accountId) {
@@ -566,13 +598,18 @@ app.post('/pairings', pairingCreateLimiter, async (req, res) => {
 
   logger.info({ correlationId, ttlSeconds }, 'Creating pairing session');
 
-  const result = await insertSessionWithRetry(ttlSeconds, metadata);
+  const result = await insertSessionWithRetry(
+    ttlSeconds,
+    device ? withPairingDevice(metadata, device.role, device.id) : metadata,
+  );
 
   if ('error' in result) {
     logger.error({ correlationId, error: result.error }, 'Failed to create pairing session');
     metrics.recordPairingRequest(false);
     return res.status(500).json({ error: result.error });
   }
+
+  if (device) connectionManager.reinstateDevice(device.id);
 
   const { code, createdAt, expiresAt } = result;
 
@@ -675,6 +712,31 @@ app.post('/pairings/:code/claim', pairingCreateLimiter, async (req, res) => {
     return res.status(409).json({ error: 'pairing_role_in_use' });
   }
 
+  const deviceId = parsedBody.data.deviceId ?? null;
+  const heldBy = pairingDeviceId(sessionData.metadata, 'mobile');
+  if (heldBy !== null && heldBy !== deviceId) {
+    return res.status(409).json({ error: 'pairing_role_in_use' });
+  }
+  if (deviceId !== null && heldBy === null) {
+    const bound = await bindSessionDevice(
+      code,
+      'mobile',
+      deviceId,
+      withPairingDevice(sessionData.metadata, 'mobile', deviceId),
+    );
+    if (bound.error) {
+      logger.error({ code, error: bound.error }, 'Failed to record the device claiming a pairing');
+      return res.status(500).json({ error: 'db_update_error' });
+    }
+    if (!bound.data) {
+      return res.status(409).json({ error: 'pairing_role_in_use' });
+    }
+    await pendingRehydrations.get(code)?.promise.catch(() => null);
+    const live = activeSessions.get(code);
+    if (live) live.metadata = withPairingDevice(live.metadata, 'mobile', deviceId);
+  }
+  if (deviceId !== null) connectionManager.reinstateDevice(deviceId);
+
   return res.json({
     code,
     role: parsedBody.data.role,
@@ -719,6 +781,36 @@ app.delete('/pairings/:code', pairingDeleteLimiter, async (req, res) => {
 
   logger.info({ code }, 'Pairing session deleted');
   return res.json({ success: true });
+});
+
+app.post('/devices/:deviceId/revoke', deviceRevokeLimiter, async (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '');
+
+  if (!SIGNALING_SECRET || !token || !constantTimeCompare(token, SIGNALING_SECRET)) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const deviceValidation = deviceIdSchema.safeParse(req.params['deviceId']);
+  const bodyValidation = deviceRevocationSchema.safeParse(req.body ?? {});
+  if (!deviceValidation.success || !bodyValidation.success) {
+    return res.status(400).json({ error: 'invalid_revocation' });
+  }
+
+  const deviceId = deviceValidation.data;
+  const reason = bodyValidation.data.reason ?? DEVICE_REVOKED_REASON;
+  const closed = connectionManager.revokeDevice(deviceId, reason);
+  const endedCodes = new Set(endPairingsNamingDevice(deviceId));
+
+  const { data: deletedCodes, error } = await deleteSessionsForDevice(deviceId);
+  if (error) {
+    logger.error({ deviceId, error }, 'Failed to delete the pairings of a revoked device');
+    return res.status(500).json({ error: 'db_delete_error', closed });
+  }
+  for (const code of deletedCodes ?? []) endedCodes.add(code);
+
+  logger.info({ deviceId, reason, closed, pairingsEnded: endedCodes.size }, 'Device revoked');
+  return res.json({ closed, pairingsEnded: endedCodes.size });
 });
 
 app.use((_req: Request, res: Response) => {
@@ -1236,6 +1328,30 @@ async function handleRegister(
     return;
   }
 
+  const deviceId = pairingDeviceId(session.metadata, message.role);
+  if (deviceId !== null && !connectionManager.bindDevice(socket, deviceId)) {
+    if (connectionManager.isDeviceRevoked(deviceId)) {
+      logger.warn(
+        { correlationId, code: message.code, role: message.role },
+        'Registration refused for a revoked device',
+      );
+      metrics.recordError('device_revoked');
+    }
+    return;
+  }
+
+  if (pairingDeviceIds(session.metadata).some((id) => connectionManager.isDeviceRevoked(id))) {
+    logger.warn(
+      { correlationId, code: message.code, role: message.role },
+      'Registration refused for a pairing whose other device was revoked',
+    );
+    metrics.recordError('pairing_device_revoked');
+    endPairing(session);
+    socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
+    socket.close();
+    return;
+  }
+
   if (session.participants[message.role]) {
     logger.warn(
       { correlationId, code: message.code, role: message.role },
@@ -1462,6 +1578,22 @@ function disconnectParticipants(
       logger.warn({ error, role }, 'Failed to close socket');
     }
   }
+}
+
+function endPairing(session: Session): void {
+  disconnectParticipants(session);
+  activeSessions.delete(session.code);
+  pendingApprovals.delete(session.code);
+}
+
+function endPairingsNamingDevice(deviceId: string): string[] {
+  const ended: string[] = [];
+  for (const session of activeSessions.values()) {
+    if (!pairingDeviceIds(session.metadata).includes(deviceId)) continue;
+    endPairing(session);
+    ended.push(session.code);
+  }
+  return ended;
 }
 
 function queuePendingApproval(code: string, payload: Record<string, unknown>): void {
