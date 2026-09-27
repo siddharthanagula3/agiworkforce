@@ -49,7 +49,16 @@ vi.mock('@/lib/server/model-catalogue', async (importOriginal) => ({
   isConfiguredManagedModelRoute: vi.fn(() => true),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { GET, POST } from '@/app/api/chat/conversations/route';
+import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 
 describe('Chat Conversations API', () => {
   const mockConversations = [
@@ -305,6 +314,46 @@ describe('Chat Conversations API', () => {
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_conversations'),
           expect.arrayContaining([CHAT_MODEL]),
+        );
+      });
+
+      it('counts one new conversation against the Free daily cap before writing it', async () => {
+        const newConv = { id: 'new-conv', title: 'New conversation', model: 'auto' };
+        mockQuery.mockResolvedValueOnce([newConv]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer valid-token' },
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(201);
+        expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'user-123', requested: { conversation_creates: 1 } }),
+        );
+      });
+
+      it('answers 429 and writes nothing once the Free daily conversation cap is used up', async () => {
+        mockAssertFreeDailyAllowance.mockRejectedValueOnce(
+          freeDailyLimitError('conversation_creates'),
+        );
+
+        const request = new NextRequest('http://localhost/api/chat/conversations', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer valid-token' },
+        });
+        const response = await POST(request);
+
+        expect(response.status).toBe(429);
+        await expect(response.json()).resolves.toMatchObject({
+          error: {
+            code: 'RATE_LIMIT_EXCEEDED',
+            message: freeDailyLimitError('conversation_creates').message,
+          },
+        });
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          expect.anything(),
         );
       });
 

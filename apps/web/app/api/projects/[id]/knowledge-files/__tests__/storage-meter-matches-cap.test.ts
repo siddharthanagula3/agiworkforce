@@ -31,12 +31,17 @@ describe('the storage meter is computed over the same set the cap enforces', () 
     }
   });
 
+  it('sizes the meter and the cap from the same seat-aware plan', () => {
+    expect(source.match(/resolveEntitledPlanTier\(db, userId\)/g)).toHaveLength(2);
+    expect(source).not.toContain('SubscriptionService');
+  });
+
   it('never lets a failed meter read take the file list down with it', () => {
     const getHandler = source.slice(
       source.indexOf('let limitBytes: number | null = null;'),
       source.indexOf('storage: { usedBytes, limitBytes }'),
     );
-    expect(getHandler).toContain('SubscriptionService.getSubscription');
+    expect(getHandler).toContain('resolveEntitledPlanTier(db, userId)');
     expect(getHandler.match(/} catch \(error\) {/g)?.length).toBeGreaterThanOrEqual(2);
     expect(getHandler).not.toContain('throw error;');
   });

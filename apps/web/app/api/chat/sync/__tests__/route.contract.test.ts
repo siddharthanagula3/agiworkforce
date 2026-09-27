@@ -39,7 +39,16 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { GET, POST } from '../route';
+import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 
 const CONV_ID = '018f6f2a-0000-7000-8000-000000000001';
 const MSG_ID = '018f6f2a-0000-7000-8000-000000000002';
@@ -280,6 +289,60 @@ describe('POST /api/chat/sync, shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('46');
+  });
+
+  it('counts only new conversations and messages against the Free daily caps', async () => {
+    mockQuery.mockResolvedValue([]);
+    const EXISTING_CONV_ID = '018f6f2a-0000-7000-8000-000000000005';
+    const SECOND_MSG_ID = '018f6f2a-0000-7000-8000-000000000006';
+
+    await POST(
+      makePost({
+        protocolVersion: 2,
+        conversations: [
+          { id: CONV_ID, title: 'New chat', baseVersion: '0' },
+          { id: EXISTING_CONV_ID, title: 'Renamed chat', baseVersion: '12' },
+        ],
+        messages: [
+          { id: MSG_ID, conversationId: CONV_ID, role: 'user', content: 'a', baseVersion: '0' },
+          {
+            id: SECOND_MSG_ID,
+            conversationId: CONV_ID,
+            role: 'assistant',
+            content: 'b',
+            baseVersion: '0',
+          },
+        ],
+      }),
+    );
+
+    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user_contract_1',
+        requested: { conversation_creates: 1, message_writes: 2 },
+      }),
+    );
+  });
+
+  it('applies nothing and answers 429 when a push would pass a Free daily cap', async () => {
+    mockQuery.mockResolvedValue([]);
+    mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('message_writes'));
+
+    const res = await POST(
+      makePost({
+        protocolVersion: 2,
+        messages: [
+          { id: MSG_ID, conversationId: CONV_ID, role: 'user', content: 'a', baseVersion: '0' },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(429);
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        /insert into web_(conversations|messages)/.test(String(sql)),
+      ),
+    ).toBe(false);
   });
 
   it('accepts a project only after proving owner and exact active workspace', async () => {

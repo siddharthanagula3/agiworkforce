@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   authUser: vi.fn(async () => ({ userId: 'user-1' })),
   rateLimit: vi.fn(async (): Promise<Response | null> => null),
-  getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })),
+  getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
   resolveActiveOrganizationId: vi.fn(async (): Promise<string | null> => null),
 }));
 
@@ -35,6 +35,7 @@ vi.mock('@/lib/projects', async (importOriginal) => ({
 }));
 
 const { POST } = await import('./route');
+const { getProjectLimit } = await import('@/lib/services/free-plan-entitlements');
 
 const call = () =>
   POST(
@@ -63,7 +64,7 @@ describe('POST /api/projects/[id]/duplicate', () => {
     vi.clearAllMocks();
     mocks.authUser.mockResolvedValue({ userId: 'user-1' });
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro' });
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
     mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   });
 
@@ -202,12 +203,30 @@ describe('POST /api/projects/[id]/duplicate', () => {
     expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses when the plan allows no projects', async () => {
-    mocks.getSubscription.mockResolvedValue({ plan_tier: 'unknown-tier' });
-    mocks.query.mockResolvedValueOnce([SOURCE]);
+  it('guards the copy with the resolved plan project limit', async () => {
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
+      .mockResolvedValueOnce([]);
 
-    const res = await call();
-    expect(res.status).toBe(400);
+    await call();
+
+    const [insertSql, insertParams] = mocks.query.mock.calls[1] as [string, unknown[]];
+    expect(insertSql).toContain("assert_user_resource_limit('projects'");
+    expect(insertParams.at(-1)).toBe(getProjectLimit('pro'));
+  });
+
+  it('holds an unrecognised tier to the Free project limit rather than lifting it', async () => {
+    mocks.getSubscription.mockResolvedValue({ plan_tier: 'unknown-tier', status: 'active' });
+    mocks.query
+      .mockResolvedValueOnce([SOURCE])
+      .mockResolvedValueOnce([{ id: 'proj-2', name: 'Q3 Analysis (copy)' }])
+      .mockResolvedValueOnce([]);
+
+    await call();
+
+    const [, insertParams] = mocks.query.mock.calls[1] as [string, unknown[]];
+    expect(insertParams.at(-1)).toBe(getProjectLimit('free'));
   });
 
   it('still returns the project when the file copy fails', async () => {

@@ -5,6 +5,7 @@ vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
 
 vi.mock('@/lib/logger', () => ({

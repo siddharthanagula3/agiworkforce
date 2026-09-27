@@ -145,7 +145,7 @@ beforeEach(() => {
 });
 
 describe('/api/settings/organization/admin-api-keys', () => {
-  it('lists keys without their hashes for a role with identity.read', async () => {
+  it('lists keys without their hashes, in the namespaced scope vocabulary, for a role with identity.read', async () => {
     bind('admin');
 
     const res = await GET(new Request('https://app.test/x') as never);
@@ -154,10 +154,13 @@ describe('/api/settings/organization/admin-api-keys', () => {
     expect(res.status).toBe(200);
     expect(body.canManageKeys).toBe(false);
     expect(JSON.stringify(body)).not.toMatch(/key_hash|keyHash/);
-    expect(body.keys[0]).toMatchObject({ keyPrefix: 'agiadm_AbCdEf12', scopes: ['audit.read'] });
+    expect(body.keys[0]).toMatchObject({
+      keyPrefix: 'agiadm_AbCdEf12',
+      scopes: ['admin.audit.view'],
+    });
   });
 
-  it('creates a scoped key, returns the secret once and stores only its hash', async () => {
+  it('creates a scoped key, returns the secret once and stores only its hash and namespaced scopes', async () => {
     bind('owner');
 
     const res = await POST(
@@ -177,7 +180,7 @@ describe('/api/settings/organization/admin-api-keys', () => {
     const params = insert?.[1] as unknown[];
     expect(params[3]).toMatch(/^[0-9a-f]{64}$/);
     expect(JSON.stringify(params)).not.toContain(body.key);
-    expect(params[4]).toEqual(['audit.read', 'content.govern']);
+    expect(params[4]).toEqual(['admin.audit.view', 'feature.content.govern']);
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'admin_api_key_created', severity: 'critical' }),
     );
@@ -214,12 +217,15 @@ describe('/api/settings/organization/admin-api-keys', () => {
     const body = await res.json();
 
     expect(res.status).toBe(201);
-    expect(body.servicePrincipal).toMatchObject({ id: PRINCIPAL_ID, maxScopes: ['audit.read'] });
+    expect(body.servicePrincipal).toMatchObject({
+      id: PRINCIPAL_ID,
+      maxScopes: ['admin.audit.view'],
+    });
     expect(body.record.servicePrincipalId).toBe(PRINCIPAL_ID);
     const insert = mockQuery.mock.calls.find(([sql]) =>
       /insert into public\.organization_service_principals/i.test(String(sql)),
     );
-    expect((insert?.[1] as unknown[])[3]).toEqual(['audit.read']);
+    expect((insert?.[1] as unknown[])[3]).toEqual(['admin.audit.view']);
   });
 
   it('refuses a scope above the named principal ceiling and mints nothing', async () => {

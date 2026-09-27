@@ -27,6 +27,7 @@ export interface WorkspaceSwitchSurface {
   readonly copyable: boolean;
   /** the item leaves the product in a reader's export */
   readonly exportable: boolean;
+  readonly workspaceColumnRecordsProvenance?: true;
 }
 
 export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
@@ -142,6 +143,16 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     effect: 'account-wide',
     tables: ['credit_transactions', 'token_credits'],
     why: 'credits are bought by the account that pays, and an organization is billed through its own ledger rather than by moving a balance between workspaces',
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
+  {
+    surface: 'bonus_credits',
+    effect: 'account-wide',
+    tables: ['bonus_credit_grants'],
+    why: 'bonus credits are granted to the account and drawn after the plan windows in every workspace; organization_id only records where a grant came from, and no read filters by it',
+    workspaceColumnRecordsProvenance: true,
     transferable: false,
     copyable: false,
     exportable: true,

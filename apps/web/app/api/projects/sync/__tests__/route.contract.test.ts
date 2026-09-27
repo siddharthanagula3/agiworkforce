@@ -36,6 +36,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET, POST } from '../route';
+import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
 
 const PROJ_ID = '018f6f2a-0000-7000-8000-000000000020';
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -153,24 +154,47 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(pushed[0].updatedAt).toBeUndefined();
   });
 
-  it('fails closed for an unknown subscription before applying a push', async () => {
-    mockGetSubscription.mockResolvedValue({ plan_tier: 'starter' });
+  it.each([
+    ['an unrecognised tier', { plan_tier: 'starter', status: 'active' }],
+    ['a lapsed Pro subscription', { plan_tier: 'pro', status: 'canceled' }],
+  ])('holds %s to the Free project limit the database enforces', async (_label, subscription) => {
+    mockGetSubscription.mockResolvedValue(subscription);
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+    ]);
 
     const res = await POST(
       new Request('http://localhost:3000/api/projects/sync', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          projects: [{ id: PROJ_ID, name: 'Blocked', baseVersion: '0' }],
+          projects: [{ id: PROJ_ID, name: 'Held to Free', baseVersion: '0' }],
         }),
       }) as never,
     );
 
-    expect(res.status).toBe(400);
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect((await res.json()).error.message).toBe(
-      'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
+    expect(res.status).toBe(200);
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(params[2]).toBe(getProjectLimit('free'));
+  });
+
+  it('passes an active Pro subscription its own project limit', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' });
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '5', current: null },
+    ]);
+
+    await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projects: [{ id: PROJ_ID, name: 'Pro', baseVersion: '0' }] }),
+      }) as never,
     );
+
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(params[2]).toBe(getProjectLimit('pro'));
+    expect(params[2]).not.toBe(getProjectLimit('free'));
   });
 
   it('returns the current server row when a stale baseVersion loses CAS', async () => {

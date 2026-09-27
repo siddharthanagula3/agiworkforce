@@ -3,10 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const API_ROOT = path.resolve(import.meta.dirname, '../../app/api');
+const WORKSPACE_CALLER = path.resolve(
+  import.meta.dirname,
+  '../../lib/server/service-principals/caller.ts',
+);
 
 const MUTATING = /export\s+(?:const|async\s+function)\s+(POST|PUT|PATCH|DELETE)\b/;
 const COOKIE_AUTH = /getClerkAuthUser\s*\(|getRequestIdentity\s*\(/;
-const CSRF = /requireCsrfToken|withCsrf/;
+const CSRF = /requireCsrfToken|withCsrf|requireCsrfUnlessWorkspaceApiKey\s*\(/;
 const RETIRED = /ENDPOINT_RETIRED|status:\s*410/;
 
 const EXEMPT: Record<string, string> = {
@@ -18,6 +22,8 @@ const EXEMPT: Record<string, string> = {
     "The bearer here is the signed `?token=`, not the cookie. verifyLocalUploadToken checks an HMAC over claims that BIND the upload to the cookie-derived userId, and additionally pins content-type, byte count and expiry; the nonce is written with the `wx` flag so a token is single-use. A cross-site page cannot mint one, the only issuer is /api/uploads/presign, which is itself cookie-authenticated AND CSRF-checked, and the whole handler throws notFound unless NODE_ENV === 'development'.",
   'voice/transcribe/route.ts':
     'The local wrapper delegates to transcriptionsHandler, which requires CSRF before resolving the Clerk principal; this file only adds the dictation capability admission check.',
+  'usage/estimate/route.ts':
+    'Read-only: it prices the posted chat completions body and writes nothing, so a forged request changes no state; POST only carries the body a GET cannot.',
   'auth/device/code/route.ts':
     'Two handlers, two principals. The cookie-authenticated one is the GET lookup, whose only write marks an ALREADY-expired code as expired, idempotent housekeeping an attacker gains nothing from. The POST is unauthenticated RFC 8628 device-code creation with no cookie principal at all.',
 };
@@ -98,6 +104,11 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
   'scim/v2/Users/route.ts': {
     call: /withScim\s*\(/,
     reason: 'The identity provider authenticates with its SCIM bearer token.',
+  },
+  'trial/cancel/route.ts': {
+    call: /cancelTrialFromLink\s*\(/,
+    reason:
+      'The principal is the HMAC-signed cancel link from the trial reminder email in the body; no session is read.',
   },
   'webhooks/connectors/[triggerId]/route.ts': {
     call: /verifyConnectorTriggerSignature\s*\(/,
@@ -197,6 +208,16 @@ describe('CSRF coverage on state-changing routes', () => {
       const src = fs.readFileSync(full, 'utf8');
       expect(CSRF.test(src), `${rel} now checks CSRF; drop its principal entry`).toBe(false);
     }
+  });
+
+  it('counts the workspace API key form only while it still checks the cookie path', () => {
+    const caller = fs.readFileSync(WORKSPACE_CALLER, 'utf8');
+    const at = caller.indexOf('export async function requireCsrfUnlessWorkspaceApiKey');
+
+    expect(at).toBeGreaterThan(-1);
+    expect(caller.slice(at, at + 240)).toMatch(
+      /presentsWorkspaceApiKey\(request\)\s*\?\s*null\s*:\s*requireCsrfToken\(request\)/,
+    );
   });
 
   it('keeps the exemption list honest', () => {
