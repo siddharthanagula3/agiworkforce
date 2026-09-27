@@ -100,12 +100,15 @@ import {
 import {
   canUseBillingPlanCapability,
   formatCreditWindowUsage,
+  formatCredits,
   getBillingPlanProductLimits,
   type BillingPlanLimit,
   type ManagedUsageCreditWindow,
+  type ManagedUsagePurchasedCredits,
 } from '@agiworkforce/types';
 import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
+import { CreditTopUp } from './CreditTopUp';
 
 type CustomConnectorInput = Parameters<NonNullable<SettingsDataAdapter['addCustomConnector']>>[0];
 
@@ -295,11 +298,6 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
     <div className="flex flex-col gap-6">
       <div>
         <h2 className="text-base font-semibold text-foreground">Billing</h2>
-        {/* Top-ups are deliberately not named here: credit top-up fulfillment
-            exists in the Stripe webhook, but no surface can start that purchase
-            yet (no checkout route stamps `type: 'credit_topup'`), so promising
-            them in this pane sends a capped user looking for a button that does
-            not exist. Add them back with the purchase flow (ledger BIZ-022). */}
         <p className="mt-1 text-sm text-muted-foreground">
           Review your plan, billing owner, and available actions.
         </p>
@@ -359,6 +357,7 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
           ) : null}
         </div>
       </div>
+      <CreditTopUp onComparePlans={onOpenPlans} />
     </div>
   );
 }
@@ -400,6 +399,26 @@ function UsageMeter({
         />
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{formatUsageReset(resetAt)}</p>
+    </div>
+  );
+}
+
+function PurchasedCreditsCard({ purchased }: { purchased: ManagedUsagePurchasedCredits }) {
+  return (
+    <div className="rounded-lg border border-border bg-card/40 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-foreground">Purchased credits</p>
+        <p className="text-sm tabular-nums text-muted-foreground">
+          {purchased.remaining === null
+            ? 'Balance unavailable'
+            : `${formatCredits(purchased.remaining)} left`}
+        </p>
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">
+        {purchased.overage_enabled
+          ? 'Spent when a usage limit stops you.'
+          : 'Kept apart from your plan. Turn on "Keep going after a usage limit" in web billing to spend them past a limit.'}
+      </p>
     </div>
   );
 }
@@ -495,6 +514,7 @@ function DesktopUsageSection() {
             resetAt={usage.flagship_weekly_reset_at}
             credits={usage.credits?.flagship_weekly}
           />
+          {usage.credits ? <PurchasedCreditsCard purchased={usage.credits.purchased} /> : null}
         </div>
       ) : null}
     </div>

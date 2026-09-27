@@ -44,7 +44,11 @@ import {
 import { Portal as TooltipPortal } from '@radix-ui/react-tooltip';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@shared/lib/utils';
-import type { SendPreviewPresentation } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_CAPABILITY_TIERS,
+  getBillingPlanPricing,
+  type SendPreviewPresentation,
+} from '@agiworkforce/types';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
 import { ConnectorToggleRow } from './ConnectorToggleRow';
@@ -117,7 +121,12 @@ const BADGE_NOT_SUPPORTED = 'Not supported';
 const PLAN_UNVERIFIED_TITLE = 'Your plan could not be verified. Click to retry.';
 const PLAN_CHECKING_TITLE = 'Checking your plan.';
 const IMAGE_ENTITLEMENT_HINT = 'Image generation is available on Pro and above.';
-const VIDEO_ENTITLEMENT_HINT = 'Video generation is available on Max 15x and Enterprise.';
+const VIDEO_ENTITLEMENT_HINT = `Video generation is available on ${new Intl.ListFormat('en', {
+  style: 'long',
+  type: 'conjunction',
+}).format(
+  BILLING_PLAN_CAPABILITY_TIERS.video_generation.map((plan) => getBillingPlanPricing(plan).label),
+)}.`;
 const FOLDER_UNSUPPORTED_TITLE = 'Folder access is not supported in this browser';
 
 const ROW_CLASS = 'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors';

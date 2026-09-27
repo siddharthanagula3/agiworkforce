@@ -1,6 +1,11 @@
 import * as vscode from 'vscode';
+import { MICROUSD_PER_USD, creditsFromMicrousd, formatCredits } from '@agiworkforce/types';
 import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { isAutoRoutingModel } from '../integrations/routingTask';
+import { fetchBilledCredits, onDidCompleteManagedRequest } from '../utils/api';
+
+const MAX_QUEUED_BILLING_REQUESTS = 200;
+const BILLING_SETTLEMENT_BATCH = 10;
 
 export class TokenCounter implements vscode.Disposable {
   private _promptTokens = 0;
@@ -8,6 +13,10 @@ export class TokenCounter implements vscode.Disposable {
   private _requestCount = 0;
   private _unpricedRequestCount = 0;
   private _estimatedCostUsd = 0;
+  private _billedCredits = 0;
+  private _billedRequests = 0;
+  private _unsettledRequests = 0;
+  private _queuedBillingRequests: string[] = [];
   private readonly _statusBarItem: vscode.StatusBarItem;
 
   constructor() {
@@ -40,6 +49,53 @@ export class TokenCounter implements vscode.Disposable {
     return this._estimatedCostUsd;
   }
 
+  get estimatedCredits(): number {
+    return creditsFromMicrousd(this._estimatedCostUsd * MICROUSD_PER_USD);
+  }
+
+  get billedCredits(): number {
+    return this._billedCredits;
+  }
+
+  get billedRequests(): number {
+    return this._billedRequests;
+  }
+
+  get unsettledRequests(): number {
+    return this._unsettledRequests + this._queuedBillingRequests.length;
+  }
+
+  recordBilledRequest(credits: number | null): void {
+    if (credits === null) {
+      this._unsettledRequests += 1;
+    } else {
+      this._billedCredits += credits;
+      this._billedRequests += 1;
+    }
+    this._updateDisplay();
+  }
+
+  queueBillingRequest(requestId: string): void {
+    this._queuedBillingRequests.push(requestId);
+    const overflow = this._queuedBillingRequests.length - MAX_QUEUED_BILLING_REQUESTS;
+    if (overflow > 0) {
+      this._queuedBillingRequests.splice(0, overflow);
+      this._unsettledRequests += overflow;
+    }
+    this._updateDisplay();
+  }
+
+  async settleQueuedBilling(secrets: vscode.SecretStorage): Promise<void> {
+    const queued = this._queuedBillingRequests.splice(0);
+    for (let start = 0; start < queued.length; start += BILLING_SETTLEMENT_BATCH) {
+      const batch = queued.slice(start, start + BILLING_SETTLEMENT_BATCH);
+      const settled = await Promise.all(
+        batch.map((requestId) => fetchBilledCredits(secrets, requestId)),
+      );
+      settled.forEach((credits) => this.recordBilledRequest(credits));
+    }
+  }
+
   addMeasuredUsage(model: string, promptTokens: number, completionTokens: number): void {
     this._promptTokens += promptTokens;
     this._completionTokens += completionTokens;
@@ -62,16 +118,24 @@ export class TokenCounter implements vscode.Disposable {
     this._requestCount = 0;
     this._unpricedRequestCount = 0;
     this._estimatedCostUsd = 0;
+    this._billedCredits = 0;
+    this._billedRequests = 0;
+    this._unsettledRequests = 0;
+    this._queuedBillingRequests = [];
     this._updateDisplay();
   }
 
   private _updateDisplay(): void {
-    if (this._requestCount === 0) {
+    const hasBilling = this._billedRequests > 0 || this.unsettledRequests > 0;
+    if (this._requestCount === 0 && !hasBilling) {
       this._statusBarItem.hide();
       return;
     }
 
-    this._statusBarItem.text = `$(pulse) Tokens: ${formatTokenCount(this.totalTokens)}`;
+    this._statusBarItem.text =
+      this._requestCount > 0
+        ? `$(pulse) Tokens: ${formatTokenCount(this.totalTokens)}`
+        : `$(credit-card) Billed: ${formatBilledCredits(this)}`;
     this._statusBarItem.tooltip =
       `AGI Workforce -- Session Token Usage\n` +
       `Measured this session, across every model used.\n\n` +
@@ -79,7 +143,8 @@ export class TokenCounter implements vscode.Disposable {
       `Output: ${formatTokenCount(this._completionTokens)}\n` +
       `Total: ${formatTokenCount(this.totalTokens)}\n` +
       `Turns: ${this._requestCount}\n` +
-      `Est. cost: ${costLabel(this)}\n\n` +
+      `Estimate: ${formatSessionCreditEstimate(this)}\n` +
+      `Billed for editor actions: ${formatBilledCredits(this)}\n\n` +
       `Click for detailed breakdown`;
     this._statusBarItem.show();
   }
@@ -109,6 +174,18 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
   context.subscriptions.push(counter);
 
   context.subscriptions.push(
+    onDidCompleteManagedRequest(({ requestId, billing }) => {
+      if (billing === 'deferred') {
+        counter.queueBillingRequest(requestId);
+        return;
+      }
+      void fetchBilledCredits(context.secrets, requestId).then((credits) =>
+        counter.recordBilledRequest(credits),
+      );
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.resetTokenCounter', () => {
       counter.reset();
       vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
@@ -117,7 +194,12 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.showTokenBreakdown', async () => {
-      if (counter.requestCount === 0) {
+      await counter.settleQueuedBilling(context.secrets);
+      if (
+        counter.requestCount === 0 &&
+        counter.billedRequests === 0 &&
+        counter.unsettledRequests === 0
+      ) {
         vscode.window.showInformationMessage(
           'AGI Workforce: No measured token usage yet this session.',
         );
@@ -141,9 +223,15 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
           detail: 'Combined input + output usage this session, across every model used',
         },
         {
-          label: `$(credit-card) Estimated Cost`,
-          description: costLabel(counter),
+          label: `$(credit-card) Estimated Credits`,
+          description: formatSessionCreditEstimate(counter),
           detail: 'Published rates applied to measured tokens, not an invoice or provider bill',
+        },
+        {
+          label: `$(credit-card) Billed Credits`,
+          description: formatBilledCredits(counter),
+          detail:
+            'Credits AGI Cloud settled this session for inline edits, completions and terminal and diagnostics suggestions',
         },
         {
           label: `$(request-changes) Turns`,
@@ -170,9 +258,18 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
   );
 }
 
-function costLabel(counter: TokenCounter): string {
+export function formatBilledCredits(counter: TokenCounter): string {
+  const unsettled = counter.unsettledRequests;
+  const unsettledLabel = `${unsettled} ${unsettled === 1 ? 'request' : 'requests'} not settled yet`;
+  if (counter.billedRequests === 0) return unsettled === 0 ? 'none yet' : unsettledLabel;
+  const billed = formatCredits(counter.billedCredits, { maximumFractionDigits: 2 });
+  return unsettled === 0 ? billed : `${billed} (${unsettledLabel})`;
+}
+
+export function formatSessionCreditEstimate(counter: TokenCounter): string {
+  if (counter.requestCount === 0) return 'none yet';
   if (counter.unpricedRequestCount === counter.requestCount) return 'no published rate';
-  const amount = `$${counter.estimatedCostUsd.toFixed(4)}`;
+  const amount = formatCredits(counter.estimatedCredits, { maximumFractionDigits: 2 });
   return counter.unpricedRequestCount === 0
     ? amount
     : `${amount} (excludes ${counter.unpricedRequestCount} turn(s) with no published rate)`;

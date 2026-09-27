@@ -210,5 +210,7 @@
   "usageExplainer": "Todo plano pago inclui créditos em três janelas: a cada 5 horas, por semana e por mês. O {{baseline}} inclui {{fiveHour, number}} créditos a cada 5 horas, {{weekly, number}} por semana e {{monthly, number}} por mês, e um multiplicador como 5x amplia as três janelas dessa franquia.",
   "flagshipShare": "No {{baseline}} e nos planos acima, os modelos mais capazes podem usar até {{percent}}% dos créditos de cada semana.",
   "switchToPlanCta": "Mudar para o {{plan}}",
-  "downgradeScheduledToast": "Seu plano muda para o {{plan}} em {{date}}."
+  "downgradeScheduledToast": "Seu plano muda para o {{plan}} em {{date}}.",
+  "pricingFootnote": "Os preços exibidos não incluem os impostos aplicáveis. Os pagamentos não são reembolsáveis, exceto quando nossa política de reembolso disser o contrário ou quando a lei local exigir.",
+  "refundPolicyLink": "Política de reembolso"
 }

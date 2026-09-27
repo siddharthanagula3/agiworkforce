@@ -520,25 +520,14 @@ async function planLimitRefusal(
   return error;
 }
 
-/** Headroom is the lesser of what is left and what was purchased, never more. */
 async function resolveOverageHeadroomMicrousd(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<number> {
   try {
     const rows = await db.query<{ headroom_microusd: number | string | null }>(
-      `select greatest(
-                least(
-                  credits.credits_allocated_microusd - credits.credits_used_microusd,
-                  credits.top_up_allocated_microusd
-                ), 0) as headroom_microusd
-         from public.token_credits credits
-         join public.subscriptions subscription on subscription.user_id = credits.user_id
-        where credits.user_id = $1
-          and credits.period_end > now()
-          and subscription.overage_enabled
-        order by credits.period_end desc
-        limit 1`,
+      `select balances.overage_headroom_microusd as headroom_microusd
+         from public.prepaid_credit_balances_microusd($1::text) balances`,
       [userId],
     );
     const value = Number(rows[0]?.headroom_microusd ?? 0);

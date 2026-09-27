@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
+import { attributeReferralFromRequest } from '@/lib/services/referral-attribution';
 
 const AcceptTermsSchema = z.object({
   surface: z.enum(['web-signup', 'web-login']),
@@ -42,6 +43,7 @@ async function handleAcceptTerms(request: NextRequest) {
     if (parsed.data.surface === 'web-signup') {
       trackProductAnalyticsEvent({ userId }, { name: 'signup', surface: 'web' });
     }
+    await attributeReferralFromRequest(request, userId);
     return NextResponse.json({
       version: acceptance.version,
       acceptedAt: acceptance.acceptedAt,

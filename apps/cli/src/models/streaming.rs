@@ -95,6 +95,87 @@ fn notify_tools_dropped(model: &str, reason: &str) {
     }
 }
 
+const QUOTA_WARNING_EVENT: &str = "quota_warning";
+
+static LAST_QUOTA_WARNING: std::sync::Mutex<Option<(String, String)>> = std::sync::Mutex::new(None);
+
+fn quota_warning_scope_label(scope: &str) -> Option<&'static str> {
+    match scope {
+        "rolling_five_hour" => Some("5-hour window"),
+        "rolling_weekly" => Some("weekly allowance"),
+        "billing_period" => Some("monthly allowance"),
+        _ => None,
+    }
+}
+
+fn notify_quota_warning(data: &serde_json::Value) {
+    let Some(header) = data.get("value").and_then(|value| value.as_str()) else {
+        return;
+    };
+    let fields: HashMap<&str, &str> = header
+        .split(';')
+        .filter_map(|part| part.split_once('='))
+        .map(|(key, value)| (key.trim(), value.trim()))
+        .collect();
+    let (Some(level), Some(scope), Some(used)) = (
+        fields.get("level").copied(),
+        fields.get("scope").copied(),
+        fields
+            .get("used_percent")
+            .and_then(|value| value.parse::<u32>().ok()),
+    ) else {
+        return;
+    };
+    let Some(window) = quota_warning_scope_label(scope) else {
+        return;
+    };
+    let key = (scope.to_string(), level.to_string());
+    let Ok(mut last) = LAST_QUOTA_WARNING.lock() else {
+        return;
+    };
+    if last.as_ref() == Some(&key) {
+        return;
+    }
+    *last = Some(key);
+    drop(last);
+    let msg = format!(
+        "You have used {}% of your {window}. Run `agi usage` to see what is left.",
+        used.min(100)
+    );
+    if crate::tui::tui_active() {
+        crate::tui::push_tui_notice(msg);
+    } else {
+        eprintln!("AGI: {msg}");
+    }
+}
+
+async fn with_usage_limit_context(error: anyhow::Error, jwt: &str) -> anyhow::Error {
+    let code = match error.downcast_ref::<CliError>() {
+        Some(CliError::UsageLimit { code, .. }) => code.clone(),
+        _ => return error,
+    };
+    let context = crate::usage_summary::usage_limit_context(jwt, &code).await;
+    match error.downcast::<CliError>() {
+        Ok(CliError::UsageLimit {
+            code,
+            message,
+            recovery_href,
+            retry_after,
+            ..
+        }) => CliError::UsageLimit {
+            code,
+            message,
+            recovery_href,
+            retry_after,
+            resets_in: context.resets_in,
+            alternative_model: context.alternative_model,
+        }
+        .into(),
+        Ok(other) => other.into(),
+        Err(error) => error,
+    }
+}
+
 /// Attempt to parse a paywall JSON body returned by the AGI Workforce managed-cloud
 /// API (`/api/llm/v1/chat/completions`) when a user exceeds 150 % of their tier quota.
 ///
@@ -143,6 +224,13 @@ fn map_llm_error(err: LlmError) -> anyhow::Error {
             required_tier,
             reason,
         } => CliError::paywall(feature, required_tier, reason).into(),
+        LlmError::UsageLimit {
+            code,
+            message,
+            recovery_href,
+            retry_after,
+            ..
+        } => CliError::usage_limit(code, message, recovery_href, retry_after).into(),
         // "Streaming timed out: no data received for 5 minutes" for the CLI's
         // 300s window, same text as the historical `bail!`.
         err @ LlmError::IdleTimeout { .. } => anyhow::anyhow!("{err}"),
@@ -163,7 +251,15 @@ fn completion_result_from(outcome: ChatOutcome) -> CompletionResult {
         stop_reason: outcome.stop_reason,
         stop: outcome.stop,
         reasoning_output_tokens: outcome.usage.reasoning_output_tokens,
+        managed_request_id: None,
     }
+}
+
+fn managed_request_id(spec: &ProviderSpec) -> Option<String> {
+    spec.extra_headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("Idempotency-Key"))
+        .map(|(_, value)| value.clone())
 }
 
 // ---------------------------------------------------------------------------
@@ -354,10 +450,12 @@ async fn run_spec(
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
-    let mut on_event = |event: StreamEvent| {
-        if let StreamEvent::TextDelta { text } = event {
-            on_chunk(&text);
+    let mut on_event = |event: StreamEvent| match event {
+        StreamEvent::TextDelta { text } => on_chunk(&text),
+        StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
+            notify_quota_warning(&data)
         }
+        _ => {}
     };
     match stream_chat(client, spec, &req, &mut on_event).await {
         Ok(outcome) => Ok(completion_result_from(outcome)),
@@ -423,7 +521,8 @@ pub async fn stream_completion(
     match provider {
         Provider::ManagedCloud => {
             let spec = managed_cloud_spec(key)?;
-            run_spec(
+            let request_id = managed_request_id(&spec);
+            match run_spec(
                 &client,
                 &spec,
                 model,
@@ -436,6 +535,13 @@ pub async fn stream_completion(
                 effort,
             )
             .await
+            {
+                Ok(mut completed) => {
+                    completed.managed_request_id = request_id;
+                    Ok(completed)
+                }
+                Err(error) => Err(with_usage_limit_context(error, key).await),
+            }
         }
         Provider::Anthropic => {
             run_spec(
