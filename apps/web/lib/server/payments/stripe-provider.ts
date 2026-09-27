@@ -9,6 +9,10 @@ import type {
   TopUpReceiptStatus,
 } from '@/features/billing/lib/billing-account-types';
 import { buildPaymentIntentTaxCalculationParams } from '@/lib/billing/tax-policy';
+import {
+  WITHDRAWAL_CONSENT_AT_KEY,
+  WITHDRAWAL_CONSENT_VERSION_KEY,
+} from '@/lib/billing/withdrawal-consent';
 import { logger } from '@/lib/logger';
 import { getStripeClient, getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
@@ -31,9 +35,10 @@ import type {
   NormalizedMoney,
   NormalizedPayment,
   NormalizedPaymentStatus,
-  NormalizedPeriod,
   NormalizedPurchase,
   NormalizedSubscription,
+  NormalizedSubscriptionPayment,
+  NormalizedWithdrawalConsent,
   OffSessionChargeInput,
   OffSessionChargeResult,
   PollablePaymentProvider,
@@ -458,6 +463,20 @@ function purchasedLedgerCentsOf(charge: Stripe.Charge): number | null {
   return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
 }
 
+function withdrawalConsentOf(
+  metadata: Stripe.Metadata | null | undefined,
+): NormalizedWithdrawalConsent | null {
+  const version = metadata?.[WITHDRAWAL_CONSENT_VERSION_KEY]?.trim();
+  const acceptedAt = new Date(metadata?.[WITHDRAWAL_CONSENT_AT_KEY] ?? '');
+  if (!version || !Number.isFinite(acceptedAt.getTime())) return null;
+  return { version, acceptedAt };
+}
+
+function paymentMetadataOf(charge: Stripe.Charge): Stripe.Metadata | null {
+  const paymentIntent = charge.payment_intent;
+  return paymentIntent && typeof paymentIntent !== 'string' ? paymentIntent.metadata : null;
+}
+
 export function normalizeStripeCharge(charge: Stripe.Charge): NormalizedCharge | null {
   const amount = normalizeMoney(charge.amount, charge.currency);
   if (!amount) return null;
@@ -476,6 +495,7 @@ export function normalizeStripeCharge(charge: Stripe.Charge): NormalizedCharge |
     cardCountry: countryCodeOf(charge.payment_method_details?.card?.country),
     receiptUrl: charge.receipt_url ?? null,
     purchasedLedgerCents: topUp ? purchasedLedgerCentsOf(charge) : null,
+    withdrawalConsent: topUp ? withdrawalConsentOf(paymentMetadataOf(charge)) : null,
   };
 }
 
@@ -485,7 +505,9 @@ export function isStripeConfigured(): boolean {
 
 export async function retrieveStripeCharge(reference: string): Promise<NormalizedCharge | null> {
   try {
-    return normalizeStripeCharge(await getStripeClient().charges.retrieve(reference));
+    return normalizeStripeCharge(
+      await getStripeClient().charges.retrieve(reference, { expand: ['payment_intent'] }),
+    );
   } catch (error) {
     if (isStripeResourceMissing(error)) return null;
     throw error;
@@ -496,7 +518,11 @@ export async function listStripeCustomerCharges(
   customerReference: string,
   limit: number,
 ): Promise<NormalizedCharge[]> {
-  const page = await getStripeClient().charges.list({ customer: customerReference, limit });
+  const page = await getStripeClient().charges.list({
+    customer: customerReference,
+    limit,
+    expand: ['data.payment_intent'],
+  });
   return page.data.flatMap((charge) => {
     const normalized = normalizeStripeCharge(charge);
     return normalized ? [normalized] : [];
@@ -530,10 +556,11 @@ export async function readStripeCustomerCountry(customerReference: string): Prom
   }
 }
 
-export async function readStripePaymentServicePeriod(
+export async function readStripeSubscriptionPayment(
   paymentReference: string,
-): Promise<NormalizedPeriod | null> {
-  const payments = await getStripeClient().invoicePayments.list({
+): Promise<NormalizedSubscriptionPayment | null> {
+  const stripe = getStripeClient();
+  const payments = await stripe.invoicePayments.list({
     payment: { type: 'payment_intent', payment_intent: paymentReference },
     expand: ['data.invoice'],
     limit: 1,
@@ -544,7 +571,16 @@ export async function readStripePaymentServicePeriod(
     (found, line) => (found === null || line.period.end > found.period.end ? line : found),
     null,
   );
-  return latest ? normalizeProviderPeriod(latest.period.start, latest.period.end) : null;
+  const subscriptionReference = referenceOf(
+    invoice.parent?.subscription_details?.subscription as string | { id?: string } | undefined,
+  );
+  const subscription = subscriptionReference
+    ? await stripe.subscriptions.retrieve(subscriptionReference)
+    : null;
+  return {
+    servicePeriod: latest ? normalizeProviderPeriod(latest.period.start, latest.period.end) : null,
+    withdrawalConsent: withdrawalConsentOf(subscription?.metadata),
+  };
 }
 
 export async function refundStripeCharge(input: ChargeRefundInput): Promise<ChargeRefundResult> {
