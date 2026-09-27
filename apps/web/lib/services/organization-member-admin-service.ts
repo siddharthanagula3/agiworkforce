@@ -1,12 +1,20 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { OrganizationPermission, OrganizationRole } from '@agiworkforce/types';
+import {
+  BUILT_IN_ORGANIZATION_ROLES,
+  expandOrganizationPermissions,
+  type OrganizationPermission,
+  type OrganizationRole,
+} from '@agiworkforce/types';
 
 import { createError } from '@/lib/errors';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { assertOwnerProtection } from '@/lib/services/organization-delegation';
-import { requireMemberPermission } from '@/lib/services/organization-permission-service';
+import {
+  requireMemberPermission,
+  resolveOrganizationPermissions,
+} from '@/lib/services/organization-permission-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { assertMembershipRoleWithinActor } from '@/app/api/settings/team/membership-role-ceiling';
 
@@ -14,11 +22,14 @@ export type MemberAdministrator =
   | { kind: 'member'; userId: string }
   | { kind: 'service_principal'; actorId: string; scopes: ReadonlySet<OrganizationPermission> };
 
+export type WorkspaceMembershipStatus = 'invited' | 'active' | 'suspended' | 'deprovisioned';
+
 export interface WorkspaceMember {
   userId: string;
   email: string | null;
   name: string | null;
   role: OrganizationRole;
+  status: WorkspaceMembershipStatus;
   joinedAt: string;
   provisioningSource: string | null;
 }
@@ -39,6 +50,7 @@ interface Authority {
 interface WorkspaceMemberRow {
   user_id: string;
   role: OrganizationRole;
+  status: WorkspaceMembershipStatus;
   joined_at: string | Date;
   provisioning_source: string | null;
   email: string | null;
@@ -49,6 +61,10 @@ const MEMBER_COLUMNS =
   'organization_id, user_id, role, provisioning_source, provisioned_at, joined_at';
 
 const ROLES_A_KEY_MANAGES: ReadonlySet<OrganizationRole> = new Set(['member', 'viewer']);
+
+const MEMBER_ROLE_PERMISSIONS = expandOrganizationPermissions(
+  BUILT_IN_ORGANIZATION_ROLES.member.permissions,
+);
 
 export function memberAdministrator(caller: {
   kind: 'member' | 'service_principal';
@@ -66,6 +82,7 @@ function toWorkspaceMember(row: WorkspaceMemberRow): WorkspaceMember {
     email: row.email,
     name: row.display_name ?? row.email,
     role: row.role,
+    status: row.status,
     joinedAt: row.joined_at instanceof Date ? row.joined_at.toISOString() : row.joined_at,
     provisioningSource: row.provisioning_source,
   };
@@ -77,7 +94,8 @@ export async function listWorkspaceMembers(
   page: { limit: number; afterId: string | null; email: string | null },
 ): Promise<WorkspaceMemberPage> {
   const rows = await db.query<WorkspaceMemberRow>(
-    `select om.user_id, om.role, om.joined_at, om.provisioning_source, p.email, p.display_name
+    `select om.user_id, om.role, om.status, om.joined_at, om.provisioning_source,
+            p.email, p.display_name
        from public.organization_members om
        left join public.profiles p on p.id = om.user_id
       where om.organization_id = $1
@@ -103,10 +121,11 @@ export async function readWorkspaceMember(
   userId: string,
 ): Promise<WorkspaceMember | null> {
   const [row] = await db.query<WorkspaceMemberRow>(
-    `select om.user_id, om.role, om.joined_at, om.provisioning_source, p.email, p.display_name
+    `select om.user_id, om.role, om.status, om.joined_at, om.provisioning_source,
+            p.email, p.display_name
        from public.organization_members om
        left join public.profiles p on p.id = om.user_id
-      where om.organization_id = $1 and om.user_id = $2 and om.status = 'active'
+      where om.organization_id = $1 and om.user_id = $2
       limit 1`,
     [organizationId, userId],
   );
@@ -169,17 +188,21 @@ export function assertKeyMayAssignRole(
   }
 }
 
-function assertKeyMayActOn(
+async function assertKeyMayActOn(
   administrator: MemberAdministrator,
+  organizationId: string,
   target: OrganizationMemberRow,
-): void {
-  if (administrator.kind === 'service_principal' && !ROLES_A_KEY_MANAGES.has(target.role)) {
-    throw createError
-      .forbidden(
-        `A workspace API key cannot change or remove an ${target.role}. Do this in the workspace console.`,
-      )
-      .asUserSafe();
+): Promise<void> {
+  if (administrator.kind !== 'service_principal') return;
+  if (ROLES_A_KEY_MANAGES.has(target.role)) {
+    const held = await resolveOrganizationPermissions(organizationId, target.user_id);
+    if ([...held].every((permission) => MEMBER_ROLE_PERMISSIONS.has(permission))) return;
   }
+  throw createError
+    .forbidden(
+      'A workspace API key cannot change or remove an owner, an admin, or a member whose roles grant admin permissions. Do this in the workspace console.',
+    )
+    .asUserSafe();
 }
 
 async function assertOwnerInvariant(
@@ -243,7 +266,7 @@ export async function changeMemberRole(
       if (!target) {
         throw createError.notFound('Member not found in this organization');
       }
-      assertKeyMayActOn(input.administrator, target);
+      await assertKeyMayActOn(input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, input.role);
 
@@ -282,7 +305,7 @@ export async function removeMember(
       if (!target) {
         throw createError.notFound('Member not found in this organization');
       }
-      assertKeyMayActOn(input.administrator, target);
+      await assertKeyMayActOn(input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, null);
 

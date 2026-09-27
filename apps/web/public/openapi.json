@@ -956,7 +956,7 @@
       },
       "WorkspaceMember": {
         "type": "object",
-        "required": ["userId", "email", "name", "role", "joinedAt", "provisioningSource"],
+        "required": ["userId", "email", "name", "role", "status", "joinedAt", "provisioningSource"],
         "properties": {
           "userId": {
             "type": "string"
@@ -972,6 +972,10 @@
           "role": {
             "type": "string",
             "enum": ["owner", "admin", "member", "viewer"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["invited", "active", "suspended", "deprovisioned"]
           },
           "joinedAt": {
             "type": "string",
@@ -2593,7 +2597,7 @@
     "/settings/organization/members/{userId}": {
       "get": {
         "summary": "Get a workspace member",
-        "description": "One active member of the caller's workspace.",
+        "description": "One member of the caller's workspace in any membership status. The member list returns active members only.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -2658,7 +2662,7 @@
             }
           },
           "404": {
-            "description": "No active member with that id in this workspace",
+            "description": "No member with that id in this workspace",
             "content": {
               "application/json": {
                 "schema": {
@@ -2681,7 +2685,7 @@
       },
       "patch": {
         "summary": "Change a member's role",
-        "description": "Sets the member's role to `admin`, `member` or `viewer` and records `member_role_changed` in the audit trail. Ownership moves only through the transfer flow, so `owner` answers 409, and the owner's own role cannot be changed here. A role cannot carry permissions the caller does not hold. A workspace API key assigns only `member` and `viewer` and cannot change an admin or the owner; make those changes in the workspace console. A browser session sends `x-csrf-token`.",
+        "description": "Sets the member's role to `admin`, `member` or `viewer` and records `member_role_changed` in the audit trail. Ownership moves only through the transfer flow, so `owner` answers 409, and the owner's own role cannot be changed here. A role cannot carry permissions the caller does not hold. A workspace API key assigns only `member` and `viewer`, and cannot change an owner, an admin, or a member whose roles grant admin permissions; make those changes in the workspace console. A browser session sends `x-csrf-token`.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -2746,7 +2750,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, the role carries permissions the caller does not hold, only an owner may change an owner, or a workspace API key tried to assign `admin` or to change an admin or the owner",
+            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, the role carries permissions the caller does not hold, only an owner may change an owner, or a workspace API key tried to assign `admin` or to change an owner, an admin, or a member whose roles grant admin permissions",
             "content": {
               "application/json": {
                 "schema": {
@@ -2789,7 +2793,7 @@
       },
       "delete": {
         "summary": "Remove a member",
-        "description": "Removes the member from the workspace, revokes the sessions, device tokens and API keys they hold for it, and records `member_removed` in the audit trail. `warnings` names any credential that could not be revoked. A caller cannot remove themselves (they leave the workspace instead), and the last owner cannot be removed. A workspace API key removes only members and viewers. A browser session sends `x-csrf-token`.",
+        "description": "Removes the member from the workspace, revokes the sessions, device tokens and API keys they hold for it, and records `member_removed` in the audit trail. `warnings` names any credential that could not be revoked. A caller cannot remove themselves (they leave the workspace instead), and the last owner cannot be removed. A workspace API key removes only members and viewers whose roles grant no admin permissions. A browser session sends `x-csrf-token`.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -2844,7 +2848,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, only an owner may remove an owner, or a workspace API key tried to remove an admin or the owner",
+            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, only an owner may remove an owner, or a workspace API key tried to remove an owner, an admin, or a member whose roles grant admin permissions",
             "content": {
               "application/json": {
                 "schema": {
@@ -3166,7 +3170,7 @@
     "/settings/organization/usage-report": {
       "get": {
         "summary": "Get the per-member daily usage report",
-        "description": "Settled managed usage of the caller's workspace in UTC day buckets, with one row per member per day: requests, input and output tokens, and the credits consumed. `from` and `to` snap to UTC day boundaries and may span up to 366 days; `to` defaults to now. Each page holds up to `limit` buckets: while `hasMore` is true, repeat the request with `page` set to `nextPage`. A turn still in flight appears once it settles. The first page records a data access event in the audit trail.",
+        "description": "Settled managed usage of the caller's workspace in UTC day buckets, with one row per member per day: requests, input and output tokens, and the credits consumed. `from` and `to` snap to UTC day boundaries and may span up to 366 days; `to` defaults to now and never reaches past today. Each page holds up to `limit` buckets: while `hasMore` is true, repeat the request with `page` set to `nextPage`. A turn still in flight appears once it settles. The first page records a data access event in the audit trail.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -3231,7 +3235,7 @@
             }
           },
           "400": {
-            "description": "`from` is missing, a date does not parse, the window is empty or longer than 366 days, or `page` is not a page of this report",
+            "description": "`from` is missing or in the future, a date does not parse, the window is empty or longer than 366 days, or `page` is not a page of this report",
             "content": {
               "application/json": {
                 "schema": {

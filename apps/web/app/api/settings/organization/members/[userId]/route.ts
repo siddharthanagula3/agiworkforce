@@ -49,7 +49,7 @@ async function requireWorkspaceMember(
 ): Promise<WorkspaceMember> {
   const member = await readWorkspaceMember(getNeonDb(), organizationId, userId);
   if (!member) {
-    throw createError.notFound('No active member with that id in this workspace.');
+    throw createError.notFound('No member with that id in this workspace.');
   }
   return member;
 }
