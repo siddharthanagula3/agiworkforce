@@ -16,6 +16,7 @@ import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { readRequestingDeviceId } from '@/lib/device-steps/requesting-device';
 
 const SIGNALING_TIMEOUT_MS = 10_000;
 
@@ -95,6 +96,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Invalid pairing code' }, { status: 400 });
   }
 
+  const deviceId = await readRequestingDeviceId(db, request, userId);
+
   let signalingResponse: Response;
   try {
     signalingResponse = await fetch(
@@ -105,7 +108,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${signalingSecret}`,
         },
-        body: JSON.stringify({ role: 'mobile', accountId: userId }),
+        body: JSON.stringify({
+          role: 'mobile',
+          accountId: userId,
+          ...(deviceId ? { deviceId } : {}),
+        }),
         signal: AbortSignal.timeout(SIGNALING_TIMEOUT_MS),
       },
     );
