@@ -2,8 +2,8 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import {
-  calculateObservedProviderUsageCostDollars,
   finalizeObservedManagedUsage,
+  observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
@@ -329,7 +329,7 @@ export function buildManagedAgentStream(
         outcome,
         provider: serving.provider,
         model: serving.chatRequest.model,
-        measuredCostDollars: calculateObservedProviderUsageCostDollars(input.usage, {
+        cost: observedTurnCost(input.usage, {
           provider: serving.provider,
           model: serving.chatRequest.model,
         }),

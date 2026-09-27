@@ -54,19 +54,6 @@ Code: `apps/web/app/models/page.tsx:12-18`, `apps/web/app/api/llm/v1/models/rout
 | web | partial | L2: the auditor searched only PromptTemplate/SavedPrompt/prompt_templates and missed the repo's own vocabulary. CustomCommandsSettings (mounted in the settings modal General section) saves name + template, INPUT_TOKEN '{{input}}' is the argument slot, and ChatComposerNew.resolveSlashCommand substitutes the typed argument when /name is sent (2489-2500, consumed at 2594/2747). Same mechanism the auditor credited as done on the CLI cell; here it is chat-only and browser-local, so partial. Desktop is the hosted web app. |  |
 | desktop | partial | L2: the auditor searched only PromptTemplate/SavedPrompt/prompt_templates and missed the repo's own vocabulary. CustomCommandsSettings (mounted in the settings modal General section) saves name + template, INPUT_TOKEN '{{input}}' is the argument slot, and ChatComposerNew.resolveSlashCommand substitutes the typed argument when /name is sent (2489-2500, consumed at 2594/2747). Same mechanism the auditor credited as done on the CLI cell; here it is chat-only and browser-local, so partial. Desktop is the hosted web app. |  |
 
-## S105.18: Usage and cost dashboards.
-
-- Done when: Developers can see usage and cost over time, broken down by model.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | `agi usage` prints render_account_usage: plan, allowance windows (5-hour, weekly, monthly, purchased) and reset times (usage_summary.rs:232-300); nothing is broken down by model or shown over time, and the session cost ledger's by_model totals (cost_ledger.rs:176, 211, 226) are never rendered by any command (git grep by_model outside cost_ledger.rs: 0). /cost shows a single session total. The criterion's 'over time, broken down by model' is not met on the CLI. |  |
-| api | partial | API keys can read only the credit balance; usage and cost history by day or model is not exposed to API callers. | api |
-
-Code: `apps/cli/src/lib.rs:4049-4052`, `apps/cli/src/usage_summary.rs:210-220`, `apps/web/app/api/llm/v1/credits/balance/route.ts:20-30`
-
 ## S105.19: Rate-limit inspection.
 
 - Done when: Developers can see their rate limits and how close they are to them.

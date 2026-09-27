@@ -32,6 +32,11 @@ import {
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import {
+  hostedCodeExecutionEvidence,
+  priceServerToolUsage,
+} from '@/lib/services/managed-usage-accounting-service';
+import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 
 export async function buildNonStreamResponse(
@@ -48,6 +53,11 @@ export async function buildNonStreamResponse(
     cacheCreationInputTokens?: number;
     cacheCreation1hInputTokens?: number;
     cachedInputTokens?: number;
+    webSearchRequests?: number;
+    webFetchRequests?: number;
+    codeExecutionRequests?: number;
+    codeExecutionContainerIds?: string[];
+    providerElapsedMs?: number;
     citations?: unknown[];
     search_results?: unknown[];
   },
@@ -80,19 +90,32 @@ export async function buildNonStreamResponse(
     cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
     cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
   };
+  const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
+    codeExecutionRequests: llmResponse.codeExecutionRequests,
+    codeExecutionContainerIds: llmResponse.codeExecutionContainerIds,
+    elapsedMs: llmResponse.providerElapsedMs,
+  });
+  const serverTools = priceServerToolUsage({
+    provider,
+    webSearchRequests: llmResponse.webSearchRequests,
+    webFetchRequests: llmResponse.webFetchRequests,
+    hostedCodeExecution,
+    dynamicFilteringWebTool: offersDynamicFilteringWebTool(processed.llmRequest.tools),
+  });
+  const tokenProviderCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
+    provider,
+    llmResponse.model,
+    tokenUsage,
+    undefined,
+    buildServingRouteId(provider, llmResponse.model),
+  );
   const providerCostMicrousd = freeTrial
     ? 0
-    : LLMCostCalculator.calculateCostMicrousd(
-        provider,
-        llmResponse.model,
-        tokenUsage,
-        undefined,
-        buildServingRouteId(provider, llmResponse.model),
-      );
+    : tokenProviderCostMicrousd + serverTools.providerMicrousd;
   const billedCostMicrousd = freeTrial
     ? 0
     : (LLMCostCalculator.calculateListCostMicrousd(llmResponse.model, tokenUsage) ??
-      providerCostMicrousd);
+        tokenProviderCostMicrousd) + serverTools.chargeMicrousd;
 
   const cpstUsage = buildCpstUsageFields(processed, { billingOutcome: 'completed' });
 
@@ -120,6 +143,11 @@ export async function buildNonStreamResponse(
         cacheReadTokens: llmResponse.cachedInputTokens,
         cacheWriteTokens: llmResponse.cacheCreationInputTokens,
         cacheWrite1hTokens: llmResponse.cacheCreation1hInputTokens,
+        ...(llmResponse.webSearchRequests
+          ? { webSearchRequests: llmResponse.webSearchRequests }
+          : {}),
+        ...(llmResponse.webFetchRequests ? { webFetchRequests: llmResponse.webFetchRequests } : {}),
+        ...(hostedCodeExecution ? { hostedCodeExecution } : {}),
         ...compactionUsageFields(processed.contextTrim),
         ...cpstUsage,
       },
@@ -200,6 +228,10 @@ export async function buildNonStreamResponse(
       outcome: 'completed',
       provider,
       model: llmResponse.model,
+      cost: {
+        tokenMicrousd: tokenProviderCostMicrousd,
+        toolMicrousd: serverTools.providerMicrousd,
+      },
       usage: {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,

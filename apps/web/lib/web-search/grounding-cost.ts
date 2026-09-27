@@ -1,18 +1,18 @@
 import 'server-only';
 
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  MICROUSD_PER_CENT,
+  chargeMicrousdForProviderCost,
   MICROUSD_PER_USD,
-  RATE_CARD_PROVIDER_COGS_ENV,
   resolveFeatureRate,
 } from '@agiworkforce/types';
 
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { logger } from '@/lib/logger';
-import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { settleSearchCall, type SearchAdmission } from '@/lib/web-search/search-budget';
 import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
 
 export const GOOGLE_GROUNDING_FEATURE = 'web_search_grounding';
-export const GOOGLE_GROUNDING_UNIT_PRICE_ENV = RATE_CARD_PROVIDER_COGS_ENV.web_search_grounding;
 const GOOGLE_GROUNDING_TOOL_NAME = 'google_search_grounding';
 const GROUNDING_COST_SOURCE_PREFIX = 'google_grounding';
 
@@ -27,7 +27,7 @@ export function googleGroundingMicrousdPerCall(model: string): number {
   const rate = resolveFeatureRate(GOOGLE_GROUNDING_FEATURE);
   if (rate.overrideInvalid) {
     logger.error(
-      { env: rate.overrideEnv, value: process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] },
+      { env: rate.overrideEnv },
       '[grounding] invalid unit price override; falling back to the published rate',
     );
   }
@@ -36,63 +36,45 @@ export function googleGroundingMicrousdPerCall(model: string): number {
   return Math.round((tier.usdPerThousandBeyondPool / REQUESTS_PER_PRICED_BLOCK) * MICROUSD_PER_USD);
 }
 
-export function googleGroundingCostCents(billableCalls: number, model: string): number {
-  if (!Number.isFinite(billableCalls) || billableCalls <= 0) return 0;
-  return Math.round((billableCalls * googleGroundingMicrousdPerCall(model)) / MICROUSD_PER_CENT);
+export function googleGroundingChargeMicrousd(model: string, groundedUses: number): number {
+  if (!Number.isFinite(groundedUses) || groundedUses <= 0) return 0;
+  return chargeMicrousdForProviderCost(groundedUses * googleGroundingMicrousdPerCall(model));
 }
 
-export interface GoogleGroundingCostInput {
+export interface GoogleGroundingSettlement {
   userId: string;
   organizationId?: string | null;
+  admission: SearchAdmission;
   providerId: string;
   model: string;
   turnRef: string;
+  settlementRef: number;
   billableCalls: number;
   delivered: boolean;
-  /** The client surface the turn came from, so interactive and automated search can be told apart. */
   surface?: string | null;
-  /** What the customer was charged for these calls, when the surface is not one that includes search. */
-  customerChargeCents?: number | null;
+  attribution?: UsageAttribution;
+  db: DatabaseAdapter;
 }
 
-/**
- * Records the portion of one turn's grounded Google search responses that
- * landed beyond the free pool for `model`'s pricing tier. A within-pool
- * grounded response costs nothing and is never passed here; `billableCalls`
- * is already that difference (`reserveGroundingPoolUses`'s `billableCalls`).
- */
-export async function recordGoogleGroundingCost(input: GoogleGroundingCostInput): Promise<void> {
-  if (!Number.isFinite(input.billableCalls) || input.billableCalls <= 0) return;
-
-  const costCents = googleGroundingCostCents(input.billableCalls, input.model);
-  try {
-    await recordSettledProviderCost({
-      userId: input.userId,
-      organizationId: input.organizationId ?? null,
-      provider: input.providerId,
-      model: input.model,
-      actualCostCents: costCents,
-      sourceRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}`,
-      taskOutcome: input.delivered ? 'delivered' : 'undelivered',
-      taskRef: input.turnRef,
-      feature: GOOGLE_GROUNDING_FEATURE,
-      surface: input.surface ?? null,
-      customerCanonicalCents: input.customerChargeCents ?? null,
-      usage: {
-        operation: 'tool',
-        tool: GOOGLE_GROUNDING_TOOL_NAME,
-        requests: input.billableCalls,
-        unitPriceEnv: GOOGLE_GROUNDING_UNIT_PRICE_ENV,
-      },
-    });
-  } catch (error) {
-    logger.error(
-      {
-        error: error instanceof Error ? error.message : String(error),
-        turnRef: input.turnRef,
-        provider: input.providerId,
-      },
-      '[grounding] could not record the Google grounding cost event',
-    );
-  }
+export function settleGoogleGroundingSpend(input: GoogleGroundingSettlement): Promise<void> {
+  const billableCalls =
+    Number.isFinite(input.billableCalls) && input.billableCalls > 0 ? input.billableCalls : 0;
+  return settleSearchCall({
+    userId: input.userId,
+    organizationId: input.organizationId ?? null,
+    admission: input.admission,
+    feature: GOOGLE_GROUNDING_FEATURE,
+    provider: input.providerId,
+    model: input.model,
+    tool: GOOGLE_GROUNDING_TOOL_NAME,
+    calls: billableCalls,
+    providerCostMicrousd: billableCalls * googleGroundingMicrousdPerCall(input.model),
+    charged: true,
+    delivered: input.delivered,
+    costRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}:${input.settlementRef}`,
+    taskRef: input.turnRef,
+    surface: input.surface ?? null,
+    ...(input.attribution ? { attribution: input.attribution } : {}),
+    db: input.db,
+  });
 }
