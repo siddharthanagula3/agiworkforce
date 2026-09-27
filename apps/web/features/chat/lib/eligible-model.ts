@@ -1,18 +1,10 @@
-import { getModelMetadataById, getModelRegistryFacts, getSlotForModel } from '@agiworkforce/types';
+import { getModelMetadataById, getModelRegistryFacts } from '@agiworkforce/types';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
-
-const FLAGSHIP_ROUTING_SLOTS: ReadonlySet<string> = new Set([
-  'flagship_coding_pro_plus',
-  'flagship_general_pro_plus',
-]);
+import { isFlagshipModel } from '@/lib/billing/flagship-models';
 
 export interface EligibleModel {
   id: string;
   name: string;
-}
-
-function isFlagshipModel(modelId: string): boolean {
-  return FLAGSHIP_ROUTING_SLOTS.has(getSlotForModel(modelId) ?? '');
 }
 
 function isRouterModel(modelId: string): boolean {
