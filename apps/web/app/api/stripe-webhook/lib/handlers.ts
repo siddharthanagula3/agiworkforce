@@ -14,6 +14,7 @@ import {
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
+import { handleAutoReloadEvent } from './auto-reload-events';
 import { topUpChargedCents } from '@agiworkforce/types';
 import {
   endEnterpriseContractIfPresent,
@@ -71,6 +72,7 @@ export async function dispatchStripeEvent(
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
+  if (await handleAutoReloadEvent(db, event)) return;
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
