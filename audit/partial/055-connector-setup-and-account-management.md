@@ -279,15 +279,14 @@ Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:83
 
 - Done when: The user controls whether a connector's write actions run automatically, need approval, or are blocked.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Per-tool Allow/Ask/Block works and Block is enforced server-side, but the consent copy says every connector call asks every time, while tools left unset run without asking in scheduled runs (auto approval mode) and saved Allow skips the prompt. | states |
-| desktop | partial | Per-tool Allow/Ask/Block works and Block is enforced server-side, but the consent copy says every connector call asks every time, while tools left unset run without asking in scheduled runs (auto approval mode) and saved Allow skips the prompt. | states |
 | mobile | partial | Mobile lists only rows already in connector_tool_permissions (GET /api/connectors/permissions returns saved rows only; rows are created only by the upsert route, which mobile calls for existing rows). A connector whose tools were never set on web shows no tool to control, so mobile cannot set auto/approval/block on its own; the auditor rated S55.26 mobile partial for this same reason. |  |
 | cli | partial | Every MCP tool call asks (fail closed); there is no standing per-tool allow or block for MCP tools (`agi approvals` rules are shell command prefixes). | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:830-836`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/web/features/connectors/components/ConnectorConsentSummary.tsx:7-10`, `apps/web/features/connectors/data/connectors.ts:77-81`
+Code: `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:53-56`, `apps/mobile/src/features/settings/cloud-connectors/ConnectorDetailScreen.tsx:278-282`, `apps/web/app/api/connectors/permissions/route.ts:59-69`, `apps/cli/src/agent/tools.rs:134-142`
 
 ## S55.28: Data-retention explanation.
 

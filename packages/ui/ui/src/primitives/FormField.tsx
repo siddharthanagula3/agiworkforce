@@ -125,7 +125,7 @@ function FormField({
           className={cn(
             className,
             displayError && 'border-destructive focus-visible:ring-destructive',
-            isValid && 'border-green-500 focus-visible:ring-green-500',
+            isValid && 'border-success-fill focus-visible:ring-success-fill',
             showValidationIcon && (displayError || isValid) && 'pr-10',
           )}
           onChange={handleChange}
@@ -141,7 +141,7 @@ function FormField({
 
         {showValidationIcon && isValid && !displayError && (
           <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-            <CheckCircle2 className="h-4 w-4 text-green-500" aria-hidden="true" />
+            <CheckCircle2 className="h-4 w-4 text-success-text" aria-hidden="true" />
           </div>
         )}
       </div>

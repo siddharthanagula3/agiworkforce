@@ -145,6 +145,7 @@ import {
   NATIVE_BROWSER_POLL_MESSAGE,
   NATIVE_BROWSER_RESULT_MESSAGE,
   NATIVE_BROWSER_UNPAIR_MESSAGE,
+  NATIVE_PAGE_CAPTURE_MESSAGE,
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
   type SitePolicyAdminState,
@@ -4759,7 +4760,12 @@ async function captureCurrentPage(): Promise<void> {
     const tabId = tab.id;
     await deliverPageCapture({
       send: () =>
-        sendNativeRequest({ type: 'page_capture', dataUrl, tabId, timestamp: Date.now() }),
+        sendNativeRequest({
+          type: NATIVE_PAGE_CAPTURE_MESSAGE,
+          dataUrl,
+          tabId,
+          timestamp: Date.now(),
+        }),
       readActionCount: async () => {
         const stats = await storageUtils.getItem<{ actionCount: number }>('stats', {
           actionCount: 0,

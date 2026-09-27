@@ -68,15 +68,18 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
   return (
     <div
       className={cn(
-        'flex h-10 w-full items-center gap-3 border-t border-white/10 px-4',
-        'bg-[#0d0e18] shrink-0',
+        'flex h-10 w-full items-center gap-3 border-t border-[var(--chat-border-subtle)] px-4',
+        'bg-[var(--chat-surface-elevated)] shrink-0',
       )}
       role="status"
       aria-live="polite"
       aria-label={`Agent executing: ${description}`}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-400" aria-hidden="true" />
+        <Loader2
+          className="h-3.5 w-3.5 shrink-0 animate-spin text-teal-700 dark:text-teal-400"
+          aria-hidden="true"
+        />
         <span className="truncate text-xs font-medium text-foreground" title={description}>
           {description}
         </span>
@@ -87,7 +90,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
           <span className="text-caption font-medium tabular-nums text-muted-foreground">
             Step {completedSteps}/{totalSteps}
           </span>
-          <div className="h-1 w-24 overflow-hidden rounded-full bg-white/10">
+          <div className="h-1 w-24 overflow-hidden rounded-full bg-[var(--chat-surface-hover)]">
             <div
               className="h-full rounded-full bg-teal-500 transition-all duration-moved ease-standard"
               style={{ width: `${progressWidth}%` }}
@@ -108,7 +111,7 @@ export function AgentProgressFooter({ onExpandSidecar }: AgentProgressFooterProp
           onClick={onExpandSidecar}
           className={cn(
             'rounded-compact p-1 text-muted-foreground transition-colors',
-            'hover:bg-white/10 hover:text-foreground',
+            'hover:bg-[var(--chat-surface-hover)] hover:text-foreground',
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-teal-500',
           )}
           aria-label="Open execution panel"

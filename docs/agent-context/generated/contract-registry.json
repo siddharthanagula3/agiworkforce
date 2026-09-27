@@ -24,6 +24,7 @@
     "client-capability-manifest",
     "client-failures",
     "cloud-code",
+    "cloud-task-handoff-uri",
     "command-capabilities",
     "concept-registry",
     "content-safety",

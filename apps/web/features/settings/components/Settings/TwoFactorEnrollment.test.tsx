@@ -4,8 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const service = vi.hoisted(() => ({
   get2FAStatus: vi.fn(),
-  setup2FA: vi.fn(),
   verify2FA: vi.fn(),
+}));
+const reverification = vi.hoisted(() => ({
+  start: vi.fn(),
+  sendEmailCode: vi.fn(),
+  verifyPassword: vi.fn(),
+  verifyEmailCode: vi.fn(),
+  verifyPasskey: vi.fn(),
+  verifySecondFactor: vi.fn(),
+  freshToken: vi.fn(),
 }));
 
 vi.mock('@features/settings/services/user-preferences', () => ({
@@ -14,6 +22,10 @@ vi.mock('@features/settings/services/user-preferences', () => ({
 }));
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'session-token') }));
 vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+vi.mock('@/lib/identity/client', () => ({
+  useSessionReverification: () => reverification,
+  useSignOut: () => vi.fn(),
+}));
 
 import { STEP_UP_TOKEN_HEADER } from '@/features/auth/step-up-fetch';
 import { TwoFactorEnrollmentPanel } from './TwoFactorEnrollment';
@@ -25,8 +37,21 @@ function stepUpRefusal(action: string, consequence: string) {
     JSON.stringify({
       error: {
         code: 'STEP_UP_REQUIRED',
-        message: 'Confirm it is you with a second factor before completing this action.',
+        message: 'Confirm it is you before completing this action.',
         details: { reason: 'step_up_required', action, consequence, freshnessSeconds: 300 },
+      },
+    }),
+    { status: 403, headers: { 'content-type': 'application/json' } },
+  );
+}
+
+function verificationRequired(action: string) {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'STEP_UP_VERIFICATION_REQUIRED',
+        message: 'Confirm it is you with your authenticator app or a backup code.',
+        details: { action, level: 'second_factor' },
       },
     }),
     { status: 403, headers: { 'content-type': 'application/json' } },
@@ -46,31 +71,33 @@ function headersOf(call: unknown[] | undefined): Record<string, string> {
 
 const SECRET = 'JBSWY3DPEHPK3PXP';
 const OTPAUTH = `otpauth://totp/AGI%20Workforce:user@example.com?secret=${SECRET}&issuer=AGI%20Workforce&algorithm=SHA1&digits=6&period=30`;
-const BACKUP_CODES = ['AAAA-1111', 'BBBB-2222', 'CCCC-3333'];
+const BACKUP_CODES = ['aaaa2345', 'bbbb6789', 'cccc2345'];
 
 function disabledStatus() {
-  return { data: { enabled: false, backupCodesRemaining: 0 } };
+  return { data: { enabled: false, backupCodesReady: false } };
 }
 
-function enabledStatus(backupCodesRemaining = 3) {
-  return {
-    data: {
-      enabled: true,
-      enabledAt: '2026-08-05T00:00:00.000Z',
-      backupCodesRemaining,
-    },
-  };
+function enabledStatus(backupCodesReady = true) {
+  return { data: { enabled: true, backupCodesReady } };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
+  fetchMock.mockImplementation(async (url: string) =>
+    url === '/api/settings/2fa/setup'
+      ? jsonOk({ secret: SECRET, otpauth_url: OTPAUTH })
+      : jsonOk({}),
+  );
   service.get2FAStatus.mockResolvedValue(disabledStatus());
-  service.setup2FA.mockResolvedValue({
-    data: { secret: SECRET, otpauthUrl: OTPAUTH, backupCodes: BACKUP_CODES },
+  service.verify2FA.mockResolvedValue({ backupCodes: BACKUP_CODES });
+  reverification.start.mockResolvedValue({
+    kind: 'second_factor',
+    methods: ['authenticator', 'backup_code'],
   });
-  service.verify2FA.mockResolvedValue({ success: true });
+  reverification.verifySecondFactor.mockResolvedValue({ kind: 'complete' });
+  reverification.freshToken.mockResolvedValue('fresh-session-token');
 });
 
 afterEach(() => {
@@ -89,7 +116,12 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
     service.get2FAStatus.mockResolvedValue(enabledStatus());
     await user.click(setupButton);
 
-    await waitFor(() => expect(service.setup2FA).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/settings/2fa/setup',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
 
     expect(await screen.findByTestId('totp-secret')).toHaveTextContent(SECRET);
     expect(
@@ -110,11 +142,7 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
 
   it('keeps 2FA off and explains the failure when the server rejects the code', async () => {
     const user = userEvent.setup();
-    service.verify2FA.mockResolvedValue({
-      success: false,
-      error: 'Authentication required',
-      status: 401,
-    });
+    service.verify2FA.mockResolvedValue({ error: 'Authentication required', status: 401 });
 
     render(<TwoFactorEnrollmentPanel />);
 
@@ -131,11 +159,7 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
 
   it('reports the rate limit truthfully instead of a generic failure', async () => {
     const user = userEvent.setup();
-    service.verify2FA.mockResolvedValue({
-      success: false,
-      error: 'Too many requests',
-      status: 429,
-    });
+    service.verify2FA.mockResolvedValue({ error: 'Too many requests', status: 429 });
 
     render(<TwoFactorEnrollmentPanel />);
 
@@ -148,10 +172,12 @@ describe('TwoFactorEnrollmentPanel · enable', () => {
 
   it('explains a temporary setup outage without exposing configuration details', async () => {
     const user = userEvent.setup();
-    service.setup2FA.mockResolvedValue({
-      error: 'An unexpected error occurred',
-      status: 503,
-    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: { message: 'An unexpected error occurred' } }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
 
     render(<TwoFactorEnrollmentPanel />);
     await user.click(await screen.findByRole('button', { name: /set up authenticator app/i }));
@@ -188,7 +214,7 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
 
     await waitFor(() => expect(screen.queryByRole('list', { name: /Backup codes/i })).toBeNull());
     expect(screen.queryByText(BACKUP_CODES[0]!)).toBeNull();
-    expect(await screen.findByText(/3 backup codes remaining/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Backup codes are set/i)).toBeInTheDocument();
   });
 
   async function reachBackupCodes() {
@@ -288,8 +314,9 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
           'Your existing backup codes stop working immediately.',
         ),
       )
+      .mockResolvedValueOnce(verificationRequired('two_factor.regenerate_backup_codes'))
       .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
-      .mockResolvedValueOnce(jsonOk({ backup_codes: ['ZZZZ-9999'] }));
+      .mockResolvedValueOnce(jsonOk({ backup_codes: ['zzzz9999'] }));
 
     render(<TwoFactorEnrollmentPanel />);
 
@@ -298,30 +325,33 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
     expect(
       await screen.findByText(/Your existing backup codes stop working immediately/i),
     ).toBeInTheDocument();
-    await user.type(await screen.findByLabelText(/Authenticator or backup code/i), '654321');
+    await user.type(await screen.findByLabelText(/Code from your authenticator app/i), '654321');
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
     expect(
       await screen.findByText(/Your previous backup codes have been invalidated/i),
     ).toBeInTheDocument();
     expect(await screen.findByRole('list', { name: /Backup codes/i })).toHaveTextContent(
-      'ZZZZ-9999',
+      'zzzz9999',
     );
 
-    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/auth/step-up');
-    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/settings/2fa/backup-codes');
-    expect(headersOf(fetchMock.mock.calls[2])[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
+    expect(reverification.verifySecondFactor).toHaveBeenCalledWith('authenticator', '654321');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/auth/step-up');
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/settings/2fa/backup-codes');
+    expect(headersOf(fetchMock.mock.calls[3])[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
   });
 
   it('keeps the old codes when the challenge is dismissed', async () => {
     const user = userEvent.setup();
     service.get2FAStatus.mockResolvedValue(enabledStatus());
-    fetchMock.mockResolvedValue(
-      stepUpRefusal(
-        'two_factor.regenerate_backup_codes',
-        'Your existing backup codes stop working immediately.',
-      ),
-    );
+    fetchMock
+      .mockResolvedValueOnce(
+        stepUpRefusal(
+          'two_factor.regenerate_backup_codes',
+          'Your existing backup codes stop working immediately.',
+        ),
+      )
+      .mockResolvedValueOnce(verificationRequired('two_factor.regenerate_backup_codes'));
 
     render(<TwoFactorEnrollmentPanel />);
 
@@ -329,11 +359,11 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
     await user.click(await screen.findByRole('button', { name: /^cancel$/i }));
 
     await waitFor(() =>
-      expect(screen.queryByLabelText(/Authenticator or backup code/i)).toBeNull(),
+      expect(screen.queryByLabelText(/Code from your authenticator app/i)).toBeNull(),
     );
     expect(screen.queryByRole('list', { name: /Backup codes/i })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -348,6 +378,7 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
           'Two-factor authentication is switched off for your account.',
         ),
       )
+      .mockResolvedValueOnce(verificationRequired('two_factor.disable'))
       .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
       .mockResolvedValueOnce(jsonOk({ success: true }));
 
@@ -358,19 +389,21 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
     expect(
       await screen.findByText(/Two-factor authentication is switched off for your account/i),
     ).toBeInTheDocument();
-    const confirm = screen.getByRole('button', { name: /^confirm$/i });
+    const confirm = await screen.findByRole('button', { name: /^confirm$/i });
     expect(confirm).toBeDisabled();
 
-    await user.type(screen.getByLabelText(/Authenticator or backup code/i), 'AAAA-1111');
+    await user.click(screen.getByRole('button', { name: /use a backup code instead/i }));
+    await user.type(screen.getByLabelText(/^Backup code$/i), 'aaaa2345');
     service.get2FAStatus.mockResolvedValue(disabledStatus());
-    await user.click(confirm);
+    await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
     expect(
       await screen.findByRole('button', { name: /set up authenticator app/i }),
     ).toBeInTheDocument();
+    expect(reverification.verifySecondFactor).toHaveBeenCalledWith('backup_code', 'aaaa2345');
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/settings/2fa');
     expect((fetchMock.mock.calls[0]?.[1] as RequestInit).body).toBeUndefined();
-    expect(headersOf(fetchMock.mock.calls[2])[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
+    expect(headersOf(fetchMock.mock.calls[3])[STEP_UP_TOKEN_HEADER]).toBe('grant.signature');
   });
 
   it('stays enabled and surfaces the failure when the replayed disable is rejected', async () => {
@@ -380,6 +413,7 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
       .mockResolvedValueOnce(
         stepUpRefusal('two_factor.disable', 'Two-factor authentication is switched off.'),
       )
+      .mockResolvedValueOnce(verificationRequired('two_factor.disable'))
       .mockResolvedValueOnce(jsonOk({ token: 'grant.signature' }))
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: { message: 'Authentication required' } }), {
@@ -391,35 +425,38 @@ describe('TwoFactorEnrollmentPanel · disable', () => {
     render(<TwoFactorEnrollmentPanel />);
 
     await user.click(await screen.findByRole('button', { name: /turn off two-factor/i }));
-    await user.type(await screen.findByLabelText(/Authenticator or backup code/i), '000000');
+    await user.type(await screen.findByLabelText(/Code from your authenticator app/i), '000000');
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
     expect(await screen.findByText(/That code was not accepted/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /set up authenticator app/i })).toBeNull();
   });
 
-  it('surfaces the server message when the code minting itself fails', async () => {
+  it('surfaces the server message when the proof cannot be issued', async () => {
     const user = userEvent.setup();
     service.get2FAStatus.mockResolvedValue(enabledStatus());
     fetchMock
       .mockResolvedValueOnce(
         stepUpRefusal('two_factor.disable', 'Two-factor authentication is switched off.'),
       )
+      .mockResolvedValueOnce(verificationRequired('two_factor.disable'))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: { message: 'That backup code has been spent.' } }), {
-          status: 401,
-          headers: { 'content-type': 'application/json' },
-        }),
+        new Response(
+          JSON.stringify({ error: { message: 'Too many attempts. Try again in a few minutes.' } }),
+          { status: 429, headers: { 'content-type': 'application/json' } },
+        ),
       );
 
     render(<TwoFactorEnrollmentPanel />);
 
     await user.click(await screen.findByRole('button', { name: /turn off two-factor/i }));
-    await user.type(await screen.findByLabelText(/Authenticator or backup code/i), '000000');
+    await user.type(await screen.findByLabelText(/Code from your authenticator app/i), '000000');
     await user.click(screen.getByRole('button', { name: /^confirm$/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('That backup code has been spent.');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Too many attempts. Try again in a few minutes.',
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 

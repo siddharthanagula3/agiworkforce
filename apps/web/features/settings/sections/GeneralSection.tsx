@@ -878,7 +878,7 @@ export function GeneralSection() {
               type="button"
               onClick={handleSave}
               disabled={!profilePreferencesReady || displayName.trim().length === 0 || saving}
-              className="rounded-md bg-amber-700 px-4 py-2 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
+              className="rounded-md bg-warning-fill px-4 py-2 text-[13px] font-semibold text-warning-on-fill transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
             >
               {saving ? 'Saving...' : 'Save profile'}
             </button>
@@ -924,7 +924,7 @@ export function GeneralSection() {
                     key={opt.value}
                     type="button"
                     onClick={() => setNextTheme(opt.value)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-amber-700 bg-amber-700 text-white' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-warning-fill bg-warning-fill text-warning-on-fill' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
                     title={opt.label}
                     aria-label={`${opt.label} theme`}
                     aria-pressed={isActive}

@@ -27,7 +27,12 @@ export async function refusePluginInstall(
 
   const surface = resolveCloudChatSurface(request);
   for (const feature of install.authorsSkills ? AUTHORED_SKILL_FEATURES : INSTALL_FEATURES) {
-    const refused = await buildWorkspaceFeatureGateResponse(scope.userId, request, feature, surface);
+    const refused = await buildWorkspaceFeatureGateResponse(
+      scope.userId,
+      request,
+      feature,
+      surface,
+    );
     if (refused) return refused;
   }
 

@@ -8,7 +8,4 @@ nothing is left.
 
 | Item | Surface | What would settle it |
 | --- | --- | --- |
-| S86.02: Password management. | web | external-service |
-| S86.02: Password management. | desktop | external-service |
-| S86.02: Password management. | mobile | external-service |
 | S86.03: Passkeys. | desktop | electron-build |

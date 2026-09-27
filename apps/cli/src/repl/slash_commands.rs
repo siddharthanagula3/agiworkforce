@@ -502,22 +502,24 @@ pub(super) async fn handle_slash_command(
         },
         "/theme" => {
             if arg.is_empty() {
-                output::print_info(
-                    "Available themes: dark | light | ansi | solarized-dark | solarized-light | colorblind\n  \
+                output::print_info(&format!(
+                    "Available themes: {}\n  \
                      Use /theme <name> to set directly.\n  \
                      In TUI mode, /theme (no arg) opens the interactive picker with live preview.",
-                );
+                    crate::tui::widgets::theme_picker::ThemeChoice::available()
+                ));
             } else {
                 use crate::tui::widgets::theme_picker::ThemeChoice;
                 match ThemeChoice::from_arg(arg) {
                     Some(choice) => {
                         // Apply it. This used to print a confirmation and change
                         // nothing, so the message was simply untrue.
-                        crate::tui::terminal_palette::set_active_theme(choice as u8);
+                        crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
                         output::print_info(&format!("Theme set to {}", choice.label()))
                     }
                     None => output::print_warn(&format!(
-                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                        "Unknown theme: '{arg}'. Available: {}",
+                        ThemeChoice::available()
                     )),
                 }
             }

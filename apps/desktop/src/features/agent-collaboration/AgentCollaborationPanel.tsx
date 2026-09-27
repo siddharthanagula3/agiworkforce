@@ -436,9 +436,9 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       case 'running':
         return <Loader2 className="h-3 w-3 animate-spin text-blue-400" />;
       case 'completed':
-        return <CheckCircle2 className="h-3 w-3 text-green-400" />;
+        return <CheckCircle2 className="h-3 w-3 text-success-text" />;
       case 'error':
-        return <AlertCircle className="h-3 w-3 text-red-400" />;
+        return <AlertCircle className="h-3 w-3 text-danger-text" />;
       default:
         return <Clock className="h-3 w-3 text-zinc-500" />;
     }
@@ -449,9 +449,9 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
       case 'task':
         return 'border-l-blue-500';
       case 'result':
-        return 'border-l-green-500';
+        return 'border-l-success-fill';
       case 'error':
-        return 'border-l-red-500';
+        return 'border-l-danger-fill';
       case 'coordination':
         return 'border-l-purple-500';
       default:
@@ -462,13 +462,13 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
   const getDelegationStatusColor = (status: TaskDelegation['status']) => {
     switch (status) {
       case 'pending':
-        return 'text-yellow-500 bg-yellow-500/10';
+        return 'text-warning-text bg-warning-fill/10';
       case 'running':
         return 'text-blue-500 bg-blue-500/10';
       case 'completed':
-        return 'text-green-500 bg-green-500/10';
+        return 'text-success-text bg-success-fill/10';
       case 'error':
-        return 'text-red-500 bg-red-500/10';
+        return 'text-danger-text bg-danger-fill/10';
     }
   };
 
@@ -508,7 +508,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
           {executing && (
             <button
               onClick={handleStop}
-              className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/10"
+              className="p-1.5 rounded text-danger-text hover:bg-danger-fill/10"
               title="Stop swarm"
             >
               <Square className="h-4 w-4" />
@@ -648,7 +648,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
                       <div className="h-1 rounded-full bg-muted overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
-                            agent.status === 'error' ? 'bg-red-500' : 'bg-blue-500'
+                            agent.status === 'error' ? 'bg-danger-fill' : 'bg-blue-500'
                           }`}
                           style={{ width: `${agent.progress}%` }}
                         />
@@ -803,7 +803,7 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
                       title="Copy results"
                     >
                       {resultsCopied ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-500" />
+                        <CheckCircle2 className="h-3 w-3 text-success-text" />
                       ) : (
                         <Copy className="h-3 w-3" />
                       )}
@@ -834,15 +834,15 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
                       key={`result-${idx}`}
                       className={`rounded-md border p-3 space-y-2 ${
                         r.success
-                          ? 'border-green-500/30 bg-green-500/5'
-                          : 'border-red-500/30 bg-red-500/5'
+                          ? 'border-success-fill/30 bg-success-fill/5'
+                          : 'border-danger-fill/30 bg-danger-fill/5'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         {r.success ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <CheckCircle2 className="h-4 w-4 text-success-text" />
                         ) : (
-                          <AlertCircle className="h-4 w-4 text-red-500" />
+                          <AlertCircle className="h-4 w-4 text-danger-text" />
                         )}
                         <span className="text-xs font-medium">
                           {r.success ? 'Completed Successfully' : 'Completed with Failures'}
@@ -854,10 +854,11 @@ export function AgentCollaborationPanel({ className }: AgentCollaborationPanelPr
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
                         <div>
                           Tasks succeeded:{' '}
-                          <span className="text-green-500 font-medium">{r.succeeded}</span>
+                          <span className="text-success-text font-medium">{r.succeeded}</span>
                         </div>
                         <div>
-                          Tasks failed: <span className="text-red-500 font-medium">{r.failed}</span>
+                          Tasks failed:{' '}
+                          <span className="text-danger-text font-medium">{r.failed}</span>
                         </div>
                         <div>
                           Wall time:{' '}

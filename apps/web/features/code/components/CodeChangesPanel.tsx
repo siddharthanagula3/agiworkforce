@@ -21,10 +21,15 @@ import {
   DropdownMenuTrigger,
   Spinner,
 } from '@agiworkforce/ui';
-import type { CloudCodeSession, CloudCodeTerminalEntry } from '@agiworkforce/types';
-import { CODE_COPY, CODE_LIMITS, changeStateLabel, repositoryLabel } from '../code-surface';
+import {
+  cloudCodePullRequestLabel,
+  cloudCodeRepositoryLabel,
+  type CloudCodeSession,
+  type CloudCodeTerminalEntry,
+} from '@agiworkforce/types';
+import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
+import { CODE_COPY, CODE_LIMITS, changeStateLabel, continueInVsCodeHref } from '../code-surface';
 import { diffByPath, diffLineKind } from '../code-diff';
-import type { CloudCodeChanges } from '../services/cloud-code-api';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -133,6 +138,7 @@ export function CodeChangesPanel({
 
   const ready = session.state === 'ready';
   const hasRepository = Boolean(session.repositoryUrl);
+  const vsCodeHref = hasRepository ? continueInVsCodeHref(session) : null;
   const workingBranch = changes?.workingBranch ?? session.workingBranch;
   const base = session.baseBranch ?? changes?.base ?? session.repositoryBranch;
   const closedOrArchived = session.state === 'closed' || session.archivedAt !== null;
@@ -178,7 +184,7 @@ export function CodeChangesPanel({
           <GitBranch size={GLYPH_SIZE} aria-hidden="true" />
           {hasRepository && workingBranch ? (
             <>
-              <span>{base ?? repositoryLabel(session.repositoryUrl ?? '')}</span>
+              <span>{base ?? cloudCodeRepositoryLabel(session.repositoryUrl ?? '')}</span>
               <ArrowRight size={GLYPH_SIZE} aria-hidden="true" />
               <span className={styles['changesBranchName']}>{workingBranch}</span>
             </>
@@ -312,7 +318,7 @@ export function CodeChangesPanel({
                 rel="noopener noreferrer"
               >
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
-                <span>{`${CODE_COPY.pullRequestChipPrefix} #${session.pullRequestNumber ?? ''}`}</span>
+                <span>{cloudCodePullRequestLabel(session)}</span>
               </a>
             ) : (
               <>
@@ -330,6 +336,16 @@ export function CodeChangesPanel({
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {vsCodeHref && (
+          <div className={styles['pullRequestBlock']}>
+            <a className={styles['secondaryButton']} href={vsCodeHref}>
+              <ArrowRight size={GLYPH_SIZE} aria-hidden="true" />
+              <span>{CODE_COPY.continueInVsCode}</span>
+            </a>
+            <span className={styles['formHelp']}>{CODE_COPY.continueInVsCodeHelp}</span>
           </div>
         )}
 

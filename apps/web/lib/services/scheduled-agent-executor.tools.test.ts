@@ -291,7 +291,7 @@ describe('scheduled agent tool access', () => {
     expect(drainToLlmResponse).not.toHaveBeenCalled();
   });
 
-  it('never offers an MCP or connector tool that has no saved allow verdict', async () => {
+  it('offers a connector tool with no saved verdict, since calling it pauses the run for approval', async () => {
     mockLoadUserConnectorToolCatalog.mockResolvedValue({
       tools: [CONNECTOR_TOOL],
       dropped: [],
@@ -303,7 +303,7 @@ describe('scheduled agent tool access', () => {
 
     await executeScheduledAgent(task, new AbortController().signal, 'run-2', executionScope);
 
-    expect(toolNames(mockBuildToolLoopStream.mock.calls[0]?.[2])).not.toContain(
+    expect(toolNames(mockBuildToolLoopStream.mock.calls[0]?.[2])).toContain(
       CONNECTOR_TOOL.qualifiedName,
     );
   });

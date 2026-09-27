@@ -96,11 +96,10 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/src/f
 
 - Done when: The owner can hand ownership to another member after confirmation, with the server moving the owner role atomically.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
 ## S87.09: Domain verification.

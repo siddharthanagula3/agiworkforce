@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockBuildToolLoopStream = vi.fn();
 vi.mock('./tool-loop-anthropic', () => ({
@@ -95,17 +95,10 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
 
 describe('runToolLoop, cancellation reaches connector tools', () => {
   beforeEach(() => {
-    // The executor options are asserted exactly, so pin the `input_required`
-    // kill-switch to its default-off state instead of inheriting the ambient env.
-    vi.stubEnv('AGI_MCP_INPUT_PAUSE', '');
     mockBuildToolLoopStream.mockReset();
     mockGetE2BExecutor.mockReset();
     mockPauseE2BSession.mockReset();
     mockExecuteWebMcpTool.mockReset();
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
   });
 
   it("hands the turn's abort signal to the connector executor", async () => {
@@ -151,7 +144,7 @@ describe('runToolLoop, cancellation reaches connector tools', () => {
       'github',
       'get_pull_request_diff',
       { owner: 'acme', repo: 'app', pull_number: 7 },
-      { signal: controller.signal },
+      { signal: controller.signal, allowInputRequired: true },
     );
   });
 });

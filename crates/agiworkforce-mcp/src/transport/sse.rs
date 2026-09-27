@@ -1,241 +1,205 @@
-//! SSE transport bringup.
-//!
-//! Long-lived `GET <url>` with `Accept: text/event-stream` for server→client
-//! frames; outbound JSON-RPC requests go via POST to either the same URL or to
-//! a server-supplied `endpoint` hint.
-
 use anyhow::{Context, Result, bail};
 use futures_util::StreamExt;
+use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
-use crate::client::TransportConn;
+use super::http::{
+    headers_carry_credentials, pinned_redirect_policy, read_body_capped, read_text_capped,
+};
+use super::sse_stream::SseDecoder;
+use crate::cache::Events;
 use crate::config::McpTimeouts;
-use crate::jsonrpc::find_subsequence;
-use crate::notification::McpNotification;
+use crate::error::TransportFault;
+use crate::hooks::ClientHooks;
+use crate::jsonrpc::matching_response;
+use crate::peer_requests;
 
-/// Open an SSE-based MCP transport and return the live [`TransportConn`].
-///
-/// Spawns a background task that parses SSE frames, forwards JSON-RPC payloads
-/// through an mpsc channel (the request correlator drains it), and best-effort
-/// forwards server *notifications* to `notif_tx`. The initialize handshake is
-/// run by the caller ([`crate::client::McpClient::connect`]).
-pub(crate) async fn connect(
-    name: &str,
-    url: &str,
-    headers: &HashMap<String, String>,
-    timeouts: McpTimeouts,
-    notif_tx: mpsc::Sender<McpNotification>,
-) -> Result<TransportConn> {
-    if timeouts.validate_urls {
-        crate::security::validate_server_url(url).with_context(|| format!("[{name}] SSE"))?;
-    }
-    refuse_cleartext_credentials(name, url, headers)?;
-    let client = build_sse_client(url, &timeouts)?;
+const ENDPOINT_HINT_WAIT: Duration = Duration::from_millis(500);
 
-    let resp = open_sse_stream(name, &client, url, headers).await?;
-
-    let session_id = resp
-        .headers()
-        .get("Mcp-Session-Id")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from);
-
-    // Spawn a task that owns the stream and forwards parsed JSON-RPC frames (and
-    // endpoint hints) through channels.
-    let (tx, rx) = mpsc::channel::<serde_json::Value>(64);
-    let (endpoint_tx, mut endpoint_rx) = mpsc::channel::<String>(1);
-    spawn_stream_drain(
-        name,
-        url,
-        resp,
-        timeouts.frame_cap(),
-        tx,
-        Some(endpoint_tx),
-        notif_tx,
-    );
-
-    // Wait briefly for an endpoint hint. Most MCP SSE servers emit it within a
-    // few hundred ms; on timeout, fall back to the original URL for POSTs.
-    let post_url = match tokio::time::timeout(Duration::from_millis(500), endpoint_rx.recv()).await
-    {
-        Ok(Some(ep)) => ep,
-        _ => url.to_string(),
-    };
-
-    Ok(TransportConn::Sse {
-        post_url,
-        headers: headers.clone(),
-        client,
-        rx,
-        session_id,
-    })
+pub(crate) struct SseConn {
+    server_name: String,
+    configured_url: String,
+    post_url: String,
+    headers: HashMap<String, String>,
+    client: reqwest::Client,
+    hooks: ClientHooks,
+    rx: mpsc::Receiver<Value>,
+    max_response: u64,
+    drain: JoinHandle<()>,
 }
 
-/// Open a legacy split-endpoint HTTP+SSE transport (the desktop remote MCP
-/// convention): POST `{base}/message` for outbound requests; a best-effort
-/// long-lived `GET {base}/sse` for server-initiated frames. When the GET fails
-/// (servers without an SSE stream), the connection degrades to POST-only with
-/// inline responses instead of failing bringup.
-pub(crate) async fn connect_legacy(
-    name: &str,
-    base_url: &str,
-    headers: &HashMap<String, String>,
-    timeouts: McpTimeouts,
-    notif_tx: mpsc::Sender<McpNotification>,
-) -> Result<TransportConn> {
-    if timeouts.validate_urls {
-        crate::security::validate_server_url(base_url)
-            .with_context(|| format!("[{name}] SSE-legacy"))?;
+impl SseConn {
+    pub(crate) async fn connect(
+        name: &str,
+        url: &str,
+        headers: &HashMap<String, String>,
+        timeouts: &McpTimeouts,
+        events: Arc<Events>,
+        hooks: ClientHooks,
+    ) -> Result<Self> {
+        if timeouts.validate_urls {
+            crate::security::validate_server_url(url).with_context(|| format!("[{name}] SSE"))?;
+        }
+        refuse_cleartext_credentials(name, url, headers)?;
+        let client = build_sse_client(url, timeouts)?;
+        let resp = open_sse_stream(name, &client, url, headers).await?;
+
+        let (tx, rx) = mpsc::channel::<Value>(64);
+        let (endpoint_tx, mut endpoint_rx) = mpsc::channel::<String>(1);
+        let drain = tokio::spawn(drain_stream(
+            name.to_string(),
+            url.to_string(),
+            resp,
+            timeouts.frame_cap(),
+            tx,
+            endpoint_tx,
+            events,
+        ));
+
+        let post_url = match tokio::time::timeout(ENDPOINT_HINT_WAIT, endpoint_rx.recv()).await {
+            Ok(Some(endpoint)) => endpoint,
+            _ => url.to_string(),
+        };
+
+        Ok(Self {
+            server_name: name.to_string(),
+            configured_url: url.to_string(),
+            post_url,
+            headers: headers.clone(),
+            client,
+            hooks,
+            rx,
+            max_response: timeouts.response_cap(),
+            drain,
+        })
     }
-    refuse_cleartext_credentials(name, base_url, headers)?;
-    let client = build_sse_client(base_url, &timeouts)?;
 
-    let base = base_url.trim_end_matches('/');
-    let post_url = format!("{base}/message");
-    let sse_url = format!("{base}/sse");
+    pub(crate) async fn request(
+        &mut self,
+        id: &Value,
+        frame: &Value,
+        method: &str,
+        timeout: Duration,
+    ) -> Result<Option<Value>> {
+        let server = self.server_name.clone();
+        let resp = self.post(frame, method).await?;
+        let inline = read_body_capped(resp, self.max_response)
+            .await
+            .with_context(|| format!("[{server}] SSE: POST '{method}' response"))?;
+        if let Some(response) = serde_json::from_slice::<Value>(&inline)
+            .ok()
+            .and_then(|value| matching_response(&value, id))
+        {
+            return Ok(Some(response));
+        }
 
-    let (tx, rx) = mpsc::channel::<serde_json::Value>(64);
+        let wait = async {
+            loop {
+                let Some(value) = self.rx.recv().await else {
+                    bail!("[{server}] SSE channel closed unexpectedly");
+                };
+                if let Some(response) = matching_response(&value, id) {
+                    return Ok(Some(response));
+                }
+                if let Some((request_method, request_id, params)) =
+                    peer_requests::server_request(&value)
+                {
+                    let reply = peer_requests::answer(
+                        &server,
+                        &self.hooks,
+                        &request_method,
+                        request_id,
+                        params,
+                    )
+                    .await;
+                    if let Err(e) = self.post(&reply, &request_method).await {
+                        eprintln!(
+                            "[{server}] reply to server request '{request_method}' failed: {e:#}"
+                        );
+                    }
+                }
+            }
+        };
+        match tokio::time::timeout(timeout, wait).await {
+            Ok(result) => result,
+            Err(_) => Err(TransportFault::Timeout {
+                server,
+                millis: timeout.as_millis(),
+                method: method.to_string(),
+            }
+            .into()),
+        }
+    }
 
-    // Best-effort SSE listener with reconnect (desktop parity: up to 5
-    // consecutive connect failures, linear 1s backoff, attempts reset after a
-    // successful connect). Non-blocking, bringup never waits on the GET, and
-    // servers without an SSE stream keep working POST-only. The supervisor
-    // holds `tx` for the lifetime of the transport so the request correlator's
-    // channel stays open even when no stream is attached.
-    spawn_legacy_sse_supervisor(
-        name,
-        sse_url,
-        headers.clone(),
-        client.clone(),
-        timeouts.frame_cap(),
-        tx,
-        notif_tx,
-    );
+    pub(crate) async fn notify(&mut self, frame: &Value) {
+        let method = frame
+            .get("method")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        if let Err(e) = self.post(frame, &method).await {
+            eprintln!(
+                "[{}] SSE: notification '{method}' POST failed: {e:#}",
+                self.server_name
+            );
+        }
+    }
 
-    Ok(TransportConn::Sse {
-        post_url,
-        headers: headers.clone(),
-        client,
-        rx,
-        session_id: None,
-    })
+    async fn post(&self, frame: &Value, method: &str) -> Result<reqwest::Response> {
+        let server = &self.server_name;
+        crate::security::enforce_same_origin(&self.configured_url, &self.post_url, "SSE POST endpoint")
+            .with_context(|| {
+                format!(
+                    "[{server}] refusing to send configured MCP headers to a foreign origin on '{method}'"
+                )
+            })?;
+        let mut request = self
+            .client
+            .post(&self.post_url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .json(frame);
+        for (k, v) in &self.headers {
+            request = request.header(k, v);
+        }
+        let resp = request
+            .send()
+            .await
+            .with_context(|| format!("[{server}] SSE: POST '{method}' failed"))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = read_text_capped(resp).await;
+            bail!("[{server}] SSE: POST '{method}' returned {status}, {body}");
+        }
+        Ok(resp)
+    }
 }
 
-/// Refuse to hand configured credentials to a cleartext connection. Loopback
-/// stays exempt so local `http://` dev MCP servers keep working; every other
-/// host must be reached over HTTPS before an `Authorization`/API-key header the
-/// host configured is attached to a GET or a POST. Headers that carry no secret
-/// do not gate bringup, see [`super::http::headers_carry_credentials`].
+impl Drop for SseConn {
+    fn drop(&mut self) {
+        self.drain.abort();
+    }
+}
+
 fn refuse_cleartext_credentials(
     name: &str,
     url: &str,
     headers: &HashMap<String, String>,
 ) -> Result<()> {
-    if !super::http::headers_carry_credentials(headers) {
+    if !headers_carry_credentials(headers) {
         return Ok(());
     }
     crate::security::enforce_https_for_remote(url)
         .with_context(|| format!("[{name}] refusing to send configured MCP headers in cleartext"))
 }
 
-/// Reconnect cap for the legacy SSE listener: consecutive connect failures
-/// before giving up (desktop parity).
-const LEGACY_SSE_MAX_RECONNECT_ATTEMPTS: u32 = 5;
-
-/// Base backoff between legacy SSE reconnect attempts; multiplied by the
-/// consecutive-failure count (desktop parity).
-const LEGACY_SSE_RECONNECT_DELAY_MS: u64 = 1000;
-
-/// Supervise the legacy `GET {base}/sse` listener: connect, drain until the
-/// stream drops, reconnect with linear backoff, and give up after
-/// [`LEGACY_SSE_MAX_RECONNECT_ATTEMPTS`] consecutive connect failures. On
-/// give-up the task parks holding `tx` so POST-only operation continues.
-fn spawn_legacy_sse_supervisor(
-    name: &str,
-    sse_url: String,
-    headers: HashMap<String, String>,
-    client: reqwest::Client,
-    max_frame: usize,
-    tx: mpsc::Sender<serde_json::Value>,
-    notif_tx: mpsc::Sender<McpNotification>,
-) {
-    let server_name = name.to_string();
-    tokio::spawn(async move {
-        // Desktop parity (connect_sse): the SSE GET refuses cleartext HTTP to
-        // non-localhost hosts so credentials cannot transit a network
-        // unencrypted. POSTs are unaffected (they matched desktop's POST path,
-        // which had no such check), the transport degrades to POST-only.
-        if let Err(e) = crate::security::enforce_https_for_remote(&sse_url) {
-            eprintln!("[{server_name}] SSE-legacy: {e:#}; continuing POST-only (no SSE listener)");
-            std::future::pending::<()>().await;
-        }
-        let mut attempts: u32 = 0;
-        while attempts < LEGACY_SSE_MAX_RECONNECT_ATTEMPTS {
-            match open_sse_stream(&server_name, &client, &sse_url, &headers).await {
-                Ok(resp) => {
-                    attempts = 0;
-                    let outcome = drain_stream(
-                        &server_name,
-                        &sse_url,
-                        resp,
-                        max_frame,
-                        &tx,
-                        None,
-                        &notif_tx,
-                    )
-                    .await;
-                    if matches!(outcome, DrainOutcome::ReceiverClosed) {
-                        // Transport dropped, exit for good.
-                        return;
-                    }
-                    eprintln!("[{server_name}] SSE-legacy: stream ended; reconnecting");
-                }
-                Err(e) => {
-                    attempts += 1;
-                    eprintln!(
-                        "[{server_name}] SSE-legacy: GET {sse_url} failed ({e:#}) \
-                         (attempt {attempts}/{LEGACY_SSE_MAX_RECONNECT_ATTEMPTS})"
-                    );
-                }
-            }
-            if tx.is_closed() {
-                return;
-            }
-            if attempts < LEGACY_SSE_MAX_RECONNECT_ATTEMPTS {
-                tokio::time::sleep(Duration::from_millis(
-                    LEGACY_SSE_RECONNECT_DELAY_MS * u64::from(attempts.max(1)),
-                ))
-                .await;
-            }
-        }
-        eprintln!("[{server_name}] SSE-legacy: reconnection limit reached; continuing POST-only");
-        // Park holding `tx` so the correlator channel stays open (POST-only).
-        std::future::pending::<()>().await;
-    });
-}
-
-/// Build the long-lived reqwest client for SSE transports. Do NOT set
-/// `.timeout()` here, the SSE GET stays open indefinitely and any per-request
-/// cap kills it. Per-call timeouts are applied via `tokio::time::timeout` in
-/// send_request.
 fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client> {
-    // This one client carries the SSE GET *and* every JSON-RPC POST, so the
-    // redirect pin has to be here: an unpinned client would hand a
-    // `307 Location: http://attacker.example/` the replayed request body and
-    // the configured credential headers, whatever the endpoint-hint and
-    // cleartext checks decided about the URL we asked for.
-    let mut builder = reqwest::Client::builder().redirect(super::http::pinned_redirect_policy(url));
-    // Takes the url so the policy is enforced HERE, beside the dangerous call,
-    // rather than at each caller where a new one could forget it. Release
-    // builds refuse this outright; debug builds allow loopback only.
+    let mut builder = reqwest::Client::builder().redirect(pinned_redirect_policy(url));
     crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)?;
-    // The policy above already bails in release, so this is unreachable there.
-    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
-    // the release binary entirely, so the guarantee survives someone later
-    // dropping the policy call, and it is what `rust/disabled-certificate-check`
-    // flagged, since the query cannot see the early-return guard.
     #[cfg(debug_assertions)]
     if !timeouts.verify_tls {
         builder = builder.danger_accept_invalid_certs(true);
@@ -249,7 +213,6 @@ fn build_sse_client(url: &str, timeouts: &McpTimeouts) -> Result<reqwest::Client
     builder.build().context("build reqwest client")
 }
 
-/// Issue the long-lived SSE GET and validate the response status.
 async fn open_sse_stream(
     name: &str,
     client: &reqwest::Client,
@@ -272,159 +235,65 @@ async fn open_sse_stream(
     Ok(resp)
 }
 
-/// Why a drain stopped, decides whether a legacy supervisor reconnects.
-enum DrainOutcome {
-    /// The frame receiver was dropped: the transport is gone; do not reconnect.
-    ReceiverClosed,
-    /// The stream errored/ended (or hit the frame cap / bad JSON): the legacy
-    /// supervisor may reconnect.
-    StreamEnded,
-}
-
-/// Spawn the task that owns the SSE byte stream and forwards parsed JSON-RPC
-/// frames (and, when `endpoint_tx` is supplied, `event: endpoint` hints)
-/// through channels. Single-shot (CLI streamable-SSE parity: no stream-level
-/// reconnect); the legacy convention layers its own reconnect supervisor.
-fn spawn_stream_drain(
-    name: &str,
-    url: &str,
-    resp: reqwest::Response,
-    max_frame: usize,
-    tx: mpsc::Sender<serde_json::Value>,
-    endpoint_tx: Option<mpsc::Sender<String>>,
-    notif_tx: mpsc::Sender<McpNotification>,
-) {
-    let server_name = name.to_string();
-    let base_url = url.to_string();
-    tokio::spawn(async move {
-        let _ = drain_stream(
-            &server_name,
-            &base_url,
-            resp,
-            max_frame,
-            &tx,
-            endpoint_tx.as_ref(),
-            &notif_tx,
-        )
-        .await;
-    });
-}
-
-/// Own the SSE byte stream until it ends, forwarding parsed frames. Returns
-/// why it stopped so a caller can decide whether to reconnect.
 async fn drain_stream(
-    server_name: &str,
-    base_url: &str,
+    server_name: String,
+    base_url: String,
     resp: reqwest::Response,
     max_frame: usize,
-    tx: &mpsc::Sender<serde_json::Value>,
-    endpoint_tx: Option<&mpsc::Sender<String>>,
-    notif_tx: &mpsc::Sender<McpNotification>,
-) -> DrainOutcome {
+    tx: mpsc::Sender<Value>,
+    endpoint_tx: mpsc::Sender<String>,
+    events: Arc<Events>,
+) {
     let mut stream = resp.bytes_stream();
-    {
-        let mut buf: Vec<u8> = Vec::new();
-        let mut current_event: Option<String> = None;
-        while let Some(chunk) = stream.next().await {
-            let chunk = match chunk {
-                Ok(c) => c,
+    let mut decoder = SseDecoder::new(max_frame);
+    while let Some(chunk) = stream.next().await {
+        let chunk = match chunk {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[{server_name}] SSE stream error: {e}");
+                return;
+            }
+        };
+        let frames = match decoder.push(&chunk) {
+            Ok(frames) => frames,
+            Err(e) => {
+                eprintln!("[{server_name}] SSE {e}; closing stream");
+                return;
+            }
+        };
+        for event in frames {
+            if event.event.as_deref() == Some("endpoint") {
+                match resolve_endpoint(&base_url, event.data.trim()) {
+                    Ok(endpoint) => {
+                        let _ = endpoint_tx.try_send(endpoint);
+                    }
+                    Err(e) => eprintln!(
+                        "[{server_name}] SSE: ignoring endpoint hint: {e:#}; POSTing to {base_url}"
+                    ),
+                }
+                continue;
+            }
+            let value = match serde_json::from_str::<Value>(&event.data) {
+                Ok(value) => value,
                 Err(e) => {
-                    eprintln!("[{server_name}] SSE stream error: {e}");
-                    break;
+                    eprintln!(
+                        "[{server_name}] SSE: invalid JSON in data frame: {e} (payload: {})",
+                        event.data
+                    );
+                    return;
                 }
             };
-            buf.extend_from_slice(&chunk);
-            // The bytes come from the remote server, so this cap is not
-            // optional: without a frame boundary the buffer would grow until
-            // the host process dies.
-            if buf.len() > max_frame && find_subsequence(&buf, b"\n\n").is_none() {
-                eprintln!("[{server_name}] SSE frame exceeded {max_frame} bytes; closing stream");
-                break;
+            if let Some((method, params)) = peer_requests::notification(&value) {
+                events.notify(method, params);
+                continue;
             }
-            // SSE frames are separated by "\n\n"; data lines start with "data: ".
-            while let Some(pos) = find_subsequence(&buf, b"\n\n") {
-                let frame = buf.drain(..pos + 2).collect::<Vec<u8>>();
-                let frame_str = String::from_utf8_lossy(&frame);
-                let mut data_buf = String::new();
-                for line in frame_str.lines() {
-                    if let Some(rest) = line.strip_prefix("event:") {
-                        current_event = Some(rest.trim().to_string());
-                    } else if let Some(rest) = line.strip_prefix("data:") {
-                        // SSE allows data fields split across multiple `data:`
-                        // lines, concatenate with newlines per spec.
-                        if !data_buf.is_empty() {
-                            data_buf.push('\n');
-                        }
-                        data_buf.push_str(rest.strip_prefix(' ').unwrap_or(rest));
-                    }
-                    // id:, retry:, comments (`:`-prefixed) are ignored.
-                }
-                if data_buf.is_empty() {
-                    current_event = None;
-                    continue;
-                }
-                // Handle endpoint hints from the server (MCP "everything"
-                // server pattern: `event: endpoint\ndata: /messages?...`).
-                // Legacy split-endpoint connections pass no `endpoint_tx`.
-                // their POST endpoint is fixed at `{base}/message`.
-                if current_event.as_deref() == Some("endpoint") {
-                    if let Some(ep_tx) = endpoint_tx {
-                        match resolve_endpoint(base_url, data_buf.trim()) {
-                            Ok(endpoint) => {
-                                let _ = ep_tx.try_send(endpoint);
-                            }
-                            Err(e) => {
-                                eprintln!(
-                                    "[{server_name}] SSE: ignoring endpoint hint: {e:#}; POSTing to {base_url}"
-                                );
-                            }
-                        }
-                    }
-                    current_event = None;
-                    continue;
-                }
-                match serde_json::from_str::<serde_json::Value>(&data_buf) {
-                    Ok(v) => {
-                        // Best-effort: surface true server notifications
-                        // (method present, no id) out-of-band. Never blocks the
-                        // drain, a full/absent receiver just drops the notice.
-                        if v.get("method").is_some() && v.get("id").is_none() {
-                            if let Some(method) =
-                                v.get("method").and_then(|m| m.as_str()).map(String::from)
-                            {
-                                let params =
-                                    v.get("params").cloned().unwrap_or(serde_json::Value::Null);
-                                let _ = notif_tx.try_send(McpNotification { method, params });
-                            }
-                        }
-                        if tx.send(v).await.is_err() {
-                            // Receiver dropped, connection closed.
-                            return DrainOutcome::ReceiverClosed;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!(
-                            "[{server_name}] SSE: invalid JSON in data frame: {e} (payload: {data_buf})"
-                        );
-                        return DrainOutcome::StreamEnded;
-                    }
-                }
-                current_event = None;
+            if tx.send(value).await.is_err() {
+                return;
             }
         }
     }
-    DrainOutcome::StreamEnded
 }
 
-/// Resolve the SSE-supplied endpoint hint against the original SSE URL. Hints
-/// may be absolute (`https://...`) or relative paths (`/messages?id=…`).
-///
-/// The hint is chosen by the remote server, and every later JSON-RPC POST.
-/// carrying the credential headers the host configured for *this* server, goes
-/// to whatever it names. So it is resolved against the configured URL and then
-/// held to that origin: a cross-origin hint (absolute, or a protocol-relative
-/// `//other.host/path` that `join` would honor) is refused, and the caller
-/// keeps POSTing to the URL the user configured.
 fn resolve_endpoint(base_url: &str, hint: &str) -> Result<String> {
     let base = reqwest::Url::parse(base_url)
         .with_context(|| format!("parse SSE base URL '{base_url}'"))?;

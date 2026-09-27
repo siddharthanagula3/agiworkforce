@@ -107,7 +107,10 @@ vi.mock('../quickAsk', () => ({
   toggleQuickAsk: vi.fn(),
   warmUpQuickAsk: vi.fn(),
 }));
-vi.mock('../screenshot', () => ({ captureToChat: vi.fn() }));
+vi.mock('../screenshot', () => ({
+  captureToChat: vi.fn(),
+  takeCaptureBackFromClipboard: vi.fn(),
+}));
 vi.mock('../windowPolicy', () => ({ applyRemoteWindowPolicy: vi.fn() }));
 vi.mock('../accountBridge', () => ({ handleBridgeCommand: vi.fn() }));
 

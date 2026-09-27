@@ -30,7 +30,7 @@ import { CalendarClock, Loader2, MessageSquarePlus, Plus, RotateCcw } from 'luci
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm } from './ScheduleForm';
 import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
-import type { ScheduleHistoryState } from './ScheduleRunHistory';
+import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
   createInitialScheduleDraft,
   scheduleToDraft,
@@ -521,6 +521,53 @@ export function SchedulesPage({
     }
   };
 
+  const resolveApproval = async (
+    schedule: ScheduleTask,
+    run: ScheduleRun,
+    decision: ScheduleApprovalDecision,
+  ) => {
+    if (!run.pendingApproval) return;
+    setOperation(schedule.id, 'approval');
+    setRowError(schedule.id, null);
+    try {
+      const resolved = await api.resolveRunApproval(schedule.id, run.id, {
+        decision,
+        toolCallIds: run.pendingApproval.toolCalls.map((call) => call.id),
+      });
+      setHistoryById((all) => {
+        const current = all[schedule.id] ?? EMPTY_HISTORY;
+        return {
+          ...all,
+          [schedule.id]: {
+            ...current,
+            status: 'success',
+            runs: uniqueRuns(current.runs, [resolved]),
+          },
+        };
+      });
+      try {
+        replaceSchedule(await api.getSchedule(schedule.id));
+      } catch {
+        setRowError(
+          schedule.id,
+          'The run continued, but the schedule summary could not be refreshed.',
+        );
+      }
+      const outcome =
+        resolved.status === 'awaiting_approval'
+          ? 'The run is waiting for approval on another step.'
+          : resolved.status === 'success'
+            ? 'The run finished.'
+            : `The run ended with status ${resolved.status}.`;
+      setActionMessage(`${decision === 'approved' ? 'Approved' : 'Denied'}. ${outcome}`);
+    } catch (error) {
+      setRowError(schedule.id, errorMessage(error, 'The approval could not be sent.'));
+      void loadHistory(schedule);
+    } finally {
+      setOperation(schedule.id, null);
+    }
+  };
+
   const deleteSchedule = async () => {
     const target = deleteTarget;
     if (!target) return;
@@ -910,6 +957,9 @@ export function SchedulesPage({
                   onToggleHistory={toggleHistory}
                   onRetryHistory={(selected) => void loadHistory(selected)}
                   onLoadMoreHistory={(selected) => void loadHistory(selected, true)}
+                  onResolveApproval={(selected, run, decision) =>
+                    void resolveApproval(selected, run, decision)
+                  }
                 />
               ))
             )}

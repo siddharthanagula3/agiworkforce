@@ -236,6 +236,14 @@ export function canUseBillingPlanCapability(
   return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
 }
 
+export function billingPlanCapabilityPlanLabels(capability: BillingPlanCapability): string {
+  const labels = BILLING_PLAN_CAPABILITY_TIERS[capability].map(
+    (plan) => getBillingPlanPricing(plan).label,
+  );
+  if (labels.length <= 2) return labels.join(' and ');
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
 export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapability, string>> =
   Object.freeze({
     managed_chat: 'Managed Cloud chat on web, desktop, mobile and Chrome',
@@ -294,6 +302,10 @@ const MINUTE_MS = 60_000;
 export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
 
 export const PLATFORM_SCHEDULE_RUNS_PER_SWEEP = 50;
+
+export const PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR = 30;
+
+export const PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY = 720;
 
 export interface BillingPlanProductLimits {
   projects: BillingPlanLimit;
@@ -714,6 +726,15 @@ export function getPublishedPlanPriceCents(
 ): number | null {
   const usd = getPublishedPlanPriceUsd(plan, interval);
   return usd === null ? null : Math.round(usd * 100);
+}
+
+export function getPublishedPlanPricePerMonthUsd(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval,
+): number | null {
+  const cents = getPublishedPlanPriceCents(plan, interval);
+  if (cents === null) return null;
+  return interval === 'yearly' ? Math.round(cents / 12) / 100 : cents / 100;
 }
 
 export function getPlanPriceInr(plan: string | null | undefined): number | null {

@@ -14,12 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The app follows the device language (syncDeviceLanguage); there is no in-app language picker. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Side panel strings come from _locales and follow Chrome's UI language; no in-extension choice. | ui |
 
-Code: `apps/mobile/src/i18n/index.ts:23-41`, `apps/extension/src/side_panel.ts:8120-8122`
+Code: `apps/extension/src/side_panel.ts:8120-8122`
 
 ## S84.02: Timezone.
 
@@ -70,10 +69,7 @@ Code: `apps/cli/src/tui/tui_app.rs:3818-3825`, `apps/cli/src/config.rs:821-826`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Text honours the OS Dynamic Type/font scale (TextScaleBoundary remounts on change) but there is no in-app text-size control. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/shared/components/TextScaleBoundary.tsx:1-12`
 
 ## S84.07: Reduced motion.
 
@@ -83,10 +79,9 @@ Code: `apps/mobile/src/shared/components/TextScaleBoundary.tsx:1-12`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Animations honour the OS reduce-motion setting (useReducedMotion) but there is no in-app override. | ui |
 | chrome | partial | The side panel honours prefers-reduced-motion in CSS; no in-extension toggle. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ChatEmptyState.tsx:3-35`, `apps/extension/src/side_panel.ts:3111-3111`
+Code: `apps/extension/src/side_panel.ts:3111-3111`
 
 ## S84.09: Code line wrapping.
 
@@ -117,16 +112,15 @@ Code: `apps/mobile/src/features/chat/components/ModelSelectorButton.tsx:1-16`, `
 
 - Done when: The user can choose the default mode new conversations start in (e.g. chat vs agent/work, ask vs auto).
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | The default permission/approval mode is set only in config.toml (permission_mode, approval_mode); no command saves it. | ui |
 | chrome | partial | The autonomy level is chosen per session from the composer chip and is not saved as a default. | ui |
 
-Code: `apps/cli/src/config.rs:74-120`, `apps/extension/src/side_panel.ts:9979-9983`
+Code: `apps/extension/src/side_panel.ts:9979-9983`
 
 ## S84.18: Notification channels.
 

@@ -1,4 +1,5 @@
 import {
+  BILLING_PLAN_PRICING,
   isMax15xPlanTier,
   isMaxPlanTier,
   isPerSeatBillingPlan,
@@ -78,7 +79,10 @@ export type ManagedUsageLimitTable = Readonly<Record<BillingPlanTier, ManagedUsa
 
 export const MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION: Readonly<
   Record<number, ManagedUsageLimitTable>
-> = Object.freeze({ 1: MANAGED_USAGE_LIMITS, [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS });
+> = Object.freeze({
+  1: MANAGED_USAGE_LIMITS,
+  [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS,
+});
 
 export function resolvePlanCatalogVersion(value: unknown): number | null {
   const version = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
@@ -105,7 +109,7 @@ export interface ManagedUsageWindowMultipliers {
   monthly: number;
 }
 
-export function managedUsageMultipliers(
+function managedUsageRatios(
   tier: BillingPlanTier,
   baseline: BillingPlanTier,
 ): ManagedUsageWindowMultipliers | null {
@@ -115,13 +119,81 @@ export function managedUsageMultipliers(
   if (against.monthlyCredits <= 0 || against.weeklyCredits <= 0 || against.fiveHourCredits <= 0) {
     return null;
   }
-  const multipliers = {
+  return {
     fiveHour: subject.fiveHourCredits / against.fiveHourCredits,
     weekly: subject.weeklyCredits / against.weeklyCredits,
     monthly: subject.monthlyCredits / against.monthlyCredits,
   };
-  const whole = Object.values(multipliers).every((ratio) => Number.isInteger(ratio) && ratio >= 1);
-  return whole ? multipliers : null;
+}
+
+export function managedUsageMultipliers(
+  tier: BillingPlanTier,
+  baseline: BillingPlanTier,
+): ManagedUsageWindowMultipliers | null {
+  const ratios = managedUsageRatios(tier, baseline);
+  if (!ratios) return null;
+  const whole = Object.values(ratios).every((ratio) => Number.isInteger(ratio) && ratio >= 1);
+  return whole ? ratios : null;
+}
+
+export const MANAGED_USAGE_BASELINES: Readonly<Partial<Record<BillingPlanTier, BillingPlanTier>>> =
+  Object.freeze({
+    basic: 'free',
+    pro: 'basic',
+    max: 'pro',
+    max_15x: 'pro',
+    team: 'pro',
+  });
+
+export interface ManagedUsageComparison {
+  baseline: BillingPlanTier;
+  perSeat: boolean;
+  factor: number | null;
+  session: number | null;
+  weekly: number | null;
+}
+
+function moreUsageMultiple(ratio: number): number | null {
+  return Number.isInteger(ratio) && ratio > 1 ? ratio : null;
+}
+
+export function compareManagedUsage(
+  tier: BillingPlanTier,
+  baseline: BillingPlanTier | undefined = MANAGED_USAGE_BASELINES[tier],
+): ManagedUsageComparison | null {
+  if (!baseline) return null;
+  const ratios = managedUsageRatios(tier, baseline);
+  if (!ratios) return null;
+  const perSeat = isPerSeatBillingPlan(tier);
+  const { fiveHour, weekly, monthly } = ratios;
+  if (fiveHour === weekly && weekly === monthly && Number.isInteger(fiveHour) && fiveHour >= 1) {
+    return { baseline, perSeat, factor: fiveHour, session: null, weekly: null };
+  }
+  const session = moreUsageMultiple(fiveHour);
+  const weeklyMultiple = moreUsageMultiple(weekly);
+  if (session === null && weeklyMultiple === null) return null;
+  return { baseline, perSeat, factor: null, session, weekly: weeklyMultiple };
+}
+
+export function managedUsageComparisonLines(
+  tier: BillingPlanTier,
+  baseline?: BillingPlanTier,
+): string[] {
+  const comparison = compareManagedUsage(tier, baseline);
+  if (!comparison) return [];
+  const against = BILLING_PLAN_PRICING[comparison.baseline].label;
+  const seat = comparison.perSeat ? ' for every seat' : '';
+  if (comparison.factor === 1) return [`Same usage as ${against}${seat}`];
+  if (comparison.factor !== null)
+    return [`${comparison.factor}x more usage than ${against}${seat}`];
+  return [
+    ...(comparison.session === null
+      ? []
+      : [`${comparison.session}x more usage per session than ${against}${seat}`]),
+    ...(comparison.weekly === null
+      ? []
+      : [`${comparison.weekly}x more weekly usage than ${against}${seat}`]),
+  ];
 }
 
 export function managedUsageMultiplier(
@@ -139,18 +211,17 @@ export function managedUsageComparisonLabel(
   baseline: BillingPlanTier,
   baselineLabel: string,
 ): string | null {
-  const multipliers = managedUsageMultipliers(tier, baseline);
-  if (!multipliers) return null;
-  const { fiveHour, weekly, monthly } = multipliers;
-  if (fiveHour === weekly && weekly === monthly) {
-    return fiveHour === 1
-      ? `Same usage as ${baselineLabel}`
-      : `${fiveHour}x more usage than ${baselineLabel}`;
+  const comparison = compareManagedUsage(tier, baseline);
+  if (!comparison) return null;
+  const { factor, session, weekly } = comparison;
+  if (factor === 1) return `Same usage as ${baselineLabel}`;
+  if (factor !== null) return `${factor}x more usage than ${baselineLabel}`;
+  if (session !== null && weekly !== null) {
+    return `${session}x more usage per session and ${weekly}x more weekly usage than ${baselineLabel}`;
   }
-  if (weekly === monthly) {
-    return `${fiveHour}x ${baselineLabel} per 5 hours, ${weekly}x per week`;
-  }
-  return `${fiveHour}x ${baselineLabel} per 5 hours, ${weekly}x per week, ${monthly}x per month`;
+  return session !== null
+    ? `${session}x more usage per session than ${baselineLabel}`
+    : `${weekly}x more weekly usage than ${baselineLabel}`;
 }
 
 export interface PlanCreditAllowance {

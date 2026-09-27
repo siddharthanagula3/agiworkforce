@@ -279,7 +279,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
             part.toLowerCase() === match.toLowerCase() ? (
               <mark
                 key={`highlight-${partIndex}-${part.slice(0, 10)}`}
-                className="bg-yellow-200 font-semibold dark:bg-yellow-800/50"
+                className="bg-warning-fill/10 font-semibold"
               >
                 {part}
               </mark>

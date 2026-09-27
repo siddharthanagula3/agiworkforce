@@ -24,7 +24,7 @@ import {
   CloudCodeApiError,
   type CloudCodeAgentTurn,
   type CloudCodeApi,
-} from './services/cloud-code-api';
+} from '@agiworkforce/cloud-contracts';
 import { useMicrophoneNoticeStore } from '@features/chat/stores/microphone-notice-store';
 
 const push = vi.fn();

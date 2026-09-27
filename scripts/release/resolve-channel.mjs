@@ -11,7 +11,6 @@ import {
   channelVersionCollisions,
   coreVersion,
   isPrerelease,
-  npmDistTag,
   surfaceTagPrefix,
   versionForTag,
   vsceChannelArgs,
@@ -48,7 +47,6 @@ function main() {
     version,
     core_version: coreVersion(version),
     prerelease: String(isPrerelease(channel)),
-    npm_dist_tag: npmDistTag(channel),
     vsce_args: vsceChannelArgs(channel).join(' '),
   };
 

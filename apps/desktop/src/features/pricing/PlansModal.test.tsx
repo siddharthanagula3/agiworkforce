@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { WEB_APP_URL } from '../../api/config';
 import { openExternalUrl } from '../../utils/navigation';
 import { useAuthStore } from '../../stores/auth';
 import { PlansModal } from './PlansModal';
@@ -181,6 +182,15 @@ describe('PlansModal paid-plan CTA routing (public alpha, no waitlist)', () => {
       expect(onOpenChange).not.toHaveBeenCalled();
     },
   );
+
+  it('hands Team to the web Team card, which owns the seat count and the cadence', () => {
+    render(<PlansModal open onOpenChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('cta-team'));
+
+    expect(openExternalUrl).toHaveBeenCalledWith(`${WEB_APP_URL}/pricing#pricing-team-title`);
+    expect(screen.queryByTestId('upgrade-confirm')).toBeNull();
+  });
 
   it('does nothing for free tiers (no browser open, modal stays)', () => {
     const onOpenChange = vi.fn();

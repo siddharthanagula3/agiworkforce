@@ -2,46 +2,37 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
-  PLAN_CREDIT_ALLOWANCES,
   PLAN_LABEL,
-  creditAmount,
-  managedUsageComparisonLabel,
+  getPublishedPlanPricePerMonthUsd,
+  managedUsageComparisonLines,
   type UIPlanTier,
 } from '@agiworkforce/types';
 import { PlanCard } from './PlanCard';
 
-const PAID_TIERS = ['basic', 'pro', 'max', 'max_15x'] as const;
+const PAID_TIERS = ['basic', 'pro', 'max', 'max_15x', 'team'] as const;
 
 function bulletTexts(): string[] {
   return screen.getAllByRole('listitem').map((item) => item.textContent ?? '');
 }
 
-function creditWindowBullet(tier: (typeof PAID_TIERS)[number]): string {
-  const allowance = PLAN_CREDIT_ALLOWANCES[tier];
-  return `${creditAmount(allowance.fiveHour)} credits per 5 hours, ${creditAmount(allowance.weekly)} per week, ${creditAmount(allowance.monthly)} per month`;
-}
-
 describe('PlanCard', () => {
-  it.each(PAID_TIERS)('opens the %s plan with its credits per window', (tier) => {
+  it.each(PAID_TIERS)('opens the %s plan with its usage relative to the plan below it', (tier) => {
+    const lines = managedUsageComparisonLines(tier);
+    expect(lines.length).toBeGreaterThan(0);
+
     render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
 
-    expect(bulletTexts()[0]).toBe(creditWindowBullet(tier));
-    expect(bulletTexts().join('\n')).not.toMatch(/more managed usage than/i);
+    expect(bulletTexts().slice(0, lines.length)).toEqual(lines);
+    expect(bulletTexts().join('\n')).not.toMatch(/credits per|per 5 hours/i);
   });
 
-  it.each(['max', 'max_15x'] as const)('compares %s with Pro window by window', (tier) => {
-    const comparison = managedUsageComparisonLabel(tier, 'pro', PLAN_LABEL.pro);
-    expect(comparison).not.toBeNull();
+  it('states Max 20x per session and per week against Pro', () => {
+    render(<PlanCard tier="max_15x" isCurrentPlan={false} onCtaClick={vi.fn()} />);
 
-    render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
-
-    expect(bulletTexts()[1]).toBe(comparison);
-  });
-
-  it.each(['basic', 'pro'] as const)('makes no multiple claim for %s', (tier) => {
-    render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
-
-    expect(bulletTexts().join('\n')).not.toMatch(new RegExp(`x ${PLAN_LABEL.pro}\\b|than ${PLAN_LABEL.pro}`));
+    expect(bulletTexts().slice(0, 2)).toEqual([
+      '20x more usage per session than Pro',
+      '10x more weekly usage than Pro',
+    ]);
   });
 
   it('sells the $200 plan under its catalog name, Max 20x', () => {
@@ -58,12 +49,32 @@ describe('PlanCard', () => {
     expect(onCtaClick).toHaveBeenCalledWith('max_15x');
   });
 
+  it('prices Team per seat on yearly billing and names the monthly seat price', () => {
+    const onCtaClick = vi.fn();
+
+    render(<PlanCard tier="team" isCurrentPlan={false} onCtaClick={onCtaClick} />);
+
+    expect(
+      screen.getByText(`$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `Billed yearly, or $${BILLING_PLAN_PRICING.team.monthlyPriceUsd} per seat billed monthly`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(`$${BILLING_PLAN_PRICING.team.yearlyPriceUsd}`, { exact: false }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose seats' }));
+    expect(onCtaClick).toHaveBeenCalledWith('team');
+  });
+
   it.each(['local', 'byok', 'free'] as const satisfies readonly UIPlanTier[])(
-    'states no credit window for %s',
+    'states no usage comparison or credit window for %s',
     (tier) => {
       render(<PlanCard tier={tier} isCurrentPlan onCtaClick={vi.fn()} />);
 
-      expect(bulletTexts().join('\n')).not.toMatch(/credits per 5 hours/);
+      expect(bulletTexts().join('\n')).not.toMatch(/credits per 5 hours|more usage|same usage/i);
     },
   );
 });

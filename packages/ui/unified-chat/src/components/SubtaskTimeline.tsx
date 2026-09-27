@@ -28,11 +28,11 @@ function formatDuration(startedAt?: Date, completedAt?: Date): string | null {
 function StepIcon({ status }: { status: SubtaskStep['status'] }) {
   switch (status) {
     case 'done':
-      return <CheckCircle2 className="h-4 w-4 shrink-0 text-green-400" />;
+      return <CheckCircle2 className="h-4 w-4 shrink-0 text-success-text" />;
     case 'failed':
-      return <XCircle className="h-4 w-4 shrink-0 text-red-400" />;
+      return <XCircle className="h-4 w-4 shrink-0 text-danger-text" />;
     case 'running':
-      return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-400" />;
+      return <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-700 dark:text-blue-400" />;
     default:
       return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />;
   }
@@ -52,9 +52,9 @@ function StepRow({ step, isLast }: StepRowProps) {
     step.status === 'done'
       ? 'text-foreground'
       : step.status === 'failed'
-        ? 'text-red-300'
+        ? 'text-danger-text'
         : step.status === 'running'
-          ? 'text-blue-300'
+          ? 'text-blue-700 dark:text-blue-300'
           : 'text-muted-foreground';
 
   return (
@@ -68,9 +68,9 @@ function StepRow({ step, isLast }: StepRowProps) {
             className={cn(
               'mt-1 w-px flex-1',
               step.status === 'done'
-                ? 'bg-green-400/30'
+                ? 'bg-success-fill/10'
                 : step.status === 'failed'
-                  ? 'bg-red-400/30'
+                  ? 'bg-danger-fill/10'
                   : 'bg-border',
             )}
             style={{ minHeight: 16 }}

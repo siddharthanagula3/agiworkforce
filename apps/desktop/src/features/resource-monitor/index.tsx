@@ -65,11 +65,11 @@ const ResourceGauge: React.FC<ResourceGaugeProps> = ({
   const isHigh = percentage > 80;
   const isMedium = percentage > 60 && percentage <= 80;
 
-  const gaugeColor = isHigh ? 'bg-red-500' : isMedium ? 'bg-yellow-500' : color;
+  const gaugeColor = isHigh ? 'bg-danger-fill' : isMedium ? 'bg-warning-fill' : color;
   const iconColor = isHigh
-    ? 'text-red-500'
+    ? 'text-danger-text'
     : isMedium
-      ? 'text-yellow-500'
+      ? 'text-warning-text'
       : color.replace('bg-', 'text-');
 
   return (

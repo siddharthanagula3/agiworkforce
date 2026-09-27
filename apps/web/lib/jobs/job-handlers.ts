@@ -20,14 +20,23 @@ import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
 import type { JobHandlerContext, JobHandlerRegistry } from './job-drain';
 import { PermanentJobError, enqueueJob } from './job-service';
 
-type ScheduleNoticeStatus = 'success' | 'failed' | 'timeout';
+type ScheduleNoticeStatus = 'success' | 'failed' | 'timeout' | 'awaiting_approval';
 
 interface ScheduleNoticePayload {
   taskId: string;
   taskName: string;
   status: ScheduleNoticeStatus;
   runId: string;
+  approvalStep?: number;
+  approvalSummary?: string;
 }
+
+const SCHEDULE_NOTICE_STATUSES: readonly ScheduleNoticeStatus[] = [
+  'success',
+  'failed',
+  'timeout',
+  'awaiting_approval',
+];
 
 function requireAccount(context: JobHandlerContext): string {
   if (!context.job.userId) throw new PermanentJobError('This job carries no account to act for');
@@ -38,11 +47,26 @@ function readScheduleNotice(payload: Record<string, unknown>): ScheduleNoticePay
   const taskId = typeof payload['taskId'] === 'string' ? payload['taskId'] : '';
   const runId = typeof payload['runId'] === 'string' ? payload['runId'] : '';
   const taskName = typeof payload['taskName'] === 'string' ? payload['taskName'] : '';
-  const status = payload['status'];
-  if (!taskId || !runId || (status !== 'success' && status !== 'failed' && status !== 'timeout')) {
+  const status = SCHEDULE_NOTICE_STATUSES.find((candidate) => candidate === payload['status']);
+  if (!taskId || !runId || !status) {
     throw new PermanentJobError('Schedule notification payload is malformed');
   }
-  return { taskId, runId, taskName, status };
+  const approvalStep = payload['approvalStep'];
+  const approvalSummary = payload['approvalSummary'];
+  return {
+    taskId,
+    runId,
+    taskName,
+    status,
+    ...(typeof approvalStep === 'number' ? { approvalStep } : {}),
+    ...(typeof approvalSummary === 'string' ? { approvalSummary } : {}),
+  };
+}
+
+function scheduleNoticeKey(prefix: string, notice: ScheduleNoticePayload): string {
+  return notice.status === 'awaiting_approval'
+    ? `${prefix}:${notice.runId}:approval:${notice.approvalStep ?? 0}`
+    : `${prefix}:${notice.runId}`;
 }
 
 function readString(payload: Record<string, unknown>, key: string): string {
@@ -71,7 +95,7 @@ async function announceScheduleCompletion(
       kind: 'email.schedule-completed',
       userId,
       organizationId: context.job.organizationId,
-      idempotencyKey: `schedule-email:${notice.runId}`,
+      idempotencyKey: scheduleNoticeKey('schedule-email', notice),
       payload: { ...notice },
       ...(heldUntil ? { runAfter: heldUntil } : {}),
     });
@@ -103,6 +127,7 @@ async function sendScheduleCompletionEmailJob(
     to: preferences.email_address,
     taskName: notice.taskName,
     status: notice.status,
+    ...(notice.approvalSummary ? { approvalSummary: notice.approvalSummary } : {}),
   });
   if (result.delivered) return { delivered: true, providerMessageId: result.providerMessageId };
   if (result.reason === 'not_configured') return { skipped: 'not_configured' };

@@ -38,6 +38,7 @@ import { WORKSPACE_DELETION_PATH } from '@/features/admin/pages/workspace-deleti
 import { SSOPanel } from './team/SSOPanel';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useWorkspaceSwitchInterruptions } from '@/features/workspaces/lib/workspace-switch-interruptions';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 type MemberRole = TeamMember['role'];
 
@@ -427,6 +428,9 @@ export function TeamSection() {
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
             Create and manage your AGI workspace.
           </p>
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <HelpArticleLink docId="workspace-administration" label="How workspaces work" />
+          </div>
         </div>
 
         {confirmDialog}
@@ -538,6 +542,9 @@ export function TeamSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Manage workspace details and the AGI accounts with access.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="workspace-administration" label="How workspaces work" />
+        </div>
       </div>
 
       {workspacePicker}

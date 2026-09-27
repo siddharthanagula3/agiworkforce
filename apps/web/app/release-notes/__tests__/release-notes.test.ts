@@ -85,7 +85,7 @@ describe('release notes describe capabilities the code actually carries', () => 
   it('keeps the CLI v1.0 release short of GA while the installer refuses that release', () => {
     const note = noteFor('2026-05-03');
     expect(note.maturity).not.toBe('ga');
-    expect(repoText('scripts', 'install.sh')).toContain(
+    expect(repoText('apps', 'web', 'public', 'install.sh')).toContain(
       'Release signature metadata is missing; refusing to install unverified bytes',
     );
   });

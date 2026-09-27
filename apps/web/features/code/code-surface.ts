@@ -1,12 +1,13 @@
 import {
+  buildVsCodeCloudTaskHandoffUri,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
+  CLOUD_CODE_SESSION_COPY,
+  cloudCodeRepositoryLabel,
   type CloudCodeChangeState,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
-  TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
-import type { CloudCodeAgentStopReason } from './services/cloud-code-api';
 
 export const CODE_ROUTES = {
   root: '/code',
@@ -79,12 +80,12 @@ export const CODE_COPY = {
   retry: 'Retry',
   retryTask: 'Run this task again',
   dismiss: 'Dismiss',
-  composerPlaceholder: 'Describe a task or ask a question',
+  composerPlaceholder: CLOUD_CODE_SESSION_COPY.composerPlaceholder,
   greetingWithName: "What's up next, {name}?",
   greeting: "What's up next?",
   send: 'Start the task',
-  stopTurn: 'Stop the task',
-  stoppingTurn: 'Stopping the task',
+  stopTurn: CLOUD_CODE_SESSION_COPY.stopTurn,
+  stoppingTurn: CLOUD_CODE_SESSION_COPY.stoppingTurn,
   startDictation: 'Start voice input',
   repositoryChip: 'Select repository',
   repositoryUrlLabel: 'Repository URL',
@@ -135,10 +136,10 @@ export const CODE_COPY = {
   copiedReply: 'Copied',
   readAloud: 'Read aloud',
   stopReading: 'Stop reading',
-  approvalHeading: 'Approval required',
-  approve: `${TOOL_APPROVAL_ACTION_LABELS.approve} and continue`,
-  reject: TOOL_APPROVAL_ACTION_LABELS.deny,
-  agentWorking: 'Working',
+  approvalHeading: CLOUD_CODE_SESSION_COPY.approvalHeading,
+  approve: CLOUD_CODE_SESSION_COPY.approve,
+  reject: CLOUD_CODE_SESSION_COPY.reject,
+  agentWorking: CLOUD_CODE_SESSION_COPY.agentWorking,
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   storageNotReady: 'Managed environments are not available yet. Existing sessions stay readable.',
@@ -154,9 +155,6 @@ export const CODE_COPY = {
   filterSort: 'Sort by',
   filterClear: 'Clear filters',
   filterAll: 'All',
-  statusOpen: 'Open',
-  statusClosed: 'Closed',
-  statusArchived: 'Archived',
   sortActivity: 'Last activity',
   sortCreated: 'Created',
   sortTitle: 'Title',
@@ -203,7 +201,7 @@ export const CODE_COPY = {
   firstRunInstallCopy: 'Choose which repositories the environment may clone and push.',
   firstRunAction: 'Connect GitHub',
 
-  runningPlaceholder: 'The agent is working. Your next task can wait here.',
+  runningPlaceholder: CLOUD_CODE_SESSION_COPY.runningPlaceholder,
   initializedSession: 'Initialized session',
   stepContainer: 'Set up a cloud container',
   stepClone: 'Cloned the repository',
@@ -227,8 +225,8 @@ export const CODE_COPY = {
   renameApply: 'Rename the session',
   renameCancel: 'Keep the current title',
   archiveSession: 'Archive',
-  unarchiveSession: 'Unarchive',
-  archivedBanner: 'This session is archived. Unarchive it to keep working in this session.',
+  unarchiveSession: CLOUD_CODE_SESSION_COPY.unarchiveSession,
+  archivedBanner: CLOUD_CODE_SESSION_COPY.archivedBanner,
   deleteSession: 'Delete',
   deleteSessionTitle: 'Delete this session?',
   deleteSessionDescription:
@@ -242,9 +240,11 @@ export const CODE_COPY = {
   changesDiffTruncated: 'The diff is too large to show in full.',
   createPullRequest: 'Create pull request',
   creatingPullRequest: 'Opening the pull request',
-  pullRequestChipPrefix: 'Pull request',
   pullRequestNeedsBranch: 'A pull request needs a repository and a working branch.',
   pullRequestNeedsOpenSession: 'A closed or archived session cannot open a pull request.',
+  continueInVsCode: 'Continue in VS Code',
+  continueInVsCodeHelp:
+    'Opens this session in VS Code and offers to check out its branch in the folder you have open. Commit and push first so your computer can fetch it.',
   changesSettings: 'Changes settings',
   changesExpand: 'Widen the panel',
   changesCollapse: 'Narrow the panel',
@@ -303,40 +303,6 @@ export function environmentChipLabel(
   return `${CODE_COPY.environmentCloud}${ENVIRONMENT_SEPARATOR}${networkAccessLabel(networkAccess)}`;
 }
 
-const SESSION_STATE_LABELS: Record<CloudCodeSession['state'], string> = {
-  ready: 'Ready',
-  running: 'Running a command',
-  provisioning: 'Provisioning',
-  failed: 'Needs attention',
-  closed: 'Closed',
-};
-
-export function sessionStateLabel(session: CloudCodeSession): string {
-  return SESSION_STATE_LABELS[session.state];
-}
-
-const STOP_REASON_LABELS: Record<CloudCodeAgentStopReason, string> = {
-  done: 'Finished',
-  awaiting_approval: 'Waiting for your approval',
-  max_steps: 'Stopped at the step limit',
-  timeout: 'Timed out',
-  cancelled: 'Cancelled',
-  denied: 'Stopped, a command was denied',
-  error: 'Failed',
-};
-
-export function stopReasonLabel(reason: CloudCodeAgentStopReason): string {
-  return STOP_REASON_LABELS[reason];
-}
-
-export function stopReasonIsFailure(reason: CloudCodeAgentStopReason): boolean {
-  return reason === 'error' || reason === 'denied' || reason === 'timeout';
-}
-
-export function stopReasonIsRetryable(reason: CloudCodeAgentStopReason): boolean {
-  return stopReasonIsFailure(reason) || reason === 'cancelled';
-}
-
 const CHANGE_STATE_LABELS: Record<CloudCodeChangeState, string> = {
   added: 'Added',
   modified: 'Modified',
@@ -350,10 +316,20 @@ export function changeStateLabel(state: CloudCodeChangeState): string {
   return CHANGE_STATE_LABELS[state];
 }
 
-export function repositoryLabel(repositoryUrl: string): string {
-  const trimmed = repositoryUrl.replace(/\.git$/, '').replace(/\/$/, '');
-  const parts = trimmed.split('/').filter(Boolean);
-  return parts.slice(-2).join('/') || trimmed;
+export function continueInVsCodeHref(
+  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch'>,
+): string | null {
+  if (session.workingBranch === null) return null;
+  try {
+    return buildVsCodeCloudTaskHandoffUri({
+      runId: session.id,
+      goal: session.title,
+      plan: [],
+      branch: session.workingBranch,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export function parseExtraHosts(value: string): string[] {
@@ -363,22 +339,11 @@ export function parseExtraHosts(value: string): string[] {
     .filter((host) => host.length > 0);
 }
 
-export function commandRanLabel(count: number): string {
-  return count === 1 ? 'Ran a command' : `Ran ${count} commands`;
-}
-
 export const CODE_STATUS_FILTERS = CLOUD_CODE_SESSION_STATUS_FILTERS;
 export type CodeStatusFilter = CloudCodeSessionStatusFilter;
 
 export const CODE_SORT_OPTIONS = ['activity', 'created', 'title'] as const;
 export type CodeSortOption = (typeof CODE_SORT_OPTIONS)[number];
-
-export const CODE_STATUS_FILTER_LABELS: Record<CodeStatusFilter, string> = {
-  open: CODE_COPY.statusOpen,
-  closed: CODE_COPY.statusClosed,
-  archived: CODE_COPY.statusArchived,
-  all: CODE_COPY.filterAll,
-};
 
 export const CODE_SORT_LABELS: Record<CodeSortOption, string> = {
   activity: CODE_COPY.sortActivity,
@@ -422,10 +387,6 @@ export function filterAndSortSessions(
     sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
   return sorted;
-}
-
-export function sessionIsBusy(session: CloudCodeSession): boolean {
-  return session.state === 'running' || session.state === 'provisioning';
 }
 
 export type CodeStepState = 'done' | 'skipped' | 'failed';
@@ -497,5 +458,5 @@ export function formatResetIn(resetAt: string | null | undefined, now: number): 
 export function sessionContextChip(session: CloudCodeSession): string {
   const environment = networkAccessLabel(session.networkAccess);
   if (!session.repositoryUrl) return environment;
-  return `${environment} · ${repositoryLabel(session.repositoryUrl)}`;
+  return `${environment} · ${cloudCodeRepositoryLabel(session.repositoryUrl)}`;
 }

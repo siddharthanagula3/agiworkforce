@@ -761,10 +761,7 @@ function EditPanel({
           </div>
 
           {retryBlocked && retryLabel ? (
-            <p
-              className="px-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-              aria-live="polite"
-            >
+            <p className="px-1 text-xs font-medium text-warning-text" aria-live="polite">
               {retryLabel} before generating another version.
             </p>
           ) : null}

@@ -1,12 +1,12 @@
+import {
+  MANAGED_CLOUD_GITHUB_TRIGGER_EVENT_TYPES,
+  MANAGED_CLOUD_GMAIL_TRIGGER_EVENT_TYPES,
+  MANAGED_CLOUD_GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES,
+  MANAGED_CLOUD_TRIGGER_SOURCES,
+} from '@agiworkforce/cloud-contracts';
 import type { FieldCondition } from '@/lib/automation/field-conditions';
 
-export const TRIGGER_SOURCES = [
-  'gmail',
-  'slack',
-  'google_calendar',
-  'github',
-  'connector',
-] as const;
+export const TRIGGER_SOURCES = MANAGED_CLOUD_TRIGGER_SOURCES;
 
 export type TriggerSource = (typeof TRIGGER_SOURCES)[number];
 
@@ -14,20 +14,12 @@ export function isTriggerSource(value: unknown): value is TriggerSource {
   return (TRIGGER_SOURCES as readonly unknown[]).includes(value);
 }
 
-export const GITHUB_TRIGGER_EVENT_TYPES = [
-  'push',
-  'pull_request.opened',
-  'pull_request.reopened',
-  'pull_request.synchronize',
-  'pull_request.ready_for_review',
-  'pull_request.closed',
-  'check_run.completed',
-  'workflow_run.completed',
-] as const;
+export const GITHUB_TRIGGER_EVENT_TYPES = MANAGED_CLOUD_GITHUB_TRIGGER_EVENT_TYPES;
 
-export const GMAIL_TRIGGER_EVENT_TYPES = ['message.received'] as const;
+export const GMAIL_TRIGGER_EVENT_TYPES = MANAGED_CLOUD_GMAIL_TRIGGER_EVENT_TYPES;
 
-export const GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES = ['events.changed', 'events.deleted'] as const;
+export const GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES =
+  MANAGED_CLOUD_GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES;
 
 const OPEN_EVENT_TYPE_RE: Record<'slack' | 'connector', RegExp> = {
   slack: /^[a-z][a-z0-9_]{0,63}$/,

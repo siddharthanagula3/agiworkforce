@@ -50,9 +50,21 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 import { runToolLoop } from './tool-loop';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
 
 const OPENAI_MODEL = requireProviderDefaultModel('openai');
+
+function offeredTool(serverId: string, toolName: string): WebMcpToolDef {
+  return {
+    qualifiedName: `mcp__${serverId}__${toolName}`,
+    serverId,
+    toolName,
+    description: toolName,
+    origin: 'operator',
+    inputSchema: { type: 'object' },
+  };
+}
 
 function fakeAdapterStream(chunks: unknown[]) {
   return async function* () {
@@ -134,7 +146,12 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     });
 
     const processed = makeProcessed();
-    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        mcpTools: [offeredTool('fs', 'list_directory')],
+      }),
+    );
 
     expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'list_directory', { path: '/' });
 
@@ -166,10 +183,10 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
           {
             type: 'tool-use-start',
             toolUseId: 'call_2',
-            name: 'mcp__fs__list_directory',
+            name: 'mcp__github__get_pull_request_diff',
             vendorIndex: 0,
           },
-          { type: 'tool-use-delta', toolUseId: 'call_2', deltaJson: '{"path":"/src"}' },
+          { type: 'tool-use-delta', toolUseId: 'call_2', deltaJson: '{"pull_number":2}' },
           { type: 'tool-use-end', toolUseId: 'call_2' },
           { type: 'stop', reason: 'tool_use' },
         ]),
@@ -184,12 +201,19 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     mockExecuteWebMcpTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
 
     const processed = makeProcessed();
-    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        mcpTools: [offeredTool('fs', 'read_file'), offeredTool('github', 'get_pull_request_diff')],
+      }),
+    );
 
     expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'read_file', {
       path: '/README.md',
     });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'list_directory', { path: '/src' });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
+      pull_number: 2,
+    });
     expect(mockOpenAIStream).toHaveBeenCalledTimes(3);
     expect(output).toContain('Done.');
     expect(output).toContain('data: [DONE]');

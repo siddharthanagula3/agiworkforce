@@ -93,22 +93,23 @@ struct Palette {
     cloud: (u8, u8, u8),
     brand: (u8, u8, u8),
     status_bar_bg: (u8, u8, u8),
-    on_dark: (u8, u8, u8),
-    on_light: (u8, u8, u8),
+    on_status_bar: (u8, u8, u8),
+    on_fill: (u8, u8, u8),
+    surface_elevated: (u8, u8, u8),
 }
 
-/// Dark = the existing AGI v3 brand defaults, so the default look is unchanged.
 const PALETTE_DARK: Palette = Palette {
-    accent: V3_TEAL,
-    muted: (128, 128, 128),
+    accent: (0x26, 0x94, 0xa2),
+    muted: (135, 135, 135),
     success: V3_SUCCESS,
     warning: V3_WARNING,
-    danger: V3_DANGER,
+    danger: (0xe4, 0x57, 0x57),
     cloud: V3_TERRACOTTA,
-    brand: V3_TEAL,
+    brand: (0x26, 0x94, 0xa2),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (255, 255, 255),
+    on_fill: (15, 15, 14),
+    surface_elevated: (28, 28, 28),
 };
 
 /// Light terminals: darker accents/text so foreground reads on a bright bg.
@@ -118,72 +119,75 @@ const PALETTE_LIGHT: Palette = Palette {
     success: (0x15, 0x80, 0x3d),
     warning: (0xb4, 0x53, 0x09),
     danger: (0xb9, 0x1c, 0x1c),
-    cloud: (0xc2, 0x4a, 0x2c),
+    cloud: (0xbe, 0x49, 0x2b),
     brand: (0x1a, 0x66, 0x70),
     status_bar_bg: (222, 222, 216),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (15, 15, 14),
+    on_fill: (255, 255, 255),
+    surface_elevated: (244, 244, 240),
 };
 
 /// Pure 16-color ANSI approximations for low-color terminals.
 const PALETTE_ANSI: Palette = Palette {
     accent: (0, 170, 170),
-    muted: (128, 128, 128),
+    muted: (170, 170, 170),
     success: (0, 170, 0),
-    warning: (170, 85, 0),
-    danger: (170, 0, 0),
-    cloud: (170, 0, 170),
+    warning: (255, 255, 85),
+    danger: (255, 85, 85),
+    cloud: (255, 85, 255),
     brand: (0, 170, 170),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (0, 0, 0),
+    on_status_bar: (255, 255, 255),
+    on_fill: (0, 0, 0),
+    surface_elevated: (28, 28, 28),
 };
 
-/// Solarized (Ethan Schoonover), dark variant.
-const PALETTE_SOLARIZED_DARK: Palette = Palette {
-    accent: (38, 139, 210),
-    muted: (88, 110, 117),
-    success: (133, 153, 0),
-    warning: (181, 137, 0),
-    danger: (220, 50, 47),
-    cloud: (203, 75, 22),
-    brand: (42, 161, 152),
-    status_bar_bg: (7, 54, 66),
-    on_dark: (253, 246, 227),
-    on_light: (0, 43, 54),
+const PALETTE_HIGH_CONTRAST_DARK: Palette = Palette {
+    accent: (47, 184, 202),
+    muted: (168, 168, 168),
+    success: (26, 193, 88),
+    warning: (248, 142, 18),
+    danger: (237, 142, 142),
+    cloud: (226, 149, 123),
+    brand: (47, 184, 202),
+    status_bar_bg: (48, 48, 48),
+    on_status_bar: (255, 255, 255),
+    on_fill: (0, 0, 0),
+    surface_elevated: (20, 20, 20),
 };
 
-/// Solarized, light variant (light base, same accents).
-const PALETTE_SOLARIZED_LIGHT: Palette = Palette {
-    accent: (38, 139, 210),
-    muted: (101, 123, 131),
-    success: (133, 153, 0),
-    warning: (181, 137, 0),
-    danger: (220, 50, 47),
-    cloud: (203, 75, 22),
-    brand: (42, 161, 152),
-    status_bar_bg: (238, 232, 213),
-    on_dark: (253, 246, 227),
-    on_light: (0, 43, 54),
+const PALETTE_HIGH_CONTRAST_LIGHT: Palette = Palette {
+    accent: (23, 91, 100),
+    muted: (83, 83, 83),
+    success: (16, 96, 46),
+    warning: (135, 62, 7),
+    danger: (165, 25, 25),
+    cloud: (143, 55, 32),
+    brand: (23, 91, 100),
+    status_bar_bg: (214, 214, 214),
+    on_status_bar: (0, 0, 0),
+    on_fill: (255, 255, 255),
+    surface_elevated: (240, 240, 240),
 };
 
 /// Deuteranopia-friendly: blue/orange/vermillion instead of green/red so the
 /// success↔danger distinction survives red-green color blindness (Wong palette).
 const PALETTE_COLORBLIND: Palette = Palette {
-    accent: (0, 114, 178),
-    muted: (128, 128, 128),
+    accent: (0, 141, 220),
+    muted: (135, 135, 135),
     success: (0, 158, 115),
     warning: (230, 159, 0),
-    danger: (213, 94, 0),
+    danger: (221, 98, 0),
     cloud: (86, 180, 233),
-    brand: (0, 114, 178),
+    brand: (0, 141, 220),
     status_bar_bg: (48, 48, 48),
-    on_dark: (255, 255, 255),
-    on_light: (15, 15, 14),
+    on_status_bar: (255, 255, 255),
+    on_fill: (15, 15, 14),
+    surface_elevated: (28, 28, 28),
 };
 
 /// Active theme index. Matches `ThemeChoice` declaration order
-/// (Dark=0, Light=1, Ansi=2, SolarizedDark=3, SolarizedLight=4, Colorblind=5).
+/// (Dark=0, Light=1, Ansi=2, HighContrastDark=3, HighContrastLight=4, Colorblind=5).
 static ACTIVE_THEME: AtomicU8 = AtomicU8::new(0);
 
 /// Apply a theme by index; subsequent `ui_*` calls resolve through it. Bumps the
@@ -203,8 +207,8 @@ fn palette_for(idx: u8) -> Palette {
     match idx {
         1 => PALETTE_LIGHT,
         2 => PALETTE_ANSI,
-        3 => PALETTE_SOLARIZED_DARK,
-        4 => PALETTE_SOLARIZED_LIGHT,
+        3 => PALETTE_HIGH_CONTRAST_DARK,
+        4 => PALETTE_HIGH_CONTRAST_LIGHT,
         5 => PALETTE_COLORBLIND,
         _ => PALETTE_DARK,
     }
@@ -254,14 +258,19 @@ pub fn ui_status_bar_bg() -> Color {
     best_color(active_palette().status_bar_bg)
 }
 
-/// Foreground for dark semantic backgrounds.
+/// Foreground for the status bar and the default mode badge drawn on it.
 pub fn ui_on_dark() -> Color {
-    best_color(active_palette().on_dark)
+    best_color(active_palette().on_status_bar)
 }
 
-/// Foreground for light semantic backgrounds.
+/// Foreground for text drawn on an accent or status fill.
 pub fn ui_on_light() -> Color {
-    best_color(active_palette().on_light)
+    best_color(active_palette().on_fill)
+}
+
+/// Fill behind popups, pickers and dialogs, one step above the terminal ground.
+pub fn ui_surface_elevated() -> Color {
+    best_color(active_palette().surface_elevated)
 }
 
 /// Badge background for the default chat mode.
@@ -413,8 +422,8 @@ fn ansi16_to_rgb(idx: u8) -> (u8, u8, u8) {
 /// Parse a `COLORFGBG` value into default fg/bg colors. The variable (set by
 /// rxvt/konsole/some tmux configs) is `"fg;bg"` or `"fg;default;bg"`; the last
 /// field is the background index. Returns `None` when absent or malformed.
-/// most modern terminals (iTerm2, Terminal.app) don't set it, so this is a
-/// best-effort fallback now that crossterm 0.28 removed the OSC color query.
+/// most modern terminals (iTerm2, Terminal.app) don't set it, so this is only
+/// the fallback for a terminal that does not answer the OSC 10/11 query.
 fn colorfgbg_to_default(raw: &str) -> Option<DefaultColors> {
     let parts: Vec<&str> = raw.split(';').collect();
     if parts.len() < 2 {
@@ -443,21 +452,111 @@ pub fn palette_version() -> u64 {
     DEFAULT_PALETTE_VERSION.load(Ordering::Relaxed)
 }
 
-// NOTE: crossterm 0.28 removed query_background_color / query_foreground_color.
-// Terminal color querying is not available; fall back to returning None.
 #[cfg(all(unix, not(test)))]
 mod imp {
     use super::DefaultColors;
+    use std::io::{ErrorKind, IsTerminal, Read, Write};
+    use std::os::unix::fs::OpenOptionsExt;
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+
+    const QUERY: &[u8] = b"\x1b]10;?\x1b\\\x1b]11;?\x1b\\\x1b[c";
+    const QUERY_TIMEOUT: Duration = Duration::from_millis(200);
+    const READ_INTERVAL: Duration = Duration::from_millis(5);
+
+    static QUERIED: Mutex<Option<DefaultColors>> = Mutex::new(None);
 
     pub(super) fn default_colors() -> Option<DefaultColors> {
-        // crossterm 0.28 removed the OSC color query, so fall back to COLORFGBG
-        // (set by rxvt/konsole/some tmux configs). Absent → None, unchanged.
-        std::env::var("COLORFGBG")
-            .ok()
-            .and_then(|raw| super::colorfgbg_to_default(&raw))
+        let queried = *QUERIED
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        queried.or_else(|| {
+            std::env::var("COLORFGBG")
+                .ok()
+                .and_then(|raw| super::colorfgbg_to_default(&raw))
+        })
     }
 
-    pub(super) fn requery_default_colors() {}
+    pub(super) fn requery_default_colors() {
+        if let Some(colors) = query_terminal_colors() {
+            *QUERIED
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(colors);
+        }
+    }
+
+    fn query_terminal_colors() -> Option<DefaultColors> {
+        if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+            return None;
+        }
+        if !crossterm::terminal::is_raw_mode_enabled().unwrap_or(false) {
+            return None;
+        }
+        let mut tty = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(nix::libc::O_NONBLOCK)
+            .open("/dev/tty")
+            .ok()?;
+        tty.write_all(QUERY).ok()?;
+        tty.flush().ok()?;
+
+        let deadline = Instant::now() + QUERY_TIMEOUT;
+        let mut reply = Vec::new();
+        let mut chunk = [0u8; 256];
+        while Instant::now() < deadline && !device_attributes_answered(&reply) {
+            match tty.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(read) => reply.extend_from_slice(&chunk[..read]),
+                Err(error) if error.kind() == ErrorKind::WouldBlock => {
+                    std::thread::sleep(READ_INTERVAL)
+                }
+                Err(error) if error.kind() == ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+
+        let bg = osc_color(&reply, b"\x1b]11;")?;
+        let fg = osc_color(&reply, b"\x1b]10;").unwrap_or(
+            if (bg.0 as u16 + bg.1 as u16 + bg.2 as u16) / 3 > 127 {
+                (0, 0, 0)
+            } else {
+                (255, 255, 255)
+            },
+        );
+        Some(DefaultColors { fg, bg })
+    }
+
+    fn device_attributes_answered(reply: &[u8]) -> bool {
+        reply
+            .windows(3)
+            .position(|window| window == b"\x1b[?")
+            .is_some_and(|start| reply[start + 3..].contains(&b'c'))
+    }
+
+    fn osc_color(reply: &[u8], introducer: &[u8]) -> Option<(u8, u8, u8)> {
+        let start = reply
+            .windows(introducer.len())
+            .position(|window| window == introducer)?
+            + introducer.len();
+        let body = &reply[start..];
+        let end = body.iter().position(|&byte| byte == 0x07 || byte == 0x1b)?;
+        let text = std::str::from_utf8(&body[..end]).ok()?;
+        let channels = text
+            .strip_prefix("rgb:")
+            .or_else(|| text.strip_prefix("rgba:"))?;
+        let mut parts = channels.split('/').map(scale_channel);
+        Some((parts.next()??, parts.next()??, parts.next()??))
+    }
+
+    fn scale_channel(hex: &str) -> Option<u8> {
+        if hex.is_empty() || hex.len() > 4 {
+            return None;
+        }
+        let value = u32::from_str_radix(hex, 16).ok()?;
+        let max = (1u32 << (4 * hex.len() as u32)) - 1;
+        Some(((value * 255 + max / 2) / max) as u8)
+    }
 }
 
 #[cfg(not(all(unix, not(test))))]
@@ -789,7 +888,7 @@ mod theme_tests {
 
     #[test]
     fn every_theme_index_resolves_to_a_distinct_dark_or_light_base() {
-        // Dark/Ansi/SolarizedDark/Colorblind are dark-based; Light/SolarizedLight
+        // Dark/Ansi/HighContrastDark/Colorblind are dark-based; Light/HighContrastLight
         // are light-based, their status-bar backgrounds must differ accordingly.
         let lightness = |(r, g, b): (u8, u8, u8)| r as u16 + g as u16 + b as u16;
         assert!(

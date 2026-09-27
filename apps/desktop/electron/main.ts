@@ -105,6 +105,7 @@ import {
   type WindowFrame,
 } from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
+import { deliverBrowserHandoff } from './browserHandoff';
 import { captureToChat } from './screenshot';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
@@ -347,6 +348,10 @@ async function startPairingBridge(): Promise<void> {
                 : 'timeout',
           };
         }
+      },
+      deliverToChat: (handoff) => {
+        showMainWindow();
+        return deliverBrowserHandoff(mainWindow, handoff);
       },
       ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),
     });

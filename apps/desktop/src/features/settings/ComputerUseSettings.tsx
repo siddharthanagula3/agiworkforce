@@ -376,7 +376,7 @@ export function ComputerUseSettings() {
             {/* Allowed list */}
             {groupedPermissions.allowed.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-green-600 dark:text-green-400 flex items-center gap-1">
+                <p className="text-xs font-medium text-success-text flex items-center gap-1">
                   <Shield className="h-3 w-3" /> Allowed
                 </p>
                 {groupedPermissions.allowed.map((p) => (
@@ -395,7 +395,7 @@ export function ComputerUseSettings() {
             {/* Denied list */}
             {groupedPermissions.denied.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-1">
+                <p className="text-xs font-medium text-danger-text flex items-center gap-1">
                   <Ban className="h-3 w-3" /> Blocked
                 </p>
                 {groupedPermissions.denied.map((p) => (
@@ -414,9 +414,7 @@ export function ComputerUseSettings() {
             {/* Ask list */}
             {groupedPermissions.ask.length > 0 && (
               <div className="space-y-1">
-                <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                  Ask every time
-                </p>
+                <p className="text-xs font-medium text-warning-text">Ask every time</p>
                 {groupedPermissions.ask.map((p) => (
                   <PermissionRow
                     key={p.app_name}
@@ -440,9 +438,9 @@ export function ComputerUseSettings() {
 
           {/* Stream 1: Always-blocked refuse-list (read-only) */}
           {alwaysBlocked.length > 0 && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-5 space-y-3">
+            <div className="rounded-lg border border-danger-fill/30 bg-danger-fill/5 p-5 space-y-3">
               <div>
-                <h4 className="font-semibold text-sm flex items-center gap-2 text-red-600 dark:text-red-400">
+                <h4 className="font-semibold text-sm flex items-center gap-2 text-danger-text">
                   <Lock className="h-4 w-4" />
                   Always Blocked (cannot be overridden)
                 </h4>
@@ -462,7 +460,7 @@ export function ComputerUseSettings() {
                       key={id}
                       className="flex items-center gap-2 px-2 py-1 rounded bg-muted/30 font-mono text-[11px]"
                     >
-                      <Ban className="h-3 w-3 text-red-500 shrink-0" />
+                      <Ban className="h-3 w-3 text-danger-text shrink-0" />
                       {id}
                     </li>
                   ))}

@@ -52,9 +52,9 @@ function getUrgencyLevel(seconds: number): 'critical' | 'warning' | 'info' {
 function getProgressColor(urgency: 'critical' | 'warning' | 'info'): string {
   switch (urgency) {
     case 'critical':
-      return 'bg-red-500';
+      return 'bg-danger-fill';
     case 'warning':
-      return 'bg-yellow-500';
+      return 'bg-warning-fill';
     default:
       return 'bg-blue-500';
   }
@@ -206,9 +206,9 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
           className={cn(
             'relative w-full max-w-md rounded-lg border shadow-2xl',
             urgency === 'critical'
-              ? 'border-red-500/50 bg-red-950/10'
+              ? 'border-danger-fill/50 bg-danger-fill/10'
               : urgency === 'warning'
-                ? 'border-yellow-500/50 bg-yellow-950/10'
+                ? 'border-warning-fill/50 bg-warning-fill/10'
                 : 'border-blue-500/50 bg-blue-950/10',
           )}
           initial={{ scale: 0.95 }}
@@ -233,9 +233,9 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
                 className={cn(
                   'rounded-lg p-2',
                   urgency === 'critical'
-                    ? 'bg-red-500/20'
+                    ? 'bg-danger-fill/10'
                     : urgency === 'warning'
-                      ? 'bg-yellow-500/20'
+                      ? 'bg-warning-fill/10'
                       : 'bg-blue-500/20',
                 )}
               >
@@ -243,9 +243,9 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
                   className={cn(
                     'h-6 w-6',
                     urgency === 'critical'
-                      ? 'text-red-500'
+                      ? 'text-danger-text'
                       : urgency === 'warning'
-                        ? 'text-yellow-500'
+                        ? 'text-warning-text'
                         : 'text-blue-500',
                   )}
                 />
@@ -353,7 +353,7 @@ export const TimeoutWarningDialog: FC<TimeoutWarningDialogProps> = ({
                   onClick={handleAbortTask}
                   disabled={isLoading}
                   variant="ghost"
-                  className="w-full text-red-400 hover:text-red-300 hover:bg-red-500/20"
+                  className="w-full text-danger-text hover:bg-danger-fill/10"
                 >
                   Abort
                 </Button>

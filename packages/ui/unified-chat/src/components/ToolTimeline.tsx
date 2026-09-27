@@ -140,11 +140,15 @@ export function ToolTimeline({
         <Wrench className="w-3 h-3" />
         <span>
           {hasRunning ? (
-            <span className="text-violet-400">{formatRunningSummary(entries)}</span>
+            <span className="text-violet-700 dark:text-violet-400">
+              {formatRunningSummary(entries)}
+            </span>
           ) : (
             <>
               Used {entries.length} tool{entries.length !== 1 ? 's' : ''}
-              {errorCount > 0 && <span className="text-red-400 ml-1">({errorCount} failed)</span>}
+              {errorCount > 0 && (
+                <span className="text-danger-text ml-1">({errorCount} failed)</span>
+              )}
               {totalDuration > 0 && (
                 <span className="text-muted-foreground ml-1">
                   (
@@ -180,8 +184,10 @@ export function ToolTimeline({
                       className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5"
                     >
                       <div className="flex items-center gap-1 mb-0.5">
-                        <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                        <span className="text-caption text-blue-400/70 font-mono">parallel</span>
+                        <GitBranch className="w-2.5 h-2.5 text-blue-700 dark:text-blue-400 shrink-0" />
+                        <span className="text-caption text-blue-700 dark:text-blue-400 font-mono">
+                          parallel
+                        </span>
                       </div>
                       {group.entries.map((entry) => (
                         <ToolCallCard

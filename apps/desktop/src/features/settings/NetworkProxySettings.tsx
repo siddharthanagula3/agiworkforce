@@ -328,7 +328,7 @@ export function NetworkProxySettings() {
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground" role="status">
           {saved && (
             <>
-              <Check className="h-3.5 w-3.5 text-emerald-500" /> Applied to live providers
+              <Check className="h-3.5 w-3.5 text-success-text" /> Applied to live providers
             </>
           )}
         </span>

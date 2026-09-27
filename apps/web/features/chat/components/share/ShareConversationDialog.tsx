@@ -132,7 +132,7 @@ function ShareConversationDialogImpl({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {activeShare ? (
-                <Check className="h-5 w-5 text-emerald-500" />
+                <Check className="h-5 w-5 text-success-text" />
               ) : (
                 <Globe2 className="h-5 w-5" />
               )}
@@ -197,8 +197,8 @@ function ShareConversationDialogImpl({
                   </p>
                 </div>
               ) : (
-                <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-muted-foreground">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <div className="flex gap-2 rounded-lg border border-warning-fill/20 bg-warning-fill/5 p-3 text-sm text-muted-foreground">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
                   <p>
                     The link does not require sign-in. Remove secrets, personal data, and private
                     files before sharing it.
@@ -243,8 +243,8 @@ function ShareConversationDialogImpl({
                   <p>{TEMPORARY_CHAT_SHARE_REFUSAL}</p>
                 </div>
               ) : (
-                <div className="flex gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 text-sm text-muted-foreground">
-                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <div className="flex gap-2 rounded-lg border border-warning-fill/20 bg-warning-fill/5 p-3 text-sm text-muted-foreground">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" />
                   <p>Anyone with the link can read the snapshot without signing in.</p>
                 </div>
               )}

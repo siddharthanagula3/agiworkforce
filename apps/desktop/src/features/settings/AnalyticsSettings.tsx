@@ -154,23 +154,23 @@ export const AnalyticsSettings = () => {
         </h3>
         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
+            <span className="text-danger-text">✗</span>
             <span>Personal information (names, emails, phone numbers)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
+            <span className="text-danger-text">✗</span>
             <span>IP addresses or precise location data</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
+            <span className="text-danger-text">✗</span>
             <span>File contents or automation logic</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
+            <span className="text-danger-text">✗</span>
             <span>API keys, passwords, or credentials</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-red-600">✗</span>
+            <span className="text-danger-text">✗</span>
             <span>Chat messages or conversation history</span>
           </div>
         </div>
@@ -211,7 +211,7 @@ export const AnalyticsSettings = () => {
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              className="px-4 py-2 bg-danger-fill text-danger-on-fill rounded-lg hover:brightness-95"
             >
               Delete Data
             </button>
@@ -257,7 +257,7 @@ export const AnalyticsSettings = () => {
                 type="button"
                 onClick={handleDeleteAllData}
                 disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                className="flex-1 px-4 py-2 bg-danger-fill text-danger-on-fill rounded-lg hover:brightness-95 disabled:opacity-50"
               >
                 {isDeleting ? 'Deleting...' : 'Delete All Data'}
               </button>
@@ -324,7 +324,7 @@ const DataCollectionItem: React.FC<DataCollectionItemProps> = ({
 }) => {
   return (
     <div role="listitem" className="flex items-start gap-3">
-      <span className={collected ? 'text-green-600' : 'text-gray-400'}>
+      <span className={collected ? 'text-success-text' : 'text-gray-400'}>
         {collected ? '✓' : '○'}
       </span>
       <div className="flex-1">

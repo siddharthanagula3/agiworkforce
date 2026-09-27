@@ -100,20 +100,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, 
 
 Code: `apps/web/app/api/connectors/permissions/route.ts:151-152`
 
-## S59.08: Permission-mode selector.
-
-- Done when: The user can pick a permission mode (ask every time / auto for low risk / skip approvals) that governs how every tool runs.
-- Wave: 3
-- Already works on: cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-| desktop | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-| mobile | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-
-Code: `apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx:141-145`, `apps/web/features/code/components/CodeComposer.tsx:857-860`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:381-391`, `apps/web/app/api/llm/v1/chat/completions/route.ts:759-768`
-
 ## S59.09: Read-only mode.
 
 - Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
@@ -122,8 +108,8 @@ Code: `apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx:141-1
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No mode limits the agent to reading: "Ask before every action" still lets writes run once approved, and Lockdown refuses connector tools only (web search, page fetch and sandbox code stay available). | handler |
-| desktop | partial | No mode limits the agent to reading: "Ask before every action" still lets writes run once approved, and Lockdown refuses connector tools only (web search, page fetch and sandbox code stay available). | handler |
+| web | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
+| desktop | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
 | mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
 | chrome | partial | The browser agent can ask before acting, but has no mode that allows reading pages while refusing clicks and typing. | handler |
 
@@ -242,17 +228,17 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`, `apps/web/app/api/llm/v
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
 | desktop | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
 | mobile | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
-| cli | partial | Approvals are kept in the managed session activity, but nothing lists them, and the approval_audit log writer (record_approval) is never called. | ui |
 | vscode | partial | Decisions show on the approval card in the current session only. | ui |
 | chrome | partial | Decisions show as "decision recorded" on the step only. | ui |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:4081-4083`, `apps/mobile/src/features/tasks/runPresentation.ts:204-205`, `apps/cli/src/platform/runtime/session_activity.rs:111-123`, `apps/cli/src/approval_audit.rs:57-61`
+Code: `apps/web/lib/hooks/useChatStream.ts:4081-4083`, `apps/mobile/src/features/tasks/runPresentation.ts:204-205`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4602-4605`, `apps/extension/src/features/side-panel/bubbles.ts:483-483`
 
 ## S59.25: Revoke saved permission.
 
@@ -299,14 +285,13 @@ Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `ap
 
 - Done when: Sensitive or irreversible actions get a stronger confirmation than routine ones (warning, no permanent allow, re-ask).
 - Wave: 3
-- Already works on: desktop, cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gate re-asks when untrusted content, private data and an egress call coincide (even over Always allow), but the approval UI looks the same as any other. | ui |
-| mobile | partial | Mobile shows a risk badge on companion approvals only; cloud approvals look the same whatever the risk. | ui |
+| mobile | partial | Web now flags a trifecta re-ask as high risk on the approval card; mobile cloud approvals still look the same whatever the risk, and mobile shows a risk badge only on companion approvals. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:80-84`, `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
+Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
 
 ## S59.29: User takeover.
 

@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Mail,
   Info,
+  LifeBuoy,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -283,9 +284,15 @@ export default function AboutScreen() {
           </Pressable>
           <Separator />
           <LinkRow
-            icon={Mail}
+            icon={LifeBuoy}
             label="Contact Support"
-            onPress={() => void openMail('mailto:support@agiworkforce.com')}
+            onPress={() => router.push('/(app)/support' as Parameters<typeof router.push>[0])}
+          />
+          <Separator />
+          <LinkRow
+            icon={Mail}
+            label="Email Support"
+            onPress={() => void openMail('mailto:contact@agiworkforce.com')}
           />
         </Card>
 

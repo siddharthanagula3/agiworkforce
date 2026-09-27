@@ -213,7 +213,7 @@ export function ResearchSettings() {
 
         {prefs.perplexityKeySet ? (
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-green-600">
+            <div className="flex items-center gap-2 text-sm text-success-text">
               <Check className="h-4 w-4" />
               <span className="font-medium">API key is saved</span>
             </div>
@@ -278,7 +278,7 @@ export function ResearchSettings() {
             <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
           )}
           {prefStatus === 'saved' && (
-            <span className="flex items-center gap-1 text-xs text-green-600">
+            <span className="flex items-center gap-1 text-xs text-success-text">
               <Check className="h-3 w-3" /> Saved
             </span>
           )}
