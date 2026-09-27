@@ -32,12 +32,32 @@ const secondaryButtonStyle = {
   whiteSpace: 'nowrap',
 } as const;
 
+const MAX_PASSKEY_NAME_CHARS = 50;
+
 export function PasskeysPanel() {
-  const { isLoaded, isSupported, passkeys, create, remove } = usePasskeys();
+  const { isLoaded, isSupported, passkeys, create, rename, remove } = usePasskeys();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const [adding, setAdding] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const [savingName, setSavingName] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleRename() {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    if (!name) return;
+    setError(null);
+    setSavingName(true);
+    try {
+      await rename(renaming.id, name);
+      setRenaming(null);
+    } catch (cause) {
+      setError(toUserMessage(cause, 'This passkey could not be renamed.'));
+    } finally {
+      setSavingName(false);
+    }
+  }
 
   async function handleAdd() {
     setError(null);
@@ -146,35 +166,94 @@ export function PasskeysPanel() {
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{label}</div>
+                  {renaming?.id === passkey.id ? (
+                    <input
+                      aria-label={`New name for ${label}`}
+                      value={renaming.name}
+                      maxLength={MAX_PASSKEY_NAME_CHARS}
+                      disabled={savingName}
+                      onChange={(event) =>
+                        setRenaming({ id: passkey.id, name: event.target.value })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleRename();
+                        }
+                        if (event.key === 'Escape') setRenaming(null);
+                      }}
+                      style={{
+                        fontSize: 14,
+                        color: 'var(--text-1)',
+                        background: 'var(--bg-base)',
+                        border: '1px solid var(--settings-border)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: 'var(--space-1) var(--space-2)',
+                      }}
+                    />
+                  ) : (
+                    <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{label}</div>
+                  )}
                   <div
                     style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
                   >
                     {describePasskey(passkey)}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  aria-label={`Remove ${label}`}
-                  disabled={removingId !== null}
-                  onClick={() =>
-                    confirm({
-                      title: `Remove ${label}?`,
-                      description:
-                        'You will no longer be able to sign in with this passkey on any device that synced it. You can add it again later.',
-                      confirmLabel: 'Remove passkey',
-                      destructive: true,
-                      onConfirm: () => handleRemove(passkey),
-                    })
-                  }
-                  style={{
-                    ...secondaryButtonStyle,
-                    color: 'var(--settings-destructive-text)',
-                    cursor: removingId !== null ? 'default' : 'pointer',
-                  }}
-                >
-                  {removingId === passkey.id ? 'Removing…' : 'Remove'}
-                </button>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  {renaming?.id === passkey.id ? (
+                    <>
+                      <button
+                        type="button"
+                        disabled={savingName || !renaming.name.trim()}
+                        onClick={() => void handleRename()}
+                        style={{ ...secondaryButtonStyle, color: 'var(--text-1)' }}
+                      >
+                        {savingName ? 'Saving…' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={savingName}
+                        onClick={() => setRenaming(null)}
+                        style={{ ...secondaryButtonStyle, color: 'var(--text-2)' }}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={`Rename ${label}`}
+                      disabled={removingId !== null || renaming !== null}
+                      onClick={() => setRenaming({ id: passkey.id, name: passkey.name ?? '' })}
+                      style={{ ...secondaryButtonStyle, color: 'var(--text-1)' }}
+                    >
+                      Rename
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Remove ${label}`}
+                    disabled={removingId !== null}
+                    onClick={() =>
+                      confirm({
+                        title: `Remove ${label}?`,
+                        description:
+                          'You will no longer be able to sign in with this passkey on any device that synced it. You can add it again later.',
+                        confirmLabel: 'Remove passkey',
+                        destructive: true,
+                        onConfirm: () => handleRemove(passkey),
+                      })
+                    }
+                    style={{
+                      ...secondaryButtonStyle,
+                      color: 'var(--settings-destructive-text)',
+                      cursor: removingId !== null ? 'default' : 'pointer',
+                    }}
+                  >
+                    {removingId === passkey.id ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
               </li>
             );
           })}

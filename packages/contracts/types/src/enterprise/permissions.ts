@@ -133,6 +133,46 @@ export function legacyOrganizationPermission(value: string): LegacyOrganizationP
   return CANONICAL_TO_LEGACY.get(value) ?? null;
 }
 
+export const ORGANIZATION_PERMISSION_COPY: Readonly<
+  Record<CanonicalOrganizationPermission, string>
+> = Object.freeze({
+  'feature.content.view': 'Open what the workspace shares',
+  'feature.content.share': 'Share projects, conversations and artifacts into the workspace',
+  'feature.content.govern': 'See members’ workspace conversations and projects',
+  'feature.sharing.manage': 'Change or withdraw anything shared',
+  'admin.members.view': 'See the member list',
+  'admin.members.manage': 'Invite, remove and change members',
+  'admin.owners.view': 'See who owns the workspace',
+  'admin.owners.manage': 'Change other owners',
+  'admin.roles.view': 'See roles and who holds them',
+  'admin.roles.manage': 'Create roles and assign them',
+  'admin.groups.view': 'See directory groups and their roles',
+  'admin.groups.manage': 'Give directory groups roles and managers',
+  'admin.policy.view': 'See workspace policy, models and connectors',
+  'admin.policy.manage': 'Change workspace policy, models and connectors',
+  'admin.identity.view': 'See single sign-on settings',
+  'admin.identity.manage': 'Change single sign-on settings',
+  'admin.directory.view': 'See directory sync and its log',
+  'admin.directory.manage': 'Manage directory sync',
+  'admin.audit.view': 'Read the audit trail and usage',
+  'admin.audit.manage': 'Change audit retention and export the trail',
+  'admin.billing.view': 'See the contract and invoices',
+  'admin.billing.manage': 'Change the plan, seats and spend limit',
+  'admin.workspace.view': 'See workspace settings',
+  'admin.workspace.manage': 'Rename the workspace',
+  'admin.ownership.view': 'See who the Primary Owner is',
+  'admin.ownership.manage': 'Transfer ownership',
+  'admin.lifecycle.view': 'See the workspace deletion state',
+  'admin.lifecycle.manage': 'Delete the workspace',
+  'admin.contracts.view': 'See the billing contract',
+  'admin.contracts.manage': 'Manage the billing contract',
+});
+
+export function organizationPermissionCopy(permission: string): string {
+  const canonical = canonicalOrganizationPermission(permission);
+  return canonical ? ORGANIZATION_PERMISSION_COPY[canonical] : permission;
+}
+
 export function canonicalOrganizationPermissions(
   values: Iterable<string>,
 ): CanonicalOrganizationPermission[] {
