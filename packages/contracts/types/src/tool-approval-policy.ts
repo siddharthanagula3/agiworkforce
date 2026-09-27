@@ -32,6 +32,9 @@ export const TOOL_APPROVAL_ACTION_LABELS = Object.freeze({
 
 export type ToolApprovalActionVerb = keyof typeof TOOL_APPROVAL_ACTION_LABELS;
 
+export const TOOL_APPROVAL_HIGH_RISK_NOTICE =
+  'High risk. Check the request below before you allow it.';
+
 export interface ToolApprovalPolicyOption {
   policy: ToolApprovalPolicy;
   /** One word for a composer-sized control. */
