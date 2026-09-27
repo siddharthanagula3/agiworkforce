@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { ACCOUNT_DENIAL_NOTICE, type AccountAccessDenied } from '@/lib/auth/account-status';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthStepFrame } from './AuthStepFrame';
-import { AUTH_PRIMARY_BUTTON_CLASS } from './authStyles';
+import { AUTH_LINK_CLASS, AUTH_PRIMARY_BUTTON_CLASS, AUTH_STEP_LINKS_CLASS } from './authStyles';
+import { SuspensionAppeal } from './SuspensionAppeal';
 
 export function AccountAccessNotice({
   denial,
@@ -25,13 +26,24 @@ export function AccountAccessNotice({
       footer={<AuthLegalFooter />}
       focusHeading
     >
-      <Link
-        href={denial.recoveryPath ?? signInHref}
-        className={AUTH_PRIMARY_BUTTON_CLASS}
-        data-account-denial={denial.reason}
-      >
-        {action}
-      </Link>
+      {denial.reason === 'suspended' ? (
+        <>
+          <SuspensionAppeal signedIn />
+          <div className={AUTH_STEP_LINKS_CLASS}>
+            <Link href="/terms#s-11" className={AUTH_LINK_CLASS}>
+              When accounts are suspended
+            </Link>
+          </div>
+        </>
+      ) : (
+        <Link
+          href={denial.recoveryPath ?? signInHref}
+          className={AUTH_PRIMARY_BUTTON_CLASS}
+          data-account-denial={denial.reason}
+        >
+          {action}
+        </Link>
+      )}
     </AuthStepFrame>
   );
 }

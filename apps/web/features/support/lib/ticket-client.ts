@@ -156,3 +156,27 @@ export async function moveSupportTicket(
   );
   return payload['ticket'] as SupportTicket;
 }
+
+const APPEAL_PATH = '/api/support/appeal';
+
+function asAppeal(payload: Record<string, unknown>): SupportTicketThread | null {
+  const appeal = payload['appeal'];
+  return isRecord(appeal) && isRecord(appeal['ticket']) ? asThread(appeal) : null;
+}
+
+export async function readSuspensionAppeal(): Promise<SupportTicketThread | null> {
+  const payload = await request(
+    APPEAL_PATH,
+    { method: 'GET', headers: { Accept: 'application/json' } },
+    'Your appeal could not be loaded.',
+  );
+  return asAppeal(payload);
+}
+
+export async function submitSuspensionAppeal(input: {
+  message: string;
+  email?: string;
+}): Promise<SupportTicketThread | null> {
+  const payload = await mutate(APPEAL_PATH, 'POST', input, 'Your appeal was not sent.');
+  return asAppeal(payload);
+}
