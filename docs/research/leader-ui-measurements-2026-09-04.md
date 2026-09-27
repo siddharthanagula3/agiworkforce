@@ -114,7 +114,7 @@ All OBSERVED.
 
 ## 8. Mobile and tablet
 
-The extension cannot resize the founder's Chrome window (the resize call reports success but the viewport stays 1543). INFERRED, HIGH from the 2026-08-30 measurement doc (chat-ui-parity-2026-08-30.md): at 390px ChatGPT's composer rests at about 87px including its footer line, the sidebar becomes a full-height drawer behind a top-left toggle, and the message column takes the full width with 16px side padding. Claude at phone width was not measured; INFERRED, MEDIUM: the same drawer pattern with the mode toggle kept inside the composer.
+The extension cannot resize the founder's Chrome window (the resize call reports success but the viewport stays 1543). INFERRED, HIGH from the 2026-08-30 measurement doc (deleted 2026-09-27, in git history): at 390px ChatGPT's composer rests at about 87px including its footer line, the sidebar becomes a full-height drawer behind a top-left toggle, and the message column takes the full width with 16px side padding. Claude at phone width was not measured; INFERRED, MEDIUM: the same drawer pattern with the mode toggle kept inside the composer.
 
 ## 9. Shared pattern and the AGI Workforce target
 
