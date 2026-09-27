@@ -14,6 +14,7 @@ import {
   loadSchedulePreferences,
   notifyScheduleCompleted,
 } from '@/lib/services/schedule-notification-service';
+import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
 
 import type { JobHandlerContext, JobHandlerRegistry } from './job-drain';
@@ -65,12 +66,14 @@ async function announceScheduleCompletion(
   const preferences = await loadSchedulePreferences(scopedDb, userId);
   let emailQueued = false;
   if (preferences.email && preferences.email_address) {
+    const heldUntil = await quietHoursEndFor(scopedDb, userId);
     await enqueueJob(context.db, {
       kind: 'email.schedule-completed',
       userId,
       organizationId: context.job.organizationId,
       idempotencyKey: `schedule-email:${notice.runId}`,
       payload: { ...notice },
+      ...(heldUntil ? { runAfter: heldUntil } : {}),
     });
     emailQueued = true;
   }
