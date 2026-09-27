@@ -9,7 +9,9 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { startGmailWatch } from '@/lib/triggers/gmail-watch';
 import { createTrigger, listTriggers, type TriggerInput } from '@/lib/triggers/trigger-service';
 import { rethrowTriggerError } from '@/lib/triggers/trigger-errors';
 import { triggerWebhookPath } from '@/lib/triggers/trigger-endpoints';
@@ -91,12 +93,13 @@ async function handleCreateTrigger(request: NextRequest) {
         source: created.trigger.source,
       },
     });
+    const trigger = await startGmailWatch(getNeonDb(), created.trigger);
     return NextResponse.json(
       {
-        trigger: created.trigger,
+        trigger,
         verificationCode: created.verificationCode,
         signingSecret: created.signingSecret,
-        webhookPath: triggerWebhookPath(created.trigger),
+        webhookPath: triggerWebhookPath(trigger),
       },
       { status: 201 },
     );

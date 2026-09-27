@@ -275,11 +275,12 @@ export function formatLiveVoiceLanguage(language: string | null): string | null 
 export function buildLiveVoiceInstructions(
   base: string,
   bundle: LiveVoiceContextBundle,
-  options: { language?: string | null } = {},
+  options: { language?: string | null; toolNotice?: string | null } = {},
 ): string {
   return compose(
     [
       base,
+      options.toolNotice ?? null,
       formatLiveVoiceLanguage(options.language ?? null),
       bundle.memoryPrompt,
       bundle.projectBrief,
@@ -292,9 +293,16 @@ export function buildLiveVoiceInstructions(
 export function buildLiveVoiceBackendInstructions(
   base: string,
   bundle: LiveVoiceContextBundle,
+  options: { toolNotice?: string | null } = {},
 ): string {
   return compose(
-    [base, bundle.memoryPrompt, bundle.projectPrompt, formatLiveVoiceTranscript(bundle.turns)],
+    [
+      base,
+      options.toolNotice ?? null,
+      bundle.memoryPrompt,
+      bundle.projectPrompt,
+      formatLiveVoiceTranscript(bundle.turns),
+    ],
     MAX_BACKEND_INSTRUCTIONS_CHARS,
   );
 }

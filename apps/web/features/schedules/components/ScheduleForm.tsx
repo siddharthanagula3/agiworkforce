@@ -113,10 +113,22 @@ export function ScheduleForm({
       }}
     >
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pr-3">
-        <div className="rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          Scheduled runs use Managed Cloud and return text. Web search, tools, research, files, and
-          media generation are not available in this surface. Email and mobile-push alerts for a
-          finished run are account-wide, not per schedule, turn them on in Settings → Notifications.
+        <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+          <p>
+            Scheduled runs use Managed Cloud and return text. Each run reads your saved memories
+            when memory is on, and a project&rsquo;s instructions and files when the schedule
+            belongs to one.
+          </p>
+          <p>
+            Nobody is there to approve actions, so a run uses only tools that need no approval: web
+            search, page fetch and code when Settings → Capabilities → Tool approvals lets them run
+            without asking, and connector tools you set to Always allow. Anything else is skipped,
+            and the output says so. Research and media generation are not available.
+          </p>
+          <p>
+            Email and mobile-push alerts for a finished run are account-wide, not per schedule. Turn
+            them on in Settings → Notifications.
+          </p>
         </div>
 
         {submitError && (
@@ -179,8 +191,8 @@ export function ScheduleForm({
               aria-describedby={describedBy('prompt', errors, 'schedule-prompt-helper')}
             />
             <p id="schedule-prompt-helper" className="text-xs text-muted-foreground">
-              Write a self-contained instruction. Scheduled runs do not inherit chat context or
-              memory.
+              Write a self-contained instruction. Scheduled runs do not see your chats, but they do
+              read your saved memories when memory is on.
             </p>
             <FieldError field="prompt" errors={errors} />
           </div>
