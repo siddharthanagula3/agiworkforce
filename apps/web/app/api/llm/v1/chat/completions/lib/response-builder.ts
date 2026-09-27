@@ -102,15 +102,13 @@ export async function buildNonStreamResponse(
     hostedCodeExecution,
     dynamicFilteringWebTool: offersDynamicFilteringWebTool(processed.llmRequest.tools),
   });
-  const tokenProviderCostMicrousd = freeTrial
-    ? 0
-    : LLMCostCalculator.calculateCostMicrousd(
-        provider,
-        llmResponse.model,
-        tokenUsage,
-        undefined,
-        buildServingRouteId(provider, llmResponse.model),
-      );
+  const tokenProviderCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
+    provider,
+    llmResponse.model,
+    tokenUsage,
+    undefined,
+    buildServingRouteId(provider, llmResponse.model),
+  );
   const providerCostMicrousd = freeTrial
     ? 0
     : tokenProviderCostMicrousd + serverTools.providerMicrousd;
@@ -230,6 +228,10 @@ export async function buildNonStreamResponse(
       outcome: 'completed',
       provider,
       model: llmResponse.model,
+      cost: {
+        tokenMicrousd: tokenProviderCostMicrousd,
+        toolMicrousd: serverTools.providerMicrousd,
+      },
       usage: {
         promptTokens: llmResponse.promptTokens,
         completionTokens: llmResponse.completionTokens,

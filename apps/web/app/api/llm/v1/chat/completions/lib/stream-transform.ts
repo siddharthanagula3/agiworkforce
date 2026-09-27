@@ -151,38 +151,11 @@ async function settleStreamBilling(input: {
       ...(input.latencyMs !== undefined ? { latencyMs: input.latencyMs } : {}),
     });
   }
-  if (processed.freeTrial) {
-    await settleFreeTrialRequest({
-      reservation: processed.freeTrial,
-      outcome: input.outcome ?? 'completed',
-      provider,
-      model,
-      usage: {
-        promptTokens: usage.inputTokens,
-        completionTokens: usage.outputTokens,
-        totalTokens,
-        reasoningTokens: usage.reasoningOutputTokens,
-        cacheReadInputTokens: usage.cacheReadInputTokens,
-        cacheCreationInputTokens: usage.cacheCreationInputTokens,
-        cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-      },
-    });
-    return;
-  }
-
   const billedOutcome = resolveBilledOutcome({
     ...(input.outcome === undefined ? {} : { outcome: input.outcome }),
     ...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
     totalTokens,
   });
-
-  const reportedCostUsd = usage.providerReportedCostUsd;
-  const hasReportedCost =
-    Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd > 0;
-
-  let providerCostMicrousd: number;
-  let billedCostMicrousd: number;
-  let costSource: 'provider_reported' | 'estimated';
   const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
     codeExecutionRequests: usage.codeExecutionRequests,
     codeExecutionContainerIds: usage.codeExecutionContainerIds,
@@ -195,6 +168,47 @@ async function settleStreamBilling(input: {
     hostedCodeExecution,
     dynamicFilteringWebTool: offersDynamicFilteringWebTool(processed.llmRequest.tools),
   });
+
+  if (processed.freeTrial) {
+    const freeTokenUsage = {
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens,
+      reasoningTokens: usage.reasoningOutputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+    };
+    await settleFreeTrialRequest({
+      reservation: processed.freeTrial,
+      outcome: input.outcome ?? 'completed',
+      provider,
+      model,
+      usage: freeTokenUsage,
+      cost:
+        billedOutcome === 'failed'
+          ? { tokenMicrousd: 0, toolMicrousd: 0 }
+          : {
+              tokenMicrousd: LLMCostCalculator.calculateCostMicrousd(
+                provider,
+                model,
+                freeTokenUsage,
+                undefined,
+                buildServingRouteId(provider, model),
+              ),
+              toolMicrousd: serverTools.providerMicrousd,
+            },
+    });
+    return;
+  }
+
+  const reportedCostUsd = usage.providerReportedCostUsd;
+  const hasReportedCost =
+    Number.isFinite(reportedCostUsd) && reportedCostUsd !== undefined && reportedCostUsd > 0;
+
+  let providerCostMicrousd: number;
+  let billedCostMicrousd: number;
+  let costSource: 'provider_reported' | 'estimated';
 
   if (billedOutcome === 'failed') {
     providerCostMicrousd = 0;
