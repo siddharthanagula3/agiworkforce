@@ -87,6 +87,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'auto-reload charges the Stripe customer on the subscription the payer owns',
   },
   {
+    path: 'apps/web/lib/services/trial-reminder-service.ts',
+    why: 'trial reminders act on the Stripe trial subscription the payer owns',
+  },
+  {
     path: 'apps/web/app/api/portal/',
     why: 'the Stripe portal manages the subscription the payer owns',
   },
