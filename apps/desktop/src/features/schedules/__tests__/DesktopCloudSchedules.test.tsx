@@ -131,6 +131,7 @@ function makeApi(overrides: Partial<DesktopCloudSchedulesApi> = {}): DesktopClou
     deleteSchedule: vi.fn(async () => undefined),
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run, replay: false })),
+    resolveRunApproval: vi.fn(async () => run),
     ...overrides,
   };
 }
