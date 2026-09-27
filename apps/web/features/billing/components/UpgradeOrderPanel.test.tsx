@@ -247,9 +247,7 @@ describe('UpgradeOrderPanel', () => {
     });
 
     it('does not call the plan price a total, because tax is added at checkout', async () => {
-      render(
-        <UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       expect(await screen.findByText('$7.00')).toBeVisible();
       expect(screen.getByRole('definition')).toHaveTextContent('$7.00');
@@ -262,9 +260,7 @@ describe('UpgradeOrderPanel', () => {
     it('hides the payment method section instead of offering a dead Add button', async () => {
       // A free account has no Stripe customer, so opening the portal to add a
       // card errors. Checkout collects the card on its own page.
-      render(
-        <UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       await screen.findByText('$7.00');
       expect(screen.queryByRole('region', { name: 'Payment method' })).toBeNull();
@@ -272,9 +268,7 @@ describe('UpgradeOrderPanel', () => {
     });
 
     it('sends the user to checkout rather than trying to charge a card it has not got', async () => {
-      render(
-        <UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       const subscribe = await screen.findByRole('button', { name: /subscribe to/i });
       fireEvent.click(screen.getByRole('checkbox'));
