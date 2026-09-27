@@ -111,6 +111,11 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "agi-workforce.installCli",
+        "title": "AGI Workforce: Install AGI CLI",
+        "icon": "$(cloud-download)"
+      },
+      {
         "command": "agi-workforce.agentMode",
         "title": "AGI Workforce: Choose Agent Mode",
         "icon": "$(robot)"
@@ -684,6 +689,17 @@
         "title": "Get started with AGI Workforce",
         "description": "Understand workspace scope, task handoffs, review, autonomy, and trust boundaries before your first developer session.",
         "steps": [
+          {
+            "id": "installCli",
+            "title": "Install the AGI CLI",
+            "description": "Chat and developer sessions run on the AGI CLI in this environment. [Install AGI CLI](command:agi-workforce.installCli)",
+            "media": {
+              "markdown": "media/walkthrough/00-cli.md"
+            },
+            "completionEvents": [
+              "onCommand:agi-workforce.installCli"
+            ]
+          },
           {
             "id": "openDeveloperSession",
             "title": "Work in this repository",
