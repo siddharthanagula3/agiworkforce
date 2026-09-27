@@ -15,14 +15,13 @@ import { logger } from '@/lib/logger';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { isStripeConfigured } from '@/lib/server/payments/stripe-provider';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
-import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
   RefundRequestRefusal,
   fileRefundRequest,
-  listCustomerCharges,
   listRefundRequests,
-  toRefundableChargeView,
+  listRefundableCharges,
 } from '@/lib/services/billing-refund-service';
 import {
   readBillingOwnerRow,
@@ -59,16 +58,12 @@ async function handleGetRefundRequests(request: NextRequest) {
   if (scoped instanceof NextResponse) return scoped;
 
   const requests = await listRefundRequests(scoped.db, scoped.userId);
-  const stripe = getStripeClientOrNull();
   const row = await readBillingOwnerRow(scoped.db, scoped.userId);
   const customerId = await resolveBillingCustomerId(scoped.db, scoped.userId, row);
-  if (!stripe || !customerId) return NextResponse.json({ requests, charges: [] });
+  if (!isStripeConfigured() || !customerId) return NextResponse.json({ requests, charges: [] });
 
   try {
-    const now = new Date();
-    const charges = (await listCustomerCharges(stripe, customerId)).map((charge) =>
-      toRefundableChargeView(charge, now),
-    );
+    const charges = await listRefundableCharges(scoped.db, scoped.userId, customerId);
     return NextResponse.json({ requests, charges });
   } catch (error) {
     logger.error({ error, userId: scoped.userId }, 'Refundable payments could not be read');
@@ -97,8 +92,7 @@ async function handleCreateRefundRequest(request: NextRequest) {
     throw createError.validation('Choose a payment and a reason for the refund.');
   }
 
-  const stripe = getStripeClientOrNull();
-  if (!stripe) {
+  if (!isStripeConfigured()) {
     throw createError
       .serviceUnavailable('Refunds are not available in this deployment.')
       .asUserSafe();
@@ -114,7 +108,6 @@ async function handleCreateRefundRequest(request: NextRequest) {
   try {
     result = await fileRefundRequest({
       db: scoped.db,
-      stripe,
       userId: scoped.userId,
       customerId,
       subscriptionId: row?.stripe_subscription_id ?? null,

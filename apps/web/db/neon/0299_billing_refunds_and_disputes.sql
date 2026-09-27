@@ -17,7 +17,8 @@
 --          post those two movements; revoke_plan_allowance_microusd takes a
 --          plan refund from the plan part of the refunded period only.
 --          billing_refund_requests is what a customer asked for, how it was
---          assessed, and the decision, automatic or by an operator.
+--          assessed and for how much, and the decision, automatic or by an
+--          operator.
 --
 -- Access : the webhook and the operator console write on the owner connection.
 --          A customer reads their own disputes, and reads and files their own
@@ -96,6 +97,8 @@ create table if not exists public.billing_refund_requests (
   assessment text not null check (assessment in (
     'statutory_withdrawal', 'unused_within_policy', 'needs_review'
   )),
+  assessed_refund_cents bigint
+    check (assessed_refund_cents is null or assessed_refund_cents >= 0),
   status text not null default 'pending' check (status in ('pending', 'refunded', 'declined')),
   refund_amount_cents bigint check (refund_amount_cents is null or refund_amount_cents > 0),
   stripe_refund_id text

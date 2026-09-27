@@ -1,6 +1,5 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
@@ -22,21 +21,29 @@ import { EEA_COUNTRY_CODES } from '@/lib/eu-access';
 import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { NormalizedCharge, NormalizedPeriod } from '@/lib/server/payments/domain';
+import {
+  cancelStripeSubscriptionNow,
+  listStripeCustomerCharges,
+  readStripeCustomerCountry,
+  readStripePaymentCustomer,
+  readStripePaymentServicePeriod,
+  refundStripeCharge,
+  retrieveStripeCharge,
+} from '@/lib/server/payments/stripe-provider';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import { recordNotification } from '@/lib/services/notification-service';
 
 const DAY_MS = 86_400_000;
 const CUSTOMER_CHARGE_LIMIT = 24;
 const OPERATOR_LIST_LIMIT = 100;
-const STATUTORY_WITHDRAWAL_COUNTRIES: ReadonlySet<string> = new Set([
-  ...EEA_COUNTRY_CODES,
-  'GB',
-  'TR',
-]);
-const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
-  'canceled',
-  'incomplete_expired',
-]);
+const STATUTORY_WITHDRAWAL_COUNTRIES: ReadonlySet<string> = new Set([...EEA_COUNTRY_CODES, 'GB']);
+const STRIPE_REFUND_REFUSALS: Readonly<Record<string, string>> = {
+  charge_already_refunded: 'This payment is already refunded.',
+  charge_disputed: 'This payment is disputed, so Stripe does not allow a refund while it is open.',
+  amount_too_large: 'The amount is more than can still be refunded on this payment.',
+  refund_disputed_payment: 'This payment is disputed, so Stripe does not allow a refund.',
+};
 
 export class RefundRequestRefusal extends Error {
   constructor(
@@ -61,6 +68,7 @@ interface RefundRequestRow {
   statutory_withdrawal: boolean;
   billing_country: string | null;
   assessment: RefundAssessment;
+  assessed_refund_cents: string | number | null;
   status: RefundRequestStatus;
   refund_amount_cents: string | number | null;
   decision_note: string | null;
@@ -81,9 +89,25 @@ interface DisputeRow {
   restored_at: string | Date | null;
 }
 
+interface CreditPeriodFacts {
+  allocatedMicrousd: number;
+  usedMicrousd: number;
+  topUpMicrousd: number;
+}
+
+interface RefundFacts {
+  credits: CreditPeriodFacts | null;
+  planPeriod: NormalizedPeriod | null;
+}
+
+interface RefundDecision {
+  assessment: RefundAssessment;
+  refundCents: number | null;
+}
+
 const REQUEST_COLUMNS = `id, user_id, charge_id, charge_kind, charge_amount_cents, charge_currency,
-  charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment, status,
-  refund_amount_cents, decision_note, decided_at, created_at`;
+  charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment,
+  assessed_refund_cents, status, refund_amount_cents, decision_note, decided_at, created_at`;
 
 function iso(value: string | Date): string {
   return new Date(value).toISOString();
@@ -93,23 +117,24 @@ function isoOrNull(value: string | Date | null): string | null {
   return value === null ? null : iso(value);
 }
 
-function toNumber(value: string | number): number {
-  return Number(value);
+function numberOrNull(value: string | number | null): number | null {
+  return value === null ? null : Number(value);
 }
 
-export function toRefundRequestView(row: RefundRequestRow): RefundRequestView {
+function toRefundRequestView(row: RefundRequestRow): RefundRequestView {
   return {
     id: row.id,
     chargeId: row.charge_id,
     chargeKind: row.charge_kind,
-    chargeAmountCents: toNumber(row.charge_amount_cents),
+    chargeAmountCents: Number(row.charge_amount_cents),
     chargeCurrency: row.charge_currency,
     chargeCreatedAt: iso(row.charge_created_at),
     reason: row.reason,
     details: row.details,
     assessment: row.assessment,
+    assessedRefundCents: numberOrNull(row.assessed_refund_cents),
     status: row.status,
-    refundAmountCents: row.refund_amount_cents === null ? null : toNumber(row.refund_amount_cents),
+    refundAmountCents: numberOrNull(row.refund_amount_cents),
     decisionNote: row.decision_note,
     decidedAt: isoOrNull(row.decided_at),
     createdAt: iso(row.created_at),
@@ -129,7 +154,7 @@ function toDisputeView(row: DisputeRow): OperatorDisputeView {
   return {
     id: row.id,
     chargeId: row.charge_id,
-    amountCents: toNumber(row.amount_cents),
+    amountCents: Number(row.amount_cents),
     currency: row.currency,
     reason: row.reason,
     stripeStatus: row.stripe_status,
@@ -140,87 +165,210 @@ function toDisputeView(row: DisputeRow): OperatorDisputeView {
   };
 }
 
-function customerIdOf(customer: Stripe.Charge['customer'] | Stripe.PaymentIntent['customer']) {
-  if (typeof customer === 'string') return customer;
-  return customer?.id ?? null;
+function chargeKindOf(charge: NormalizedCharge): RefundChargeKind {
+  return charge.kind === 'top_up' ? 'top_up' : 'plan';
 }
 
-export function chargeKindOf(charge: Stripe.Charge): RefundChargeKind {
-  return charge.metadata?.['type'] === 'credit_topup' ? 'top_up' : 'plan';
+function currencyOf(charge: NormalizedCharge): string {
+  return charge.amount.currency.toLowerCase();
 }
 
-export function billingCountryOf(charge: Stripe.Charge): string | null {
-  const country =
-    charge.billing_details?.address?.country ?? charge.payment_method_details?.card?.country;
-  return country ? country.toUpperCase() : null;
+function refundableCentsOf(charge: NormalizedCharge): number {
+  return Math.max(0, charge.amount.minorUnits - charge.refundedMinorUnits);
 }
 
-function refundableCentsOf(charge: Stripe.Charge): number {
-  return Math.max(0, charge.amount - charge.amount_refunded);
+function isWithinDays(createdAt: Date, days: number, now: Date): boolean {
+  return now.getTime() - createdAt.getTime() <= days * DAY_MS;
 }
 
-function isWithinDays(createdSeconds: number, days: number, now: Date): boolean {
-  return now.getTime() - createdSeconds * 1000 <= days * DAY_MS;
+function isWithdrawalCountry(country: string | null): boolean {
+  return country !== null && STATUTORY_WITHDRAWAL_COUNTRIES.has(country);
 }
 
-export function isWithdrawalEligible(charge: Stripe.Charge, now: Date): boolean {
-  const country = billingCountryOf(charge);
-  return (
-    country !== null &&
-    STATUTORY_WITHDRAWAL_COUNTRIES.has(country) &&
-    isWithinDays(charge.created, STATUTORY_WITHDRAWAL_DAYS, now)
-  );
+function inWithdrawalWindow(charge: NormalizedCharge, now: Date): boolean {
+  return isWithinDays(charge.createdAt, STATUTORY_WITHDRAWAL_DAYS, now);
 }
 
-export function toRefundableChargeView(charge: Stripe.Charge, now: Date): RefundableChargeView {
-  return {
-    id: charge.id,
-    kind: chargeKindOf(charge),
-    amountCents: charge.amount,
-    refundedCents: charge.amount_refunded,
-    refundableCents: refundableCentsOf(charge),
-    currency: charge.currency,
-    createdAt: new Date(charge.created * 1000).toISOString(),
-    billingCountry: billingCountryOf(charge),
-    disputed: charge.disputed,
-    withdrawalEligible: isWithdrawalEligible(charge, now),
-    receiptUrl: charge.receipt_url ?? null,
-  };
-}
-
-export async function listCustomerCharges(
-  stripe: Stripe,
-  customerId: string,
-): Promise<Stripe.Charge[]> {
-  const page = await stripe.charges.list({ customer: customerId, limit: CUSTOMER_CHARGE_LIMIT });
-  return page.data.filter((charge) => charge.status === 'succeeded' && charge.paid);
-}
-
-interface UsageFacts {
-  creditsUsedMicrousd: number;
-  purchasedRemainingMicrousd: number;
-}
-
-async function readUsageFacts(db: DatabaseAdapter, userId: string): Promise<UsageFacts> {
-  const [row] = await db.query<{
+async function readRefundFacts(db: DatabaseAdapter, userId: string): Promise<RefundFacts> {
+  const [credits] = await db.query<{
+    credits_allocated_microusd: string | number;
     credits_used_microusd: string | number;
-    purchased_remaining_microusd: string | number;
+    top_up_allocated_microusd: string | number;
   }>(
-    `select credits_used_microusd,
-            greatest(
-              least(top_up_allocated_microusd, credits_allocated_microusd - credits_used_microusd),
-              0
-            ) as purchased_remaining_microusd
+    `select credits_allocated_microusd, credits_used_microusd, top_up_allocated_microusd
        from token_credits
       where user_id = $1 and period_end > now()
       order by period_end desc
       limit 1`,
     [userId],
   );
+  const [subscription] = await db.query<{
+    current_period_start: string | Date | null;
+    current_period_end: string | Date | null;
+  }>(
+    'select current_period_start, current_period_end from subscriptions where user_id = $1 limit 1',
+    [userId],
+  );
+  const startsAt = subscription?.current_period_start
+    ? new Date(subscription.current_period_start)
+    : null;
+  const endsAt = subscription?.current_period_end
+    ? new Date(subscription.current_period_end)
+    : null;
   return {
-    creditsUsedMicrousd: Number(row?.credits_used_microusd ?? 0),
-    purchasedRemainingMicrousd: Number(row?.purchased_remaining_microusd ?? 0),
+    credits: credits
+      ? {
+          allocatedMicrousd: Number(credits.credits_allocated_microusd),
+          usedMicrousd: Number(credits.credits_used_microusd),
+          topUpMicrousd: Number(credits.top_up_allocated_microusd),
+        }
+      : null,
+    planPeriod: startsAt && endsAt ? { startsAt, endsAt } : null,
   };
+}
+
+function purchasedRemainingMicrousd(credits: CreditPeriodFacts): number {
+  return Math.max(
+    0,
+    Math.min(credits.topUpMicrousd, credits.allocatedMicrousd - credits.usedMicrousd),
+  );
+}
+
+function unusedPlanShare(credits: CreditPeriodFacts): number | null {
+  const allowance = Math.max(0, credits.allocatedMicrousd - credits.topUpMicrousd);
+  if (allowance <= 0) return null;
+  const used = Math.min(Math.max(0, credits.usedMicrousd), allowance);
+  return (allowance - used) / allowance;
+}
+
+function unspentTopUpShare(charge: NormalizedCharge, credits: CreditPeriodFacts): number | null {
+  if (charge.purchasedLedgerCents === null) return null;
+  const purchased = charge.purchasedLedgerCents * MICROUSD_PER_LEDGER_CENT;
+  return Math.min(purchased, purchasedRemainingMicrousd(credits)) / purchased;
+}
+
+async function coversCurrentPlanPeriod(
+  charge: NormalizedCharge,
+  planPeriod: NormalizedPeriod | null,
+): Promise<boolean> {
+  if (!planPeriod) return false;
+  const servicePeriod = charge.paymentReference
+    ? await readStripePaymentServicePeriod(charge.paymentReference)
+    : null;
+  if (servicePeriod) {
+    return (
+      Math.floor(servicePeriod.endsAt.getTime() / 1000) ===
+      Math.floor(planPeriod.endsAt.getTime() / 1000)
+    );
+  }
+  return charge.createdAt >= planPeriod.startsAt && charge.createdAt < planPeriod.endsAt;
+}
+
+async function withdrawalRefundCents(
+  charge: NormalizedCharge,
+  facts: RefundFacts,
+): Promise<number | null> {
+  if (charge.refundedMinorUnits > 0 || charge.disputed || !facts.credits) return null;
+  const share =
+    charge.kind === 'top_up'
+      ? unspentTopUpShare(charge, facts.credits)
+      : (await coversCurrentPlanPeriod(charge, facts.planPeriod))
+        ? unusedPlanShare(facts.credits)
+        : null;
+  return share === null ? null : Math.round(charge.amount.minorUnits * share);
+}
+
+function isUnused(charge: NormalizedCharge, credits: CreditPeriodFacts | null): boolean {
+  if (!credits) return false;
+  if (charge.kind !== 'top_up') return credits.usedMicrousd === 0;
+  const purchased = (charge.purchasedLedgerCents ?? 0) * MICROUSD_PER_LEDGER_CENT;
+  return purchased > 0 && purchasedRemainingMicrousd(credits) >= purchased;
+}
+
+async function billingCountryOf(charge: NormalizedCharge): Promise<string | null> {
+  if (charge.billingCountry) return charge.billingCountry;
+  const customerCountry = charge.customerReference
+    ? await readStripeCustomerCountry(charge.customerReference)
+    : null;
+  return customerCountry ?? charge.cardCountry;
+}
+
+function assessRefundRequest(input: {
+  charge: NormalizedCharge;
+  reason: RefundRequestReason;
+  country: string | null;
+  withdrawalCents: number | null;
+  unused: boolean;
+  priorDiscretionaryRefunds: number;
+  now: Date;
+}): RefundDecision {
+  if (BILLING_ERROR_REASONS.has(input.reason)) {
+    return { assessment: 'needs_review', refundCents: null };
+  }
+  const withdrawalCents =
+    input.withdrawalCents === null
+      ? null
+      : Math.min(input.withdrawalCents, refundableCentsOf(input.charge));
+  if (withdrawalCents !== null && withdrawalCents > 0 && isWithdrawalCountry(input.country)) {
+    return { assessment: 'statutory_withdrawal', refundCents: withdrawalCents };
+  }
+  if (
+    input.unused &&
+    input.priorDiscretionaryRefunds === 0 &&
+    isWithinDays(input.charge.createdAt, UNUSED_REFUND_WINDOW_DAYS, input.now)
+  ) {
+    return { assessment: 'unused_within_policy', refundCents: refundableCentsOf(input.charge) };
+  }
+  return {
+    assessment: 'needs_review',
+    refundCents: input.reason === 'statutory_withdrawal' ? withdrawalCents : null,
+  };
+}
+
+function toRefundableChargeView(
+  charge: NormalizedCharge,
+  input: { country: string | null; withdrawalEligible: boolean; withdrawalCents: number | null },
+): RefundableChargeView {
+  return {
+    id: charge.reference,
+    kind: chargeKindOf(charge),
+    amountCents: charge.amount.minorUnits,
+    refundedCents: charge.refundedMinorUnits,
+    refundableCents: refundableCentsOf(charge),
+    currency: currencyOf(charge),
+    createdAt: charge.createdAt.toISOString(),
+    billingCountry: input.country,
+    disputed: charge.disputed,
+    withdrawalEligible: input.withdrawalEligible,
+    withdrawalRefundCents: input.withdrawalCents,
+    receiptUrl: charge.receiptUrl,
+  };
+}
+
+export async function listRefundableCharges(
+  db: DatabaseAdapter,
+  userId: string,
+  customerId: string,
+  now: Date = new Date(),
+): Promise<RefundableChargeView[]> {
+  const charges = (await listStripeCustomerCharges(customerId, CUSTOMER_CHARGE_LIMIT)).filter(
+    (charge) => charge.settled,
+  );
+  const recent = charges.filter((charge) => inWithdrawalWindow(charge, now));
+  const customerCountry = recent.some((charge) => charge.billingCountry === null)
+    ? await readStripeCustomerCountry(customerId)
+    : null;
+  const facts = recent.length > 0 ? await readRefundFacts(db, userId) : null;
+
+  const views: RefundableChargeView[] = [];
+  for (const charge of charges) {
+    const country = charge.billingCountry ?? customerCountry ?? charge.cardCountry;
+    const withdrawalEligible = isWithdrawalCountry(country) && inWithdrawalWindow(charge, now);
+    const withdrawalCents =
+      withdrawalEligible && facts ? await withdrawalRefundCents(charge, facts) : null;
+    views.push(toRefundableChargeView(charge, { country, withdrawalEligible, withdrawalCents }));
+  }
+  return views;
 }
 
 async function countDiscretionaryRefunds(db: DatabaseAdapter, userId: string): Promise<number> {
@@ -230,36 +378,6 @@ async function countDiscretionaryRefunds(db: DatabaseAdapter, userId: string): P
     [userId],
   );
   return Number(row?.refunds ?? 0);
-}
-
-function purchasedMicrousdOf(charge: Stripe.Charge): number {
-  const cents = Number(charge.metadata?.['credit_amount_cents']);
-  return Number.isSafeInteger(cents) && cents > 0 ? cents * MICROUSD_PER_LEDGER_CENT : 0;
-}
-
-export function assessRefundRequest(input: {
-  charge: Stripe.Charge;
-  reason: RefundRequestReason;
-  usage: UsageFacts;
-  priorDiscretionaryRefunds: number;
-  now: Date;
-}): RefundAssessment {
-  if (input.reason === 'statutory_withdrawal' && isWithdrawalEligible(input.charge, input.now)) {
-    return 'statutory_withdrawal';
-  }
-  if (
-    BILLING_ERROR_REASONS.has(input.reason) ||
-    input.priorDiscretionaryRefunds > 0 ||
-    !isWithinDays(input.charge.created, UNUSED_REFUND_WINDOW_DAYS, input.now)
-  ) {
-    return 'needs_review';
-  }
-  const purchased = purchasedMicrousdOf(input.charge);
-  const unused =
-    chargeKindOf(input.charge) === 'top_up'
-      ? purchased > 0 && input.usage.purchasedRemainingMicrousd >= purchased
-      : input.usage.creditsUsedMicrousd === 0;
-  return unused ? 'unused_within_policy' : 'needs_review';
 }
 
 export async function listRefundRequests(
@@ -289,15 +407,6 @@ async function findRequestForCharge(
     [userId, chargeId],
   );
   return row ?? null;
-}
-
-async function retrieveCharge(stripe: Stripe, chargeId: string): Promise<Stripe.Charge | null> {
-  try {
-    return await stripe.charges.retrieve(chargeId);
-  } catch (error) {
-    if ((error as { code?: string }).code === 'resource_missing') return null;
-    throw error;
-  }
 }
 
 async function recordRefundDecision(
@@ -353,16 +462,12 @@ async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow):
 }
 
 async function endPlanAfterRefund(
-  stripe: Stripe,
   subscriptionId: string | null,
   context: Record<string, unknown>,
 ): Promise<boolean> {
   if (!isStripeSubscriptionId(subscriptionId)) return false;
   try {
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
-    if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) return false;
-    await stripe.subscriptions.cancel(subscriptionId, { prorate: false, invoice_now: false });
-    return true;
+    return await cancelStripeSubscriptionNow(subscriptionId);
   } catch (error) {
     logger.error(
       { ...context, error, subscriptionId },
@@ -374,7 +479,6 @@ async function endPlanAfterRefund(
 
 export interface FileRefundRequestInput {
   db: DatabaseAdapter;
-  stripe: Stripe;
   userId: string;
   customerId: string;
   subscriptionId: string | null;
@@ -386,35 +490,38 @@ export interface FileRefundRequestInput {
 
 async function insertRefundRequest(
   input: FileRefundRequestInput,
-  charge: Stripe.Charge,
-  assessment: RefundAssessment,
+  charge: NormalizedCharge,
+  country: string | null,
+  decision: RefundDecision,
 ): Promise<{ row: RefundRequestRow; created: boolean }> {
   try {
     const [row] = await input.db.query<RefundRequestRow>(
       `insert into public.billing_refund_requests (
          user_id, charge_id, charge_kind, charge_amount_cents, charge_currency,
-         charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment
-       ) values ($1, $2, $3, $4, $5, to_timestamp($6), $7, $8, $9, $10, $11)
+         charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment,
+         assessed_refund_cents
+       ) values ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12)
        returning ${REQUEST_COLUMNS}`,
       [
         input.userId,
-        charge.id,
+        charge.reference,
         chargeKindOf(charge),
-        charge.amount,
-        charge.currency,
-        charge.created,
+        charge.amount.minorUnits,
+        currencyOf(charge),
+        charge.createdAt.toISOString(),
         input.reason,
         input.details,
         input.reason === 'statutory_withdrawal',
-        billingCountryOf(charge),
-        assessment,
+        country,
+        decision.assessment,
+        decision.refundCents,
       ],
     );
     if (!row) throw new Error('Refund request insert returned no row');
     return { row, created: true };
   } catch (error) {
     if ((error as { code?: string }).code !== '23505') throw error;
-    const existing = await findRequestForCharge(input.db, input.userId, charge.id);
+    const existing = await findRequestForCharge(input.db, input.userId, charge.reference);
     if (!existing) throw error;
     return { row: existing, created: false };
   }
@@ -423,32 +530,36 @@ async function insertRefundRequest(
 async function settleAutomatically(
   input: FileRefundRequestInput,
   row: RefundRequestRow,
-  charge: Stripe.Charge,
 ): Promise<RefundRequestRow> {
-  let refund: Stripe.Refund;
+  const amountCents = numberOrNull(row.assessed_refund_cents);
+  if (amountCents === null || amountCents <= 0) return row;
+
+  let result: Awaited<ReturnType<typeof refundStripeCharge>>;
   try {
-    refund = await input.stripe.refunds.create(
-      {
-        charge: charge.id,
-        amount: refundableCentsOf(charge),
-        reason: 'requested_by_customer',
-        metadata: { refund_request_id: row.id, assessment: row.assessment },
-      },
-      { idempotencyKey: `refund-request:${row.id}` },
-    );
+    result = await refundStripeCharge({
+      chargeReference: row.charge_id,
+      amountMinorUnits: amountCents,
+      reason: 'requested_by_customer',
+      metadata: { refund_request_id: row.id, assessment: row.assessment },
+      idempotencyKey: `refund-request:${row.id}`,
+    });
   } catch (error) {
     logger.error(
-      { error, requestId: row.id, chargeId: charge.id, userId: input.userId },
+      { error, requestId: row.id, chargeId: row.charge_id, userId: input.userId },
       'Automatic refund could not be issued; the request waits for an operator',
+    );
+    return row;
+  }
+  if (result.outcome === 'rejected') {
+    logger.warn(
+      { requestId: row.id, chargeId: row.charge_id, code: result.code },
+      'Stripe refused an automatic refund; the request waits for an operator',
     );
     return row;
   }
 
   if (row.charge_kind === 'plan') {
-    await endPlanAfterRefund(input.stripe, input.subscriptionId, {
-      requestId: row.id,
-      userId: input.userId,
-    });
+    await endPlanAfterRefund(input.subscriptionId, { requestId: row.id, userId: input.userId });
   }
 
   const ownerDb = getNeonDb();
@@ -457,8 +568,8 @@ async function settleAutomatically(
     status: 'refunded',
     decidedBy: 'automatic',
     decidedByUserId: null,
-    refundAmountCents: refund.amount,
-    stripeRefundId: refund.id,
+    refundAmountCents: result.refund.amount.minorUnits,
+    stripeRefundId: result.refund.reference,
     note: null,
   });
   if (!decided) return row;
@@ -472,11 +583,11 @@ export async function fileRefundRequest(
   const existing = await findRequestForCharge(input.db, input.userId, input.chargeId);
   if (existing) return { request: toRefundRequestView(existing), created: false };
 
-  const charge = await retrieveCharge(input.stripe, input.chargeId);
-  if (!charge || customerIdOf(charge.customer) !== input.customerId) {
+  const charge = await retrieveStripeCharge(input.chargeId);
+  if (!charge || charge.customerReference !== input.customerId) {
     throw new RefundRequestRefusal('That payment is not on your account.', 404);
   }
-  if (charge.status !== 'succeeded' || !charge.paid) {
+  if (!charge.settled) {
     throw new RefundRequestRefusal(
       'That payment did not complete, so there is nothing to refund.',
       409,
@@ -493,23 +604,25 @@ export async function fileRefundRequest(
   }
 
   const now = input.now ?? new Date();
-  const [usage, priorDiscretionaryRefunds] = await Promise.all([
-    readUsageFacts(input.db, input.userId),
-    countDiscretionaryRefunds(input.db, input.userId),
-  ]);
-  const assessment = assessRefundRequest({
+  const facts = await readRefundFacts(input.db, input.userId);
+  const country = await billingCountryOf(charge);
+  const decision = assessRefundRequest({
     charge,
     reason: input.reason,
-    usage,
-    priorDiscretionaryRefunds,
+    country,
+    withdrawalCents: inWithdrawalWindow(charge, now)
+      ? await withdrawalRefundCents(charge, facts)
+      : null,
+    unused: isUnused(charge, facts.credits),
+    priorDiscretionaryRefunds: await countDiscretionaryRefunds(input.db, input.userId),
     now,
   });
 
-  const { row, created } = await insertRefundRequest(input, charge, assessment);
+  const { row, created } = await insertRefundRequest(input, charge, country, decision);
   if (!created || row.assessment === 'needs_review') {
     return { request: toRefundRequestView(row), created };
   }
-  const settled = await settleAutomatically(input, row, charge);
+  const settled = await settleAutomatically(input, row);
   return { request: toRefundRequestView(settled), created };
 }
 
@@ -525,20 +638,19 @@ export async function listPendingRefundRequests(
   return rows.map(toOperatorRequestView);
 }
 
+async function customerOfLookup(query: string): Promise<string | null> {
+  if (/^(ch|py)_[A-Za-z0-9]+$/.test(query)) {
+    return (await retrieveStripeCharge(query))?.customerReference ?? null;
+  }
+  if (/^pi_[A-Za-z0-9]+$/.test(query)) return readStripePaymentCustomer(query);
+  return isStripeCustomerId(query) ? query : null;
+}
+
 async function resolveOperatorQuery(
   db: DatabaseAdapter,
-  stripe: Stripe,
   query: string,
 ): Promise<{ id: string; email: string | null; stripe_customer_id: string | null } | null> {
-  let customerId: string | null = null;
-  if (/^(ch|py)_[A-Za-z0-9]+$/.test(query)) {
-    customerId = customerIdOf((await retrieveCharge(stripe, query))?.customer ?? null);
-  } else if (/^pi_[A-Za-z0-9]+$/.test(query)) {
-    customerId = customerIdOf((await stripe.paymentIntents.retrieve(query)).customer);
-  } else if (isStripeCustomerId(query)) {
-    customerId = query;
-  }
-
+  const customerId = await customerOfLookup(query);
   const [profile] = customerId
     ? await db.query<{ id: string; email: string | null; stripe_customer_id: string | null }>(
         'select id, email, stripe_customer_id from profiles where stripe_customer_id = $1 limit 1',
@@ -556,11 +668,10 @@ async function resolveOperatorQuery(
 
 export async function lookupAccountBilling(
   db: DatabaseAdapter,
-  stripe: Stripe,
   rawQuery: string,
   now: Date = new Date(),
 ): Promise<OperatorAccountBilling | null> {
-  const profile = await resolveOperatorQuery(db, stripe, rawQuery.trim());
+  const profile = await resolveOperatorQuery(db, rawQuery.trim());
   if (!profile) return null;
 
   const [subscription] = await db.query<{
@@ -576,23 +687,21 @@ export async function lookupAccountBilling(
       ? subscription.stripe_customer_id
       : null;
 
-  const [charges, requests, disputes] = await Promise.all([
-    customerId ? listCustomerCharges(stripe, customerId) : Promise.resolve([]),
-    db.query<RefundRequestRow>(
-      `select ${REQUEST_COLUMNS} from public.billing_refund_requests
-        where user_id = $1 order by created_at desc limit ${OPERATOR_LIST_LIMIT}`,
-      [profile.id],
-    ),
-    db.query<DisputeRow>(
-      `select id, charge_id, amount_cents, currency, reason, stripe_status, outcome,
-              opened_at, closed_at, restored_at
-         from public.billing_disputes
-        where user_id = $1
-        order by opened_at desc
-        limit ${OPERATOR_LIST_LIMIT}`,
-      [profile.id],
-    ),
-  ]);
+  const charges = customerId ? await listRefundableCharges(db, profile.id, customerId, now) : [];
+  const requests = await db.query<RefundRequestRow>(
+    `select ${REQUEST_COLUMNS} from public.billing_refund_requests
+      where user_id = $1 order by created_at desc limit ${OPERATOR_LIST_LIMIT}`,
+    [profile.id],
+  );
+  const disputes = await db.query<DisputeRow>(
+    `select id, charge_id, amount_cents, currency, reason, stripe_status, outcome,
+            opened_at, closed_at, restored_at
+       from public.billing_disputes
+      where user_id = $1
+      order by opened_at desc
+      limit ${OPERATOR_LIST_LIMIT}`,
+    [profile.id],
+  );
 
   return {
     userId: profile.id,
@@ -600,7 +709,7 @@ export async function lookupAccountBilling(
     stripeCustomerId: customerId,
     planTier: subscription?.plan_tier ?? null,
     subscriptionStatus: subscription?.status ?? null,
-    charges: charges.map((charge) => toRefundableChargeView(charge, now)),
+    charges,
     requests: requests.map(toOperatorRequestView),
     disputes: disputes.map(toDisputeView),
   };
@@ -627,12 +736,36 @@ export interface OperatorRefundResult {
   request: OperatorRefundRequestView | null;
 }
 
+async function readPendingRequest(
+  db: DatabaseAdapter,
+  requestId: string,
+  chargeId: string,
+): Promise<{ assessment: RefundAssessment; assessedCents: number | null }> {
+  const [pending] = await db.query<{
+    charge_id: string;
+    status: string;
+    assessment: RefundAssessment;
+    assessed_refund_cents: string | number | null;
+  }>(
+    `select charge_id, status, assessment, assessed_refund_cents
+       from public.billing_refund_requests
+      where id = $1`,
+    [requestId],
+  );
+  if (!pending || pending.charge_id !== chargeId || pending.status !== 'pending') {
+    throw new RefundRequestRefusal('That refund request is not pending for this payment.', 409);
+  }
+  return {
+    assessment: pending.assessment,
+    assessedCents: numberOrNull(pending.assessed_refund_cents),
+  };
+}
+
 export async function issueOperatorRefund(
   db: DatabaseAdapter,
-  stripe: Stripe,
   input: OperatorRefundInput,
 ): Promise<OperatorRefundResult> {
-  const charge = await retrieveCharge(stripe, input.chargeId);
+  const charge = await retrieveStripeCharge(input.chargeId);
   if (!charge) throw new RefundRequestRefusal('No payment has that charge id.', 404);
   if (charge.disputed) {
     throw new RefundRequestRefusal(
@@ -650,45 +783,56 @@ export async function issueOperatorRefund(
     );
   }
 
-  const customerId = customerIdOf(charge.customer);
-  const [owner] = customerId
+  const pending = input.requestId
+    ? await readPendingRequest(db, input.requestId, charge.reference)
+    : null;
+  const statutoryFloor =
+    pending?.assessment === 'statutory_withdrawal' ? (pending.assessedCents ?? 0) : 0;
+  if (amountCents < Math.min(statutoryFloor, refundable)) {
+    throw new RefundRequestRefusal(
+      `This is a statutory withdrawal, so the refund must be at least ${statutoryFloor} in the smallest currency unit.`,
+      400,
+    );
+  }
+
+  const [owner] = charge.customerReference
     ? await db.query<{ user_id: string; stripe_subscription_id: string | null }>(
         `select profile.id as user_id, subscription.stripe_subscription_id
            from profiles profile
            left join subscriptions subscription on subscription.user_id = profile.id
           where profile.stripe_customer_id = $1
           limit 1`,
-        [customerId],
+        [charge.customerReference],
       )
     : [];
 
-  if (input.requestId) {
-    const [pending] = await db.query<{ charge_id: string; status: string }>(
-      'select charge_id, status from public.billing_refund_requests where id = $1',
-      [input.requestId],
-    );
-    if (!pending || pending.charge_id !== charge.id || pending.status !== 'pending') {
-      throw new RefundRequestRefusal('That refund request is not pending for this payment.', 409);
-    }
-  }
-
-  const refund = await stripe.refunds.create(
-    {
-      charge: charge.id,
-      amount: amountCents,
-      reason: input.stripeReason,
-      metadata: {
-        operator_user_id: input.operatorUserId,
-        ...(input.requestId ? { refund_request_id: input.requestId } : {}),
-      },
+  const result = await refundStripeCharge({
+    chargeReference: charge.reference,
+    amountMinorUnits: amountCents,
+    reason: input.stripeReason,
+    metadata: {
+      operator_user_id: input.operatorUserId,
+      ...(input.requestId ? { refund_request_id: input.requestId } : {}),
     },
-    { idempotencyKey: `operator-refund:${charge.id}:${input.idempotencyKey}` },
-  );
+    idempotencyKey: `operator-refund:${charge.reference}:${input.idempotencyKey}`,
+  });
+  if (result.outcome === 'rejected') {
+    logger.warn(
+      { chargeId: charge.reference, code: result.code },
+      'Stripe refused an operator refund',
+    );
+    throw new RefundRequestRefusal(
+      STRIPE_REFUND_REFUSALS[result.code ?? ''] ??
+        'Stripe refused the refund. Open the payment in the Stripe dashboard to see why.',
+      409,
+    );
+  }
+  const refund = result.refund;
 
   const planEnded =
     input.endPlan && chargeKindOf(charge) === 'plan'
-      ? await endPlanAfterRefund(stripe, owner?.stripe_subscription_id ?? null, {
-          chargeId: charge.id,
+      ? await endPlanAfterRefund(owner?.stripe_subscription_id ?? null, {
+          chargeId: charge.reference,
           operatorUserId: input.operatorUserId,
         })
       : false;
@@ -700,8 +844,8 @@ export async function issueOperatorRefund(
       status: 'refunded',
       decidedBy: 'operator',
       decidedByUserId: input.operatorUserId,
-      refundAmountCents: refund.amount,
-      stripeRefundId: refund.id,
+      refundAmountCents: refund.amount.minorUnits,
+      stripeRefundId: refund.reference,
       note: input.note,
     });
     if (decided) {
@@ -711,10 +855,10 @@ export async function issueOperatorRefund(
   }
 
   return {
-    refundId: refund.id,
-    refundStatus: refund.status ?? null,
-    amountCents: refund.amount,
-    currency: refund.currency,
+    refundId: refund.reference,
+    refundStatus: refund.status,
+    amountCents: refund.amount.minorUnits,
+    currency: refund.amount.currency.toLowerCase(),
     userId: owner?.user_id ?? null,
     planEnded,
     request,

@@ -294,14 +294,16 @@ const ALLOWLIST = [
       'recordRefundDecision',
       'listPendingRefundRequests',
       'resolveOperatorQuery',
+      'readPendingRequest',
       'issueOperatorRefund',
     ],
     reason:
       'the operator refund console and the automatic refund decision. listPendingRefundRequests ' +
       'and resolveOperatorQuery serve api/admin/billing-refunds, which reads across accounts by ' +
-      'design; issueOperatorRefund reads the request the operator named and the account a Stripe ' +
-      'charge belongs to; recordRefundDecision writes the decision to the one request id that was ' +
-      'just resolved. A customer files and reads their own requests on the caller connection',
+      'design; readPendingRequest reads the request the operator named, and issueOperatorRefund ' +
+      'the account a Stripe charge belongs to; recordRefundDecision writes the decision to the ' +
+      'one request id that was just resolved. A customer files and reads their own requests on ' +
+      'the caller connection',
   },
   {
     match: /lib\/services\/schedule-service\.ts$/,

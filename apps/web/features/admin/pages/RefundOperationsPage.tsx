@@ -42,6 +42,8 @@ const STRIPE_REASON_LABEL: Record<OperatorRefundStripeReason, string> = {
 interface RefundTarget {
   charge: Pick<RefundableChargeView, 'id' | 'kind' | 'refundableCents' | 'currency'>;
   requestId: string | null;
+  statutoryCents: number | null;
+  minimumCents: number;
 }
 
 interface RefundOutcome {
@@ -72,6 +74,7 @@ function toMajorUnits(amount: number, currency: string): string {
 }
 
 function requestTarget(request: OperatorRefundRequestView): RefundTarget {
+  const statutory = request.assessment === 'statutory_withdrawal' || request.statutoryWithdrawal;
   return {
     charge: {
       id: request.chargeId,
@@ -80,6 +83,18 @@ function requestTarget(request: OperatorRefundRequestView): RefundTarget {
       currency: request.chargeCurrency,
     },
     requestId: request.id,
+    statutoryCents: statutory ? request.assessedRefundCents : null,
+    minimumCents:
+      request.assessment === 'statutory_withdrawal' ? (request.assessedRefundCents ?? 0) : 0,
+  };
+}
+
+function chargeTarget(charge: RefundableChargeView): RefundTarget {
+  return {
+    charge,
+    requestId: null,
+    statutoryCents: charge.withdrawalEligible ? charge.withdrawalRefundCents : null,
+    minimumCents: 0,
   };
 }
 
@@ -102,6 +117,9 @@ function RequestRow({
         </p>
         <p className="text-xs text-muted-foreground">
           {REFUND_REQUEST_REASON_LABELS[request.reason]} · {ASSESSMENT_LABEL[request.assessment]}
+          {request.assessedRefundCents !== null
+            ? ` · assessed ${formatPaymentAmount(request.assessedRefundCents, request.chargeCurrency)}`
+            : ''}
           {request.billingCountry ? ` · billed in ${request.billingCountry}` : ''} · asked{' '}
           {formatDateTime(request.createdAt)}
         </p>
@@ -185,7 +203,14 @@ export default function RefundOperationsPage() {
 
   function openRefund(next: RefundTarget) {
     setTarget(next);
-    setAmount(toMajorUnits(next.charge.refundableCents, next.charge.currency));
+    setAmount(
+      toMajorUnits(
+        next.requestId !== null && next.statutoryCents !== null && next.statutoryCents > 0
+          ? Math.min(next.statutoryCents, next.charge.refundableCents)
+          : next.charge.refundableCents,
+        next.charge.currency,
+      ),
+    );
     setStripeReason('requested_by_customer');
     setNote('');
     setEndPlan(next.charge.kind === 'plan');
@@ -215,6 +240,12 @@ export default function RefundOperationsPage() {
     if (amountCents === null || amountCents > target.charge.refundableCents) {
       setError(
         `Enter an amount up to ${formatPaymentAmount(target.charge.refundableCents, target.charge.currency)}.`,
+      );
+      return;
+    }
+    if (amountCents < Math.min(target.minimumCents, target.charge.refundableCents)) {
+      setError(
+        `This is a statutory withdrawal, so refund at least ${formatPaymentAmount(target.minimumCents, target.charge.currency)}.`,
       );
       return;
     }
@@ -435,6 +466,11 @@ export default function RefundOperationsPage() {
                               ? ` · ${formatPaymentAmount(charge.refundedCents, charge.currency)} refunded`
                               : ''}
                             {charge.disputed ? ' · disputed' : ''}
+                            {charge.withdrawalEligible
+                              ? charge.withdrawalRefundCents !== null
+                                ? ` · 14-day withdrawal share ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}`
+                                : ' · inside the 14-day withdrawal window'
+                              : ''}
                             <span className="ml-2 font-mono text-xs text-muted-foreground">
                               {charge.id}
                             </span>
@@ -443,7 +479,7 @@ export default function RefundOperationsPage() {
                             type="button"
                             className={ACTION_CLASS}
                             disabled={charge.refundableCents <= 0 || charge.disputed}
-                            onClick={() => openRefund({ charge, requestId: null })}
+                            onClick={() => openRefund(chargeTarget(charge))}
                           >
                             Refund
                           </button>
@@ -503,6 +539,9 @@ export default function RefundOperationsPage() {
             <p className="mt-1 text-xs text-muted-foreground">
               Up to {formatPaymentAmount(target.charge.refundableCents, target.charge.currency)} can
               still be refunded.
+              {target.statutoryCents !== null
+                ? ` An EU, EEA or UK customer withdrawing within 14 days is owed ${formatPaymentAmount(target.statutoryCents, target.charge.currency)}, the payment prorated by the credits used.`
+                : ''}
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">

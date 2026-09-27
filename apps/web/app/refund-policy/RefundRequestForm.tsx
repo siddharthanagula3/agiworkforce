@@ -7,6 +7,7 @@ import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
+  BILLING_ERROR_REASONS,
   REFUND_REQUEST_REASONS,
   REFUND_REQUEST_REASON_LABELS,
   formatPaymentAmount,
@@ -34,16 +35,38 @@ function paymentLabel(charge: RefundableChargeView): string {
   return `${kind}, ${formatPaymentAmount(charge.amountCents, charge.currency)}, ${date}`;
 }
 
+function withdrawalRefund(
+  charge: RefundableChargeView,
+  reason: RefundRequestReason,
+): number | null {
+  if (!charge.withdrawalEligible || BILLING_ERROR_REASONS.has(reason)) return null;
+  return charge.withdrawalRefundCents !== null && charge.withdrawalRefundCents > 0
+    ? charge.withdrawalRefundCents
+    : null;
+}
+
 function consequence(charge: RefundableChargeView, reason: RefundRequestReason): string {
+  const withdrawal = withdrawalRefund(charge, reason);
+  if (withdrawal !== null) {
+    const effect =
+      charge.kind === 'plan'
+        ? 'Your plan ends today and its remaining credits for this period are removed.'
+        : 'The credits from this payment that you have not spent leave your balance.';
+    return `You are within 14 days of this payment, so as soon as you confirm you get back ${formatPaymentAmount(withdrawal, charge.currency)}, the part of the payment for the credits you have not used. ${effect} A refund cannot be undone.`;
+  }
   const effect =
     charge.kind === 'plan'
       ? 'your plan ends today and its credits for this period are removed'
       : 'the credits this payment bought are removed from your balance';
-  const withdrawal =
-    reason === 'statutory_withdrawal' && charge.withdrawalEligible
-      ? 'Because you are withdrawing within 14 days, this payment is refunded in full as soon as you confirm, and '
-      : 'If this payment qualifies under the policy above, it is refunded as soon as you confirm, and ';
-  return `${withdrawal}${effect}. A refund cannot be undone. If it needs a person to decide, it waits and nothing changes until then.`;
+  return `If this payment qualifies under the policy above, it is refunded as soon as you confirm, and ${effect}. A refund cannot be undone. If it needs a person to decide, it waits and nothing changes until then.`;
+}
+
+function withdrawalHint(charge: RefundableChargeView): string | null {
+  if (!charge.withdrawalEligible || charge.withdrawalRefundCents === null) return null;
+  if (charge.withdrawalRefundCents > 0) {
+    return `You are within 14 days of this payment. Withdrawing refunds ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}, prorated by the credits you have used.`;
+  }
+  return 'You have used the credits this payment bought, so a refund prorated by use comes to nothing. A person can still review the request.';
 }
 
 function outcomeText(request: RefundRequestView): string {
@@ -202,6 +225,9 @@ export function RefundRequestForm() {
                 </option>
               ))}
             </select>
+            {charge && withdrawalHint(charge) ? (
+              <p className="agi-ds-hint">{withdrawalHint(charge)}</p>
+            ) : null}
           </div>
 
           <div className="agi-ds-field">
@@ -223,8 +249,8 @@ export function RefundRequestForm() {
             </select>
             {reason === 'statutory_withdrawal' && charge && !charge.withdrawalEligible ? (
               <p className="agi-ds-hint">
-                This payment is more than 14 days old or was not billed to an address in the EU,
-                EEA, UK or Turkey, so a person reviews the request.
+                This payment is more than 14 days old or was not billed to an address in the EU, EEA
+                or UK, so a person reviews the request.
               </p>
             ) : null}
           </div>

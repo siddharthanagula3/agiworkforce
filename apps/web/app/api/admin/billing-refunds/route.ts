@@ -12,7 +12,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClientIp, logSecurityEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getStripeClientOrNull } from '@/lib/server/stripe-client';
+import { isStripeConfigured } from '@/lib/server/payments/stripe-provider';
 import {
   RefundRequestRefusal,
   declineRefundRequest,
@@ -48,14 +48,12 @@ const OperatorRefundActionSchema = z.discriminatedUnion('action', [
     .strict(),
 ]);
 
-function requireStripe() {
-  const stripe = getStripeClientOrNull();
-  if (!stripe) {
+function requireStripe(): void {
+  if (!isStripeConfigured()) {
     throw createError
       .serviceUnavailable('Stripe is not configured in this deployment.')
       .asUserSafe();
   }
-  return stripe;
 }
 
 function rethrowRefusal(error: unknown): never {
@@ -82,8 +80,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
   if (query.length > 320) throw createError.validation('The lookup is too long.');
 
+  requireStripe();
   try {
-    const account = await lookupAccountBilling(db, requireStripe(), query);
+    const account = await lookupAccountBilling(db, query);
     if (!account) throw createError.notFound('No account matches that lookup.').asUserSafe();
     return NextResponse.json({ account }, { headers: NO_STORE });
   } catch (error) {
@@ -142,8 +141,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     { method: request.method, header: (name) => request.headers.get(name) },
     { idempotencyKey: 'required' },
   );
+  requireStripe();
   try {
-    const result = await issueOperatorRefund(db, requireStripe(), {
+    const result = await issueOperatorRefund(db, {
       operatorUserId,
       chargeId: action.chargeId,
       amountCents: action.amountCents,
