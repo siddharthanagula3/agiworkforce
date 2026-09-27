@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   clientDelivered: vi.fn(),
   backendCost: vi.fn(),
-  priceBackend: vi.fn(() => ({ totalMicrousd: 0 })),
+  priceBackend: vi.fn((..._args: unknown[]) => ({ totalMicrousd: 0 })),
   userScopedDb: vi.fn(),
 }));
 

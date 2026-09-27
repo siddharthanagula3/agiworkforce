@@ -119,22 +119,20 @@ describe('WorkspacePolicySection security controls', () => {
     renderSection();
 
     expect(screen.getByText(/no cap/i)).toBeInTheDocument();
-    const input = screen.getByLabelText('Monthly spend cap in dollars') as HTMLInputElement;
+    const input = screen.getByLabelText('Monthly spend cap in credits') as HTMLInputElement;
     expect(input.value).toBe('');
   });
 
-  it('converts a dollar amount into cents when a spend cap is set', async () => {
+  it('converts a credit amount into ledger cents when a spend cap is set', async () => {
     const user = userEvent.setup();
     mockOverview.mockReturnValue(overview({ policy: policy({ monthlySpendCapCents: null }) }));
     renderSection();
 
-    const input = screen.getByLabelText('Monthly spend cap in dollars');
+    const input = screen.getByLabelText('Monthly spend cap in credits');
     await user.type(input, '250');
     await user.click(screen.getByRole('button', { name: /save policy/i }));
 
-    expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ monthlySpendCapCents: 25000 }),
-    );
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ monthlySpendCapCents: 125 }));
   });
 
   it('clearing the spend cap field sets no cap', async () => {
@@ -142,7 +140,7 @@ describe('WorkspacePolicySection security controls', () => {
     mockOverview.mockReturnValue(overview({ policy: policy({ monthlySpendCapCents: 5000 }) }));
     renderSection();
 
-    const input = screen.getByLabelText('Monthly spend cap in dollars');
+    const input = screen.getByLabelText('Monthly spend cap in credits');
     await user.clear(input);
     await user.click(screen.getByRole('button', { name: /save policy/i }));
 
@@ -217,7 +215,7 @@ describe('WorkspacePolicySection security controls', () => {
 
     expect(screen.getByLabelText('Secret handling')).toBeDisabled();
     expect(screen.getByLabelText('Require multi-factor authentication')).toBeDisabled();
-    expect(screen.getByLabelText('Monthly spend cap in dollars')).toBeDisabled();
+    expect(screen.getByLabelText('Monthly spend cap in credits')).toBeDisabled();
     expect(screen.getByLabelText('Require zero data retention providers')).toBeDisabled();
     expect(screen.getByLabelText('Add an IP address or CIDR block')).toBeDisabled();
   });
