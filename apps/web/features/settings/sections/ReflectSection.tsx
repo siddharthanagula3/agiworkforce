@@ -316,7 +316,7 @@ export function ReflectSection() {
 
           {recap.ongoingWork && recap.ongoingWork.length > 0 ? (
             <section aria-labelledby="reflect-ongoing-heading" className="space-y-4">
-              <h2 id="reflect-ongoing-heading" className="text-lg font-semibold text-foreground">
+              <h2 id="reflect-ongoing-heading" className="text-h3 text-foreground">
                 Work in progress
               </h2>
               <ul>

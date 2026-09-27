@@ -57,7 +57,7 @@ const TitleBar = ({
         'flex items-center justify-between gap-2 px-4 py-2 h-12 shrink-0',
         'bg-background/90 backdrop-blur-xl',
         'border-b border-border/60 rounded-t-2xl',
-        'shadow-[0_2px_12px_rgba(8,12,20,0.22)]',
+        'shadow-e1',
         'select-none',
         'min-w-[640px]',
         'relative z-50',
