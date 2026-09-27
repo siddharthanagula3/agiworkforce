@@ -217,24 +217,12 @@ pub(super) async fn handle_slash_command(
             output::print_block(&crate::agents::format_subagents(&agents));
         }
         "/task" | "/tasks" => {
-            let sub = arg.split_whitespace().next().unwrap_or("list");
-            match sub {
-                "" | "list" | "ls" => {
-                    let tasks = match &session.subagent_manager {
-                        Some(manager) => manager.list().await,
-                        None => Vec::new(),
-                    };
-                    output::print_block(&crate::subagent::format_task_list(&tasks));
-                }
-                other => {
-                    output::print_warn(&format!(
-                        "Unknown /task subcommand '{other}'. Use: /task list"
-                    ));
-                }
-            }
+            registry::tasks_for_display(session.subagent_manager.as_ref(), arg)
+                .await
+                .print();
         }
         "/context" | "/ctx" => {
-            output::print_block(&session.context_report());
+            output::print_block(&session.context_report(config.default.max_tokens as usize));
         }
         "/status" => {
             eprintln!("{}", ts::accent_header("Status:"));
