@@ -1,6 +1,11 @@
 import 'server-only';
 
-import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
+import {
+  CREDITS_PER_CENT,
+  MICROUSD_PER_CREDIT,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { MANAGED_USAGE_LIMITS, type ManagedUsageLimit } from '@/lib/billing/managed-usage-caps';
 
 export type ManagedUsageCapCents = number | null;
@@ -11,8 +16,6 @@ export const MICROUSD_PER_LEDGER_CENT = 10_000;
 export const MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_MICROUSD =
   MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS * MICROUSD_PER_LEDGER_CENT;
 
-const INTERNAL_USAGE_UNITS_PER_LEDGER_CENT = 2;
-const MICROUSD_PER_INTERNAL_USAGE_UNIT = 5_000;
 export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
 
 export function toPublicUsagePercentage(used: number, limit: number): number {
@@ -29,44 +32,40 @@ function getLimit(plan: string | null | undefined): ManagedUsageLimit | null {
     : null;
 }
 
-export function getPlanMonthlyUsageUnits(plan: string | null | undefined): number {
-  return getLimit(plan)?.monthlyUnits ?? 0;
+export function getPlanMonthlyUsageCredits(plan: string | null | undefined): number {
+  return getLimit(plan)?.monthlyCredits ?? 0;
 }
 
-export function getPlanWeeklyUsageUnits(plan: string | null | undefined): number {
-  return getLimit(plan)?.weeklyUnits ?? 0;
+export function getPlanWeeklyUsageCredits(plan: string | null | undefined): number {
+  return getLimit(plan)?.weeklyCredits ?? 0;
 }
 
-export function getPlanDailyUsageUnits(plan: string | null | undefined): number {
-  return getLimit(plan)?.dailyUnits ?? 0;
+export function getPlanDailyUsageCredits(plan: string | null | undefined): number {
+  return getLimit(plan)?.dailyCredits ?? 0;
 }
 
-export function getPlanFiveHourUsageUnits(plan: string | null | undefined): number {
-  return getLimit(plan)?.fiveHourUnits ?? 0;
+export function getPlanFiveHourUsageCredits(plan: string | null | undefined): number {
+  return getLimit(plan)?.fiveHourCredits ?? 0;
 }
 
 export function getPlanMonthlyUsageBudgetMicrousd(plan: string | null | undefined): number {
-  return getPlanMonthlyUsageUnits(plan) * MICROUSD_PER_INTERNAL_USAGE_UNIT;
+  return getPlanMonthlyUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
 export function getPlanWeeklyUsageBudgetMicrousd(plan: string | null | undefined): number {
-  return getPlanWeeklyUsageUnits(plan) * MICROUSD_PER_INTERNAL_USAGE_UNIT;
+  return getPlanWeeklyUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
 export function getPlanFiveHourUsageBudgetMicrousd(plan: string | null | undefined): number {
-  return getPlanFiveHourUsageUnits(plan) * MICROUSD_PER_INTERNAL_USAGE_UNIT;
+  return getPlanFiveHourUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
-export function getInternalUsageUnitMicrousd(): number {
-  return MICROUSD_PER_INTERNAL_USAGE_UNIT;
-}
-
-function unitsToLedgerCents(units: number): number {
-  if (units <= 0) return 0;
-  if (units % INTERNAL_USAGE_UNITS_PER_LEDGER_CENT !== 0) {
+function creditsToLedgerCents(credits: number): number {
+  if (credits <= 0) return 0;
+  if (credits % CREDITS_PER_CENT !== 0) {
     throw new Error('Managed usage allocation cannot be represented by the paid cents ledger');
   }
-  return units / INTERNAL_USAGE_UNITS_PER_LEDGER_CENT;
+  return credits / CREDITS_PER_CENT;
 }
 
 export function isPlanUsageUncapped(plan: string | null | undefined): boolean {
@@ -79,17 +78,17 @@ export function getPlanUsageBudgetCents(
 ): number {
   if (isPlanUsageUncapped(plan)) return MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS;
   if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
-  return unitsToLedgerCents(getPlanMonthlyUsageUnits(plan));
+  return creditsToLedgerCents(getPlanMonthlyUsageCredits(plan));
 }
 
 export function getPlanWeeklyUsageBudgetCents(plan: string | null | undefined): number {
   if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
-  return unitsToLedgerCents(getPlanWeeklyUsageUnits(plan));
+  return creditsToLedgerCents(getPlanWeeklyUsageCredits(plan));
 }
 
 export function getPlanSessionUsageBudgetCents(plan: string | null | undefined): number {
   if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
-  return unitsToLedgerCents(getPlanFiveHourUsageUnits(plan));
+  return creditsToLedgerCents(getPlanFiveHourUsageCredits(plan));
 }
 
 export function getPlanFlagshipWeeklyUsageBudgetCents(plan: string | null | undefined): number {
@@ -115,7 +114,7 @@ export function getPlanFlagshipWeeklyUsageCapCents(
  * cents getters return, scaled, rather than a second derivation from the unit
  * table: a cap is a whole number of ledger cents by construction, so scaling
  * loses nothing, and a plan whose allowance the two derivations disagree on
- * (free, which declares five-hour units and a zero paid budget) cannot end up
+ * (free, which declares five-hour credits and a zero paid budget) cannot end up
  * with two different ceilings.
  */
 function toCapMicrousd(cap: ManagedUsageCapCents): ManagedUsageCapMicrousd {
@@ -163,10 +162,7 @@ export const QUOTA_WARNING_THRESHOLD_PERCENT = 80;
 export const QUOTA_CRITICAL_THRESHOLD_PERCENT = 95;
 
 export type QuotaWarningScope =
-  | 'billing_period'
-  | 'rolling_five_hour'
-  | 'rolling_weekly'
-  | 'computer_use_soft_cap';
+  'billing_period' | 'rolling_five_hour' | 'rolling_weekly' | 'computer_use_soft_cap';
 
 export function buildComputerUseSoftCapWarningHeader(input: {
   usedUnits: number;

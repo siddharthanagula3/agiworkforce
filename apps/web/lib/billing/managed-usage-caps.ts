@@ -1,92 +1,103 @@
 import type { BillingPlanTier } from '@agiworkforce/types';
 
 export interface ManagedUsageLimit {
-  monthlyUnits: number;
-  weeklyUnits: number;
-  fiveHourUnits: number;
-  dailyUnits: number;
+  monthlyCredits: number;
+  weeklyCredits: number;
+  fiveHourCredits: number;
+  dailyCredits: number;
   unlimited: boolean;
 }
 
+const NO_MANAGED_USAGE: ManagedUsageLimit = {
+  monthlyCredits: 0,
+  weeklyCredits: 0,
+  fiveHourCredits: 0,
+  dailyCredits: 0,
+  unlimited: false,
+};
+
 export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsageLimit>> =
   Object.freeze({
-    'local-only': {
-      monthlyUnits: 0,
-      weeklyUnits: 0,
-      fiveHourUnits: 0,
-      dailyUnits: 0,
+    'local-only': NO_MANAGED_USAGE,
+    byok: NO_MANAGED_USAGE,
+    free: {
+      monthlyCredits: 20,
+      weeklyCredits: 15,
+      fiveHourCredits: 2,
+      dailyCredits: 0,
       unlimited: false,
     },
-    byok: { monthlyUnits: 0, weeklyUnits: 0, fiveHourUnits: 0, dailyUnits: 0, unlimited: false },
-    free: { monthlyUnits: 20, weeklyUnits: 15, fiveHourUnits: 5, dailyUnits: 0, unlimited: false },
     basic: {
-      monthlyUnits: 400,
-      weeklyUnits: 100,
-      fiveHourUnits: 20,
-      dailyUnits: 0,
+      monthlyCredits: 400,
+      weeklyCredits: 100,
+      fiveHourCredits: 10,
+      dailyCredits: 0,
       unlimited: false,
     },
     pro: {
-      monthlyUnits: 2_000,
-      weeklyUnits: 500,
-      fiveHourUnits: 100,
-      dailyUnits: 0,
+      monthlyCredits: 2_000,
+      weeklyCredits: 500,
+      fiveHourCredits: 50,
+      dailyCredits: 0,
       unlimited: false,
     },
     max: {
-      monthlyUnits: 10_000,
-      weeklyUnits: 2_500,
-      fiveHourUnits: 500,
-      dailyUnits: 0,
+      monthlyCredits: 10_000,
+      weeklyCredits: 2_500,
+      fiveHourCredits: 250,
+      dailyCredits: 0,
       unlimited: false,
     },
     max_15x: {
-      monthlyUnits: 30_000,
-      weeklyUnits: 7_500,
-      fiveHourUnits: 1_500,
-      dailyUnits: 0,
+      monthlyCredits: 20_000,
+      weeklyCredits: 5_000,
+      fiveHourCredits: 1_000,
+      dailyCredits: 0,
       unlimited: false,
     },
     team: {
-      monthlyUnits: 2_000,
-      weeklyUnits: 500,
-      fiveHourUnits: 100,
-      dailyUnits: 0,
+      monthlyCredits: 2_000,
+      weeklyCredits: 500,
+      fiveHourCredits: 50,
+      dailyCredits: 0,
       unlimited: false,
     },
-    enterprise: {
-      monthlyUnits: 0,
-      weeklyUnits: 0,
-      fiveHourUnits: 0,
-      dailyUnits: 0,
-      unlimited: true,
-    },
+    enterprise: { ...NO_MANAGED_USAGE, unlimited: true },
   });
 
-/**
- * The only source a published "Nx more usage" claim may be built from. A
- * hand-typed multiplier is falsifiable the moment the table above moves; this
- * returns null rather than a number whenever the comparison is not a clean
- * whole multiple, so no surface can round a claim into being true.
- */
+export interface ManagedUsageWindowMultipliers {
+  fiveHour: number;
+  weekly: number;
+  monthly: number;
+}
+
+export function managedUsageMultipliers(
+  tier: BillingPlanTier,
+  baseline: BillingPlanTier,
+): ManagedUsageWindowMultipliers | null {
+  const subject = MANAGED_USAGE_LIMITS[tier];
+  const against = MANAGED_USAGE_LIMITS[baseline];
+  if (!subject || !against || subject.unlimited || against.unlimited) return null;
+  if (against.monthlyCredits <= 0 || against.weeklyCredits <= 0 || against.fiveHourCredits <= 0) {
+    return null;
+  }
+  const multipliers = {
+    fiveHour: subject.fiveHourCredits / against.fiveHourCredits,
+    weekly: subject.weeklyCredits / against.weeklyCredits,
+    monthly: subject.monthlyCredits / against.monthlyCredits,
+  };
+  const whole = Object.values(multipliers).every((ratio) => Number.isInteger(ratio) && ratio >= 1);
+  return whole ? multipliers : null;
+}
+
 export function managedUsageMultiplier(
   tier: BillingPlanTier,
   baseline: BillingPlanTier,
 ): number | null {
-  const subject = MANAGED_USAGE_LIMITS[tier];
-  const against = MANAGED_USAGE_LIMITS[baseline];
-  if (!subject || !against) return null;
-  if (subject.unlimited || against.unlimited) return null;
-  if (against.monthlyUnits <= 0) return null;
-
-  const ratios = [
-    subject.monthlyUnits / against.monthlyUnits,
-    subject.weeklyUnits / against.weeklyUnits,
-    subject.fiveHourUnits / against.fiveHourUnits,
-  ];
-  const [first] = ratios;
-  if (first === undefined || !Number.isInteger(first) || first < 1) return null;
-  return ratios.every((ratio) => ratio === first) ? first : null;
+  const multipliers = managedUsageMultipliers(tier, baseline);
+  if (!multipliers) return null;
+  const { fiveHour, weekly, monthly } = multipliers;
+  return fiveHour === weekly && weekly === monthly ? fiveHour : null;
 }
 
 export function managedUsageComparisonLabel(
@@ -94,8 +105,16 @@ export function managedUsageComparisonLabel(
   baseline: BillingPlanTier,
   baselineLabel: string,
 ): string | null {
-  const multiplier = managedUsageMultiplier(tier, baseline);
-  if (multiplier === null) return null;
-  if (multiplier === 1) return `Same usage as ${baselineLabel}`;
-  return `${multiplier}x more usage than ${baselineLabel}`;
+  const multipliers = managedUsageMultipliers(tier, baseline);
+  if (!multipliers) return null;
+  const { fiveHour, weekly, monthly } = multipliers;
+  if (fiveHour === weekly && weekly === monthly) {
+    return fiveHour === 1
+      ? `Same usage as ${baselineLabel}`
+      : `${fiveHour}x more usage than ${baselineLabel}`;
+  }
+  if (weekly === monthly) {
+    return `${fiveHour}x ${baselineLabel} per 5 hours, ${weekly}x per week`;
+  }
+  return `${fiveHour}x ${baselineLabel} per 5 hours, ${weekly}x per week, ${monthly}x per month`;
 }

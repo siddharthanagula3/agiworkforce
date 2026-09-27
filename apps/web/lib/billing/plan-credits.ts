@@ -2,17 +2,13 @@ import 'server-only';
 
 import type { BillingPlanTier } from '@agiworkforce/types';
 import {
-  creditsFromMicrousd,
   isMax15xPlanTier,
   isMaxPlanTier,
   isPerSeatBillingPlan,
   isProPlanTier,
 } from '@agiworkforce/types';
 import { MANAGED_USAGE_LIMITS } from '@/lib/billing/managed-usage-caps';
-import {
-  FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
-  getInternalUsageUnitMicrousd,
-} from '@/lib/server/managed-usage-policy';
+import { FLAGSHIP_OF_WEEKLY_BUDGET_RATIO } from '@/lib/server/managed-usage-policy';
 
 function hasFlagshipWeeklyAllowance(tier: BillingPlanTier): boolean {
   return (
@@ -31,10 +27,6 @@ export interface PlanCreditAllowance {
   unlimited: boolean;
 }
 
-function unitsToCredits(units: number): number {
-  return creditsFromMicrousd(units * getInternalUsageUnitMicrousd());
-}
-
 function buildAllowance(tier: BillingPlanTier): PlanCreditAllowance {
   const limit = MANAGED_USAGE_LIMITS[tier];
   if (limit.unlimited) {
@@ -46,11 +38,11 @@ function buildAllowance(tier: BillingPlanTier): PlanCreditAllowance {
       unlimited: true,
     };
   }
-  const weekly = unitsToCredits(limit.weeklyUnits);
+  const weekly = limit.weeklyCredits;
   return {
-    monthly: unitsToCredits(limit.monthlyUnits),
+    monthly: limit.monthlyCredits,
     weekly,
-    fiveHour: unitsToCredits(limit.fiveHourUnits),
+    fiveHour: limit.fiveHourCredits,
     flagshipWeekly: hasFlagshipWeeklyAllowance(tier)
       ? weekly * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO
       : null,

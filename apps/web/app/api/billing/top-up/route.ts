@@ -3,12 +3,15 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
+  DAILY_TOP_UP_LIMIT_USD,
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
+  TOP_UP_CONVERSION,
+  TOP_UP_UNITS_PER_USD,
+  creditsFromMicrousd,
   formatCredits,
-  topUpLedgerCentsForUsd,
-  topUpUnitsForUsd,
   isFreeBillingPlanTier,
+  quoteTopUp,
 } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
@@ -95,11 +98,11 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   }
 
   const amountUsd = parsed.data.amountUsd;
-  const amountCents = topUpLedgerCentsForUsd(amountUsd);
-  const topUpUnits = topUpUnitsForUsd(amountUsd);
-  if (amountCents === null || topUpUnits === null) {
+  const quote = quoteTopUp(amountUsd);
+  if (!quote) {
     throw createError.validation('Invalid top-up amount.');
   }
+  const topUpUnits = quote.credits;
 
   const idempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() ?? '';
 
@@ -145,12 +148,34 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const [purchasedToday] = await db.query<{ purchased_microusd: string | number | null }>(
+    `select coalesce(sum(amount_microusd), 0) as purchased_microusd
+       from credit_transactions
+      where user_id = $1
+        and transaction_type = 'purchase'
+        and created_at >= date_trunc('day', now() at time zone 'utc') at time zone 'utc'`,
+    [userId],
+  );
+  const dailyCredits = DAILY_TOP_UP_LIMIT_USD * TOP_UP_UNITS_PER_USD;
+  const purchasedTodayCredits = creditsFromMicrousd(
+    Number(purchasedToday?.purchased_microusd ?? 0),
+  );
+  if (purchasedTodayCredits + topUpUnits > dailyCredits) {
+    throw createError.validation(
+      `You can add up to ${formatCredits(dailyCredits)} a day. Choose a smaller amount or try again tomorrow.`,
+    );
+  }
+
   const metadata = {
     type: 'credit_topup',
     user_id: userId,
-    credit_amount_cents: String(amountCents),
+    conversion: TOP_UP_CONVERSION,
+    amount_usd: String(quote.amountUsd),
+    price_cents: String(quote.priceCents),
+    discount_percent: String(quote.discountPercent),
+    credit_amount_cents: String(quote.budgetCents),
     top_up_units: String(topUpUnits),
-    conversion: 'usd_1_to_units_50_v1',
+    auto_reload: 'false',
   };
   const appUrl = resolveCheckoutReturnOrigin(request);
   const session = await getStripeClient().checkout.sessions.create(
@@ -165,10 +190,13 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
           quantity: 1,
           price_data: {
             currency: 'usd',
-            unit_amount: amountCents,
+            unit_amount: quote.priceCents,
             product_data: {
               name: `AGI top-up, ${formatCredits(topUpUnits)}`,
-              description: `${formatCredits(topUpUnits)} managed-usage top-up`,
+              description:
+                quote.discountPercent > 0
+                  ? `${formatCredits(topUpUnits)}, ${quote.discountPercent}% off`
+                  : formatCredits(topUpUnits),
             },
           },
         },
@@ -198,7 +226,13 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     },
   });
 
-  return NextResponse.json({ url: session.url, amountUsd, topUpUnits });
+  return NextResponse.json({
+    url: session.url,
+    amountUsd,
+    topUpUnits,
+    priceCents: quote.priceCents,
+    discountPercent: quote.discountPercent,
+  });
 }
 
 export const POST = withCorsRoute(

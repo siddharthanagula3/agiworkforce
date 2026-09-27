@@ -14,7 +14,7 @@ import {
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
-import { isValidTopUpPurchase } from '@agiworkforce/types';
+import { topUpChargedCents } from '@agiworkforce/types';
 import {
   endEnterpriseContractIfPresent,
   recordEnterpriseInvoiceEvent,
@@ -305,11 +305,15 @@ export async function dispatchStripeEvent(
       let refundedCreditTarget = charge.amount_refunded;
       if (isCreditTopUpCharge) {
         const purchasedCents = Number(charge.metadata?.['credit_amount_cents']);
-        const purchasedUnits = Number(charge.metadata?.['top_up_units']);
-        if (
-          !isValidTopUpPurchase({ amountCents: purchasedCents, units: purchasedUnits }) ||
-          charge.amount < purchasedCents
-        ) {
+        const chargedCents = topUpChargedCents({
+          conversion: charge.metadata?.['conversion'],
+          amountCents: purchasedCents,
+          units: Number(charge.metadata?.['top_up_units']),
+          priceCents: Number(charge.metadata?.['price_cents']),
+          amountUsd: Number(charge.metadata?.['amount_usd']),
+          autoReload: charge.metadata?.['auto_reload'] === 'true',
+        });
+        if (chargedCents === null || charge.amount < chargedCents) {
           throw new Error(`Invalid credit top-up refund metadata for Charge ${charge.id}`);
         }
         refundedCreditTarget = fullyRefunded
