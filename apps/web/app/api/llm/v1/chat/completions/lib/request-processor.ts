@@ -138,6 +138,7 @@ import {
   WORKSPACE_FEATURE_LABELS,
   type Effort,
   getSlotForModel,
+  isFlagshipRoutingSlot,
   normalizeModelId,
   canUseBillingPlanCapability,
   isFreeBillingPlanTier,
@@ -230,8 +231,11 @@ import {
   reserveManagedUsageRequest,
   resolveManagedQuotaRecovery,
   type ManagedQuotaRecovery,
+  type ManagedUsageLimitContext,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+import { toIsoTimestamp } from '@/lib/server/capability-limit-resets';
+import { resolvePlanLimitAlternativeModel } from '@/lib/server/plan-limit-alternative';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
 import {
   fitProjectContextBlocks,
@@ -2160,6 +2164,29 @@ function quotaRecoveryFor(
   });
 }
 
+async function planLimitContext(input: {
+  planTier: string;
+  model: string;
+  resetsAt: string | null;
+}): Promise<ManagedUsageLimitContext> {
+  try {
+    return {
+      resetsAt: input.resetsAt,
+      alternativeModel: await resolvePlanLimitAlternativeModel({
+        planTier: input.planTier,
+        refusedModelId: input.model,
+        kind: 'free_pool',
+      }),
+    };
+  } catch (error) {
+    logger.warn(
+      { error, model: input.model },
+      'Plan limit alternative could not be read; the refusal is sent without it',
+    );
+    return { resetsAt: input.resetsAt, alternativeModel: null };
+  }
+}
+
 export function handleCreditError(
   _deductResult: {
     code?: string;
@@ -2168,19 +2195,21 @@ export function handleCreditError(
     daily_used?: number;
   },
   subscription?: SubscriptionInfo,
+  limitContext: ManagedUsageLimitContext | null = null,
 ): NextResponse {
-  const recovery = quotaRecoveryFor('monthly_limit_exceeded', subscription);
+  const error = new ManagedUsageRequestError(
+    'Usage budget exhausted for this billing period. Upgrade your plan or add credits.',
+    402,
+    'monthly_limit_exceeded',
+  );
+  error.limitContext = limitContext;
   return NextResponse.json(
-    {
-      error: {
-        message:
-          'Usage budget exhausted for this billing period. Upgrade your plan or add credits.',
-        type: 'insufficient_quota',
-        code: 'monthly_limit_exceeded',
-        ...(recovery ? { recovery } : {}),
-      },
-    },
-    { status: 402 },
+    createManagedUsageErrorBody(
+      error,
+      'insufficient_quota',
+      quotaRecoveryFor(error.code, subscription),
+    ),
+    { status: error.status },
   );
 }
 
@@ -2201,27 +2230,32 @@ function managedUsageErrorResponse(
   );
 }
 
-function freeTrialBudgetReachedResponse(
-  subscription: SubscriptionInfo | undefined,
-  resetAt: string | null,
-): ProcessFailure {
-  const recovery = quotaRecoveryFor('free_trial_token_budget_reached', subscription);
-  const retryAfterSeconds = freeTrialRetryAfterSeconds(resetAt);
+async function freeTrialBudgetReachedResponse(
+  subscription: SubscriptionInfo,
+  input: { model: string; resetsAt: string | null },
+): Promise<ProcessFailure> {
+  const error = new ManagedUsageRequestError(
+    FREE_USAGE_LIMIT_REACHED_MESSAGE,
+    429,
+    'free_trial_token_budget_reached',
+  );
+  error.limitContext = await planLimitContext({
+    planTier: subscription.plan_tier,
+    model: input.model,
+    resetsAt: input.resetsAt,
+  });
+  const body = createManagedUsageErrorBody(
+    error,
+    'insufficient_quota',
+    quotaRecoveryFor(error.code, subscription),
+  );
+  const retryAfterSeconds = freeTrialRetryAfterSeconds(input.resetsAt);
   return {
     ok: false,
     response: NextResponse.json(
+      { error: { ...body.error, trial: { model: FREE_TRIAL_MODEL } } },
       {
-        error: {
-          message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
-          type: 'insufficient_quota',
-          code: 'free_trial_token_budget_reached',
-          trial: { model: FREE_TRIAL_MODEL },
-          ...(resetAt ? { reset_at: resetAt } : {}),
-          ...(recovery ? { recovery } : {}),
-        },
-      },
-      {
-        status: 429,
+        status: error.status,
         ...(retryAfterSeconds === undefined
           ? {}
           : { headers: { 'Retry-After': String(retryAfterSeconds) } }),
@@ -3866,8 +3900,7 @@ export async function processRequest(
   });
 
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
-  const isFlagshipRequest =
-    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
+  const isFlagshipRequest = isFlagshipRoutingSlot(resolvedSlot);
 
   let quotaFeature: QuotaFeature = 'chat';
   if (resolvedSlot === 'image_generation') {
@@ -4192,6 +4225,18 @@ export async function processRequest(
     );
 
     if (!hasCredits) {
+      const monthlyLimitRefusal = async (): Promise<ProcessFailure> => ({
+        ok: false,
+        response: handleCreditError(
+          { code: 'MONTHLY_CREDIT_LIMIT_REACHED' },
+          subscription,
+          await planLimitContext({
+            planTier: subscription.plan_tier,
+            model: chatRequest.model,
+            resetsAt: toIsoTimestamp(existingBalance?.period_end),
+          }),
+        ),
+      });
       const fallbackModel = ownership.selectedRouteId
         ? null
         : findCheaperFallbackModel(
@@ -4248,16 +4293,10 @@ export async function processRequest(
           provider = fallbackProvider;
           estimatedCostMicrousd = fallbackCostMicrousd;
         } else {
-          return {
-            ok: false,
-            response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }, subscription),
-          };
+          return monthlyLimitRefusal();
         }
       } else {
-        return {
-          ok: false,
-          response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }, subscription),
-        };
+        return monthlyLimitRefusal();
       }
     }
 
@@ -4634,7 +4673,10 @@ export async function processRequest(
       freePoolRoute: freeLanePlan !== null,
     });
     if (!trialReservationResult.ok) {
-      return freeTrialBudgetReachedResponse(subscription, trialReservationResult.resetAt);
+      return freeTrialBudgetReachedResponse(subscription, {
+        model: chatRequest.model,
+        resetsAt: trialReservationResult.resetAt,
+      });
     }
 
     freeTrial = trialReservationResult.reservation;
@@ -4646,7 +4688,10 @@ export async function processRequest(
     });
     if (!fitted.ok) {
       await settleFreeTrialRequest({ reservation: freeTrial, outcome: 'failed' });
-      return freeTrialBudgetReachedResponse(subscription, await freeTrialResetAt(userId));
+      return freeTrialBudgetReachedResponse(subscription, {
+        model: chatRequest.model,
+        resetsAt: await freeTrialResetAt(userId),
+      });
     }
     maxTokens = llmRequest.max_tokens;
   }
