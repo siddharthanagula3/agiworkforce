@@ -85,6 +85,7 @@ function localMemoryPorts(memoryEnabled: boolean): ExplicitMemoryPorts {
         source_conversation_id: null,
         pinned: false,
         created_at: Date.now(),
+        source: 'typed',
       });
       return { stored: true, alreadyKnown: false };
     },

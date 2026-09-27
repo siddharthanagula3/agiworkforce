@@ -32,12 +32,18 @@ export interface Message {
   parent_message_id: string | null;
 }
 
+export type MemoryFactSource = 'typed' | 'learned' | 'imported';
+
 export interface MemoryFact {
   id: string;
   fact: string;
   source_conversation_id: string | null;
   pinned: boolean;
   created_at: number;
+  updated_at?: number;
+  source?: MemoryFactSource | null;
+  category?: string | null;
+  source_conversation_title?: string | null;
 }
 
 export interface InstalledModel {

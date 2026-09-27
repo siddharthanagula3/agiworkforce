@@ -12,9 +12,9 @@ import {
   searchMemoryByText,
   searchMemoryByEmbedding,
 } from '@/storage/memory';
-import type { MemoryFact } from '@/storage/types';
+import type { MemoryFact, MemoryFactSource } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
+import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
 import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
 import { api } from '@/services/api';
 import { markMemoryForSync, syncNow } from '@/services/cloudSyncEngine';
@@ -52,6 +52,26 @@ interface MemoryState {
 }
 
 const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
+
+function cloudMemoryOrigin(entry: CloudMemoryEntry): MemoryFactSource {
+  const raw = entry.origin ?? entry.source;
+  if (raw === 'auto') return 'learned';
+  return raw.startsWith('imported') ? 'imported' : 'typed';
+}
+
+function cloudMemoryFact(entry: CloudMemoryEntry): MemoryFact {
+  return {
+    id: entry.id,
+    fact: entry.content,
+    source_conversation_id: entry.sourceConversationId ?? null,
+    source_conversation_title: entry.sourceConversationTitle ?? null,
+    pinned: entry.pinned,
+    created_at: new Date(entry.createdAt).getTime(),
+    updated_at: new Date(entry.updatedAt).getTime(),
+    source: cloudMemoryOrigin(entry),
+    category: entry.category,
+  };
+}
 
 function captureMemoryOperationScope(): AccountScopedUiState | null {
   return captureAccountScopedUiState(useChatAppModeStore.getState().appMode);
@@ -92,13 +112,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         const cloudEntries = useCloudMemoryStore
           .getState()
           .entries.filter((e) => !e.isDeleted)
-          .map((e): MemoryFact => ({
-            id: e.id,
-            fact: e.content,
-            source_conversation_id: null,
-            pinned: e.pinned,
-            created_at: new Date(e.createdAt).getTime(),
-          }))
+          .map(cloudMemoryFact)
           .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
@@ -154,6 +168,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
             source_conversation_id: null,
             pinned: false,
             created_at: Date.now(),
+            source: 'typed',
           };
           const q = state.searchQuery.trim().toLowerCase();
           const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
@@ -172,6 +187,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           source_conversation_id: null,
           pinned: false,
           created_at: Date.now(),
+          source: 'typed',
         };
         await insertMemoryFact(newFact);
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
@@ -210,9 +226,12 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     }
 
+    const editedAt = Date.now();
     set((state) => ({
-      entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
-      filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
+      entries: state.entries.map((e) => (e.id === id ? { ...e, fact, updated_at: editedAt } : e)),
+      filteredEntries: state.filteredEntries.map((e) =>
+        e.id === id ? { ...e, fact, updated_at: editedAt } : e,
+      ),
     }));
 
     try {
@@ -403,6 +422,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           source_conversation_id: null,
           pinned: false,
           created_at: Date.now(),
+          source: 'imported',
         });
         inserted++;
       } catch {
