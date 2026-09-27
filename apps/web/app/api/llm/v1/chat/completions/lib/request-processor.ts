@@ -87,8 +87,16 @@ import {
   hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { extractCandidateMemoryFacts, passiveMemoryText } from '@agiworkforce/agent-core';
-import { MEMORY_COMMAND_CLIENT_SURFACES } from '@/lib/services/memory-commands';
+import {
+  MEMORY_COMMAND_KINDS,
+  extractCandidateMemoryFacts,
+  passiveMemoryText,
+} from '@agiworkforce/agent-core';
+import {
+  MEMORY_COMMAND_CLIENT_SURFACES,
+  MEMORY_COMMAND_TURN_STATUSES,
+  memoryCommandTurnNote,
+} from '@/lib/services/memory-commands';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -429,6 +437,13 @@ export const ChatCompletionRequestSchema = z
     web_fetch: z.boolean().optional(),
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
+    personalization: z.boolean().optional(),
+    memory_command: z
+      .object({
+        kind: z.enum(MEMORY_COMMAND_KINDS),
+        status: z.enum(MEMORY_COMMAND_TURN_STATUSES),
+      })
+      .optional(),
     research: z.boolean().optional(),
     /**
      * What a research run may read (§24). `files` opens the account's own
@@ -2468,6 +2483,7 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
   const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
     ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
     ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
@@ -2545,7 +2561,7 @@ export async function processRequest(
     };
   }
   const customInstructionsPromise =
-    chatSurface === 'api'
+    chatSurface === 'api' || chatRequest.personalization === false
       ? null
       : scopedDbPromise
           .then((scoped) => buildCustomInstructionsPreamble(scoped.db, userId))
@@ -4531,7 +4547,15 @@ export async function processRequest(
     .map((block) => block.text)
     .filter((text) => text.length > 0)
     .join('\n\n');
-  const dynamicTurnInstruction = [dynamicSkillMemoryText, responseBudget?.instruction ?? '']
+  const memoryCommandNote =
+    chatRequest.memory_command && MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface)
+      ? memoryCommandTurnNote(lastUserText, chatRequest.memory_command)
+      : null;
+  const dynamicTurnInstruction = [
+    dynamicSkillMemoryText,
+    memoryCommandNote ?? '',
+    responseBudget?.instruction ?? '',
+  ]
     .filter((text) => text.length > 0)
     .join('\n\n');
 

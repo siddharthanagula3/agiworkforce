@@ -48,7 +48,7 @@ function translateUserContent(blocks: ContentBlock[]): string | OpenAIChatUserMe
         b.source.type === 'base64'
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
-      return [{ type: 'image_url', image_url: { url } }];
+      return [{ type: 'image_url', image_url: b.detail ? { url, detail: b.detail } : { url } }];
     }
     if (b.type === 'file') {
       // The Chat Completions wire format has no file part at all, so a

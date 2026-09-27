@@ -184,6 +184,7 @@ import {
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
+import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
 
 interface SendMessageOptions {
@@ -212,6 +213,7 @@ interface SendMessageOptions {
   connectorToolsEnabled?: boolean;
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
+  memoryCommand?: MemoryCommandReport;
   research?: boolean;
   /** §24: what this research run may read, chosen on the plan card. */
   researchSources?: {
@@ -3717,6 +3719,7 @@ export function useChatStream(): UseChatStreamReturn {
                 : undefined,
               connector_tools_enabled: options.connectorToolsEnabled,
               memory_enabled: options.memoryEnabled === false ? false : undefined,
+              memory_command: options.memoryCommand,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),

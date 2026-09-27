@@ -1,0 +1,86 @@
+import 'server-only';
+
+import { NextResponse, type NextRequest } from 'next/server';
+import { z } from 'zod';
+
+import { getSuspendedAccountUser } from '@/lib/api-auth';
+import { requireCsrfToken } from '@/lib/csrf';
+import { withErrorHandler } from '@/lib/error-handler';
+import { createError, isAppError } from '@/lib/errors';
+import { withRateLimit } from '@/lib/rate-limit';
+import { readJsonBody } from '@/lib/read-json-body';
+import { requireHumanCaller } from '@/lib/security/bot-challenge';
+import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
+import {
+  AppealContactMissingError,
+  readLatestAppeal,
+  submitAccountAppeal,
+  submitSignedOutAppeal,
+} from '@/lib/support/tickets/appeals';
+import { MAX_TICKET_MESSAGE_CHARS } from '@/lib/support/tickets/types';
+
+export const runtime = 'nodejs';
+
+const AppealSchema = z.object({
+  message: z.string().trim().min(1).max(MAX_TICKET_MESSAGE_CHARS),
+  email: z.string().trim().email().max(254).optional(),
+});
+
+const NO_STORE = { 'cache-control': 'no-store' };
+
+async function suspendedCaller(request: NextRequest): Promise<string | null> {
+  try {
+    return (await getSuspendedAccountUser(request)).userId;
+  } catch (error) {
+    if (isAppError(error) && error.statusCode === 401) return null;
+    throw error;
+  }
+}
+
+async function handleRead(request: NextRequest) {
+  const { userId } = await getSuspendedAccountUser(request);
+
+  const limited = await withRateLimit(request, 'support-tickets-read', `user:${userId}`);
+  if (limited) return limited;
+
+  return NextResponse.json({ appeal: await readLatestAppeal(userId) }, { headers: NO_STORE });
+}
+
+async function handleSubmit(request: NextRequest) {
+  const csrfResponse = await requireCsrfToken(request);
+  if (csrfResponse) return csrfResponse;
+
+  const userId = await suspendedCaller(request);
+
+  const limited = userId
+    ? await withRateLimit(request, 'support-tickets-write', `user:${userId}`)
+    : await withRateLimit(request, 'support-handoff-create');
+  if (limited) return limited;
+
+  const parsed = AppealSchema.safeParse(await readJsonBody(request));
+  if (!parsed.success) {
+    throw createError.validation('Invalid appeal', parsed.error);
+  }
+
+  if (userId) {
+    try {
+      const appeal = await submitAccountAppeal(userId, parsed.data.message);
+      return NextResponse.json({ appeal }, { status: 201, headers: NO_STORE });
+    } catch (error) {
+      if (error instanceof AppealContactMissingError) {
+        throw createError.validation('This account has no email address support can reply to.');
+      }
+      throw error;
+    }
+  }
+
+  await requireHumanCaller(BOT_CHALLENGED_ENDPOINTS.supportAppeal);
+  if (!parsed.data.email) {
+    throw createError.validation('Enter the email address of the suspended account.');
+  }
+  await submitSignedOutAppeal({ email: parsed.data.email, message: parsed.data.message });
+  return NextResponse.json({ received: true }, { status: 202, headers: NO_STORE });
+}
+
+export const GET = withErrorHandler(handleRead);
+export const POST = withErrorHandler(handleSubmit);
