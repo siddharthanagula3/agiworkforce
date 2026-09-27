@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0308: the Gmail mailbox watch behind each Gmail trigger
+-- Migration 0307: the Gmail mailbox watch behind each Gmail trigger
 --
 -- Why    : a Gmail trigger was created pending and nothing ever registered the
 --          mailbox watch that 0210 names as its ownership proof, so no Gmail

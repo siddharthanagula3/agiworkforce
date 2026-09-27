@@ -79,7 +79,7 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Only provider-hosted web search and code interpreter are reachable from voice, and they run without reading the approval policy; product, file and connector tools cannot be called from voice. | handler |
+| platform | partial | Hosted web search and code interpreter now attach to voice only when the approval policy allows them (live-voice-tools.ts:209-235). Product, file and connector tools still cannot be called from voice. | handler |
 
 Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live-voice-tools.ts:68-78`
 

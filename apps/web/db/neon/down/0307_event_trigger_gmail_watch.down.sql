@@ -1,4 +1,4 @@
--- Reversal of 0308 : removes the Gmail watch state from event triggers.
+-- Reversal of 0307 : removes the Gmail watch state from event triggers.
 --
 -- WHAT THIS COSTS: Gmail triggers keep their verification but lose the history
 -- id they had read up to, so the code that reads new mail for them has nothing
@@ -26,6 +26,6 @@ alter table public.event_triggers
   drop column if exists watch_history_id;
 
 delete from public.schema_migrations
- where filename = '0308_event_trigger_gmail_watch.sql';
+ where filename = '0307_event_trigger_gmail_watch.sql';
 
 commit;
