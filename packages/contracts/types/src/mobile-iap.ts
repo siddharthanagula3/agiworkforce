@@ -1,8 +1,4 @@
-import {
-  BILLING_PLAN_PRICING,
-  type BillingInterval,
-  type SelfServeIndividualPlanTier,
-} from './billing-catalog';
+import { getPlanPriceUsd, type SelfServeIndividualPlanTier } from './billing-catalog';
 import { topUpUnitsForUsd } from './billing-topups';
 
 export type MobileIapPlatform = 'ios' | 'android';
@@ -11,7 +7,6 @@ export type MobileIapProductKind = 'subscription' | 'top_up';
 export const MOBILE_IAP_SUBSCRIPTION_PRODUCT_KEYS = [
   'subscription_basic_monthly',
   'subscription_pro_monthly',
-  'subscription_pro_yearly',
   'subscription_max_monthly',
   'subscription_max_15x_monthly',
 ] as const;
@@ -33,7 +28,7 @@ export interface MobileIapSubscriptionDefinition {
   key: MobileIapSubscriptionProductKey;
   kind: 'subscription';
   planTier: SelfServeIndividualPlanTier;
-  interval: BillingInterval;
+  interval: 'monthly';
   intendedPriceUsd: number;
 }
 
@@ -46,11 +41,10 @@ export interface MobileIapTopUpDefinition {
 
 export type MobileIapProductDefinition = MobileIapSubscriptionDefinition | MobileIapTopUpDefinition;
 
-function requirePlanPriceUsd(tier: SelfServeIndividualPlanTier, interval: BillingInterval): number {
-  const pricing = BILLING_PLAN_PRICING[tier];
-  const amount = interval === 'monthly' ? pricing.monthlyPriceUsd : pricing.yearlyPriceUsd;
-  if (typeof amount !== 'number' || amount <= 0) {
-    throw new Error(`Mobile IAP definition references an unavailable ${tier} ${interval} price.`);
+function requireMonthlyPlanPriceUsd(tier: SelfServeIndividualPlanTier): number {
+  const amount = getPlanPriceUsd(tier, 'monthly');
+  if (amount === null || amount <= 0) {
+    throw new Error(`Mobile IAP definition references an unavailable ${tier} monthly price.`);
   }
   return amount;
 }
@@ -69,35 +63,28 @@ export const MOBILE_IAP_PRODUCT_DEFINITIONS = [
     kind: 'subscription',
     planTier: 'basic',
     interval: 'monthly',
-    intendedPriceUsd: requirePlanPriceUsd('basic', 'monthly'),
+    intendedPriceUsd: requireMonthlyPlanPriceUsd('basic'),
   },
   {
     key: 'subscription_pro_monthly',
     kind: 'subscription',
     planTier: 'pro',
     interval: 'monthly',
-    intendedPriceUsd: requirePlanPriceUsd('pro', 'monthly'),
-  },
-  {
-    key: 'subscription_pro_yearly',
-    kind: 'subscription',
-    planTier: 'pro',
-    interval: 'yearly',
-    intendedPriceUsd: requirePlanPriceUsd('pro', 'yearly'),
+    intendedPriceUsd: requireMonthlyPlanPriceUsd('pro'),
   },
   {
     key: 'subscription_max_monthly',
     kind: 'subscription',
     planTier: 'max',
     interval: 'monthly',
-    intendedPriceUsd: requirePlanPriceUsd('max', 'monthly'),
+    intendedPriceUsd: requireMonthlyPlanPriceUsd('max'),
   },
   {
     key: 'subscription_max_15x_monthly',
     kind: 'subscription',
     planTier: 'max_15x',
     interval: 'monthly',
-    intendedPriceUsd: requirePlanPriceUsd('max_15x', 'monthly'),
+    intendedPriceUsd: requireMonthlyPlanPriceUsd('max_15x'),
   },
   {
     key: 'top_up_10',

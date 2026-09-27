@@ -7,6 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import { TEMPORARY_CHAT_NOT_SAVED } from '@/lib/temporary-chat-policy';
 import { scheduleArtifactIndexing } from './index-artifacts';
 import { scheduleConversationTitleGeneration } from './generate-title';
 import { resolveSavedMessageSourceUrls } from './resolve-source-urls';
@@ -68,8 +69,9 @@ export async function persistConversationMessage(input: {
     id: string;
     model: string | null;
     active_leaf_message_id: string | null;
+    is_temporary: boolean;
   }>(
-    `select id, model, active_leaf_message_id
+    `select id, model, active_leaf_message_id, is_temporary
        from web_conversations
       where id = $1
         and user_id = $2
@@ -80,6 +82,7 @@ export async function persistConversationMessage(input: {
   );
 
   if (!conversation) throw createError.notFound('Conversation not found');
+  if (conversation.is_temporary) throw createError.conflict(TEMPORARY_CHAT_NOT_SAVED);
 
   if (requestedMessage.role !== 'assistant') {
     await assertFreeDailyAllowance({

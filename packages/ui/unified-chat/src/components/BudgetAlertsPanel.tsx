@@ -16,21 +16,21 @@ export function BudgetAlertsPanel() {
         const config = {
           warning: {
             icon: AlertTriangle,
-            bg: 'bg-warning/10',
-            border: 'border-warning/30',
-            text: 'text-warning',
+            bg: 'bg-warning-fill/10',
+            border: 'border-warning-fill/40',
+            text: 'text-warning-text',
           },
           danger: {
             icon: AlertCircle,
-            bg: 'bg-destructive/10',
-            border: 'border-destructive/30',
-            text: 'text-danger',
+            bg: 'bg-danger-fill/10',
+            border: 'border-danger-fill/40',
+            text: 'text-danger-text',
           },
           exceeded: {
             icon: XCircle,
-            bg: 'bg-destructive/20',
-            border: 'border-destructive/50',
-            text: 'text-danger',
+            bg: 'bg-danger-fill/10',
+            border: 'border-danger-fill',
+            text: 'text-danger-text',
           },
         }[alert.type];
         if (!config) return null;

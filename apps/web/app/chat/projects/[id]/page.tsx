@@ -1018,7 +1018,7 @@ export default function ProjectDetailPage() {
           {projectConversations.length >= MAX_CONVERSATIONS_WARN && (
             <div
               role="alert"
-              className="rounded-lg border border-warning/30 bg-warning/10 text-warning"
+              className="rounded-lg border border-warning-fill/40 bg-warning-fill/10 text-warning-text"
               style={{
                 marginBottom: 'var(--space-4)',
                 padding: 'var(--space-2) var(--space-3)',

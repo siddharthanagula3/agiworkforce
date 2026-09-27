@@ -77,7 +77,6 @@ async function handleUnlink(
         userId,
         deviceId,
         reason: options.lost ? 'lost' : 'unlinked',
-        revokedAtMs: Date.now(),
       })
     : null;
   const remoteControlRevoked = revocation?.remoteWorkStopped ?? false;
@@ -164,6 +163,7 @@ async function handleUnlink(
       revokedCredentialCount: result.revokedCredentialCount,
       lost: options.lost,
       logoutAll: options.logoutAll,
+      signalingReachable: revocation?.signalingReachable ?? null,
     },
     'Linked device unlinked',
   );
@@ -227,6 +227,7 @@ async function handleUnlink(
     credentialFamilyCompromised: result.compromiseRecorded,
     remoteControlRevoked,
     liveSessionsDropped: revocation?.liveSessionsDropped ?? null,
+    signalingReachable: revocation?.signalingReachable ?? null,
     ...(loggedOutEverywhere ? { loggedOutEverywhere } : {}),
   });
 }
@@ -269,7 +270,6 @@ async function handleStopRemoteWork(
     userId,
     deviceId,
     reason,
-    revokedAtMs: Date.now(),
   });
 
   logger.info(

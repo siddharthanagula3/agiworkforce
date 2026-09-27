@@ -31,7 +31,7 @@ describe('autonomy chip', () => {
     expect(panel).toContain("t('spAutonomyFullAccess')");
     expect(panel).toContain(".sp-autonomy-chip[data-mode='full']");
     expect(panel).toMatch(
-      /\.sp-autonomy-chip\[data-mode='full'\] \{[^}]*color: var\(--agi-ext-warning\);/,
+      /\.sp-autonomy-chip\[data-mode='full'\] \{[^}]*color: var\(--agi-ext-warning-text\);/,
     );
   });
 

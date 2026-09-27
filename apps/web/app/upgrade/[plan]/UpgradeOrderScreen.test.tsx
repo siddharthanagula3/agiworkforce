@@ -31,7 +31,7 @@ describe('UpgradeOrderScreen', () => {
   it('re-reads the plan everywhere once the upgrade lands', async () => {
     // Without this the screen would congratulate the user while the sidebar and
     // pricing cards still render the plan they just paid to leave.
-    render(<UpgradeOrderScreen plan="max" billingInterval="monthly" />);
+    render(<UpgradeOrderScreen plan="max" />);
     panelMocks.onUpgraded?.();
 
     await waitFor(() => expect(queryMocks.invalidateQueries).toHaveBeenCalled());
@@ -40,7 +40,7 @@ describe('UpgradeOrderScreen', () => {
   });
 
   it('switches which capacity is being bought without leaving the screen', async () => {
-    render(<UpgradeOrderScreen plan="max" billingInterval="monthly" />);
+    render(<UpgradeOrderScreen plan="max" />);
     expect(screen.getByTestId('panel')).toHaveAttribute('data-plan', 'max');
 
     fireEvent.click(screen.getByRole('button', { name: /Max 20x/i }));
@@ -53,7 +53,7 @@ describe('UpgradeOrderScreen', () => {
   });
 
   it('offers no capacity switch for a plan that has only one', () => {
-    render(<UpgradeOrderScreen plan="basic" billingInterval="monthly" />);
+    render(<UpgradeOrderScreen plan="basic" />);
 
     expect(screen.queryByRole('group', { name: 'Capacity' })).toBeNull();
   });

@@ -64,9 +64,9 @@ vi.mock('stripe', () => ({
 
 import type Stripe from 'stripe';
 import {
-  BILLING_PLAN_PRICING,
   SELF_SERVE_PAID_PLAN_TIERS,
   isPerSeatBillingPlan,
+  planOffersBillingInterval,
 } from '@agiworkforce/types';
 import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { resolveCheckoutPlan } from '@/lib/services/plan-catalog-service';
@@ -206,7 +206,7 @@ describe('checkout binds price, plan and customer on the server', () => {
 
   it('refuses an interval the catalog does not price', async () => {
     const unpriced = SELF_SERVE_PAID_PLAN_TIERS.filter(
-      (plan) => !BILLING_PLAN_PRICING[plan].yearlyPriceUsd,
+      (plan) => !planOffersBillingInterval(plan, 'yearly'),
     );
     expect(unpriced.length).toBeGreaterThan(0);
     for (const plan of unpriced) {

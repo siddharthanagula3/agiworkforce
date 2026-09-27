@@ -138,7 +138,7 @@ export function RecordingOverlay({
           accessibilityLabel="Send recording"
           accessibilityRole="button"
         >
-          <Check size={24} color={colors.white} />
+          <Check size={24} color={colors.accentText} />
         </Pressable>
       </View>
     </Animated.View>

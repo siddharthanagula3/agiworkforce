@@ -21,7 +21,7 @@ import {
   validateOptionalFeatureConfig,
 } from './config/optional-features';
 import { recordConfigurationState } from './observability/metrics';
-import { getAllRegisteredPriceIds } from './price-tier-mapping';
+import { getAllRegisteredPriceIds, isGrandfatheredPriceId } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 import { totpKeysourceValidationError } from './crypto/totp-keysource';
 
@@ -77,7 +77,6 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_BASIC_MONTHLY_USD',
     'STRIPE_PRICE_BASIC_MONTHLY_INR',
     'STRIPE_PRICE_PRO_MONTHLY',
-    'STRIPE_PRICE_PRO_YEARLY',
     'STRIPE_PRICE_MAX_MONTHLY',
     'STRIPE_PRICE_MAX_15X_MONTHLY',
   ];
@@ -178,7 +177,9 @@ export function validatePriceIdConsistency(): ValidationResult {
       warnings.push('These are loaded dynamically from STRIPE_PRICE_* environment variables');
     }
 
-    const unusedRegisteredIds = registeredPriceIds.filter((id) => !envPriceIds.includes(id));
+    const unusedRegisteredIds = registeredPriceIds.filter(
+      (id) => !envPriceIds.includes(id) && !isGrandfatheredPriceId(id),
+    );
 
     if (unusedRegisteredIds.length > 0) {
       warnings.push(
@@ -189,9 +190,7 @@ export function validatePriceIdConsistency(): ValidationResult {
 
     const expectedMappings = {
       pro_monthly: STRIPE_PRICE_IDS.pro.monthly,
-      pro_yearly: STRIPE_PRICE_IDS.pro.yearly,
       max_monthly: STRIPE_PRICE_IDS.max.monthly,
-      max_yearly: undefined, // Max is monthly-only
     };
 
     if (process.env.NODE_ENV !== 'production') {
@@ -1139,7 +1138,8 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     owner: 'apps/web/lib/billing',
     defaultValue: null,
     requiredIn: [],
-    description: 'the Stripe price the pro yearly plan is charged at',
+    description:
+      'the retired yearly pro Stripe price, kept so subscriptions bought before 2026-09-27 renew as pro',
   }),
   published('STRIPE_PRICE_MAX_MONTHLY', {
     type: 'string',

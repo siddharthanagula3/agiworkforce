@@ -15,11 +15,8 @@ import {
   readPluginArchive,
   type UploadedPlugin,
 } from '@/features/plugins/server/directory/archive';
-import {
-  installsDisabledResponse,
-  pluginNotPermittedResponse,
-} from '@/features/plugins/server/directory/install-responses';
-import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
+import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
+import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 import {
   PLUGIN_UPLOAD_FILE_FIELD,
   PLUGIN_UPLOAD_NAME_FIELD,
@@ -83,7 +80,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrf = await requireCsrfToken(request);
   if (csrf) return csrf as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const scope = await getUserScopedDb(request);
+  const { db, userId, organizationId } = scope;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
 
@@ -105,15 +103,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     throw error;
   }
 
-  for (const plugin of archive.plugins) {
-    const policy = await evaluatePluginPolicyForUser({
-      db,
-      userId,
-      pluginKey: plugin.key,
-      request,
-    });
-    if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
-  }
+  const refused = await refusePluginInstall(request, scope, {
+    pluginKeys: archive.plugins.map((plugin) => plugin.key),
+  });
+  if (refused) return refused;
 
   try {
     const plugins = await storeOwnedPluginSource(db, userId, {

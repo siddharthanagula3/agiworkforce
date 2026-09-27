@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
-  ingestTriggerEvent: vi.fn(),
+  readGmailNotice: vi.fn(),
   getNeonDb: vi.fn(() => ({})),
   verifyIdentity: vi.fn(),
 }));
@@ -13,7 +13,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
-vi.mock('@/lib/triggers/trigger-ingest', () => ({ ingestTriggerEvent: mocks.ingestTriggerEvent }));
+vi.mock('@/lib/triggers/gmail-watch', () => ({ readGmailNotice: mocks.readGmailNotice }));
 vi.mock('@/lib/server/google-pubsub-push-identity', () => ({
   verifyGooglePubSubPushIdentity: mocks.verifyIdentity,
 }));
@@ -43,9 +43,7 @@ beforeEach(() => {
     ok: true,
     email: 'pubsub@example.iam.gserviceaccount.com',
   });
-  mocks.ingestTriggerEvent.mockResolvedValue([
-    { triggerId: 't1', outcome: 'enqueued', detail: null },
-  ]);
+  mocks.readGmailNotice.mockResolvedValue({ matched: 1, queued: 1, retry: false });
 });
 
 describe('POST /api/webhooks/gmail', () => {
@@ -55,7 +53,7 @@ describe('POST /api/webhooks/gmail', () => {
     const response = await POST(push({ emailAddress: 'me@example.com', historyId: 1 }));
 
     expect(response.status).toBe(503);
-    expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
+    expect(mocks.readGmailNotice).not.toHaveBeenCalled();
   });
 
   it('refuses a token Google did not sign for this deployment', async () => {
@@ -68,22 +66,17 @@ describe('POST /api/webhooks/gmail', () => {
     const response = await POST(push({ nothing: true }));
 
     expect(response.status).toBe(400);
-    expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
+    expect(mocks.readGmailNotice).not.toHaveBeenCalled();
   });
 
   it('routes a verified notice to the mailbox that changed', async () => {
     const response = await POST(push({ emailAddress: 'Me@Example.com', historyId: 987 }));
 
     expect(response.status).toBe(200);
-    expect(mocks.ingestTriggerEvent).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        source: 'gmail',
-        type: 'mailbox.changed',
-        account: 'me@example.com',
-        deliveryId: 'msg-1',
-        data: { emailAddress: 'me@example.com', historyId: '987' },
-      }),
-    );
+    expect(mocks.readGmailNotice).toHaveBeenCalledWith(expect.anything(), {
+      emailAddress: 'me@example.com',
+      historyId: '987',
+    });
+    expect(await response.json()).toEqual({ received: true, matched: 1, queued: 1 });
   });
 });

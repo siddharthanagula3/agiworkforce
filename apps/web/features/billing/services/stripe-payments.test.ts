@@ -105,6 +105,7 @@ describe('stripe payments', () => {
       charge: null,
       promotion: null,
       replacesScheduledChange: false,
+      grandfatheredNotice: null,
     });
   });
 
