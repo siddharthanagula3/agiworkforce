@@ -15,13 +15,11 @@ that lists every open item with what is left per surface.
 Fix these first. Each file is one defect; delete it when the fix lands and its
 ledger cells are updated.
 
-- [01-approval-uploads-skip-injection-guard.md](../blockers/01-approval-uploads-skip-injection-guard.md)
 - [06-approval-web-default-policy-autonomous.md](../blockers/06-approval-web-default-policy-autonomous.md)
 - [07-approval-cli-approval-mode-unused.md](../blockers/07-approval-cli-approval-mode-unused.md)
 - [14-desktop-and-vscode-need-unpublished-cli.md](../blockers/14-desktop-and-vscode-need-unpublished-cli.md)
 - [15-desktop-app-has-no-icon.md](../blockers/15-desktop-app-has-no-icon.md)
 - [17-desktop-bridge-acks-ignored-messages.md](../blockers/17-desktop-bridge-acks-ignored-messages.md)
-- [18-model-policy-fails-open.md](../blockers/18-model-policy-fails-open.md)
 - [20-mobile-image-stop-keeps-billing.md](../blockers/20-mobile-image-stop-keeps-billing.md)
 - [22-settings-2fa-does-not-protect-sign-in.md](../blockers/22-settings-2fa-does-not-protect-sign-in.md)
 - [23-step-up-not-enforced.md](../blockers/23-step-up-not-enforced.md)
