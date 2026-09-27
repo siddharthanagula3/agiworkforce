@@ -63,7 +63,7 @@
     },
     {
       "doc": "glossary",
-      "sha256": "32390510755b75153eb4599251a2b80dfdc011690a7b25f09845d309eb9cda31"
+      "indexed": true
     },
     {
       "doc": "install-desktop-and-mobile",
@@ -2831,6 +2831,377 @@
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
           "name": "states the same contract on the Desktop, Local, and BYOK pages"
+        }
+      ]
+    },
+    {
+      "id": "glossary-three-trust-modes-never-loosened-unasked",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "AGI runs three and never moves work to a less private one without your approval.",
+      "implementation": [
+        "packages/contracts/types/src/trust-mode-contract.ts#refuseTrustTransition",
+        "apps/web/lib/server/trust-boundary-crossing.ts#evaluateProviderEgress"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/trust-mode-contract.test.ts",
+          "name": "covers the three modes and no others"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/trust-mode-contract.test.ts",
+          "name": "refuses every loosening that nobody approved"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/trust-boundary-crossing.test.ts",
+          "name": "refuses an unapproved fallback in local mode and allows an approved one"
+        }
+      ]
+    },
+    {
+      "id": "glossary-local-free-and-offline",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "It is free, and inference can run offline once the runtime and model are installed.",
+      "implementation": [
+        "packages/contracts/types/src/billing-catalog.ts#isFreeOfChargePlanTier",
+        "packages/contracts/types/src/trust-mode-contract.ts#TRUST_MODE_CONTRACTS",
+        "apps/cli/src/local_models.rs"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-catalog.test.ts",
+          "name": "reports the three tiers with no possible managed spend as free of charge"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/trust-mode-contract.test.ts",
+          "name": "keeps local on the device, with no cloud egress and no sync"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/local_models.rs",
+          "name": "openai_chat_endpoint_rejects_non_loopback_or_ambiguous_urls"
+        }
+      ]
+    },
+    {
+      "id": "glossary-byok-key-in-os-credential-store",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "By default the CLI stores keys in your operating system's credential store.",
+      "implementation": ["apps/cli/src/auth.rs#AUTH_INDEX_STORAGE"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/auth.rs",
+          "name": "no_credential_reaches_disk_when_the_credential_store_holds_it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/auth.rs",
+          "name": "a_credential_store_denial_is_an_error_and_never_a_plaintext_fallback"
+        }
+      ]
+    },
+    {
+      "id": "glossary-byok-provider-bills-no-markup",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "Your provider bills the usage, and AGI adds no markup.",
+      "implementation": [
+        "packages/contracts/types/src/trust-mode-contract.ts#TRUST_MODE_CONTRACTS",
+        "packages/contracts/types/src/billing-catalog.ts#isFreeOfChargePlanTier"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/trust-mode-contract.test.ts",
+          "name": "attributes a byok call to the user key and keeps failover inside the boundary"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-catalog.test.ts",
+          "name": "reports the three tiers with no possible managed spend as free of charge"
+        }
+      ]
+    },
+    {
+      "id": "glossary-byok-free",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "BYOK is free.",
+      "implementation": ["packages/contracts/types/src/billing-catalog.ts#isFreeOfChargePlanTier"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-catalog.test.ts",
+          "name": "reports the three tiers with no possible managed spend as free of charge"
+        }
+      ]
+    },
+    {
+      "id": "glossary-managed-metered-refuses-byok-credentials",
+      "doc": "glossary",
+      "section": "Trust modes",
+      "kind": "prose",
+      "sentence": "It is metered, and it refuses BYOK credentials by design so the two trust boundaries stay separate.",
+      "implementation": [
+        "apps/web/lib/server/trust-boundary-crossing.ts#evaluateProviderEgress",
+        "apps/web/lib/managed-compute-gate.ts#evaluateProviderEgress",
+        "packages/contracts/types/src/managed-usage-limits.ts#MANAGED_USAGE_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/trust-boundary-crossing.test.ts",
+          "name": "refuses a payload carrying a credential in every mode"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.budget-admission.test.ts",
+          "name": "denies deterministically when a rolling window is exhausted"
+        }
+      ]
+    },
+    {
+      "id": "glossary-allowance-is-managed-capacity",
+      "doc": "glossary",
+      "section": "Usage and billing terms",
+      "kind": "prose",
+      "sentence": "**Allowance** is the metered capacity a plan carries for managed cloud.",
+      "implementation": [
+        "packages/contracts/types/src/managed-usage-limits.ts#MANAGED_USAGE_LIMITS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/managed-usage-limits.test.ts",
+          "name": "prices every paid plan so its full monthly allowance costs at most half its price"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/billing/plan-progression.test.ts",
+          "name": "gives a local or bring-your-own-key plan no managed allowance at all"
+        }
+      ]
+    },
+    {
+      "id": "glossary-allowance-exhausted-stops-managed-requests",
+      "doc": "glossary",
+      "section": "Usage and billing terms",
+      "kind": "prose",
+      "sentence": "When it runs out, managed requests stop until it resets, unless **Keep going after a usage limit** is on and you have credits; Local and BYOK are unaffected.",
+      "implementation": [
+        "apps/web/lib/services/managed-usage-request-service.ts#reserveManagedUsageRequest",
+        "apps/web/lib/server/spendable-credits.ts#overage_enabled"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.budget-admission.test.ts",
+          "name": "denies deterministically when a rolling window is exhausted"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-usage-lifecycle.invariants.test.ts",
+          "name": "keeps an overage turn out of the plan windows in both directions"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/billing/plan-progression.test.ts",
+          "name": "gives a local or bring-your-own-key plan no managed allowance at all"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/BillingSection.tsx",
+          "text": "Keep going after a usage limit"
+        }
+      ]
+    },
+    {
+      "id": "glossary-credits-are-a-separate-prepaid-balance",
+      "doc": "glossary",
+      "section": "Usage and billing terms",
+      "kind": "prose",
+      "sentence": "**Credits** are a prepaid balance, separate from the allowance, that managed usage can draw on once the allowance is exhausted.",
+      "implementation": [
+        "packages/contracts/types/src/product-plan.ts#creditLedgerRemainingMicroUsd"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/billing/plan-progression.test.ts",
+          "name": "counts an allowance and a purchase as two balances, and spends both"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/BillingSection.tsx",
+          "text": "Spend your credits when a usage limit stops you."
+        }
+      ]
+    },
+    {
+      "id": "glossary-concurrency-ceiling-clears-when-a-response-ends",
+      "doc": "glossary",
+      "section": "Usage and billing terms",
+      "kind": "prose",
+      "sentence": "Reaching that ceiling is not the same as exhausting an allowance: it clears as soon as an in-flight response finishes.",
+      "implementation": [
+        "apps/web/lib/rate-limit.ts#acquireManagedTurnSlot",
+        "apps/web/app/api/llm/v1/chat/completions/lib/turn-slot.ts#attachTurnSlotToStream"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "refuses a turn once the plan ceiling is full and gives its own slot back"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/turn-slot.test.ts",
+          "name": "names the ceiling, the cause and the two ways out"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/turn-slot.ts",
+          "text": "Stop a running response or wait for it to finish, then send this message again."
+        }
+      ]
+    },
+    {
+      "id": "glossary-free-lane-capacity-not-guaranteed",
+      "doc": "glossary",
+      "section": "Usage and billing terms",
+      "kind": "prose",
+      "sentence": "Where the free lane is offered, it appears as Auto (free), and its capacity is not guaranteed.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT",
+        "apps/web/features/chat/lib/free-lane-ui-gate.ts#resolveFreeLaneUiEnabled"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/__tests__/ComposerFooter.free-lane-copy.test.tsx",
+          "name": "describes the community lane once the free-lane copy is switched on"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/free-quota-catalogue.test.ts",
+          "name": "reports a model as exhausted once the shared allowance cannot fit another turn"
+        }
+      ]
+    },
+    {
+      "id": "glossary-project-holds-shared-context",
+      "doc": "glossary",
+      "section": "Chat terms",
+      "kind": "prose",
+      "sentence": "**Project** groups conversations around shared context: written instructions, uploaded knowledge files, and its own memory scope.",
+      "implementation": [
+        "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+        "apps/web/lib/services/managed-memory-context-service.ts#loadProjectMemoryScope"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/projects/components/ProjectSettingsDialog.tsx",
+          "text": "Rename the project, update its instructions and knowledge files, or delete it."
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-scoped-memory.test.ts",
+          "name": "a project that opted out sees only its own, never the account pool"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/project-scoped-memory.test.ts",
+          "name": "writes the project id so the fact stays inside the project"
+        }
+      ]
+    },
+    {
+      "id": "glossary-temporary-chat-no-memory-no-standing-approvals",
+      "doc": "glossary",
+      "section": "Chat terms",
+      "kind": "prose",
+      "sentence": "**Temporary chat** is a conversation that neither reads memory nor writes to it, and that ignores saved **Always allow** verdicts.",
+      "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts#withoutStandingApprovals",
+        "apps/web/lib/temporary-chat-policy.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "does not load or inject account memory for Temporary Chats"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
+          "name": "extracts conservative facts only for enabled non-API, non-temporary turns"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/lib/temporary-chat-policy.ts",
+          "text": "a connector asks before every call even where you saved Always allow"
+        }
+      ]
+    },
+    {
+      "id": "glossary-connectors-scoped-to-the-account",
+      "doc": "glossary",
+      "section": "Tools and connectors",
+      "kind": "prose",
+      "sentence": "Every connector is scoped to your own account.",
+      "implementation": ["apps/web/lib/connectors/oauth-access.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/connectors/__tests__/oauth-access.test.ts",
+          "name": "reports not-connected when the user never authorized"
+        }
+      ]
+    },
+    {
+      "id": "glossary-tool-approval-web-default-is-skip",
+      "doc": "glossary",
+      "section": "Tools and connectors",
+      "kind": "prose",
+      "sentence": "On the website, an account that has never chosen one defaults to **Skip approvals**, which runs eligible tools without asking; destructive and unknown actions still ask.",
+      "implementation": [
+        "apps/web/shared/types/toolApprovalPolicy.ts#WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY",
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts#policyAutoApprovesTool"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/shared/types/toolApprovalPolicy.test.ts",
+          "name": "uses Skip approvals for an unconfigured website account"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "runs eligible built-ins for an unconfigured website account"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/__tests__/documented-approval-posture.test.ts",
+          "name": "keeps an undeclared tool asking under every policy"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.permission-matrix.test.ts",
+          "name": "keeps the loop in manual mode when a destructive tool is offered under autonomous"
         }
       ]
     }

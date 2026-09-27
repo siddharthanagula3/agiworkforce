@@ -81,7 +81,8 @@ import {
   hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+import { extractCandidateMemoryFacts, passiveMemoryText } from '@agiworkforce/agent-core';
+import { MEMORY_COMMAND_CLIENT_SURFACES } from '@/lib/services/memory-commands';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -1244,6 +1245,7 @@ export async function enrichManagedMemoryContext(params: {
     organizationId: params.organizationId ?? null,
     suppressedSources,
     scope,
+    query: lastUserMessageText(params.chatRequest),
   });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
@@ -3128,6 +3130,10 @@ export async function processRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
+  const passiveUserText = passiveMemoryText(
+    lastUserText,
+    MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface),
+  );
   const autoMemoryEligibility = {
     isTemporary: conversationIsTemporary,
     surface: chatSurface,
@@ -3135,11 +3141,11 @@ export async function processRequest(
     memoryEnabled: chatRequest.memory_enabled,
   };
   let autoMemoryFacts = prepareManagedAutoMemoryFacts({
-    message: lastUserText,
+    message: passiveUserText,
     ...autoMemoryEligibility,
   });
   let autoMemorySourceText = managedAutoMemoryLearningAllowed(autoMemoryEligibility)
-    ? lastUserText
+    ? passiveUserText
     : '';
 
   const routingHistory = chatRequest.messages
