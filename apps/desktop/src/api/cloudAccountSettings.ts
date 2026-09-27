@@ -31,6 +31,55 @@ function readApiError(body: unknown, fallback: string): string {
   return fallback;
 }
 
+export const CLOUD_ACCOUNT_SETTINGS_PATH = '/settings/account';
+export const CLOUD_SECURITY_SETTINGS_PATH = '/settings/security';
+
+export class CloudStepUpRequiredError extends Error {
+  constructor() {
+    super(
+      'This needs you to confirm it is you, and AGI Desktop cannot ask for your password or authenticator code. Finish it in your account settings on agiworkforce.com.',
+    );
+    this.name = 'CloudStepUpRequiredError';
+  }
+}
+
+export class CloudMfaRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CloudMfaRequiredError';
+  }
+}
+
+export interface CloudWebAction {
+  message: string;
+  path: string;
+  label: string;
+}
+
+export function cloudWebActionFor(error: unknown): CloudWebAction | null {
+  if (error instanceof CloudStepUpRequiredError) {
+    return {
+      message: error.message,
+      path: CLOUD_ACCOUNT_SETTINGS_PATH,
+      label: 'Open account settings',
+    };
+  }
+  if (error instanceof CloudMfaRequiredError) {
+    return {
+      message: error.message,
+      path: CLOUD_SECURITY_SETTINGS_PATH,
+      label: 'Turn on two-factor',
+    };
+  }
+  return null;
+}
+
+function refusalCode(response: Response, body: unknown): string | null {
+  if (response.status !== 403 || !isRecord(body)) return null;
+  const error = body['error'];
+  return isRecord(error) && typeof error['code'] === 'string' ? error['code'] : null;
+}
+
 async function failure(
   request: ManagedCloudRequestContext,
   response: Response,
@@ -38,6 +87,13 @@ async function failure(
 ): Promise<Error> {
   const body: unknown = await response.json().catch(() => null);
   request.assertBoundary();
+  const code = refusalCode(response, body);
+  if (code === 'STEP_UP_REQUIRED') return new CloudStepUpRequiredError();
+  if (code === 'MFA_REQUIRED') {
+    return new CloudMfaRequiredError(
+      readApiError(body, 'Your workspace requires two-factor authentication.'),
+    );
+  }
   return new Error(readApiError(body, `${fallback} (HTTP ${response.status})`));
 }
 
@@ -177,7 +233,7 @@ export async function deleteCloudConversation(conversationId: string): Promise<v
 
 export interface CloudTwoFactorStatus {
   enabled: boolean;
-  backupCodesRemaining: number;
+  backupCodesReady: boolean;
 }
 
 export async function getCloudTwoFactorStatus(): Promise<CloudTwoFactorStatus> {
@@ -192,11 +248,9 @@ export async function getCloudTwoFactorStatus(): Promise<CloudTwoFactorStatus> {
   if (!isRecord(payload)) {
     throw new Error('The Cloud security service returned an invalid response.');
   }
-  const remaining = payload['backup_codes_remaining'];
   return {
     enabled: payload['enabled'] === true,
-    backupCodesRemaining:
-      typeof remaining === 'number' && Number.isFinite(remaining) ? remaining : 0,
+    backupCodesReady: payload['backup_codes_ready'] === true,
   };
 }
 

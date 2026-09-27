@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { CacheService } from '../../services/cacheService';
 import { toast } from 'sonner';
@@ -162,7 +161,7 @@ export const CacheManagement: React.FC = () => {
 
   if (error && !stats) {
     return (
-      <div className="p-4 text-red-600">
+      <div className="p-4 text-danger-text">
         <p>Failed to load cache statistics. Please try again.</p>
         <button
           type="button"
@@ -185,7 +184,7 @@ export const CacheManagement: React.FC = () => {
       </div>
 
       {error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded text-red-600">
+        <div className="p-4 bg-danger-fill/10 border border-danger-fill/30 rounded text-danger-text">
           Something went wrong loading cache data. Please try refreshing.
         </div>
       )}
@@ -202,7 +201,7 @@ export const CacheManagement: React.FC = () => {
           </div>
           <div>
             <p className="text-sm text-gray-600">Total Cost Savings</p>
-            <p className="text-2xl font-bold text-green-600">
+            <p className="text-2xl font-bold text-success-text">
               {stats ? formatCurrency(stats.total_savings_usd) : '$0.00'}
             </p>
           </div>
@@ -218,7 +217,7 @@ export const CacheManagement: React.FC = () => {
               type="button"
               onClick={() => setClearLLMDialogOpen(true)}
               disabled={loading || stats.llm_cache.entries === 0}
-              className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1 text-sm bg-danger-fill text-danger-on-fill rounded hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Clear LLM Cache
             </button>
@@ -234,7 +233,7 @@ export const CacheManagement: React.FC = () => {
             </div>
             <div>
               <p className="text-sm text-gray-600">Savings</p>
-              <p className="text-xl font-semibold text-green-600">
+              <p className="text-xl font-semibold text-success-text">
                 {stats.llm_cache.savings_usd ? formatCurrency(stats.llm_cache.savings_usd) : 'N/A'}
               </p>
             </div>
@@ -259,7 +258,9 @@ export const CacheManagement: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold">{query.hit_count} hits</p>
-                  <p className="text-xs text-green-600">{formatCurrency(query.cost_saved)} saved</p>
+                  <p className="text-xs text-success-text">
+                    {formatCurrency(query.cost_saved)} saved
+                  </p>
                 </div>
               </div>
             ))}
@@ -279,14 +280,14 @@ export const CacheManagement: React.FC = () => {
                   <p className="text-xs text-gray-500">{provider.entries} entries</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm font-semibold text-green-600">
+                  <p className="text-sm font-semibold text-success-text">
                     {formatCurrency(provider.cost_saved)}
                   </p>
                   <button
                     type="button"
                     onClick={() => setClearProviderDialog(provider.provider)}
                     disabled={loading}
-                    className="text-xs text-red-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="text-xs text-danger-text hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Clear
                   </button>
@@ -313,7 +314,7 @@ export const CacheManagement: React.FC = () => {
             type="button"
             onClick={handlePruneExpired}
             disabled={loading}
-            className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 disabled:opacity-50"
+            className="px-4 py-2 bg-warning-fill text-warning-on-fill rounded hover:brightness-95 disabled:opacity-50"
           >
             Prune Expired
           </button>
@@ -321,7 +322,7 @@ export const CacheManagement: React.FC = () => {
             type="button"
             onClick={handleExport}
             disabled={loading}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+            className="px-4 py-2 bg-success-fill text-success-on-fill rounded hover:brightness-95 disabled:opacity-50"
           >
             Export Cache
           </button>
@@ -329,7 +330,7 @@ export const CacheManagement: React.FC = () => {
             type="button"
             onClick={() => setClearAllDialogOpen(true)}
             disabled={loading}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+            className="px-4 py-2 bg-danger-fill text-danger-on-fill rounded hover:brightness-95 disabled:opacity-50"
           >
             Clear All Cache
           </button>
@@ -414,7 +415,7 @@ export const CacheManagement: React.FC = () => {
                 setClearAllDialogOpen(false);
                 void handleClearAll();
               }}
-              className="bg-red-600 hover:bg-red-700 focus-visible:ring-red-600"
+              className="bg-danger-fill text-danger-on-fill hover:brightness-95 focus-visible:ring-danger-fill"
             >
               Clear All Cache
             </AlertDialogAction>

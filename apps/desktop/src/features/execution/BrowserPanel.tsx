@@ -181,7 +181,7 @@ function ActionCard({ action, isLast, isExpanded, onToggleExpand }: ActionCardPr
           <div
             className={cn(
               'absolute -bottom-0.5 -right-0.5 flex h-3 w-3 items-center justify-center rounded-full border border-background',
-              action.success ? 'bg-green-500' : 'bg-destructive',
+              action.success ? 'bg-success-fill' : 'bg-destructive',
             )}
           >
             {action.success ? (

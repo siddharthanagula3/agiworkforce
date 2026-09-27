@@ -304,7 +304,7 @@ export function CalculationCard({ content }: CalculationCardProps) {
               onClick={handleCopyResult}
               className={cn(
                 'h-8 gap-1.5 text-xs shrink-0',
-                copied ? 'text-emerald-600' : 'text-muted-foreground hover:text-foreground',
+                copied ? 'text-success-text' : 'text-muted-foreground hover:text-foreground',
               )}
               aria-label={copied ? 'Result copied' : 'Copy result'}
             >

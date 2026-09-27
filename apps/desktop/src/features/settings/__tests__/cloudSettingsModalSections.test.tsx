@@ -88,7 +88,7 @@ beforeEach(() => {
     hasMore: false,
     nextOffset: 0,
   });
-  mocks.getCloudTwoFactorStatus.mockResolvedValue({ enabled: false, backupCodesRemaining: 0 });
+  mocks.getCloudTwoFactorStatus.mockResolvedValue({ enabled: false, backupCodesReady: false });
   mocks.listCloudSecurityActivity.mockResolvedValue([]);
   mocks.getCloudAccountProfile.mockResolvedValue({
     email: 'founder@example.com',

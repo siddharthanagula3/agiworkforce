@@ -43,23 +43,24 @@ the ecosystem expects it.
 
 ## Install
 
-From source:
+```bash
+curl -fsSL https://agiworkforce.com/install.sh | bash
+```
+
+The installer downloads the release archive for your platform from GitHub,
+verifies the release's signed checksum manifest with `openssl`, checks the
+archive's SHA-256 against it, and installs `agi` to `~/.agi/bin`. It refuses
+anything it cannot verify, and stops with a message when no signed release is
+published. Windows needs Git Bash, MSYS2, Cygwin or WSL to run it. `agi update` compares this build against the newest release, and
+`agi update --install` runs the same installer into the directory this `agi`
+runs from. AGI Cloud for desktop ships its own copy of `agi` for local coding
+sessions, so the desktop app needs no separate install.
+
+To build from source instead:
 
 ```bash
 cargo install --path apps/cli --bin agi
 ```
-
-From the published package, which is also what `agi update --install` runs:
-
-```bash
-npm install -g @agiworkforce/cli
-```
-
-`agi update` compares this build against the release feed and downloads nothing.
-`agi update --install` prints the command above, asks before running it, and
-`--yes` skips the prompt. Installing needs a signed release: the install routes
-refuse an archive without its signed checksum manifest, and no published CLI
-release carries one yet.
 
 Then sign in with your provider:
 

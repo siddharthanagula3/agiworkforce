@@ -102,13 +102,16 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
     let mut _in_inline_code = false;
     let mut in_link = false;
     let mut in_list = false;
-    let mut list_number: Option<u64> = None;
+    let mut list_numbers: Vec<Option<u64>> = Vec::new();
+    let mut item_fresh = false;
+    let mut block_gap = false;
     let mut in_blockquote = false;
 
     for event in parser {
         match event {
             Event::Start(Tag::CodeBlock(kind)) => {
-                flush_line(&mut lines, &mut current_spans);
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
+                item_fresh = false;
                 in_code_block = true;
                 code_content.clear();
                 code_lang = match kind {
@@ -135,9 +138,10 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                     Style::default().fg(ui_muted()),
                 )));
                 in_code_block = false;
+                block_gap = true;
             }
             Event::Start(Tag::Heading { level, .. }) => {
-                flush_line(&mut lines, &mut current_spans);
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
                 in_heading = true;
                 heading_level = level as u8;
             }
@@ -161,6 +165,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 current_spans.push(Span::styled(format!("    {prefix} {heading_text}"), style));
                 flush_line(&mut lines, &mut current_spans);
                 in_heading = false;
+                block_gap = true;
             }
             Event::Start(Tag::Strong) => {
                 in_bold = true;
@@ -187,44 +192,62 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 in_link = false;
             }
             Event::Start(Tag::List(start)) => {
-                flush_line(&mut lines, &mut current_spans);
+                if list_numbers.is_empty() {
+                    open_block(&mut lines, &mut current_spans, &mut block_gap);
+                } else {
+                    flush_line(&mut lines, &mut current_spans);
+                }
+                item_fresh = false;
                 in_list = true;
-                list_number = start;
+                list_numbers.push(start);
             }
             Event::End(TagEnd::List(_)) => {
-                in_list = false;
-                list_number = None;
+                flush_line(&mut lines, &mut current_spans);
+                list_numbers.pop();
+                if list_numbers.is_empty() {
+                    in_list = false;
+                    block_gap = true;
+                }
             }
             Event::Start(Tag::Item) => {
-                flush_line(&mut lines, &mut current_spans);
-                let bullet = if let Some(ref mut n) = list_number {
-                    let s = format!("    {n}. ");
-                    *n += 1;
-                    s
-                } else {
-                    "    • ".to_string()
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
+                let bullet = match list_numbers.last_mut() {
+                    Some(Some(n)) => {
+                        let s = format!("    {n}. ");
+                        *n += 1;
+                        s
+                    }
+                    _ => "    • ".to_string(),
                 };
                 current_spans.push(Span::styled(bullet, Style::default().fg(ui_accent())));
+                item_fresh = true;
             }
             Event::End(TagEnd::Item) => {
                 flush_line(&mut lines, &mut current_spans);
+                item_fresh = false;
             }
             Event::Start(Tag::BlockQuote(_)) => {
-                flush_line(&mut lines, &mut current_spans);
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
                 in_blockquote = true;
             }
             Event::End(TagEnd::BlockQuote(_)) => {
+                flush_line(&mut lines, &mut current_spans);
                 in_blockquote = false;
+                block_gap = true;
             }
             Event::Start(Tag::Paragraph) => {
-                if !current_spans.is_empty() {
-                    flush_line(&mut lines, &mut current_spans);
+                if item_fresh {
+                    item_fresh = false;
+                } else {
+                    open_block(&mut lines, &mut current_spans, &mut block_gap);
                 }
             }
             Event::End(TagEnd::Paragraph) => {
                 flush_line(&mut lines, &mut current_spans);
+                block_gap = true;
             }
             Event::Text(text) => {
+                item_fresh = false;
                 if in_table_cell {
                     current_cell.push_str(&text);
                 } else if in_code_block {
@@ -273,14 +296,15 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
                 lines.push(Line::from(""));
             }
             Event::Rule => {
-                flush_line(&mut lines, &mut current_spans);
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
                 lines.push(Line::from(Span::styled(
                     "    ────────────────────────────────",
                     Style::default().fg(ui_muted()),
                 )));
+                block_gap = true;
             }
             Event::Start(Tag::Table(_)) => {
-                flush_line(&mut lines, &mut current_spans);
+                open_block(&mut lines, &mut current_spans, &mut block_gap);
                 table_rows.clear();
                 current_row.clear();
                 table_header_rows = 0;
@@ -309,6 +333,7 @@ pub fn render_markdown(text: &str) -> Vec<Line<'static>> {
             }
             Event::End(TagEnd::Table) => {
                 lines.extend(render_table(&table_rows, table_header_rows));
+                block_gap = true;
             }
             _ => {}
         }
@@ -384,6 +409,13 @@ fn render_table(rows: &[Vec<String>], header_rows: usize) -> Vec<Line<'static>> 
 fn flush_line(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>) {
     if !spans.is_empty() {
         lines.push(Line::from(std::mem::take(spans)));
+    }
+}
+
+fn open_block(lines: &mut Vec<Line<'static>>, spans: &mut Vec<Span<'static>>, gap: &mut bool) {
+    flush_line(lines, spans);
+    if std::mem::take(gap) && lines.last().is_some_and(|line| line.width() > 0) {
+        lines.push(Line::from(""));
     }
 }
 

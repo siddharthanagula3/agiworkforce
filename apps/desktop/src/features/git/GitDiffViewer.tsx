@@ -181,11 +181,11 @@ export function GitDiffViewer({
           </span>
           {!loading && diffs.length > 0 && (
             <div className="flex items-center gap-2 text-xs">
-              <span className="flex items-center gap-1 text-green-500">
+              <span className="flex items-center gap-1 text-success-text">
                 <Plus className="h-3 w-3" />
                 {totalStats.additions}
               </span>
-              <span className="flex items-center gap-1 text-red-500">
+              <span className="flex items-center gap-1 text-danger-text">
                 <Minus className="h-3 w-3" />
                 {totalStats.deletions}
               </span>
@@ -234,10 +234,10 @@ export function GitDiffViewer({
                     {diff.file_path}
                   </span>
                   <div className="flex items-center gap-2 text-xs shrink-0">
-                    <span className="text-green-500" aria-hidden="true">
+                    <span className="text-success-text" aria-hidden="true">
                       +{diff.additions}
                     </span>
-                    <span className="text-red-500" aria-hidden="true">
+                    <span className="text-danger-text" aria-hidden="true">
                       -{diff.deletions}
                     </span>
                     <span className="sr-only">
@@ -253,8 +253,8 @@ export function GitDiffViewer({
                       key={lineIndex}
                       className={cn(
                         'flex',
-                        line.type === 'add' && 'bg-green-500/10',
-                        line.type === 'remove' && 'bg-red-500/10',
+                        line.type === 'add' && 'bg-success-fill/10',
+                        line.type === 'remove' && 'bg-danger-fill/10',
                         line.type === 'header' && 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
                       )}
                     >
@@ -277,8 +277,8 @@ export function GitDiffViewer({
                         aria-hidden="true"
                         className={cn(
                           'w-6 shrink-0 text-center py-0.5 select-none',
-                          line.type === 'add' && 'text-green-600 dark:text-green-400',
-                          line.type === 'remove' && 'text-red-600 dark:text-red-400',
+                          line.type === 'add' && 'text-success-text',
+                          line.type === 'remove' && 'text-danger-text',
                         )}
                       >
                         {line.type === 'add' && '+'}

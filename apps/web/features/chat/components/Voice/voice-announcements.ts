@@ -8,12 +8,14 @@ export const VOICE_ANNOUNCEMENT = {
   thinking: 'Working on your request',
   speaking: 'Assistant is speaking',
   muted: 'Microphone muted',
+  approval: 'An action is waiting for your approval on screen',
 } as const;
 
 export interface VoiceAnnouncementInput {
   readonly status: VoiceSessionStatus;
   readonly muted: boolean;
   readonly backendBusy: boolean;
+  readonly approvalPending?: boolean;
 }
 
 const BY_STATUS: Partial<Record<VoiceSessionStatus, string>> = {
@@ -33,6 +35,7 @@ const BY_STATUS: Partial<Record<VoiceSessionStatus, string>> = {
 export function voiceStatusAnnouncement(input: VoiceAnnouncementInput): string {
   if (input.status === VOICE_SESSION_STATUS.exited) return '';
   if (input.status === VOICE_SESSION_STATUS.error) return '';
+  if (input.approvalPending) return VOICE_ANNOUNCEMENT.approval;
   if (input.muted && input.status !== VOICE_SESSION_STATUS.speaking) {
     return VOICE_ANNOUNCEMENT.muted;
   }

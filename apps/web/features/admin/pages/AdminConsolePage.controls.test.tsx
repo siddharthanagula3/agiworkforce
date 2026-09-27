@@ -91,8 +91,8 @@ describe('AdminConsolePage, readiness status tone', () => {
     const badge = screen.getByText('Temporarily disabled (incident kill-switch)');
 
     expect(badge.getAttribute('data-tone')).toBe('warn');
-    expect(badge.className).not.toContain('emerald');
-    expect(badge.className).toContain('amber');
+    expect(badge.className).not.toContain('success');
+    expect(badge.className).toContain('warning');
   });
 
   it('marks the managed-compute row ok when compute is open', () => {
@@ -102,7 +102,7 @@ describe('AdminConsolePage, readiness status tone', () => {
     const badge = screen.getByText('Public alpha');
 
     expect(badge.getAttribute('data-tone')).toBe('ok');
-    expect(badge.className).toContain('emerald');
+    expect(badge.className).toContain('success');
   });
 
   it('gives every readiness badge an explicit tone', () => {

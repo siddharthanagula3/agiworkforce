@@ -1,4 +1,3 @@
-
 import { invoke, isTauri } from '../lib/tauri-mock';
 
 export interface ReflectionInsight {
@@ -110,14 +109,14 @@ export function getCorrectionTypeLabel(type: CorrectionType): string {
 
 export function getFailureCategoryColor(category: FailureCategory): string {
   const colors: Record<FailureCategory, string> = {
-    ResourceUnavailable: 'text-orange-500',
-    PermissionDenied: 'text-red-500',
-    InvalidInput: 'text-yellow-500',
+    ResourceUnavailable: 'text-warning-text',
+    PermissionDenied: 'text-danger-text',
+    InvalidInput: 'text-warning-text',
     NetworkError: 'text-blue-500',
     Timeout: 'text-purple-500',
     DependencyFailed: 'text-pink-500',
-    ToolError: 'text-red-400',
-    StateError: 'text-amber-500',
+    ToolError: 'text-danger-text',
+    StateError: 'text-warning-text',
     Unknown: 'text-gray-500',
   };
   return colors[category] || 'text-gray-500';

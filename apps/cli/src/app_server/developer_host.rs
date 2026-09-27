@@ -461,7 +461,17 @@ impl CliDeveloperSessionHost {
         .map_err(invalid_request)?;
         agent.apply_ui_config(&self.config);
         if !managed_session.messages.is_empty() {
+            let fresh_system_message = agent.messages.first().cloned();
             agent.messages = managed_session.messages.clone();
+            if !agent.memory_enabled {
+                if let (Some(fresh), Some(stored)) =
+                    (fresh_system_message, agent.messages.first_mut())
+                {
+                    if stored.role == "system" {
+                        *stored = fresh;
+                    }
+                }
+            }
         }
         agent
             .adopt_managed_session(managed_session, path)

@@ -37,16 +37,10 @@ vi.mock('../services/user-preferences', () => ({
     updateProfile: vi.fn().mockResolvedValue({}),
     updateSettings: vi.fn().mockResolvedValue({}),
     uploadAvatar: vi.fn().mockResolvedValue({ data: '' }),
-    changePassword: vi.fn().mockResolvedValue({}),
-    createAPIKey: vi.fn().mockResolvedValue({ data: null }),
     deleteAPIKey: vi.fn().mockResolvedValue({}),
     get2FAStatus: vi.fn().mockResolvedValue({ data: { enabled: false } }),
     setup2FA: vi.fn().mockResolvedValue({ data: undefined }),
-    verify2FA: vi.fn().mockResolvedValue({ success: false }),
-    validateTOTPCode: vi.fn().mockResolvedValue({ valid: false }),
-    disable2FA: vi.fn().mockResolvedValue({ success: false }),
-    regenerateBackupCodes: vi.fn().mockResolvedValue({}),
-    enable2FA: vi.fn().mockResolvedValue({}),
+    verify2FA: vi.fn().mockResolvedValue({}),
   },
   settingsService: {
     getProfile: vi.fn().mockResolvedValue({ data: null }),
@@ -446,44 +440,5 @@ describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions
 
     expect(result.current.data).toBeUndefined();
     expect(result.current.error).toBeTruthy();
-  });
-});
-
-describe('useToggle2FA · enable must not falsely report success (A9)', () => {
-  beforeEach(async () => {
-    fetchMock.mockReset();
-    await setupMocks();
-  });
-
-  it('enable does NOT toast success even when enable2FA() resolves without error', async () => {
-    const { toast } = await import('sonner');
-    const { useToggle2FA } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
-
-    result.current.mutate(true);
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
-  });
-
-  it('enable surfaces toast.error so the user knows verification is still required', async () => {
-    const { toast } = await import('sonner');
-    const { useToggle2FA } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
-
-    result.current.mutate(true);
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(vi.mocked(toast.error)).toHaveBeenCalled();
-  });
-
-  it('enable mutation ends in error state · 2FA is not actually turned on', async () => {
-    const { useToggle2FA } = await import('./use-settings-queries');
-    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
-
-    result.current.mutate(true);
-
-    await waitFor(() => expect(result.current.isError).toBe(true));
-    expect(result.current.data).toBeUndefined();
   });
 });

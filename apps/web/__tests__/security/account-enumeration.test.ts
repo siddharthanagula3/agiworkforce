@@ -19,6 +19,11 @@ const SHORTEST_REASON = 60;
  * until its reason is written here.
  */
 const LOOKUPS: Record<string, { count: number; reason: string }> = {
+  'app/api/settings/email/route.ts': {
+    count: 1,
+    reason:
+      'An update keyed by the caller’s own profile id that stores the address the caller just verified and made primary; it looks up no account and returns nothing.',
+  },
   'app/api/settings/team/route.ts': {
     count: 1,
     reason:

@@ -11,13 +11,13 @@ import {
 function TypeIcon({ type }: { type: CanvasArtifactType }) {
   switch (type) {
     case 'html':
-      return <Globe className="h-4 w-4 text-orange-400" />;
+      return <Globe className="h-4 w-4 text-orange-700 dark:text-orange-400" />;
     case 'markdown':
-      return <FileText className="h-4 w-4 text-blue-400" />;
+      return <FileText className="h-4 w-4 text-blue-700 dark:text-blue-400" />;
     case 'document':
-      return <FileText className="h-4 w-4 text-purple-400" />;
+      return <FileText className="h-4 w-4 text-purple-700 dark:text-purple-400" />;
     default:
-      return <Code2 className="h-4 w-4 text-green-400" />;
+      return <Code2 className="h-4 w-4 text-green-700 dark:text-green-400" />;
   }
 }
 
@@ -34,10 +34,11 @@ function relativeTime(ts: number): string {
 
 function executionBadge(state: CanvasArtifact['executionState']): React.ReactNode | null {
   if (state === 'success')
-    return <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" />;
-  if (state === 'error') return <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />;
+    return <span className="h-1.5 w-1.5 rounded-full bg-success-fill shrink-0" />;
+  if (state === 'error')
+    return <span className="h-1.5 w-1.5 rounded-full bg-danger-fill shrink-0" />;
   if (state === 'running')
-    return <span className="h-1.5 w-1.5 rounded-full bg-yellow-400 shrink-0 animate-pulse" />;
+    return <span className="h-1.5 w-1.5 rounded-full bg-warning-fill shrink-0 animate-pulse" />;
   return null;
 }
 
@@ -147,7 +148,7 @@ export function ArtifactList({ className }: ArtifactListProps) {
               <button
                 type="button"
                 onClick={(e) => handleDelete(e, artifact.id)}
-                className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                className="shrink-0 opacity-0 group-hover:opacity-100 p-1 rounded text-gray-500 hover:text-danger-text hover:bg-danger-fill/10 transition-all"
                 title="Delete artifact"
                 aria-label={`Delete ${artifact.title}`}
               >

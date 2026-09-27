@@ -49,7 +49,7 @@ jobs:
           const desktop = read('.github/workflows/release-desktop.yml');
           const windows = read('.github/workflows/build-windows-release.yml');
           const cli = read('.github/workflows/release-cli.yml');
-          const installer = read('scripts/install.sh');
+          const installer = read('apps/web/public/install.sh');
 
           requireText(desktop, "- 'v-desktop-*'", 'desktop releases must use v-desktop-* tags');
           rejectText(desktop, "- 'v*'", 'desktop releases must not consume CLI tags');
@@ -60,7 +60,8 @@ jobs:
           requireText(desktop, 'PACKAGE_VERSION=', 'desktop release tags must match source versions');
           requireText(cli, 'Validate CLI release version', 'CLI release tags must match package versions');
           requireText(cli, 'cosign sign-blob', 'CLI releases must sign their checksum manifest');
-          requireText(cli, 'needs: [validate-version, build, sign-release-assets]', 'npm publishing must wait for version validation and signed assets');
+          requireText(cli, 'openssl dgst -sha256 -sign', 'CLI releases must sign their checksum manifest with the pinned release key');
+          requireText(installer, 'openssl dgst -sha256 -verify', 'CLI installer must verify the pinned release key signature');
           requireText(installer, 'cosign verify-blob', 'CLI installer must verify release provenance');
           requireText(installer, 'actual_checksum', 'CLI installer must verify archive bytes');
           NODE

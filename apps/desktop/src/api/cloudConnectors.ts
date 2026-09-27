@@ -1,4 +1,3 @@
-
 import { CLOUD_API_BASE_URL } from './cloudApi';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
 
@@ -10,6 +9,7 @@ export interface CloudConnectorEntry {
   updatedAt: string;
   source: 'user' | 'github-app' | 'custom';
   name?: string;
+  toolConnectorId?: string;
 }
 
 export interface ListConnectorsResult {
@@ -66,6 +66,9 @@ function parseConnectorEntry(value: unknown): CloudConnectorEntry | null {
     updatedAt: record['updatedAt'],
     source: record['source'],
     ...(typeof record['name'] === 'string' ? { name: record['name'] } : {}),
+    ...(typeof record['toolConnectorId'] === 'string'
+      ? { toolConnectorId: record['toolConnectorId'] }
+      : {}),
   };
 }
 

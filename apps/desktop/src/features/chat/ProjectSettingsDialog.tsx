@@ -1048,7 +1048,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                             variant="ghost"
                             size="sm"
                             onClick={() => handleRemoveFile(file.id)}
-                            className="shrink-0 text-muted-foreground opacity-0 hover:text-red-400 focus-visible:opacity-100 group-hover:opacity-100"
+                            className="shrink-0 text-muted-foreground opacity-0 hover:text-danger-text focus-visible:opacity-100 group-hover:opacity-100"
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -1119,7 +1119,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   {cloudKnowledgeError && (
                     <div
                       role="alert"
-                      className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300"
+                      className="rounded-lg border border-danger-fill/30 bg-danger-fill/10 px-3 py-2 text-xs text-danger-text"
                     >
                       {cloudKnowledgeError}
                     </div>
@@ -1173,7 +1173,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                               aria-label={`Remove ${file.fileName}`}
                               disabled={removingCloudKnowledgeIds.has(file.id)}
                               onClick={() => void handleRemoveCloudKnowledge(file.id)}
-                              className="shrink-0 text-muted-foreground hover:text-red-400"
+                              className="shrink-0 text-muted-foreground hover:text-danger-text"
                             >
                               {removingCloudKnowledgeIds.has(file.id) ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -1239,7 +1239,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                             className="flex items-center justify-between p-2 bg-muted rounded-md group"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <File className="w-4 h-4 text-green-400 shrink-0" />
+                              <File className="w-4 h-4 text-green-700 dark:text-green-400 shrink-0" />
                               <div className="min-w-0">
                                 <span className="text-sm text-foreground truncate block">
                                   {file.name}
@@ -1255,7 +1255,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                               variant="ghost"
                               size="sm"
                               onClick={() => handleRemoveKbFile(file.id)}
-                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 shrink-0"
+                              className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-danger-text shrink-0"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>

@@ -35,16 +35,34 @@ impl McpClient {
     }
 
     pub async fn connect_server(&self, name: String, config: McpServerConfig) -> McpResult<()> {
+        self.connect(name, config, false).await
+    }
+
+    pub async fn sign_in_and_connect(
+        &self,
+        name: String,
+        config: McpServerConfig,
+    ) -> McpResult<()> {
+        self.connect(name, config, true).await
+    }
+
+    async fn connect(
+        &self,
+        name: String,
+        config: McpServerConfig,
+        interactive: bool,
+    ) -> McpResult<()> {
         tracing::info!("[MCP Client] Connecting to server '{}'", name);
 
-        let session = McpSession::connect(name.clone(), config).await?;
+        let session = McpSession::connect(name.clone(), config, interactive).await?;
 
-        let init_result = session.initialize().await?;
+        let server_info = session.get_server_info();
         tracing::info!(
-            "[MCP Client] Server '{}' initialized: {} v{}",
+            "[MCP Client] Server '{}' connected: {} v{} over MCP {}",
             name,
-            init_result.server_info.name,
-            init_result.server_info.version
+            server_info.name,
+            server_info.version,
+            session.negotiated_protocol_version()
         );
 
         let tools = session.list_tools().await?;

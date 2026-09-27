@@ -11,6 +11,7 @@ import {
   Pencil,
   MoreHorizontal,
   Send,
+  Library,
 } from 'lucide-react';
 import { Spinner, useDialogKeyboard, useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
@@ -25,7 +26,31 @@ import {
   type ImageRevisionRequest,
 } from '../lib/imageGenerationOptions';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
+import { useChatStore } from '@shared/stores/web-chat-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
+import { toast } from 'sonner';
+
+const MEDIA_ASSET_URL_PATTERN =
+  /^\/api\/files\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?:[/?#]|$)/i;
+
+function mediaAssetIdFromUrl(url: string | undefined): string | null {
+  return url ? (MEDIA_ASSET_URL_PATTERN.exec(url)?.[1] ?? null) : null;
+}
+
+async function keepTemporaryChatMedia(assetId: string): Promise<void> {
+  const response = await fetch('/api/media/keep', {
+    method: 'POST',
+    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ id: assetId }),
+  });
+  if (!response.ok) {
+    const data = (await response.json().catch(() => null)) as {
+      error?: { message?: string };
+    } | null;
+    throw new Error(data?.error?.message || 'This image could not be saved to your Library.');
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Re-export the shared media option type for existing card consumers.
@@ -736,10 +761,7 @@ function EditPanel({
           </div>
 
           {retryBlocked && retryLabel ? (
-            <p
-              className="px-1 text-xs font-medium text-amber-700 dark:text-amber-300"
-              aria-live="polite"
-            >
+            <p className="px-1 text-xs font-medium text-warning-text" aria-live="polite">
               {retryLabel} before generating another version.
             </p>
           ) : null}
@@ -800,9 +822,10 @@ interface ResultCardProps {
   modelId?: string;
   onEdit: () => void;
   onShare: () => void;
+  onKeep?: () => void;
 }
 
-function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardProps) {
+function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: ResultCardProps) {
   const modelLabel = getImageModelLabel(modelId);
   const [imgError, setImgError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -962,6 +985,20 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare }: ResultCardPr
                 <Share2 className="h-3.5 w-3.5" />
                 Share
               </button>
+              {onKeep && (
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onKeep();
+                    setShowMore(false);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs transition-colors hover:bg-muted/60"
+                >
+                  <Library className="h-3.5 w-3.5" />
+                  Save to Library
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -991,6 +1028,11 @@ export function ImageGenerationCard({
 }: ImageGenerationCardProps) {
   const [showEdit, setShowEdit] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [keptAssetId, setKeptAssetId] = useState<string | null>(null);
+  const inTemporaryChat = useChatStore((state) => {
+    const id = state.activeConversationId;
+    return id ? state.conversations.find((c) => c.id === id)?.isTemporary === true : false;
+  });
   const retryAspectRatio = normalizeImageAspectRatioForModel(modelId, aspectRatio);
   const [retryClockMs, setRetryClockMs] = useState<number | null>(null);
 
@@ -1048,6 +1090,12 @@ export function ImageGenerationCard({
   // State A: generating. The copy deliberately reflects observable state and
   // elapsed time; rotating pseudo-stages such as "Painting details" and
   // "Almost there" implied provider telemetry we do not receive.
+  const displayedAssetId = mediaAssetIdFromUrl(liveUrl ?? imageUrl);
+  const keepableAssetId =
+    inTemporaryChat && displayedAssetId && displayedAssetId !== keptAssetId
+      ? displayedAssetId
+      : null;
+
   if (!imageUrl && isGenerating) {
     return <GeneratingCard aspectRatio={aspectRatio} capHeight modelId={modelId} />;
   }
@@ -1102,6 +1150,22 @@ export function ImageGenerationCard({
         modelId={modelId}
         onEdit={() => setShowEdit(true)}
         onShare={() => setShowShare(true)}
+        {...(keepableAssetId
+          ? {
+              onKeep: () => {
+                void keepTemporaryChatMedia(keepableAssetId)
+                  .then(() => {
+                    setKeptAssetId(keepableAssetId);
+                    toast.success('Saved to your Library. It stays after this chat is gone.');
+                  })
+                  .catch((error: unknown) =>
+                    toast.error(
+                      toUserMessage(error, 'This image could not be saved to your Library.'),
+                    ),
+                  );
+              },
+            }
+          : {})}
       />
 
       {/* State C: revision panel (portals into the layout) */}

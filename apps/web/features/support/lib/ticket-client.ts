@@ -1,5 +1,7 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
+import { DIAGNOSTICS_EXPORT_PATH, type DiagnosticsExport } from '@/lib/support/diagnostics/export';
+import type { SupportDiagnostics } from '@/lib/support/diagnostics/types';
 import type { SupportTicket, SupportTicketReply, TicketStatus } from '@/lib/support/tickets/types';
 
 const TICKETS_PATH = '/api/support/tickets';
@@ -90,16 +92,37 @@ export interface OpenedSupportTicket {
   staffNotified: boolean;
 }
 
+export async function reviewSupportDiagnostics(): Promise<DiagnosticsExport> {
+  const payload = await mutate(
+    DIAGNOSTICS_EXPORT_PATH,
+    'POST',
+    { diagnostics: collectDiagnostics({ surface: 'web' }) },
+    'The diagnostics could not be prepared.',
+  );
+  const summary = payload['summary'];
+  const filename = payload['filename'];
+  const diagnostics = payload['diagnostics'];
+  if (typeof summary !== 'string' || typeof filename !== 'string' || !isRecord(diagnostics)) {
+    throw new Error('The diagnostics could not be prepared.');
+  }
+  return { summary, filename, diagnostics: diagnostics as unknown as SupportDiagnostics };
+}
+
 export async function openSupportTicket(input: {
   subject: string;
   message: string;
+  includeDiagnostics: boolean;
+  reviewedDiagnostics?: SupportDiagnostics | null;
 }): Promise<OpenedSupportTicket> {
   // Build, environment, platform and the last few failures, collected rather
   // than asked for. The route re-validates and re-redacts whatever this sends.
+  const diagnostics = input.includeDiagnostics
+    ? (input.reviewedDiagnostics ?? collectDiagnostics({ surface: 'web' }))
+    : null;
   const payload = await mutate(
     TICKETS_PATH,
     'POST',
-    { ...input, diagnostics: collectDiagnostics({ surface: 'web' }) },
+    { subject: input.subject, message: input.message, ...(diagnostics ? { diagnostics } : {}) },
     'That ticket was not raised.',
   );
   return {

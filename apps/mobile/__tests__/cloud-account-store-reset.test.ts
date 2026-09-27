@@ -72,7 +72,7 @@ describe('Cloud account store resets', () => {
         { conversationId: 'account-a-chat', messageId: 'message-a', snippet: 'secret' },
       ],
       isSearching: true,
-      chatStyle: 'detailed',
+      chatStyle: 'explanatory',
     });
 
     useChatViewStore.getState().clearCloudSearchState();
@@ -81,7 +81,7 @@ describe('Cloud account store resets', () => {
       searchQuery: '',
       searchResults: [],
       isSearching: false,
-      chatStyle: 'detailed',
+      chatStyle: 'explanatory',
     });
   });
 

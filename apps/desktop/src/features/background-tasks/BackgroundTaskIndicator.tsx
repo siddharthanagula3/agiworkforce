@@ -79,7 +79,7 @@ export function BackgroundTaskIndicator({
 
           {/* Loading indicator overlay */}
           {isLoading && (
-            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+            <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-warning-fill animate-pulse" />
           )}
         </Button>
       </PopoverTrigger>

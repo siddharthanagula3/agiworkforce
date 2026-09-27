@@ -41,9 +41,9 @@ pub struct ManagedPolicySection {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ManagedConfigSection {
-    /// Pinned approval mode. The user and project layers may not replace it.
+    /// Pinned permission mode. The user and project layers may not loosen it.
     #[serde(default)]
-    pub approval_mode: Option<String>,
+    pub permission_mode: Option<String>,
     /// Pinned privacy mode, for organizations that require Local or Managed.
     #[serde(default)]
     pub privacy_mode: Option<String>,
@@ -222,13 +222,13 @@ mod tests {
         let path = write(
             dir.path(),
             "managed-policy.toml",
-            "[config]\napprovalMode = \"ask\"\nallowProjectConfig = false\n\n[[policy.rules]]\ntool = \"run_command\"\npattern = \"curl\"\ndecision = \"deny\"\npriority = 900\n",
+            "[config]\npermissionMode = \"default\"\nallowProjectConfig = false\n\n[[policy.rules]]\ntool = \"run_command\"\npattern = \"curl\"\ndecision = \"deny\"\npriority = 900\n",
         );
         let state = load_managed_policy_from(&path);
         let document = state.document().unwrap();
         assert_eq!(document.policy.as_ref().unwrap().rules.len(), 1);
         let config = document.config.as_ref().unwrap();
-        assert_eq!(config.approval_mode.as_deref(), Some("ask"));
+        assert_eq!(config.permission_mode.as_deref(), Some("default"));
         assert_eq!(config.allow_project_config, Some(false));
     }
 }

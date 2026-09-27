@@ -182,7 +182,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
               </div>
             ) : available ? (
               <div className="space-y-1.5">
-                <div className="flex items-center gap-2 text-xs text-green-600">
+                <div className="flex items-center gap-2 text-xs text-success-text">
                   <Check className="h-3 w-3" />
                   <span>{runtime.label} is running and available</span>
                 </div>
@@ -197,7 +197,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
                 )}
               </div>
             ) : (
-              <p className="text-xs text-yellow-600">
+              <p className="text-xs text-warning-text">
                 {runtime.label} not detected{error ? `, ${error}` : ''}. Learn more at{' '}
                 <a
                   href={runtime.docsUrl}

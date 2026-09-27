@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
 import {
@@ -8,6 +8,8 @@ import {
   History,
   KeyRound,
   Laptop,
+  Lock,
+  LogOut,
   ShieldCheck,
   Smartphone,
   Timer,
@@ -28,21 +30,31 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
+  SettingsSwitchRow,
 } from '@/src/features/settings/common';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
+  WEB_SECURITY_URL,
+  changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
+  fetchLockdownMode,
   fetchSessionTimeout,
   groupAuditEntries,
   revokeAccountSession,
+  revokeAllAccountSessions,
+  saveLockdownMode,
   saveSessionTimeout,
   type AccountSecurityStatus,
   type AccountSessionRow,
   type AccountSessions,
   type AuditLogEntry,
+  type PasswordChange,
   type SessionTimeoutMinutes,
 } from './service';
 
@@ -78,7 +90,6 @@ function formatSessionLabel(row: AccountSessionRow): string {
   return row.isCurrent ? `${parts.join(' · ')} (this device)` : parts.join(' · ');
 }
 
-const WEB_SECURITY_URL = 'https://agiworkforce.com/settings/security';
 const WEB_ACCOUNT_URL = 'https://agiworkforce.com/settings/account';
 
 export default function AccountSecurityScreen() {
@@ -96,9 +107,16 @@ export default function AccountSecurityScreen() {
   const [savingTimeout, setSavingTimeout] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const { withStepUp, modal: stepUpModal } = useStepUp();
+  const hasPassword = clerkUser?.passwordEnabled === true;
   const [sessions, setSessions] = useState<AccountSessions | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [revokingAll, setRevokingAll] = useState(false);
+  const [lockdown, setLockdown] = useState<boolean | null>(null);
+  const [savingLockdown, setSavingLockdown] = useState(false);
+  const signOut = useAuthStore((state) => state.signOut);
   const appLockHydrated = useBiometricFlag((state) => state.hydrated);
   const appLockEnabled = useBiometricFlag((state) => state.enabled);
 
@@ -187,6 +205,79 @@ export default function AccountSecurityScreen() {
     [loadSessions],
   );
 
+  useEffect(() => {
+    if (!isClerkSignedIn || appMode !== 'cloud') return;
+    let cancelled = false;
+    fetchLockdownMode()
+      .then((enabled) => {
+        if (!cancelled) setLockdown(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setLockdown(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [appMode, isClerkSignedIn, clerkUserId]);
+
+  const changeLockdown = useCallback(
+    (next: boolean) => {
+      const previous = lockdown;
+      setLockdown(next);
+      void (async () => {
+        setSavingLockdown(true);
+        try {
+          await saveLockdownMode(next);
+        } catch (saveError) {
+          setLockdown(previous);
+          Alert.alert(
+            'Lockdown mode was not changed',
+            saveError instanceof Error ? saveError.message : 'Please try again.',
+          );
+        } finally {
+          setSavingLockdown(false);
+        }
+      })();
+    },
+    [lockdown],
+  );
+
+  const confirmRevokeAllSessions = useCallback(() => {
+    const account = captureCloudAccountEpoch();
+    if (!account || account.ownerId !== clerkUserId) return;
+    Alert.alert(
+      'Log out of all devices?',
+      'Every signed-in device, including this one, is signed out. You will need to sign in again.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log out everywhere',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setRevokingAll(true);
+              try {
+                await withStepUp('session.revoke_all', null, (headers) =>
+                  revokeAllAccountSessions(headers),
+                );
+                if (!isCloudAccountEpochCurrent(account)) return;
+                await signOut();
+              } catch (revokeError) {
+                if (isStepUpCancelled(revokeError)) return;
+                Alert.alert(
+                  'Could not log out of all devices',
+                  revokeError instanceof Error ? revokeError.message : 'Please try again.',
+                );
+              } finally {
+                setRevokingAll(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  }, [clerkUserId, signOut, withStepUp]);
+
   const openOwnedWebPage = useCallback(
     (url: string) => {
       const account = captureCloudAccountEpoch();
@@ -221,47 +312,36 @@ export default function AccountSecurityScreen() {
     })();
   }, [sessionTimeout]);
 
-  const handleChangePassword = useCallback(() => {
-    if (!clerkUser?.updatePassword) {
-      Alert.alert(
-        'Password change unavailable',
-        'This account signs in without a password, so there is none to change.',
-      );
-      return;
-    }
-
-    if (Platform.OS !== 'ios') {
-      openOwnedWebPage(WEB_SECURITY_URL);
-      return;
-    }
-
-    Alert.prompt(
-      'Change password',
-      'Enter a new password for your AGI account.',
-      (newPassword: string) => {
-        const trimmed = newPassword.trim();
-        if (trimmed.length < 8) {
-          Alert.alert('Password too short', 'Use at least 8 characters.');
-          return;
+  const handleChangePassword = useCallback(
+    (change: PasswordChange) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId) return;
+      void (async () => {
+        setChangingPassword(true);
+        try {
+          await withStepUp('password.change', null, (headers) =>
+            changeAccountPassword(change, headers),
+          );
+          if (!isCloudAccountEpochCurrent(account)) return;
+          setPasswordModalOpen(false);
+          Alert.alert(
+            'Password changed',
+            'Your account password has been updated and your other sessions were signed out.',
+          );
+          await clerkUser?.reload();
+        } catch (changeError) {
+          if (isStepUpCancelled(changeError)) return;
+          Alert.alert(
+            'Could not change password',
+            changeError instanceof Error ? changeError.message : 'Please try again.',
+          );
+        } finally {
+          setChangingPassword(false);
         }
-        void (async () => {
-          setChangingPassword(true);
-          try {
-            await clerkUser.updatePassword({ newPassword: trimmed });
-            Alert.alert('Password changed', 'Your account password has been updated.');
-          } catch (changeError) {
-            Alert.alert(
-              'Could not change password',
-              changeError instanceof Error ? changeError.message : 'Please try again.',
-            );
-          } finally {
-            setChangingPassword(false);
-          }
-        })();
-      },
-      'secure-text',
-    );
-  }, [clerkUser, openOwnedWebPage]);
+      })();
+    },
+    [clerkUser, clerkUserId, withStepUp],
+  );
 
   useEffect(() => {
     setStatus(null);
@@ -311,6 +391,16 @@ export default function AccountSecurityScreen() {
 
   return (
     <SettingsScreenShell title="Account Security">
+      {passwordModalOpen ? null : stepUpModal}
+      <ChangePasswordModal
+        visible={passwordModalOpen}
+        hasPassword={hasPassword}
+        saving={changingPassword}
+        onCancel={() => setPasswordModalOpen(false)}
+        onSubmit={handleChangePassword}
+      >
+        {passwordModalOpen ? stepUpModal : null}
+      </ChangePasswordModal>
       {appMode !== 'cloud' ? (
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : null}
@@ -326,7 +416,7 @@ export default function AccountSecurityScreen() {
           <SettingsRow
             label="Backup codes"
             icon={KeyRound}
-            value={`${status.backupCodesRemaining} remaining`}
+            value={status.backupCodesReady ? 'Ready' : 'Not set'}
           />
         ) : null}
         <SettingsRow
@@ -340,10 +430,10 @@ export default function AccountSecurityScreen() {
 
       <SettingsGroup>
         <SettingsRow
-          label="Change password"
+          label={hasPassword ? 'Change password' : 'Set a password'}
           icon={KeyRound}
-          value={changingPassword ? 'Saving…' : 'Change'}
-          onPress={appMode === 'cloud' ? handleChangePassword : undefined}
+          value={changingPassword ? 'Saving…' : hasPassword ? 'Change' : 'Set'}
+          onPress={appMode === 'cloud' ? () => setPasswordModalOpen(true) : undefined}
           isLast
         />
       </SettingsGroup>
@@ -406,6 +496,15 @@ export default function AccountSecurityScreen() {
             )}
           </>
         )}
+        {appMode === 'cloud' ? (
+          <SettingsRow
+            label="Log out of all devices"
+            icon={LogOut}
+            value={revokingAll ? 'Signing out…' : undefined}
+            onPress={revokingAll ? undefined : confirmRevokeAllSessions}
+            destructive
+          />
+        ) : null}
         <SettingsRow
           label="Open Web account"
           icon={ExternalLink}
@@ -462,9 +561,23 @@ export default function AccountSecurityScreen() {
         )}
       </SettingsGroup>
 
+      {appMode === 'cloud' && lockdown !== null ? (
+        <SettingsGroup>
+          <SettingsSwitchRow
+            label="Lockdown mode"
+            description="Refuses connector tools, web search, page fetch, code execution and Deep Research in every chat on this account, so a page or document cannot talk the model into calling one."
+            icon={Lock}
+            value={lockdown}
+            onValueChange={changeLockdown}
+            disabled={savingLockdown}
+            isLast
+          />
+        </SettingsGroup>
+      ) : null}
+
       <SettingsInfo
         title="Unavailable account controls"
-        body="Passkeys, SMS MFA, and Lockdown mode are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them."
+        body="Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

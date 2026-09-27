@@ -209,7 +209,7 @@ export function GitPanel({ repoPath, className }: GitPanelProps) {
           <TabsTrigger value="staged-diff">
             Staged
             {(status?.staged.length ?? 0) > 0 && (
-              <span className="text-xs bg-green-500/20 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded-full ml-1">
+              <span className="text-xs bg-success-fill/10 text-success-text px-1.5 py-0.5 rounded-full ml-1">
                 {status?.staged.length}
               </span>
             )}

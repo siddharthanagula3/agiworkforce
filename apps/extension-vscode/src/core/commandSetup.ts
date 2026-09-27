@@ -97,6 +97,7 @@ import {
 import { getAccountMemoryStore } from '../memory/accountMemoryStore';
 import { ChatEditorPanel } from '../providers/chatEditorPanel';
 import { type LocalRuntimePool } from '../integrations/localRuntimePool';
+import { installCli } from '../integrations/cliInstaller';
 import {
   admitDeveloperSessionHandoff,
   describeHandoffRefusal,
@@ -788,6 +789,33 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (result.ok) vscode.window.showInformationMessage(message);
       else vscode.window.showErrorMessage(message);
       return { ...result, environment: environment.kind };
+    }),
+
+    register('agi-workforce.installCli', async () => {
+      if (!(await installCli())) return { ok: false as const };
+      const environment = describeRemoteEnvironment(vscode.env.remoteName);
+      const result = await probeCli(
+        resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
+        runCliVersion,
+      );
+      if (!result.ok) {
+        vscode.window.showErrorMessage(cliProbeMessage(result, environment));
+        return { ok: false as const };
+      }
+      try {
+        await localRuntimes.restartAll();
+        vscode.window.showInformationMessage(cliProbeMessage(result, environment));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(
+          `AGI Workforce: The AGI CLI is installed, but the local runtime did not restart, ${message}`,
+        );
+      } finally {
+        conversationTreeProvider.refresh();
+        sidebarProvider.refreshRuntimeStatus();
+        ChatEditorPanel.refreshRuntimeStatus();
+      }
+      return { ok: true as const, version: result.version };
     }),
 
     register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {

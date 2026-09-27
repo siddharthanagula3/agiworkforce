@@ -154,7 +154,7 @@ export default function AgiCodePage() {
         <FinalCta
           eyebrow={LAUNCH.publicLabel}
           title="Bring the agent to your repo."
-          body="The CLI is released. AGI in VS Code is coming soon: request the preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
+          body="AGI in the CLI and in VS Code is coming soon: request the preview, and choose the route for every task: local models, your own keys, or AGI managed cloud (public alpha, open by default)."
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'See the CLI' },

@@ -278,6 +278,42 @@ export const agiRadiiVar = {
   full: '--corner-pill',
 } as const satisfies Record<keyof typeof agiRadii, `--${string}`>;
 
+export const agiCornerCssVars = {
+  '--corner-detail': agiRadii.detail,
+  '--corner-compact': agiRadii.compact,
+  '--corner-control': agiRadii.sm,
+  '--corner-field': agiRadii.md,
+  '--corner-menu': agiRadii.menu,
+  '--corner-surface': agiRadii.lg,
+  '--corner-panel': agiRadii.xl,
+  '--corner-overlay': agiRadii['2xl'],
+  '--corner-hero': agiRadii['3xl'],
+  '--corner-pill': agiRadii.full,
+} as const satisfies CssVariableMap &
+  Record<(typeof agiRadiiVar)[keyof typeof agiRadiiVar], string>;
+
+export const agiMotion = {
+  duration: {
+    instant: '90ms',
+    quick: '160ms',
+    moved: '260ms',
+    reveal: '700ms',
+  },
+  curve: {
+    standard: 'cubic-bezier(0.2, 0, 0, 1)',
+    exit: 'cubic-bezier(0.4, 0, 1, 1)',
+  },
+} as const;
+
+export const agiMotionCssVars = {
+  '--duration-instant': agiMotion.duration.instant,
+  '--duration-quick': agiMotion.duration.quick,
+  '--duration-moved': agiMotion.duration.moved,
+  '--duration-reveal': agiMotion.duration.reveal,
+  '--curve-standard': agiMotion.curve.standard,
+  '--curve-exit': agiMotion.curve.exit,
+} as const satisfies CssVariableMap;
+
 /**
  * Concrete family names, never the var(--font-*) indirection chat.css uses.
  * This map reaches surfaces only through `agiChatCssVars`, which is emitted as

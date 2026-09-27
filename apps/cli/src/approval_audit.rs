@@ -67,6 +67,23 @@ pub fn record_approval(
     }
 }
 
+pub fn recent_approvals(limit: usize) -> Result<Vec<ApprovalAuditEntry>> {
+    let path = approval_log_path()?;
+    let contents = match std::fs::read_to_string(&path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => {
+            return Err(error).with_context(|| format!("failed to read {}", path.display()))
+        }
+    };
+    Ok(contents
+        .lines()
+        .rev()
+        .filter_map(|line| serde_json::from_str(line).ok())
+        .take(limit)
+        .collect())
+}
+
 fn approval_log_path() -> Result<PathBuf> {
     Ok(crate::config::CliConfig::config_dir()?.join("approvals.jsonl"))
 }

@@ -4,7 +4,7 @@ import { fenceUntrustedMemoryContent } from '@agiworkforce/utils/fence';
 import { renderPersonalizationBlock } from './personalization';
 
 export interface PersonalContextInput {
-  personalization: Personalization;
+  personalization: Personalization | null;
   memories: MemoryFact[];
 }
 
@@ -36,7 +36,7 @@ export function renderMemoryBlock(memories: MemoryFact[]): string {
 export function buildPersonalContextBlocks(input: PersonalContextInput): PersonalContextBlock[] {
   const blocks: PersonalContextBlock[] = [];
 
-  const persona = renderPersonalizationBlock(input.personalization);
+  const persona = input.personalization ? renderPersonalizationBlock(input.personalization) : '';
   if (persona) blocks.push({ role: 'system', content: persona });
 
   const memory = renderMemoryBlock(input.memories);

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { CloudCodeAgentStopReason } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import type { NotificationSeverity } from '@/features/notifications/lib/notification-target';
 import { recordNotification } from './notification-service';
@@ -239,5 +240,106 @@ export async function notifyResearchReportSettled(
   } catch (error) {
     logger.warn({ error, reportId: notice.reportId }, '[notifications] research notify failed');
     return none;
+  }
+}
+
+export type CloudCodeTurnNotificationEvent = Extract<
+  AgentRunNotificationEvent,
+  'approval_required' | 'completed' | 'failed'
+>;
+
+export function cloudCodeTurnNotificationEvent(
+  stopReason: CloudCodeAgentStopReason,
+): CloudCodeTurnNotificationEvent | null {
+  switch (stopReason) {
+    case 'awaiting_approval':
+      return 'approval_required';
+    case 'done':
+      return 'completed';
+    case 'error':
+    case 'timeout':
+    case 'max_steps':
+      return 'failed';
+    case 'cancelled':
+    case 'denied':
+      return null;
+  }
+}
+
+export interface CloudCodeTurnNotice {
+  userId: string;
+  sessionId: string;
+  sessionTitle: string | null;
+  turnId: string;
+  event: CloudCodeTurnNotificationEvent;
+  approvalStepIndex?: number;
+}
+
+function describeCloudCodeTurnEvent(notice: CloudCodeTurnNotice): { title: string; body: string } {
+  const session = shortLabel(notice.sessionTitle ?? '');
+  switch (notice.event) {
+    case 'approval_required':
+      return {
+        title: 'Approval needed',
+        body: session
+          ? `“${session}” is waiting for your approval.`
+          : 'Your AGI Code session is waiting for your approval.',
+      };
+    case 'completed':
+      return {
+        title: 'Task finished',
+        body: session
+          ? `“${session}” finished its task.`
+          : 'Your AGI Code session finished its task.',
+      };
+    case 'failed':
+      return {
+        title: 'Task stopped',
+        body: session
+          ? `“${session}” stopped before it finished.`
+          : 'Your AGI Code session stopped before it finished.',
+      };
+  }
+}
+
+export async function notifyCloudCodeTurnEvent(
+  db: DatabaseAdapter,
+  notice: CloudCodeTurnNotice,
+): Promise<{ pushed: boolean }> {
+  try {
+    const { title, body } = describeCloudCodeTurnEvent(notice);
+    const occurrence =
+      notice.event === 'approval_required'
+        ? `${notice.event}:${notice.approvalStepIndex ?? 0}`
+        : notice.event;
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'agent_run',
+      severity: FEED_SEVERITY[notice.event],
+      title,
+      message: body,
+      target: { kind: 'code-session', id: notice.sessionId },
+      dedupeKey: `code-turn:${notice.turnId}:${occurrence}`,
+    });
+
+    const toExpo = await loadAgentPushPreference(db, notice.userId);
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: MOBILE_NOTIFICATION_TYPE[notice.event],
+          priority: MOBILE_PRIORITY[notice.event],
+          codeSessionId: notice.sessionId,
+        },
+      },
+      { expo: toExpo, web: true },
+    ).catch(() => null);
+
+    return { pushed: (result?.sent ?? 0) > 0 };
+  } catch (error) {
+    logger.warn({ error, turnId: notice.turnId }, '[notifications] code turn notify failed');
+    return { pushed: false };
   }
 }

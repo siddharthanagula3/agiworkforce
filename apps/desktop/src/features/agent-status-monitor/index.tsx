@@ -26,20 +26,20 @@ const statusConfig = {
   },
   paused: {
     icon: Pause,
-    color: 'text-yellow-500 dark:text-yellow-400',
-    bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
+    color: 'text-warning-text',
+    bgColor: 'bg-warning-fill/10',
     label: 'Paused',
   },
   completed: {
     icon: CheckCircle,
-    color: 'text-green-500 dark:text-green-400',
-    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    color: 'text-success-text',
+    bgColor: 'bg-success-fill/10',
     label: 'Completed',
   },
   failed: {
     icon: XCircle,
-    color: 'text-red-500 dark:text-red-400',
-    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    color: 'text-danger-text',
+    bgColor: 'bg-danger-fill/10',
     label: 'Failed',
   },
 };
@@ -121,7 +121,7 @@ export const AgentStatusMonitor: React.FC<AgentStatusMonitorProps> = ({
                     <button
                       type="button"
                       onClick={() => onCancelAgent(agent.id)}
-                      className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200 transition-colors"
+                      className="p-1 text-danger-text transition-colors"
                       title="Cancel agent"
                     >
                       <XCircle className="w-4 h-4" />

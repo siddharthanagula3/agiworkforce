@@ -140,7 +140,9 @@ function SessionItemBase({
 
   const rowContent = (
     <div className="flex min-w-0 items-center gap-1.5">
-      {session.starred && <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" />}
+      {session.starred && (
+        <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-700 dark:text-amber-400" />
+      )}
       {session.runState === 'running' && (
         <span
           data-testid={`session-running-${session.id}`}
@@ -271,7 +273,7 @@ function SessionItemBase({
                 onOpenCustomInstructions(session.id);
               }}
               className={cn(
-                'flex h-7 w-7 items-center justify-center rounded-md text-amber-500 hover:bg-muted pointer-coarse:h-11 pointer-coarse:w-11',
+                'flex h-7 w-7 items-center justify-center rounded-md text-warning-text hover:bg-muted pointer-coarse:h-11 pointer-coarse:w-11',
                 ROW_FOCUS_RING,
               )}
             >

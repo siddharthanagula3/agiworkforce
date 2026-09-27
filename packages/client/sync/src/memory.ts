@@ -18,6 +18,9 @@ export interface SyncMemoryRecord {
   createdAt: string;
   updatedAt: string;
   serverVersion?: string;
+  origin?: string | null;
+  sourceConversationId?: string | null;
+  sourceConversationTitle?: string | null;
 }
 
 const KNOWN_NON_WEB_SOURCES: ReadonlySet<string> = new Set(['mobile', 'desktop', 'auto']);
@@ -37,6 +40,9 @@ export function mapMemoryWireDelta(delta: MemoryWireDelta): SyncMemoryRecord {
     createdAt: delta.created_at,
     updatedAt: delta.updated_at,
     serverVersion: delta.server_version,
+    origin: delta.source,
+    sourceConversationId: delta.source_conversation_id ?? null,
+    sourceConversationTitle: delta.source_conversation_title ?? null,
   };
 }
 
@@ -66,7 +72,7 @@ export interface MemoryPushItem {
   id: string;
   content: string;
   category: string | null;
-  source: SyncMemorySource;
+  source: string;
   pinned: boolean;
   baseVersion: string;
   isDeleted: boolean;
@@ -77,7 +83,7 @@ export function toMemoryPushItem(record: SyncMemoryRecord): MemoryPushItem {
     id: record.id,
     content: record.content,
     category: record.category,
-    source: record.source,
+    source: record.origin ?? record.source,
     pinned: record.pinned,
     baseVersion: record.serverVersion ?? '0',
     isDeleted: record.isDeleted,

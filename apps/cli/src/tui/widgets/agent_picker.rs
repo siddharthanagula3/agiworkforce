@@ -21,7 +21,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 use crate::agents::AgentDefinition;
 use crate::terminal_text::sanitize_terminal_text;
 use crate::tui::pad_to_cols;
-use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light};
+use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light, ui_surface_elevated};
 
 const PICKER_TITLE: &str = "Agents";
 const SEARCH_PLACEHOLDER: &str = "type to filter agents...";
@@ -159,6 +159,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
     let outer_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
+        .style(Style::default().bg(ui_surface_elevated()))
         .title(title_line);
     frame.render_widget(outer_block, popup_area);
 

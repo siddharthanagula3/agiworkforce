@@ -38,27 +38,25 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `app
 
 - Done when: The user can turn on a second factor that is then required when signing in, and turn it off.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Settings authenticator (user_two_factor) is never asked at sign-in: sign-in challenges only identity-provider MFA, which no screen enrolls, and the workspace require-MFA policy reads that provider flag. | handler |
-| desktop | partial | Same as web: the authenticator protects step-up actions only, not sign-in. | handler |
-| mobile | partial | Mobile shows whether the authenticator is on and sends the user to web to set it up; the factor does not protect sign-in on any surface. | ui, handler |
+| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui, handler |
 
-Code: `apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx:272-276`, `apps/web/app/api/settings/2fa/setup/route.ts:40-70`, `apps/web/lib/mfa-policy-gate.ts:50-54`, `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
+Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
 
 ## S86.05: Recovery codes.
 
 - Done when: The user can view, download and regenerate recovery codes that let them back into the account if the second factor is lost.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Codes are shown once, downloadable and regenerable, but they only satisfy step-up prompts; because the authenticator is not a sign-in factor they recover nothing at sign-in. | handler |
-| desktop | partial | Same as web. | handler |
-| mobile | partial | Mobile shows only how many backup codes remain; viewing or regenerating them opens the web page. | ui |
+| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui |
 
-Code: `apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx:301-325`, `apps/web/app/api/settings/2fa/backup-codes/route.ts:45-70`, `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
+Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 
 ## S86.06: Active sessions.
 
@@ -220,18 +218,6 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:47-5
 | chrome | partial | The only remembered approval is the approved-sites list; per-action decisions are never saved, and sensitive actions always ask. | ui |
 
 Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:28-40`
-
-## S86.24: Default permission mode.
-
-- Done when: The user can set the default approval posture for agent actions (ask every time, auto-approve safe, autonomous) and it is enforced.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The onboarding "Default interaction mode" choice writes approval_mode, which nothing reads; the default that is actually applied is permission_mode, set only by editing config.toml or from VS Code. Shift+Tab and --permission-mode change it per session/run. | handler |
-
-Code: `apps/cli/src/onboarding.rs:716-760`, `apps/cli/src/config.rs:103-115`, `apps/cli/src/lib.rs:4474-4478`
 
 ## S86.25: Revoke all optional grants.
 

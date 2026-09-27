@@ -315,7 +315,7 @@ describe('chatStore, streaming state', () => {
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ chatMode: 'create', chatStyle: 'detailed' });
+      useChatStore.setState({ chatMode: 'create', chatStyle: 'explanatory' });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -345,7 +345,7 @@ describe('chatStore, streaming state', () => {
         expect.arrayContaining([
           expect.objectContaining({
             role: 'system',
-            content: expect.stringContaining('Style: Detailed'),
+            content: expect.stringContaining('Style: Explanatory'),
           }),
         ]),
       );

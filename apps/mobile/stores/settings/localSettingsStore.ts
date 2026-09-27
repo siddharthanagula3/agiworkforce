@@ -1,5 +1,5 @@
-
 import { create } from 'zustand';
+import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, storage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type {
@@ -45,6 +45,10 @@ const defaultPersonalization: Personalization = {
   enthusiasm: 50,
   headersLists: 50,
   emoji: 50,
+  aboutYou: '',
+  preferredLength: 'default',
+  technicalLevel: 'unspecified',
+  responseLanguage: RESPONSE_LANGUAGE_AUTO,
 };
 
 export const useLocalSettingsStore = create<LocalSettingsState>()(

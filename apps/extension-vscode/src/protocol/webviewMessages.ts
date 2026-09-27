@@ -41,6 +41,7 @@ const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
 const manageWorkspaceTrust = z.object({ type: z.literal('manageWorkspaceTrust') });
 const retryRuntime = z.object({ type: z.literal('retryRuntime') });
+const installCli = z.object({ type: z.literal('installCli') });
 const cancel = z.object({ type: z.literal('cancel') });
 const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
 const clearConversation = z.object({ type: z.literal('clearConversation') });
@@ -227,6 +228,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openWorkspace,
   manageWorkspaceTrust,
   retryRuntime,
+  installCli,
   cancel,
   fileSearch,
   shareDiagnostics,
