@@ -9,9 +9,12 @@ import {
   normalizePurchasableSeats,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
+  billingIntervalsForPlan,
   getPlanPriceCents,
   getPlanPriceInr,
   getPlanPriceUsd,
+  getPublishedPlanPriceUsd,
+  planOffersBillingInterval,
   isContractPricedPlan,
   getBillingPlanProductLimits,
   getPlanMaxConcurrentTurns,
@@ -91,7 +94,7 @@ describe('billing catalog', () => {
 
   it('keeps the public catalog limited to customer-facing prices', () => {
     expect(getPlanPriceCents('pro')).toBe(2000);
-    expect(getPlanPriceCents('pro', 'yearly')).toBe(20000);
+    expect(getPlanPriceCents('pro', 'yearly')).toBeNull();
     expect(getPlanPriceCents('max')).toBe(10000);
     expect(getPlanPriceCents('max_15x')).toBe(20000);
     expect(getPlanPriceCents('basic')).toBe(700);
@@ -102,6 +105,16 @@ describe('billing catalog', () => {
       expect(plan).not.toHaveProperty('weeklyUsageBudgetUsd');
       expect(plan).not.toHaveProperty('dailyUsageBudgetUsd');
     }
+  });
+
+  it('bills individual plans monthly only and Team monthly or yearly', () => {
+    for (const plan of SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER) {
+      expect(billingIntervalsForPlan(plan)).toEqual(['monthly']);
+      expect(planOffersBillingInterval(plan, 'yearly')).toBe(false);
+      expect(getPublishedPlanPriceUsd(plan, 'yearly')).toBeNull();
+    }
+    expect(billingIntervalsForPlan('team')).toEqual(['monthly', 'yearly']);
+    expect(getPublishedPlanPriceUsd('team', 'yearly')).toBe(240);
   });
 
   describe('contract-priced plans publish no amount', () => {

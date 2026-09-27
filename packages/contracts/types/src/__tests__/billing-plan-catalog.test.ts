@@ -5,6 +5,7 @@ import {
   BILLING_PLAN_CATALOG_VERSION,
   SPEND_CAP_UNLIMITED,
   WITHDRAWN_BILLING_PLANS,
+  isGrandfatheredBillingInterval,
   isGrandfatheredSubscriber,
   isPlanOnSale,
   isUnlimitedSpendCap,
@@ -50,6 +51,12 @@ describe('plan catalog versioning', () => {
     expect(Object.keys(WITHDRAWN_BILLING_PLANS)).toEqual([]);
     expect(listPlanCatalog().some((entry) => entry.sellability === 'withdrawn')).toBe(false);
     expect(isGrandfatheredSubscriber('pro')).toBe(false);
+  });
+
+  it('withdraws yearly Pro from sale and keeps Team yearly', () => {
+    expect(isGrandfatheredBillingInterval('pro', 'yearly')).toBe(true);
+    expect(isGrandfatheredBillingInterval('pro', 'monthly')).toBe(false);
+    expect(isGrandfatheredBillingInterval('team', 'yearly')).toBe(false);
   });
 
   it('sends a new buyer to the plan itself while it is on sale', () => {

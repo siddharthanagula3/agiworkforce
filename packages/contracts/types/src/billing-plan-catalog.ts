@@ -4,16 +4,17 @@ import {
   isContractPricedPlan,
   isFreeOfChargePlanTier,
   normalizeBillingPlanTier,
+  type BillingInterval,
   type BillingPlanTier,
 } from './billing-catalog';
 
 /**
- * Bumped whenever a plan is added, withdrawn or repriced. A stored
- * subscription records the version it was sold under, so a later reprice is
- * visibly a different catalog rather than a silent rewrite of what a customer
- * agreed to.
+ * Bumped whenever a plan or one of its billing intervals is added, withdrawn or
+ * repriced. A stored subscription records the version it was sold under, so a
+ * later reprice is visibly a different catalog rather than a silent rewrite of
+ * what a customer agreed to.
  */
-export const BILLING_PLAN_CATALOG_VERSION = 1;
+export const BILLING_PLAN_CATALOG_VERSION = 2;
 
 export type PlanSellability = 'self_serve' | 'contract_only' | 'free_of_charge' | 'withdrawn';
 
@@ -36,6 +37,19 @@ export interface PlanCatalogEntry {
 export const WITHDRAWN_BILLING_PLANS: Readonly<
   Partial<Record<BillingPlanTier, { withdrawnAt: string; successorTier: BillingPlanTier | null }>>
 > = Object.freeze({});
+
+export const WITHDRAWN_BILLING_INTERVALS: Readonly<
+  Partial<Record<BillingPlanTier, Partial<Record<BillingInterval, { withdrawnAt: string }>>>>
+> = Object.freeze({
+  pro: Object.freeze({ yearly: Object.freeze({ withdrawnAt: '2026-09-27' }) }),
+});
+
+export function isGrandfatheredBillingInterval(
+  tier: string | null | undefined,
+  interval: BillingInterval,
+): boolean {
+  return WITHDRAWN_BILLING_INTERVALS[normalizeBillingPlanTier(tier)]?.[interval] !== undefined;
+}
 
 function sellabilityOf(tier: BillingPlanTier): PlanSellability {
   if (WITHDRAWN_BILLING_PLANS[tier]) return 'withdrawn';
