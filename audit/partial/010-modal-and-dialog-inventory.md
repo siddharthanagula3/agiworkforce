@@ -380,16 +380,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
-## S10.33: Reauthentication challenge.
-
-- Done when: Before a sensitive account action, a dialog asks the user to prove it is them (code or passkey) and only then proceeds.
-- Wave: 3
-- Already works on: web, desktop
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
-
 ## S10.34: Microphone permission explanation.
 
 - Done when: Before or when the microphone is first needed, the product explains why it wants it and what to do if access is refused.
