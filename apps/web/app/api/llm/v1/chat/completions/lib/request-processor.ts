@@ -20,10 +20,11 @@ import { modelSupportsResearch } from '@/features/chat/lib/research-capability-g
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
+import { loadToolApprovalPolicy, policyAutoApprovesTool } from './tool-approval-policy';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
-import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
@@ -32,8 +33,12 @@ import {
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
 import { deviceStepToolDefs } from '@/lib/device-steps/device-tools';
-import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
-import { webSearchToolDef, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
+import { URL_FETCH_TOOL, urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  WEB_SEARCH_TOOL,
+  webSearchToolDef,
+  webSearchBackendConfigured,
+} from '@/lib/web-search/web-search-tool';
 import {
   resolveUserRoutingPreferences,
   type UserRoutingPreferences,
@@ -153,6 +158,7 @@ import type {
   PromptCacheScope,
   RoutingSlot,
   ThinkingBlock,
+  ToolApprovalPolicy,
 } from '@agiworkforce/types';
 import {
   applyConversationContext,
@@ -875,6 +881,7 @@ export type ProcessedRequest = {
    */
   sensitiveContextPresent?: boolean;
   untrustedContextPresent?: boolean;
+  toolApprovalPolicy?: ToolApprovalPolicy;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
@@ -1513,16 +1520,22 @@ export function resolveWebFetchTools({
   tools,
   toolsCapable,
   stream,
+  nativeFetchPermitted = true,
 }: {
   providerLower: string;
   model: string;
   tools: unknown[] | undefined;
   toolsCapable: boolean;
   stream: boolean | undefined;
+  nativeFetchPermitted?: boolean;
 }): unknown[] | undefined {
   if (!toolsCapable) return tools;
 
-  if (providerLower === 'anthropic' && modelHasNativeAnthropicWebFetch(model)) {
+  if (
+    nativeFetchPermitted &&
+    providerLower === 'anthropic' &&
+    modelHasNativeAnthropicWebFetch(model)
+  ) {
     return [
       ...(tools ?? []),
       { type: 'web_fetch_20260209', name: 'web_fetch', allowed_callers: ['direct'] },
@@ -3171,6 +3184,8 @@ export async function processRequest(
 
   let resolvedTaskType: RoutingTaskType = classifierResult.type;
 
+  const webSearchRequestedByCaller =
+    chatRequest.web_search === true || chatRequest.research === true;
   applyImplicitManagedToolIntent(chatRequest, {
     prompt: lastUserText,
     taskType: resolvedTaskType,
@@ -3707,6 +3722,14 @@ export async function processRequest(
   // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
   // shape of degradation.
   const researchUnavailable = chatRequest.research === true && !researchMode;
+  const toolApprovalPolicy =
+    chatRequest.web_search || chatRequest.web_fetch || chatRequest.code_execution
+      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () =>
+          loadToolApprovalPolicy((await scopedDbPromise).db, userId),
+        )
+      : undefined;
+  const nativeToolPermitted = (gatedTwin: string): boolean =>
+    toolApprovalPolicy !== undefined && policyAutoApprovesTool(toolApprovalPolicy, gatedTwin);
 
   if (
     !freeTrialEnabled &&
@@ -4053,6 +4076,44 @@ export async function processRequest(
       ),
     };
   }
+  const unstreamedToolNeedingApproval = chatRequest.stream
+    ? undefined
+    : [
+        {
+          requested: webSearchRequestedByCaller,
+          gatedTwin: WEB_SEARCH_TOOL,
+          label: 'Web search',
+          code: 'web_search_stream_required',
+        },
+        {
+          requested: chatRequest.web_fetch === true,
+          gatedTwin: URL_FETCH_TOOL,
+          label: 'Web fetch',
+          code: 'web_fetch_stream_required',
+        },
+        {
+          requested: chatRequest.code_execution === true,
+          gatedTwin: EXECUTE_CODE_TOOL,
+          label: 'Code execution',
+          code: 'code_execution_stream_required',
+        },
+      ].find((tool) => tool.requested && !nativeToolPermitted(tool.gatedTwin));
+  if (unstreamedToolNeedingApproval) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `${unstreamedToolNeedingApproval.label} needs approval under this account's tool approval setting, and only a streaming request can ask for it. Set stream: true.`,
+            type: 'invalid_request_error',
+            code: unstreamedToolNeedingApproval.code,
+            param: 'stream',
+          },
+        },
+        { status: 422 },
+      ),
+    };
+  }
 
   const effectiveEffort = clampReasoningEffort(
     resolveRequestEffort(
@@ -4150,7 +4211,8 @@ export async function processRequest(
     stream: chatRequest.stream,
     e2bEnabled: e2bProvisioningReady(),
     toolsCapable: resolvedModelCaps?.tools ?? true,
-    codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
+    codeExecutionCapable:
+      resolvedModelCaps?.codeExecution === true && nativeToolPermitted(EXECUTE_CODE_TOOL),
   };
   const codeExecutionHoldMicrousd = chatRequest.code_execution
     ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
@@ -4429,7 +4491,7 @@ export async function processRequest(
   });
 
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
-  if (offerWebSearch) {
+  if (offerWebSearch && (chatRequest.stream || nativeToolPermitted(WEB_SEARCH_TOOL))) {
     const googleGroundingPoolAvailable =
       providerLower === 'google' ? (await peekGroundingPool(providerLower)).withinPool : true;
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps, {
@@ -4508,6 +4570,7 @@ export async function processRequest(
       tools: resolvedTools,
       toolsCapable: resolvedModelCaps?.tools ?? true,
       stream: chatRequest.stream,
+      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL),
     });
   }
 
@@ -4767,6 +4830,7 @@ export async function processRequest(
     ...(dynamicSystemBlocks.some((block) => block.layer === 'untrusted_context')
       ? { untrustedContextPresent: true }
       : {}),
+    ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
     requestedModel,
     provider,
     estimatedCostMicrousd,
