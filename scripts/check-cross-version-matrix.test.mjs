@@ -27,7 +27,7 @@ test('the repository as committed satisfies the guard', () => {
 
 test('checklist titles are read from the checklist, not from the manifest', () => {
   const markdown = fs.readFileSync(
-    path.join(process.cwd(), 'docs/work/enterprise-master-build-checklist-2026-09-16.md'),
+    path.join(process.cwd(), 'audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md'),
     'utf8',
   );
   const pairs = checklistTitles(markdown, 109);

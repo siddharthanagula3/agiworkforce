@@ -12,7 +12,7 @@ const cleanupScript = fileURLToPath(new URL('./clean-repo.mjs', import.meta.url)
 
 test('the live audit evidence ledger is protected from cleanup', () => {
   assert.equal(isProtectedCleanupPath('audit'), true);
-  assert.equal(isProtectedCleanupPath('audit/inventory.json'), true);
+  assert.equal(isProtectedCleanupPath('audit/registers/code-reachability-inventory.json'), true);
   assert.equal(
     TRACKED_STALE.some((candidate) => candidate === 'audit' || candidate.startsWith('audit/')),
     false,

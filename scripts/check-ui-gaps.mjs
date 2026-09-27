@@ -15,9 +15,9 @@ import {
 } from './ui-gaps-lib.mjs';
 
 const root = process.cwd();
-const csvPath = path.join(root, 'audit/ui-gaps.csv');
-const markdownPath = path.join(root, 'audit/ui-gaps.md');
-const baselinePath = path.join(root, 'audit/ui-gaps-baseline.json');
+const csvPath = path.join(root, 'audit/registers/ui-gaps.csv');
+const markdownPath = path.join(root, 'audit/registers/ui-gaps.md');
+const baselinePath = path.join(root, 'audit/baselines/ui-gaps-baseline.json');
 const errors = [];
 
 function readJson(filePath) {
@@ -37,7 +37,7 @@ function validateTracker(csv, baseline) {
   try {
     parsed = parseCsv(csv);
   } catch (error) {
-    errors.push(`audit/ui-gaps.csv is invalid: ${error.message}`);
+    errors.push(`audit/registers/ui-gaps.csv is invalid: ${error.message}`);
     return [];
   }
 
@@ -141,7 +141,7 @@ function enforceMonotonic(records, ref) {
     return;
   }
 
-  const result = spawnSync('git', ['show', `${ref}:audit/ui-gaps.csv`], {
+  const result = spawnSync('git', ['show', `${ref}:audit/registers/ui-gaps.csv`], {
     cwd: root,
     encoding: 'utf8',
   });
@@ -184,7 +184,7 @@ if (errors.length === 0) {
     records = validateTracker(csv, baseline);
     const expectedHash = csvSha256(csv);
     if (!markdown.includes(`<!-- ui-gaps-csv-sha256: ${expectedHash} -->`)) {
-      errors.push('audit/ui-gaps.md is stale; run pnpm generate:ui-gaps');
+      errors.push('audit/registers/ui-gaps.md is stale; run pnpm generate:ui-gaps');
     }
   } catch (error) {
     errors.push(error.message);

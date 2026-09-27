@@ -15,7 +15,7 @@ const ROOTS = [
   'apps/web/app',
 ];
 
-const BASELINE_PATH = 'audit/theme-only-text-colours.json';
+const BASELINE_PATH = 'audit/baselines/theme-only-text-colours.json';
 
 function sourceFiles(dir) {
   const abs = path.join(root, dir);

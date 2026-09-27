@@ -38,7 +38,7 @@ Developer continuity domain for Desktop Code/CLI/VS Code, and explicit handoff
 between them. The September 21 competitor and continuity research under
 `research/` explains the evidence behind that direction but does not prove the
 repository implements it. Current implementation and release state live in
-`work/implementation-status.md`, `ACTIVE_ISSUES.md`, and the active surface
+`audit/prior-audits/parity-implementation-matrix.md`, `ACTIVE_ISSUES.md`, and the active surface
 release audit.
 
 ## Precedence

@@ -12,7 +12,7 @@
     "docs/product/definition.md",
     "docs/product/requirements.md",
     "docs/product/competitive-guidance.md",
-    "docs/work/implementation-status.md",
+    "audit/prior-audits/parity-implementation-matrix.md",
     "docs/product/experience-contract.md",
     "docs/architecture/byok-provider-strategy.md",
     "docs/architecture/provider-routing.md",

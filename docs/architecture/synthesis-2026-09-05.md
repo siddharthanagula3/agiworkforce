@@ -8,7 +8,7 @@ This document preserves the September 5 synthesis. Current product status,
 surface sequencing, continuity domains, Desktop scope, and commercial gates
 come from `docs/product/definition.md`, `docs/architecture/overview.md`,
 `docs/architecture/trust-boundaries.md`, `docs/product/commercial.md`, and
-`docs/work/implementation-status.md`. Re-verify any implementation claim below
+`audit/prior-audits/parity-implementation-matrix.md`. Re-verify any implementation claim below
 against current code before acting on it.
 
 What the three Stage 1 documents say when read together, and the risk maps
@@ -17,8 +17,8 @@ the founder asked for. Inputs, each verified today: the system map
 (`docs/research/market-current-state-2026-09-05.md`), the unit economics
 model (`docs/research/unit-economics-2026-09-05.md` and
 `scripts/research/unit-economics-2026-09-05.mjs`), the P0 capability
-classification (`docs/research/p0-capability-classification-2026-09-05.md`),
-the ship readiness audit (`docs/research/surface-ship-readiness-2026-09-05.md`)
+classification (`audit/prior-audits/p0-capability-classification-2026-09-05.md`),
+the ship readiness audit (`audit/prior-audits/surface-ship-readiness-2026-09-05.md`)
 and the lead's own walkthrough of both leaders, held outside the repository.
 Model families and routing tiers only; no model ids or display names.
 

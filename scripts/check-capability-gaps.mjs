@@ -5,7 +5,7 @@ import process from 'node:process';
 import { parseCsv } from './ui-gaps-lib.mjs';
 
 const root = process.cwd();
-const csvPath = path.join(root, 'audit/capability-gaps.csv');
+const csvPath = path.join(root, 'audit/registers/capability-gaps.csv');
 const expectedColumns = [
   'id',
   'concept',
@@ -50,13 +50,13 @@ function fail(errors) {
   process.exit(1);
 }
 
-if (!fs.existsSync(csvPath)) fail(['audit/capability-gaps.csv is missing']);
+if (!fs.existsSync(csvPath)) fail(['audit/registers/capability-gaps.csv is missing']);
 
 let parsed;
 try {
   parsed = parseCsv(fs.readFileSync(csvPath, 'utf8'));
 } catch (error) {
-  fail([`audit/capability-gaps.csv is invalid: ${error.message}`]);
+  fail([`audit/registers/capability-gaps.csv is invalid: ${error.message}`]);
 }
 
 const errors = [];

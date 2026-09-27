@@ -13,7 +13,7 @@ Current sources of truth:
 
 - `docs/product/definition.md` - single product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
 - `docs/product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
-- `docs/work/implementation-status.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+- `audit/prior-audits/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
 - `docs/architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and developer-surface model-selector rules.
 - `docs/product/suite.md` - product thesis, surfaces, trust modes, and sync boundary.
 - `docs/architecture/overview.md` - monorepo shape, runtime boundaries, provider strategy, generated files, and enterprise control plane.
@@ -89,8 +89,8 @@ Archived source material:
 17. The cloud foundation is Clerk for managed identity and Neon for Postgres. The migration off Supabase is complete: no `@supabase`/Supabase client usage remains in app/package/service code, there is no root `supabase/` directory, and the canonical migrations live in `apps/web/db/neon`. Do not reintroduce Supabase or switch providers by docs-only claims. (Updated 2026-06-27: superseded the prior "production stays on Supabase until verified" wording, which was stale.)
     Evidence: `packages/platform/data-layer/src/adapters/clerk.ts`, `packages/platform/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `apps/web/.env.example`.
 
-18. `docs/product/definition.md` is the first product read for agents and humans, and `docs/work/implementation-status.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, removed corpora retrievable only from git history (`tasks/**`, `reports/**`, `docs/archive/**`), and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
-    Evidence: `docs/product/definition.md`, `docs/work/implementation-status.md`, `docs/README.md`, `docs/agent-context/doc-status.json`.
+18. `docs/product/definition.md` is the first product read for agents and humans, and `audit/prior-audits/parity-implementation-matrix.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, removed corpora retrievable only from git history (`tasks/**`, `reports/**`, `docs/archive/**`), and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
+    Evidence: `docs/product/definition.md`, `audit/prior-audits/parity-implementation-matrix.md`, `docs/README.md`, `docs/agent-context/doc-status.json`.
 
 19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/architecture/byok-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and developer-surface model-selector grouping. The public Electron Desktop accepts no provider key.
     Evidence: `docs/architecture/byok-provider-strategy.md`, `packages/contracts/types/src/models.json`, `docs/architecture/provider-routing.md`.
@@ -127,7 +127,7 @@ Archived source material:
     Evidence: `docs/product/definition.md` (billing plan table), `packages/contracts/types/src/billing-catalog.ts`, `apps/web/lib/pricing.ts` (the originally cited tier-metering plan, unit-economics doc, and products README were retired in `906fe5cda`; git history only. Team $25/$240 confirmed by founder 2026-08-05). Sonnet 5 retirement: `packages/ai/model-registry/catalog/models.curation.json` (the Anthropic default-model entry's costOverride field), `packages/ai/model-registry/tests/catalog-policy.test.mjs`.
 
 23. Routing thesis (founder, 2026-08-05): Different model, provider, reasoning-effort, tool-harness, and deployment configurations occupy different points on the quality–cost–latency frontier. AGI Workforce selects and governs the cheapest configuration that meets a measurable task-specific quality threshold. Implementation contract: routing selects an ExecutionPlan (model snapshot, provider endpoint, reasoning effort, service tier, execution location, harness version, cache policy, verifier, fallback policy, budget, approval policy), never a bare model name; quality thresholds are task-family-specific and measured (CPST plus the eval corpus, per the design doc); hard constraints, trust mode, capability, tier entitlement, latency lane, tenant policy, filter candidates before any cost ranking; auto-routing stays explicit and explainable per Decision #10.
-    Evidence: `docs/architecture/execution-plan-contract.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `docs/work/implementation-status.md` (2026-08-05 founder decisions section).
+    Evidence: `docs/architecture/execution-plan-contract.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `audit/prior-audits/parity-implementation-matrix.md` (2026-08-05 founder decisions section).
 
 24. Ecosystem continuity (founder clarification 2026-09-21): one account and
     one effective entitlement span all six surfaces. Web, Mobile Cloud, Desktop
@@ -186,7 +186,7 @@ Archived source material:
     Evidence: `apps/web/e2e/chat-live-latency.spec.ts`,
     `apps/web/lib/client/chat-latency.ts`,
     `apps/web/app/api/llm/v1/chat/completions/route.ts` and WEB-053 in
-    `WEB_PUBLIC_RELEASE_AUDIT.md`.
+    `audit/prior-audits/web-public-release-audit.md`.
 
 28. Plain managed chat gives the durable workflow 500 ms to produce its first
     event. If that opening budget expires, the route cancels the durable start
@@ -204,7 +204,7 @@ Archived source material:
     `apps/web/app/api/llm/v1/chat/completions/lib/sse-heartbeat.ts`,
     `apps/web/lib/client/frame-coalesced-appender.ts`,
     `apps/web/e2e/chat-live-latency.spec.ts` and WEB-100 to WEB-102 in
-    `WEB_PUBLIC_RELEASE_AUDIT.md`.
+    `audit/prior-audits/web-public-release-audit.md`.
 
 ## Outdated Or Historical
 

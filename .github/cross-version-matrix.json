@@ -1,6 +1,6 @@
 {
-  "description": "Every §109 cross-version pair in docs/work/enterprise-master-build-checklist-2026-09-16.md, and for each one either the test CI runs or the reason no test can exist yet. scripts/check-cross-version-matrix.mjs fails when a pair is missing, when a covered pair names a test file that is not there, or when a blocked pair does not name what would unblock it. A pair may never be both.",
-  "checklist": "docs/work/enterprise-master-build-checklist-2026-09-16.md",
+  "description": "Every §109 cross-version pair in audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md, and for each one either the test CI runs or the reason no test can exist yet. scripts/check-cross-version-matrix.mjs fails when a pair is missing, when a covered pair names a test file that is not there, or when a blocked pair does not name what would unblock it. A pair may never be both.",
+  "checklist": "audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md",
   "workflow": ".github/workflows/cross-version-compatibility.yml",
   "releases": {
     "cli": {

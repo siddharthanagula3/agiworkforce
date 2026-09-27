@@ -5,7 +5,7 @@ import path from 'node:path';
 import process from 'node:process';
 
 const root = process.cwd();
-const inventoryPath = path.join(root, 'audit/inventory.json');
+const inventoryPath = path.join(root, 'audit/registers/code-reachability-inventory.json');
 const validStatuses = ['built', 'partial', 'stub', 'unwired', 'broken', 'missing', 'unclear'];
 const baselineTally = {
   built: 390,

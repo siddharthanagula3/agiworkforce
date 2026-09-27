@@ -10,10 +10,16 @@
       "reason": "Agent and repo-operability contracts consumed by guard scripts and coding agents."
     },
     {
-      "path": "audit/inventory.json",
+      "path": "audit/registers/code-reachability-inventory.json",
       "status": "machine-contract",
       "owner": "Platform and product integration",
       "reason": "The identity-pinned 654-item product integration ledger is validated by CI via pnpm check:audit-inventory."
+    },
+    {
+      "path": "audit/ledger/**",
+      "status": "machine-contract",
+      "owner": "Repository maintainers",
+      "reason": "Per-item, per-surface capability ledger from the 2026-09-26 code audit; scripts/audit-worklist.mjs renders audit/missing, audit/partial and audit/live-check from it, and check:audit-worklist fails when they drift."
     },
     {
       "path": ".agents/skills/**",
@@ -46,7 +52,7 @@
       "reason": "Console screenshots cited by path from the provider free-value matrix, a decision document pending founder sign-off; delete with the addendum that cites them once the decision closes."
     },
     {
-      "path": "docs/research/evidence/frontend-ui-audit-2026-09-01/**",
+      "path": "audit/prior-audits/evidence/frontend-ui-audit-2026-09-01/**",
       "status": "live-evidence",
       "owner": "Repository maintainers",
       "reason": "Screenshot corpus from the 2026-09-01 live parity audit, referenced by the frontend transition workstream; superseded and deletable once the post-transition browser re-measure is appended to docs/research/leader-ui-measurements-2026-09-04.md."

@@ -9,7 +9,7 @@ It is the durable product spec for humans and coding agents when the compact
 source-of-truth docs are not enough. Use it with:
 
 - `docs/product/definition.md` for the compact product lock.
-- `docs/work/implementation-status.md` for feature-by-feature parity status.
+- `audit/prior-audits/parity-implementation-matrix.md` for feature-by-feature parity status.
 - `docs/architecture/byok-provider-strategy.md` for provider and model routing.
 - `docs/decisions/README.md` for conflict resolution.
 
@@ -1762,7 +1762,7 @@ When adding or changing requirements:
 
 1. Update this PRD.
 2. Update `docs/product/definition.md` if the compact product lock changes.
-3. Update `docs/work/implementation-status.md` if feature status or
+3. Update `audit/prior-audits/parity-implementation-matrix.md` if feature status or
    parity requirements change.
 4. Update `docs/decisions/README.md` if a conflict is resolved or a
    new lock is created.

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const LEDGER = 'docs/work/implementation-status.md';
+const LEDGER = 'audit/prior-audits/parity-implementation-matrix.md';
 const MARKER = /hard\s+precondition/gi;
 const CITED_PATH = /`([A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+)`/g;
 

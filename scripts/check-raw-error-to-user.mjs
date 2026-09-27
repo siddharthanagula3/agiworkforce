@@ -13,7 +13,7 @@ const ROOTS = [
   'apps/web/app',
   'packages/ui',
 ];
-const BASELINE_PATH = 'audit/raw-error-to-user.json';
+const BASELINE_PATH = 'audit/baselines/raw-error-to-user.json';
 
 function sourceFiles(dir) {
   const abs = path.join(root, dir);

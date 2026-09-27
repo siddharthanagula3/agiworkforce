@@ -34,7 +34,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:970cfbd852bb4002083ac0d2e03d115f87599163f2868e74a2543a16479fe10b"
+      "computedHash": "sha256-tree-v1:40f970f76c6d2d11a652be6fe873dfaf509e035c6563931cf600be1a6369b5ba"
     },
     "ai-seo": {
       "path": ".agents/skills/ai-seo",

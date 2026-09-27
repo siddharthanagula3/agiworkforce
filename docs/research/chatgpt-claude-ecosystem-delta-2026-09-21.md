@@ -12,7 +12,7 @@ copying branding, layouts, wording, assets, or private implementation.
 
 When an older research snapshot conflicts with this document about current
 competitor behavior, this document wins. Repository implementation status still
-comes from code, tests, and `docs/work/implementation-status.md`, not from this
+comes from code, tests, and `audit/prior-audits/parity-implementation-matrix.md`, not from this
 market record.
 
 ## Executive Result

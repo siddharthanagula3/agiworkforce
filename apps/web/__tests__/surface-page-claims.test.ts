@@ -308,7 +308,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       'docs/architecture/desktop.md',
       'docs/architecture/overview.md',
       'docs/architecture/execution-plan-contract.md',
-      'docs/work/implementation-status.md',
+      'audit/prior-audits/parity-implementation-matrix.md',
     ]
       .map((path) => repoText(...path.split('/')).replace(/\s+/gu, ' '))
       .join('\n');

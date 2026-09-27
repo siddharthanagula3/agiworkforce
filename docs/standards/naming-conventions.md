@@ -60,7 +60,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.
-- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28, do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/capability-gaps.csv`.)
+- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28, do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/registers/capability-gaps.csv`.)
 
 ## Directory Names
 

@@ -624,7 +624,7 @@ This table preserves the implementation snapshot and its August corrections.
 Its standalone Cowork terminology is historical. As of the 2026-09-21 product
 contract, AGI targets direct chat and durable work in one product home, not a
 separate competitor-named surface. Current status comes from
-`docs/work/implementation-status.md` and executable evidence.
+`audit/prior-audits/parity-implementation-matrix.md` and executable evidence.
 
 | Capability                                  | Web            | Desktop                                                  | Mobile                   | CLI                    | VS Code                | Chrome                                   |
 | ------------------------------------------- | -------------- | -------------------------------------------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------------------------- |
@@ -644,7 +644,7 @@ This table is not a release claim. `packages/ai/model-registry/catalog/harnesses
 
 CORRECTED 2026-08-09 (four cells the 2026-07-16 snapshot got wrong or that later
 work superseded; mirrors the same corrections in
-`docs/work/implementation-status.md`):
+`audit/prior-audits/parity-implementation-matrix.md`):
 
 - The single "Work/run: Missing/Missing/Missing" row conflated two
   capabilities and is split, matching the parity matrix's 2026-08-06 split.
@@ -757,7 +757,7 @@ A frontend capability is complete only when:
 Defined 2026-09-06 for the web workflow audit requested by the founder. These
 are completion targets, not claims about deployed behavior. Current evidence
 and remaining work are recorded in
-[the web audit](../work/implementation-status.md#web-workflow-audit-2026-09-06).
+[the web audit](../../audit/prior-audits/parity-implementation-matrix.md#web-workflow-audit-2026-09-06).
 Existing executable policy, catalog limits, permissions, and trust boundaries
 remain authoritative; this checklist does not introduce new entitlements.
 
@@ -807,7 +807,7 @@ recorded before comparing outputs, so the standard cannot move after a result.
 ## 17. Evidence
 
 - `docs/research/competitor-capability-session-architecture-2026-07-15.md`
-- `docs/work/implementation-status.md`
+- `audit/prior-audits/parity-implementation-matrix.md`
 - `docs/architecture/trust-boundaries.md`
 - `docs/agent-context/known-flaws.md`
 - `packages/ai/model-registry/catalog/harnesses.json`

@@ -6,7 +6,7 @@ Last updated: 2026-09-21
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
-For feature-by-feature, option-by-option implementation detail, use `docs/work/implementation-status.md`.
+For feature-by-feature, option-by-option implementation detail, use `audit/prior-audits/parity-implementation-matrix.md`.
 
 For BYOK providers, hosted open-model APIs, open-weight model priorities, and developer-surface model-selector rules, use `docs/architecture/byok-provider-strategy.md`.
 
@@ -491,7 +491,7 @@ Agents should read current truth in this order:
 1. `AGENTS.md`
 2. `docs/product/definition.md`
 3. `docs/product/requirements.md` for product/UX/surface release requirements
-4. `docs/work/implementation-status.md`
+4. `audit/prior-audits/parity-implementation-matrix.md`
 5. `docs/architecture/byok-provider-strategy.md` when touching model/provider/BYOK work
 6. `docs/agent-context/repo-map.json`
 7. `docs/agent-context/known-flaws.md`
@@ -513,8 +513,8 @@ Treat these as evidence or working notes, not source of truth:
 (The former `tasks/**`, `reports/**`, and `docs/archive/**` directories were
 removed repo-wide on 2026-06-28, do not cite them as existing. `audit/` was
 removed then too but has since been reintroduced and is live again: it is the
-current triage queue, and `audit/capability-gaps.csv` is cited as the source of
-truth by `docs/work/implementation-status.md`. Cite it, but treat its
+current triage queue, and `audit/registers/capability-gaps.csv` is cited as the source of
+truth by `audit/prior-audits/parity-implementation-matrix.md`. Cite it, but treat its
 contents as a queue of claims to verify in code, never as evidence that work is
 done.)
 

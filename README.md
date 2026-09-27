@@ -338,7 +338,7 @@ vulnerability privately through GitHub's advisory flow: [`SECURITY.md`](SECURITY
 **Active development, pre-v1.0 MVP.** The long-form surface order lives in
 [`docs/product/requirements.md`](docs/product/requirements.md); day-to-day
 sequencing follows the ordered release gate in
-[`docs/work/implementation-status.md`](docs/work/implementation-status.md),
+[`audit/prior-audits/parity-implementation-matrix.md`](audit/prior-audits/parity-implementation-matrix.md),
 tracked per capability, row by row. Managed Cloud is in public alpha and open
 by default (founder decision, 2026-06-27); metering and abuse controls must
 keep pace with public usage, but no longer gate access.
