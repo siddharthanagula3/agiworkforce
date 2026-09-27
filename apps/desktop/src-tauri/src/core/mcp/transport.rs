@@ -1,136 +1,68 @@
 use super::logs::append_server_log;
+use super::oauth::{DesktopBrowser, DesktopTokenStore};
 use super::protocol::{JsonRpcResponse, RequestId};
 use crate::core::mcp::{McpError, McpResult};
+use agiworkforce_mcp::{McpNotification, NegotiatedServer};
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
-/// Default timeout for HTTP requests (30 seconds)
 const HTTP_REQUEST_TIMEOUT_SECS: u64 = 30;
 
-/// Default timeout for stdio JSON-RPC request/response round-trips
 const STDIO_REQUEST_TIMEOUT_SECS: u64 = 120;
 
-/// Default timeout for SSE stream idle reads (seconds).
-/// If no SSE chunk arrives within this window, the stream is considered stalled.
 const SSE_STREAM_IDLE_TIMEOUT_SECS: u64 = 60;
 
-/// Trait defining the interface for MCP transports
+const STDIO_LIVENESS_POLL_SECS: u64 = 5;
+
 #[async_trait]
 pub trait McpTransport: Send + Sync {
-    /// Send a JSON-RPC request and wait for a response
     async fn send_request(
         &self,
         method: String,
         params: Option<serde_json::Value>,
     ) -> McpResult<JsonRpcResponse>;
 
-    /// Send a JSON-RPC notification (no response expected)
-    fn send_notification(&self, method: String, params: Option<serde_json::Value>);
-
-    /// Check if the transport connection is alive
     fn is_alive(&self) -> bool;
 
-    /// Shutdown the transport connection
     async fn shutdown(&self) -> McpResult<()>;
 }
 
-// ============================================================================
-// STDIO Transport Implementation
-// ============================================================================
+type Notifications = parking_lot::Mutex<Option<mpsc::Receiver<McpNotification>>>;
 
-/// Interval for the stdio liveness snapshot + stderr drain in the engine actor.
-const STDIO_LIVENESS_POLL_SECS: u64 = 5;
-
-/// stdio MCP transport, a thin facade over the shared
-/// [`agiworkforce_mcp::McpClient`] engine (Wave 5 stage d2 of
-/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
-///
-/// The engine owns the child process, JSON-RPC framing, id correlation, and
-/// per-request timeouts. Desktop-side POLICY stays here in [`StdioTransport::new`]:
-/// the executor allowlist + metachar validation, PATH augmentation/resolution
-/// for Finder-launched apps, and the canonical env blocklist filter.
-///
-/// A background actor task exclusively owns the engine client; the
-/// [`McpTransport`] methods talk to it over a FIFO command channel, which
-/// preserves the notification/request ordering guarantees of the old
-/// writer-task design (`notifications/initialized` is written before any
-/// later request). Requests are serialized through the engine (the old
-/// transport could interleave concurrent requests, but no production caller
-/// issues concurrent RPCs on one session, verified during the d2 swap).
-///
-/// The engine's connection is host-handshake-driven
-/// ([`agiworkforce_mcp::McpClient::connect_without_handshake`]): `McpSession`
-/// keeps building the exact `initialize` wire frames (protocolVersion
-/// 2025-11-25, desktop clientInfo) it always sent.
 pub struct StdioTransport {
-    /// FIFO command channel into the engine actor.
     tx: mpsc::UnboundedSender<EngineCommand>,
-
-    /// Liveness snapshot maintained by the actor (child `try_wait` poll every
-    /// [`STDIO_LIVENESS_POLL_SECS`], plus refresh on request errors).
     alive: Arc<AtomicBool>,
-
-    /// Set by [`McpTransport::shutdown`]; rejects new requests immediately.
     is_shutdown: Arc<AtomicBool>,
-
-    /// Wakes the actor out of an in-flight request when shutdown is requested,
-    /// so the child is killed promptly (the old transport killed on shutdown
-    /// without waiting for in-flight requests).
     shutdown_signal: Arc<tokio::sync::Notify>,
+    negotiated: NegotiatedServer,
+    notifications: Notifications,
 }
 
-/// Commands processed by the engine actor. FIFO order is the ordering contract.
 enum EngineCommand {
     Request {
         method: String,
         params: Option<serde_json::Value>,
         reply: oneshot::Sender<McpResult<JsonRpcResponse>>,
     },
-    Notify {
-        method: String,
-        params: Option<serde_json::Value>,
-    },
     Shutdown {
         reply: oneshot::Sender<()>,
     },
 }
 
-/// Map an engine error onto the desktop error taxonomy. JSON-RPC error frames
-/// surface from the engine as "MCP error {code}: {message}" (the same server
-/// error the old transport mapped to [`McpError::RmcpError`]); everything else
-/// (I/O, timeout, closed pipe) was a [`McpError::ConnectionError`] before and
-/// stays one.
 fn map_engine_error(e: agiworkforce_mcp::McpError) -> McpError {
     let msg = format!("{:#}", e.as_anyhow());
-    if msg.contains("MCP error ") {
-        // A server that speaks only the 2026-07-28 stateless revision rejects
-        // our legacy `initialize` with -32022 and, per spec, names the
-        // revisions it does support. That message exists precisely because a
-        // legacy client cannot fall forward, it may be the only diagnostic the
-        // user ever gets, so it is worth classifying rather than folding into
-        // the generic server-error bucket where it reads as a transient fault.
-        //
-        // Matched on the rendered code because the engine flattens JSON-RPC
-        // error frames to a string before this point; the structured
-        // `data.supported` list does not survive that conversion, so the
-        // versions reach the user only as part of the message text.
-        if msg.contains(&format!(
-            "MCP error {}",
-            crate::core::mcp::protocol::UNSUPPORTED_PROTOCOL_VERSION_CODE
-        )) {
-            return McpError::UnsupportedProtocolVersion(msg);
-        }
+    if e.is_unsupported_protocol_version() {
+        McpError::UnsupportedProtocolVersion(msg)
+    } else if e.rpc_error().is_some() {
         McpError::RmcpError(msg)
     } else {
         McpError::ConnectionError(msg)
     }
 }
 
-/// Drain buffered child stderr lines into the desktop per-server log store.
-/// the same `[stderr]`-prefixed stream the old dedicated stderr task produced.
 fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) {
     for line in client.drain_stderr() {
         tracing::debug!("[MCP Server stderr] {}", line);
@@ -138,20 +70,23 @@ fn drain_engine_stderr(server_name: &str, client: &agiworkforce_mcp::McpClient) 
     }
 }
 
-/// Host hooks handed to the shared engine, common to both desktop transports.
-/// Elicitation auto-declines (desktop's transport never surfaced
-/// server-initiated requests), the browser gate denies (no OAuth on these
-/// paths, desktop resolves credentials app-side), and engine lifecycle logs
-/// route to tracing.
-fn engine_hooks(server_name: &str) -> agiworkforce_mcp::ClientHooks {
+fn client_metadata_document_url() -> Option<String> {
+    agiworkforce_mcp::oauth::client_metadata_document_url(
+        &crate::sys::account::get_api_base_url(),
+        "desktop",
+    )
+}
+
+fn engine_hooks(server_name: &str, interactive: bool) -> agiworkforce_mcp::ClientHooks {
     agiworkforce_mcp::ClientHooks {
-        token_store: Arc::new(agiworkforce_mcp::hooks::InMemoryTokenStore::new()),
+        token_store: Arc::new(DesktopTokenStore),
         elicitation: Arc::new(agiworkforce_mcp::AutoDeclineHandler),
-        browser: Arc::new(agiworkforce_mcp::hooks::DenyBrowserAuthorizer),
+        browser: Arc::new(DesktopBrowser { interactive }),
         client_info: agiworkforce_mcp::ClientInfo {
             name: "AGI Workforce".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
+        client_metadata_url: client_metadata_document_url(),
         on_log: {
             let name = server_name.to_string();
             Arc::new(move |msg: &str| {
@@ -161,10 +96,6 @@ fn engine_hooks(server_name: &str) -> agiworkforce_mcp::ClientHooks {
     }
 }
 
-/// The engine actor shared by both transports: exclusively owns the engine
-/// client, processes commands in FIFO order, keeps the liveness snapshot
-/// fresh, and streams child stderr into the per-server log store (stdio only.
-/// remote transports have no stderr).
 #[allow(clippy::too_many_arguments)]
 fn spawn_engine_actor(
     server_name: String,
@@ -199,7 +130,6 @@ fn spawn_engine_actor(
                                 result = &mut request => Some(result),
                                 _ = shutdown_signal.notified() => None,
                             }
-                            // `request` (and its &mut client borrow) drops here.
                         };
 
                         match outcome {
@@ -225,9 +155,6 @@ fn spawn_engine_actor(
                                 let _ = reply.send(mapped);
                             }
                             None => {
-                                // Shutdown requested mid-request: abandon it and
-                                // tear the engine down promptly (the old transports
-                                // killed/dropped on shutdown without waiting).
                                 let _ = reply.send(Err(McpError::ConnectionError(
                                     "Transport shutting down".to_string(),
                                 )));
@@ -238,16 +165,6 @@ fn spawn_engine_actor(
                             }
                         }
                     }
-                    Some(EngineCommand::Notify { method, params }) => {
-                        if let Err(e) = client.notify(&method, params).await {
-                            tracing::warn!(
-                                "[MCP Transport] Notification '{}' failed: {:#}",
-                                method,
-                                e.as_anyhow()
-                            );
-                        }
-                        drain_engine_stderr(&server_name, &client);
-                    }
                     Some(EngineCommand::Shutdown { reply }) => {
                         let _ = client.shutdown().await;
                         drain_engine_stderr(&server_name, &client);
@@ -256,8 +173,6 @@ fn spawn_engine_actor(
                         break;
                     }
                     None => {
-                        // Transport dropped without shutdown(): tear down the
-                        // engine so no child process / stream is leaked.
                         let _ = client.shutdown().await;
                         alive.store(false, Ordering::SeqCst);
                         break;
@@ -272,6 +187,49 @@ fn spawn_engine_actor(
 
         tracing::info!("[MCP Transport] Engine actor for '{}' stopped", server_name);
     });
+}
+
+async fn send_engine_request(
+    tx: &mpsc::UnboundedSender<EngineCommand>,
+    method: String,
+    params: Option<serde_json::Value>,
+    timeout: std::time::Duration,
+) -> Option<McpResult<JsonRpcResponse>> {
+    let (reply_tx, reply_rx) = oneshot::channel();
+    if tx
+        .send(EngineCommand::Request {
+            method,
+            params,
+            reply: reply_tx,
+        })
+        .is_err()
+    {
+        return Some(Err(McpError::ConnectionError(
+            "Failed to send request: channel closed".to_string(),
+        )));
+    }
+    match tokio::time::timeout(timeout, reply_rx).await {
+        Ok(Ok(result)) => Some(result),
+        Ok(Err(_)) => Some(Err(McpError::ConnectionError(
+            "Response channel closed".to_string(),
+        ))),
+        Err(_) => None,
+    }
+}
+
+async fn shutdown_engine(
+    tx: &mpsc::UnboundedSender<EngineCommand>,
+    is_shutdown: &AtomicBool,
+    shutdown_signal: &tokio::sync::Notify,
+    alive: &AtomicBool,
+) {
+    is_shutdown.store(true, Ordering::SeqCst);
+    shutdown_signal.notify_waiters();
+    let (reply_tx, reply_rx) = oneshot::channel();
+    if tx.send(EngineCommand::Shutdown { reply: reply_tx }).is_ok() {
+        let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), reply_rx).await;
+    }
+    alive.store(false, Ordering::SeqCst);
 }
 
 /// Build an augmented PATH string that includes common Node.js install locations.
@@ -541,10 +499,8 @@ impl StdioTransport {
         args: &[String],
         env: &HashMap<String, String>,
     ) -> McpResult<Self> {
-        // Validate the command against the allowlist before spawning
         validate_mcp_command(command)?;
 
-        // Validate each arg for shell metacharacters
         for arg in args {
             if arg
                 .chars()
@@ -564,9 +520,6 @@ impl StdioTransport {
             args
         );
 
-        // Build augmented PATH using the shared helper, then merge any user-supplied
-        // PATH from `env` so it is appended rather than silently replacing ours.
-        // Use the platform-appropriate PATH separator (`;` on Windows, `:` elsewhere).
         let augmented_path = build_augmented_path();
         let final_path = if let Some(user_path) = env.get("PATH") {
             format!("{}{}{}", augmented_path, path_separator(), user_path)
@@ -574,33 +527,11 @@ impl StdioTransport {
             augmented_path
         };
 
-        // SECURITY: Blocklist approach for env vars passed to MCP child processes.
-        // We use a blocklist (not allowlist) because MCP servers legitimately need most of
-        // the parent environment (PATH, HOME, LANG, etc.) to function. An allowlist would
-        // break too many servers. Instead we deny specific variables that enable:
-        //   - Shared library injection (LD_PRELOAD, DYLD_INSERT_LIBRARIES, etc.)
-        //   - Runtime code injection via language-specific hooks (NODE_OPTIONS, PYTHONSTARTUP, etc.)
-        //   - Shell startup injection (BASH_ENV, ENV, ZDOTDIR)
-        //   - Information disclosure in debug builds (NODE_DEBUG, RUST_LOG)
-        //   - Electron/Node.js sandbox escapes (ELECTRON_RUN_AS_NODE)
-        // BATCH-5 (audit 2026-05-19): the inline `BLOCKED_ENV_VARS` constant
-        // formerly lived here. It moved to `crate::sys::security::env_filter`
-        // so this site, `sys/commands/code_execution`, and `core/agi/sandbox`
-        // all consume the same canonical list (strict superset of the prior
-        // three lists).
-        let filtered_env: std::collections::HashMap<String, String> = env
+        let mut engine_env: HashMap<String, String> = env
             .iter()
             .filter(|(key, _)| !crate::sys::security::env_filter::is_blocked_env_var(key))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-
-        // Hand the spawn + JSON-RPC mechanics to the shared engine. The engine's
-        // stdio spawn is env_clear + safe-parent-allowlist + manifest env (with
-        // its own loader-injection blocklist on top of ours), so the child gets
-        // a same-or-stricter environment than before. The augmented PATH is
-        // passed through the manifest env so command discovery behavior
-        // (Finder-launched apps) is preserved exactly.
-        let mut engine_env = filtered_env;
         engine_env.insert("PATH".to_string(), final_path);
 
         let engine_config = agiworkforce_mcp::TransportConfig::Stdio {
@@ -608,27 +539,18 @@ impl StdioTransport {
             args: args.to_vec(),
             env: engine_env,
         };
-        // Elicitation note: desktop's elicitation UI plumbing is not wired to
-        // the transport today (the old read loop ignored server-initiated
-        // requests); the engine's auto-decline handler answers
-        // `elicitation/create` with a decline instead of leaving the server
-        // hanging.
-        let hooks = engine_hooks(&server_name);
-
-        // No handshake here: McpSession drives its own `initialize` (protocol
-        // version 2025-11-25, desktop clientInfo) through send_request, exactly
-        // as it did against the old transport.
-        let client = agiworkforce_mcp::McpClient::connect_without_handshake(
+        let mut client = agiworkforce_mcp::McpClient::connect(
             &server_name,
             engine_config,
             agiworkforce_mcp::McpTimeouts::default(),
-            hooks,
+            engine_hooks(&server_name, false),
         )
         .await
         .map_err(map_engine_error)?;
+        let negotiated = client.server().clone();
+        let notifications = parking_lot::Mutex::new(client.notifications());
 
         let (tx, rx) = mpsc::unbounded_channel::<EngineCommand>();
-        let response_seq = Arc::new(AtomicU64::new(1));
         let alive = Arc::new(AtomicBool::new(true));
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_signal = Arc::new(tokio::sync::Notify::new());
@@ -637,7 +559,7 @@ impl StdioTransport {
             server_name,
             client,
             rx,
-            response_seq,
+            Arc::new(AtomicU64::new(1)),
             alive.clone(),
             is_shutdown.clone(),
             shutdown_signal.clone(),
@@ -649,6 +571,8 @@ impl StdioTransport {
             alive,
             is_shutdown,
             shutdown_signal,
+            negotiated,
+            notifications,
         })
     }
 }
@@ -660,59 +584,20 @@ impl McpTransport for StdioTransport {
         method: String,
         params: Option<serde_json::Value>,
     ) -> McpResult<JsonRpcResponse> {
-        tracing::debug!("[MCP Transport] send_request called: method={}", method);
-
-        // Check if transport is shutdown
         if self.is_shutdown.load(Ordering::SeqCst) {
-            tracing::error!(
-                "[MCP Transport] Transport is shutdown, rejecting request: {}",
-                method
-            );
             return Err(McpError::ConnectionError(
                 "Transport is shutdown".to_string(),
             ));
         }
-
-        let (reply_tx, reply_rx) = oneshot::channel();
-        self.tx
-            .send(EngineCommand::Request {
-                method,
-                params,
-                reply: reply_tx,
+        let timeout = std::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS);
+        send_engine_request(&self.tx, method, params, timeout)
+            .await
+            .unwrap_or_else(|| {
+                Err(McpError::ConnectionError(format!(
+                    "Request timeout after {} seconds",
+                    STDIO_REQUEST_TIMEOUT_SECS
+                )))
             })
-            .map_err(|_| {
-                McpError::ConnectionError("Failed to send request: channel closed".to_string())
-            })?;
-
-        // The engine enforces the same per-request timeout internally; this
-        // outer bound also caps time spent queued behind an in-flight request.
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(STDIO_REQUEST_TIMEOUT_SECS),
-            reply_rx,
-        )
-        .await
-        {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(McpError::ConnectionError(
-                "Response channel closed".to_string(),
-            )),
-            Err(_) => Err(McpError::ConnectionError(format!(
-                "Request timeout after {} seconds",
-                STDIO_REQUEST_TIMEOUT_SECS
-            ))),
-        }
-    }
-
-    fn send_notification(&self, method: String, params: Option<serde_json::Value>) {
-        if self.is_shutdown.load(Ordering::SeqCst) {
-            return;
-        }
-        // FIFO with requests through the actor channel, so lifecycle
-        // notifications keep their ordering guarantees (e.g.
-        // `notifications/initialized` is written before any later request).
-        // The engine serializes notifications without an `id` member per the
-        // JSON-RPC 2.0 spec (BUG 1 FIX preserved).
-        let _ = self.tx.send(EngineCommand::Notify { method, params });
     }
 
     fn is_alive(&self) -> bool {
@@ -721,50 +606,24 @@ impl McpTransport for StdioTransport {
 
     async fn shutdown(&self) -> McpResult<()> {
         tracing::info!("[MCP Transport] Shutting down");
-        self.is_shutdown.store(true, Ordering::SeqCst);
-
-        // Wake the actor out of any in-flight request so the child is killed
-        // promptly, then ask it to shut the engine down (SIGTERM, then SIGKILL).
-        self.shutdown_signal.notify_waiters();
-        let (reply_tx, reply_rx) = oneshot::channel();
-        if self
-            .tx
-            .send(EngineCommand::Shutdown { reply: reply_tx })
-            .is_ok()
-        {
-            // Bounded wait: if the actor already exited via the shutdown signal,
-            // the reply sender is dropped and this returns immediately.
-            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), reply_rx).await;
-        }
-        self.alive.store(false, Ordering::SeqCst);
-
+        shutdown_engine(
+            &self.tx,
+            &self.is_shutdown,
+            &self.shutdown_signal,
+            &self.alive,
+        )
+        .await;
         Ok(())
     }
 }
 
-// ============================================================================
-// HTTP/SSE Transport Implementation
-// ============================================================================
-
-/// Configuration for HTTP/SSE transport
 #[derive(Debug, Clone)]
 pub struct HttpSseConfig {
-    /// Base URL of the MCP server (e.g., "http://localhost:8080")
     pub url: String,
-
-    /// Optional API key for authentication
     pub api_key: Option<String>,
-
-    /// Optional bearer token for authentication
     pub bearer_token: Option<String>,
-
-    /// Custom headers to include in requests
     pub headers: HashMap<String, String>,
-
-    /// Request timeout in seconds
     pub timeout_secs: u64,
-
-    /// Whether to verify SSL certificates
     pub verify_ssl: bool,
 }
 
@@ -781,79 +640,27 @@ impl Default for HttpSseConfig {
     }
 }
 
-/// Connect timeout for SSE long-lived connections (seconds).
-/// Separate from request timeout because SSE streams are open-ended.
 const SSE_CONNECT_TIMEOUT_SECS: u64 = 30;
 
-/// HTTP/SSE (legacy split-endpoint) MCP transport, a thin facade over the
-/// shared [`agiworkforce_mcp::McpClient`] engine speaking
-/// `TransportConfig::SseLegacy` (Wave 5 stage d2 of
-/// `docs/plans/rust-engine-extraction-2026-07-09.md`).
-///
-/// Wire convention (unchanged): outbound JSON-RPC goes via POST to
-/// `{url}/message`; a best-effort long-lived `GET {url}/sse` carries
-/// server-initiated frames, with reconnect (5 consecutive connect failures
-/// max, linear 1s backoff, attempts reset on success) and a 60s stalled-stream
-/// read timeout, all now inside the engine. Responses may arrive inline on
-/// the POST or via the SSE stream (dual delivery); the engine correlates both
-/// on the JSON-RPC id. This transport is legacy-convention only (it never
-/// spoke streamable-HTTP 2025-06-18; the engine's `Http` config is available
-/// when desktop adds that).
-///
-/// Desktop-side POLICY stays here in [`HttpSseTransport::new`]: SSRF URL
-/// validation + the 50 MB response cap + the 30s connect / 60s read timeouts
-/// (as engine hardening knobs), the SEV-DESK-07 `verify_ssl` policy (refused
-/// in release builds; debug builds localhost-only), the credential-over-
-/// cleartext refusal, and the api-key/bearer/custom header mapping with
-/// build-time validation.
-///
-/// Same actor model as [`StdioTransport`]: a background task exclusively owns
-/// the engine client behind a FIFO command channel.
+const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000;
+
 pub struct HttpSseTransport {
-    /// Server name for logging.
     server_name: String,
-
-    /// FIFO command channel into the engine actor.
     tx: mpsc::UnboundedSender<EngineCommand>,
-
-    /// Liveness snapshot maintained by the actor. Remote transports report
-    /// alive until shutdown (matching the old `!is_shutdown` semantics.
-    /// connection failures surface on the next request).
     alive: Arc<AtomicBool>,
-
-    /// Set by [`McpTransport::shutdown`]; rejects new requests immediately.
     is_shutdown: Arc<AtomicBool>,
-
-    /// Wakes the actor out of an in-flight request when shutdown is requested.
     shutdown_signal: Arc<tokio::sync::Notify>,
-
-    /// Per-request timeout (seconds), from [`HttpSseConfig::timeout_secs`].
     request_timeout_secs: u64,
+    negotiated: NegotiatedServer,
+    notifications: Notifications,
 }
 
-/// Maximum inline response body size accepted from a remote MCP server
-/// (Content-Length checked before the body is read). FIX R-10 preserved.
-const MAX_RESPONSE_BODY_BYTES: u64 = 50_000_000; // 50 MB
-
-/// Refuse a URL that would carry a caller-supplied header over a cleartext
-/// network hop. HTTPS is fine; so is loopback, where nothing leaves the host.
-///
-/// The scheme is read from the parser, never matched textually: URL schemes are
-/// case-insensitive, so `HTTP://host` connects exactly like `http://host` while
-/// slipping past any `starts_with("http://")` test. An unparseable URL fails
-/// closed.
 fn refuse_cleartext_credential_hop(url: &str) -> Result<(), String> {
     let parsed = url::Url::parse(url).map_err(|e| format!("invalid MCP server URL: {}", e))?;
     if parsed.scheme() == "https" {
         return Ok(());
     }
-    let loopback = match parsed.host() {
-        Some(url::Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
-        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
-        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
-        None => false,
-    };
-    if loopback {
+    if is_loopback_host(&parsed) {
         return Ok(());
     }
     Err(format!(
@@ -863,10 +670,15 @@ fn refuse_cleartext_credential_hop(url: &str) -> Result<(), String> {
     ))
 }
 
-/// Lowercase the scheme of a URL handed to the engine, leaving the rest
-/// byte-for-byte so `{base}/message` keeps its exact shape. The engine's own
-/// cleartext refusal for the SSE listener compares the scheme textually, so an
-/// `HTTP://` spelling would otherwise slip past it.
+fn is_loopback_host(parsed: &url::Url) -> bool {
+    match parsed.host() {
+        Some(url::Host::Domain(domain)) => domain.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(v4)) => v4.is_loopback(),
+        Some(url::Host::Ipv6(v6)) => v6.is_loopback(),
+        None => false,
+    }
+}
+
 fn canonical_scheme(url: &str) -> String {
     let Ok(parsed) = url::Url::parse(url) else {
         return url.to_string();
@@ -880,170 +692,141 @@ fn canonical_scheme(url: &str) -> String {
     }
 }
 
+fn remote_engine_config(
+    server_name: &str,
+    config: &HttpSseConfig,
+) -> McpResult<(
+    agiworkforce_mcp::TransportConfig,
+    agiworkforce_mcp::McpTimeouts,
+)> {
+    if !config.verify_ssl {
+        #[cfg(not(debug_assertions))]
+        {
+            tracing::error!(
+                "[MCP HTTP Transport] verify_ssl=false is forbidden in release builds (server '{}', url '{}')",
+                server_name,
+                config.url
+            );
+            return Err(McpError::ConnectionError(
+                "SSL verification cannot be disabled in release builds. \
+                 Use a properly-signed certificate or run a debug build."
+                    .to_string(),
+            ));
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            let is_localhost = url::Url::parse(&config.url)
+                .map(|parsed| {
+                    matches!(
+                        parsed.host_str(),
+                        Some("localhost") | Some("127.0.0.1") | Some("::1")
+                    )
+                })
+                .unwrap_or(false);
+            if !is_localhost {
+                tracing::error!(
+                    "[MCP HTTP Transport] Refusing to disable SSL verification for remote server '{}' at {}",
+                    server_name,
+                    config.url
+                );
+                return Err(McpError::ConnectionError(
+                    "SSL verification cannot be disabled for remote servers. \
+                     Only localhost (127.0.0.1, ::1) connections may bypass SSL verification."
+                        .to_string(),
+                ));
+            }
+        }
+    }
+
+    let sends_caller_headers =
+        config.api_key.is_some() || config.bearer_token.is_some() || !config.headers.is_empty();
+    if sends_caller_headers {
+        refuse_cleartext_credential_hop(&config.url).map_err(|reason| {
+            tracing::error!(
+                "[MCP HTTP Transport] Refusing to send credentials for server '{}' over cleartext HTTP: {}",
+                server_name,
+                reason
+            );
+            McpError::ConnectionError(format!(
+                "Refusing to send MCP credentials over cleartext HTTP. Remote MCP servers must use HTTPS: {}",
+                reason
+            ))
+        })?;
+    }
+
+    let mut headers: HashMap<String, String> = HashMap::new();
+    if let Some(ref api_key) = config.api_key {
+        reqwest::header::HeaderValue::from_str(api_key)
+            .map_err(|e| McpError::InvalidConfig(format!("Invalid API key header value: {}", e)))?;
+        headers.insert("X-API-Key".to_string(), api_key.clone());
+    }
+    if let Some(ref token) = config.bearer_token {
+        let value = format!("Bearer {}", token);
+        reqwest::header::HeaderValue::from_str(&value).map_err(|e| {
+            McpError::InvalidConfig(format!("Invalid bearer token header value: {}", e))
+        })?;
+        headers.insert("Authorization".to_string(), value);
+    }
+    for (key, value) in &config.headers {
+        reqwest::header::HeaderName::try_from(key.as_str()).map_err(|e| {
+            McpError::InvalidConfig(format!("Invalid header name '{}': {}", key, e))
+        })?;
+        reqwest::header::HeaderValue::from_str(value).map_err(|e| {
+            McpError::InvalidConfig(format!("Invalid header value for '{}': {}", key, e))
+        })?;
+        headers.insert(key.clone(), value.clone());
+    }
+
+    let url = canonical_scheme(&config.url);
+    let carries_authorization = headers
+        .keys()
+        .any(|name| name.eq_ignore_ascii_case("authorization"));
+    let oauth = (!carries_authorization && refuse_cleartext_credential_hop(&url).is_ok())
+        .then(agiworkforce_mcp::OAuthConfig::default);
+    let timeouts = agiworkforce_mcp::McpTimeouts {
+        initialize: std::time::Duration::from_secs(config.timeout_secs),
+        validate_urls: true,
+        verify_tls: config.verify_ssl,
+        max_response_bytes: Some(MAX_RESPONSE_BODY_BYTES),
+        connect_timeout: Some(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS)),
+        sse_read_timeout: Some(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS)),
+        ..agiworkforce_mcp::McpTimeouts::default()
+    };
+    Ok((
+        agiworkforce_mcp::TransportConfig::Http {
+            url,
+            headers,
+            oauth,
+        },
+        timeouts,
+    ))
+}
+
 impl HttpSseTransport {
-    /// Create a new HTTP/SSE transport over the shared engine.
-    pub async fn new(server_name: String, config: HttpSseConfig) -> McpResult<Self> {
+    pub async fn new(
+        server_name: String,
+        config: HttpSseConfig,
+        interactive: bool,
+    ) -> McpResult<Self> {
         tracing::info!(
             "[MCP HTTP Transport] Connecting to server '{}' at {}",
             server_name,
             config.url
         );
-
-        // SEV-DESK-07 (defence-in-depth), preserved verbatim from the old
-        // transport: in release builds, refuse `verify_ssl: false` regardless
-        // of host, a malicious config file must not be able to downgrade TLS.
-        // Debug builds may disable verification for localhost only.
-        if !config.verify_ssl {
-            #[cfg(not(debug_assertions))]
-            {
-                tracing::error!(
-                    "[MCP HTTP Transport] verify_ssl=false is forbidden in release builds (server '{}', url '{}')",
-                    server_name,
-                    config.url
-                );
-                return Err(McpError::ConnectionError(
-                    "SSL verification cannot be disabled in release builds. \
-                     Use a properly-signed certificate or run a debug build."
-                        .to_string(),
-                ));
-            }
-
-            #[cfg(debug_assertions)]
-            {
-                let is_localhost = if let Ok(parsed) = url::Url::parse(&config.url) {
-                    matches!(
-                        parsed.host_str(),
-                        Some("localhost") | Some("127.0.0.1") | Some("::1")
-                    )
-                } else {
-                    false
-                };
-
-                if !is_localhost {
-                    tracing::error!(
-                        "[MCP HTTP Transport] Refusing to disable SSL verification for remote server '{}' at {}. \
-                         SSL verification can only be disabled for localhost connections.",
-                        server_name,
-                        config.url
-                    );
-                    return Err(McpError::ConnectionError(
-                        "SSL verification cannot be disabled for remote servers. \
-                         Only localhost (127.0.0.1, ::1) connections may bypass SSL verification."
-                            .to_string(),
-                    ));
-                }
-
-                tracing::warn!(
-                    "[MCP HTTP Transport] SSL certificate verification DISABLED for local server '{}' (debug build). \
-                     This is acceptable for local development with self-signed certificates.",
-                    server_name
-                );
-            }
-        }
-
-        // CWE-319: refuse to attach a caller-supplied header unless the
-        // configured URL is HTTPS or loopback. Every such header counts, not
-        // just recognisably-named ones, a name-based denylist misses
-        // conventions like `apikey`, `x-access-key` or `authentication`, and
-        // the config file an attacker can write picks the name. This gates the
-        // configured URL only; a 3xx downgrade mid-flight is the engine
-        // client's redirect policy to enforce.
-        let sends_caller_headers =
-            config.api_key.is_some() || config.bearer_token.is_some() || !config.headers.is_empty();
-        if sends_caller_headers {
-            refuse_cleartext_credential_hop(&config.url).map_err(|reason| {
-                tracing::error!(
-                    "[MCP HTTP Transport] Refusing to send credentials for server '{}' over cleartext HTTP: {}",
-                    server_name,
-                    reason
-                );
-                McpError::ConnectionError(format!(
-                    "Refusing to send MCP credentials over cleartext HTTP. Remote MCP servers must use HTTPS: {}",
-                    reason
-                ))
-            })?;
-        }
-
-        // Header mapping with build-time validation (old `build_headers`
-        // semantics): api_key -> X-API-Key, bearer_token -> Authorization,
-        // plus custom headers. Content-Type is set per-request by the engine.
-        let mut engine_headers: HashMap<String, String> = HashMap::new();
-        if let Some(ref api_key) = config.api_key {
-            reqwest::header::HeaderValue::from_str(api_key).map_err(|e| {
-                McpError::InvalidConfig(format!("Invalid API key header value: {}", e))
-            })?;
-            engine_headers.insert("X-API-Key".to_string(), api_key.clone());
-        }
-        if let Some(ref token) = config.bearer_token {
-            let value = format!("Bearer {}", token);
-            reqwest::header::HeaderValue::from_str(&value).map_err(|e| {
-                McpError::InvalidConfig(format!("Invalid bearer token header value: {}", e))
-            })?;
-            engine_headers.insert("Authorization".to_string(), value);
-        }
-        for (key, value) in &config.headers {
-            reqwest::header::HeaderName::try_from(key.as_str()).map_err(|e| {
-                McpError::InvalidConfig(format!("Invalid header name '{}': {}", key, e))
-            })?;
-            reqwest::header::HeaderValue::from_str(value).map_err(|e| {
-                McpError::InvalidConfig(format!("Invalid header value for '{}': {}", key, e))
-            })?;
-            engine_headers.insert(key.clone(), value.clone());
-        }
-
-        // Engine hardening knobs: SSRF validation at connect (FIX R-09; the
-        // engine's validator is the ported desktop one), the 50 MB inline
-        // response cap (FIX R-10), the 30s connect timeout, and the 60s
-        // stalled-stream read timeout. The SSE listener's HTTPS-for-remote
-        // refusal lives inside the engine supervisor (old `connect_sse`
-        // parity); credential-free cleartext-remote POSTs stay allowed.
-        let timeouts = agiworkforce_mcp::McpTimeouts {
-            validate_urls: true,
-            verify_tls: config.verify_ssl,
-            max_response_bytes: Some(MAX_RESPONSE_BODY_BYTES),
-            connect_timeout: Some(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS)),
-            sse_read_timeout: Some(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS)),
-            ..agiworkforce_mcp::McpTimeouts::default()
-        };
-
-        let engine_config = agiworkforce_mcp::TransportConfig::SseLegacy {
-            base_url: canonical_scheme(&config.url),
-            headers: engine_headers,
-        };
-
-        // No handshake here: McpSession drives its own `initialize` through
-        // send_request, exactly as it did against the old transport.
-        let mut client = agiworkforce_mcp::McpClient::connect_without_handshake(
+        let (engine_config, timeouts) = remote_engine_config(&server_name, &config)?;
+        let mut client = agiworkforce_mcp::McpClient::connect(
             &server_name,
             engine_config,
             timeouts,
-            engine_hooks(&server_name),
+            engine_hooks(&server_name, interactive),
         )
         .await
         .map_err(map_engine_error)?;
-
-        // Forward server-initiated SSE notifications into the per-server log
-        // store, the same `[sse notification]` line the old event processor
-        // produced.
-        if let Some(mut notifications) = client.notifications() {
-            let notif_server = server_name.clone();
-            tokio::spawn(async move {
-                while let Some(notif) = notifications.recv().await {
-                    tracing::info!(
-                        "[MCP HTTP Transport] Received SSE notification for '{}': {}",
-                        notif_server,
-                        notif.method
-                    );
-                    append_server_log(
-                        &notif_server,
-                        format!("[sse notification] {}", notif.method),
-                    );
-                }
-            });
-        }
+        let negotiated = client.server().clone();
+        let notifications = parking_lot::Mutex::new(client.notifications());
 
         let (tx, rx) = mpsc::unbounded_channel::<EngineCommand>();
-        let response_seq = Arc::new(AtomicU64::new(1));
         let alive = Arc::new(AtomicBool::new(true));
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let shutdown_signal = Arc::new(tokio::sync::Notify::new());
@@ -1053,7 +836,7 @@ impl HttpSseTransport {
             server_name.clone(),
             client,
             rx,
-            response_seq,
+            Arc::new(AtomicU64::new(1)),
             alive.clone(),
             is_shutdown.clone(),
             shutdown_signal.clone(),
@@ -1067,30 +850,9 @@ impl HttpSseTransport {
             is_shutdown,
             shutdown_signal,
             request_timeout_secs,
+            negotiated,
+            notifications,
         })
-    }
-
-    /// Kept for API compatibility with the pre-engine transport: the SSE
-    /// listener (with reconnect) now attaches automatically inside the engine
-    /// at connect time, so there is nothing left to start here. Both callers
-    /// (`McpSession::connect{,_with_transport}`) pass `None`; a custom
-    /// `sse_endpoint` was never used and is no longer supported, the legacy
-    /// convention fixes the stream at `{url}/sse`.
-    pub async fn start_sse_listener(&self, sse_endpoint: Option<&str>) -> McpResult<()> {
-        if let Some(endpoint) = sse_endpoint {
-            tracing::warn!(
-                "[MCP HTTP Transport] Custom SSE endpoint '{}' ignored for '{}', \
-                 the engine listens on {{url}}/sse",
-                endpoint,
-                self.server_name
-            );
-        } else {
-            tracing::debug!(
-                "[MCP HTTP Transport] SSE listener for '{}' already attached by the engine",
-                self.server_name
-            );
-        }
-        Ok(())
     }
 }
 
@@ -1106,45 +868,15 @@ impl McpTransport for HttpSseTransport {
                 "Transport is shutdown".to_string(),
             ));
         }
-
-        let (reply_tx, reply_rx) = oneshot::channel();
-        self.tx
-            .send(EngineCommand::Request {
-                method,
-                params,
-                reply: reply_tx,
+        let timeout = std::time::Duration::from_secs(self.request_timeout_secs);
+        send_engine_request(&self.tx, method, params, timeout)
+            .await
+            .unwrap_or_else(|| {
+                Err(McpError::RequestTimeout(format!(
+                    "Request for '{}' timed out after {}s, server accepted request but did not respond in time",
+                    self.server_name, self.request_timeout_secs
+                )))
             })
-            .map_err(|_| {
-                McpError::ConnectionError("Failed to send request: channel closed".to_string())
-            })?;
-
-        // The engine enforces the same per-request timeout internally; this
-        // outer bound also caps time spent queued behind an in-flight request.
-        match tokio::time::timeout(
-            tokio::time::Duration::from_secs(self.request_timeout_secs),
-            reply_rx,
-        )
-        .await
-        {
-            Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(McpError::ConnectionError(
-                "Response channel closed".to_string(),
-            )),
-            Err(_) => Err(McpError::RequestTimeout(format!(
-                "Request for '{}' timed out after {}s, server accepted request but did not respond in time",
-                self.server_name, self.request_timeout_secs
-            ))),
-        }
-    }
-
-    fn send_notification(&self, method: String, params: Option<serde_json::Value>) {
-        if self.is_shutdown.load(Ordering::SeqCst) {
-            return;
-        }
-        // FIFO with requests through the actor channel. The engine serializes
-        // notifications without an `id` member per the JSON-RPC 2.0 spec
-        // (BUG 1 FIX preserved).
-        let _ = self.tx.send(EngineCommand::Notify { method, params });
     }
 
     fn is_alive(&self) -> bool {
@@ -1156,63 +888,50 @@ impl McpTransport for HttpSseTransport {
             "[MCP HTTP Transport] Shutting down transport for '{}'",
             self.server_name
         );
-        self.is_shutdown.store(true, Ordering::SeqCst);
-
-        self.shutdown_signal.notify_waiters();
-        let (reply_tx, reply_rx) = oneshot::channel();
-        if self
-            .tx
-            .send(EngineCommand::Shutdown { reply: reply_tx })
-            .is_ok()
-        {
-            let _ = tokio::time::timeout(tokio::time::Duration::from_secs(5), reply_rx).await;
-        }
-        self.alive.store(false, Ordering::SeqCst);
-
+        shutdown_engine(
+            &self.tx,
+            &self.is_shutdown,
+            &self.shutdown_signal,
+            &self.alive,
+        )
+        .await;
         Ok(())
     }
 }
 
-// ============================================================================
-// Transport Factory
-// ============================================================================
-
-/// Enum representing different transport types
 pub enum Transport {
     Stdio(StdioTransport),
     HttpSse(HttpSseTransport),
 }
 
 impl Transport {
-    /// Create a transport based on configuration
     pub async fn from_config(
         server_name: String,
         config: &super::config::McpServerConfig,
+        interactive: bool,
     ) -> McpResult<Self> {
         match &config.transport {
-            Some(transport_config) => match transport_config {
-                TransportConfig::Stdio => {
-                    let transport = StdioTransport::new(
-                        server_name,
-                        &config.command,
-                        &config.args,
-                        &config.env,
-                    )
-                    .await?;
-                    Ok(Transport::Stdio(transport))
-                }
-                TransportConfig::Http(http_config) => {
-                    let transport = HttpSseTransport::new(server_name, http_config.clone()).await?;
-                    Ok(Transport::HttpSse(transport))
-                }
-            },
-            None => {
-                // Default to STDIO for backward compatibility
-                let transport =
-                    StdioTransport::new(server_name, &config.command, &config.args, &config.env)
-                        .await?;
-                Ok(Transport::Stdio(transport))
-            }
+            Some(TransportConfig::Http(http_config)) => Ok(Transport::HttpSse(
+                HttpSseTransport::new(server_name, http_config.clone(), interactive).await?,
+            )),
+            Some(TransportConfig::Stdio) | None => Ok(Transport::Stdio(
+                StdioTransport::new(server_name, &config.command, &config.args, &config.env)
+                    .await?,
+            )),
+        }
+    }
+
+    pub fn negotiated(&self) -> &NegotiatedServer {
+        match self {
+            Transport::Stdio(t) => &t.negotiated,
+            Transport::HttpSse(t) => &t.negotiated,
+        }
+    }
+
+    pub fn take_notifications(&self) -> Option<mpsc::Receiver<McpNotification>> {
+        match self {
+            Transport::Stdio(t) => t.notifications.lock().take(),
+            Transport::HttpSse(t) => t.notifications.lock().take(),
         }
     }
 }
@@ -1227,13 +946,6 @@ impl McpTransport for Transport {
         match self {
             Transport::Stdio(t) => t.send_request(method, params).await,
             Transport::HttpSse(t) => t.send_request(method, params).await,
-        }
-    }
-
-    fn send_notification(&self, method: String, params: Option<serde_json::Value>) {
-        match self {
-            Transport::Stdio(t) => t.send_notification(method, params),
-            Transport::HttpSse(t) => t.send_notification(method, params),
         }
     }
 
@@ -1326,13 +1038,13 @@ impl<'de> serde::Deserialize<'de> for HttpSseConfig {
 mod protocol_era_tests {
     use super::*;
 
-    /// A modern-only server rejects our legacy `initialize` with -32022. That
-    /// must not read as a transient server fault: retrying cannot help, and the
-    /// remedy is a client update.
+    /// A server that still rejects every revision we speak with -32022 after
+    /// negotiation must not read as a transient server fault: retrying cannot
+    /// help, and the remedy is a client update.
     #[test]
     fn test_unsupported_version_frame_is_classified_separately() {
-        let engine_err = agiworkforce_mcp::McpError::from(anyhow::anyhow!(
-            "MCP error -32022: Unsupported protocol version"
+        let engine_err = agiworkforce_mcp::McpError::from(anyhow::Error::new(
+            agiworkforce_mcp::RpcError::unsupported_protocol_version("2026-07-28"),
         ));
         assert!(matches!(
             map_engine_error(engine_err),
@@ -1343,8 +1055,9 @@ mod protocol_era_tests {
     /// Every other JSON-RPC error frame keeps its existing classification.
     #[test]
     fn test_other_jsonrpc_frames_stay_server_errors() {
-        let engine_err =
-            agiworkforce_mcp::McpError::from(anyhow::anyhow!("MCP error -32601: Method not found"));
+        let engine_err = agiworkforce_mcp::McpError::from(anyhow::Error::new(
+            agiworkforce_mcp::RpcError::new(-32601, "Method not found"),
+        ));
         assert!(matches!(
             map_engine_error(engine_err),
             McpError::RmcpError(_)
@@ -1367,7 +1080,6 @@ mod protocol_era_tests {
 mod tests {
     use super::super::protocol::{JsonRpcRequest, McpMessage};
     use super::*;
-    use std::time::Instant;
 
     #[tokio::test]
     async fn test_request_id_increment() {
@@ -1519,10 +1231,8 @@ mod tests {
         assert!(timeout_err.to_string().contains("60s"));
     }
 
-    #[tokio::test]
-    async fn test_http_sse_transport_connection_timeout_config() {
-        // Verify the HTTP client is configured with timeouts by attempting a
-        // connection to a non-routable address and checking it fails quickly.
+    #[test]
+    fn test_http_sse_transport_connection_timeout_config() {
         let config = HttpSseConfig {
             url: "http://192.0.2.1:9999".to_string(),
             timeout_secs: 1,
@@ -1530,45 +1240,29 @@ mod tests {
             ..Default::default()
         };
 
-        let start = Instant::now();
-        // This will succeed in creating the transport (client construction does
-        // not connect), but the client itself will have timeouts configured.
-        let result = HttpSseTransport::new("timeout-test".to_string(), config).await;
-        let elapsed = start.elapsed();
-
-        // Transport creation should succeed (no connection attempt during new())
-        assert!(
-            result.is_ok(),
-            "Transport creation should succeed, got: {:?}",
-            result.err(),
+        let (_, timeouts) =
+            remote_engine_config("timeout-test", &config).expect("header-free config is accepted");
+        assert_eq!(timeouts.initialize, std::time::Duration::from_secs(1));
+        assert_eq!(
+            timeouts.connect_timeout,
+            Some(std::time::Duration::from_secs(SSE_CONNECT_TIMEOUT_SECS))
         );
-
-        // Should be near-instant since new() does not connect
-        assert!(
-            elapsed.as_secs() < 5,
-            "Transport creation should not involve connection attempt, took {:?}",
-            elapsed,
+        assert_eq!(
+            timeouts.sse_read_timeout,
+            Some(std::time::Duration::from_secs(SSE_STREAM_IDLE_TIMEOUT_SECS))
         );
-
-        // Clean up
-        if let Ok(transport) = result {
-            let _ = transport.shutdown().await;
-        }
     }
 
     fn cleartext_remote(name: &str) -> String {
         format!("http://{}.example.com:8080", name)
     }
 
-    async fn expect_credential_refusal(server: &str, config: HttpSseConfig) -> McpError {
-        match HttpSseTransport::new(server.to_string(), config).await {
-            Ok(transport) => {
-                let _ = transport.shutdown().await;
-                panic!(
-                    "credentials over cleartext http:// must be refused ({})",
-                    server
-                );
-            }
+    fn expect_credential_refusal(server: &str, config: HttpSseConfig) -> McpError {
+        match remote_engine_config(server, &config) {
+            Ok(_) => panic!(
+                "credentials over cleartext http:// must be refused ({})",
+                server
+            ),
             Err(e) => e,
         }
     }
@@ -1581,9 +1275,7 @@ mod tests {
             ..Default::default()
         };
 
-        let msg = expect_credential_refusal("cleartext-bearer", config)
-            .await
-            .to_string();
+        let msg = expect_credential_refusal("cleartext-bearer", config).to_string();
         assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
         assert!(
             !msg.contains("secret-token"),
@@ -1600,9 +1292,7 @@ mod tests {
             ..Default::default()
         };
 
-        let msg = expect_credential_refusal("cleartext-api-key", config)
-            .await
-            .to_string();
+        let msg = expect_credential_refusal("cleartext-api-key", config).to_string();
         assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
         assert!(!msg.contains("secret-key"), "leaked credential: {}", msg);
     }
@@ -1616,9 +1306,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let msg = expect_credential_refusal("cleartext-custom", config)
-                .await
-                .to_string();
+            let msg = expect_credential_refusal("cleartext-custom", config).to_string();
             assert!(msg.contains("HTTPS"), "header '{}': {}", name, msg);
         }
     }
@@ -1642,9 +1330,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let msg = expect_credential_refusal("cleartext-any-header", config)
-                .await
-                .to_string();
+            let msg = expect_credential_refusal("cleartext-any-header", config).to_string();
             assert!(msg.contains("HTTPS"), "header '{}': {}", name, msg);
         }
     }
@@ -1660,9 +1346,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let msg = expect_credential_refusal("uppercase-scheme", config)
-                .await
-                .to_string();
+            let msg = expect_credential_refusal("uppercase-scheme", config).to_string();
             assert!(msg.contains("HTTPS"), "scheme '{}': {}", scheme, msg);
             assert!(
                 !msg.contains("secret-token"),
@@ -1680,9 +1364,7 @@ mod tests {
             ..Default::default()
         };
 
-        let msg = expect_credential_refusal("uppercase-scheme-header", config)
-            .await
-            .to_string();
+        let msg = expect_credential_refusal("uppercase-scheme-header", config).to_string();
         assert!(msg.contains("HTTPS"), "unexpected error: {}", msg);
     }
 
@@ -1697,9 +1379,7 @@ mod tests {
                 ..Default::default()
             };
 
-            let msg = expect_credential_refusal("unresolvable-scheme", config)
-                .await
-                .to_string();
+            let msg = expect_credential_refusal("unresolvable-scheme", config).to_string();
             assert!(msg.contains("HTTPS"), "url '{}': {}", url, msg);
             assert!(!msg.contains("secret-key"), "leaked credential: {}", msg);
         }
@@ -1713,10 +1393,8 @@ mod tests {
             ..Default::default()
         };
 
-        let transport = HttpSseTransport::new("uppercase-https".to_string(), config)
-            .await
+        remote_engine_config("uppercase-https", &config)
             .expect("uppercase https remote with credentials must be allowed");
-        let _ = transport.shutdown().await;
     }
 
     #[test]
@@ -1745,10 +1423,8 @@ mod tests {
                 ..Default::default()
             };
 
-            let transport = HttpSseTransport::new("loopback".to_string(), config)
-                .await
+            remote_engine_config("loopback", &config)
                 .unwrap_or_else(|e| panic!("loopback {} must stay allowed: {:?}", host, e));
-            let _ = transport.shutdown().await;
         }
     }
 
@@ -1760,10 +1436,8 @@ mod tests {
             ..Default::default()
         };
 
-        let transport = HttpSseTransport::new("https-remote".to_string(), config)
-            .await
+        remote_engine_config("https-remote", &config)
             .expect("https remote with credentials must be allowed");
-        let _ = transport.shutdown().await;
     }
 
     #[tokio::test]
@@ -1773,10 +1447,8 @@ mod tests {
             ..Default::default()
         };
 
-        let transport = HttpSseTransport::new("no-creds".to_string(), config)
-            .await
+        remote_engine_config("no-creds", &config)
             .expect("cleartext remote without caller headers keeps prior behaviour");
-        let _ = transport.shutdown().await;
     }
 
     #[tokio::test]
@@ -1787,9 +1459,6 @@ mod tests {
             ..Default::default()
         };
 
-        let transport = HttpSseTransport::new("loopback-headers".to_string(), config)
-            .await
-            .expect("loopback keeps custom headers");
-        let _ = transport.shutdown().await;
+        remote_engine_config("loopback-headers", &config).expect("loopback keeps custom headers");
     }
 }

@@ -43,22 +43,20 @@ async fn http_401_triggers_discovery_registration_and_retry() {
     // The browser was opened exactly once (the authorization step).
     assert_eq!(browser.opened.load(Ordering::SeqCst), 1);
 
-    // The server saw an unauthenticated initialize (the 401) followed by an
-    // authenticated one (the retry), then an authenticated tools/list.
+    // The unauthenticated discovery probe drew the 401; every request after
+    // the flow, the retried probe and the legacy initialize included, carries
+    // the issued bearer.
     let reqs = rec.requests.lock().unwrap();
+    let first = reqs.first().expect("requests recorded");
+    assert_eq!(first.method, "server/discover");
+    assert!(first.authorization.is_none(), "the first probe is the 401");
     let inits: Vec<_> = reqs.iter().filter(|r| r.method == "initialize").collect();
+    assert!(!inits.is_empty(), "the legacy fallback must initialize");
     assert!(
-        inits.len() >= 2,
-        "expected an unauthed + authed initialize, got {}",
-        inits.len()
-    );
-    assert!(
-        inits[0].authorization.is_none(),
-        "first initialize is the 401"
-    );
-    assert!(
-        inits.last().unwrap().authorization.as_deref() == Some("Bearer sim-access-token"),
-        "retry initialize must carry the issued bearer"
+        inits
+            .iter()
+            .all(|r| r.authorization.as_deref() == Some("Bearer sim-access-token")),
+        "initialize must carry the issued bearer"
     );
     let list = reqs.iter().rfind(|r| r.method == "tools/list").unwrap();
     assert_eq!(
