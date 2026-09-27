@@ -114,49 +114,44 @@ Code: `apps/web/features/settings/sections/ReflectSection.tsx:180-196`, `apps/we
 ## S39.10: Add Memory manually.
 
 - Done when: The user can type a new fact and save it to their memory, where later chats can use it.
-- Wave: 1
-- Already works on: mobile, cli
+- Wave: 3
+- Already works on: mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | pending-migration, states |
-| desktop | partial | Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | pending-migration, states |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | states |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | states |
 | vscode | partial | Saving works (account sync push), but the prompt says the fact is 'Stored locally' when it is saved to the account, and it refuses unless a workspace folder is open although memory is account-wide. | states |
-| chrome | partial | The drawer's Add calls POST /api/memory, whose writer needs columns from pending migration 0285; at the applied schema every add fails with a 'Memory is unavailable' error. | pending-migration |
 
 Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:174-204`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:176-207`, `apps/web/app/api/memory/route.ts:140-159`
 
 ## S39.11: Explicit “remember this” action.
 
 - Done when: From inside a conversation the user can explicitly ask the assistant to remember something and gets confirmation it was saved.
-- Wave: 1
+- Wave: 2
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount, pending-migration |
-| desktop | partial | Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount, pending-migration |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount |
 | mobile | partial | Add an explicit remember action; in the default Local mode 'remember that ...' is only caught by the passive on-device extractor, with no confirmation. | ui |
 | vscode | partial | Add a 'remember this' action from a chat or selection; only the separate 'Add a memory fact' command exists. | ui |
-| chrome | partial | Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui, pending-migration |
+| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
 
 Code: `apps/web/app/api/memory/commands/route.ts:25-66`, `packages/ai/agent-core/src/memory.ts:44-48`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`, `apps/mobile/src/features/memory/services/consolidation.ts:134-147`
 
 ## S39.12: Automatic Memory update.
 
 - Done when: After ordinary conversations the assistant automatically saves new durable facts to memory (when allowed).
-- Wave: 1
-- Already works on: cli
+- Wave: 2
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Automatic capture runs after completed turns (patterns, optional model extraction), but saves through writeConsolidatedMemory, which inserts columns from pending migration 0285; at the applied schema every write fails and is only logged. | pending-migration |
-| desktop | partial | Automatic capture runs after completed turns (patterns, optional model extraction), but saves through writeConsolidatedMemory, which inserts columns from pending migration 0285; at the applied schema every write fails and is only logged. | pending-migration |
-| mobile | partial | Local mode learns on-device after each turn; in Cloud mode learning depends on the server writer that needs pending migration 0285. | pending-migration |
 | vscode | partial | Memory is learned only when a thread is archived in the local CLI runtime (developer_host archive path); ordinary VS Code chats never update memory. | mount |
-| chrome | partial | Side-panel chats go through the server extractor (surface chrome is allowed to learn), which saves through pending migration 0285. | pending-migration |
 
-Code: `apps/web/features/settings/sections/MemorySection.tsx:274-283`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1308`, `apps/web/lib/services/managed-auto-memory-service.ts:110-132`
+Code: `apps/cli/src/app_server/developer_host.rs:1676-1685`
 
 ## S39.13: Edit Memory.
 
@@ -219,14 +214,14 @@ Code: `apps/cli/src/lib.rs:2069-2074`
 ## S39.17: Memory source/provenance.
 
 - Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui, pending-migration |
-| desktop | partial | Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui, pending-migration |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui |
 | mobile | partial | Name the chat a memory came from; the summary only sorts on-device facts into 'Learned from chats' or 'Added by you', and in Cloud mode every memory is filed as 'Added by you'. | ui, states |
-| cli | partial | Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui, pending-migration |
+| cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
 | vscode | partial | Show where each memory came from; the Memory tree tooltip shows only category and dates although the sync feed returns a source label. | ui |
 | chrome | partial | Show where each memory came from; drawer rows show only text and a relative time although GET /api/memory returns a source label. | ui |
 
@@ -248,32 +243,30 @@ Code: `apps/mobile/src/features/settings/components/MemoryItem.tsx:144-150`, `ap
 ## S39.19: Correction of stale information.
 
 - Done when: When the user states a newer fact that contradicts a stored memory, the outdated memory stops being used without a manual edit.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Newer facts on the same topic replace older ones only inside the server writer, which needs pending migration 0285, so at the applied schema every save through it fails and nothing is corrected. | pending-migration |
-| desktop | partial | Newer facts on the same topic replace older ones only inside the server writer, which needs pending migration 0285, so at the applied schema every save through it fails and nothing is corrected. | pending-migration |
-| mobile | partial | On-device learning only skips exact duplicates and never replaces an outdated fact; Cloud mode relies on the server writer that needs pending migration 0285. | handler, pending-migration |
+| mobile | partial | Migration 0285 is now applied in production (2026-09-27). Still open: On-device learning only skips exact duplicates and never replaces an outdated fact; Cloud mode relies on the server writer that needs pending migration 0285. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Side-panel chats learn through the server writer, whose same-topic replacement needs pending migration 0285. | pending-migration |
 
-Code: `apps/web/app/api/memory/route.ts:140-149`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`, `apps/web/lib/services/managed-memory-context-service.ts:750-757`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
+Code: `apps/mobile/src/features/memory/services/consolidation.ts:146-147`, `apps/web/lib/services/managed-memory-context-service.ts:750-757`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
 
 ## S39.20: Conflicting-Memory resolution.
 
 - Done when: When two memories disagree, a stated rule decides which one the assistant uses, and the user can see or settle the conflict.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui, pending-migration |
-| desktop | partial | A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui, pending-migration |
-| mobile | partial | On-device memory has no conflict rule (only exact duplicates are skipped); Cloud mode relies on the server writer that needs pending migration 0285, and no screen shows a conflict. | ui, handler, pending-migration |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui |
+| mobile | partial | Migration 0285 is now applied in production (2026-09-27). Still open: On-device memory has no conflict rule (only exact duplicates are skipped); Cloud mode relies on the server writer that needs pending migration 0285, and no screen shows a conflict. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-| chrome | partial | Side-panel learning goes through the server ranking rule that needs pending migration 0285; the drawer never shows a conflict. | ui, pending-migration |
+| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Side-panel learning goes through the server ranking rule that needs pending migration 0285; the drawer never shows a conflict. | ui |
 
 Code: `apps/web/lib/services/managed-memory-context-service.ts:603-606`, `apps/web/lib/services/managed-memory-context-service.ts:750-757`, `apps/web/lib/services/managed-memory-context-service.ts:327-329`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
 
@@ -326,13 +319,13 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 ## S39.24: Project-scoped Memory.
 
 - Done when: Memories can be confined to one project, are used only in that project, and the user can tell which memories are project-only.
-- Wave: 1
+- Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui, pending-migration |
-| desktop | partial | Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui, pending-migration |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -389,7 +382,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/mobile/src/features
 ## S39.29: Sensitive-Memory controls.
 
 - Done when: The user can stop sensitive information from being remembered (e.g. never-remember terms or categories), and sensitive facts such as credentials are refused automatically.
-- Wave: 1
+- Wave: 3
 - Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
@@ -397,7 +390,7 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/mobile/src/features
 | mobile | partial | Add sensitive-memory controls on mobile; the never-remember list can only be edited on web, and on-device learning (Local mode) has no credential or special-category filter at all. | ui, handler |
 | cli | partial | Add a way to set never-remember terms from the CLI; account writes are refused server-side (and the refusal is printed), but local learned memory (raw_memories.md) has no sensitive-content filter. | ui, handler |
 | vscode | partial | Add a way to set never-remember terms in VS Code; saves are refused server-side and the refusal is shown, but the list itself is web-only. | ui |
-| chrome | partial | Add never-remember controls in the side panel; its adds go through POST /api/memory, which enforces the web list but whose writer needs pending migration 0285. | ui, pending-migration |
+| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add never-remember controls in the side panel; its adds go through POST /api/memory, which enforces the web list but whose writer needs pending migration 0285. | ui |
 
 Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/memory/services/consolidation.ts:146-160`, `apps/web/app/api/memory/sync/route.ts:159-169`, `apps/cli/src/lib.rs:2083-2093`
 
@@ -435,14 +428,14 @@ Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/
 ## S39.32: Cross-surface Memory continuity.
 
 - Done when: A memory saved on one client appears and is used on every other client signed in to the same account.
-- Wave: 1
+- Wave: 3
 - Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | pending-migration, states |
-| desktop | partial | Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | pending-migration, states |
+| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | states |
+| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | states |
 | mobile | partial | Account memory syncs only in Cloud mode; the default Local mode keeps a separate on-device memory that no other client sees. | states |
-| chrome | partial | Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | pending-migration, states |
+| chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | states |
 
 Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:242-260`, `apps/web/app/api/memory/route.ts:42-56`, `apps/web/app/api/memory/route.ts:140-149`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`

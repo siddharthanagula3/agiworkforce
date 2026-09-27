@@ -67,12 +67,12 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 ## S63.06: Source selection.
 
 - Done when: The user chooses which sources (project files, instructions, docs, web) a routine run may read.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui, pending-migration |
-| desktop | partial | No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -82,12 +82,12 @@ Code: `apps/web/app/chat/projects/[id]/page.tsx:1247-1247`, `apps/web/features/s
 ## S63.08: Connector selection.
 
 - Done when: Per routine, the user chooses which connectors/tools the run may use.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
-| desktop | partial | No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -146,27 +146,26 @@ Code: `apps/mobile/src/features/schedules/policy.ts:47-47`, `apps/mobile/src/fea
 ## S63.15: Event-trigger selection.
 
 - Done when: A routine can be set to run when an external event happens (GitHub, Slack, Gmail, Calendar, webhook) and it runs when the event arrives.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Triggers can be added (GitHub, Slack, Gmail, Calendar, signed webhook) and fire runs, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
-| desktop | partial | Triggers can be added (GitHub, Slack, Gmail, Calendar, signed webhook) and fire runs, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The local daemon fires cron, webhook and file-watcher triggers, but only from a hand-written ~/.agiworkforce/triggers.json run with `agi --daemon`; no command creates them. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:228-228`, `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:239-239`, `apps/web/lib/triggers/trigger-fire.ts:135-135`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-449`, `apps/cli/src/daemon.rs:967-967`
 
 ## S63.16: Event filters.
 
 - Done when: Event triggers can be narrowed (event types, account, field conditions, repeat suppression) so only matching events start the routine.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
-| desktop | partial | Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Only a glob filter for file-watcher triggers, set by hand in triggers.json; webhook and cron triggers take no filters. | ui |
 | chrome | missing | Not built on this surface. |  |
@@ -176,45 +175,40 @@ Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:311-311`
 ## S63.17: Webhook trigger.
 
 - Done when: A routine gets a webhook URL (with a secret); a signed POST to it starts a run.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The signed-webhook trigger issues a URL and secret and fires runs, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
-| desktop | partial | The signed-webhook trigger issues a URL and secret and fires runs, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | The local daemon serves bearer-token webhook triggers on port 7891, configured only by hand in triggers.json and run with `agi --daemon`. | ui |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | The signed receiver works (env EVENT_TRIGGER_SIGNING_SECRET must be set), but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:69-69`, `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:252-252`, `apps/web/app/api/webhooks/connectors/[triggerId]/route.ts:46-46`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/cli/src/features/hooks/hooks.rs:476-476`, `apps/cli/src/daemon.rs:675-675`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.18: API trigger.
 
 - Done when: A documented, token-authenticated API call starts a routine run.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| api | partial | POST /api/schedules/{id}/runs with an Idempotency-Key works with bearer tokens but is not in openapi.json, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | api, pending-migration |
+| api | partial | Migration 0284 is now applied in production (2026-09-27). Still open: POST /api/schedules/{id}/runs with an Idempotency-Key works with bearer tokens but is not in openapi.json, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | api |
 
 Code: `apps/web/app/api/schedules/[id]/runs/route.ts:74-74`, `apps/web/app/api/schedules/[id]/runs/route.ts:94-94`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.19: Manual run.
 
 - Done when: A "Run now" control starts the routine immediately and the run completes with a result.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Run now starts a run, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
-| desktop | partial | Run now starts a run, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
-| mobile | partial | triggerScheduleNow exists in the service but no screen calls it; add a Run now button. Runs also fail until pending migration 0284 ships. | ui, pending-migration |
+| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: triggerScheduleNow exists in the service but no screen calls it; add a Run now button. Runs also fail until pending migration 0284 ships. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | "Run Schedule Now" starts a run after a confirm, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | pending-migration |
-| chrome | partial | The side-panel Run now starts a cloud run, but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284; local tasks have no Run now. | pending-migration |
 
-Code: `apps/web/features/schedules/components/ScheduleCard.tsx:344-344`, `apps/web/features/schedules/components/SchedulesPage.tsx:491-491`, `apps/web/app/api/schedules/[id]/runs/route.ts:94-94`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 ## S63.21: Last-run display.
 
@@ -242,18 +236,17 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:212-212`, 
 ## S63.23: Per-run results.
 
 - Done when: Opening a run shows what that run produced (its output text), not just its status.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Output text is rendered per run and in "Latest result", but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284, so there is never output to show. | pending-migration |
-| desktop | partial | Output text is rendered per run and in "Latest result", but every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284, so there is never output to show. | pending-migration |
-| mobile | partial | Run rows show status, duration and error but not the output the service already maps; and runs fail until pending migration 0284 ships. | ui, pending-migration |
-| cli | partial | ScheduleRun drops the server's result field, so neither text nor --json shows output; runs also fail until pending migration 0284 ships. | ui, pending-migration |
-| vscode | partial | The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui, pending-migration |
+| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Run rows show status, duration and error but not the output the service already maps; and runs fail until pending migration 0284 ships. | ui |
+| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: ScheduleRun drops the server's result field, so neither text nor --json shows output; runs also fail until pending migration 0284 ships. | ui |
+| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui |
 | chrome | partial | Local tasks open only their latest result conversation; cloud schedules in the side panel show no results. | ui |
 
-Code: `apps/web/features/schedules/components/ScheduleRunHistory.tsx:54-54`, `apps/web/features/schedules/components/SchedulesPage.tsx:1086-1086`, `apps/web/app/api/schedules/[id]/runs/route.ts:58-58`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/mobile/src/features/schedules/service.ts:100-100`, `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:145-145`, `apps/cli/src/schedules.rs:356-356`
 
 ## S63.24: Enable/disable.
 
@@ -338,31 +331,31 @@ Code: `apps/web/features/schedules/components/ScheduleForm.tsx:605-605`, `apps/w
 ## S63.32: Required-approval behavior.
 
 - Done when: When an unattended run needs approval for an action, it pauses and asks the user, and resumes once approved.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
-| desktop | partial | A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui, pending-migration |
-| mobile | partial | The server stops runs that need approval; mobile only shows the failed run's error, with no approve action; runs fail until pending migration 0284 ships. | ui, pending-migration |
-| cli | partial | Same server stop-on-approval; the CLI only prints the error from `agi schedules runs`; runs fail until pending migration 0284 ships. | ui, pending-migration |
-| vscode | partial | Same server stop-on-approval; the runs list shows the error, no approve action; runs fail until pending migration 0284 ships. | ui, pending-migration |
-| chrome | partial | Cloud schedules run under the same stop-on-approval rule but the side panel shows no run outcome; runs fail until pending migration 0284 ships. | ui, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The server stops runs that need approval; mobile only shows the failed run's error, with no approve action; runs fail until pending migration 0284 ships. | ui |
+| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same server stop-on-approval; the CLI only prints the error from `agi schedules runs`; runs fail until pending migration 0284 ships. | ui |
+| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same server stop-on-approval; the runs list shows the error, no approve action; runs fail until pending migration 0284 ships. | ui |
+| chrome | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Cloud schedules run under the same stop-on-approval rule but the side panel shows no run outcome; runs fail until pending migration 0284 ships. | ui |
 
 Code: `apps/web/lib/services/scheduled-agent-executor.ts:453-453`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.33: Missed-run explanation.
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states, pending-migration |
-| desktop | partial | Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states, pending-migration |
-| mobile | partial | Skip reasons show as the run error; late-run notes never appear and runs fail until pending migration 0284 ships. | states, pending-migration |
-| cli | partial | `agi schedules runs` prints skip reasons as the error; late-run notes are dropped and runs fail until pending migration 0284 ships. | states, pending-migration |
-| vscode | partial | The runs quick pick shows skip reasons as the error; late-run notes never appear and runs fail until pending migration 0284 ships. | states, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skipped occurrences are recorded with a reason; with the default "run late" policy the late note rides only on a successful result, and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | states |
+| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skip reasons show as the run error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
+| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: `agi schedules runs` prints skip reasons as the error; late-run notes are dropped and runs fail until pending migration 0284 ships. | states |
+| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows skip reasons as the error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/schedules/components/ScheduleForm.tsx:533-533`, `apps/web/lib/services/schedule-service.ts:1596-1596`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`

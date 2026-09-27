@@ -9,24 +9,13 @@ nothing is left.
 ## S94.02: Explicit Memory write handler.
 
 - Done when: A handler performs explicit remember/forget commands and reports the result.
-- Wave: 1
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Call /api/memory/commands from chat on some surface (no caller exists), and ship pending migration 0285 that its remember path writes through. | mount, pending-migration |
+| platform | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Call /api/memory/commands from chat on some surface (no caller exists), and ship pending migration 0285 that its remember path writes through. | mount |
 
 Code: `apps/web/lib/services/memory-commands.ts:155-160`, `apps/web/lib/services/memory-commands.ts:94-98`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
-
-## S94.04: Memory provenance.
-
-- Done when: Each memory records where it came from (conversation, turn, writer).
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ship pending migration 0285 (source_conversation_id, source_turn_id, provenance); until then only a coarse source label is stored. | pending-migration |
-
-Code: `apps/web/lib/services/managed-memory-context-service.ts:720-724`, `apps/web/lib/services/managed-memory-context-service.ts:413-425`
 
 ## S94.06: Memory relevance ranking.
 
@@ -38,28 +27,6 @@ Code: `apps/web/lib/services/managed-memory-context-service.ts:720-724`, `apps/w
 | platform | partial | Rank by relevance; memories are ordered pinned-first then most recently updated (first 30), and the relevance model only runs in shadow mode without affecting the prompt. | handler |
 
 Code: `apps/web/lib/services/managed-memory-context-service.ts:873-882`, `apps/web/lib/services/semantic-decisions/consumers/memory-relevance.ts:99-101`
-
-## S94.07: Duplicate-Memory merger.
-
-- Done when: Duplicate memories are merged instead of stored twice.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ship pending migration 0285; the merge CTE sits in the same statement as an insert naming 0285 columns, so managed writes fail at the applied schema. Import dedupes by import_key; sync writes do not merge. | pending-migration |
-
-Code: `apps/web/lib/services/managed-memory-context-service.ts:681-702`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`, `apps/web/lib/memory/import-store.ts:47-58`
-
-## S94.08: Contradiction/correction handling.
-
-- Done when: A newer contradicting fact supersedes the older memory.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ship pending migration 0285; supersession is in the same 0285-dependent write statement. | pending-migration |
-
-Code: `apps/web/lib/services/managed-memory-context-service.ts:750-757`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
 
 ## S94.15: Background Memory maintenance.
 

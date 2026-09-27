@@ -282,16 +282,16 @@ Code: `apps/web/lib/services/workspace-posture-service.ts:1040-1065`, `apps/web/
 ## S87.25: Customer-managed-key setup where offered.
 
 - Done when: Where offered, an administrator connects a customer-managed encryption key, rotates or revokes it from the console, and workspace data is sealed under it.
-- Wave: 1
+- Wave: 3
+- Already works on: api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui, pending-migration |
-| desktop | partial | Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui, pending-migration |
+| web | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
+| desktop | partial | Migration 0290 is now applied in production (2026-09-27). Still open: Keys can be provisioned, rotated and revoked only by calling /api/settings/organization/keys (no console screen), and after any rotation the key status and rewrap read the covered_stores column from pending migration 0290, which fails on production. | ui |
 | cli | missing | Not built on this surface. |  |
-| api | partial | The keys endpoint is session + CSRF only (no workspace-key access) and reads covered_stores from pending migration 0290 once a key has been rotated. | pending-migration |
 
-Code: `apps/web/app/api/settings/organization/keys/route.ts:359-363`, `apps/web/app/api/settings/organization/keys/route.ts:112-121`, `apps/web/lib/server/organization-encryption-keys.ts:622-637`, `apps/web/app/api/settings/organization/keys/route.ts:140-150`
+Code: `apps/web/app/api/settings/organization/keys/route.ts:359-363`, `apps/web/app/api/settings/organization/keys/route.ts:112-121`, `apps/web/lib/server/organization-encryption-keys.ts:622-637`
 
 ## S87.26: Network/IP restrictions.
 
@@ -361,15 +361,12 @@ Code: `apps/cli/src/features/hooks/managed.rs:137-156`
 ## S87.34: Billing administration.
 
 - Done when: An administrator manages the workspace plan, seats, payment method, invoices and (for enterprise) contract terms from the console.
-- Wave: 1
+- Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Plan, seats and Stripe billing settings work, but the enterprise contract, invoices and contacts panel reads agreement columns from pending migration 0286 and pending migration 0287 and the offline-payment table from pending migration 0288, so it errors on production. | pending-migration |
-| desktop | partial | Plan, seats and Stripe billing settings work, but the enterprise contract, invoices and contacts panel reads agreement columns from pending migration 0286 and pending migration 0287 and the offline-payment table from pending migration 0288, so it errors on production. | pending-migration |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/billing/page.tsx:12-17`, `apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx:136-140`, `apps/web/features/workspace-console/components/WorkspaceBillingSummary.tsx:156-161`, `apps/web/app/api/settings/organization/billing-contract/route.ts:111-123`
 
 ## S87.36: Compliance export.
 

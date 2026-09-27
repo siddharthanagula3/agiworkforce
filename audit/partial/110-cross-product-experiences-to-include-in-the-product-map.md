@@ -120,12 +120,12 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4562-4566`
 ## S110.11: Team mention → coding session.
 
 - Done when: A teammate mentions the assistant in a team channel, issue or PR, and that mention opens a coding session on the repository that the team can follow and whose result posts back.
-- Wave: 1
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off, pending-migration |
-| desktop | partial | A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A GitHub @agi-workforce mention on a pull request only queues an automated review (issue mentions are ignored) and a Slack mention only starts a fixed saved routine that fails in production until pending migration 0284 ships; nothing opens a coding session, and web cloud Code is off by default (AGI_E2B_EXECUTION). | handler, flag-off |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -166,14 +166,14 @@ Code: `apps/cli/src/agent/chat.rs:1047-1057`
 ## S110.15: Completed task → scheduled routine.
 
 - Done when: After a task completes, the user turns it into a scheduled routine that later runs the same work successfully on its schedule.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No command turns a finished task into a routine (only asking the agent to call cron_create with a fresh prompt), and the hosted schedule it creates fails every run until pending migration 0284 ships. | ui, pending-migration |
+| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No command turns a finished task into a routine (only asking the agent to call cron_create with a fresh prompt), and the hosted schedule it creates fails every run until pending migration 0284 ships. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

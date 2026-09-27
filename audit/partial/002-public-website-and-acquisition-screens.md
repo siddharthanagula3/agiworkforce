@@ -61,17 +61,6 @@ Code: `apps/web/features/marketing/components/system/nav.ts:31-35`, `apps/web/ap
 
 Code: `apps/web/app/skills/page.tsx:12-14`, `apps/web/app/skills/SignedOutSkills.tsx:9-11`
 
-## S2.20: Individual plugin detail pages.
-
-- Done when: Each plugin has a public detail page with description, permissions, install info and release history.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Release history on plugin pages selects signature columns that exist only in pending migration 0289; at 0273 the query fails and the page silently shows no versions. | pending-migration |
-
-Code: `apps/web/app/plugins/page.tsx:150-154`, `apps/web/app/plugins/[id]/page.tsx:77-82`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`, `apps/web/features/plugins/server/registry-source.ts:110-121`
-
 ## S2.21: Individual template preview pages.
 
 - Done when: Each template has its own previewable page (addressable URL).

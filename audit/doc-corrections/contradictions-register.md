@@ -137,6 +137,8 @@ Ordered by the harm a wrong statement can do: first, copy a customer reads today
 
 #### CR-008 · C-001: WEB_PUBLIC_RELEASE_AUDIT says production is at migration 0291; the tracked ledger says 0273
 
+**Resolved 2026-09-27.** A live `pnpm db:migrate -- status` against production showed 291 applied, 3 pending and 0 drift, so the web release audit was right and `scripts/config/production-migrations-applied.json` (273) was wrong. 0292 to 0294 were then applied; production is at 0294 and the record is updated.
+
 - **Source:** `WEB_PUBLIC_RELEASE_AUDIT.md:46-49` (claim `web-release-audit:L48`; Status Current; last updated 2026-09-22): "superseded by the September 22 production version response reporting `0291`".
 - **Code shows:** `scripts/config/production-migrations-applied.json:3-4` has `"appliedThrough": 273, "recordedAt": "2026-09-20"`. The audit follows the config, since tracked config outranks prose.
 - **Verdict:** Unresolved conflict between the two documents. It can't be settled from a checkout. It is the first production-state check in the live-verification queue.

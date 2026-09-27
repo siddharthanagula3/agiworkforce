@@ -111,34 +111,34 @@ Code: `apps/cli/src/routing/classify.rs:1-9`
 ## S79.17: Provider lock.
 
 - Done when: The user can lock requests to one provider for the chosen model.
-- Wave: 1
+- Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui, pending-migration |
-| desktop | partial | The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui, pending-migration |
+| web | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
+| desktop | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api, pending-migration |
+| api | partial | Migration 0293 is now applied in production (2026-09-27). Still open: API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api |
 
 Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3481-3483`
 
 ## S79.18: Route lock.
 
 - Done when: The user can lock requests to one specific provider route.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui, pending-migration |
-| desktop | partial | The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui, pending-migration |
+| web | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
+| desktop | partial | Migration 0293 is now applied in production (2026-09-27). Still open: The server honours a per-conversation provider pin, but no control sets it and its column exists only in pending migration 0293. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | --provider chooses the provider for BYOK/local use; a managed-cloud route cannot be pinned. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api, pending-migration |
+| api | partial | Migration 0293 is now applied in production (2026-09-27). Still open: API callers can pin a route only through a conversation's selected route (pending migration 0293); there is no per-request route parameter. | api |
 
 Code: `apps/web/app/api/chat/conversations/[id]/route.ts:201-206`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3481-3483`, `apps/cli/src/lib.rs:203-205`
 

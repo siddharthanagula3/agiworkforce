@@ -230,12 +230,12 @@ Code: `packages/ui/ui/src/directory/PluginDetailView.tsx:113-145`, `apps/web/fea
 ## S54.19: Required permissions.
 
 - Done when: Before and after installing, a user sees the permissions a plugin requires.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui, pending-migration |
-| desktop | partial | Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui, pending-migration |
+| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
+| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Permission sets are stored and a changed set must be acknowledged before an update applies, but no screen shows a plugin's permissions; the update path reads pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -316,13 +316,13 @@ Code: `apps/cli/src/app_server/surfaces.rs:194-201`, `apps/cli/src/tui/tui_app.r
 ## S54.25: Update.
 
 - Done when: A user can update an installed plugin to a newer version.
-- Wave: 1
+- Wave: 3
 - Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui, pending-migration |
-| desktop | partial | An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui, pending-migration |
+| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
+| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: An update-offer API exists but nothing in the product calls it, and it reads signature columns from pending migration 0289. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -452,12 +452,12 @@ Code: `packages/ui/ui/src/directory/DirectoryPanel.tsx:374-380`, `apps/web/featu
 ## S54.36: Submission and review workflow.
 
 - Done when: A publisher can submit a plugin for review and track the review.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Submit/publish exist only as a platform-admin API (requirePlatformAdmin) with no UI; publishers cannot submit, and the version rows use pending migration 0289 columns. | ui, pending-migration |
-| desktop | partial | Submit/publish exist only as a platform-admin API (requirePlatformAdmin) with no UI; publishers cannot submit, and the version rows use pending migration 0289 columns. | ui, pending-migration |
+| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Submit/publish exist only as a platform-admin API (requirePlatformAdmin) with no UI; publishers cannot submit, and the version rows use pending migration 0289 columns. | ui |
+| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Submit/publish exist only as a platform-admin API (requirePlatformAdmin) with no UI; publishers cannot submit, and the version rows use pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
@@ -468,12 +468,12 @@ Code: `apps/web/app/api/plugins/[id]/lifecycle/route.ts:7-60`, `apps/web/lib/ser
 ## S54.37: Listing moderation.
 
 - Done when: Platform staff can moderate listings (suspend, deprecate).
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Deprecate/suspend exist only as a platform-admin API with no operator screen, and they write pending migration 0289 columns. | ui, pending-migration |
-| desktop | partial | Deprecate/suspend exist only as a platform-admin API with no operator screen, and they write pending migration 0289 columns. | ui, pending-migration |
+| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Deprecate/suspend exist only as a platform-admin API with no operator screen, and they write pending migration 0289 columns. | ui |
+| desktop | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Deprecate/suspend exist only as a platform-admin API with no operator screen, and they write pending migration 0289 columns. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |

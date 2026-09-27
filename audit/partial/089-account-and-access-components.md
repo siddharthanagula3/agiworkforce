@@ -9,11 +9,11 @@ nothing is left.
 ## S89.06: Recovery service.
 
 - Done when: A recovery service lets a locked-out user regain access when password, email or second factor is lost, with verification and audit.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Only the provider's emailed password reset exists; nothing starts recovery for a lost email or second factor, the recovery_requested event is never emitted, and the recovery_pending state needs pending migration 0277. | handler, pending-migration |
+| platform | partial | Migration 0277 is now applied in production (2026-09-27). Still open: Only the provider's emailed password reset exists; nothing starts recovery for a lost email or second factor, the recovery_requested event is never emitted, and the recovery_pending state needs pending migration 0277. | handler |
 
 Code: `apps/web/features/auth/identityAuthAdapter.tsx:414-422`, `apps/web/lib/services/identity-events/catalogue.ts:197-205`
 
