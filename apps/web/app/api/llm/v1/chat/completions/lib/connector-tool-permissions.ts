@@ -166,7 +166,7 @@ interface PermissionRow {
   level: string;
 }
 
-async function isLockedDown(db: DatabaseAdapter, userId: string): Promise<boolean> {
+export async function isLockedDown(db: DatabaseAdapter, userId: string): Promise<boolean> {
   try {
     const [row] = await db.query<{ settings: unknown }>(
       'select settings from public.user_settings where user_id = $1 limit 1',

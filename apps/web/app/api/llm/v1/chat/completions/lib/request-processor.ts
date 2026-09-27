@@ -20,7 +20,8 @@ import { modelSupportsResearch } from '@/features/chat/lib/research-capability-g
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from './tool-approval-policy';
+import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
+import { isLockedDown } from './connector-tool-permissions';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
@@ -883,6 +884,7 @@ export type ProcessedRequest = {
   sensitiveContextPresent?: boolean;
   untrustedContextPresent?: boolean;
   toolApprovalPolicy?: ToolApprovalPolicy;
+  toolLockdown?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
@@ -3723,14 +3725,33 @@ export async function processRequest(
   // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
   // shape of degradation.
   const researchUnavailable = chatRequest.research === true && !researchMode;
-  const toolApprovalPolicy =
+  const [toolApprovalPolicy, toolLockdown]: readonly [ToolApprovalPolicy | undefined, boolean] =
     chatRequest.web_search || chatRequest.web_fetch || chatRequest.code_execution
-      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () =>
-          loadToolApprovalPolicy((await scopedDbPromise).db, userId),
-        )
-      : undefined;
+      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
+          const { db } = await scopedDbPromise;
+          return Promise.all([loadToolApprovalPolicy(db, userId), isLockedDown(db, userId)]);
+        })
+      : [undefined, false];
   const nativeToolPermitted = (gatedTwin: string): boolean =>
-    toolApprovalPolicy !== undefined && policyAutoApprovesTool(toolApprovalPolicy, gatedTwin);
+    toolApprovalPolicy !== undefined &&
+    hostedToolRunsUnasked(toolApprovalPolicy, gatedTwin, toolLockdown);
+
+  if (researchMode && toolLockdown) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Deep Research searches the web, and Lockdown mode keeps web tools off for this account. Turn Lockdown mode off in Settings to run it.',
+            type: 'invalid_request_error',
+            code: 'lockdown_blocks_research',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
 
   if (
     !freeTrialEnabled &&
@@ -4102,17 +4123,28 @@ export async function processRequest(
   if (unstreamedToolNeedingApproval) {
     return {
       ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: `${unstreamedToolNeedingApproval.label} needs approval under this account's tool approval setting, and only a streaming request can ask for it. Set stream: true.`,
-            type: 'invalid_request_error',
-            code: unstreamedToolNeedingApproval.code,
-            param: 'stream',
-          },
-        },
-        { status: 422 },
-      ),
+      response: toolLockdown
+        ? NextResponse.json(
+            {
+              error: {
+                message: `${unstreamedToolNeedingApproval.label} is off while Lockdown mode is on for this account.`,
+                type: 'invalid_request_error',
+                code: 'lockdown_tool_unavailable',
+              },
+            },
+            { status: 403 },
+          )
+        : NextResponse.json(
+            {
+              error: {
+                message: `${unstreamedToolNeedingApproval.label} needs approval under this account's tool approval setting, and only a streaming request can ask for it. Set stream: true.`,
+                type: 'invalid_request_error',
+                code: unstreamedToolNeedingApproval.code,
+                param: 'stream',
+              },
+            },
+            { status: 422 },
+          ),
     };
   }
 
@@ -4832,6 +4864,7 @@ export async function processRequest(
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
+    ...(toolLockdown ? { toolLockdown: true } : {}),
     requestedModel,
     provider,
     estimatedCostMicrousd,

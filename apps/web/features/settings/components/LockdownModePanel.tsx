@@ -71,15 +71,18 @@ export function LockdownModePanel() {
 
       <div className="flex items-start justify-between gap-4 rounded-lg border border-border p-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">Refuse every connector tool</p>
+          <p className="text-sm font-medium text-foreground">
+            Refuse connector tools and web tools
+          </p>
           <p className="mt-1 text-xs text-muted-foreground">
-            AGI stops offering connector tools to the model entirely, so a web page, document, or
-            connector response cannot talk it into calling one. Your connectors stay connected and
-            your per-tool choices are kept; nothing is offered while this is on.
+            AGI stops offering connector tools to the model, and web search, page fetch, code
+            execution and Deep Research stay off, so a web page, document, or connector response
+            cannot talk it into calling one. Your connectors stay connected and your per-tool
+            choices are kept for when you turn this off.
           </p>
           {enabled ? (
             <p className="mt-2 text-xs font-medium text-[var(--chat-accent-primary-text)]">
-              Connector tools are unavailable in every chat on this account.
+              Connector tools and web tools are unavailable in every chat on this account.
             </p>
           ) : null}
         </div>

@@ -106,7 +106,7 @@ import {
   withoutStandingApprovals,
 } from './lib/connector-tool-permissions';
 import { admitConversationTurn } from './lib/conversation-turn-admission';
-import { loadTurnToolPermissions, policyAutoApprovesTool } from './lib/tool-approval-policy';
+import { hostedToolRunsUnasked, loadTurnToolPermissions } from './lib/tool-approval-policy';
 import { DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -525,7 +525,11 @@ async function dispatchChatCompletions(
         loadConnectorToolPermissions(requestDb, userId),
       );
       processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
-        approvalRequired: !policyAutoApprovesTool(researchToolApprovalPolicy, WEB_SEARCH_TOOL),
+        approvalRequired: !hostedToolRunsUnasked(
+          researchToolApprovalPolicy,
+          WEB_SEARCH_TOOL,
+          processed.toolLockdown === true,
+        ),
         genericBackendConfigured: webSearchBackendConfigured(),
       });
       const researchUsage = createObservedProviderUsage();
@@ -781,7 +785,11 @@ async function dispatchChatCompletions(
     // has to happen here rather than in `processRequest`: the policy is only
     // known after the read above, and the request was built before it.
     processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
-      approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+      approvalRequired: !hostedToolRunsUnasked(
+        toolApprovalPolicy,
+        WEB_SEARCH_TOOL,
+        processed.toolLockdown === true,
+      ),
       genericBackendConfigured: webSearchBackendConfigured(),
     });
 
