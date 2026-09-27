@@ -330,6 +330,11 @@ export async function listResearchReports(
     : await db.query<ResearchReportRow>(
         `select * from public.research_reports
           where user_id = $1
+            and not exists (
+              select 1 from public.web_conversations conversation
+               where conversation.id = research_reports.conversation_id
+                 and (conversation.is_temporary or conversation.deleted_at is not null)
+            )
           order by created_at desc
           limit $2`,
         [input.userId, limit],

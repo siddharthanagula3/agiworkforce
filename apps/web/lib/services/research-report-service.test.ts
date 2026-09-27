@@ -269,7 +269,7 @@ describe('listResearchReports', () => {
     await listResearchReports(db, { userId: 'user-1' });
 
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).not.toContain('conversation_id');
+    expect(sql).toContain('conversation.is_temporary');
     expect(params).toEqual(['user-1', 20]);
   });
 });
