@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getAllowedModelsForTier, getBillingPlanPricing } from '@agiworkforce/types';
 
 const {
   mockGetUserScopedDb,
@@ -55,12 +56,14 @@ import {
 import { CloudCodeTurnStillRunningError } from '@/lib/services/cloud-code-turn-transport';
 import { POST } from './route';
 
+const PRO_MODEL = getAllowedModelsForTier('pro_additions')[0]!;
+const MAX_MODEL = getAllowedModelsForTier('flagship_additions')[0]!;
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const IDEMPOTENCY_KEY = '44444444-4444-4444-8444-444444444444';
 const context = { params: Promise.resolve({ sessionId: SESSION_ID }) };
 
 function turnRequest(
-  body: unknown = { goal: 'fix the failing test', model: 'a-model' },
+  body: unknown = { goal: 'fix the failing test', model: PRO_MODEL },
   headers: Record<string, string> = { 'idempotency-key': IDEMPOTENCY_KEY },
 ): NextRequest {
   return new NextRequest(`http://localhost:3000/api/code/sessions/${SESSION_ID}/agent`, {
@@ -102,7 +105,7 @@ describe('POST /api/code/sessions/[sessionId]/agent', () => {
       expect.objectContaining({
         sessionId: SESSION_ID,
         goal: 'fix the failing test',
-        model: 'a-model',
+        model: PRO_MODEL,
         idempotencyKey: IDEMPOTENCY_KEY,
         planTier: 'pro',
       }),
@@ -152,13 +155,51 @@ describe('POST /api/code/sessions/[sessionId]/agent', () => {
 
   it('refuses a goal or model that is not there', async () => {
     for (const body of [
-      { model: 'a-model' },
-      { goal: '   ', model: 'a-model' },
+      { model: PRO_MODEL },
+      { goal: '   ', model: PRO_MODEL },
       { goal: 'fix it' },
+      { goal: 'fix it', model: 'not-a-catalog-model' },
     ]) {
       const response = await POST(turnRequest(body), context);
       expect(response.status).toBe(400);
     }
+    expect(mockRunTurn).not.toHaveBeenCalled();
+  });
+
+  it('refuses a model the resolved plan does not reach, naming the plan it needs', async () => {
+    const response = await POST(turnRequest({ goal: 'fix it', model: MAX_MODEL }), context);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: 'model_not_available',
+        requiredTier: 'max',
+        message: expect.stringContaining(getBillingPlanPricing('max').label),
+      },
+    });
+    expect(mockRunTurn).not.toHaveBeenCalled();
+  });
+
+  it('runs a Max model for a Max subscriber at the tier the resolver grants', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'max', status: 'active' });
+
+    const response = await POST(turnRequest({ goal: 'fix it', model: MAX_MODEL }), context);
+
+    expect(response.status).toBe(200);
+    expect(mockRunTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ model: MAX_MODEL, planTier: 'max' }),
+    );
+  });
+
+  it('holds a lapsed subscription to Free, which does not reach a Pro model', async () => {
+    mockGetSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'canceled' });
+
+    const response = await POST(turnRequest(), context);
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'model_not_available' },
+    });
     expect(mockRunTurn).not.toHaveBeenCalled();
   });
 
