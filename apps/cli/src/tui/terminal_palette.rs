@@ -289,6 +289,28 @@ pub fn ui_mode_full_auto() -> Color {
     ui_danger()
 }
 
+#[derive(Clone, Copy)]
+pub struct SyntaxPalette {
+    pub keyword: (u8, u8, u8),
+    pub string: (u8, u8, u8),
+    pub constant: (u8, u8, u8),
+    pub comment: (u8, u8, u8),
+    pub function: (u8, u8, u8),
+    pub invalid: (u8, u8, u8),
+}
+
+pub fn syntax_palette() -> SyntaxPalette {
+    let palette = active_palette();
+    SyntaxPalette {
+        keyword: palette.accent,
+        string: palette.success,
+        constant: palette.warning,
+        comment: palette.muted,
+        function: palette.cloud,
+        invalid: palette.danger,
+    }
+}
+
 static DEFAULT_PALETTE_VERSION: AtomicU64 = AtomicU64::new(0);
 
 fn bump_palette_version() {
@@ -417,7 +439,6 @@ pub fn terminal_is_light() -> bool {
 /// Returns a monotonic counter that increments whenever `requery_default_colors()` runs
 /// successfully so cached renderers can know when their styling assumptions (e.g.
 /// background colors baked into cached transcript rows) are stale and need invalidation.
-#[allow(dead_code)]
 pub fn palette_version() -> u64 {
     DEFAULT_PALETTE_VERSION.load(Ordering::Relaxed)
 }
