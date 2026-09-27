@@ -63,6 +63,7 @@ interface Grant {
   microusd: unknown;
   description: unknown;
   transactionType: unknown;
+  metadata: unknown;
 }
 
 function ledger() {
@@ -101,6 +102,7 @@ function ledger() {
         microusd,
         description: params[3],
         transactionType: params[4],
+        metadata: params[5],
       });
       return [];
     }
@@ -207,13 +209,21 @@ describe('a purchased top-up grants exactly what was paid for', () => {
     expect(grants[0]!.microusd).toBe(5_000_000);
   });
 
-  it('charges the discounted pack price and still grants the full pack', async () => {
+  it('charges the discounted pack price, grants the full pack and records what was paid', async () => {
     const { db, grants } = ledger();
     const quoted = quote(1_000);
     await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), session(1_000, 'cs_thousand'));
 
     expect(quoted).toMatchObject({ discountPercent: 30, priceCents: 70_000, credits: 50_000 });
     expect(grants[0]!.microusd).toBe(50_000 * MICROUSD_PER_CREDIT);
+    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({ charged_cents: 70_000 });
+  });
+
+  it('records the list price paid for a checkout sold under the first conversion', async () => {
+    const { db, grants } = ledger();
+    await handleCreditTopUp(db, stripeReceiving(2_000), legacySession(20, 'cs_legacy_price'));
+
+    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({ charged_cents: 2_000 });
   });
 
   it.each(TOP_UP_PRESET_AMOUNTS_USD.map((amountUsd) => [amountUsd] as const))(
