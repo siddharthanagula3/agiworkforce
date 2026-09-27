@@ -13,10 +13,7 @@ import {
   requireCsrfUnlessWorkspaceApiKey,
   resolveWorkspaceApiCaller,
 } from '@/lib/server/service-principals/caller';
-import {
-  formatInvitation,
-  revokeInvitation,
-} from '@/lib/services/organization-invitation-service';
+import { formatInvitation, revokeInvitation } from '@/lib/services/organization-invitation-service';
 
 export const runtime = 'nodejs';
 
