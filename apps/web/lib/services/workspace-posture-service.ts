@@ -3,6 +3,7 @@ import 'server-only';
 import { X509Certificate } from 'node:crypto';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromCents, formatCredits } from '@agiworkforce/types';
 
 import {
   auditStreamContinuity,
@@ -654,7 +655,7 @@ export async function readWorkspacePosture(
           state: 'ok',
           enforcement: 'enforced',
           detail:
-            'Managed cloud spend by member, model, and provider. Volume and cost only, this surface never carries what anyone asked the model.',
+            'Managed cloud credits used by member, model, and provider. Volume and credits only, this surface never carries what anyone asked the model.',
           href: '/workspace/usage',
         },
         {
@@ -664,8 +665,8 @@ export async function readWorkspacePosture(
             spendLimit === null
               ? 'None'
               : spendLimit.enforcement === 'block'
-                ? `$${(spendLimit.monthly_cap_cents / 100).toFixed(2)} a month, enforced`
-                : `$${(spendLimit.monthly_cap_cents / 100).toFixed(2)} a month, ${spendLimit.enforcement}`,
+                ? `${formatCredits(creditsFromCents(spendLimit.monthly_cap_cents))} a month, enforced`
+                : `${formatCredits(creditsFromCents(spendLimit.monthly_cap_cents))} a month, ${spendLimit.enforcement}`,
           state: spendLimit === null ? 'attention' : 'ok',
           enforcement:
             spendLimit === null

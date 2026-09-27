@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import type { PrivacyMode, SecretHandlingMode, SyncedAppSurface } from '@agiworkforce/types';
+import {
+  centsFromCredits,
+  creditsFromCents,
+  formatCredits,
+  type PrivacyMode,
+  type SecretHandlingMode,
+  type SyncedAppSurface,
+} from '@agiworkforce/types';
 import {
   useUpdateWorkspacePolicy,
   useWorkspacePolicy,
@@ -12,8 +19,8 @@ import { isValidIpOrCidr } from '../schemas/settings-validation';
 
 type PolicyDraft = Omit<
   WorkspaceAdminPolicy,
-  'organizationId' | 'updatedAt' | 'controls' | 'revision'
->;
+  'organizationId' | 'updatedAt' | 'controls' | 'revision' | 'monthlySpendCapCents'
+> & { monthlySpendCapCredits: number | null };
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -58,6 +65,7 @@ const fieldInputStyle = {
 } as const;
 
 const MAX_MONTHLY_SPEND_CAP_CENTS = 100_000_000;
+const MAX_MONTHLY_SPEND_CAP_CREDITS = creditsFromCents(MAX_MONTHLY_SPEND_CAP_CENTS);
 const MAX_IP_ALLOW_LIST_ENTRIES = 100;
 
 const PRIVACY_MODES: { value: PrivacyMode; label: string; hint: string }[] = [
@@ -121,9 +129,23 @@ function toDraft(policy: WorkspaceAdminPolicy): PolicyDraft {
     allowMemory: policy.allowMemory,
     secretHandling: policy.secretHandling,
     requireMfa: policy.requireMfa,
-    monthlySpendCapCents: policy.monthlySpendCapCents,
+    monthlySpendCapCredits:
+      policy.monthlySpendCapCents === null ? null : creditsFromCents(policy.monthlySpendCapCents),
     zeroDataRetentionOnly: policy.zeroDataRetentionOnly,
     ipAllowList: [...policy.ipAllowList],
+  };
+}
+
+function toPolicyPatch({ monthlySpendCapCredits, ...draft }: PolicyDraft) {
+  return {
+    ...draft,
+    monthlySpendCapCents:
+      monthlySpendCapCredits === null
+        ? null
+        : Math.min(
+            Math.ceil(centsFromCredits(monthlySpendCapCredits)),
+            MAX_MONTHLY_SPEND_CAP_CENTS,
+          ),
   };
 }
 
@@ -585,32 +607,31 @@ export function WorkspacePolicySection() {
       <Row
         title="Monthly spend cap"
         description={
-          draft.monthlySpendCapCents === null
+          draft.monthlySpendCapCredits === null
             ? 'No cap. AGI-managed compute usage is unrestricted for this workspace.'
-            : `AGI-managed compute stops once this workspace's usage passes $${(
-                draft.monthlySpendCapCents / 100
-              ).toFixed(2)} for the month.`
+            : `AGI-managed compute stops once this workspace's usage passes ${formatCredits(
+                draft.monthlySpendCapCredits,
+              )} for the month.`
         }
         control={
           <input
             type="number"
-            min={0.01}
-            max={MAX_MONTHLY_SPEND_CAP_CENTS / 100}
-            step={0.01}
-            value={draft.monthlySpendCapCents === null ? '' : draft.monthlySpendCapCents / 100}
+            min={1}
+            max={MAX_MONTHLY_SPEND_CAP_CREDITS}
+            step={1}
+            value={draft.monthlySpendCapCredits ?? ''}
             disabled={!canEdit}
-            aria-label="Monthly spend cap in dollars"
+            aria-label="Monthly spend cap in credits"
             placeholder="No cap"
             onChange={(event) => {
               const raw = event.target.value;
               if (raw.trim() === '') {
-                patch({ monthlySpendCapCents: null });
+                patch({ monthlySpendCapCredits: null });
                 return;
               }
-              const dollars = Number.parseFloat(raw);
-              if (!Number.isFinite(dollars) || dollars <= 0) return;
-              const cents = Math.min(Math.round(dollars * 100), MAX_MONTHLY_SPEND_CAP_CENTS);
-              patch({ monthlySpendCapCents: cents });
+              const credits = Number.parseFloat(raw);
+              if (!Number.isFinite(credits) || credits <= 0) return;
+              patch({ monthlySpendCapCredits: Math.min(credits, MAX_MONTHLY_SPEND_CAP_CREDITS) });
             }}
             style={{ width: 100, ...fieldInputStyle }}
           />
@@ -757,7 +778,7 @@ export function WorkspacePolicySection() {
             cursor: !canEdit || !dirty || coherenceError ? 'not-allowed' : 'pointer',
           }}
           disabled={!canEdit || !dirty || Boolean(coherenceError)}
-          onClick={() => update.mutate(draft)}
+          onClick={() => update.mutate(toPolicyPatch(draft))}
         >
           {update.isPending ? 'Saving…' : overview.configured ? 'Save policy' : 'Apply policy'}
         </button>

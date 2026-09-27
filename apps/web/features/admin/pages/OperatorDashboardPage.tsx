@@ -6,7 +6,7 @@ import type {
   OperatorOverview,
   UserRow,
 } from '@/features/admin/services/operator-metrics';
-import { formatCredits } from '@agiworkforce/types';
+import { centsFromCredits, formatCredits } from '@agiworkforce/types';
 import { useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -24,7 +24,7 @@ import RoutingHealthPanel from '../components/RoutingHealthPanel';
 import ServiceHealthPanel from '../components/ServiceHealthPanel';
 import SupportTicketQueuePanel from '../components/SupportTicketQueuePanel';
 import { SupportHandoffQueuePanel } from '@/features/support/components/SupportHandoffQueuePanel';
-import { formatCents, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
+import { formatCreditAmount, formatDateTime, NOT_RECORDED } from '../lib/operator-format';
 import { helpHref } from '@/lib/support/help-entry-points';
 
 const TABS = [
@@ -197,7 +197,7 @@ export function OperatorDashboardPage() {
     try {
       const preview = await operatorAction({ action: 'preview-reset-all' });
       const affected = Number(preview['affectedUsers'] ?? 0);
-      const cleared = Number(preview['clearedCents'] ?? 0);
+      const cleared = Number(preview['clearedCredits'] ?? 0);
       if (affected === 0) {
         setNotice('No account has usage to clear right now.');
         return;
@@ -206,7 +206,7 @@ export function OperatorDashboardPage() {
       // proper severity, and only then does the typed phrase confirm intent.
       const acknowledged = await confirmDestructive({
         title: 'Clear usage for every account?',
-        description: `This clears ${formatCents(cleared)} of usage across ${affected} account(s) and cannot be undone. You will be asked to type a confirmation next.`,
+        description: `This clears ${formatCreditAmount(cleared)} of usage across ${affected} account(s) and cannot be undone. You will be asked to type a confirmation next.`,
         confirmText: 'Continue',
         variant: 'destructive',
       });
@@ -215,7 +215,7 @@ export function OperatorDashboardPage() {
       if (typed === null) return;
       const result = await operatorAction({ action: 'reset-all-usage', confirm: typed });
       setNotice(
-        `Cleared ${formatCents(Number(result['clearedCents'] ?? 0))} across ` +
+        `Cleared ${formatCreditAmount(Number(result['clearedCredits'] ?? 0))} across ` +
           `${Number(result['affectedUsers'] ?? 0)} account(s).`,
       );
       await load(tab);
@@ -228,13 +228,14 @@ export function OperatorDashboardPage() {
 
   async function grantCredits(user: UserRow) {
     const label = user.email ?? user.id;
-    const raw = window.prompt(`Grant goodwill credit to ${label}. Amount in dollars:`, '10');
+    const raw = window.prompt(`Grant goodwill credits to ${label}. Amount in credits:`, '2000');
     if (raw === null) return;
-    const dollars = Number(raw);
-    if (!Number.isFinite(dollars) || dollars <= 0) {
-      setError('Enter a positive dollar amount.');
+    const credits = Number(raw);
+    if (!Number.isFinite(credits) || credits <= 0) {
+      setError('Enter a positive number of credits.');
       return;
     }
+    const amountCents = Math.ceil(centsFromCredits(credits));
     const reason = window.prompt('Reason (recorded on the grant):', '');
     if (reason === null) return;
     if (!reason.trim()) {
@@ -248,14 +249,14 @@ export function OperatorDashboardPage() {
       const result = await operatorAction({
         action: 'grant-credits',
         userId: user.id,
-        amountCents: Math.round(dollars * 100),
+        amountCents,
         reason: reason.trim(),
       });
-      const credits = typeof result['credits'] === 'number' ? result['credits'] : null;
+      const grantedCredits = typeof result['credits'] === 'number' ? result['credits'] : null;
       const expiresAt = typeof result['expiresAt'] === 'string' ? result['expiresAt'] : null;
       setNotice(
-        result['granted'] && credits !== null && expiresAt
-          ? `Granted ${formatCredits(credits, { maximumFractionDigits: 0 })} to ${label}. They expire ${formatDateTime(expiresAt)}.`
+        result['granted'] && grantedCredits !== null && expiresAt
+          ? `Granted ${formatCredits(grantedCredits, { maximumFractionDigits: 0 })} to ${label}. They expire ${formatDateTime(expiresAt)}.`
           : `${label} has no active credit period, so there was nothing to credit.`,
       );
       await load('users');
@@ -290,7 +291,7 @@ export function OperatorDashboardPage() {
       if (!response.ok) throw new Error(body?.error?.message ?? `Failed (${response.status})`);
       setNotice(
         body.reset
-          ? `Cleared ${formatCents(body.clearedCents)} of usage for ${label}.`
+          ? `Cleared ${formatCreditAmount(body.clearedCredits)} of usage for ${label}.`
           : `${label} has no active credit period, so there was nothing to reset.`,
       );
       await load('users');
@@ -506,8 +507,8 @@ export function OperatorDashboardPage() {
                       ) : null}
                     </td>
                     <td className="p-3 tabular-nums">
-                      {formatCents(user.creditsUsedCents)} /{' '}
-                      {formatCents(user.creditsAllocatedCents)}
+                      {formatCreditAmount(user.creditsUsed)} /{' '}
+                      {formatCreditAmount(user.creditsAllocated)}
                     </td>
                     <td className="p-3 text-xs text-muted-foreground">
                       {formatDateTime(user.createdAt)}

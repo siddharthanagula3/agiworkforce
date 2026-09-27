@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { BarChart3, Download } from 'lucide-react';
+import { formatCredits } from '@agiworkforce/types';
 
 import { WorkspaceSpendLimit } from './WorkspaceSpendLimit';
 import {
@@ -22,13 +23,6 @@ const WINDOWS = [
   { days: 30, label: '30 days' },
   { days: 90, label: '90 days' },
 ] as const;
-
-function money(cents: number): string {
-  return `$${(cents / 100).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
-}
 
 function compact(n: number): string {
   return n.toLocaleString();
@@ -64,18 +58,22 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
  */
 function Sparkline({ days }: { days: UsageDayRow[] }) {
   if (days.length === 0) return null;
-  const peak = Math.max(...days.map((d) => d.costCents), 1);
+  const peak = Math.max(...days.map((d) => d.credits), 1);
 
   return (
-    <div className="flex h-16 items-end gap-[2px] px-5 pb-4" role="img" aria-label="Daily spend">
+    <div
+      className="flex h-16 items-end gap-[2px] px-5 pb-4"
+      role="img"
+      aria-label="Daily credits used"
+    >
       {days.map((day) => (
         <span
           key={day.day}
-          title={`${new Date(day.day).toLocaleDateString()}, ${money(day.costCents)}`}
+          title={`${new Date(day.day).toLocaleDateString()}, ${formatCredits(day.credits)}`}
           style={{
             flex: 1,
             minWidth: 2,
-            height: `${Math.max(2, (day.costCents / peak) * 100)}%`,
+            height: `${Math.max(2, (day.credits / peak) * 100)}%`,
             background: 'var(--text-3)',
             borderRadius: 'var(--corner-detail)',
           }}
@@ -135,7 +133,7 @@ function BreakdownTable({
                 <th className="px-5 py-2 text-right font-medium">Turns</th>
                 <th className="px-5 py-2 text-right font-medium">Tokens in</th>
                 <th className="px-5 py-2 text-right font-medium">Tokens out</th>
-                <th className="px-5 py-2 text-right font-medium">Spend</th>
+                <th className="px-5 py-2 text-right font-medium">Credits</th>
               </tr>
             </thead>
             <tbody>
@@ -169,7 +167,7 @@ function BreakdownTable({
                     className="px-5 py-2.5 text-right tabular-nums"
                     style={{ color: 'var(--text-1)' }}
                   >
-                    {money(row.costCents)}
+                    {formatCredits(row.credits)}
                   </td>
                 </tr>
               ))}
@@ -224,7 +222,7 @@ export function WorkspaceUsageAnalytics() {
           You do not administer this workspace
         </p>
         <p className="mt-1.5 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-          Per-member spend is limited to owners and admins.
+          Per-member usage is limited to owners and admins.
         </p>
       </div>
     );
@@ -271,7 +269,7 @@ export function WorkspaceUsageAnalytics() {
             className="text-sm font-semibold"
             style={{ color: 'var(--text-1)' }}
           >
-            Managed cloud spend
+            Managed cloud usage
           </h2>
           <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
             Completed, settled requests only. Requests still processing or awaiting settlement are
@@ -282,7 +280,7 @@ export function WorkspaceUsageAnalytics() {
           className="grid grid-cols-2 divide-x md:grid-cols-4"
           style={{ borderColor: 'var(--settings-border)' }}
         >
-          <Stat label="Spend" value={money(usage.totals.costCents)} />
+          <Stat label="Credits used" value={formatCredits(usage.totals.credits)} />
           <Stat label="Turns" value={compact(usage.totals.requests)} />
           <Stat label="Tokens in" value={compact(usage.totals.inputTokens)} />
           <Stat label="Tokens out" value={compact(usage.totals.outputTokens)} />
@@ -320,7 +318,7 @@ export function WorkspaceUsageAnalytics() {
         <>
           <BreakdownTable
             title="By member"
-            caption="Who is spending. Volume and cost only, this surface never carries what anyone asked the model."
+            caption="Who is using credits. Volume and credits only, this surface never carries what anyone asked the model."
             rows={usage.byMember}
           />
           <BreakdownTable
@@ -331,7 +329,7 @@ export function WorkspaceUsageAnalytics() {
           />
           <BreakdownTable
             title="By model"
-            caption="Where the spend is going, which is usually the fastest lever on a workspace bill."
+            caption="Where the credits go, which is usually the fastest lever on a workspace bill."
             rows={usage.byModel}
           />
           <BreakdownTable
