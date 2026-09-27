@@ -308,18 +308,15 @@ describe('WebChatPage auto-title (WEB-85)', () => {
     );
   }, 15000);
 
-  it('falls back to a local truncation for a temporary chat the server never titles', async () => {
+  it('keeps a temporary chat title on this device and never writes it to the server', async () => {
     seedFirstTurn({ title: 'New Chat', isTemporary: true });
     const fetchMock = vi.fn(async () => jsonResponse({}));
     vi.stubGlobal('fetch', fetchMock);
 
     render(<WebChatPage />);
 
-    await waitFor(() =>
-      expect(mocks.updateConversation).toHaveBeenCalledWith(CONVERSATION_ID, {
-        title: CLIENT_TRUNCATION,
-      }),
-    );
+    await waitFor(() => expect(storeTitle()).toBe(CLIENT_TRUNCATION));
+    expect(mocks.updateConversation).not.toHaveBeenCalled();
     expect(conversationTitleReads(fetchMock)).toEqual([]);
   });
 });
