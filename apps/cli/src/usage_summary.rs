@@ -1218,6 +1218,180 @@ mod tests {
         assert_eq!(billed_turn(&[]).await, None);
     }
 
+    fn history_fixture() -> &'static str {
+        r#"{
+            "userId": "user_fixture",
+            "from": "2026-08-28T00:00:00.000Z",
+            "to": "2026-09-27T00:00:00.000Z",
+            "granularity": "day",
+            "totals": { "requests": 42, "inputTokens": 910000, "outputTokens": 120000, "credits": 1234.5 },
+            "periods": [
+                { "start": "2026-09-17T00:00:00.000Z", "requests": 1, "credits": 0.5 },
+                { "start": "2026-09-18T00:00:00.000Z", "requests": 2, "credits": 1 },
+                { "start": "2026-09-19T00:00:00.000Z", "requests": 3, "credits": 2 },
+                { "start": "2026-09-20T00:00:00.000Z", "requests": 4, "credits": 3 },
+                { "start": "2026-09-21T00:00:00.000Z", "requests": 5, "credits": 4 },
+                { "start": "2026-09-22T00:00:00.000Z", "requests": 6, "credits": 5 },
+                { "start": "2026-09-23T00:00:00.000Z", "requests": 7, "credits": 6 },
+                { "start": "2026-09-24T00:00:00.000Z", "requests": 8, "credits": 7 }
+            ],
+            "byWorkload": [
+                { "key": "chat", "label": null, "requests": 30, "inputTokens": 1, "outputTokens": 1, "credits": 1000 },
+                { "key": "work", "label": null, "requests": 10, "inputTokens": 1, "outputTokens": 1, "credits": 200.5 },
+                { "key": "unknown", "label": null, "requests": 1, "inputTokens": 1, "outputTokens": 1, "credits": 30 },
+                { "key": "sheets", "label": "Spreadsheets", "requests": 1, "inputTokens": 1, "outputTokens": 1, "credits": 4 }
+            ],
+            "byModel": [
+                { "key": "fixture-unlisted-model", "label": null, "requests": 40, "inputTokens": 1, "outputTokens": 1, "credits": 1200 },
+                { "key": "fixture-labelled-model", "label": "Fixture Model", "requests": 2, "inputTokens": 1, "outputTokens": 1, "credits": 34.5 }
+            ],
+            "byProject": [
+                { "key": "proj_fixture", "label": "Launch", "requests": 12, "inputTokens": 1, "outputTokens": 1, "credits": 500 }
+            ],
+            "freshness": { "asOf": "2026-09-27T00:00:00.000Z", "latestActivityAt": null, "unsettledRequests": 3 }
+        }"#
+    }
+
+    #[test]
+    fn parses_the_usage_history_body_the_server_sends() {
+        let history = parse_usage_history(history_fixture()).expect("server history must parse");
+        assert_eq!(history.totals.credits, 1_234.5);
+        assert_eq!(history.periods.len(), 8);
+        assert_eq!(history.by_workload.len(), 4);
+        assert_eq!(history.by_model[1].label.as_deref(), Some("Fixture Model"));
+        assert_eq!(history.freshness.unsettled_requests, 3);
+        assert!(parse_usage_history(r#"{"from":"x","to":"y"}"#).is_err());
+    }
+
+    #[test]
+    fn usage_history_is_broken_down_by_product_area_and_model_in_credits() {
+        let history = parse_usage_history(history_fixture()).expect("server history must parse");
+        let lines = render_usage_history(&history);
+        assert_eq!(
+            lines[..10],
+            [
+                "Usage history, last 30 days: 1,234.5 credits, 42 requests",
+                "  By product area:",
+                "    Chat: 1,000 credits, 30 requests",
+                "    AGI Work: 200.5 credits, 10 requests",
+                "    Not attributed: 30 credits, 1 request",
+                "    Spreadsheets: 4 credits, 1 request",
+                "  By model:",
+                "    fixture-unlisted-model: 1,200 credits, 40 requests",
+                "    Fixture Model: 34.5 credits, 2 requests",
+                "  By day (UTC):",
+            ]
+        );
+        assert_eq!(lines[10], "    2026-09-24: 7 credits, 8 requests");
+        assert_eq!(
+            lines[10..17].last().map(String::as_str),
+            Some("    2026-09-18: 1 credit, 2 requests"),
+            "newest seven days first"
+        );
+        assert_eq!(
+            lines.last().map(String::as_str),
+            Some("  3 requests still settling, not counted yet")
+        );
+        assert_eq!(lines.len(), 18);
+        assert!(lines.iter().all(|line| !line.contains('$')), "{lines:?}");
+    }
+
+    #[test]
+    fn a_weekly_or_monthly_history_labels_its_periods_by_that_window() {
+        let mut history =
+            parse_usage_history(history_fixture()).expect("server history must parse");
+        history.periods.truncate(1);
+        history.granularity = "week".to_string();
+        let weekly = render_usage_history(&history);
+        assert!(
+            weekly.contains(&"  By week (UTC):".to_string()),
+            "{weekly:?}"
+        );
+        assert!(
+            weekly.contains(&"    Week of 2026-09-17: 0.5 credits, 1 request".to_string()),
+            "{weekly:?}"
+        );
+        history.granularity = "month".to_string();
+        let monthly = render_usage_history(&history);
+        assert!(
+            monthly.contains(&"  By month (UTC):".to_string()),
+            "{monthly:?}"
+        );
+        assert!(
+            monthly.contains(&"    2026-09: 0.5 credits, 1 request".to_string()),
+            "{monthly:?}"
+        );
+    }
+
+    #[test]
+    fn an_empty_history_says_nothing_has_settled() {
+        let mut history =
+            parse_usage_history(history_fixture()).expect("server history must parse");
+        history.totals.credits = 0.0;
+        history.totals.requests = 0;
+        history.periods.clear();
+        history.by_workload.clear();
+        history.by_model.clear();
+        history.freshness.unsettled_requests = 0;
+        assert_eq!(
+            render_usage_history(&history),
+            [
+                "Usage history, last 30 days: 0 credits, 0 requests",
+                "  No settled usage in this window",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_session_estimate_is_stated_in_credits() {
+        let rendered = render_session_estimate(&SessionEstimate {
+            turns: 2,
+            input_tokens: 1_000,
+            output_tokens: 200,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            estimated_cost_usd: 0.0125,
+            by_model: vec![("fixture-unlisted-model".to_string(), 0.0125)],
+            model: "fixture-unlisted-model".to_string(),
+        });
+        assert!(
+            rendered.contains(&"  estimated: 2.5 credits".to_string()),
+            "{rendered:?}"
+        );
+        assert!(
+            rendered.contains(&"    fixture-unlisted-model: 2.5 credits".to_string()),
+            "{rendered:?}"
+        );
+        assert!(
+            rendered.iter().all(|line| !line.contains('$')),
+            "{rendered:?}"
+        );
+    }
+
+    #[test]
+    fn a_failed_payment_is_worded_like_billing_and_points_at_settings() {
+        let mut usage =
+            parse_account_usage(contract_fixture()).expect("contract fixture must parse");
+        usage.subscription_status = Some("past_due".to_string());
+        let rendered = render_account_usage(&usage, fixture_now());
+        let billing = web_link(BILLING_PATH);
+        assert_eq!(rendered[2], "  Subscription: past due");
+        assert_eq!(
+            rendered[3],
+            "  Your last payment did not go through, so this subscription is past due. Until it is settled this account is on Free, and plan features and purchased credits are paused."
+        );
+        assert_eq!(
+            rendered[4],
+            format!("  Update your payment method in Settings > Billing: {billing}")
+        );
+        assert_eq!(
+            UsageFetchError::entitlement(402).to_string(),
+            format!(
+                "your last payment did not go through. Update your payment method in Settings > Billing: {billing}"
+            )
+        );
+    }
+
     #[test]
     fn reset_suffix_handles_a_past_and_unparseable_timestamp() {
         assert_eq!(
