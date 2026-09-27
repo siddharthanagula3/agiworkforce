@@ -106,6 +106,7 @@ describe('schedule form contract', () => {
         retryBackoffSeconds: 300,
         missedExecutionPolicy: 'run_once',
         condition: null,
+        creditCap: null,
       },
     });
     expect(JSON.stringify(result)).not.toContain('notification');

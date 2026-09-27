@@ -53,6 +53,7 @@ export interface RefundableChargeView {
   disputed: boolean;
   withdrawalEligible: boolean;
   withdrawalRefundCents: number | null;
+  withdrawalProrated: boolean;
   receiptUrl: string | null;
 }
 

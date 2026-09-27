@@ -27,7 +27,7 @@ import {
   listStripeCustomerCharges,
   readStripeCustomerCountry,
   readStripePaymentCustomer,
-  readStripePaymentServicePeriod,
+  readStripeSubscriptionPayment,
   refundStripeCharge,
   retrieveStripeCharge,
 } from '@/lib/server/payments/stripe-provider';
@@ -103,6 +103,11 @@ interface RefundFacts {
 interface RefundDecision {
   assessment: RefundAssessment;
   refundCents: number | null;
+}
+
+interface WithdrawalTerms {
+  refundCents: number | null;
+  prorated: boolean;
 }
 
 const REQUEST_COLUMNS = `id, user_id, charge_id, charge_kind, charge_amount_cents, charge_currency,
@@ -247,14 +252,12 @@ function unspentTopUpShare(charge: NormalizedCharge, credits: CreditPeriodFacts)
   return Math.min(purchased, purchasedRemainingMicrousd(credits)) / purchased;
 }
 
-async function coversCurrentPlanPeriod(
+function coversCurrentPlanPeriod(
   charge: NormalizedCharge,
+  servicePeriod: NormalizedPeriod | null,
   planPeriod: NormalizedPeriod | null,
-): Promise<boolean> {
+): boolean {
   if (!planPeriod) return false;
-  const servicePeriod = charge.paymentReference
-    ? await readStripePaymentServicePeriod(charge.paymentReference)
-    : null;
   if (servicePeriod) {
     return (
       Math.floor(servicePeriod.endsAt.getTime() / 1000) ===
@@ -264,18 +267,35 @@ async function coversCurrentPlanPeriod(
   return charge.createdAt >= planPeriod.startsAt && charge.createdAt < planPeriod.endsAt;
 }
 
-async function withdrawalRefundCents(
+async function withdrawalTermsFor(
   charge: NormalizedCharge,
   facts: RefundFacts,
-): Promise<number | null> {
-  if (charge.refundedMinorUnits > 0 || charge.disputed || !facts.credits) return null;
+): Promise<WithdrawalTerms> {
+  if (charge.disputed) return { refundCents: null, prorated: false };
+  const subscriptionPayment =
+    charge.kind === 'top_up' || !charge.paymentReference
+      ? null
+      : await readStripeSubscriptionPayment(charge.paymentReference);
+  const consent =
+    charge.kind === 'top_up'
+      ? charge.withdrawalConsent
+      : (subscriptionPayment?.withdrawalConsent ?? null);
+  if (!consent) return { refundCents: refundableCentsOf(charge), prorated: false };
+  if (charge.refundedMinorUnits > 0 || !facts.credits) return { refundCents: null, prorated: true };
   const share =
     charge.kind === 'top_up'
       ? unspentTopUpShare(charge, facts.credits)
-      : (await coversCurrentPlanPeriod(charge, facts.planPeriod))
+      : coversCurrentPlanPeriod(
+            charge,
+            subscriptionPayment?.servicePeriod ?? null,
+            facts.planPeriod,
+          )
         ? unusedPlanShare(facts.credits)
         : null;
-  return share === null ? null : Math.round(charge.amount.minorUnits * share);
+  return {
+    refundCents: share === null ? null : Math.round(charge.amount.minorUnits * share),
+    prorated: true,
+  };
 }
 
 function isUnused(charge: NormalizedCharge, credits: CreditPeriodFacts | null): boolean {
@@ -327,7 +347,11 @@ function assessRefundRequest(input: {
 
 function toRefundableChargeView(
   charge: NormalizedCharge,
-  input: { country: string | null; withdrawalEligible: boolean; withdrawalCents: number | null },
+  input: {
+    country: string | null;
+    withdrawalEligible: boolean;
+    withdrawal: WithdrawalTerms | null;
+  },
 ): RefundableChargeView {
   return {
     id: charge.reference,
@@ -340,7 +364,8 @@ function toRefundableChargeView(
     billingCountry: input.country,
     disputed: charge.disputed,
     withdrawalEligible: input.withdrawalEligible,
-    withdrawalRefundCents: input.withdrawalCents,
+    withdrawalRefundCents: input.withdrawal?.refundCents ?? null,
+    withdrawalProrated: input.withdrawal?.prorated ?? false,
     receiptUrl: charge.receiptUrl,
   };
 }
@@ -364,9 +389,8 @@ export async function listRefundableCharges(
   for (const charge of charges) {
     const country = charge.billingCountry ?? customerCountry ?? charge.cardCountry;
     const withdrawalEligible = isWithdrawalCountry(country) && inWithdrawalWindow(charge, now);
-    const withdrawalCents =
-      withdrawalEligible && facts ? await withdrawalRefundCents(charge, facts) : null;
-    views.push(toRefundableChargeView(charge, { country, withdrawalEligible, withdrawalCents }));
+    const withdrawal = withdrawalEligible && facts ? await withdrawalTermsFor(charge, facts) : null;
+    views.push(toRefundableChargeView(charge, { country, withdrawalEligible, withdrawal }));
   }
   return views;
 }
@@ -611,7 +635,7 @@ export async function fileRefundRequest(
     reason: input.reason,
     country,
     withdrawalCents: inWithdrawalWindow(charge, now)
-      ? await withdrawalRefundCents(charge, facts)
+      ? (await withdrawalTermsFor(charge, facts)).refundCents
       : null,
     unused: isUnused(charge, facts.credits),
     priorDiscretionaryRefunds: await countDiscretionaryRefunds(input.db, input.userId),

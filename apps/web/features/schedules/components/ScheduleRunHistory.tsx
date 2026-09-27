@@ -1,13 +1,13 @@
 'use client';
 
 import { Badge, Button, Skeleton } from '@agiworkforce/ui';
-import { formatCredits } from '@agiworkforce/types';
 import { AlertCircle, CheckCircle2, Clock3, Coins, Loader2, XCircle } from 'lucide-react';
 import type { ScheduleRun } from '../types';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
 import {
   formatDateTime,
   formatDuration,
+  formatRunCredits,
   formatTokenCount,
   scheduleModelLabel,
   scheduleResultText,
@@ -77,12 +77,12 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
               className="inline-flex items-center gap-1 tabular-nums"
               title={
                 usage.model
-                  ? `${formatCredits(usage.credits)} on ${scheduleModelLabel(usage.model)}`
-                  : formatCredits(usage.credits)
+                  ? `${formatRunCredits(usage.credits)} on ${scheduleModelLabel(usage.model)}`
+                  : formatRunCredits(usage.credits)
               }
             >
               <Coins className="h-3.5 w-3.5" aria-hidden="true" />
-              {formatCredits(usage.credits)}
+              {formatRunCredits(usage.credits)}
             </span>
           </>
         )}

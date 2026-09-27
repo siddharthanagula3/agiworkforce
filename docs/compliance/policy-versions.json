@@ -176,8 +176,8 @@
         },
         {
           "date": "2026-09-27",
-          "digest": "d8a061f601b4d5f0",
-          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK refunded prorated by the credits used as Claude does (support.claude.com/en/articles/12386328), the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date."
+          "digest": "16e8983458c38814",
+          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise."
         }
       ]
     },
