@@ -430,6 +430,10 @@
                 "enum": ["text", "json_object"]
               }
             }
+          },
+          "memory_enabled": {
+            "type": "boolean",
+            "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
           }
         }
       },
