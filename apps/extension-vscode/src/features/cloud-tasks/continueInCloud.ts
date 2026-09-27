@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import type { CloudCodeApi } from '@agiworkforce/cloud-contracts';
 import {
+  CLOUD_CODE_LIMITS,
   CLOUD_CODE_STOP_REASON_LABELS,
   cloudCodeStopReasonIsFailure,
   modelDisplayNameById,
@@ -61,11 +62,26 @@ export function describeCloudContinuationReview(
   };
 }
 
+export function cloudSessionTitle(goal: string): string {
+  const firstLine = goal.split('\n')[0]?.trim() ?? '';
+  return firstLine.length > CLOUD_CODE_LIMITS.title
+    ? `${firstLine.slice(0, CLOUD_CODE_LIMITS.title - 1)}…`
+    : firstLine;
+}
+
+function validateCloudTask(value: string): string | null {
+  const task = value.trim();
+  if (task === '') return 'Describe the task to run.';
+  if (task.length > CLOUD_CODE_LIMITS.task) {
+    return `Keep the task under ${CLOUD_CODE_LIMITS.task.toLocaleString()} characters.`;
+  }
+  return null;
+}
+
 export interface ContinueInCloudHost {
   readSource: () => Promise<WorkspaceCloudSource | null>;
   resolveApi: () => Promise<CloudCodeApi | null>;
   modelId: () => string;
-  titleFor: (goal: string) => string;
 }
 
 export async function continueInCloud(host: ContinueInCloudHost): Promise<void> {
@@ -88,7 +104,7 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
       title: CONTINUE_IN_CLOUD,
       prompt: `What should the cloud session do on ${source.branch}?`,
       ignoreFocusOut: true,
-      validateInput: (value) => (value.trim() === '' ? 'Describe the task to run.' : null),
+      validateInput: validateCloudTask,
     })
   )?.trim();
   if (!goal) return;
@@ -112,7 +128,7 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
       () =>
         api.create({
           requestId: randomUUID(),
-          title: host.titleFor(goal),
+          title: cloudSessionTitle(goal),
           repositoryUrl: source.repositoryUrl,
           repositoryBranch: source.branch,
           networkAccess: 'trusted',
