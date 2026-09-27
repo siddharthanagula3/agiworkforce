@@ -12,6 +12,7 @@ import { resolveTierSync } from '../../integrations/tierResolver';
 import { type WorkspaceFileReference } from '../chat-participant/promptReferences';
 import { type ChatTurn } from '../chat/retry';
 import { AttentionState } from './attentionBadge';
+import { alertSessionActivity } from './sessionActivityAlert';
 import { markInUse } from '../../core/startupWork';
 
 export { getWebviewContent, getNonce, escapeHtml } from './webviewContent';
@@ -145,6 +146,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       this._attention.record('turn-finished');
     }
     this._refreshBadge();
+    alertSessionActivity(message, () => this.reveal());
     return this._view?.webview.postMessage(message);
   }
 
