@@ -77,6 +77,7 @@ async function harness(): Promise<Harness> {
         joined_at: '2026-01-01T00:00:00.000Z',
       },
     ],
+    organizations: [{ id: ORG, owner_user_id: ADMIN, stripe_subscription_id: null }],
     subscriptions: [
       {
         id: 'sub-1',

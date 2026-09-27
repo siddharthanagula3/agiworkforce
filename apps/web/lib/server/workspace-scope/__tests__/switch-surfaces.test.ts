@@ -7,6 +7,24 @@ import { WORKSPACE_SCOPED_CONTENT_TABLES, workspaceSurfaceForTable } from '..';
 import { WORKSPACE_SWITCH_SURFACES, workspaceSwitchTables } from '../switch-surfaces';
 
 const MIGRATIONS = path.resolve(__dirname, '../../../../db/neon');
+const APP_ROOT = path.resolve(__dirname, '../../../..');
+const SOURCE_ROOTS = ['app', 'lib', 'features', 'shared'];
+
+function productionSources(): string[] {
+  const files: string[] = [];
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.tsx?$/.test(entry.name) && !/\.(?:test|spec)\.tsx?$/.test(entry.name)) {
+        files.push(full);
+      }
+    }
+  };
+  for (const root of SOURCE_ROOTS) walk(path.join(APP_ROOT, root));
+  return files;
+}
 const OWNER_COLUMN = 'user_id';
 const WORKSPACE_COLUMN = 'organization_id';
 
@@ -104,7 +122,11 @@ describe('what a workspace switch changes, surface by surface', () => {
         if (entry.effect === 'partitioned' && !partitioned) {
           wrong.push(`${entry.surface}: ${table} is claimed to switch and carries no pair`);
         }
-        if (entry.effect === 'account-wide' && found.has(WORKSPACE_COLUMN)) {
+        if (
+          entry.effect === 'account-wide' &&
+          found.has(WORKSPACE_COLUMN) &&
+          !entry.workspaceColumnRecordsProvenance
+        ) {
           wrong.push(`${entry.surface}: ${table} carries a workspace column after all`);
         }
         if (entry.effect === 'organization-only' && !found.has(WORKSPACE_COLUMN)) {
@@ -114,6 +136,29 @@ describe('what a workspace switch changes, surface by surface', () => {
     }
 
     expect(wrong).toEqual([]);
+  });
+
+  it('never reads a provenance-only workspace column as a partition', () => {
+    const provenanceTables = WORKSPACE_SWITCH_SURFACES.filter(
+      (entry) => entry.workspaceColumnRecordsProvenance,
+    ).flatMap((entry) => entry.tables);
+    const filtering: string[] = [];
+
+    for (const file of productionSources()) {
+      const source = readFileSync(file, 'utf8');
+      for (const literal of source.matchAll(/`[^`]*`|'[^'\n]*'/g)) {
+        const sql = literal[0].toLowerCase();
+        for (const table of provenanceTables) {
+          if (!new RegExp(`\\b${table}\\b`).test(sql)) continue;
+          if (/where[\s\S]*\borganization_id\b/.test(sql)) {
+            filtering.push(`${path.relative(APP_ROOT, file)}: ${table}`);
+          }
+        }
+      }
+    }
+
+    expect(provenanceTables.length).toBeGreaterThan(0);
+    expect(filtering).toEqual([]);
   });
 
   it('states why a surface a switch does not change is that way', () => {

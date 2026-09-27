@@ -23,11 +23,9 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
   recordAuditEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/services/subscription-service', async (importOriginal) => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  SubscriptionService: {
-    getSubscription: vi.fn(async () => ({ plan_tier: 'enterprise', status: 'active' })),
-  },
+  resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
 }));
 
 const { getDb } = vi.hoisted(() => ({ getDb: { current: null as unknown } }));

@@ -56,26 +56,40 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const SECOND_ORG = '22222222-2222-4222-8222-222222222222';
 const CONNECTION = '33333333-3333-4333-8333-333333333333';
 const FOREIGN_CONNECTION = '44444444-4444-4444-8444-444444444444';
+const SECOND_ORG_OWNER = 'second-org-owner';
 
-function subscription(planTier: string, status = 'active') {
+function subscription(planTier: string, status = 'active', userId = 'admin-user') {
   return {
-    id: 'sub-1',
-    user_id: 'admin-user',
+    id: `sub-${userId}`,
+    user_id: userId,
     plan_tier: planTier,
     status,
     current_period_start: '2026-01-01T00:00:00.000Z',
     current_period_end: '2027-01-01T00:00:00.000Z',
-    stripe_subscription_id: 'sub_stripe',
+    stripe_subscription_id: `sub_stripe_${userId}`,
     stripe_price_id: null,
     apple_original_transaction_id: null,
     google_purchase_token: null,
   };
 }
 
+const ORGANIZATIONS = [
+  { id: ORG, owner_user_id: 'admin-user', stripe_subscription_id: null },
+  { id: SECOND_ORG, owner_user_id: SECOND_ORG_OWNER, stripe_subscription_id: null },
+];
+
 function seed(
-  options: { planTier?: string; roles?: Array<{ organization_id: string; role: string }> } = {},
+  options: {
+    planTier?: string;
+    secondOrgPlanTier?: string;
+    roles?: Array<{ organization_id: string; role: string }>;
+  } = {},
 ): FakeScimDbState {
-  const { planTier = 'enterprise', roles = [{ organization_id: ORG, role: 'owner' }] } = options;
+  const {
+    planTier = 'enterprise',
+    secondOrgPlanTier = 'enterprise',
+    roles = [{ organization_id: ORG, role: 'owner' }],
+  } = options;
 
   const { adapter, state } = createFakeScimDb({
     directory_sync_connections: [
@@ -110,7 +124,11 @@ function seed(
       provisioned_at: null,
       joined_at: '2026-01-01T00:00:00.000Z',
     })),
-    subscriptions: planTier === 'none' ? [] : [subscription(planTier)],
+    organizations: ORGANIZATIONS.map((organization) => ({ ...organization })),
+    subscriptions: [
+      ...(planTier === 'none' ? [] : [subscription(planTier)]),
+      subscription(secondOrgPlanTier, 'active', SECOND_ORG_OWNER),
+    ],
   });
 
   getDb.current = adapter as unknown as DatabaseAdapter;
@@ -162,9 +180,53 @@ describe('directory sync admin entitlement gate', () => {
     },
   );
 
-  it('fails closed when the caller has no subscription row at all', async () => {
+  it('fails closed when the organization owner holds no subscription at all', async () => {
     seed({ planTier: 'none' });
     expect((await connectionsGet(jsonRequest(LIST_URL))).status).toBe(403);
+  });
+
+  it('admits an administrator on a free personal plan when the organization holds Enterprise', async () => {
+    seed({ planTier: 'free', roles: [{ organization_id: SECOND_ORG, role: 'admin' }] });
+
+    const response = await connectionsGet(jsonRequest(LIST_URL));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ organization_id: SECOND_ORG });
+  });
+
+  it('refuses an administrator holding Enterprise personally when the organization does not', async () => {
+    seed({
+      planTier: 'enterprise',
+      secondOrgPlanTier: 'team',
+      roles: [{ organization_id: SECOND_ORG, role: 'admin' }],
+    });
+
+    const response = await connectionsGet(jsonRequest(LIST_URL));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'SUBSCRIPTION_REQUIRED',
+      currentPlan: 'team',
+    });
+  });
+
+  it('answers 503 rather than guessing when the organization plan cannot be read', async () => {
+    const state = seed();
+    const adapter = getDb.current as DatabaseAdapter;
+    getDb.current = {
+      ...adapter,
+      query: async (sql: string, params?: unknown[]) => {
+        if (sql.includes('from public.organizations o')) throw new Error('database unavailable');
+        return adapter.query(sql, params);
+      },
+    };
+
+    const response = await connectionsPost(
+      jsonRequest(LIST_URL, 'POST', { provider: 'okta', directory_id: 'dir-new' }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(state.directory_sync_connections).toHaveLength(2);
   });
 
   it('fails closed on a tier string the catalog does not recognise', async () => {
@@ -186,6 +248,7 @@ describe('directory sync admin entitlement gate', () => {
           joined_at: '2026-01-01T00:00:00.000Z',
         },
       ],
+      organizations: ORGANIZATIONS.map((organization) => ({ ...organization })),
       subscriptions: [subscription('enterprise', 'canceled')],
     });
     getDb.current = adapter as unknown as DatabaseAdapter;

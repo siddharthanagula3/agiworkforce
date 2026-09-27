@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import {
   createInitialScheduleDraft,
@@ -110,6 +111,22 @@ describe('schedule form contract', () => {
       },
     });
     expect(JSON.stringify(result)).not.toContain('notification');
+  });
+
+  it('carries a whole-credit spend cap and refuses one outside the allowed range', () => {
+    const now = new Date('2026-07-15T12:00:00.000Z');
+    const weekly = { recurrence: 'weekly' as const, timeOfDay: '09:30', daysOfWeek: [1] };
+
+    expect(validateAndBuildScheduleRequest(draft({ ...weekly, creditCap: '250' }), now)).toEqual({
+      ok: true,
+      payload: expect.objectContaining({ creditCap: 250 }),
+    });
+    for (const creditCap of ['0', '2.5', String(MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP + 1)]) {
+      expect(validateAndBuildScheduleRequest(draft({ ...weekly, creditCap }), now)).toEqual({
+        ok: false,
+        errors: expect.objectContaining({ creditCap: expect.stringContaining('whole number') }),
+      });
+    }
   });
 
   it('converts a one-time wall clock value in its selected IANA timezone to UTC', () => {

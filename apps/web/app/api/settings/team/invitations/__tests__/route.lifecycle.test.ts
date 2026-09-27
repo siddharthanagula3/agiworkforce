@@ -61,6 +61,14 @@ vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendBulkTransactionalEmail: vi.fn(),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: {
@@ -77,6 +85,7 @@ import { GET, POST } from '../route';
 import { DELETE as REVOKE, POST as RESEND } from '../[invitationId]/route';
 import { POST as ACCEPT } from '../accept/route';
 import { hashInvitationToken } from '@/lib/services/organization-invitation-service';
+import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
@@ -213,6 +222,49 @@ describe('organization invitation lifecycle routes', () => {
           `https://app.agiworkforce.test/invite#token=${body.inviteToken}`,
         );
         expect(sent.html).toContain('Accept the invitation');
+      } finally {
+        delete process.env['RESEND_API_KEY'];
+        delete process.env['AGI_NOTIFICATIONS_FROM_EMAIL'];
+        delete process.env['NEXT_PUBLIC_APP_URL'];
+      }
+    });
+
+    it('counts the send against the inviter and hands back the link once the Free daily email cap is used up', async () => {
+      process.env['RESEND_API_KEY'] = 'test-resend-key';
+      process.env['AGI_NOTIFICATIONS_FROM_EMAIL'] = 'team@agiworkforce.test';
+      process.env['NEXT_PUBLIC_APP_URL'] = 'https://app.agiworkforce.test';
+      mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('email_sends'));
+      mockQuery
+        .mockResolvedValueOnce([adminMembership])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([{ name: 'Northwind' }]);
+
+      try {
+        const response = await POST(
+          jsonRequest('http://localhost:3000/api/settings/team/invitations', 'POST', {
+            organizationId: ORG_A,
+            email: 'Invitee@Example.com',
+            role: 'member',
+          }),
+        );
+
+        expect(response.status).toBe(201);
+        const body = (await response.json()) as {
+          inviteToken: string;
+          delivery: { emailSent: boolean; reason: string };
+        };
+
+        expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'org-a-admin', requested: { email_sends: 1 } }),
+        );
+        expect(mockSendTransactionalEmail).not.toHaveBeenCalled();
+        expect(body.delivery.emailSent).toBe(false);
+        expect(body.delivery.reason).toContain('Free accounts can send');
+        expect(body.delivery.reason).toContain('Send this link to the invited address yourself');
+        expect(body.inviteToken).toMatch(/^[A-Za-z0-9_-]{20,}$/);
       } finally {
         delete process.env['RESEND_API_KEY'];
         delete process.env['AGI_NOTIFICATIONS_FROM_EMAIL'];

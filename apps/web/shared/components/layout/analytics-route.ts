@@ -40,6 +40,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'notifications',
     'privacy',
     'profile',
+    'referrals',
     'reflect',
     'safety',
     'security',
