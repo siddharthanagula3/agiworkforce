@@ -111,9 +111,16 @@ export default function AccessibilityPage() {
             <h2 className="agi-ds-h2" id="agi-accessibility-report-title">
               Report a barrier.
             </h2>
-            <Prose>Email contact@agiworkforce.com and we treat it as a P0.</Prose>
+            <Prose>
+              Signed in, open Settings, Help and choose Report an accessibility barrier; the ticket
+              and every reply stay there. Or email contact@agiworkforce.com. Either way we treat it
+              as a P0.
+            </Prose>
             <ButtonRow>
-              <Button href="mailto:contact@agiworkforce.com">Email contact@agiworkforce.com</Button>
+              <Button href="/settings/help">Report from Settings, Help</Button>
+              <Button href="mailto:contact@agiworkforce.com" variant="secondary">
+                Email contact@agiworkforce.com
+              </Button>
               <Button href="/security" variant="secondary">
                 Security posture
               </Button>

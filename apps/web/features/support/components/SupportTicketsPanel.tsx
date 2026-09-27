@@ -12,12 +12,14 @@ import {
   type SupportTicket,
   type TicketStatus,
 } from '@/lib/support/tickets/types';
+import type { DiagnosticsExport } from '@/lib/support/diagnostics/export';
 import {
   listSupportTickets,
   moveSupportTicket,
   openSupportTicket,
   readSupportTicket,
   replyToSupportTicket,
+  reviewSupportDiagnostics,
   type OpenedSupportTicket,
   type SupportTicketThread,
 } from '../lib/ticket-client';
@@ -66,17 +68,50 @@ function StatusChip({ status }: { status: TicketStatus }) {
   );
 }
 
+export const ACCESSIBILITY_TICKET_SUBJECT = 'Accessibility barrier';
+
 function NewTicketForm({
+  initialSubject,
   onCreated,
   onCancel,
 }: {
+  initialSubject: string;
   onCreated: (opened: OpenedSupportTicket) => void;
   onCancel: () => void;
 }) {
-  const [subject, setSubject] = useState('');
+  const [subject, setSubject] = useState(initialSubject);
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsExport | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const reviewDiagnostics = async () => {
+    setReviewing(true);
+    setReviewError(null);
+    try {
+      setDiagnostics(await reviewSupportDiagnostics());
+    } catch (reviewFailure) {
+      setReviewError(toUserMessage(reviewFailure, 'The diagnostics could not be prepared.'));
+    } finally {
+      setReviewing(false);
+    }
+  };
+
+  const downloadDiagnostics = (bundle: DiagnosticsExport) => {
+    const url = URL.createObjectURL(
+      new Blob([`${JSON.stringify(bundle.diagnostics, null, 2)}\n`], {
+        type: 'application/json',
+      }),
+    );
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = bundle.filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -88,7 +123,14 @@ function NewTicketForm({
     setSubmitting(true);
     setError(null);
     try {
-      onCreated(await openSupportTicket({ subject: subject.trim(), message: message.trim() }));
+      onCreated(
+        await openSupportTicket({
+          subject: subject.trim(),
+          message: message.trim(),
+          includeDiagnostics,
+          reviewedDiagnostics: diagnostics?.diagnostics ?? null,
+        }),
+      );
       setSubject('');
       setMessage('');
     } catch (submitError) {
@@ -121,10 +163,54 @@ function NewTicketForm({
           onChange={(event) => setMessage(event.target.value)}
         />
       </label>
-      <p className="text-xs text-muted-foreground">
-        Your build, platform and the last few errors this browser recorded are attached
-        automatically. Nothing you were working on is sent.
-      </p>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-start gap-2 text-xs text-foreground">
+          <input
+            type="checkbox"
+            className="mt-0.5"
+            checked={includeDiagnostics}
+            disabled={submitting}
+            onChange={(event) => setIncludeDiagnostics(event.target.checked)}
+          />
+          <span>
+            Attach diagnostics: your build, platform and the last few errors this browser recorded.
+            Nothing you were working on is sent.
+          </span>
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={GHOST_BUTTON_CLASS}
+            disabled={reviewing}
+            onClick={() => void reviewDiagnostics()}
+          >
+            {reviewing ? <Spinner size="sm" className="mr-2" /> : null}
+            {diagnostics ? 'Refresh diagnostics' : 'Review diagnostics'}
+          </button>
+          {diagnostics ? (
+            <button
+              type="button"
+              className={GHOST_BUTTON_CLASS}
+              onClick={() => downloadDiagnostics(diagnostics)}
+            >
+              Download diagnostics
+            </button>
+          ) : null}
+        </div>
+        {reviewError ? (
+          <p role="alert" className="text-xs text-danger-text">
+            {reviewError}
+          </p>
+        ) : null}
+        {diagnostics ? (
+          <pre
+            aria-label="Diagnostics that would be attached"
+            className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted p-2 text-[11px] text-foreground"
+          >
+            {diagnostics.summary}
+          </pre>
+        ) : null}
+      </div>
       {error ? (
         <p role="alert" className="text-xs text-danger-text">
           {error}
@@ -306,7 +392,7 @@ export function SupportTicketsPanel() {
   const [thread, setThread] = useState<SupportTicketThread | null>(null);
   const [loading, setLoading] = useState(true);
   const [opening, setOpening] = useState(false);
-  const [composing, setComposing] = useState(false);
+  const [composing, setComposing] = useState<{ subject: string } | null>(null);
   const [created, setCreated] = useState<{ ticketId: string; staffNotified: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -396,9 +482,10 @@ export function SupportTicketsPanel() {
         </div>
       ) : composing ? (
         <NewTicketForm
-          onCancel={() => setComposing(false)}
+          initialSubject={composing.subject}
+          onCancel={() => setComposing(null)}
           onCreated={({ ticket, staffNotified }) => {
-            setComposing(false);
+            setComposing(null);
             setCreated({ ticketId: ticket.id, staffNotified });
             setTickets((current) => [ticket, ...(current ?? [])]);
             void open(ticket.id);
@@ -436,13 +523,22 @@ export function SupportTicketsPanel() {
             </ul>
           ) : null}
 
-          <button
-            type="button"
-            className={`${PRIMARY_BUTTON_CLASS} self-start`}
-            onClick={() => setComposing(true)}
-          >
-            Raise a ticket
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={PRIMARY_BUTTON_CLASS}
+              onClick={() => setComposing({ subject: '' })}
+            >
+              Raise a ticket
+            </button>
+            <button
+              type="button"
+              className={GHOST_BUTTON_CLASS}
+              onClick={() => setComposing({ subject: ACCESSIBILITY_TICKET_SUBJECT })}
+            >
+              Report an accessibility barrier
+            </button>
+          </div>
         </>
       )}
     </section>

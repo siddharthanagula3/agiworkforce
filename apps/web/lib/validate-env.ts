@@ -24,6 +24,7 @@ import { recordConfigurationState } from './observability/metrics';
 import { getAllRegisteredPriceIds, isGrandfatheredPriceId } from './price-tier-mapping';
 import { STRIPE_PRICE_IDS } from './pricing';
 import { totpKeysourceValidationError } from './crypto/totp-keysource';
+import { parseMaintenanceWindow } from './service-notices/maintenance-window';
 
 interface ValidationResult {
   valid: boolean;
@@ -542,6 +543,12 @@ function oneOf(...allowed: readonly string[]): (value: string) => string | null 
 }
 
 const BOOLEAN_SPELLINGS = ['1', '0', 'true', 'false', 'yes', 'no', 'on', 'off'];
+
+function isMaintenanceWindow(value: string): string | null {
+  return parseMaintenanceWindow(value)
+    ? null
+    : 'it is not an ISO 8601 interval such as 2026-10-01T02:00:00Z/2026-10-01T03:00:00Z';
+}
 
 function isBooleanish(value: string): string | null {
   return BOOLEAN_SPELLINGS.includes(value.trim().toLowerCase())
@@ -1344,10 +1351,27 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
   published('NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/features/support',
-    defaultValue: null,
+    defaultValue: '1',
     requiredIn: [],
     validate: isBooleanish,
-    description: 'whether the in-product support widget mounts',
+    description: 'kill switch for the support widget, which mounts unless this is 0',
+  }),
+  published('AGI_MAINTENANCE_WINDOW', {
+    type: 'string',
+    owner: 'apps/web/lib/server',
+    defaultValue: null,
+    requiredIn: [],
+    validate: isMaintenanceWindow,
+    description:
+      'the planned maintenance window the product announces 72 hours ahead and during, as start/end',
+  }),
+  published('SUPPORT_AGENT_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/lib/support',
+    defaultValue: '1',
+    requiredIn: [],
+    validate: isBooleanish,
+    description: 'kill switch for automated support answers, which run unless this is 0',
   }),
   published(
     'ACCOUNT_STATUS_FAIL_OPEN',
