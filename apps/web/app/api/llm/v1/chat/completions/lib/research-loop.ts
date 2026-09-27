@@ -1818,7 +1818,9 @@ export async function* runResearchLoop(
           (call) =>
             (runtimeSearchAvailable && isWebSearchTool(call.name)) || isUrlFetchTool(call.name),
         )
-        .map((call) => [call.id, researchCallRefusal(call, gateResearchCall(call, calls))]),
+        .map(
+          (call) => [call.id, researchCallRefusal(call, gateResearchCall(call, calls))] as const,
+        ),
     );
 
     for (const call of calls) {
