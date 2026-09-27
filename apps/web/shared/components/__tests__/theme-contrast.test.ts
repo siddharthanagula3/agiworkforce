@@ -1379,12 +1379,14 @@ describe('the mobile palette clears AA in every theme', () => {
         const swatch = swatches[accent]![mode];
         const grounds = [
           ...SURFACES.map((surface) => palette[surface]!),
-          ...TINT_BASES.map((base) => over(palette.accentSurface!, palette[base]!)),
+          ...TINT_BASES.map((base) => over(palette['accentSurface']!, palette[base]!)),
         ];
         for (const ground of grounds) {
           expect(contrastRatio(swatch, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
         }
-        expect(contrastRatio(palette.accentText!, swatch)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        expect(contrastRatio(palette['accentText']!, swatch)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
       });
     }
 
