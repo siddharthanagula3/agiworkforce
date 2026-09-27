@@ -13,24 +13,19 @@ import {
 } from '@agiworkforce/icons';
 import { MarkdownContent } from '@agiworkforce/unified-chat';
 import { Spinner } from '@agiworkforce/ui';
-import type {
-  CloudCodeAgentStep,
-  CloudCodeSession,
-  CloudCodeTerminalEntry,
+import {
+  CLOUD_CODE_STOP_REASON_LABELS,
+  cloudCodeCommandRanLabel,
+  cloudCodeStopReasonIsFailure,
+  type CloudCodeAgentStep,
+  type CloudCodeSession,
+  type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
+import type { CodeApprovalPrompt, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { formatRelativeTime } from '@shared/utils/format';
 import { useTTS } from '@/lib/hooks/useTTS';
-import {
-  CODE_COPY,
-  CODE_TIMING,
-  commandRanLabel,
-  formatElapsed,
-  provisioningSteps,
-  stopReasonIsFailure,
-  stopReasonLabel,
-} from '../code-surface';
-import type { CodeApprovalPrompt, CodeTranscriptItem } from '../code-transcript';
+import { CODE_COPY, CODE_TIMING, formatElapsed, provisioningSteps } from '../code-surface';
 import styles from '../CloudCodePage.module.css';
 
 const ACTION_GLYPH_SIZE = 14;
@@ -162,7 +157,7 @@ function CommandGroup({
   return (
     <div className={styles['activity']}>
       <DisclosureRow
-        label={commandRanLabel(entries.length)}
+        label={cloudCodeCommandRanLabel(entries.length)}
         expanded={expanded}
         onToggle={() => setExpanded((open) => !open)}
       />
@@ -359,12 +354,12 @@ export function CodeTranscriptBody({
             {item.stopReason && (
               <p
                 className={
-                  stopReasonIsFailure(item.stopReason)
+                  cloudCodeStopReasonIsFailure(item.stopReason)
                     ? styles['activityFailure']
                     : styles['statusLine']
                 }
               >
-                {stopReasonLabel(item.stopReason)}
+                {CLOUD_CODE_STOP_REASON_LABELS[item.stopReason]}
               </p>
             )}
             {item.retryGoal && (

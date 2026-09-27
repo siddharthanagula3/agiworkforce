@@ -7,6 +7,7 @@ import {
   BookImage,
   BookOpen,
   Bot,
+  Code2,
   Bell,
   CalendarClock,
   FolderOpen,
@@ -48,6 +49,7 @@ import {
   type ShellShortcutRoute,
 } from '@/src/features/shell';
 import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
+import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
 
 type RoutePath =
   | '/(app)/chats'
@@ -58,6 +60,7 @@ type RoutePath =
   | '/(app)/skills'
   | '/(app)/reports'
   | '/(app)/schedules'
+  | '/(app)/cloud-code'
   | '/(app)/companion'
   | '/(app)/tasks'
   | '/(app)/notifications'
@@ -69,7 +72,16 @@ type RoutePath =
   | ShellShortcutRoute;
 
 interface PrimaryItem {
-  key: 'chats' | 'projects' | 'library' | 'reports' | 'skills' | 'schedules' | 'remote' | 'tasks';
+  key:
+    | 'chats'
+    | 'projects'
+    | 'library'
+    | 'reports'
+    | 'skills'
+    | 'schedules'
+    | 'code'
+    | 'remote'
+    | 'tasks';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -124,6 +136,13 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'Schedules',
     icon: CalendarClock,
     route: '/(app)/schedules',
+    cloud: true,
+  },
+  {
+    key: 'code',
+    label: CLOUD_CODE_SCREEN_TITLE,
+    icon: Code2,
+    route: '/(app)/cloud-code',
     cloud: true,
   },
   {
@@ -361,6 +380,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       if (key === 'skills') return p.includes('/skills');
       if (key === 'reports') return p.includes('/reports');
       if (key === 'schedules') return p.includes('/schedules');
+      if (key === 'code') return p.includes('/cloud-code');
       if (key === 'remote') return p.includes('/companion');
       if (key === 'tasks') return p.includes('/tasks');
       return false;
