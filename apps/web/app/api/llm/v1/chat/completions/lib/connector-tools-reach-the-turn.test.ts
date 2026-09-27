@@ -117,7 +117,7 @@ const runServiceMocks = vi.hoisted(() => ({ createRun: vi.fn(), findActive: vi.f
 const workflowMocks = vi.hoisted(() => ({ start: vi.fn(), loadMcpTools: vi.fn() }));
 const toolLoopMocks = vi.hoisted(() => ({ classify: vi.fn() }));
 const connectorCatalogMocks = vi.hoisted(() => ({ load: vi.fn() }));
-const toolPolicyMocks = vi.hoisted(() => ({ loadTurn: vi.fn() }));
+const toolPolicyMocks = vi.hoisted(() => ({ loadTurn: vi.fn(), loadPolicy: vi.fn() }));
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: rlsMocks.getUserScopedDb,
@@ -157,6 +157,10 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy', async (imp
     loadTurnToolPermissions: (...args: Parameters<typeof actual.loadTurnToolPermissions>) => {
       toolPolicyMocks.loadTurn(...args);
       return actual.loadTurnToolPermissions(...args);
+    },
+    loadToolApprovalPolicy: (...args: Parameters<typeof actual.loadToolApprovalPolicy>) => {
+      toolPolicyMocks.loadPolicy(...args);
+      return actual.loadToolApprovalPolicy(...args);
     },
   };
 });
@@ -378,6 +382,7 @@ describe('WEB-CONNECTORS-NO-RUNTIME-EFFECT-01 · connectors reach the turn', () 
 
     expect(connectorCatalogMocks.load).not.toHaveBeenCalled();
     expect(toolPolicyMocks.loadTurn).not.toHaveBeenCalled();
+    expect(toolPolicyMocks.loadPolicy).not.toHaveBeenCalled();
     expect(offeredConnectorTools()).toEqual([]);
   });
 
@@ -385,13 +390,8 @@ describe('WEB-CONNECTORS-NO-RUNTIME-EFFECT-01 · connectors reach the turn', () 
     await POST(makeRequest(undefined, false, 'Search the web for today’s weather', true));
 
     expect(connectorCatalogMocks.load).not.toHaveBeenCalled();
-    expect(toolPolicyMocks.loadTurn).toHaveBeenCalledWith(
-      expect.anything(),
-      USER_ID,
-      expect.objectContaining({
-        connectorPermissionsRequired: false,
-        toolApprovalPolicyRequired: true,
-      }),
-    );
+    expect(toolPolicyMocks.loadPolicy).toHaveBeenCalledTimes(1);
+    expect(toolPolicyMocks.loadPolicy).toHaveBeenCalledWith(expect.anything(), USER_ID);
+    expect(toolPolicyMocks.loadTurn).not.toHaveBeenCalled();
   });
 });

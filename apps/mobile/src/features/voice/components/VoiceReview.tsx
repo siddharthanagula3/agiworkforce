@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';

@@ -305,7 +305,8 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
     );
   }
 
-  const toolApprovalPolicy = await loadToolApprovalPolicy(db, userId);
+  const toolApprovalPolicy =
+    processed.toolApprovalPolicy ?? (await loadToolApprovalPolicy(db, userId));
 
   // The checkpoint froze the client's pre-substitution tool list, so a native
   // search the first leg withdrew returns unless it is withdrawn again here.

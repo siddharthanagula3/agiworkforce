@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getPublishedPlanPriceCents } from '@agiworkforce/types';
+import { getPublishedMonthlyPriceCents } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -27,7 +27,7 @@ async function loadService() {
   return import('../localized-pricing-service');
 }
 
-const PUBLISHED_PRO_MONTHLY_CENTS = getPublishedPlanPriceCents('pro', 'monthly');
+const PUBLISHED_PRO_MONTHLY_CENTS = getPublishedMonthlyPriceCents('pro');
 
 describe('getPriceSelectionForCurrency · USD catalog divergence', () => {
   beforeEach(() => {
