@@ -4598,7 +4598,7 @@
       },
       "put": {
         "summary": "Save a connector tool permission",
-        "description": "Saves `allow`, `ask` or `deny` for one connector tool. Whether the tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
+        "description": "Saves `allow`, `ask` or `deny` for one connector tool (`toolName`) or for up to 200 of them at once (`toolNames`), which is how a whole category such as the connector's write and delete tools is set. Send exactly one of the two. Whether a tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
         "tags": ["Users"],
         "security": [
           {
@@ -4610,7 +4610,35 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ConnectorToolPermission"
+                "type": "object",
+                "required": ["connectorId", "level"],
+                "properties": {
+                  "connectorId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolNames": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"],
+                    "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+                  }
+                }
               }
             }
           }
@@ -4629,7 +4657,7 @@
                     },
                     "destructive": {
                       "type": "boolean",
-                      "description": "Whether the server treats this tool as destructive"
+                      "description": "Whether the server treats any of these tools as destructive"
                     }
                   }
                 }
@@ -4637,7 +4665,7 @@
             }
           },
           "400": {
-            "description": "Missing connectorId or toolName, or an unknown level",
+            "description": "Missing connectorId, neither or both of toolName and toolNames, or an unknown level",
             "content": {
               "application/json": {
                 "schema": {
