@@ -450,6 +450,11 @@
         "icon": "$(account)"
       },
       {
+        "command": "agi-workforce.comparePlans",
+        "title": "AGI Workforce: Compare Plans",
+        "icon": "$(list-unordered)"
+      },
+      {
         "command": "agi-workforce.showOnboarding",
         "title": "AGI Workforce: Show Getting Started",
         "icon": "$(getting-started)"

@@ -16,7 +16,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
-  creditsFromCents,
   effectivePlanTier,
   getDefaultModelFor,
   INTERACTIVE_CARD_REQUEST_KEY,
@@ -247,10 +246,10 @@ function readModelUsageRow(value: unknown): ManagedModelUsage | null {
   const record = value as Record<string, unknown>;
   const modelId = normalizeAccessString(record['key'], 200);
   const requests = record['requests'];
-  const costCents = record['costCents'];
-  if (!modelId || typeof requests !== 'number' || typeof costCents !== 'number') return null;
-  if (!Number.isFinite(requests) || !Number.isFinite(costCents)) return null;
-  return { modelId, requests, credits: creditsFromCents(Math.max(0, costCents)) };
+  const credits = record['credits'];
+  if (!modelId || typeof requests !== 'number' || typeof credits !== 'number') return null;
+  if (!Number.isFinite(requests) || !Number.isFinite(credits)) return null;
+  return { modelId, requests, credits: Math.max(0, credits) };
 }
 
 export async function getManagedUsageHistory(

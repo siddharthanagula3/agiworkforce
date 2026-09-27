@@ -85,15 +85,24 @@ export class TokenCounter implements vscode.Disposable {
     this._updateDisplay();
   }
 
-  async settleQueuedBilling(secrets: vscode.SecretStorage): Promise<void> {
-    const queued = this._queuedBillingRequests.splice(0);
-    for (let start = 0; start < queued.length; start += BILLING_SETTLEMENT_BATCH) {
-      const batch = queued.slice(start, start + BILLING_SETTLEMENT_BATCH);
+  async settleBillingRequests(
+    secrets: vscode.SecretStorage,
+    requestIds: readonly string[],
+  ): Promise<(number | null)[]> {
+    const results: (number | null)[] = [];
+    for (let start = 0; start < requestIds.length; start += BILLING_SETTLEMENT_BATCH) {
+      const batch = requestIds.slice(start, start + BILLING_SETTLEMENT_BATCH);
       const settled = await Promise.all(
         batch.map((requestId) => fetchBilledCredits(secrets, requestId)),
       );
       settled.forEach((credits) => this.recordBilledRequest(credits));
+      results.push(...settled);
     }
+    return results;
+  }
+
+  async settleQueuedBilling(secrets: vscode.SecretStorage): Promise<void> {
+    await this.settleBillingRequests(secrets, this._queuedBillingRequests.splice(0));
   }
 
   addMeasuredUsage(model: string, promptTokens: number, completionTokens: number): void {
@@ -144,7 +153,7 @@ export class TokenCounter implements vscode.Disposable {
       `Total: ${formatTokenCount(this.totalTokens)}\n` +
       `Turns: ${this._requestCount}\n` +
       `Estimate: ${formatSessionCreditEstimate(this)}\n` +
-      `Billed for editor actions: ${formatBilledCredits(this)}\n\n` +
+      `Billed this session: ${formatBilledCredits(this)}\n\n` +
       `Click for detailed breakdown`;
     this._statusBarItem.show();
   }
@@ -231,7 +240,7 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
           label: `$(credit-card) Billed Credits`,
           description: formatBilledCredits(counter),
           detail:
-            'Credits AGI Cloud settled this session for inline edits, completions and terminal and diagnostics suggestions',
+            'Credits AGI Cloud settled this session for chat turns, inline edits, completions and terminal and diagnostics suggestions',
         },
         {
           label: `$(request-changes) Turns`,
