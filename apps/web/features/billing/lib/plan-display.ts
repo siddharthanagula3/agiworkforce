@@ -1,4 +1,5 @@
 import {
+  BILLING_PLAN_CAPABILITY_LABELS,
   canUseBillingPlanCapability,
   formatCredits,
   getBillingPlanPricing,
@@ -113,13 +114,23 @@ const COMPARED_LIMITS: ReadonlyArray<{
   { key: 'maxScheduledTasks', label: 'Scheduled tasks', format: formatCount },
 ];
 
-const COMPARED_CAPABILITIES: ReadonlyArray<readonly [BillingPlanCapability, string]> = [
-  ['skills_connectors', 'Skills and connectors'],
-  ['agi_work', 'AGI Work'],
-  ['image_generation', 'Image generation'],
-  ['video_generation', 'Video generation'],
-  ['managed_api', 'Managed API access'],
-  ['developer_surfaces', 'Managed CLI, Chrome, and VS Code access'],
+const COMPARED_CAPABILITIES: readonly BillingPlanCapability[] = [
+  'skills_connectors',
+  'agi_work',
+  'image_generation',
+  'video_generation',
+  'managed_api',
+  'developer_surfaces',
+];
+
+const FEATURED_CAPABILITIES: readonly BillingPlanCapability[] = [
+  'skills_connectors',
+  'agi_work',
+  'image_generation',
+  'video_generation',
+  'developer_surfaces',
+  'team_admin',
+  'enterprise_controls',
 ];
 
 export interface PlanValueChange {
@@ -172,9 +183,9 @@ export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier):
   return {
     credits,
     limits,
-    lostCapabilities: COMPARED_CAPABILITIES.flatMap(([capability, label]) =>
+    lostCapabilities: COMPARED_CAPABILITIES.flatMap((capability) =>
       canUseBillingPlanCapability(from, capability) && !canUseBillingPlanCapability(to, capability)
-        ? [label]
+        ? [BILLING_PLAN_CAPABILITY_LABELS[capability]]
         : [],
     ),
   };
@@ -197,23 +208,17 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
 
   const creditWindows = formatPlanCreditWindows(plan);
   if (creditWindows) features.push(creditWindows);
-  if (canUseBillingPlanCapability(plan, 'managed_chat')) features.push('Managed chat and tools');
+  if (canUseBillingPlanCapability(plan, 'managed_chat')) {
+    features.push(BILLING_PLAN_CAPABILITY_LABELS.managed_chat);
+  }
   if (limits) {
     features.push(limitLabel(limits.projects, 'project', 'projects'));
     features.push(limitLabel(limits.customMcpServers, 'custom MCP server', 'custom MCP servers'));
   }
-  if (canUseBillingPlanCapability(plan, 'skills_connectors')) {
-    features.push('Skills and connectors');
-  }
-  if (canUseBillingPlanCapability(plan, 'agi_work')) features.push('AGI Work');
-  if (canUseBillingPlanCapability(plan, 'image_generation')) features.push('Image generation');
-  if (canUseBillingPlanCapability(plan, 'video_generation')) features.push('Video generation');
-  if (canUseBillingPlanCapability(plan, 'developer_surfaces')) {
-    features.push('Managed CLI, Chrome, and VS Code access');
-  }
-  if (canUseBillingPlanCapability(plan, 'team_admin')) features.push('Team administration');
-  if (canUseBillingPlanCapability(plan, 'enterprise_controls')) {
-    features.push('Enterprise controls');
+  for (const capability of FEATURED_CAPABILITIES) {
+    if (canUseBillingPlanCapability(plan, capability)) {
+      features.push(BILLING_PLAN_CAPABILITY_LABELS[capability]);
+    }
   }
 
   return {

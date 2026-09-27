@@ -14,12 +14,15 @@ import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { requireManagedStripeSubscription } from '@/features/billing/server/billing-account';
+import {
+  refreshManagedStripeSubscription,
+  requireManagedStripeSubscription,
+} from '@/lib/server/stripe-upgrade-subscription';
 import {
   currentPlanOf,
   readPlanChangeState,
   scheduleDowngrade,
-} from '@/features/billing/server/plan-change';
+} from '@/lib/server/stripe-plan-change';
 
 const DowngradeRequestSchema = z
   .object({ plan: z.enum(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER) })
@@ -93,7 +96,7 @@ async function handleScheduleDowngrade(request: NextRequest): Promise<NextRespon
     request,
     detail: {
       resourceType: 'subscription',
-      resourceId: managed.subscription.id,
+      resourceId: managed.subscriptionId,
       source: 'settings_billing',
       previousPlanTier: previousPlan,
       planTier: parsed.data.plan,
@@ -102,10 +105,8 @@ async function handleScheduleDowngrade(request: NextRequest): Promise<NextRespon
   });
 
   try {
-    const subscription = await stripe.subscriptions.retrieve(managed.subscription.id, {
-      expand: ['items.data.price'],
-    });
-    return NextResponse.json(await readPlanChangeState(stripe, { ...managed, subscription }));
+    const refreshed = await refreshManagedStripeSubscription(stripe, managed);
+    return NextResponse.json(await readPlanChangeState(stripe, refreshed));
   } catch (error) {
     if (isAppError(error)) throw error;
     logger.error({ error, userId }, 'Reading the scheduled plan change failed');

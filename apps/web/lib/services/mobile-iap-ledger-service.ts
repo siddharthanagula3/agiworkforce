@@ -8,6 +8,7 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isFreeBillingPlanTier,
   mobileIapStoreCommissionBasisPoints,
+  purchasedCreditMetadata,
   topUpBudgetCentsForCredits,
   type MobileIapCatalogProduct,
   type MobileIapPlatform,
@@ -278,12 +279,15 @@ async function grantVerifiedMobileIapPurchase(input: {
       if (!balance?.account_id) {
         throw createError.conflict('No active credit account is available for this top-up.');
       }
-      await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
+      await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5, $6)', [
         input.userId,
         balance.account_id,
         topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
         `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
         'purchase',
+        JSON.stringify(
+          purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
+        ),
       ]);
       await tx.execute(
         `update public.mobile_iap_transactions

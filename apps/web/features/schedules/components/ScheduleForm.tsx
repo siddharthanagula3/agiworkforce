@@ -643,8 +643,8 @@ export function ScheduleForm({
                 aria-describedby={describedBy('creditCap', errors, 'schedule-credit-cap-helper')}
               />
               <p id="schedule-credit-cap-helper" className="text-xs text-muted-foreground">
-                The schedule pauses once its runs have used this many credits, counting every
-                model, search and tool charge. A run that starts under the cap finishes.
+                The schedule pauses once its runs have used this many credits, counting every model,
+                search and tool charge. A run that starts under the cap finishes.
                 {creditsUsed !== null ? ` It has used ${formatCredits(creditsUsed)} so far.` : ''}
               </p>
               <FieldError field="creditCap" errors={errors} />

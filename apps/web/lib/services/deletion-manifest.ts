@@ -128,6 +128,7 @@ const OPERATIONAL_RECORD = [
   'email_preferences',
   'enterprise_offline_payment_records',
   'erasure_tombstones',
+  'expiring_credit_purchases',
   'event_triggers',
   'feature_flags',
   'free_daily_usage_reservations',

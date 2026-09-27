@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type Stripe from 'stripe';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError, isAppError } from '@/lib/errors';
@@ -13,16 +12,13 @@ import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { requireManagedStripeSubscription } from '@/features/billing/server/billing-account';
+import { requireManagedStripeSubscription } from '@/lib/server/stripe-upgrade-subscription';
 import {
   currentPlanOf,
   keepCurrentPlan,
   readPlanChangeState,
-} from '@/features/billing/server/plan-change';
-
-function isoFromSeconds(seconds: number | null): string | null {
-  return typeof seconds === 'number' ? new Date(seconds * 1000).toISOString() : null;
-}
+  type KeptPlan,
+} from '@/lib/server/stripe-plan-change';
 
 async function handleResume(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
@@ -43,13 +39,9 @@ async function handleResume(request: NextRequest): Promise<NextResponse> {
   const plan = currentPlanOf(managed);
   const idempotencyKey = request.headers.get(IDEMPOTENCY_KEY_HEADER)?.trim() ?? '';
 
-  let subscription: Stripe.Subscription;
+  let kept: KeptPlan;
   try {
-    subscription = await keepCurrentPlan(
-      stripe,
-      managed.subscription,
-      `keep-plan:${userId}:${idempotencyKey}`,
-    );
+    kept = await keepCurrentPlan(stripe, managed, `keep-plan:${userId}:${idempotencyKey}`);
   } catch (error) {
     logger.error({ error, userId }, 'Keeping the current plan failed in Stripe');
     throw createError
@@ -62,16 +54,11 @@ async function handleResume(request: NextRequest): Promise<NextResponse> {
       `update public.subscriptions
           set cancel_at_period_end = $2, canceled_at = $3, updated_at = now()
         where user_id = $1 and stripe_subscription_id = $4`,
-      [
-        userId,
-        subscription.cancel_at_period_end,
-        isoFromSeconds(subscription.canceled_at),
-        subscription.id,
-      ],
+      [userId, kept.cancelAtPeriodEnd, kept.canceledAt, managed.subscriptionId],
     );
   } catch (error) {
     logger.warn(
-      { error, userId, subscriptionId: subscription.id },
+      { error, userId, subscriptionId: managed.subscriptionId },
       'Resumed in Stripe; the stored cancellation flag waits for the subscription webhook',
     );
   }
@@ -82,7 +69,7 @@ async function handleResume(request: NextRequest): Promise<NextResponse> {
     request,
     detail: {
       resourceType: 'subscription',
-      resourceId: subscription.id,
+      resourceId: managed.subscriptionId,
       source: 'settings_billing',
       planTier: plan,
       status: 'resumed',
@@ -90,7 +77,7 @@ async function handleResume(request: NextRequest): Promise<NextResponse> {
   });
 
   try {
-    return NextResponse.json(await readPlanChangeState(stripe, { ...managed, subscription }));
+    return NextResponse.json(await readPlanChangeState(stripe, kept.managed));
   } catch (error) {
     if (isAppError(error)) throw error;
     logger.error({ error, userId }, 'Reading the resumed plan failed');

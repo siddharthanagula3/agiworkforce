@@ -11,11 +11,8 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import {
-  readBillingOwnerRow,
-  resolveBillingCustomerId,
-} from '@/features/billing/server/billing-account';
-import { readPaymentHistory } from '@/features/billing/server/payment-history';
+import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
+import { readPaymentHistory } from '@/lib/server/payments/stripe-provider';
 
 async function handleGetReceipts(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-invoices');

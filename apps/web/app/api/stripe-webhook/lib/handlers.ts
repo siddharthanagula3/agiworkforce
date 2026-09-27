@@ -15,11 +15,7 @@ import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
 import { handleAutoReloadEvent } from './auto-reload-events';
 import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
-import {
-  handleReferralChargeReversal,
-  handleReferralInvoicePaid,
-  notifyTrialEnding,
-} from './referral-events';
+import { handleReferralChargeReversal, handleReferralInvoicePaid } from './referral-events';
 import { handleChargeRefunded } from './refund-events';
 import {
   endEnterpriseContractIfPresent,
@@ -168,9 +164,6 @@ export async function dispatchStripeEvent(
       await handleReferralInvoicePaid(db, stripe, invoice);
       break;
     }
-    case 'customer.subscription.trial_will_end':
-      await notifyTrialEnding(db, stripe, event.data.object as Stripe.Subscription);
-      break;
     case 'invoice.created':
     case 'invoice.finalized':
     case 'invoice.updated':
