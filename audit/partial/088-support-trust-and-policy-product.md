@@ -204,18 +204,6 @@ Code: `apps/web/features/settings/sections/PrivacySection.tsx:801-806`, `apps/we
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S88.19: Copyright/impersonation reporting.
-
-- Done when: Anyone can report copyright infringement or impersonation in hosted content and get a reference.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-| desktop | partial | A copyright and trademark notice form exists, but there is no way to report impersonation. | ui |
-
-Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/app/api/copyright-notice/route.ts:147-159`
-
 ## S88.20: Safety-warning appeal.
 
 - Done when: When a response is refused for safety reasons, the user can appeal or report the refusal from that notice.
@@ -233,17 +221,14 @@ Code: `apps/web/app/copyright/report/CopyrightNoticeForm.tsx:85-90`, `apps/web/a
 
 - Done when: A suspended user is told why and can appeal from where they are blocked, with a way to follow the appeal.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
-| desktop | partial | A suspended user is shown a "Contact support" email link with an appeal subject; there is no in-product appeal form or status. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/auth/AuthNoticeStep.tsx:59-64`, `apps/web/lib/api-auth.ts:144-150`
 
 ## S88.23: Accessibility feedback.
 

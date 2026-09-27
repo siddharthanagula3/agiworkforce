@@ -2,10 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  EffectiveWorkspaceCodeControls,
+  EffectiveWorkspacePolicy,
   OrganizationPermission,
   OrganizationRole,
   WorkspaceControlsLayer,
   WorkspacePolicyOverride,
+  WorkspaceFeature,
   WorkspacePolicyOverrideSubject,
 } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -243,4 +246,43 @@ export function useDeletePolicyOverride() {
       }),
     [WORKSPACE_OVERRIDES_QUERY_KEY],
   );
+}
+
+export type PolicyDiagnosisSurface =
+  'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome' | 'api';
+
+export interface PolicyDiagnosisQuery {
+  memberId: string;
+  feature: WorkspaceFeature | '';
+  surface: PolicyDiagnosisSurface | '';
+  country: string;
+}
+
+export interface PolicyDiagnosis {
+  memberId: string;
+  effective: {
+    organizationId: string;
+    revision: number;
+    controls: EffectiveWorkspacePolicy;
+    code: EffectiveWorkspaceCodeControls;
+  } | null;
+  decision: { allowed: boolean; code: string; reason: string } | null;
+}
+
+export function usePolicyDiagnosis(
+  query: PolicyDiagnosisQuery | null,
+): UseQueryResult<PolicyDiagnosis, Error> {
+  return useQuery({
+    queryKey: ['workspace', 'policy-diagnosis', query],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(query ?? {})) {
+        if (value) params.set(key, value);
+      }
+      return request<PolicyDiagnosis>(`/api/settings/organization/policy/diagnose?${params}`);
+    },
+    enabled: Boolean(query?.memberId),
+    staleTime: 0,
+    meta: { errorMessage: 'Failed to explain the workspace policy' },
+  });
 }

@@ -49,7 +49,11 @@ function blocksToInputContent(blocks: ContentBlock[]): ResponsesInputContent[] {
         b.source.type === 'base64'
           ? `data:${b.source.mediaType};base64,${b.source.data}`
           : b.source.url;
-      out.push({ type: 'input_image', image_url });
+      out.push(
+        b.detail
+          ? { type: 'input_image', image_url, detail: b.detail }
+          : { type: 'input_image', image_url },
+      );
     } else if (isFileBlock(b)) {
       out.push({
         type: 'input_file',

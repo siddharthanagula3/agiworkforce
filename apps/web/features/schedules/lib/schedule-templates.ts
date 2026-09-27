@@ -38,7 +38,7 @@ export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
     draft: {
       name: 'Daily briefing',
       prompt:
-        'Give me a brief for today: the few things that matter most, anything time-sensitive, and one thing worth doing early while I have focus. Keep it under 200 words.',
+        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
       recurrence: 'weekly',
       daysOfWeek: WEEKDAYS,
       timeOfDay: '08:00',

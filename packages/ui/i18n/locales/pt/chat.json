@@ -226,6 +226,9 @@
     "shareConversation": "Compartilhar conversa",
     "temporaryChat": "Chat temporário",
     "temporaryChatRetentionNote": "Não será salvo no seu histórico e ignora a memória nesta rodada.",
+    "temporaryChatPersonalized": "Personalizado",
+    "temporaryChatUnpersonalized": "Sem personalização",
+    "temporaryChatPersonalizationHint": "Personalizado usa seu perfil, suas instruções e seu estilo de resposta. Sem personalização os deixa de fora.",
     "toggleArtifacts": "Alternar painel de artefatos",
     "toggleArtifactsCount": "Alternar painel de artefatos ({{count}})",
     "toggleStats": "Estatísticas"

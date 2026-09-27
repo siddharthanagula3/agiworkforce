@@ -10,13 +10,13 @@ nothing is left.
 
 - Done when: With an email account connected, the assistant can search the mailbox (e.g. by sender or subject) and return matching messages.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | flag-off |
 
@@ -42,13 +42,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create a draft email (new or reply) in the connected mailbox for the user to review.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 | desktop | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 | mobile | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Gmail's create_draft tool needs gmail.compose or gmail.modify, but the scope ceiling admits only gmail.readonly and gmail.send; widen the ceiling (or add another drafting connector); also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail. | handler, flag-off |
 
@@ -58,13 +58,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can send an email from the connected account, after approval.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
 | desktop | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
 | mobile | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No pinned email server exposes a send tool: Gmail's listed tools stop at drafts, and Outlook (Mail.Send allowed) has no pinned MCP server; add a send-capable email connector; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Gmail and Outlook. | handler, flag-off |
 
@@ -106,13 +106,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can search the connected calendar for events by text or date range.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
@@ -122,13 +122,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can check free/busy time on the connected calendar to find open slots.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
@@ -138,13 +138,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create a calendar event on the connected calendar, after approval.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
@@ -154,13 +154,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can edit or cancel an existing calendar event.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Calendar. | flag-off |
 
@@ -202,35 +202,33 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can search files in a connected cloud drive.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.14: Cloud-file download.
 
 - Done when: The assistant can download/read the content of a file from a connected cloud drive.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.15: Cloud-file creation.
 
 - Done when: The assistant can create a new file in a connected cloud drive, after approval.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 | desktop | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 | mobile | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 | chrome | partial | Available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Google Drive. | flag-off |
 
@@ -240,11 +238,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can modify an existing file in a connected cloud drive.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.17: Folder and sharing management.
@@ -267,13 +264,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can edit a word-processing document (e.g. Google Docs or Word) in a connected account.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
 | desktop | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
 | mobile | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No Google Docs or Word/OneDrive document connector; only Notion and Confluence pages can be edited. | handler |
 
@@ -315,13 +312,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can search messages in a connected team chat workspace (Slack/Teams).
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
 | desktop | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
 | mobile | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Slack message search needs the search:read scope, which the Slack ceiling does not admit; Teams has no pinned MCP server; also available only when the operator adds a CONNECTOR_OAUTH_PROVIDERS_JSON entry for Teams. | handler, flag-off |
 
@@ -331,10 +328,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can draft and post a message to a team chat channel, after approval.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.23: Knowledge-base search.
@@ -352,11 +349,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create or edit wiki/knowledge-base pages in a connected workspace.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 
 ## S56.25: Issue and task creation.
@@ -374,11 +370,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can update an issue's status or fields in a connected tracker.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.27: Project-management boards.
@@ -396,22 +391,20 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can look up CRM accounts and contacts in a connected CRM.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.29: CRM opportunity updates.
 
 - Done when: The assistant can update CRM opportunities/deals, after approval.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 
 ## S56.30: Support-ticket workflows.
@@ -444,26 +437,23 @@ Code: `apps/web/lib/connectors/directory/sources/first-party.json:550-550`, `app
 
 - Done when: The assistant can read a pull request, review it and post review comments on the hosted repository.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi review` reviews a local diff or branch and /pr-comments is only a prompt; no tool reads or comments on a hosted pull request. | handler |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
-
-Code: `apps/cli/src/lib.rs:744-744`, `apps/cli/src/review.rs:40-50`, `apps/cli/src/claude_parity.rs:1188-1198`
 
 ## S56.33: CI status and logs.
 
 - Done when: The assistant can report CI pipeline status and show build logs from a connected CI provider.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
 | desktop | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
 | mobile | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | No CI provider connector works (CircleCI has no remote server; GitHub Actions is not exposed); only Vercel deployment build logs are available. | handler |
 
@@ -484,11 +474,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can pull design-to-code references (code context, dev resources) from a connected design file.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | partial | Ruling 2 (lead): VS Code sidebar chat drives the local CLI runtime (turn/start), whose managed-cloud provider posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client"; notes: needs-local-cli: VS Code chat drives the local CLI runtime, whose managed-cloud provider carries the turn. |  |
 
 ## S56.36: Database querying.
@@ -527,21 +516,20 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can create a dashboard in a connected analytics/BI tool.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 
 ## S56.39: Deployment management.
 
 - Done when: The assistant can view and manage deployments (list, inspect, deploy) in a connected hosting provider.
 - Wave: 3
-- Already works on: web, desktop, mobile, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 
 ## S56.40: Licensed research retrieval.
@@ -634,13 +622,13 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:280-280`, `pa
 
 - Done when: The assistant can read balances and transactions from a connected financial account.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
 | desktop | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
 | mobile | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
-| cli | partial | Ruling 2 (lead): the CLI managed-cloud provider (streaming.rs) posts the account JWT to /api/llm/v1/chat/completions; the route loads the signed-in user's connector tools for every caller (connector_tools_enabled defaults true, no platform gate) and merges them into the turn, so a connector the user connected on web is offered to the model on this surface. In manual mode the loop suspends on x_tool_approval_request, which neither the CLI nor VS Code consumes (q: 0 hits), so only tools pre-set to Always allow on web run. partial, miss [ui, states], remaining: "only connector tools pre-set to Always allow on web run; approval requests are not shown in this client". |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Only merchant platforms (PayPal, Stripe) connect; there is no bank-account link: the Plaid entry is Plaid's developer-dashboard server. | handler |
 

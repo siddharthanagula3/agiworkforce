@@ -4,9 +4,14 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 export type CopyrightNoticeStatus = 'received' | 'actioned' | 'rejected' | 'counter_notified';
 
+export const CONTENT_NOTICE_TYPES = ['copyright', 'trademark', 'impersonation'] as const;
+
+export type ContentNoticeType = (typeof CONTENT_NOTICE_TYPES)[number];
+
 export interface CopyrightNoticeRecord {
   id: string;
   reference: string;
+  noticeType: ContentNoticeType;
   reporterName: string;
   reporterEmail: string;
   reporterOrganization: string | null;
@@ -23,6 +28,7 @@ export interface CopyrightNoticeRecord {
 
 export interface RecordCopyrightNoticeInput {
   reference: string;
+  noticeType: ContentNoticeType;
   reporterName: string;
   reporterEmail: string;
   reporterOrganization?: string | null;
@@ -36,6 +42,7 @@ export interface RecordCopyrightNoticeInput {
 interface CopyrightNoticeRow {
   id: string;
   reference: string;
+  notice_type: ContentNoticeType;
   reporter_name: string;
   reporter_email: string;
   reporter_organization: string | null;
@@ -54,6 +61,7 @@ function toRecord(row: CopyrightNoticeRow): CopyrightNoticeRecord {
   return {
     id: row.id,
     reference: row.reference,
+    noticeType: row.notice_type,
     reporterName: row.reporter_name,
     reporterEmail: row.reporter_email,
     reporterOrganization: row.reporter_organization,
@@ -75,15 +83,16 @@ export async function recordCopyrightNotice(
 ): Promise<CopyrightNoticeRecord> {
   const rows = (await db.query(
     `insert into public.copyright_notices (
-       reference, reporter_name, reporter_email, reporter_organization,
+       reference, notice_type, reporter_name, reporter_email, reporter_organization,
        target_kind, target_token, target_owner_id,
        work_description, statement,
        affirms_good_faith, affirms_accuracy, affirms_authority
      )
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, true, true)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, true, true)
      returning *`,
     [
       input.reference,
+      input.noticeType,
       input.reporterName,
       input.reporterEmail,
       input.reporterOrganization ?? null,

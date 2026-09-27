@@ -31,6 +31,8 @@ const OWNER_ONLY_PROJECT_FIELDS = [
   'defaultProviderMode',
   'allowedSurfaces',
   'usesGlobalMemory',
+  'usesAccountInstructions',
+  'usesAccountStyle',
   'importedFrom',
 ] as const;
 
@@ -169,6 +171,10 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.color !== undefined) addBase('color', body.color.trim());
   if (body.isArchived !== undefined) addBase('is_archived', body.isArchived);
   if (body.usesGlobalMemory !== undefined) addBase('uses_global_memory', body.usesGlobalMemory);
+  if (body.usesAccountInstructions !== undefined) {
+    addBase('uses_account_instructions', body.usesAccountInstructions);
+  }
+  if (body.usesAccountStyle !== undefined) addBase('uses_account_style', body.usesAccountStyle);
   if (body.starred !== undefined) {
     baseParams.push(body.starred);
     baseSetClauses.push(
