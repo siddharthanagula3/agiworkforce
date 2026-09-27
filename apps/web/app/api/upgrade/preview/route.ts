@@ -22,7 +22,7 @@ import {
   getLocalizedPricingCatalog,
   getPriceSelectionForCurrency,
 } from '@/lib/server/localized-pricing-service';
-import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
+import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import {
   promotionDiscountCents,
   resolveStripeSubscriptionForUpgrade,
@@ -32,7 +32,7 @@ import {
   type UpgradePromotion,
 } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
-import { resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
+import { resolveTrialDaysForCheckout } from '@/lib/billing/trial-policy';
 import { referralTrialDays } from '@/lib/services/referral-service';
 import {
   assertSameCheckoutBillingInterval,
@@ -43,7 +43,7 @@ import {
   planChangeProration,
   type PlanChangeAnchor,
 } from '@/lib/server/stripe-plan-change';
-import { getPlanTrialDays, isPerSeatBillingPlan } from '@agiworkforce/types';
+import { isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
@@ -171,24 +171,6 @@ interface CheckoutTrialPreview {
   convertsAt: string;
 }
 
-async function customerHasSubscriptionHistory(
-  stripe: Stripe,
-  customerId: string,
-  userId: string,
-): Promise<boolean | null> {
-  try {
-    const page = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
-    return page.data.length > 0;
-  } catch (error) {
-    if (isStripeResourceMissing(error)) return false;
-    logger.warn(
-      { error, userId, customerId },
-      'Trial eligibility could not be verified; previewing checkout without a trial',
-    );
-    return null;
-  }
-}
-
 async function previewCheckoutTrial(input: {
   db: DatabaseAdapter;
   stripe: Stripe;
@@ -197,40 +179,33 @@ async function previewCheckoutTrial(input: {
   sub: SubRow | null;
 }): Promise<CheckoutTrialPreview | null> {
   const { db, stripe, userId, plan, sub } = input;
-  let offeredDays: number | null = null;
-  let profileCustomerId: string | null = null;
+  let offeredReferralDays: number | null;
+  let profileCustomerId: string | null;
   try {
-    offeredDays = getPlanTrialDays(plan) ?? (await referralTrialDays(db, userId, plan));
-    if (offeredDays !== null) {
-      const [profile] = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
-        'select stripe_customer_id from profiles where id = $1 limit 1',
-        [userId],
-      );
-      profileCustomerId = profile?.stripe_customer_id ?? null;
-    }
+    offeredReferralDays = await referralTrialDays(db, userId, plan);
+    const [profile] = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+      'select stripe_customer_id from profiles where id = $1 limit 1',
+      [userId],
+    );
+    profileCustomerId = profile?.stripe_customer_id ?? null;
   } catch (error) {
     logger.error({ error, userId }, 'Failed to check trial eligibility for upgrade preview');
     throw createError
       .serviceUnavailable('Trial eligibility could not be verified. Please retry.')
       .asUserSafe();
   }
-  if (offeredDays === null) return null;
 
-  const customerId = isStripeCustomerId(profileCustomerId)
-    ? profileCustomerId
-    : isStripeCustomerId(sub?.stripe_customer_id)
-      ? sub.stripe_customer_id
-      : null;
-  const days = resolveCheckoutTrialDays({
-    trialDays: offeredDays,
-    priorStoreOrStripeSubscription: Boolean(
-      sub?.stripe_subscription_id ||
-      sub?.apple_original_transaction_id ||
-      sub?.google_purchase_token,
-    ),
-    customerHasSubscriptionHistory: customerId
-      ? await customerHasSubscriptionHistory(stripe, customerId, userId)
-      : false,
+  const days = await resolveTrialDaysForCheckout({
+    stripe,
+    plan,
+    userId,
+    stripeCustomerId: isStripeCustomerId(profileCustomerId)
+      ? profileCustomerId
+      : isStripeCustomerId(sub?.stripe_customer_id)
+        ? sub.stripe_customer_id
+        : null,
+    referralTrialDays: offeredReferralDays,
+    existingSubscription: sub,
   });
   return days === null
     ? null
