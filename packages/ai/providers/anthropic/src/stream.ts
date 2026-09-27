@@ -137,6 +137,8 @@ export async function* translateAnthropicStream(
         if (stopEmitted) break;
         const usage = event.usage;
         const outputTokens = usage?.output_tokens;
+        const webSearchRequests = usage?.server_tool_use?.web_search_requests ?? 0;
+        const webFetchRequests = usage?.server_tool_use?.web_fetch_requests ?? 0;
         const usageChunk: StreamChunk = {
           type: 'usage',
           ...(inputTokens !== undefined ? { inputTokens } : {}),
@@ -144,6 +146,8 @@ export async function* translateAnthropicStream(
           ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
           ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
           ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
+          ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
+          ...(webFetchRequests > 0 ? { webFetchRequests } : {}),
         };
         yield usageChunk;
         yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };

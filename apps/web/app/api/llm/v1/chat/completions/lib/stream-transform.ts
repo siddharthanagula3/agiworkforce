@@ -62,6 +62,8 @@ interface StreamBillingUsage {
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
   providerReportedCostUsd?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
 }
 
 /**
@@ -187,6 +189,8 @@ async function settleStreamBilling(input: {
       cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
       cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
+      webSearchRequests: usage.webSearchRequests || undefined,
+      webFetchRequests: usage.webFetchRequests || undefined,
     };
     const estimateCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
       provider,
@@ -229,6 +233,8 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
+        ...(usage.webFetchRequests ? { webFetchRequests: usage.webFetchRequests } : {}),
         ...(totalTokens > 0 && billedOutcome !== 'failed' ? { costSource } : {}),
         ...compactionUsageFields(processed.contextTrim),
         ...buildCpstUsageFields(processed, {
@@ -1007,6 +1013,8 @@ export async function buildAdapterStreamResponse(
               cacheCreationInputTokens: usage.cacheCreationInputTokens,
               cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
               providerReportedCostUsd: usage.providerReportedCostUsd,
+              webSearchRequests: usage.webSearchRequests,
+              webFetchRequests: usage.webFetchRequests,
             },
             outcome: 'failed',
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -1114,6 +1122,8 @@ export async function buildAdapterStreamResponse(
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
             providerReportedCostUsd: usage.providerReportedCostUsd,
+            webSearchRequests: usage.webSearchRequests,
+            webFetchRequests: usage.webFetchRequests,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
@@ -1228,6 +1238,8 @@ export async function buildAdapterStreamResponse(
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
             providerReportedCostUsd: usage.providerReportedCostUsd,
+            webSearchRequests: usage.webSearchRequests,
+            webFetchRequests: usage.webFetchRequests,
           },
           outcome: 'failed',
           cancelled: true,

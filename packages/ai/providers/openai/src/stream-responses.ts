@@ -66,6 +66,20 @@ function incrementCount(counts: Record<string, number>, key: string): void {
   counts[key] = (counts[key] ?? 0) + 1;
 }
 
+function countWebSearchCalls(output: readonly ResponseOutputItem[]): {
+  searches: number;
+  pageActions: number;
+} {
+  let searches = 0;
+  let pageActions = 0;
+  for (const item of output) {
+    if (!isWebSearchItem(item) || item.status === 'failed') continue;
+    if (!item.action || item.action.type === 'search') searches += 1;
+    else pageActions += 1;
+  }
+  return { searches, pageActions };
+}
+
 function stripOpenAITrackingParam(url: string): string {
   try {
     const parsed = new URL(url);
@@ -511,6 +525,7 @@ export async function* translateOpenAIResponsesStream(
         }
         const usage = ev.response.usage;
         if (usage) {
+          const webSearchCalls = countWebSearchCalls(ev.response.output ?? []);
           const usageChunk: StreamChunk = {
             type: 'usage',
             ...(usage.input_tokens !== undefined ? { inputTokens: usage.input_tokens } : {}),
@@ -523,6 +538,10 @@ export async function* translateOpenAIResponsesStream(
               : {}),
             ...(usage.output_tokens_details?.reasoning_tokens !== undefined
               ? { reasoningTokens: usage.output_tokens_details.reasoning_tokens }
+              : {}),
+            ...(webSearchCalls.searches > 0 ? { webSearchRequests: webSearchCalls.searches } : {}),
+            ...(webSearchCalls.pageActions > 0
+              ? { webFetchRequests: webSearchCalls.pageActions }
               : {}),
           };
           yield usageChunk;

@@ -5,11 +5,13 @@ import {
   getProviderConfig,
   getProviderReasoningTokenBillingClass,
   listCanonicalModels,
+  MICROUSD_PER_USD,
   normalizeModelId,
   resolveEffectiveModelPricingForInputTokens,
 } from '@agiworkforce/types';
 import * as modelCatalogRegistry from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 import { getOptionalEnv } from '@shared/utils/env';
 
 export function isCacheTokensDisjointFromInput(providerId: string | null | undefined): boolean {
@@ -61,6 +63,8 @@ export interface TokenUsage {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
 }
 
 export interface ModelPricing {
@@ -185,6 +189,18 @@ export function normalizeProviderId(provider: string | null | undefined): string
 
   const normalizedProvider = provider.trim().toLowerCase();
   return PROVIDER_ALIASES[normalizedProvider] ?? normalizedProvider;
+}
+
+function nativeServerToolCostDollars(provider: string, usage: TokenUsage): number {
+  const providerId = normalizeProviderId(provider);
+  if (!providerId) return 0;
+  const searchMicrousd =
+    Math.max(0, usage.webSearchRequests ?? 0) *
+    nativeServerToolMicrousdPerRequest(providerId, 'web_search');
+  const fetchMicrousd =
+    Math.max(0, usage.webFetchRequests ?? 0) *
+    nativeServerToolMicrousdPerRequest(providerId, 'web_fetch');
+  return (searchMicrousd + fetchMicrousd) / MICROUSD_PER_USD;
 }
 
 export class LLMCostCalculator {
@@ -415,7 +431,7 @@ export class LLMCostCalculator {
       const outputCost = (billableOutput / 1_000_000) * pricing.outputCostPer1MTokens;
 
       const totalCostDollars = inputCost + cacheReadCost + cacheWriteCost + outputCost;
-      return totalCostDollars;
+      return totalCostDollars + nativeServerToolCostDollars(provider, usage);
     } catch (error) {
       if (error instanceof UnpricedModelError) throw error;
       logger.error({ error, provider, model }, 'LLM cost calculator: Unexpected error');
