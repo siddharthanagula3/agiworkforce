@@ -223,8 +223,19 @@ function candidateSql(options: {
            ${options.semanticParam !== null ? 's.rank' : 'null'} as semantic_rank
       from retrieval_chunks c
       join retrieval_documents d on d.id = c.document_id
+      left join web_artifacts source_artifact on source_artifact.id = d.artifact_id
+      left join research_reports source_report on source_report.id = d.research_report_id
+      left join web_conversations source_conversation
+        on source_conversation.id = coalesce(
+          d.conversation_id,
+          source_artifact.conversation_id,
+          source_report.conversation_id
+        )
+      left join media_assets source_asset on source_asset.id = d.media_asset_id
       ${joins.join('\n      ')}
-     where ${present.join(' or ')}`;
+     where (${present.join(' or ')})
+       and coalesce(source_conversation.is_temporary, false) = false
+       and coalesce(source_asset.temporary_chat, false) = false`;
 }
 
 /**

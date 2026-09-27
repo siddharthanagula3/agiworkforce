@@ -90,7 +90,7 @@ async function handlePull(request: NextRequest) {
                active_leaf_message_id::text as active_leaf_message_id,
                created_at, updated_at, deleted_at, server_version
         from web_conversations
-        where user_id = $1 and server_version > $2
+        where user_id = $1 and server_version > $2 and is_temporary = false
         order by server_version asc
         limit ${MAX_CONVERSATIONS_PULL}
       `,
@@ -104,7 +104,7 @@ async function handlePull(request: NextRequest) {
                m.created_at, m.updated_at, m.deleted_at, m.server_version
         from web_messages m
         join web_conversations c on c.id = m.conversation_id
-        where c.user_id = $1 and m.server_version > $2
+        where c.user_id = $1 and m.server_version > $2 and c.is_temporary = false
         order by m.server_version asc
         limit ${MAX_MESSAGES_PULL}
       `,
@@ -112,11 +112,13 @@ async function handlePull(request: NextRequest) {
       ),
       db.query<ArtifactDelta>(
         `
-        select id, conversation_id, message_id, title, artifact_type, language, content,
-               current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
-        from web_artifacts
-        where user_id = $1 and server_version > $2
-        order by server_version asc
+        select a.id, a.conversation_id, a.message_id, a.title, a.artifact_type, a.language,
+               a.content, a.current_version, a.pinned, a.tags, a.created_at, a.updated_at,
+               a.deleted_at, a.server_version
+        from web_artifacts a
+        join web_conversations c on c.id = a.conversation_id
+        where a.user_id = $1 and a.server_version > $2 and c.is_temporary = false
+        order by a.server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
         [userId, since],
@@ -197,6 +199,7 @@ const PUSH_MESSAGES_SQL = `
                and existing.deleted_at is null
                and existing.server_version = incoming.base_version
                and parent.id = existing.conversation_id and parent.user_id = $1
+               and not parent.is_temporary
                and (
                  existing.content is distinct from incoming.content
                  or (incoming.has_model and existing.model is distinct from incoming.model)
@@ -222,6 +225,7 @@ const PUSH_MESSAGES_SQL = `
                select 1 from web_conversations parent
                 where parent.id = incoming.conversation_id and parent.user_id = $1
                   and parent.deleted_at is null
+                  and not parent.is_temporary
              )
             on conflict (id) do nothing
             returning id, server_version
@@ -699,6 +703,7 @@ async function handlePush(request: NextRequest) {
                and existing.conversation_id = incoming.conversation_id
                and (existing.deleted_at is null or incoming.should_delete)
                and parent.id = incoming.conversation_id and parent.user_id = $1
+               and not parent.is_temporary
             returning existing.id, existing.server_version
           ), inserted as (
             insert into web_artifacts
@@ -713,6 +718,7 @@ async function handlePush(request: NextRequest) {
                select 1 from web_conversations parent
                 where parent.id = incoming.conversation_id and parent.user_id = $1
                   and parent.deleted_at is null
+                  and not parent.is_temporary
              )
             on conflict (id) do nothing
             returning id, server_version
