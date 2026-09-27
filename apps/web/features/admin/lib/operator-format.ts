@@ -1,3 +1,5 @@
+import { formatCredits } from '@agiworkforce/types';
+
 const CENTS_PER_DOLLAR = 100;
 const MONEY_FRACTION_DIGITS = 2;
 const PERCENT_SCALE = 100;
@@ -28,6 +30,11 @@ export function formatCents(cents: number | null | undefined): string {
     minimumFractionDigits: MONEY_FRACTION_DIGITS,
     maximumFractionDigits: MONEY_FRACTION_DIGITS,
   })}`;
+}
+
+export function formatCreditAmount(credits: number | null | undefined): string {
+  if (credits === null || credits === undefined || !Number.isFinite(credits)) return NOT_RECORDED;
+  return formatCredits(credits);
 }
 
 export function formatCount(value: number | null | undefined): string {
