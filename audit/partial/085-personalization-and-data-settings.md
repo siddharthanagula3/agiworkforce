@@ -92,7 +92,7 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `app
 | --- | --- | --- | --- |
 | web | partial | Works for Managed Cloud chats (temporary chats excluded); a free promotional (free-pool) model chat never searches past chats. | handler |
 | desktop | partial | Same as web: not applied to free promotional (free-pool) model chats. | handler |
-| mobile | partial | Mobile Cloud looks up past chats itself through /api/search, which does not filter temporary chats, so a temporary chat can be quoted back; and the switch writes the account memory setting, not the account "Search past chats" setting. | handler |
+| mobile | partial | Past-chat lookups now skip temporary chats through /api/search, but the mobile 'Search past chats' switch writes the memory setting instead of its own, so turning it off does not stop past-chat reference. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome has no switch; if "Search past chats" is on in web settings the server adds past-chat excerpts to Chrome Managed Cloud chats. | ui |
@@ -144,17 +144,15 @@ Code: `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:34
 
 - Done when: The user can make new chats temporary by default (not saved, not used for memory) and the preference is honoured.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The default works for new chats, but temporary chats still show in global search (/api/search has no temporary filter) and the first turn of a new temporary chat is persisted (LQA-01), contradicting "No message from a temporary conversation is written to your history". | handler |
-| desktop | partial | Same as web (LQA-01 search leak and first-turn persistence). | handler |
-| mobile | partial | General > Temporary Chat makes every new chat temporary, but the server search (/api/search) still returns temporary chats (LQA-01). | handler |
 | cli | partial | Only a per-run --no-session-persistence flag; no saved default to always start sessions without history. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-752`, `apps/web/lib/hooks/useConversations.ts:450-461`, `apps/web/app/api/search/route.ts:256-262`, `apps/mobile/src/features/settings/general/index.tsx:48-54`
+Code: `apps/cli/src/lib.rs:428-430`, `apps/cli/src/lib.rs:3001-3006`
 
 ## S85.17: Archived-chat management.
 

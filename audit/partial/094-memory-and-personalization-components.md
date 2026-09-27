@@ -50,17 +50,6 @@ Code: `apps/web/app/api/cron/expire-memories/route.ts:12-19`, `vercel.json:69-71
 
 Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3440-3446`
 
-## S94.20: Temporary-conversation exclusions.
-
-- Done when: Temporary conversations are excluded from memory, past-chat recall, search and history.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Add the is_temporary filter to /api/search (titles and messages) and fix first-turn persistence (client flag from the placeholder id; free-pool routes save user_message unchecked). Memory, recall, recap and the history list already exclude temporary chats. | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2754-2755`, `apps/web/lib/services/past-chat-context-service.ts:288-296`, `apps/web/app/api/search/route.ts:256-262`, `apps/web/lib/server/persist-free-offering-user.ts:24-48`
-
 ## S94.22: Daily-brief context builder.
 
 - Done when: A component assembles context for a daily brief (plans, time-sensitive items, recent work).
