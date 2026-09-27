@@ -1,8 +1,18 @@
-
 export const TIME_FOCUS_PREFERENCES_NAMESPACE = 'time-focus';
 export const BREAK_REMINDER_MINUTES = [30, 60, 120, 240] as const;
 
 export type BreakReminderMinutes = (typeof BREAK_REMINDER_MINUTES)[number];
+
+export const QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES = [
+  'agent_failed',
+  'emergency_stop_triggered',
+  'agent_approval_needed',
+  'approval_pending_escalation',
+] as const;
+
+export function isQuietHoursExemptNotification(type: unknown): boolean {
+  return (QUIET_HOURS_EXEMPT_NOTIFICATION_TYPES as readonly unknown[]).includes(type);
+}
 export type TimeFocusWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 export interface QuietHoursPreferences {
@@ -147,6 +157,18 @@ function activeQuietHoursStartDateKey(date: Date, schedule: QuietHoursPreference
 
 export function isDateWithinQuietHours(date: Date, schedule: QuietHoursPreferences): boolean {
   return activeQuietHoursStartDateKey(date, schedule) !== null;
+}
+
+export function quietHoursRemainingMinutes(
+  date: Date,
+  schedule: QuietHoursPreferences,
+): number | null {
+  if (!isDateWithinQuietHours(date, schedule)) return null;
+  const end = clockTimeToMinutes(schedule.endTime);
+  const parts = getZonedDateParts(date, schedule.timezone);
+  if (end === null || !parts) return null;
+  const minutesInDay = 24 * 60;
+  return (end - parts.minuteOfDay + minutesInDay) % minutesInDay || minutesInDay;
 }
 
 export function getQuietHoursWindowKey(date: Date, schedule: QuietHoursPreferences): string | null {
