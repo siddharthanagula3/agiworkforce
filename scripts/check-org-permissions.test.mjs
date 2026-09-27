@@ -67,6 +67,7 @@ async function handle(request) {
   await requireMemberPermission('org', 'user', 'members.manage', 'no');
   await requireMemberPermission('org', 'user', 'roles.manage', 'no');
   await requireMemberPermission('org', 'user', 'admin.roles.view', 'no');
+  await requireMemberPermission('org', 'user', 'admin.members.view', 'no');
 }
 export const PUT = handle;
 `,
@@ -264,14 +265,14 @@ test('a declaration goes stale as soon as a decision does ask for it', () => {
     route,
     `${fs.readFileSync(path.join(root, route), 'utf8')}
 export const PATCH = async () => {
-  await requireMemberPermission('org', 'user', 'admin.members.view', 'no');
+  await requireMemberPermission('org', 'user', 'admin.owners.view', 'no');
 };
 `,
   );
   const { status, output } = run(root);
   assert.equal(status, 1);
   assert.match(output, /declared as consulted by nothing now are/);
-  assert.match(output, /admin\.members\.view/);
+  assert.match(output, /admin\.owners\.view/);
 });
 
 test('the canonical list is re-derived from the contract, not held here', () => {
