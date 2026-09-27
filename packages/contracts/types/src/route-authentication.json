@@ -21,6 +21,7 @@
     "apps/web/app/api/releases/desktop-cloud/latest/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/releases/latest/[platform]/route.ts": "published release metadata is the same for every caller",
     "apps/web/app/api/support/handoff/availability/route.ts": "reports whether live support is staffed right now",
+    "apps/web/app/api/trial/cancel/route.ts": "the signed link in a trial reminder email is the only principal, and it can cancel only the one trial it names before that trial ends",
     "apps/web/app/api/v1/providers/[providerId]/stream/route.ts": "a retired managed-execution endpoint that answers every caller the same way",
     "apps/web/app/api/version/route.ts": "the build version string, identical for every caller"
   },
@@ -59,6 +60,7 @@
     "apps/web/app/api/cron/recover-reservations/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/refresh-connector-directory/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/refresh-plugin-directory/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
+    "apps/web/app/api/cron/remind-trials/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/replicate-object-backups/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/report-enterprise-usage/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/reset-credits/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",

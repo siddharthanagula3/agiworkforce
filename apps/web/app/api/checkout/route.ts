@@ -37,8 +37,8 @@ import {
   holdsLivePaidSubscription,
   waitlistAccessRequiredResponse,
 } from '@/lib/server/billing-waitlist-access';
-import { formatLocalizedPrice } from '@/lib/regional-pricing';
 import { referralTrialDays } from '@/lib/services/referral-service';
+import { TRIAL_REMINDER_DAYS, formatChargeAmount } from '@/lib/services/trial-reminder-service';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -63,11 +63,12 @@ function trialDisclosure(input: {
     { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' },
   );
   const period = input.billingInterval === 'yearly' ? 'year' : 'month';
-  const price = formatLocalizedPrice(input.amountMinor, input.currency, 'en-US');
+  const price = formatChargeAmount(input.amountMinor, input.currency);
   return (
     `Your ${input.trialDays}-day free trial ends on ${endsOn}. On that date your card is ` +
     `charged ${price} plus any applicable tax, and again every ${period}, unless you cancel ` +
-    'before then in Settings > Billing. We email you a reminder before the trial ends.'
+    `before then. ${TRIAL_REMINDER_DAYS} days before the trial ends we email you a reminder ` +
+    'with a one-click cancel link, and you can also cancel any time in Settings > Billing.'
   );
 }
 

@@ -3,19 +3,16 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { formatCredits } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
-import { formatLocalizedPrice } from '@/lib/regional-pricing';
 import { isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 import {
   bonusCreditExpiry,
   grantBonusCredits,
   revokeBonusCreditGrant,
 } from '@/lib/services/bonus-credit-service';
-import { isNotificationEmailConfigured } from '@/lib/services/notification-email-service';
 import { recordNotification } from '@/lib/services/notification-service';
 import { REFERRAL_PROGRAM } from '@/lib/services/referral-program';
 import { referralDeviceOrNetworkBlock } from '@/lib/services/referral-service';
 import type { Stripe } from '@/lib/stripe-types';
-import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
 const DAY_MS = 86_400_000;
 const MAX_LISTED_PAYMENTS = 10;
@@ -53,14 +50,6 @@ function formatDate(date: Date): string {
     year: 'numeric',
     timeZone: 'UTC',
   });
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 async function paymentCardFingerprint(
@@ -265,72 +254,4 @@ export async function handleReferralChargeReversal(
     },
     'Referral clawed back after its qualifying invoice was reversed',
   );
-}
-
-export async function notifyTrialEnding(
-  db: DatabaseAdapter,
-  stripe: Stripe,
-  subscription: Stripe.Subscription,
-): Promise<void> {
-  if (
-    subscription.status !== 'trialing' ||
-    !subscription.trial_end ||
-    subscription.cancel_at_period_end
-  ) {
-    return;
-  }
-
-  const [owner] = await db.query<{ user_id: string; email: string | null }>(
-    `select subscription_row.user_id, profile.email
-       from public.subscriptions subscription_row
-       left join public.profiles profile on profile.id = subscription_row.user_id
-      where subscription_row.stripe_subscription_id = $1
-      limit 1`,
-    [subscription.id],
-  );
-  if (!owner) return;
-
-  const preview = await stripe.invoices.createPreview({ subscription: subscription.id });
-  const interval =
-    subscription.items.data[0]?.price.recurring?.interval === 'year' ? 'year' : 'month';
-  const endsOn = formatDate(new Date(subscription.trial_end * 1000));
-  const charge = formatLocalizedPrice(preview.amount_due, preview.currency, 'en-US');
-  const title = `Your free trial ends on ${endsOn}`;
-  const message =
-    `Your card will be charged ${charge} on ${endsOn}, and again every ${interval}, unless ` +
-    'you cancel before then in Settings > Billing.';
-  const dedupeKey = `trial-ending:${subscription.id}:${subscription.trial_end}`;
-
-  await recordNotification(db, {
-    userId: owner.user_id,
-    category: 'billing',
-    severity: 'info',
-    title,
-    message,
-    target: { kind: 'settings', id: 'billing' },
-    dedupeKey,
-  });
-
-  const from = process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim();
-  if (!owner.email || !from || !isNotificationEmailConfigured()) {
-    logger.warn(
-      { userId: owner.user_id, subscriptionId: subscription.id },
-      'Trial ending reminder recorded in the app; no email address or sender is configured',
-    );
-    return;
-  }
-  const result = await sendTransactionalEmail({
-    from,
-    to: owner.email,
-    subject: title,
-    text: `${title}.\n\n${message}`,
-    html: `<p>${escapeHtml(title)}.</p><p>${escapeHtml(message)}</p>`,
-    idempotencyKey: dedupeKey,
-  });
-  if (!result.delivered) {
-    logger.warn(
-      { userId: owner.user_id, subscriptionId: subscription.id, reason: result.reason },
-      'Trial ending reminder email was not delivered',
-    );
-  }
 }

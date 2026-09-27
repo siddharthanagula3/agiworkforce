@@ -35,6 +35,10 @@
       "schedule": "25 1 * * *"
     },
     {
+      "path": "/api/cron/remind-trials",
+      "schedule": "13 * * * *"
+    },
+    {
       "path": "/api/cron/run-schedules",
       "schedule": "*/15 * * * *"
     },
