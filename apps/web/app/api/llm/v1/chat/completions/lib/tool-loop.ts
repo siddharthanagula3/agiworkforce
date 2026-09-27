@@ -2121,7 +2121,11 @@ async function runMcpTool(
   }
 
   const parsed = parseQualifiedToolName(toolCall.qualifiedName);
-  if (!parsed) {
+  // Every other branch of this function checks the tool was offered this turn.
+  // isToolOffered only runs on the resume and post-approval paths, so without
+  // this a fresh tool_call naming any connector or operator MCP tool reached
+  // its executor.
+  if (!parsed || !availableTools.has(toolCall.qualifiedName)) {
     return {
       content: `Unknown tool: ${toolCall.qualifiedName}`,
       isError: true,
@@ -2129,12 +2133,6 @@ async function runMcpTool(
   }
 
   if (connectorExecutor) {
-    // Every other branch of this function checks the tool was offered this turn.
-    // isToolOffered only runs on the resume and post-approval paths, so without
-    // this a fresh tool_call naming any connector reached the executor.
-    if (!availableTools.has(toolCall.qualifiedName)) {
-      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
-    }
     try {
       const connectorResult = await connectorExecutor(
         parsed.serverId,
