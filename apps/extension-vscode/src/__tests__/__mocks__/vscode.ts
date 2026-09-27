@@ -460,6 +460,7 @@ class LanguageModelChatMessage {
 // ─── Exported vscode namespace ────────────────────────────────────────────────
 
 export const window = {
+  state: { focused: true, active: true },
   activeTextEditor: undefined as unknown,
   visibleTextEditors: [] as unknown[],
   showInformationMessage: vi.fn().mockResolvedValue(undefined),
