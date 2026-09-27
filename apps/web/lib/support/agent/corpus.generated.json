@@ -950,7 +950,7 @@
         "web",
         "windows"
       ],
-      "updated": "2026-09-18",
+      "updated": "2026-09-27",
       "source": "content/support/glossary.md",
       "chunks": [
         {
@@ -965,35 +965,35 @@
           "ordinal": 1,
           "heading": "Trust modes",
           "headingPath": "Glossary of AGI terms › Trust modes",
-          "text": "**Trust mode** is which machine and which provider account runs your request.\nAGI runs three and never silently moves work between them.\n\n**Local** runs models on your own hardware through a runtime you install. It is\nfree, and inference can run offline once the runtime and model are installed.\n\n**BYOK**, \"bring your own key\", means you supply a provider API key and AGI\nsends your requests directly to that provider with it. Keys are encrypted at\nrest on your machine. Your provider bills the usage, and AGI adds no markup.\nBYOK is free.\n\n**Managed cloud** runs on AGI-operated provider access. It is metered, and it\nrefuses BYOK credentials by design so the two trust boundaries stay separate."
+          "text": "**Trust mode** is which machine and which provider account runs your request.\nAGI runs three and never moves work to a less private one without your approval.\n\n**Local** runs models on your own hardware through a runtime you install. It is\nfree, and inference can run offline once the runtime and model are installed.\n\n**BYOK**, \"bring your own key\", means you supply a provider API key and AGI\nsends your requests directly to that provider with it. By default the CLI stores\nkeys in your operating system's credential store. Your provider bills the usage,\nand AGI adds no markup. BYOK is free.\n\n**Managed cloud** runs on AGI-operated provider access. It is metered, and it\nrefuses BYOK credentials by design so the two trust boundaries stay separate."
         },
         {
           "id": "glossary#2",
           "ordinal": 2,
           "heading": "Usage and billing terms",
           "headingPath": "Glossary of AGI terms › Usage and billing terms",
-          "text": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets; Local and BYOK are unaffected.\n\n**Credits** are a prepaid balance, separate from the allowance, that managed\nusage can draw on once the allowance is exhausted.\n\n**Top-up** is a credit purchase for a custom amount in whole dollars.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. The free lane is\noffered as Auto (free), whose capacity is not guaranteed."
+          "text": "**Allowance** is the metered capacity a plan carries for managed cloud. When it\nruns out, managed requests stop until it resets, unless **Keep going after a\nusage limit** is on and you have credits; Local and BYOK are unaffected.\n\n**Credits** are a prepaid balance, separate from the allowance, that managed\nusage can draw on once the allowance is exhausted.\n\n**Top-up** is a credit purchase, either a preset pack or another amount in whole\ndollars.\n\n**Concurrency** is how many responses may be generating at once. Reaching that\nceiling is not the same as exhausting an allowance: it clears as soon as an\nin-flight response finishes.\n\n**Auto** is the routing choice that picks a model for you. Where the free lane is\noffered, it appears as Auto (free), and its capacity is not guaranteed."
         },
         {
           "id": "glossary#3",
           "ordinal": 3,
           "heading": "Chat terms",
           "headingPath": "Glossary of AGI terms › Chat terms",
-          "text": "**Conversation** is a single thread of messages.\n\n**Project** groups conversations around shared context: written instructions,\nuploaded knowledge files, and its own memory scope.\n\n**Artifact** is a document, a piece of code or a rendered page that an answer\nproduces, opened in a panel beside the conversation and versioned as you edit.\n\n**Library** is where past conversations and artifacts are listed.\n\n**Temporary chat** is a conversation that neither reads memory nor writes to\nit, and that ignores saved approval verdicts.\n\n**Memory** is what AGI carries between conversations. Persistent memory stores\nfacts; search past chats instead reads your history at answer time."
+          "text": "**Conversation** is a single thread of messages.\n\n**Project** groups conversations around shared context: written instructions,\nuploaded knowledge files, and its own memory scope.\n\n**Artifact** is a document, a piece of code or a rendered page that an answer\nproduces, opened in a panel beside the conversation and versioned as you edit.\n\n**Library** is where past conversations and artifacts are listed.\n\n**Temporary chat** is a conversation that neither reads memory nor writes to\nit, and that ignores saved **Always allow** verdicts.\n\n**Memory** is what AGI carries between conversations. Persistent memory stores\nfacts; search past chats instead reads your history at answer time."
         },
         {
           "id": "glossary#4",
           "ordinal": 4,
           "heading": "Tools and connectors",
           "headingPath": "Glossary of AGI terms › Tools and connectors",
-          "text": "**Connector** lets AGI call an external system on your behalf. Every connector\nis scoped to your own account.\n\n**MCP**, the Model Context Protocol, is the open protocol a connector can use to\nexpose tools. Custom MCP endpoints can be added with their own URL.\n\n**Tool approval** is the verdict that decides whether a tool may run without\nasking. The default is to ask before every action, including reads.\n\n**AGI Work** is the mode for a multi-step task rather than a question: the\nsession plans, works, and produces files."
+          "text": "**Connector** lets AGI call an external system on your behalf. Every connector\nis scoped to your own account.\n\n**MCP**, the Model Context Protocol, is the open protocol a connector can use to\nexpose tools. Custom MCP endpoints can be added with their own URL.\n\n**Tool approval** is the verdict that decides whether a tool may run without\nasking. On the website, an account that has never chosen one defaults to **Skip\napprovals**, which runs eligible tools without asking; destructive and unknown\nactions still ask.\n\n**AGI Work** is the mode for a multi-step task rather than a question: the\nsession plans, works, and produces files."
         },
         {
           "id": "glossary#5",
           "ordinal": 5,
           "heading": "Platform and surface names",
           "headingPath": "Glossary of AGI terms › Platform and surface names",
-          "text": "**Surface** is one of the six places AGI runs: Web, Desktop, CLI, Mobile, VS\nCode, and Chrome. A feature can be available on one surface and not another, so\narticles name the surface rather than assuming it.\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to, so a question about one platform does not answer with another."
+          "text": "**Surface** is one of the six places AGI runs: Web, Desktop, CLI, Mobile, VS\nCode, and Chrome. A feature can be available on one surface and not another, so\narticles name the surface rather than assuming it.\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
         }
       ]
     },
