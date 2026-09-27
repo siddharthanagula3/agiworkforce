@@ -100,6 +100,7 @@ import {
   hasStreamError,
   ProjectFileCitations,
   resolveModelEscalation,
+  StreamAnnouncer,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import {
@@ -1859,6 +1860,7 @@ const MessageBubbleComponent = function MessageBubble({
     >
       {/* Delete confirmation. Rendered outside the dropdown so closing the menu
           on select cannot unmount the dialog that the select just opened. */}
+      {isUser ? <h5 className="sr-only">You said:</h5> : <h6 className="sr-only">AGI said:</h6>}
       {destructiveConfirmDialog}
       {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
           read as a right-aligned bubble, assistant messages as a flat left column. */}
@@ -2150,6 +2152,7 @@ const MessageBubbleComponent = function MessageBubble({
                       content={cleanedContent}
                       isStreaming
                       citations={citationsByMarker}
+                      announce={false}
                     />
                   ) : (
                     <MarkdownContent
@@ -2159,16 +2162,20 @@ const MessageBubbleComponent = function MessageBubble({
                       literalHtml={isUser}
                     />
                   );
-                  return formatCardType ? (
-                    <MessageFormatCard
-                      content={cleanedContent}
-                      cardType={formatCardType}
-                      messageId={message.id}
-                    >
-                      {markdown}
-                    </MessageFormatCard>
-                  ) : (
-                    markdown
+                  return (
+                    <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
+                      {formatCardType ? (
+                        <MessageFormatCard
+                          content={cleanedContent}
+                          cardType={formatCardType}
+                          messageId={message.id}
+                        >
+                          {markdown}
+                        </MessageFormatCard>
+                      ) : (
+                        markdown
+                      )}
+                    </StreamAnnouncer>
                   );
                 })()
               )}
@@ -2877,7 +2884,7 @@ const MessageBubbleComponent = function MessageBubble({
                   'flex flex-nowrap items-center gap-1 transition-opacity',
                   ACTION_ROW_MIN_HEIGHT,
                   isUser || !isLatestTurn
-                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100'
+                    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-expanded=true]]:opacity-100 [@media(hover:none)]:opacity-100'
                     : 'opacity-100',
                 )}
               >

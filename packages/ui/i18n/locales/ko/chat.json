@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요."
   },
   "bubble": {
+    "assistantSaid": "AGI의 답변:",
     "assistantThinking": "어시스턴트가 생각 중입니다",
     "cancelEdit": "취소",
     "copied": "복사됨",
@@ -210,7 +211,8 @@
     "messageAttachments": "메시지 첨부 파일",
     "retryResponse": "이 응답 재시도",
     "saveEdit": "저장",
-    "toolResult": "결과"
+    "toolResult": "결과",
+    "userSaid": "내가 말한 내용:"
   },
   "goalHandoff": {
     "action": "작업으로 실행",

@@ -767,7 +767,7 @@ export function ChatInterface({
 
         {/* Input area, ALWAYS at bottom in natural document flow.
             Never position:fixed. Never teleported. */}
-        <div className="shrink-0 px-4 pb-2">
+        <div className="shrink-0 px-gutter-compact pb-2">
           {/*
             Running-low warning, attached ABOVE the composer.
             Usage was previously visible only in Settings, so the first signal a

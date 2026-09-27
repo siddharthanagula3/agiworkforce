@@ -990,7 +990,7 @@ export function ChatInput({
           : t('placeholderEmpty', 'How can I help you today?');
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
+    <div className={cn('relative mx-auto w-full max-w-3xl px-gutter-compact pb-2', className)}>
       <SlashCommandMenu
         show={slashMenuOpen}
         suggestions={slashSuggestions}

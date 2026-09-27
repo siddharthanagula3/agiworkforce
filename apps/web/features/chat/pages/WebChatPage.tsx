@@ -5786,7 +5786,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
                   {!compact && !voiceModeActive && <GreetingBanner />}
-                  <div className="mx-auto w-full max-w-3xl px-4">
+                  <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />
@@ -5897,7 +5897,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 </div>
 
                 <div className="shrink-0 pb-4">
-                  <div className="mx-auto w-full max-w-3xl px-4">
+                  <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
                     <FreePlanTrainingNotice />

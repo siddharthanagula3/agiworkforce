@@ -26,6 +26,7 @@ import {
 import { ToolCallCard } from './ToolCallCard';
 import { MarkdownContent } from './markdown/MarkdownContent';
 import { StreamingMarkdownContent } from './markdown/StreamingMarkdownContent';
+import { StreamAnnouncer } from './markdown/StreamAnnouncer';
 import { AgentActivityTimeline, hasCanonicalToolActivity } from './AgentActivityTimeline';
 import { MessageLimitCard, readMessagePaywall } from './MessageLimitCard';
 import { artifactDownloadFile } from '../lib/artifact-download';
@@ -614,7 +615,7 @@ function UserBubbleActions({
     'h-11 w-11 touch-manipulation sm:h-7 sm:w-7 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)]';
 
   return (
-    <div className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+    <div className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100">
       <Button
         variant="ghost"
         size="icon"
@@ -704,6 +705,7 @@ export function MessageBubble({
         data-testid="message-item"
         className="group message-enter flex max-w-[85%] min-w-0 flex-col items-end gap-1"
       >
+        <h5 className="sr-only">{t('bubble.userSaid', 'You said:')}</h5>
         {message.attachments && message.attachments.length > 0 && (
           <UserMessageAttachments attachments={message.attachments} />
         )}
@@ -762,6 +764,7 @@ export function MessageBubble({
       data-testid="message-item"
       className="message-enter flex flex-col gap-1"
     >
+      <h6 className="sr-only">{t('bubble.assistantSaid', 'AGI said:')}</h6>
       {canonicalActivity && (
         <div className="mb-2">
           <AgentActivityTimeline
@@ -792,10 +795,14 @@ export function MessageBubble({
       <div className="text-[15px] leading-relaxed text-[var(--chat-text-primary)] break-words">
         {isStreaming && !message.content.trim() && !canonicalActivity ? (
           <StreamingThinkingStatus />
-        ) : isStreaming ? (
-          <StreamingMarkdownContent content={bodyContent} isStreaming />
         ) : (
-          <MarkdownContent content={bodyContent} />
+          <StreamAnnouncer text={bodyContent} isStreaming={isStreaming}>
+            {isStreaming ? (
+              <StreamingMarkdownContent content={bodyContent} isStreaming announce={false} />
+            ) : (
+              <MarkdownContent content={bodyContent} />
+            )}
+          </StreamAnnouncer>
         )}
       </div>
 

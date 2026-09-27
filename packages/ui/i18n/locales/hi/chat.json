@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "यह ब्राउज़र वॉइस इनपुट का समर्थन नहीं करता। Chrome या Edge आज़माएं।"
   },
   "bubble": {
+    "assistantSaid": "AGI ने कहा:",
     "assistantThinking": "सहायक सोच रहा है",
     "cancelEdit": "रद्द करें",
     "copied": "कॉपी हो गया",
@@ -210,7 +211,8 @@
     "messageAttachments": "संदेश अनुलग्नक",
     "retryResponse": "इस प्रतिक्रिया को फिर से आज़माएं",
     "saveEdit": "सहेजें",
-    "toolResult": "परिणाम"
+    "toolResult": "परिणाम",
+    "userSaid": "आपने कहा:"
   },
   "goalHandoff": {
     "action": "टास्क के रूप में चलाएं",
