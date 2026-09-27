@@ -26,6 +26,7 @@ import {
   getFileExtensionIconName,
   isTerminalToolStatus,
   TOOL_APPROVAL_ACTION_LABELS,
+  TOOL_APPROVAL_HIGH_RISK_NOTICE,
   TOOL_STATUS_PRESENTATION,
 } from '@agiworkforce/types';
 import type { ToolStatus } from '@agiworkforce/types';
@@ -174,6 +175,8 @@ function ToolCallTimelineRow({
   const chip = trailingChipLabel(tool);
   const hasBody = Boolean(tool.searchResults?.length || tool.input || tool.output || tool.command);
   const isSearch = isWebSearchTool(tool.name);
+  const highRiskApproval =
+    tool.approvalRiskLevel === 'high' && !approvalExpired && !tool.approvalDecision;
   const statusLabel = TOOL_STATUS_PRESENTATION[status].label;
   const statusTone = TOOL_STATUS_PRESENTATION[status].tone;
   const spokenStatus = chip?.startsWith(statusLabel)
@@ -252,8 +255,14 @@ function ToolCallTimelineRow({
         <View style={{ paddingLeft: 20, paddingBottom: 10 }}>
           <View
             style={{
-              backgroundColor: approvalExpired ? colors.surfaceOverlay : colors.warningSurface,
+              backgroundColor: approvalExpired
+                ? colors.surfaceOverlay
+                : highRiskApproval
+                  ? colors.dangerSurface
+                  : colors.warningSurface,
               borderRadius: 8,
+              borderWidth: highRiskApproval ? 1 : 0,
+              borderColor: highRiskApproval ? colors.dangerBorder : 'transparent',
               padding: 10,
               gap: 8,
             }}
@@ -287,6 +296,21 @@ function ToolCallTimelineRow({
               </>
             ) : (
               <>
+                {highRiskApproval ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <ShieldAlert size={14} color={colors.agentError} />
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontSize: 12.5,
+                        fontWeight: '600',
+                        color: colors.agentError,
+                      }}
+                    >
+                      {TOOL_APPROVAL_HIGH_RISK_NOTICE}
+                    </Text>
+                  </View>
+                ) : null}
                 <Text style={{ fontSize: 12.5, color: colors.textPrimary }}>
                   {tool.approvalDecision
                     ? `Decision saved: ${
