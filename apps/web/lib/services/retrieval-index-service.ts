@@ -172,7 +172,10 @@ export async function loadRetrievalSourceText(
         `select a.title, a.artifact_type, a.language, a.content, a.conversation_id
            from web_artifacts a
            join web_conversations c on c.id = a.conversation_id
-          where a.id = $1 and a.deleted_at is null and c.is_temporary = false`,
+          where a.id = $1
+            and a.deleted_at is null
+            and c.deleted_at is null
+            and c.is_temporary = false`,
         [document.source_id],
       );
       if (!artifact) return null;
@@ -204,7 +207,7 @@ export async function loadRetrievalSourceText(
             and r.status = 'completed'
             and not exists (
               select 1 from web_conversations c
-               where c.id = r.conversation_id and c.is_temporary
+               where c.id = r.conversation_id and (c.is_temporary or c.deleted_at is not null)
             )`,
         [document.source_id],
       );

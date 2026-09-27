@@ -234,7 +234,10 @@ function candidateSql(options: {
       left join media_assets source_asset on source_asset.id = d.media_asset_id
       ${joins.join('\n      ')}
      where (${present.join(' or ')})
+       and source_artifact.deleted_at is null
+       and source_conversation.deleted_at is null
        and coalesce(source_conversation.is_temporary, false) = false
+       and source_asset.deleted_at is null
        and coalesce(source_asset.temporary_chat, false) = false`;
 }
 
