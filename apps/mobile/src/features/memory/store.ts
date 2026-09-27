@@ -5,6 +5,7 @@ import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   insertMemoryFact,
   listMemoryFacts,
+  deleteAllMemoryFacts,
   deleteMemoryFact,
   updateMemoryFact,
   togglePinMemoryFact,
@@ -14,7 +15,9 @@ import {
 import type { MemoryFact } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
-import { markMemoryForSync } from '@/services/cloudSyncEngine';
+import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
+import { api } from '@/services/api';
+import { markMemoryForSync, syncNow } from '@/services/cloudSyncEngine';
 import {
   captureAccountScopedUiState,
   isAccountScopedUiStateCurrent,
@@ -38,6 +41,7 @@ interface MemoryState {
   addMemory: (fact: string, _category?: string) => Promise<void>;
   updateMemory: (id: string, fact: string) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
+  resetMemories: () => Promise<boolean>;
   togglePin: (id: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   searchMemories: (query: string, embedding?: Float32Array) => Promise<void>;
@@ -46,6 +50,8 @@ interface MemoryState {
   clearError: () => void;
   resetVisibleState: () => void;
 }
+
+const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
 
 function captureMemoryOperationScope(): AccountScopedUiState | null {
   return captureAccountScopedUiState(useChatAppModeStore.getState().appMode);
@@ -86,15 +92,13 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         const cloudEntries = useCloudMemoryStore
           .getState()
           .entries.filter((e) => !e.isDeleted)
-          .map(
-            (e): MemoryFact => ({
-              id: e.id,
-              fact: e.content,
-              source_conversation_id: null,
-              pinned: e.pinned,
-              created_at: new Date(e.createdAt).getTime(),
-            }),
-          )
+          .map((e): MemoryFact => ({
+            id: e.id,
+            fact: e.content,
+            source_conversation_id: null,
+            pinned: e.pinned,
+            created_at: new Date(e.createdAt).getTime(),
+          }))
           .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
@@ -269,6 +273,40 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         filteredEntries: prevFiltered,
         error: err instanceof Error ? err.message : 'Failed to delete memory',
       });
+    }
+  },
+
+  resetMemories: async () => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return false;
+    }
+    set({ error: null });
+    try {
+      if (operationScope.scope === 'cloud') {
+        await api.delete('/api/memory');
+        const dirtyIds = new Set(useMemorySyncStateStore.getState().dirtyMemoryIds);
+        const cloudMemory = useCloudMemoryStore.getState();
+        const now = new Date().toISOString();
+        for (const entry of cloudMemory.entries) {
+          if (dirtyIds.has(entry.id)) {
+            cloudMemory.upsertCloudMemory({ ...entry, isDeleted: true, updatedAt: now });
+          } else {
+            cloudMemory.hardDeleteCloudMemory(entry.id);
+          }
+        }
+        void syncNow().catch(() => undefined);
+      } else {
+        await deleteAllMemoryFacts();
+      }
+      if (isMemoryOperationScopeCurrent(operationScope)) {
+        set({ entries: [], filteredEntries: [] });
+      }
+      return true;
+    } catch {
+      if (isMemoryOperationScopeCurrent(operationScope)) set({ error: RESET_FAILED_MESSAGE });
+      return false;
     }
   },
 

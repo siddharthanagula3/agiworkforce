@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
+import { Alert, View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Brain, FileText, Search, X, Plus, Upload } from 'lucide-react-native';
+import { ArrowLeft, Brain, FileText, Search, Trash2, X, Plus, Upload } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
@@ -78,6 +78,7 @@ export default function MemoryScreen() {
     addMemory,
     updateMemory,
     deleteMemory,
+    resetMemories,
     togglePin,
     setSearchQuery,
     clearError,
@@ -169,6 +170,28 @@ export default function MemoryScreen() {
   const handleSummaryPress = useCallback(() => {
     router.push('/(app)/settings/memory-summary' as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  const handleResetPress = useCallback(() => {
+    const actionScope = activeScopeRef.current;
+    if (!isScopeCurrent(actionScope)) return;
+    Alert.alert(
+      'Reset memory?',
+      currentIsCloud
+        ? 'This permanently deletes every memory saved to your AGI Cloud account, on every device. Your chats are not deleted. This cannot be undone.'
+        : 'This permanently deletes every memory saved on this device. Your chats are not deleted. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset memory',
+          style: 'destructive',
+          onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
+            void resetMemories();
+          },
+        },
+      ],
+    );
+  }, [currentIsCloud, isScopeCurrent, resetMemories]);
 
   const handleAddPress = useCallback(() => {
     const actionScope = activeScopeRef.current;
@@ -284,6 +307,12 @@ export default function MemoryScreen() {
             icon={FileText}
             {...(memoryFreshness ? { value: memoryFreshness } : {})}
             onPress={handleSummaryPress}
+          />
+          <SettingsRow
+            label="Reset memory"
+            icon={Trash2}
+            onPress={handleResetPress}
+            destructive
             isLast
           />
         </SettingsGroup>
