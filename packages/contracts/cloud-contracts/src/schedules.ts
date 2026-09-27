@@ -8,6 +8,7 @@ export const MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE = 100;
 export const MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE = 20;
 export const MANAGED_CLOUD_SCHEDULE_RUNS_MAX_PAGE_SIZE = 100;
 export const MANAGED_CLOUD_SCHEDULES_MAX_PAGE_OFFSET = 10_000;
+export const MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP = 1_000_000;
 
 export function clampSchedulePageSize(
   value: number | null | undefined,
@@ -104,6 +105,13 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   isActive: z.boolean(),
   expiresAt: z.string().datetime().nullable(),
   maxExecutions: z.number().int().min(1).max(1_000_000).nullable(),
+  creditCap: z
+    .number()
+    .int()
+    .min(1)
+    .max(MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP)
+    .nullable()
+    .optional(),
   projectId: z.string().trim().min(1).nullable().optional(),
   recurrenceRule: z.string().trim().min(1).max(512).nullable().optional(),
   dayparts: z.array(ManagedCloudScheduleDaypartSchema).max(7).nullable().optional(),
@@ -148,6 +156,9 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
   condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
   conditionState: ManagedCloudScheduleConditionStateSchema.nullable().optional(),
+  creditCap: z.number().positive().nullable().optional(),
+  creditsUsed: z.number().nonnegative().optional(),
+  pausedReason: z.enum(['credit_cap_reached']).nullable().optional(),
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
 

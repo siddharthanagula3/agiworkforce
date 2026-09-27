@@ -136,6 +136,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'reconciliation compares rows with Stripe',
   },
   {
+    path: 'apps/web/lib/services/billing-refund-service.ts',
+    why: 'a refund acts on the payment and the subscription the payer owns',
+  },
+  {
     path: 'apps/web/lib/services/stripe-settlement-reconciliation-service.ts',
     why: 'settlement reconciliation compares rows with Stripe',
   },

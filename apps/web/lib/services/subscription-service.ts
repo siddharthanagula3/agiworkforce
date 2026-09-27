@@ -1,7 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_CATALOG_VERSION,
+  isFreeBillingPlanTier,
+  resolvePlanCatalogVersion,
+} from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import Stripe from 'stripe';
@@ -12,7 +16,11 @@ import { resolvePlanTier, isValidPlanTier } from '@/lib/price-tier-mapping';
 import { resolveEnterprisePlanTier } from '@/lib/services/enterprise-billing-service';
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
-import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
+import {
+  getPlanUsageBudgetCents,
+  isPlanUsageUncapped,
+  type VersionedPlanTier,
+} from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
 
@@ -28,6 +36,7 @@ export interface SubscriptionInfo {
   stripe_price_id: string | null;
   apple_original_transaction_id?: string | null;
   google_purchase_token?: string | null;
+  plan_catalog_version?: number | null;
   /**
    * Present only on a subscription derived from an organization seat, where
    * `id` and `stripe_subscription_id` belong to the owner and `user_id` is the
@@ -39,6 +48,34 @@ export interface SubscriptionInfo {
 interface CreditAllocationOptions {
   db: DatabaseAdapter;
   stripePriceId?: string | null;
+  catalogVersion?: number | null;
+}
+
+async function readSubscriptionCatalogVersion(
+  db: DatabaseAdapter,
+  userId: string,
+  subscriptionId: string,
+): Promise<number | null> {
+  const [row] = await db.query<{ plan_catalog_version: number | null }>(
+    'select plan_catalog_version from subscriptions where id = $1 and user_id = $2 limit 1',
+    [subscriptionId, userId],
+  );
+  return row?.plan_catalog_version ?? null;
+}
+
+async function resolveAllowance(
+  userId: string,
+  planTier: string,
+  subscriptionId: string,
+  options: CreditAllocationOptions,
+): Promise<VersionedPlanTier> {
+  return {
+    tier: planTier,
+    catalogVersion:
+      options.catalogVersion !== undefined
+        ? options.catalogVersion
+        : await readSubscriptionCatalogVersion(options.db, userId, subscriptionId),
+  };
 }
 
 export class SubscriptionService {
@@ -51,7 +88,7 @@ export class SubscriptionService {
         `SELECT id, user_id, plan_tier, status, current_period_start, current_period_end,
                 cancel_at_period_end,
                 stripe_subscription_id, stripe_price_id,
-                apple_original_transaction_id, google_purchase_token
+                apple_original_transaction_id, google_purchase_token, plan_catalog_version
          FROM subscriptions
          WHERE user_id = $1
          LIMIT 1`,
@@ -76,6 +113,7 @@ export class SubscriptionService {
         stripe_price_id: data.stripe_price_id,
         apple_original_transaction_id: data.apple_original_transaction_id,
         google_purchase_token: data.google_purchase_token,
+        plan_catalog_version: data.plan_catalog_version ?? null,
       };
     } catch (error) {
       logger.error({ error, userId }, 'Error in getSubscription');
@@ -91,11 +129,12 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {
       logger.info(
-        { userId, planTier, uncapped: isPlanUsageUncapped(planTier) },
+        { userId, planTier, uncapped: isPlanUsageUncapped(allowance) },
         'No paid-ledger credits allocated for plan tier',
       );
       return '';
@@ -114,6 +153,7 @@ export class SubscriptionService {
         usagePeriod.periodEnd,
         creditsCents,
         options.db,
+        allowance.catalogVersion,
       );
 
       logger.info(
@@ -121,6 +161,7 @@ export class SubscriptionService {
           userId,
           subscriptionId,
           planTier,
+          catalogVersion: allowance.catalogVersion,
           creditsCents,
           accountId,
         },
@@ -142,7 +183,8 @@ export class SubscriptionService {
     periodEnd: Date,
     options: CreditAllocationOptions,
   ): Promise<string> {
-    const creditsCents = getPlanUsageBudgetCents(planTier, 'monthly');
+    const allowance = await resolveAllowance(userId, planTier, subscriptionId, options);
+    const creditsCents = getPlanUsageBudgetCents(allowance, 'monthly');
 
     if (creditsCents === 0) {
       logger.info({ userId, planTier }, 'No credits to reset for plan tier');
@@ -162,6 +204,7 @@ export class SubscriptionService {
         usagePeriod.periodEnd,
         creditsCents,
         options.db,
+        allowance.catalogVersion,
       );
 
       logger.info(
@@ -169,6 +212,7 @@ export class SubscriptionService {
           userId,
           subscriptionId,
           planTier,
+          catalogVersion: allowance.catalogVersion,
           creditsCents,
           accountId,
         },
@@ -190,9 +234,16 @@ export class SubscriptionService {
     periodStart: Date,
     periodEnd: Date,
     db: DatabaseAdapter,
+    catalogVersions: { previous?: number | null; next?: number | null } = {},
   ): Promise<string> {
-    const previousBudgetCents = getPlanUsageBudgetCents(previousPlanTier, 'monthly');
-    const nextBudgetCents = getPlanUsageBudgetCents(nextPlanTier, 'monthly');
+    const previousBudgetCents = getPlanUsageBudgetCents(
+      { tier: previousPlanTier, catalogVersion: catalogVersions.previous },
+      'monthly',
+    );
+    const nextBudgetCents = getPlanUsageBudgetCents(
+      { tier: nextPlanTier, catalogVersion: catalogVersions.next },
+      'monthly',
+    );
     if (previousBudgetCents <= 0 || nextBudgetCents < previousBudgetCents) {
       throw new Error('Usage carry-forward requires a paid plan upgrade');
     }
@@ -209,6 +260,7 @@ export class SubscriptionService {
       usagePeriod.periodEnd,
       nextBudgetCents - previousBudgetCents,
       db,
+      catalogVersions.next,
     );
   }
 
@@ -427,6 +479,9 @@ export class SubscriptionService {
       const periodEnd = period.end;
 
       const stripeCouponId = getSubscriptionCouponId(stripeSubscription);
+      const soldCatalogVersion =
+        resolvePlanCatalogVersion(stripeSubscription.metadata?.['plan_catalog_version']) ??
+        BILLING_PLAN_CATALOG_VERSION;
 
       await this.ensureProfileExists(userId, email);
 
@@ -453,8 +508,9 @@ export class SubscriptionService {
           `INSERT INTO subscriptions
              (user_id, stripe_customer_id, stripe_subscription_id, stripe_price_id,
               status, plan_tier, current_period_start, current_period_end,
-              cancel_at_period_end, canceled_at, updated_at, stripe_coupon_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+              cancel_at_period_end, canceled_at, updated_at, stripe_coupon_id,
+              plan_catalog_version)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
            ON CONFLICT (user_id) DO UPDATE SET
              stripe_customer_id      = EXCLUDED.stripe_customer_id,
              stripe_subscription_id  = EXCLUDED.stripe_subscription_id,
@@ -466,7 +522,12 @@ export class SubscriptionService {
              cancel_at_period_end    = EXCLUDED.cancel_at_period_end,
              canceled_at             = EXCLUDED.canceled_at,
              updated_at              = EXCLUDED.updated_at,
-             stripe_coupon_id        = EXCLUDED.stripe_coupon_id
+             stripe_coupon_id        = EXCLUDED.stripe_coupon_id,
+             plan_catalog_version    = CASE
+               WHEN subscriptions.stripe_price_id IS NOT DISTINCT FROM EXCLUDED.stripe_price_id
+                 THEN COALESCE(subscriptions.plan_catalog_version, EXCLUDED.plan_catalog_version)
+               ELSE EXCLUDED.plan_catalog_version
+             END
            RETURNING *`,
           [
             userId,
@@ -481,6 +542,7 @@ export class SubscriptionService {
             canceledAt,
             updatedAt,
             stripeCouponId,
+            soldCatalogVersion,
           ],
         );
       } catch (upsertError) {
@@ -540,7 +602,7 @@ export class SubscriptionService {
         planTier,
         new Date(currentPeriodStart),
         new Date(currentPeriodEnd),
-        { db },
+        { db, catalogVersion: data.plan_catalog_version ?? null },
       );
 
       return {
@@ -552,6 +614,7 @@ export class SubscriptionService {
         current_period_end: new Date(data.current_period_end),
         stripe_subscription_id: data.stripe_subscription_id,
         stripe_price_id: data.stripe_price_id,
+        plan_catalog_version: data.plan_catalog_version ?? null,
       };
     } catch (error) {
       const isNotFound =

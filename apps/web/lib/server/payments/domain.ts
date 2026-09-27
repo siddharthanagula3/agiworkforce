@@ -164,6 +164,41 @@ export interface NormalizedCostActivity {
   invoiceDiscounts: NormalizedInvoiceDiscount[];
 }
 
+export interface NormalizedCharge {
+  reference: string;
+  paymentReference: string | null;
+  customerReference: string | null;
+  kind: NormalizedChargeAttributionKind;
+  amount: NormalizedMoney;
+  refundedMinorUnits: number;
+  createdAt: Date;
+  settled: boolean;
+  disputed: boolean;
+  billingCountry: string | null;
+  cardCountry: string | null;
+  receiptUrl: string | null;
+  purchasedLedgerCents: number | null;
+}
+
+export type NormalizedRefundReason = 'requested_by_customer' | 'duplicate' | 'fraudulent';
+
+export interface NormalizedRefund {
+  reference: string;
+  status: string | null;
+  amount: NormalizedMoney;
+}
+
+export interface ChargeRefundInput {
+  chargeReference: string;
+  amountMinorUnits: number;
+  reason: NormalizedRefundReason;
+  metadata: Readonly<Record<string, string>>;
+  idempotencyKey: string;
+}
+
+export type ChargeRefundResult =
+  { outcome: 'refunded'; refund: NormalizedRefund } | { outcome: 'rejected'; code: string | null };
+
 export interface PurchaseVerificationInput {
   reference: string;
   ownerReference?: string | null;

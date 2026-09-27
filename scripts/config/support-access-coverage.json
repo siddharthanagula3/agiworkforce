@@ -8,6 +8,10 @@
       "serves": "customer_content",
       "reason": "A dead job carries the tenant's payload and the provider error, so both are held back unless a live grant covers that workspace."
     },
+    "apps/web/app/api/admin/billing-refunds/route.ts": {
+      "serves": "submitted_to_platform",
+      "reason": "Payments the platform charged, the refund requests members filed with us, and the disputes on those payments. No workspace content is read."
+    },
     "apps/web/app/api/admin/content-reports/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "A member filed the report and chose the excerpt it carries, which is the queue trust and safety works."

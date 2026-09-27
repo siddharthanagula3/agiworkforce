@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { formatCredits } from '@agiworkforce/types';
 import { describeCronCadence } from '@/lib/schedules/schedule-time';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
@@ -253,10 +254,28 @@ export function ScheduleCard({
                 </dd>
               </div>
               <div className="min-w-0">
+                <dt className="font-medium text-foreground/70">Credits</dt>
+                <dd className="tabular-nums">
+                  {formatCredits(schedule.creditsUsed ?? 0)}
+                  {schedule.creditCap === null || schedule.creditCap === undefined
+                    ? ''
+                    : ` of ${formatCredits(schedule.creditCap)}`}
+                </dd>
+              </div>
+              <div className="min-w-0">
                 <dt className="font-medium text-foreground/70">Model</dt>
                 <dd className="break-words">{scheduleModelLabel(schedule.model)}</dd>
               </div>
             </dl>
+
+            {schedule.pausedReason === 'credit_cap_reached' &&
+            schedule.creditCap !== null &&
+            schedule.creditCap !== undefined ? (
+              <p role="status" className="break-words rounded-lg bg-muted px-3 py-2 text-xs">
+                Paused: it used its {formatCredits(schedule.creditCap)} cap. Raise the cap in Edit
+                to run it again.
+              </p>
+            ) : null}
 
             {schedule.lastError && (
               <p className="break-words rounded-lg bg-destructive/10 px-3 py-2 text-xs text-danger">

@@ -1165,6 +1165,39 @@ const mobileIapAccountExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const billingRefundRequestExportSchema = z.object({
+  id: z.string(),
+  charge_id: z.string(),
+  charge_kind: z.string(),
+  charge_amount_cents: numericSchema,
+  charge_currency: z.string(),
+  charge_created_at: timestampSchema,
+  reason: z.string(),
+  details: z.string().nullable(),
+  statutory_withdrawal: z.boolean(),
+  billing_country: z.string().nullable(),
+  assessment: z.string(),
+  assessed_refund_cents: numericSchema.nullable(),
+  status: z.string(),
+  refund_amount_cents: numericSchema.nullable(),
+  decision_note: z.string().nullable(),
+  decided_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
+const billingDisputeExportSchema = z.object({
+  id: z.string(),
+  charge_id: z.string(),
+  amount_cents: numericSchema,
+  currency: z.string(),
+  reason: z.string().nullable(),
+  stripe_status: z.string(),
+  outcome: z.string(),
+  opened_at: timestampSchema,
+  closed_at: nullableTimestampSchema,
+  restored_at: nullableTimestampSchema,
+});
+
 const autoReloadSettingsExportSchema = z.object({
   enabled: z.boolean(),
   threshold_credits: numericSchema,
@@ -1655,6 +1688,26 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           from mobile_iap_accounts
           where user_id = $1`,
     schema: mobileIapAccountExportSchema,
+  },
+  {
+    section: 'billing_refund_requests',
+    table: 'billing_refund_requests',
+    sql: `select id, charge_id, charge_kind, charge_amount_cents, charge_currency,
+                 charge_created_at, reason, details, statutory_withdrawal, billing_country,
+                 assessment, assessed_refund_cents, status, refund_amount_cents, decision_note,
+                 decided_at, created_at
+          from billing_refund_requests
+          where user_id = $1`,
+    schema: billingRefundRequestExportSchema,
+  },
+  {
+    section: 'billing_disputes',
+    table: 'billing_disputes',
+    sql: `select id, charge_id, amount_cents, currency, reason, stripe_status, outcome,
+                 opened_at, closed_at, restored_at
+          from billing_disputes
+          where user_id = $1`,
+    schema: billingDisputeExportSchema,
   },
   {
     section: 'auto_reload_settings',

@@ -41,7 +41,8 @@ vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
- CreditService: creditMocks }));
+  CreditService: creditMocks,
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
@@ -82,8 +83,17 @@ const disputeEvent = {
 const chargesRetrieve = vi.fn();
 const stripeStub = { charges: { retrieve: chargesRetrieve } } as unknown as Stripe;
 
-function withProfile() {
-  return makeDb((sql) => (sql.includes('from profiles') ? [{ id: 'user_123', email: null }] : []));
+function withProfile(revokedMicrousd = 15_000_000) {
+  return makeDb((sql) => {
+    if (sql.includes('from profiles')) return [{ id: 'user_123', email: null }];
+    if (sql.includes('from public.billing_disputes')) {
+      return [{ id: 'dp_123', outcome: 'open', revoked_at: null }];
+    }
+    if (sql.includes('revoke_disputed_credits_microusd')) {
+      return [{ account_id: 'account_1', revoked_microusd: revokedMicrousd, top_up_microusd: 0 }];
+    }
+    return [];
+  });
 }
 
 describe('charge.dispute.created records why access was removed', () => {
@@ -114,8 +124,7 @@ describe('charge.dispute.created records why access was removed', () => {
   });
 
   it('still records the reason when the account had no credits left to claw back', async () => {
-    creditMocks.getBalance.mockResolvedValue({ credits_remaining_cents: 0 });
-    const { db, calls } = withProfile();
+    const { db, calls } = withProfile(0);
 
     await dispatchStripeEvent(db, stripeStub, disputeEvent);
 

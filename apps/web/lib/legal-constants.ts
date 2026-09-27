@@ -72,7 +72,7 @@ export const POLICY_LAST_UPDATED = {
   security: '2026-08-14',
   trust: '2026-09-21',
   sla: '2026-09-04',
-  refunds: '2026-08-13',
+  refunds: '2026-09-27',
   referralTerms: '2026-09-27',
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',

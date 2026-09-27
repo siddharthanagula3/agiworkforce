@@ -1431,7 +1431,18 @@
       "why": "analytics names the product surfaces a second time, so a new surface reports under no name until both lists are edited."
     }
   ],
-  "columnExemptions": [],
+  "columnExemptions": [
+    {
+      "table": "billing_disputes",
+      "exempt": [],
+      "why": "the processor's dispute on a payment, written only by the Stripe webhook from the event; no principal other than the processor creates it and nothing edits it under an If-Match precondition"
+    },
+    {
+      "table": "billing_refund_requests",
+      "exempt": [],
+      "why": "filed once by its owner and decided once by the platform, never edited by a client, so there is no creator distinct from the owner and no concurrent write to version"
+    }
+  ],
   "tableDispositions": [
     {
       "table": "account_lockout_attempts",
@@ -1661,6 +1672,16 @@
       "why": "a support ticket outlives the session that opened it and is read by an operator outside the tenant, which is exactly what a canonical object with an audit boundary is for",
       "becomes": "support-ticket",
       "fix": "add packages/contracts/types/src/support-ticket.ts exporting SupportTicket (status, priority, tier, handoffSessionId) and register the concept over the three support tables"
+    },
+    {
+      "table": "billing_disputes",
+      "disposition": "operational",
+      "why": "the record of a card dispute on a payment and what it held and restored; it is closed by the processor, never synced or versioned"
+    },
+    {
+      "table": "billing_refund_requests",
+      "disposition": "operational",
+      "why": "a request about a payment rather than an object of its own; it is decided and closed, never synced or versioned"
     }
   ],
   "uiStateColumns": [

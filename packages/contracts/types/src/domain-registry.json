@@ -146,6 +146,8 @@
       "concepts": ["credit-bucket"],
       "tables": [
         "auto_reload_settings",
+        "billing_disputes",
+        "billing_refund_requests",
         "bonus_credit_grants",
         "cogs_adjustments",
         "credit_idempotency_keys",
