@@ -23,6 +23,10 @@ import {
   toIsoTimestamp,
 } from '@/lib/server/capability-limit-resets';
 import { getSpendableCredits } from '@/lib/server/spendable-credits';
+import {
+  getPrepaidCreditBalances,
+  type PrepaidCreditBalances,
+} from '@/lib/services/bonus-credit-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { getFreeTrialPublicUsage } from '@/lib/services/free-trial-service';
 import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
@@ -30,7 +34,6 @@ import { resolveEffectiveSubscription } from '@/lib/services/effective-subscript
 export interface ManagedUsageBonusCredits {
   remaining: number;
   next_expiry_at: string | null;
-  next_expiry_credits: number;
 }
 
 export interface AccountUsageCredits extends ManagedUsageCredits {
@@ -41,52 +44,14 @@ export interface AccountUsageSummary extends Omit<ManagedUsageSummaryResponse, '
   credits?: AccountUsageCredits;
 }
 
-interface BonusCreditRow {
-  remaining: string | number | null;
-  next_expiry_at: string | Date | null;
-  next_expiry_credits: string | number | null;
-}
-
-const SELECT_LIVE_BONUS_CREDITS = `
-  with live as (
-    select credits_remaining, expires_at
-      from public.bonus_credit_grants
-     where user_id = $1
-       and revoked_at is null
-       and credits_remaining > 0
-       and expires_at > now()
-  ),
-  nearest as (
-    select min(expires_at) as expires_at from live
-  )
-  select coalesce(sum(live.credits_remaining), 0) as remaining,
-         nearest.expires_at as next_expiry_at,
-         coalesce(
-           sum(live.credits_remaining) filter (where live.expires_at = nearest.expires_at),
-           0
-         ) as next_expiry_credits
-    from nearest
-    left join live on true
-   group by nearest.expires_at`;
-
-function toCredits(value: string | number | null | undefined): number {
-  const parsed = typeof value === 'number' ? value : Number.parseFloat(value ?? '');
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
-}
-
-export async function readBonusCreditBalance(
+async function readPrepaidCredits(
   db: DatabaseAdapter,
   userId: string,
-): Promise<ManagedUsageBonusCredits | null> {
+): Promise<PrepaidCreditBalances | null> {
   try {
-    const [row] = await db.query<BonusCreditRow>(SELECT_LIVE_BONUS_CREDITS, [userId]);
-    return {
-      remaining: toCredits(row?.remaining),
-      next_expiry_at: toIsoTimestamp(row?.next_expiry_at ?? null),
-      next_expiry_credits: toCredits(row?.next_expiry_credits),
-    };
+    return await getPrepaidCreditBalances(db, userId);
   } catch (error) {
-    logger.error({ error, userId }, 'Bonus credit lookup failed; reporting unknown balance');
+    logger.error({ error, userId }, 'Prepaid credit lookup failed; reporting unknown balances');
     return null;
   }
 }
@@ -95,11 +60,11 @@ export async function getManagedUsageSummary(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<AccountUsageSummary> {
-  const [balance, subscription, spendableCredits, bonus] = await Promise.all([
+  const [balance, subscription, spendableCredits, prepaid] = await Promise.all([
     CreditService.getBalance(db, userId),
     resolveEffectiveSubscription(db, userId),
     getSpendableCredits(db, userId),
-    readBonusCreditBalance(db, userId),
+    readPrepaidCredits(db, userId),
   ]);
 
   const planTier = subscription?.plan_tier || 'free';
@@ -175,13 +140,12 @@ export async function getManagedUsageSummary(
                 flagshipWeeklyResetAt,
               ),
         purchased: {
-          remaining:
-            spendableCredits.availableMicrousd === null
-              ? null
-              : creditsFromMicrousd(spendableCredits.availableMicrousd),
+          remaining: prepaid ? prepaid.purchasedCredits : null,
           overage_enabled: spendableCredits.overageEnabled,
         },
-        bonus,
+        bonus: prepaid
+          ? { remaining: prepaid.bonusCredits, next_expiry_at: prepaid.nextBonusExpiry }
+          : null,
       }
     : null;
 
