@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { TOOL_APPROVAL_ACTION_LABELS, TOOL_APPROVAL_HIGH_RISK_NOTICE } from '@agiworkforce/types';
 import { Button } from '@agiworkforce/ui';
 import { InlineToolCall, type InlineToolCallStatus, type InlineToolKind } from './InlineToolCall';
 import { HighlightedCode } from './markdown/HighlightedCode';
@@ -48,8 +48,6 @@ export interface ToolCallCardProps {
   footer?: ReactNode;
   className?: string;
 }
-
-const HIGH_RISK_APPROVAL_NOTICE = 'High risk. Check the request below before you allow it.';
 
 const CODE_EXECUTION_TOOLS = new Set([
   'execute_code',
@@ -493,7 +491,7 @@ const ToolCallCardComponent = ({
               )}
             >
               {highRiskApproval
-                ? HIGH_RISK_APPROVAL_NOTICE
+                ? TOOL_APPROVAL_HIGH_RISK_NOTICE
                 : 'This tool requires approval before execution.'}
             </p>
             <div className="flex gap-1.5">
