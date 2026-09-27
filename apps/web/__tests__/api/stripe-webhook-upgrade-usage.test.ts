@@ -1,5 +1,6 @@
 import type Stripe from 'stripe';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BILLING_PLAN_CATALOG_VERSION } from '@agiworkforce/types';
 
 const serviceMocks = vi.hoisted(() => ({
   allocate: vi.fn(),
@@ -22,7 +23,8 @@ vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
- CreditService: {} }));
+  CreditService: {},
+}));
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: vi.fn((metadata: Record<string, string> | null) => metadata?.['plan_tier']),
   isValidPlanTier: vi.fn(() => true),
@@ -74,6 +76,7 @@ function database(existingPlan: string, existingPeriodStart: string) {
             user_id: 'user-123',
             plan_tier: existingPlan,
             current_period_start: existingPeriodStart,
+            plan_catalog_version: BILLING_PLAN_CATALOG_VERSION,
           },
         ];
       }
@@ -110,6 +113,7 @@ describe('subscription webhook usage rollover', () => {
       new Date(nextPeriodStart * 1000),
       new Date((nextPeriodStart + 30 * 24 * 60 * 60) * 1000),
       db,
+      { previous: BILLING_PLAN_CATALOG_VERSION, next: BILLING_PLAN_CATALOG_VERSION },
     );
     expect(serviceMocks.reset).not.toHaveBeenCalled();
     expect(serviceMocks.allocate).not.toHaveBeenCalled();
@@ -180,6 +184,7 @@ describe('subscription webhook usage rollover', () => {
       new Date(periodStart * 1000),
       new Date((periodStart + 30 * 24 * 60 * 60) * 1000),
       db,
+      { next: BILLING_PLAN_CATALOG_VERSION },
     );
     expect(serviceMocks.allocate).not.toHaveBeenCalled();
     expect(serviceMocks.reset).not.toHaveBeenCalled();
