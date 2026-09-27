@@ -1,391 +1,27 @@
-//! Streamable HTTP transport (MCP 2025-06-18 spec).
-//!
-//! POST per request; the response is either an inline JSON-RPC body or an
-//! SSE-upgrade stream of frames. `Mcp-Session-Id` is captured from every
-//! response and echoed on every subsequent request for sticky session affinity.
-//!
-//! OAuth (PKCE) layers on top. When an [`OAuthConfig`] is set on the transport:
-//!   * On every request, look up the host token store keyed by server URL. If a
-//!     cached token exists and isn't expiring within 60s, attach
-//!     `Authorization: Bearer ...`. If it is expiring and a refresh token is
-//!     available, refresh first.
-//!   * On a 401, parse `WWW-Authenticate: Bearer resource_metadata="..."` to
-//!     discover the AS, run the PKCE flow, persist the token, retry once.
-//!   * On a 401 with `error="insufficient_scope"`, re-run with the elevated
-//!     scope (step-up auth, RFC 9470).
-
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use futures_util::StreamExt;
+use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
-use crate::client::TransportConn;
-use crate::config::OAuthConfig;
+use super::sse_stream::SseDecoder;
+use crate::cache::Events;
+use crate::config::{McpTimeouts, OAuthConfig};
+use crate::error::TransportFault;
 use crate::hooks::{ClientHooks, OAuthToken};
-use crate::jsonrpc::{JsonRpcRequest, extract_matching_response, find_subsequence};
+use crate::jsonrpc::{error_body, matching_response, request_frame};
 use crate::oauth::flow::{parse_insufficient_scope, perform_full_oauth, refresh_token};
+use crate::peer_requests;
+use crate::protocol::{
+    HEADER_METHOD, HEADER_PROTOCOL_VERSION, HEADER_SESSION_ID, META_SUBSCRIPTION_ID,
+};
 
-/// Build a Streamable-HTTP transport. Synchronous, the `initialize` handshake
-/// (which goes through `send_request` → POST) is run by the caller. Sticky
-/// `Mcp-Session-Id` capture happens inside [`send_request_http`] on every
-/// response, so the first POST response populates it.
-pub(crate) fn connect(
-    url: &str,
-    headers: &HashMap<String, String>,
-    oauth: Option<&OAuthConfig>,
-    timeouts: &crate::config::McpTimeouts,
-) -> Result<TransportConn> {
-    if timeouts.validate_urls {
-        crate::security::validate_server_url(url).context("[mcp http]")?;
-    }
-    refuse_cleartext_credentials(url, headers_carry_credentials(headers) || oauth.is_some())
-        .context("[mcp http]")?;
-    // No global `.timeout()` on the client, POSTs are wrapped per-call, and the
-    // optional GET stream is long-lived.
-    let builder = reqwest::Client::builder().redirect(pinned_redirect_policy(url));
-    // Release builds refuse this outright; debug builds allow loopback only.
-    crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)
-        .context("[mcp http]")?;
-    // The policy above already bails in release, so this is unreachable there.
-    // Gating the call site as well keeps `danger_accept_invalid_certs` out of
-    // the release binary entirely, so the guarantee survives someone later
-    // dropping the policy call, and it is what `rust/disabled-certificate-check`
-    // flagged, since the query cannot see the early-return guard. Shadowing
-    // rather than `mut`: the gated block is the only mutation here, so `mut`
-    // would be an unused-mut error in release under `-D warnings`.
-    #[cfg(debug_assertions)]
-    let builder = if timeouts.verify_tls {
-        builder
-    } else {
-        builder.danger_accept_invalid_certs(true)
-    };
-    let client = builder.build().context("build reqwest client")?;
-
-    Ok(TransportConn::Http {
-        url: url.to_string(),
-        headers: headers.clone(),
-        client,
-        session_id: None,
-        oauth: oauth.cloned(),
-    })
-}
-
-/// Send a JSON-RPC request over Streamable HTTP and wait for the response.
-///
-/// Handles the three response shapes per the 2025-06-18 spec: inline JSON body,
-/// SSE-upgrade stream, or `202 Accepted` (no reply → `Ok(None)`). On 401 with
-/// an OAuth config, runs discovery + PKCE via the host [`ClientHooks`] and
-/// retries exactly once.
-#[allow(clippy::too_many_arguments)]
-pub(crate) async fn send_request_http(
-    url: &str,
-    headers: &HashMap<String, String>,
-    client: &reqwest::Client,
-    session_id: &mut Option<String>,
-    oauth: Option<&OAuthConfig>,
-    body: &JsonRpcRequest,
-    timeout: Duration,
-    server_name: &str,
-    method_name: &str,
-    hooks: &ClientHooks,
-    max_frame_bytes: usize,
-    max_response_bytes: u64,
-) -> Result<Option<serde_json::Value>> {
-    // Phase 1: refresh-if-near-expiry, then attach bearer if we have one.
-    let mut bearer = if let Some(cfg) = oauth {
-        prepare_bearer(url, cfg, hooks).await
-    } else {
-        None
-    };
-
-    let outcome = send_once(
-        url,
-        headers,
-        client,
-        session_id,
-        bearer.as_deref(),
-        body,
-        timeout,
-        server_name,
-        method_name,
-        max_frame_bytes,
-        max_response_bytes,
-    )
-    .await?;
-
-    match outcome {
-        SendOutcome::Done(v) => Ok(v),
-        SendOutcome::Unauthorized {
-            www_authenticate,
-            body_text,
-        } => {
-            let cfg = match oauth {
-                Some(c) => c,
-                None => {
-                    bail!(
-                        "[{server_name}] [mcp http] non-success response 401 on '{method_name}' \
-                         and no OAuth configured: {body_text}"
-                    );
-                }
-            };
-
-            // Headless guard: TTY-less runs shouldn't pop a browser; surface a
-            // clear error instead. The interactivity check is host-provided.
-            if !hooks.browser.is_interactive() {
-                bail!(
-                    "[{server_name}] [mcp http] received 401 on '{method_name}' but no usable cached token \
-                     and not running interactively, re-run from a terminal or pre-auth \
-                     via `agi mcp oauth login <server>`. body: {body_text}"
-                );
-            }
-
-            // Detect step-up; otherwise full discovery + PKCE.
-            let scope_override = parse_insufficient_scope(www_authenticate.as_deref());
-
-            eprintln!(
-                "[{server_name}] [mcp http] received 401 on '{method_name}', running OAuth flow{}",
-                scope_override
-                    .as_deref()
-                    .map(|s| format!(" (step-up scope: {s})"))
-                    .unwrap_or_default()
-            );
-
-            let new_token = perform_full_oauth(
-                url,
-                cfg,
-                www_authenticate.as_deref(),
-                scope_override.as_deref(),
-                hooks.browser.as_ref(),
-            )
-            .await
-            .with_context(|| format!("[{server_name}] OAuth flow failed"))?;
-
-            // Persist before retrying so a crash mid-retry doesn't lose the token.
-            if let Err(e) = hooks.token_store.set(url, new_token.clone()) {
-                eprintln!("[{server_name}] [mcp http] warning: failed to persist OAuth token: {e}");
-            }
-
-            bearer = Some(new_token.access_token.clone());
-
-            let retry = send_once(
-                url,
-                headers,
-                client,
-                session_id,
-                bearer.as_deref(),
-                body,
-                timeout,
-                server_name,
-                method_name,
-                max_frame_bytes,
-                max_response_bytes,
-            )
-            .await?;
-
-            match retry {
-                SendOutcome::Done(v) => Ok(v),
-                SendOutcome::Unauthorized { body_text, .. } => {
-                    bail!(
-                        "[{server_name}] [mcp http] OAuth flow completed but request still \
-                         rejected with 401 on '{method_name}', check that scopes match what \
-                         the server requires. body: {body_text}"
-                    );
-                }
-            }
-        }
-    }
-}
-
-/// Outcome of a single POST attempt.
-#[derive(Debug)]
-enum SendOutcome {
-    Done(Option<serde_json::Value>),
-    Unauthorized {
-        www_authenticate: Option<String>,
-        body_text: String,
-    },
-}
-
-/// Single round-trip without OAuth retry logic.
-#[allow(clippy::too_many_arguments)]
-async fn send_once(
-    url: &str,
-    headers: &HashMap<String, String>,
-    client: &reqwest::Client,
-    session_id: &mut Option<String>,
-    bearer: Option<&str>,
-    body: &JsonRpcRequest,
-    timeout: Duration,
-    server_name: &str,
-    method_name: &str,
-    max_frame_bytes: usize,
-    max_response_bytes: u64,
-) -> Result<SendOutcome> {
-    // The bearer and the host-configured headers are credentials scoped to this
-    // server: refuse to put them on the wire in cleartext (loopback exempt) no
-    // matter which host built this transport.
-    refuse_cleartext_credentials(url, bearer.is_some() || headers_carry_credentials(headers))
-        .with_context(|| format!("[{server_name}] [mcp http] '{method_name}'"))?;
-
-    let mut req = client
-        .post(url)
-        .header("Content-Type", "application/json")
-        .header("Accept", "application/json, text/event-stream")
-        .json(body);
-    for (k, v) in headers {
-        req = req.header(k, v);
-    }
-    if let Some(sid) = session_id.as_deref() {
-        req = req.header("Mcp-Session-Id", sid);
-    }
-    if let Some(b) = bearer {
-        req = req.header("Authorization", format!("Bearer {b}"));
-    }
-
-    let resp = match tokio::time::timeout(timeout, req.send()).await {
-        Ok(r) => {
-            r.with_context(|| format!("[{server_name}] [mcp http] POST '{method_name}' failed"))?
-        }
-        Err(_) => bail!(
-            "[{server_name}] [mcp http] POST timeout ({}ms) on '{method_name}'",
-            timeout.as_millis()
-        ),
-    };
-
-    // Capture sticky session id off any response (even errors).
-    if let Some(sid_hv) = resp.headers().get("Mcp-Session-Id") {
-        if let Ok(sid_str) = sid_hv.to_str() {
-            *session_id = Some(sid_str.to_string());
-        }
-    }
-
-    let status = resp.status();
-    if status == reqwest::StatusCode::ACCEPTED {
-        // Fire-and-forget, server accepted the request but won't reply.
-        return Ok(SendOutcome::Done(None));
-    }
-
-    if status == reqwest::StatusCode::UNAUTHORIZED {
-        let www_authenticate = resp
-            .headers()
-            .get("WWW-Authenticate")
-            .and_then(|v| v.to_str().ok())
-            .map(String::from);
-        let body_text = read_text_capped(resp).await;
-        return Ok(SendOutcome::Unauthorized {
-            www_authenticate,
-            body_text,
-        });
-    }
-
-    if !status.is_success() {
-        let body_text = read_text_capped(resp).await;
-        bail!(
-            "[{server_name}] [mcp http] non-success response {status} on '{method_name}': {body_text}"
-        );
-    }
-
-    let ct = resp
-        .headers()
-        .get("Content-Type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-
-    if ct.starts_with("text/event-stream") {
-        // SSE-upgrade response, drain frames until the matching id arrives.
-        let expected_id = body.id;
-        let mut stream = resp.bytes_stream();
-        let mut buf: Vec<u8> = Vec::new();
-        loop {
-            let next = match tokio::time::timeout(timeout, stream.next()).await {
-                Ok(n) => n,
-                Err(_) => bail!(
-                    "[{server_name}] [mcp http] sse-upgrade idle timeout ({}ms) on '{method_name}'",
-                    timeout.as_millis()
-                ),
-            };
-            let chunk = match next {
-                Some(Ok(c)) => c,
-                Some(Err(e)) => bail!(
-                    "[{server_name}] [mcp http] sse-upgrade read error on '{method_name}': {e}"
-                ),
-                None => bail!(
-                    "[{server_name}] [mcp http] sse-upgrade closed before response on '{method_name}'"
-                ),
-            };
-            buf.extend_from_slice(&chunk);
-            // Not optional: the server chooses when to send a frame boundary,
-            // so without this the buffer grows until the host process dies.
-            if buf.len() > max_frame_bytes && find_subsequence(&buf, b"\n\n").is_none() {
-                bail!(
-                    "[{server_name}] [mcp http] sse-upgrade frame exceeded {max_frame_bytes} bytes on '{method_name}'"
-                );
-            }
-            while let Some(pos) = find_subsequence(&buf, b"\n\n") {
-                let frame = buf.drain(..pos + 2).collect::<Vec<u8>>();
-                let frame_str = String::from_utf8_lossy(&frame);
-                let mut data_buf = String::new();
-                for line in frame_str.lines() {
-                    if let Some(rest) = line.strip_prefix("data:") {
-                        if !data_buf.is_empty() {
-                            data_buf.push('\n');
-                        }
-                        data_buf.push_str(rest.strip_prefix(' ').unwrap_or(rest));
-                    }
-                }
-                if data_buf.is_empty() {
-                    continue;
-                }
-                let v = serde_json::from_str::<serde_json::Value>(&data_buf).with_context(|| {
-                    format!("[{server_name}] [mcp http] invalid JSON in sse-upgrade frame on '{method_name}'")
-                })?;
-                if let Some(matched) = extract_matching_response(&v, expected_id, server_name)? {
-                    return Ok(SendOutcome::Done(matched));
-                }
-                // Otherwise a notification / different-id response, keep draining.
-            }
-        }
-    }
-
-    // Default path: JSON body inline, read under a hard cap so a malicious
-    // server cannot exhaust memory with one giant reply.
-    let raw = read_body_capped(resp, max_response_bytes)
-        .await
-        .with_context(|| format!("[{server_name}] [mcp http] on '{method_name}'"))?;
-    let value: serde_json::Value = serde_json::from_slice(&raw).with_context(|| {
-        format!("[{server_name}] [mcp http] parse json body on '{method_name}'")
-    })?;
-    match extract_matching_response(&value, body.id, server_name)? {
-        Some(matched) => Ok(SendOutcome::Done(matched)),
-        None => {
-            // Body had no matching id, treat like 202.
-            Ok(SendOutcome::Done(None))
-        }
-    }
-}
-
-/// Bytes of a diagnostic (error / 401) body kept for the message. The body is
-/// attacker-controlled text that only ends up in a log line, so it is truncated
-/// rather than refused.
 const MAX_DIAGNOSTIC_BODY_BYTES: usize = 64 * 1024;
+const MAX_REDIRECT_HOPS: usize = 5;
+const LISTEN_MAX_FAILURES: u32 = 5;
+const LISTEN_MAX_BACKOFF: Duration = Duration::from_secs(60);
 
-/// Refuse to attach credentials to a cleartext connection. Loopback stays
-/// exempt so local `http://` dev MCP servers keep working; any other host must
-/// be reached over HTTPS before a bearer token or a configured auth header goes
-/// out on it.
-pub(crate) fn refuse_cleartext_credentials(url: &str, has_credentials: bool) -> Result<()> {
-    if !has_credentials {
-        return Ok(());
-    }
-    crate::security::enforce_https_for_remote(url)
-        .context("refusing to send MCP credentials in cleartext")
-}
-
-/// Substrings that make a configured header name a secret. Matched
-/// case-insensitively so vendor spellings (`X-Api-Key`, `Api-Key`,
-/// `X-Auth-Token`, `X-Session-Secret`) are all covered without an exact-name
-/// allowlist that a new vendor would slip past.
 const CREDENTIAL_HEADER_MARKERS: [&str; 9] = [
     "auth",
     "key",
@@ -398,10 +34,571 @@ const CREDENTIAL_HEADER_MARKERS: [&str; 9] = [
     "signature",
 ];
 
-/// Whether any host-configured header carries a secret. Only these gate the
-/// cleartext refusal: a benign routing header (`X-Client: agi`) on a LAN
-/// `http://` MCP server exposes nothing, and failing bringup on it would break
-/// working setups for no security gain.
+pub(crate) struct HttpConn {
+    server_name: String,
+    url: String,
+    headers: HashMap<String, String>,
+    client: reqwest::Client,
+    oauth: Option<OAuthConfig>,
+    hooks: ClientHooks,
+    events: Arc<Events>,
+    max_frame: usize,
+    max_response: u64,
+    session_id: Option<String>,
+    auth_epoch: u64,
+}
+
+pub(crate) struct Exchange<'a> {
+    pub(crate) id: &'a Value,
+    pub(crate) method: &'a str,
+    pub(crate) frame: &'a Value,
+    pub(crate) headers: &'a [(String, String)],
+    pub(crate) timeout: Duration,
+    pub(crate) legacy: bool,
+}
+
+enum Outcome {
+    Done(Option<Value>),
+    Challenge {
+        www_authenticate: Option<String>,
+        status: u16,
+        body: String,
+    },
+}
+
+impl HttpConn {
+    pub(crate) fn connect(
+        server_name: &str,
+        url: &str,
+        headers: &HashMap<String, String>,
+        oauth: Option<&OAuthConfig>,
+        timeouts: &McpTimeouts,
+        hooks: ClientHooks,
+        events: Arc<Events>,
+    ) -> Result<Self> {
+        if timeouts.validate_urls {
+            crate::security::validate_server_url(url).context("[mcp http]")?;
+        }
+        refuse_cleartext_credentials(url, headers_carry_credentials(headers) || oauth.is_some())
+            .context("[mcp http]")?;
+        let builder = reqwest::Client::builder().redirect(pinned_redirect_policy(url));
+        crate::security::enforce_tls_verification_policy(url, timeouts.verify_tls)
+            .context("[mcp http]")?;
+        #[cfg(debug_assertions)]
+        let builder = if timeouts.verify_tls {
+            builder
+        } else {
+            builder.danger_accept_invalid_certs(true)
+        };
+        let builder = match timeouts.connect_timeout {
+            Some(connect) => builder.connect_timeout(connect),
+            None => builder,
+        };
+        let client = builder.build().context("build reqwest client")?;
+
+        Ok(Self {
+            server_name: server_name.to_string(),
+            url: url.to_string(),
+            headers: headers.clone(),
+            client,
+            oauth: oauth.cloned(),
+            hooks,
+            events,
+            max_frame: timeouts.frame_cap(),
+            max_response: timeouts.response_cap(),
+            session_id: None,
+            auth_epoch: 0,
+        })
+    }
+
+    pub(crate) fn auth_epoch(&self) -> u64 {
+        self.auth_epoch
+    }
+
+    pub(crate) async fn exchange(&mut self, request: &Exchange<'_>) -> Result<Option<Value>> {
+        let bearer = self.bearer().await;
+        match self.send_once(request, bearer.as_deref()).await? {
+            Outcome::Done(value) => Ok(value),
+            Outcome::Challenge {
+                www_authenticate,
+                status,
+                body,
+            } => {
+                if status == reqwest::StatusCode::UNAUTHORIZED.as_u16()
+                    && let Some(refreshed) = self.refreshed_bearer().await
+                    && let Outcome::Done(value) = self.send_once(request, Some(&refreshed)).await?
+                {
+                    return Ok(value);
+                }
+                let bearer = self
+                    .authorize(www_authenticate.as_deref(), request.method, status, &body)
+                    .await?;
+                match self.send_once(request, Some(&bearer)).await? {
+                    Outcome::Done(value) => Ok(value),
+                    Outcome::Challenge { status, body, .. } => bail!(
+                        "[{}] [mcp http] OAuth flow completed but request still rejected with {status} \
+                         on '{}', check that scopes match what the server requires. body: {body}",
+                        self.server_name,
+                        request.method
+                    ),
+                }
+            }
+        }
+    }
+
+    pub(crate) async fn notify(&mut self, frame: &Value, headers: &[(String, String)]) {
+        let method = frame
+            .get("method")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let bearer = self.cached_bearer();
+        if let Err(e) = refuse_cleartext_credentials(
+            &self.url,
+            bearer.is_some() || headers_carry_credentials(&self.headers),
+        ) {
+            eprintln!(
+                "[{}] HTTP: notification '{method}' not sent: {e:#}",
+                self.server_name
+            );
+            return;
+        }
+        let request = self.post(frame, headers, true, bearer.as_deref());
+        if let Err(e) = request.send().await {
+            eprintln!(
+                "[{}] HTTP: notification '{method}' POST failed: {e}",
+                self.server_name
+            );
+        }
+    }
+
+    pub(crate) async fn end_session(&mut self) {
+        let Some(session_id) = self.session_id.take() else {
+            return;
+        };
+        let mut request = self
+            .client
+            .delete(&self.url)
+            .header(HEADER_SESSION_ID, session_id);
+        for (k, v) in &self.headers {
+            request = request.header(k, v);
+        }
+        if let Some(bearer) = self.cached_bearer() {
+            request = request.header("Authorization", format!("Bearer {bearer}"));
+        }
+        let _ = tokio::time::timeout(Duration::from_secs(5), request.send()).await;
+    }
+
+    pub(crate) fn listener(&self) -> Listener {
+        Listener {
+            server_name: self.server_name.clone(),
+            url: self.url.clone(),
+            headers: self.headers.clone(),
+            client: self.client.clone(),
+            oauth: self.oauth.clone(),
+            hooks: self.hooks.clone(),
+            events: Arc::clone(&self.events),
+            max_frame: self.max_frame,
+        }
+    }
+
+    async fn bearer(&self) -> Option<String> {
+        match &self.oauth {
+            Some(cfg) => prepare_bearer(&self.url, cfg, &self.hooks).await,
+            None => None,
+        }
+    }
+
+    async fn refreshed_bearer(&self) -> Option<String> {
+        let cfg = self.oauth.as_ref()?;
+        let cached = self.hooks.token_store.get(&self.url)?;
+        cached.refresh_token.as_ref()?;
+        match refresh_token(&cached, cfg).await {
+            Ok(refreshed) => {
+                let access = refreshed.access_token.clone();
+                if let Err(e) = self.hooks.token_store.set(&self.url, refreshed) {
+                    eprintln!(
+                        "[{}] [mcp http] warning: failed to persist the refreshed OAuth token: {e}",
+                        self.server_name
+                    );
+                }
+                Some(access)
+            }
+            Err(e) => {
+                eprintln!(
+                    "[{}] [mcp oauth] the server rejected the stored refresh token ({e})",
+                    self.server_name
+                );
+                None
+            }
+        }
+    }
+
+    fn cached_bearer(&self) -> Option<String> {
+        self.oauth.as_ref()?;
+        self.hooks
+            .token_store
+            .get(&self.url)
+            .filter(|token| !token.is_expiring_soon(60))
+            .map(|token| token.access_token)
+    }
+
+    async fn authorize(
+        &mut self,
+        www_authenticate: Option<&str>,
+        method: &str,
+        status: u16,
+        body: &str,
+    ) -> Result<String> {
+        let server = self.server_name.clone();
+        let Some(cfg) = self.oauth.clone() else {
+            return Err(TransportFault::HttpStatus {
+                server,
+                status,
+                method: method.to_string(),
+                body: format!("no OAuth configured: {body}"),
+            }
+            .into());
+        };
+        if !self.hooks.browser.is_interactive() {
+            return Err(TransportFault::AuthorizationRequired {
+                server,
+                status,
+                method: method.to_string(),
+            }
+            .into());
+        }
+        eprintln!(
+            "[{server}] [mcp http] received {status} on '{method}', running OAuth flow{}",
+            parse_insufficient_scope(www_authenticate)
+                .map(|scope| format!(" (step-up scope: {scope})"))
+                .unwrap_or_default()
+        );
+        let token = perform_full_oauth(&self.url, &cfg, www_authenticate, &self.hooks)
+            .await
+            .with_context(|| format!("[{server}] OAuth flow failed"))?;
+        if let Err(e) = self.hooks.token_store.set(&self.url, token.clone()) {
+            eprintln!("[{server}] [mcp http] warning: failed to persist OAuth token: {e}");
+        }
+        self.auth_epoch += 1;
+        Ok(token.access_token)
+    }
+
+    fn post(
+        &self,
+        frame: &Value,
+        headers: &[(String, String)],
+        legacy: bool,
+        bearer: Option<&str>,
+    ) -> reqwest::RequestBuilder {
+        let mut request = self
+            .client
+            .post(&self.url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .json(frame);
+        for (k, v) in &self.headers {
+            request = request.header(k, v);
+        }
+        for (k, v) in headers {
+            request = request.header(k, v);
+        }
+        if legacy && let Some(session_id) = self.session_id.as_deref() {
+            request = request.header(HEADER_SESSION_ID, session_id);
+        }
+        if let Some(bearer) = bearer {
+            request = request.header("Authorization", format!("Bearer {bearer}"));
+        }
+        request
+    }
+
+    async fn send_once(&mut self, request: &Exchange<'_>, bearer: Option<&str>) -> Result<Outcome> {
+        let server = self.server_name.clone();
+        let method = request.method;
+        refuse_cleartext_credentials(
+            &self.url,
+            bearer.is_some() || headers_carry_credentials(&self.headers),
+        )
+        .with_context(|| format!("[{server}] [mcp http] '{method}'"))?;
+
+        let post = self.post(request.frame, request.headers, request.legacy, bearer);
+        let resp = match tokio::time::timeout(request.timeout, post.send()).await {
+            Ok(r) => r.with_context(|| format!("[{server}] [mcp http] POST '{method}' failed"))?,
+            Err(_) => bail!(
+                "[{server}] [mcp http] POST timeout ({}ms) on '{method}'",
+                request.timeout.as_millis()
+            ),
+        };
+
+        if request.legacy
+            && let Some(session_id) = resp
+                .headers()
+                .get(HEADER_SESSION_ID)
+                .and_then(|v| v.to_str().ok())
+        {
+            self.session_id = Some(session_id.to_string());
+        }
+
+        let status = resp.status();
+        if status == reqwest::StatusCode::ACCEPTED {
+            return Ok(Outcome::Done(None));
+        }
+
+        let www_authenticate = resp
+            .headers()
+            .get("WWW-Authenticate")
+            .and_then(|v| v.to_str().ok())
+            .map(String::from);
+        let step_up = status == reqwest::StatusCode::FORBIDDEN
+            && parse_insufficient_scope(www_authenticate.as_deref()).is_some();
+        if status == reqwest::StatusCode::UNAUTHORIZED || step_up {
+            let body = read_text_capped(resp).await;
+            return Ok(Outcome::Challenge {
+                www_authenticate,
+                status: status.as_u16(),
+                body,
+            });
+        }
+
+        if !status.is_success() {
+            let body = read_capped_bytes(resp).await;
+            if request.legacy
+                && status == reqwest::StatusCode::NOT_FOUND
+                && self.session_id.take().is_some()
+            {
+                return Err(TransportFault::SessionExpired {
+                    server,
+                    method: method.to_string(),
+                }
+                .into());
+            }
+            if let Some(peer) = error_body(&body, &server) {
+                return Err(peer.into());
+            }
+            return Err(TransportFault::HttpStatus {
+                server,
+                status: status.as_u16(),
+                method: method.to_string(),
+                body: String::from_utf8_lossy(&body).into_owned(),
+            }
+            .into());
+        }
+
+        let event_stream = resp
+            .headers()
+            .get("Content-Type")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|ct| ct.starts_with("text/event-stream"));
+        if event_stream {
+            return self.read_stream(resp, request).await.map(Outcome::Done);
+        }
+
+        let raw = read_body_capped(resp, self.max_response)
+            .await
+            .with_context(|| format!("[{server}] [mcp http] on '{method}'"))?;
+        let value: Value = serde_json::from_slice(&raw)
+            .with_context(|| format!("[{server}] [mcp http] parse json body on '{method}'"))?;
+        Ok(Outcome::Done(matching_response(&value, request.id)))
+    }
+
+    async fn read_stream(
+        &self,
+        resp: reqwest::Response,
+        request: &Exchange<'_>,
+    ) -> Result<Option<Value>> {
+        let server = &self.server_name;
+        let method = request.method;
+        let mut stream = resp.bytes_stream();
+        let mut decoder = SseDecoder::new(self.max_frame);
+        loop {
+            let next = tokio::time::timeout(request.timeout, stream.next())
+                .await
+                .map_err(|_| TransportFault::Timeout {
+                    server: server.clone(),
+                    millis: request.timeout.as_millis(),
+                    method: method.to_string(),
+                })?;
+            let chunk = match next {
+                Some(Ok(chunk)) => chunk,
+                Some(Err(_)) | None => {
+                    return Err(TransportFault::StreamBroke {
+                        server: server.clone(),
+                        method: method.to_string(),
+                    }
+                    .into());
+                }
+            };
+            let events = decoder
+                .push(&chunk)
+                .map_err(|e| anyhow!("[{server}] [mcp http] sse-upgrade {e} on '{method}'"))?;
+            for event in events {
+                let value: Value = serde_json::from_str(&event.data).with_context(|| {
+                    format!("[{server}] [mcp http] invalid JSON in sse-upgrade frame on '{method}'")
+                })?;
+                if let Some(frame) = matching_response(&value, request.id) {
+                    return Ok(Some(frame));
+                }
+                self.handle_side_message(&value, request.legacy).await;
+            }
+        }
+    }
+
+    async fn handle_side_message(&self, value: &Value, legacy: bool) {
+        if let Some((method, params)) = peer_requests::notification(value) {
+            self.events.notify(method, params);
+            return;
+        }
+        let Some((method, id, params)) = peer_requests::server_request(value) else {
+            return;
+        };
+        if !legacy {
+            tracing::warn!(
+                "[{}] ignoring server-initiated '{method}' on a stateless response stream",
+                self.server_name
+            );
+            return;
+        }
+        let reply =
+            peer_requests::answer(&self.server_name, &self.hooks, &method, id, params).await;
+        let request = self.post(&reply, &[], true, self.cached_bearer().as_deref());
+        if let Err(e) = request.send().await {
+            eprintln!(
+                "[{}] reply to server request '{method}' failed: {e}",
+                self.server_name
+            );
+        }
+    }
+}
+
+pub(crate) struct Listener {
+    server_name: String,
+    url: String,
+    headers: HashMap<String, String>,
+    client: reqwest::Client,
+    oauth: Option<OAuthConfig>,
+    hooks: ClientHooks,
+    events: Arc<Events>,
+    max_frame: usize,
+}
+
+enum ListenEnd {
+    Graceful,
+    Dropped,
+    Retry(anyhow::Error),
+    Fatal(anyhow::Error),
+}
+
+impl Listener {
+    pub(crate) async fn run(self, protocol_version: String, params: Value) {
+        let mut failures = 0u32;
+        let mut sequence = 0u64;
+        loop {
+            sequence += 1;
+            let id = json!(format!("subscription-{sequence}"));
+            match self.listen_once(&id, &protocol_version, &params).await {
+                ListenEnd::Graceful => return,
+                ListenEnd::Dropped => failures = 0,
+                ListenEnd::Retry(error) => {
+                    failures += 1;
+                    if failures >= LISTEN_MAX_FAILURES {
+                        tracing::warn!(
+                            "[{}] giving up on change notifications after {failures} attempts: {error:#}",
+                            self.server_name
+                        );
+                        return;
+                    }
+                }
+                ListenEnd::Fatal(error) => {
+                    tracing::warn!(
+                        "[{}] change notifications unavailable: {error:#}",
+                        self.server_name
+                    );
+                    return;
+                }
+            }
+            let backoff = Duration::from_secs(1u64 << failures.min(6)).min(LISTEN_MAX_BACKOFF);
+            tokio::time::sleep(backoff).await;
+        }
+    }
+
+    async fn listen_once(&self, id: &Value, protocol_version: &str, params: &Value) -> ListenEnd {
+        let bearer = match &self.oauth {
+            Some(cfg) => prepare_bearer(&self.url, cfg, &self.hooks).await,
+            None => None,
+        };
+        if let Err(e) = refuse_cleartext_credentials(
+            &self.url,
+            bearer.is_some() || headers_carry_credentials(&self.headers),
+        ) {
+            return ListenEnd::Fatal(e);
+        }
+        let frame = request_frame(id, "subscriptions/listen", Some(params.clone()));
+        let mut request = self
+            .client
+            .post(&self.url)
+            .header("Content-Type", "application/json")
+            .header("Accept", "application/json, text/event-stream")
+            .header(HEADER_PROTOCOL_VERSION, protocol_version)
+            .header(HEADER_METHOD, "subscriptions/listen")
+            .json(&frame);
+        for (k, v) in &self.headers {
+            request = request.header(k, v);
+        }
+        if let Some(bearer) = bearer {
+            request = request.header("Authorization", format!("Bearer {bearer}"));
+        }
+        let resp = match request.send().await {
+            Ok(resp) => resp,
+            Err(e) => return ListenEnd::Retry(e.into()),
+        };
+        let status = resp.status();
+        if status.is_server_error() {
+            return ListenEnd::Retry(anyhow!("subscriptions/listen returned {status}"));
+        }
+        if !status.is_success() {
+            return ListenEnd::Fatal(anyhow!("subscriptions/listen returned {status}"));
+        }
+        let mut stream = resp.bytes_stream();
+        let mut decoder = SseDecoder::new(self.max_frame);
+        while let Some(chunk) = stream.next().await {
+            let Ok(chunk) = chunk else {
+                return ListenEnd::Dropped;
+            };
+            let events = match decoder.push(&chunk) {
+                Ok(events) => events,
+                Err(e) => return ListenEnd::Retry(e),
+            };
+            for event in events {
+                let Ok(value) = serde_json::from_str::<Value>(&event.data) else {
+                    continue;
+                };
+                if matching_response(&value, id).is_some() {
+                    return ListenEnd::Graceful;
+                }
+                let Some((method, params)) = peer_requests::notification(&value) else {
+                    continue;
+                };
+                let tagged = params
+                    .get("_meta")
+                    .and_then(|meta| meta.get(META_SUBSCRIPTION_ID))
+                    == Some(id);
+                if tagged && method != "notifications/subscriptions/acknowledged" {
+                    self.events.notify(method, params);
+                }
+            }
+        }
+        ListenEnd::Dropped
+    }
+}
+
+pub(crate) fn refuse_cleartext_credentials(url: &str, has_credentials: bool) -> Result<()> {
+    if !has_credentials {
+        return Ok(());
+    }
+    crate::security::enforce_https_for_remote(url)
+        .context("refusing to send MCP credentials in cleartext")
+}
+
 pub(crate) fn headers_carry_credentials(headers: &HashMap<String, String>) -> bool {
     headers.keys().any(|name| {
         let lower = name.to_ascii_lowercase();
@@ -411,21 +608,6 @@ pub(crate) fn headers_carry_credentials(headers: &HashMap<String, String>) -> bo
     })
 }
 
-/// Hops a transport client will follow before giving up. A custom redirect
-/// policy replaces reqwest's own limit, so it has to carry one.
-const MAX_REDIRECT_HOPS: usize = 5;
-
-/// Redirect policy for a transport client: follow a hop only while it stays on
-/// the origin the user configured.
-///
-/// reqwest's default policy follows up to 10 hops to any origin and strips only
-/// `Authorization`/`Cookie`/`Proxy-Authorization`. So without this, a server
-/// that answers the same-origin, HTTPS-checked POST with
-/// `307 Location: http://attacker.example/` gets the whole JSON-RPC body
-/// replayed to it along with every other configured credential header
-/// (`X-Api-Key`, `X-Auth-Token`, …), walking straight past the same-origin and
-/// cleartext checks that guard the request URL, and reaching link-local
-/// metadata services that `validate_server_url` refused.
 pub(crate) fn pinned_redirect_policy(url: &str) -> reqwest::redirect::Policy {
     let pinned = url.to_string();
     reqwest::redirect::Policy::custom(move |attempt| {
@@ -443,10 +625,6 @@ pub(crate) fn pinned_redirect_policy(url: &str) -> reqwest::redirect::Policy {
     })
 }
 
-/// Read a response body, failing as soon as it passes `cap`. Shared with the
-/// SSE transport's inline-response path in [`crate::client`]. `Content-Length`
-/// only short-circuits the read: a chunked response carries no length, so the
-/// limit has to hold on the bytes themselves.
 pub(crate) async fn read_body_capped(mut resp: reqwest::Response, cap: u64) -> Result<Vec<u8>> {
     if let Some(len) = resp.content_length() {
         if len > cap {
@@ -463,8 +641,7 @@ pub(crate) async fn read_body_capped(mut resp: reqwest::Response, cap: u64) -> R
     Ok(out)
 }
 
-/// Read at most [`MAX_DIAGNOSTIC_BODY_BYTES`] of an error body for the message.
-pub(crate) async fn read_text_capped(mut resp: reqwest::Response) -> String {
+async fn read_capped_bytes(mut resp: reqwest::Response) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     while let Ok(Some(chunk)) = resp.chunk().await {
         let room = MAX_DIAGNOSTIC_BODY_BYTES.saturating_sub(out.len());
@@ -473,12 +650,13 @@ pub(crate) async fn read_text_capped(mut resp: reqwest::Response) -> String {
         }
         out.extend_from_slice(&chunk[..chunk.len().min(room)]);
     }
-    String::from_utf8_lossy(&out).into_owned()
+    out
 }
 
-/// Look up a cached token for `url` and refresh it if within 60s of expiry.
-/// Returns the access token to attach as a Bearer (or `None` if no cached token
-/// exists yet, first-use case).
+pub(crate) async fn read_text_capped(resp: reqwest::Response) -> String {
+    String::from_utf8_lossy(&read_capped_bytes(resp).await).into_owned()
+}
+
 async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Option<String> {
     let cached = hooks.token_store.get(url)?;
 
@@ -486,13 +664,9 @@ async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Op
         return Some(cached.access_token);
     }
 
-    // Try refresh. If it fails, drop the cached token; the caller then sees a
-    // 401 and runs the full flow.
     match refresh_token(&cached, cfg).await {
         Ok(refreshed) => {
             let access = refreshed.access_token.clone();
-            // Preserve the metadata URL across refresh so future flows skip
-            // re-discovery if the refresh later fails.
             let merged = OAuthToken {
                 auth_server_metadata_url: refreshed
                     .auth_server_metadata_url
@@ -510,10 +684,6 @@ async fn prepare_bearer(url: &str, cfg: &OAuthConfig, hooks: &ClientHooks) -> Op
     }
 }
 
-/// Hand-rolled HTTP/1.1 listeners for the transport tests. `axum` cannot script
-/// a raw `307` whose `Location` points at a second, unrelated listener, and
-/// asserting that the second listener was never contacted is the whole point of
-/// the redirect tests. Shared with the SSE transport's tests.
 #[cfg(test)]
 pub(crate) mod raw_http {
     use std::collections::VecDeque;
@@ -525,8 +695,6 @@ pub(crate) mod raw_http {
 
     use crate::jsonrpc::find_subsequence;
 
-    /// Read one whole request (headers plus any `Content-Length` body) so the
-    /// next read on a keep-alive connection starts on a request boundary.
     async fn read_request(sock: &mut TcpStream) -> String {
         let mut buf: Vec<u8> = Vec::new();
         let mut chunk = [0u8; 1024];
@@ -550,8 +718,6 @@ pub(crate) mod raw_http {
         String::from_utf8_lossy(&buf).into_owned()
     }
 
-    /// Stands in for the attacker origin: records every request it ever
-    /// receives, so a test can assert it received none.
     pub(crate) async fn spawn_collector() -> (SocketAddr, Arc<Mutex<Vec<String>>>) {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -573,7 +739,6 @@ pub(crate) mod raw_http {
         (addr, hits)
     }
 
-    /// Answers each request with the next canned response, across connections.
     pub(crate) async fn spawn_scripted(script: Vec<String>) -> SocketAddr {
         let listener = TcpListener::bind("127.0.0.1:0")
             .await
@@ -604,50 +769,53 @@ pub(crate) mod raw_http {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::McpTimeouts;
-
-    fn rpc(id: u64) -> JsonRpcRequest {
-        JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id,
-            method: "tools/call".to_string(),
-            params: None,
-        }
-    }
+    use crate::elicitation::AutoDeclineHandler;
+    use crate::hooks::{DenyBrowserAuthorizer, InMemoryTokenStore, noop_log};
 
     fn api_key_headers() -> HashMap<String, String> {
         HashMap::from([("X-Api-Key".to_string(), "STATIC_API_KEY".to_string())])
     }
 
-    async fn post_once(
-        url: &str,
-        headers: &HashMap<String, String>,
-        client: &reqwest::Client,
-    ) -> Result<SendOutcome> {
-        let timeouts = McpTimeouts::default();
-        let mut session_id = None;
-        send_once(
+    fn http_conn(url: &str, headers: &HashMap<String, String>) -> HttpConn {
+        let hooks = ClientHooks {
+            token_store: Arc::new(InMemoryTokenStore::new()),
+            elicitation: Arc::new(AutoDeclineHandler),
+            browser: Arc::new(DenyBrowserAuthorizer),
+            client_info: crate::hooks::ClientInfo {
+                name: "unit-test".to_string(),
+                version: "0.0.0".to_string(),
+            },
+            client_metadata_url: None,
+            on_log: noop_log(),
+        };
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        HttpConn::connect(
+            "redirect",
             url,
             headers,
-            client,
-            &mut session_id,
-            Some("OAUTH_TOKEN"),
-            &rpc(1),
-            Duration::from_secs(5),
-            "redirect",
-            "tools/call",
-            timeouts.frame_cap(),
-            timeouts.response_cap(),
+            None,
+            &McpTimeouts::default(),
+            hooks,
+            Arc::new(Events::new(tx)),
         )
-        .await
+        .expect("connect")
     }
 
-    fn http_client(url: &str, headers: &HashMap<String, String>) -> reqwest::Client {
-        let conn = connect(url, headers, None, &McpTimeouts::default()).expect("connect");
-        match conn {
-            TransportConn::Http { client, .. } => client,
-            _ => panic!("expected an http transport"),
-        }
+    async fn post_once(conn: &mut HttpConn) -> Result<Outcome> {
+        let id = json!(1);
+        let frame = request_frame(&id, "tools/call", None);
+        conn.send_once(
+            &Exchange {
+                id: &id,
+                method: "tools/call",
+                frame: &frame,
+                headers: &[],
+                timeout: Duration::from_secs(5),
+                legacy: false,
+            },
+            Some("OAUTH_TOKEN"),
+        )
+        .await
     }
 
     #[tokio::test]
@@ -659,14 +827,15 @@ mod tests {
         .await;
 
         let url = format!("http://{server}/");
-        let headers = api_key_headers();
-        let client = http_client(&url, &headers);
+        let mut conn = http_conn(&url, &api_key_headers());
 
-        let result = post_once(&url, &headers, &client).await;
+        let result = post_once(&mut conn).await;
 
         let seen = hits.lock().expect("collector lock").clone();
         assert!(seen.is_empty(), "attacker origin was contacted: {seen:?}");
-        let err = result.expect_err("a cross-origin redirect must not be followed");
+        let err = result
+            .err()
+            .expect("a cross-origin redirect must not be followed");
         assert!(format!("{err:#}").contains("tools/call"), "{err:#}");
     }
 
@@ -684,13 +853,12 @@ mod tests {
         .await;
 
         let url = format!("http://{server}/");
-        let headers = api_key_headers();
-        let client = http_client(&url, &headers);
+        let mut conn = http_conn(&url, &api_key_headers());
 
-        let outcome = post_once(&url, &headers, &client)
+        let outcome = post_once(&mut conn)
             .await
             .expect("a same-origin redirect must still be followed");
-        assert!(matches!(outcome, SendOutcome::Done(Some(_))));
+        assert!(matches!(outcome, Outcome::Done(Some(_))));
     }
 
     #[test]

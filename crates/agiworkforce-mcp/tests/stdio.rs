@@ -1,4 +1,4 @@
-//! stdio transport: initialize + tools/list + tools/call, plus the
+//! stdio transport: negotiation + tools/list + tools/call, plus the
 //! server-initiated `elicitation/create` ordering guard (the reply must be
 //! written back before the client keeps waiting for its own response).
 //!
@@ -47,54 +47,37 @@ async fn stdio_list_and_call() {
 }
 
 #[tokio::test]
-async fn stdio_connect_without_handshake_host_drives_initialize() {
-    // The desktop d2 adoption path: bring the transport up WITHOUT the crate's
-    // built-in `initialize`, then have the host drive its own handshake with a
-    // host-chosen protocol version + client capabilities via `request` /
-    // `notify`. The sim echoes back whatever `protocolVersion` it is sent, so a
-    // "2025-11-25" round-trip proves the handshake bytes stay host-controlled.
-    let mut client = McpClient::connect_without_handshake(
-        "stdio-nohs",
+async fn stdio_connect_negotiates_the_legacy_handshake() {
+    let mut client = McpClient::connect(
+        "stdio-negotiated",
         stdio_cfg("normal"),
         McpTimeouts::default(),
         support::decline_hooks(),
     )
     .await
-    .expect("connect_without_handshake");
+    .expect("connect");
 
-    let init = client
-        .request(
-            "initialize",
-            Some(serde_json::json!({
-                "protocolVersion": "2025-11-25",
-                "capabilities": {},
-                "clientInfo": { "name": "AGI Workforce", "version": "9.9.9" }
-            })),
-            Duration::from_secs(3),
-        )
-        .await
-        .expect("host initialize")
-        .expect("initialize result");
-    assert_eq!(init["protocolVersion"], "2025-11-25");
-    assert_eq!(init["serverInfo"]["name"], "mcp-sim-stdio");
-
-    client
-        .notify("notifications/initialized", None)
-        .await
-        .expect("initialized notification");
+    assert_eq!(client.server().protocol_version, "2025-11-25");
+    assert_eq!(
+        client
+            .server()
+            .server_info
+            .as_ref()
+            .map(|info| info.name.as_str()),
+        Some("mcp-sim-stdio")
+    );
 
     let tools = client.list_tools().await.expect("list_tools");
     assert_eq!(tools.len(), 1);
     assert_eq!(tools[0].name, "echo");
 
     let raw = client
-        .call_tool_value("echo", serde_json::json!({ "text": "host-driven" }))
+        .call_tool_value("echo", serde_json::json!({ "text": "negotiated" }))
         .await
         .expect("call_tool_value")
         .expect("result");
-    assert_eq!(raw["content"][0]["text"], "host-driven");
+    assert_eq!(raw["content"][0]["text"], "negotiated");
 
-    // Non-RPC liveness snapshot: alive while the child runs, dead after shutdown.
     assert!(
         client.transport_alive(),
         "child should be alive mid-session"
@@ -129,9 +112,12 @@ import sys
 print("boot line one", file=sys.stderr, flush=True)
 print("boot line two", file=sys.stderr, flush=True)
 
-line = sys.stdin.readline()
-init = json.loads(line)
-print(json.dumps({"jsonrpc": "2.0", "id": init["id"], "result": {"serverInfo": {"name": "t"}}}), flush=True)
+while True:
+    init = json.loads(sys.stdin.readline())
+    if init.get("method") != "server/discover":
+        break
+    print(json.dumps({"jsonrpc": "2.0", "id": init["id"], "error": {"code": -32601, "message": "Method not found"}}), flush=True)
+print(json.dumps({"jsonrpc": "2.0", "id": init["id"], "result": {"protocolVersion": "2025-11-25", "serverInfo": {"name": "t", "version": "0"}}}), flush=True)
 sys.stdin.readline()  # notifications/initialized
 sys.stdin.readline()  # block until shutdown
 "#;
@@ -220,7 +206,10 @@ def write_frame(frame):
     print(json.dumps(frame), flush=True)
 
 init = read_frame()
-write_frame({"jsonrpc": "2.0", "id": init["id"], "result": {"serverInfo": {"name": "test"}}})
+while init.get("method") == "server/discover":
+    write_frame({"jsonrpc": "2.0", "id": init["id"], "error": {"code": -32601, "message": "Method not found"}})
+    init = read_frame()
+write_frame({"jsonrpc": "2.0", "id": init["id"], "result": {"protocolVersion": "2025-11-25", "serverInfo": {"name": "test", "version": "0"}}})
 read_frame()  # notifications/initialized
 tools = read_frame()
 write_frame({
