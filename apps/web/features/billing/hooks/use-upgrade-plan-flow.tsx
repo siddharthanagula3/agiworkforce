@@ -63,17 +63,9 @@ export function useUpgradePlanFlow({
         if (isBasicPlanTier(request.plan)) {
           await upgradeToBasicPlan({ userId: user.id, userEmail: user.email || '' });
         } else if (isProPlanTier(request.plan)) {
-          await upgradeToProPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod: request.billingInterval,
-          });
+          await upgradeToProPlan({ userId: user.id, userEmail: user.email || '' });
         } else if (isMaxPlanTier(request.plan)) {
-          await upgradeToMaxPlan({
-            userId: user.id,
-            userEmail: user.email || '',
-            billingPeriod: 'monthly',
-          });
+          await upgradeToMaxPlan({ userId: user.id, userEmail: user.email || '' });
         } else if (isMax15xPlanTier(request.plan)) {
           await upgradeToMax15xPlan({ userId: user.id, userEmail: user.email || '' });
         }
@@ -87,14 +79,13 @@ export function useUpgradePlanFlow({
   );
 
   const handleUpgradePlan = useCallback(
-    async (plan: UpgradeTarget, annual: boolean) => {
+    async (plan: UpgradeTarget) => {
       if (!user) {
         toast.error('Please sign in to upgrade.');
         return;
       }
       setUpgradePlanOpen(false);
       setUpgradePlanTarget(null);
-      const billingPeriod = annual ? 'yearly' : 'monthly';
       const hasActivePaidPlan =
         subscription != null &&
         !['free', 'local-only', 'byok'].includes(subscription.tier) &&
@@ -112,10 +103,10 @@ export function useUpgradePlanFlow({
           openSettings('billing');
           return;
         }
-        setUpgradeConfirm({ plan, billingInterval: billingPeriod });
+        setUpgradeConfirm({ plan, billingInterval: 'monthly' });
         return;
       }
-      setWaitlistRequest({ plan, billingInterval: billingPeriod });
+      setWaitlistRequest({ plan, billingInterval: 'monthly' });
     },
     [billingPolicyReady, openSettings, subscription, user],
   );
@@ -130,7 +121,7 @@ export function useUpgradePlanFlow({
         }}
         currentTier={currentTier}
         targetTier={upgradePlanTarget}
-        onUpgrade={(plan, annual) => void handleUpgradePlan(plan, annual)}
+        onUpgrade={(plan) => void handleUpgradePlan(plan)}
       />
       <UpgradeConfirmDialog
         request={upgradeConfirm}

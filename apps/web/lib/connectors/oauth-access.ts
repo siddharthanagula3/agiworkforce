@@ -5,13 +5,17 @@ import {
   ConnectorOAuthTokenError,
   refreshAccessToken,
   revokeTokenAtProvider,
+  type OAuthTokenResult,
 } from '@/lib/connectors/oauth-client';
 import {
   ConnectorGrantDecryptionError,
+  ConnectorGrantLockTimeoutError,
   getConnectorOAuthGrant,
   listRevocableConnectorTokens,
   revokeConnectorOAuthGrant,
-  updateConnectorOAuthGrantTokens,
+  withLockedConnectorOAuthGrant,
+  type ConnectorOAuthGrant,
+  type LockedConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
 import {
   getConnectorOAuthProvider,
@@ -24,13 +28,13 @@ import { recordNotification } from '@/lib/services/notification-service';
 
 const EXPIRY_SKEW_MS = 60_000;
 
-async function dropUnusableGrant(
+const refreshesInFlight = new Map<string, Promise<ConnectorAccessOutcome>>();
+
+async function notifyReconnectRequired(
   userId: string,
   connectorId: string,
   provider: ConnectorOAuthProvider | null,
 ): Promise<void> {
-  const revoked = await revokeConnectorOAuthGrant(userId, connectorId);
-  if (!revoked) return;
   const name = provider?.displayName ?? connectorId;
   await recordNotification(getNeonDb(), {
     userId,
@@ -85,82 +89,134 @@ export async function resolveConnectorAccessToken(
   if (!grant) return { status: 'not-connected' };
   if (options.discovered && !grant.mcpUrl) return { status: 'not-configured' };
 
-  const expiresSoon =
+  if (!options.forceRefresh && !expiresSoon(grant)) return ready(grant);
+
+  return refreshOnce(userId, connectorId, grant, provider);
+}
+
+function expiresSoon(grant: ConnectorOAuthGrant): boolean {
+  return (
     grant.accessTokenExpiresAt !== null &&
-    grant.accessTokenExpiresAt.getTime() - EXPIRY_SKEW_MS <= Date.now();
+    grant.accessTokenExpiresAt.getTime() - EXPIRY_SKEW_MS <= Date.now()
+  );
+}
 
-  if (!options.forceRefresh && !expiresSoon) {
-    return {
-      status: 'ready',
-      accessToken: grant.accessToken,
-      tokenType: grant.tokenType,
-      grantedScopes: grant.grantedScopes,
-    };
+function ready(
+  tokens: Pick<ConnectorOAuthGrant, 'accessToken' | 'tokenType' | 'grantedScopes'>,
+): ConnectorAccessOutcome {
+  return {
+    status: 'ready',
+    accessToken: tokens.accessToken,
+    tokenType: tokens.tokenType,
+    grantedScopes: tokens.grantedScopes,
+  };
+}
+
+function refreshOnce(
+  userId: string,
+  connectorId: string,
+  seen: ConnectorOAuthGrant,
+  provider: ConnectorOAuthProvider | null,
+): Promise<ConnectorAccessOutcome> {
+  const key = JSON.stringify([userId, connectorId, seen.accountKey]);
+  const inFlight = refreshesInFlight.get(key);
+  if (inFlight) return inFlight;
+  const refresh = refreshUnderLock(userId, connectorId, seen, provider).finally(() => {
+    refreshesInFlight.delete(key);
+  });
+  refreshesInFlight.set(key, refresh);
+  return refresh;
+}
+
+interface LockedRefresh {
+  outcome: ConnectorAccessOutcome;
+  dropped: boolean;
+}
+
+const REFRESH_FAILED: ConnectorAccessOutcome = {
+  status: 'reauthorization-required',
+  reason: 'refresh-failed',
+};
+
+const EXPIRED: ConnectorAccessOutcome = { status: 'reauthorization-required', reason: 'expired' };
+
+async function refreshUnderLock(
+  userId: string,
+  connectorId: string,
+  seen: ConnectorOAuthGrant,
+  provider: ConnectorOAuthProvider | null,
+): Promise<ConnectorAccessOutcome> {
+  let result: LockedRefresh;
+  try {
+    result = await withLockedConnectorOAuthGrant(userId, connectorId, seen.accountKey, (locked) =>
+      refreshLockedGrant(locked, seen, provider, connectorId),
+    );
+  } catch (error) {
+    if (error instanceof ConnectorGrantLockTimeoutError) {
+      logger.warn({ connectorId }, '[connector-oauth] a concurrent refresh held the grant too long');
+      return REFRESH_FAILED;
+    }
+    if (error instanceof ConnectorGrantDecryptionError) {
+      return { status: 'reauthorization-required', reason: 'undecryptable' };
+    }
+    throw error;
+  }
+  if (result.dropped) await notifyReconnectRequired(userId, connectorId, provider);
+  return result.outcome;
+}
+
+async function refreshLockedGrant(
+  locked: LockedConnectorOAuthGrant,
+  seen: ConnectorOAuthGrant,
+  provider: ConnectorOAuthProvider | null,
+  connectorId: string,
+): Promise<LockedRefresh> {
+  const current = locked.grant;
+  if (!current) return { outcome: REFRESH_FAILED, dropped: false };
+  if (current.accessToken !== seen.accessToken && !expiresSoon(current)) {
+    return { outcome: ready(current), dropped: false };
   }
 
-  const refreshToken = grant.refreshToken;
-  if (!refreshToken) {
-    await dropUnusableGrant(userId, connectorId, provider);
-    return { status: 'reauthorization-required', reason: 'expired' };
-  }
+  const refreshToken = current.refreshToken;
+  if (!refreshToken) return { outcome: EXPIRED, dropped: await locked.revoke() };
 
-  if (grant.mcpUrl) {
+  if (current.mcpUrl) {
     const outcome = await refreshDiscoveredGrant({
-      mcpUrl: grant.mcpUrl,
-      issuer: grant.issuer,
+      mcpUrl: current.mcpUrl,
+      issuer: current.issuer,
       refreshToken,
-      tokenType: grant.tokenType,
-      grantedScopes: grant.grantedScopes,
+      tokenType: current.tokenType,
+      grantedScopes: current.grantedScopes,
     });
 
     if (outcome.status === 'authorization-server-changed') {
-      await dropUnusableGrant(userId, connectorId, provider);
-      return { status: 'reauthorization-required', reason: 'refresh-failed' };
+      return { outcome: REFRESH_FAILED, dropped: await locked.revoke() };
     }
     if (outcome.status === 'failed') {
       logger.warn({ connectorId }, '[connector-oauth] discovered-connector token refresh failed');
-      return { status: 'reauthorization-required', reason: 'refresh-failed' };
+      return { outcome: REFRESH_FAILED, dropped: false };
     }
 
-    await updateConnectorOAuthGrantTokens(userId, connectorId, {
+    await locked.saveTokens({
       accessToken: outcome.accessToken,
       refreshToken: outcome.refreshToken,
       tokenType: outcome.tokenType,
       grantedScopes: outcome.grantedScopes,
       accessTokenExpiresAt: outcome.accessTokenExpiresAt,
     });
-    return {
-      status: 'ready',
-      accessToken: outcome.accessToken,
-      tokenType: outcome.tokenType,
-      grantedScopes: outcome.grantedScopes,
-    };
+    return { outcome: ready(outcome), dropped: false };
   }
 
-  if (!provider) {
-    return { status: 'reauthorization-required', reason: 'expired' };
-  }
+  if (!provider) return { outcome: EXPIRED, dropped: false };
 
+  let refreshed: OAuthTokenResult;
   try {
-    const refreshed = await refreshAccessToken({
+    refreshed = await refreshAccessToken({
       provider,
       refreshToken,
-      tokenEndpoint: grant.tokenEndpoint,
-      grantedScopes: grant.grantedScopes,
+      tokenEndpoint: current.tokenEndpoint,
+      grantedScopes: current.grantedScopes,
     });
-    await updateConnectorOAuthGrantTokens(userId, connectorId, {
-      accessToken: refreshed.accessToken,
-      refreshToken: refreshed.refreshToken,
-      tokenType: refreshed.tokenType,
-      grantedScopes: refreshed.grantedScopes,
-      accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
-    });
-    return {
-      status: 'ready',
-      accessToken: refreshed.accessToken,
-      tokenType: refreshed.tokenType,
-      grantedScopes: refreshed.grantedScopes,
-    };
   } catch (error) {
     const isDead = error instanceof ConnectorOAuthTokenError && error.isInvalidGrant;
     logger.warn(
@@ -171,9 +227,17 @@ export async function resolveConnectorAccessToken(
       },
       '[connector-oauth] token refresh failed',
     );
-    if (isDead) await dropUnusableGrant(userId, connectorId, provider);
-    return { status: 'reauthorization-required', reason: 'refresh-failed' };
+    return { outcome: REFRESH_FAILED, dropped: isDead ? await locked.revoke() : false };
   }
+
+  await locked.saveTokens({
+    accessToken: refreshed.accessToken,
+    refreshToken: refreshed.refreshToken,
+    tokenType: refreshed.tokenType,
+    grantedScopes: refreshed.grantedScopes,
+    accessTokenExpiresAt: refreshed.accessTokenExpiresAt,
+  });
+  return { outcome: ready(refreshed), dropped: false };
 }
 
 /**

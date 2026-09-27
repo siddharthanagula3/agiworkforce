@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { BillingInterval, SelfServePaidPlanTier } from '@agiworkforce/types';
+import type { SelfServePaidPlanTier } from '@agiworkforce/types';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import {
   Dialog,
@@ -21,7 +21,6 @@ import { toast } from 'sonner';
 
 export interface DesktopUpgradeRequest {
   tier: SelfServePaidPlanTier;
-  interval: BillingInterval;
 }
 
 export interface DesktopUpgradeConfirmDialogProps {
@@ -62,7 +61,7 @@ export function DesktopUpgradeConfirmDialog({
     setError(null);
     setSyncPending(false);
     setPreviewing(true);
-    void previewPlanUpgrade(request.tier, request.interval)
+    void previewPlanUpgrade(request.tier)
       .then((value) => {
         if (!cancelled) setPreview(value);
       })
@@ -82,7 +81,6 @@ export function DesktopUpgradeConfirmDialog({
   if (!request) return null;
 
   const pricing = BILLING_PLAN_PRICING[request.tier];
-  const recurringInterval = request.interval === 'yearly' ? 'year' : 'month';
 
   const confirm = async () => {
     if (!preview) return;
@@ -90,7 +88,7 @@ export function DesktopUpgradeConfirmDialog({
     setError(null);
     try {
       if (preview.kind === 'checkout-required') {
-        const checkoutError = await openCheckout(request.tier, request.interval, async () => {
+        const checkoutError = await openCheckout(request.tier, async () => {
           const activated = await waitForPlanActivation(request.tier);
           if (activated) {
             toast.success(`${pricing.label} is now active`);
@@ -100,7 +98,7 @@ export function DesktopUpgradeConfirmDialog({
         });
         if (checkoutError) throw new Error(checkoutError);
       } else {
-        const result = await applyPlanUpgrade(request.tier, preview.previewToken, request.interval);
+        const result = await applyPlanUpgrade(request.tier, preview.previewToken);
         if (result.kind === 'payment-action-required') {
           await openUpgradePayment(result.paymentUrl, async () => {
             const activated = await waitForPlanActivation(request.tier);
@@ -145,7 +143,7 @@ export function DesktopUpgradeConfirmDialog({
             {previewing
               ? 'Calculating your exact charge…'
               : preview?.kind === 'prorated'
-                ? `You’ll be charged ${formatMoney(preview.amountDueNowCents, preview.currency)} today. Stripe applies credit for unused time on your current plan. Your new billing cycle then renews at ${formatMoney(preview.recurringAmountCents, preview.currency)}/${recurringInterval}.`
+                ? `You’ll be charged ${formatMoney(preview.amountDueNowCents, preview.currency)} today. Stripe applies credit for unused time on your current plan. Your new billing cycle then renews at ${formatMoney(preview.recurringAmountCents, preview.currency)}/month.`
                 : preview?.kind === 'checkout-required'
                   ? `No paid Stripe subscription is available to credit. Starting ${pricing.label} costs ${formatMoney(preview.amountDueNowCents, preview.currency)} today.`
                   : 'Review the exact amount before any charge is made.'}
@@ -164,6 +162,10 @@ export function DesktopUpgradeConfirmDialog({
               allowance is applied by the canonical billing webhook.
             </p>
           </div>
+        ) : null}
+
+        {preview?.kind === 'prorated' && preview.grandfatheredNotice ? (
+          <p className="text-sm text-muted-foreground">{preview.grandfatheredNotice}</p>
         ) : null}
 
         {error ? <p className="text-sm text-red-500">{error}</p> : null}

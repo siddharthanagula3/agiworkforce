@@ -16,13 +16,7 @@ import {
 
 const MAX_CAPACITIES: readonly SelfServeIndividualPlanTier[] = ['max', 'max_15x'];
 
-export function UpgradeOrderScreen({
-  plan,
-  billingInterval,
-}: {
-  plan: SelfServeIndividualPlanTier;
-  billingInterval: 'monthly' | 'yearly';
-}) {
+export function UpgradeOrderScreen({ plan }: { plan: SelfServeIndividualPlanTier }) {
   const [selected, setSelected] = useState<SelfServeIndividualPlanTier>(plan);
   const [upgraded, setUpgraded] = useState(false);
   const queryClient = useQueryClient();
@@ -102,12 +96,7 @@ export function UpgradeOrderScreen({
 
       <UpgradeOrderPanel
         plan={selected}
-        billingInterval={billingInterval}
-        returnPath={
-          billingInterval === 'yearly'
-            ? `/upgrade/${selected}?interval=yearly`
-            : `/upgrade/${selected}`
-        }
+        returnPath={`/upgrade/${selected}`}
         onUpgraded={() => void handleUpgraded()}
       />
     </div>

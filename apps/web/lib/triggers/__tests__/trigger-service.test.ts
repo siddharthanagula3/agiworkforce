@@ -91,7 +91,7 @@ describe('validateTriggerInput', () => {
         taskId: TASK_ID,
         name: 'Mail',
         source: 'gmail',
-        eventTypes: ['mailbox.changed'],
+        eventTypes: ['message.received'],
         sourceAccount: 'Me@Example.com',
       }).sourceAccount,
     ).toBe('me@example.com');

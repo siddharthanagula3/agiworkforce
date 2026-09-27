@@ -14,18 +14,15 @@ const authMocks = vi.hoisted(() => ({ auth: vi.fn(async () => ({ userId: 'user_1
 vi.mock('next/navigation', () => navMocks);
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => authMocks.auth() }));
 vi.mock('./UpgradeOrderScreen', () => ({
-  UpgradeOrderScreen: ({ plan, billingInterval }: Record<string, string>) => (
-    <div data-testid="order-screen" data-plan={plan} data-interval={billingInterval} />
+  UpgradeOrderScreen: ({ plan }: Record<string, string>) => (
+    <div data-testid="order-screen" data-plan={plan} />
   ),
 }));
 
 import UpgradePlanPage from './page';
 
-function open(plan: string, interval?: string) {
-  return UpgradePlanPage({
-    params: Promise.resolve({ plan }),
-    searchParams: Promise.resolve(interval ? { interval } : {}),
-  });
+function open(plan: string) {
+  return UpgradePlanPage({ params: Promise.resolve({ plan }) });
 }
 
 describe('/upgrade/[plan] guards', () => {
@@ -53,13 +50,8 @@ describe('/upgrade/[plan] guards', () => {
     );
   });
 
-  it('prices yearly only when the caller asked for it', async () => {
-    const yearly = await open('pro', 'yearly');
-    expect(yearly.props.children.props.billingInterval).toBe('yearly');
-
-    // An unrecognised interval must fall back to monthly rather than reaching
-    // Stripe as an unpriced value.
-    const bogus = await open('pro', 'quarterly');
-    expect(bogus.props.children.props.billingInterval).toBe('monthly');
+  it('orders an individual plan with nothing but the plan, since it is sold monthly only', async () => {
+    const page = await open('pro');
+    expect(page.props.children.props).toEqual({ plan: 'pro' });
   });
 });
