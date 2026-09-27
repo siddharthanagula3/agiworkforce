@@ -61,7 +61,7 @@ function consentStatement(
   thresholdCredits: number,
   card: string | null,
 ): string {
-  return `By turning on auto-reload, you authorize AGI Workforce to charge ${card ?? 'your saved card'} ${reloadPrice(quote)} plus tax for ${formatCredits(quote.credits)} each time your credit balance falls below ${formatCredits(thresholdCredits)}, up to ${formatUsdAmount(DAILY_TOP_UP_LIMIT_USD)} a day, until you turn auto-reload off here. Charges are made without asking again.`;
+  return `By turning on auto-reload, you authorize AGI Workforce to charge ${card ?? 'your saved card'} ${reloadPrice(quote)} plus tax for ${formatCredits(quote.credits)} each time your credit balance falls below ${formatCredits(thresholdCredits)}, up to ${formatUsdAmount(DAILY_TOP_UP_LIMIT_USD)} a day, until you turn auto-reload off here. If your balance is already below that, the first charge happens within minutes. Charges are made without asking again.`;
 }
 
 export function AutoReloadPanel({
