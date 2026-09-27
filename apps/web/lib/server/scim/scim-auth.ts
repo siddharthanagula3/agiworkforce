@@ -3,7 +3,6 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   canUseBillingPlanCapability,
-  effectivePlanTier,
   isOrganizationAdminRole,
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -11,7 +10,10 @@ import type { BillingPlanTier } from '@agiworkforce/types';
 import { isTenantLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  resolveOrganizationEntitlementPlan,
+  resolveUserPersonalPlanTier,
+} from '@/lib/services/org-entitlements';
 import type { DirectorySyncConnectionRow, OrganizationMemberRow } from '@/lib/server/neon-types';
 import { ScimError } from './scim-protocol';
 import { recordSyncEvent, type ScimConnectionContext } from './scim-provisioning-service';
@@ -109,7 +111,7 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
     );
   }
 
-  const plan = await resolveEntitlementPlan(db, verified.createdByUserId);
+  const plan = await failClosed(resolveOrganizationEntitlementPlan(verified.organizationId));
 
   if (!canUseBillingPlanCapability(plan, 'enterprise_controls')) {
     await recordSyncEvent(db, ctx, {
@@ -132,19 +134,20 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
   };
 }
 
-export async function resolveEntitlementPlan(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<BillingPlanTier> {
+async function failClosed(plan: Promise<BillingPlanTier>): Promise<BillingPlanTier> {
   try {
-    const subscription = await SubscriptionService.getSubscription(db, userId);
-    return normalizeBillingPlanTier(
-      effectivePlanTier(subscription?.plan_tier, subscription?.status),
-    );
+    return await plan;
   } catch (error) {
     logger.error({ error }, 'Failed to resolve SCIM entitlement plan; failing closed');
     return normalizeBillingPlanTier(undefined);
   }
+}
+
+export async function resolveEntitlementPlan(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<BillingPlanTier> {
+  return failClosed(resolveUserPersonalPlanTier(db, userId));
 }
 
 export function scimBaseUrl(request: Request): string {
