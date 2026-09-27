@@ -75,3 +75,35 @@ test.describe('settings referrals', () => {
     expect(second).toBe(first);
   });
 });
+
+test.describe('referral welcome', () => {
+  test('an invite link lands on /r/welcome with the invitation and remembers the code', async ({
+    page,
+  }) => {
+    await page.goto('/r/abcd-2345', { waitUntil: 'domcontentloaded' });
+
+    await expect(page).toHaveURL(/\/r\/welcome$/);
+    await expect(
+      page.getByRole('heading', { name: 'A friend invited you to AGI Workforce.' }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('link', { name: 'Create your account' })).toHaveAttribute(
+      'href',
+      '/signup',
+    );
+    const attribution = (await page.context().cookies()).find(
+      (cookie) => cookie.name === 'agi_referral',
+    );
+    expect(attribution).toMatchObject({ value: 'ABCD2345', httpOnly: true, sameSite: 'Lax' });
+  });
+
+  test('/r/welcome without an invite says the invite did not reach this browser', async ({
+    page,
+  }) => {
+    await page.goto('/r/welcome', { waitUntil: 'domcontentloaded' });
+
+    await expect(
+      page.getByRole('heading', { name: 'Your invite did not reach this browser.' }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('link', { name: 'Create your account' })).toHaveCount(0);
+  });
+});
