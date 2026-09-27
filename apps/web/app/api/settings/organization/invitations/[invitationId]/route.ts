@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
+  auditSourceOf,
   auditSurfaceOf,
   requireCsrfUnlessWorkspaceApiKey,
   resolveWorkspaceApiCaller,
@@ -47,6 +48,7 @@ async function handleDelete(
     surface: auditSurfaceOf(caller),
     detail: {
       resourceType: 'organization_invitation',
+      source: auditSourceOf(caller),
       resourceId: invitation.id,
       organizationId: caller.organizationId,
       reason: 'invitation_revoked',

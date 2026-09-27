@@ -10,6 +10,7 @@ import { readValidatedJsonBody, readValidatedSearchParams } from '@/lib/read-jso
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
+  auditSourceOf,
   auditSurfaceOf,
   requireCsrfUnlessWorkspaceApiKey,
   resolveWorkspaceApiCaller,
@@ -113,6 +114,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
     surface: auditSurfaceOf(caller),
     detail: {
       resourceType: 'organization_invitation',
+      source: auditSourceOf(caller),
       resourceId: invitation.id,
       organizationId: caller.organizationId,
       role: invitation.role,

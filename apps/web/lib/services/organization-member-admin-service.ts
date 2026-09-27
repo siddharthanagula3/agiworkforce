@@ -11,10 +11,7 @@ import {
 import { createError } from '@/lib/errors';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { assertOwnerProtection } from '@/lib/services/organization-delegation';
-import {
-  requireMemberPermission,
-  resolveOrganizationPermissions,
-} from '@/lib/services/organization-permission-service';
+import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
 import { assertMembershipRoleWithinActor } from '@/app/api/settings/team/membership-role-ceiling';
 
@@ -57,8 +54,10 @@ interface WorkspaceMemberRow {
   display_name: string | null;
 }
 
+type MemberRow = OrganizationMemberRow & { status: WorkspaceMembershipStatus };
+
 const MEMBER_COLUMNS =
-  'organization_id, user_id, role, provisioning_source, provisioned_at, joined_at';
+  'organization_id, user_id, role, status, provisioning_source, provisioned_at, joined_at';
 
 const ROLES_A_KEY_MANAGES: ReadonlySet<OrganizationRole> = new Set(['member', 'viewer']);
 
@@ -143,8 +142,8 @@ async function readMemberRow(
   db: DatabaseAdapter,
   organizationId: string,
   userId: string,
-): Promise<OrganizationMemberRow | null> {
-  const [row] = await db.query<OrganizationMemberRow>(
+): Promise<MemberRow | null> {
+  const [row] = await db.query<MemberRow>(
     `select ${MEMBER_COLUMNS}
        from public.organization_members
       where organization_id = $1 and user_id = $2
@@ -189,18 +188,29 @@ export function assertKeyMayAssignRole(
 }
 
 async function assertKeyMayActOn(
+  tx: DatabaseAdapter,
   administrator: MemberAdministrator,
   organizationId: string,
-  target: OrganizationMemberRow,
+  target: MemberRow,
 ): Promise<void> {
   if (administrator.kind !== 'service_principal') return;
-  if (ROLES_A_KEY_MANAGES.has(target.role)) {
-    const held = await resolveOrganizationPermissions(organizationId, target.user_id);
-    if ([...held].every((permission) => MEMBER_ROLE_PERMISSIONS.has(permission))) return;
+  if (target.status === 'active' && ROLES_A_KEY_MANAGES.has(target.role)) {
+    const [row] = await tx.query<{ permissions: unknown }>(
+      `select public.organization_member_permissions($1::uuid, $2) as permissions`,
+      [organizationId, target.user_id],
+    );
+    const held: unknown[] = Array.isArray(row?.permissions) ? row.permissions : [];
+    if (
+      held.every(
+        (permission) => typeof permission === 'string' && MEMBER_ROLE_PERMISSIONS.has(permission),
+      )
+    ) {
+      return;
+    }
   }
   throw createError
     .forbidden(
-      'A workspace API key cannot change or remove an owner, an admin, or a member whose roles grant admin permissions. Do this in the workspace console.',
+      'A workspace API key can change or remove only active members and viewers whose roles grant no admin permissions. Do this in the workspace console.',
     )
     .asUserSafe();
 }
@@ -266,7 +276,7 @@ export async function changeMemberRole(
       if (!target) {
         throw createError.notFound('Member not found in this organization');
       }
-      await assertKeyMayActOn(input.administrator, input.organizationId, target);
+      await assertKeyMayActOn(tx, input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, input.role);
 
@@ -305,7 +315,7 @@ export async function removeMember(
       if (!target) {
         throw createError.notFound('Member not found in this organization');
       }
-      await assertKeyMayActOn(input.administrator, input.organizationId, target);
+      await assertKeyMayActOn(tx, input.administrator, input.organizationId, target);
 
       await assertOwnerInvariant(tx, input.organizationId, authority.role, target, null);
 

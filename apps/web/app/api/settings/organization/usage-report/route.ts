@@ -56,14 +56,12 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     window,
   );
 
-  if (query.page === undefined) {
-    await logAdminDataAccess(request, {
-      userId: caller.actorUserId,
-      organizationId: caller.organizationId,
-      role: caller.role,
-      resourceType: 'organization_usage_report',
-    });
-  }
+  await logAdminDataAccess(request, {
+    userId: caller.actorUserId,
+    organizationId: caller.organizationId,
+    role: caller.role,
+    resourceType: 'organization_usage_report',
+  });
 
   return NextResponse.json(report);
 }

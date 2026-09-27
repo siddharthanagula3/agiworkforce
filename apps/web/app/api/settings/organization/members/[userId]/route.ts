@@ -13,6 +13,7 @@ import { getIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import {
+  auditSourceOf,
   auditSurfaceOf,
   requireCsrfUnlessWorkspaceApiKey,
   resolveWorkspaceApiCaller,
@@ -95,6 +96,7 @@ async function handlePatch(
     severity: role === 'admin' ? 'warning' : 'info',
     detail: {
       resourceType: 'organization_member',
+      source: auditSourceOf(caller),
       resourceId: targetUserId,
       organizationId: caller.organizationId,
       targetUserId,
@@ -141,6 +143,7 @@ async function handleDelete(
     severity: deprovision.errors.length > 0 ? 'critical' : 'warning',
     detail: {
       resourceType: 'organization_member',
+      source: auditSourceOf(caller),
       resourceId: targetUserId,
       organizationId: caller.organizationId,
       targetUserId,
