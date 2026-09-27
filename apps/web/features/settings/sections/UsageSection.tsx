@@ -39,6 +39,8 @@ type AccountCredits = NonNullable<AccountUsageSummaryResponse['credits']>;
 const MINUTE_MS = 60 * 1000;
 const HISTORY_ROW_LIMIT = 8;
 const REPORT_WINDOW = 'window';
+const FREE_PLAN_NOTE = 'Free uses free models. Upgrade for credits on premium models.';
+const LIMITS_FAILURE = 'Could not load this month’s usage.';
 
 const CARD: CSSProperties = {
   border: '1px solid var(--settings-border)',
@@ -246,6 +248,7 @@ function parseUsageLimits(value: unknown): UsageLimitsResponse | null {
       },
     ];
   });
+  const responses = value['responses'];
   return {
     planTier: String(value['planTier'] ?? ''),
     periodStart: String(value['periodStart'] ?? ''),
@@ -256,6 +259,12 @@ function parseUsageLimits(value: unknown): UsageLimitsResponse | null {
       requests: isFiniteNumber(images['requests']) ? images['requests'] : 0,
       credits: isFiniteNumber(images['credits']) ? images['credits'] : 0,
     },
+    responses:
+      isRecord(responses) &&
+      isFiniteNumber(responses['limit']) &&
+      isFiniteNumber(responses['active'])
+        ? { limit: responses['limit'], active: responses['active'] }
+        : null,
   };
 }
 
@@ -462,13 +471,21 @@ function AllowanceRow({ unit }: { unit: LimitUnit }) {
   );
 }
 
-function MonthlyAllowancesCard({ enabled }: { enabled: boolean }) {
-  const { data, loading, error, reload } = useUsageResource(
-    enabled ? '/api/usage/limits' : null,
-    parseUsageLimits,
-    'Could not load this month’s usage.',
+function RunningResponsesRow({ reading }: { reading: UsageLimitsResponse['responses'] }) {
+  if (!reading) return null;
+  return (
+    <div style={ROW}>
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+        Responses running now
+      </span>
+      <span style={DETAIL}>{`${reading.active} of ${reading.limit} at a time`}</span>
+    </div>
   );
-  if (!enabled) return null;
+}
+
+function MonthlyAllowancesCard({ resource }: { resource: Loadable<UsageLimitsResponse> }) {
+  const { data, loading, error, reload } = resource;
+  if (!data && !loading && !error) return null;
 
   const units =
     data?.units.filter(
@@ -550,6 +567,7 @@ function DiscrepancyReportForm({
 }) {
   const [periodKey, setPeriodKey] = useState(REPORT_WINDOW);
   const [requestId, setRequestId] = useState('');
+  const [reference, setReference] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -579,6 +597,7 @@ function DiscrepancyReportForm({
           ...window,
           message: message.trim(),
           ...(requestId.trim() ? { requestId: requestId.trim() } : {}),
+          ...(reference.trim() ? { reference: reference.trim() } : {}),
         }),
       });
       const payload: unknown = await response.json().catch(() => null);
@@ -660,6 +679,19 @@ function DiscrepancyReportForm({
           spellCheck={false}
           placeholder="From the request_id column of the CSV"
           onChange={(event) => setRequestId(event.target.value)}
+        />
+      </label>
+      <label className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-foreground">
+          Invoice or charge reference (optional)
+        </span>
+        <input
+          className={FIELD_CLASS}
+          value={reference}
+          disabled={submitting}
+          autoComplete="off"
+          placeholder="Invoice number, or the date and amount of the charge"
+          onChange={(event) => setReference(event.target.value)}
         />
       </label>
       <label className="flex flex-col gap-1">
@@ -836,6 +868,11 @@ export function UsageSection() {
   const isFreePlan = usage ? isFreeBillingPlanTier(usage.plan_tier) : false;
   const contractPriced = usage ? isContractPricedPlan(usage.plan_tier) : false;
   const showFlagship = credits ? credits.flagship_weekly !== null : true;
+  const limits = useUsageResource(
+    usage !== null && !contractPriced ? '/api/usage/limits' : null,
+    parseUsageLimits,
+    LIMITS_FAILURE,
+  );
 
   const planAllowanceLine = useMemo(() => {
     if (!usage || !credits) return null;
@@ -904,6 +941,13 @@ export function UsageSection() {
                 View workspace usage
               </SettingsPageLink>
             </div>
+          ) : isFreePlan ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>{FREE_PLAN_NOTE}</p>
+              <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
+                Upgrade
+              </SettingsPageLink>
+            </div>
           ) : (
             <>
               <UsageBar
@@ -952,45 +996,43 @@ export function UsageSection() {
                   credits?.monthly,
                 )}
               />
-              {isFreePlan && (
-                <SettingsPageLink
-                  href="/pricing"
-                  className="text-sm text-primary underline underline-offset-4"
-                >
-                  Compare plans and join the upgrade waitlist
-                </SettingsPageLink>
-              )}
+              <RunningResponsesRow reading={limits.data?.responses ?? null} />
             </>
           )}
         </div>
 
-        <div
-          style={{
-            ...ROW,
-            alignItems: 'center',
-            padding: 'var(--space-3) var(--space-5)',
-            borderTop: '1px solid var(--settings-border)',
-          }}
-        >
-          <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-            aria-label="Refresh usage data"
-            className={QUIET_BUTTON_CLASS}
+        {!isFreePlan && (
+          <div
+            style={{
+              ...ROW,
+              alignItems: 'center',
+              padding: 'var(--space-3) var(--space-5)',
+              borderTop: '1px solid var(--settings-border)',
+            }}
           >
-            <RefreshCw size={12} aria-hidden="true" />
-            Refresh
-          </button>
-        </div>
+            <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
+            <button
+              type="button"
+              onClick={() => {
+                void refresh();
+                limits.reload();
+              }}
+              disabled={loading}
+              aria-label="Refresh usage data"
+              className={QUIET_BUTTON_CLASS}
+            >
+              <RefreshCw size={12} aria-hidden="true" />
+              Refresh
+            </button>
+          </div>
+        )}
       </section>
 
       {credits && !contractPriced && <CreditBalancesCard credits={credits} />}
 
-      <MonthlyAllowancesCard enabled={usage !== null && !contractPriced} />
+      <MonthlyAllowancesCard resource={limits} />
 
-      <UsageHistorySection enabled={usage !== null && !contractPriced} />
+      <UsageHistorySection enabled={usage !== null && !contractPriced && !isFreePlan} />
     </div>
   );
 }
