@@ -277,17 +277,13 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose a learning-oriented style (teaching, quizzing, step by step), and replies actually follow it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Study mode starts a session and opens a normal chat, but its teaching instruction is only displayed on the Study page: composeStudyPrompt has no caller and the chat route never reads study sessions. | handler |
-| desktop | partial | Study mode starts a session and opens a normal chat, but its teaching instruction is only displayed on the Study page: composeStudyPrompt has no caller and the chat route never reads study sessions. | handler |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/study/page.tsx:12-17`, `apps/web/features/study/components/StudyPage.tsx:181-184`, `apps/web/features/study/components/StudyPage.tsx:82-91`, `apps/web/features/study/lib/study-session.ts:112-118`
 
 ## S40.26: Concise output style.
 
