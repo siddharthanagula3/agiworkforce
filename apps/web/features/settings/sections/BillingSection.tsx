@@ -47,6 +47,7 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
 import { EnterpriseCollectionBanner } from '../components/EnterpriseCollectionBanner';
 import { toUserMessage } from '@/lib/user-error-message';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 interface PaymentMethod {
   id: string;
@@ -641,6 +642,9 @@ export function BillingSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Your plan, credits, and payment details.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="billing-and-plans" label="How plans and billing work" />
+        </div>
       </div>
 
       <EnterpriseCollectionBanner />
