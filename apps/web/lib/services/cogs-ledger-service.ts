@@ -9,6 +9,7 @@ import {
   type RateCardFeature,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
+import type { NormalizedBalanceEntry, NormalizedCostActivity } from '@/lib/server/payments/domain';
 import { logger } from '@/lib/logger';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
@@ -714,8 +715,6 @@ export async function recordCogsAdjustment(
   );
 }
 
-const BALANCE_TRANSACTION_PAGE = 100;
-
 const ADJUSTMENT_KIND_BY_BALANCE_TYPE: Record<string, CogsAdjustmentKind> = {
   refund: 'refund',
   payment_refund: 'refund',
@@ -736,241 +735,59 @@ export interface StripeCogsImportSummary {
   discountsRecorded: number;
 }
 
-const TOP_UP_CHARGE_TYPE = 'credit_topup';
-const USER_ID_METADATA_KEY = 'user_id';
-
-interface StripeCreatedRange {
-  gte: number;
-  lt: number;
-}
-
-interface StripeReference {
-  id: string;
-}
-
-interface StripeCogsSource {
-  balanceTransactions: {
-    list(params: { created: StripeCreatedRange; limit: number; expand: string[] }): {
-      autoPagingEach(handler: (entry: StripeBalanceTransaction) => void): Promise<void>;
-    };
-  };
-  invoices: {
-    list(params: { created: StripeCreatedRange; limit: number }): {
-      autoPagingEach(handler: (invoice: StripeInvoice) => void): Promise<void>;
-    };
-  };
-  invoicePayments: {
-    list(params: {
-      limit: number;
-      expand: string[];
-      created?: StripeCreatedRange;
-      status?: 'paid';
-      payment?: { type: 'payment_intent'; payment_intent: string };
-    }): {
-      autoPagingEach(handler: (payment: StripeInvoicePayment) => void): Promise<void>;
-    };
-  };
-}
-
-interface StripeInvoice {
-  id: string;
-  currency: string;
-  created: number;
-  total_discount_amounts?: Array<{
-    amount: number;
-    discount: string | { id: string };
-  }> | null;
-}
-
-interface StripeBalanceSource {
-  id: string;
-  object?: string;
-  payment_intent?: string | StripeReference | null;
-  metadata?: Record<string, string> | null;
-}
-
-interface StripeBalanceTransaction {
-  id: string;
-  amount: number;
-  fee: number;
-  currency: string;
-  created: number;
-  type: string;
-  source?: unknown;
-}
-
-interface StripeInvoicePayment {
-  payment: { payment_intent?: string | StripeReference };
-  invoice: unknown;
-}
-
-interface StripeSubscriptionDetails {
-  subscription?: string | StripeReference | null;
-  metadata?: Record<string, string> | null;
-}
-
-interface AttributedFee {
-  userId: string | null;
-  attribution: CogsAdjustmentAttribution;
-}
-
-function stripeId(value: string | StripeReference | null | undefined): string | null {
-  if (!value) return null;
-  return typeof value === 'string' ? value : value.id;
-}
-
-function createdRange(since: Date, until: Date): StripeCreatedRange {
-  return {
-    gte: Math.floor(since.getTime() / 1000),
-    lt: Math.floor(until.getTime() / 1000),
-  };
-}
-
-function chargeOf(entry: StripeBalanceTransaction): StripeBalanceSource | null {
-  if (!entry.source || typeof entry.source !== 'object') return null;
-  const source = entry.source as StripeBalanceSource;
-  return source.object === 'charge' && typeof source.id === 'string' ? source : null;
-}
-
-function subscriptionDetailsOf(invoice: unknown): StripeSubscriptionDetails | null {
-  if (!invoice || typeof invoice !== 'object') return null;
-  const parent = (invoice as { parent?: { subscription_details?: unknown } | null }).parent;
-  const details = parent?.subscription_details;
-  return details && typeof details === 'object' ? (details as StripeSubscriptionDetails) : null;
-}
-
-function subscriptionFeeOf(payment: StripeInvoicePayment): AttributedFee | null {
-  const details = subscriptionDetailsOf(payment.invoice);
-  const subscriptionId = stripeId(details?.subscription);
-  if (!details || !subscriptionId) return null;
-  return {
-    userId: details.metadata?.[USER_ID_METADATA_KEY] ?? null,
-    attribution: { kind: 'subscription', ref: subscriptionId },
-  };
-}
-
-function topUpFeeOf(charge: StripeBalanceSource): AttributedFee | null {
-  const metadata = charge.metadata;
-  if (!metadata || metadata['type'] !== TOP_UP_CHARGE_TYPE) return null;
-  return {
-    userId: metadata[USER_ID_METADATA_KEY] ?? null,
-    attribution: { kind: 'top_up', ref: stripeId(charge.payment_intent) ?? charge.id },
-  };
-}
-
-async function subscriptionFeesByPaymentIntent(
-  stripe: StripeCogsSource,
-  created: StripeCreatedRange,
-): Promise<Map<string, AttributedFee>> {
-  const fees = new Map<string, AttributedFee>();
-  await stripe.invoicePayments
-    .list({ created, status: 'paid', expand: ['data.invoice'], limit: BALANCE_TRANSACTION_PAGE })
-    .autoPagingEach((payment) => {
-      const paymentIntentId = stripeId(payment.payment.payment_intent);
-      const fee = subscriptionFeeOf(payment);
-      if (paymentIntentId && fee) fees.set(paymentIntentId, fee);
-    });
-  return fees;
-}
-
-async function subscriptionFeeForPaymentIntent(
-  stripe: StripeCogsSource,
-  paymentIntentId: string,
-): Promise<AttributedFee | null> {
-  const found: AttributedFee[] = [];
-  await stripe.invoicePayments
-    .list({
-      payment: { type: 'payment_intent', payment_intent: paymentIntentId },
-      expand: ['data.invoice'],
-      limit: 1,
-    })
-    .autoPagingEach((payment) => {
-      const fee = subscriptionFeeOf(payment);
-      if (fee) found.push(fee);
-    });
-  return found[0] ?? null;
-}
-
-async function attributeFee(
-  stripe: StripeCogsSource,
-  charge: StripeBalanceSource,
-  subscriptionFees: Map<string, AttributedFee>,
-): Promise<AttributedFee | null> {
-  const topUp = topUpFeeOf(charge);
-  if (topUp) return topUp;
-  const paymentIntentId = stripeId(charge.payment_intent);
-  if (!paymentIntentId) return null;
-  const known = subscriptionFees.get(paymentIntentId);
-  if (known) return known;
-  const looked = await subscriptionFeeForPaymentIntent(stripe, paymentIntentId);
-  if (looked) subscriptionFees.set(paymentIntentId, looked);
-  return looked;
-}
-
-function processingFeeCents(entry: StripeBalanceTransaction): number {
-  if (entry.fee > 0) return entry.fee;
-  return ADJUSTMENT_KIND_BY_BALANCE_TYPE[entry.type] === 'stripe_fee' && entry.amount < 0
-    ? Math.abs(entry.amount)
+function processingFeeCents(entry: NormalizedBalanceEntry): number {
+  if (entry.feeMinorUnits > 0) return entry.feeMinorUnits;
+  return ADJUSTMENT_KIND_BY_BALANCE_TYPE[entry.type] === 'stripe_fee' && entry.amountMinorUnits < 0
+    ? Math.abs(entry.amountMinorUnits)
     : 0;
 }
 
 export async function importStripeCogsAdjustments(input: {
-  stripe: StripeCogsSource;
-  since: Date;
-  until: Date;
+  activity: NormalizedCostActivity;
   db?: DatabaseAdapter;
 }): Promise<StripeCogsImportSummary> {
   const db = input.db ?? getNeonDb();
-  const created = createdRange(input.since, input.until);
-  const pending: StripeBalanceTransaction[] = [];
-
-  await input.stripe.balanceTransactions
-    .list({ created, limit: BALANCE_TRANSACTION_PAGE, expand: ['data.source'] })
-    .autoPagingEach((entry) => {
-      pending.push(entry);
-    });
-
-  const subscriptionFees = await subscriptionFeesByPaymentIntent(input.stripe, created);
+  const { balanceEntries, invoiceDiscounts } = input.activity;
 
   let feesRecorded = 0;
   let feesAttributed = 0;
   let adjustmentsRecorded = 0;
 
-  for (const entry of pending) {
-    const occurredAt = new Date(entry.created * 1000);
+  for (const entry of balanceEntries) {
+    const sourceRef = `balance_txn:${entry.reference}`;
     const feeCents = processingFeeCents(entry);
     if (feeCents > 0) {
-      const charge = chargeOf(entry);
-      const attributed = charge ? await attributeFee(input.stripe, charge, subscriptionFees) : null;
       await recordCogsAdjustment(
         {
-          userId: attributed?.userId ?? null,
+          userId: entry.attribution?.ownerReference ?? null,
           kind: 'stripe_fee',
           amountCents: feeCents,
           currency: entry.currency,
-          sourceRef: `balance_txn:${entry.id}`,
-          occurredAt,
+          sourceRef,
+          occurredAt: entry.occurredAt,
           metadata: {
             balanceTransactionType: entry.type,
-            ...(charge ? { chargeId: charge.id } : {}),
+            ...(entry.chargeReference ? { chargeId: entry.chargeReference } : {}),
           },
-          attribution: attributed?.attribution ?? null,
+          attribution: entry.attribution
+            ? { kind: entry.attribution.kind, ref: entry.attribution.reference }
+            : null,
         },
         db,
       );
       feesRecorded += 1;
-      if (attributed) feesAttributed += 1;
+      if (entry.attribution) feesAttributed += 1;
     }
 
     const kind = ADJUSTMENT_KIND_BY_BALANCE_TYPE[entry.type];
-    if (kind && kind !== 'stripe_fee' && entry.amount < 0) {
+    if (kind && kind !== 'stripe_fee' && entry.amountMinorUnits < 0) {
       await recordCogsAdjustment(
         {
           kind,
-          amountCents: Math.abs(entry.amount),
+          amountCents: Math.abs(entry.amountMinorUnits),
           currency: entry.currency,
-          sourceRef: `balance_txn:${entry.id}`,
-          occurredAt,
+          sourceRef,
+          occurredAt: entry.occurredAt,
           metadata: { balanceTransactionType: entry.type },
         },
         db,
@@ -979,43 +796,26 @@ export async function importStripeCogsAdjustments(input: {
     }
   }
 
-  const invoices: StripeInvoice[] = [];
-  await input.stripe.invoices
-    .list({ created, limit: BALANCE_TRANSACTION_PAGE })
-    .autoPagingEach((invoice) => {
-      invoices.push(invoice);
-    });
-
-  let discountsRecorded = 0;
-  for (const invoice of invoices) {
-    const lines = invoice.total_discount_amounts ?? [];
-    const discountCents = lines.reduce((total, line) => total + Math.max(0, line.amount), 0);
-    if (discountCents <= 0) continue;
-
+  for (const discount of invoiceDiscounts) {
     await recordCogsAdjustment(
       {
         kind: 'discount',
-        amountCents: discountCents,
-        currency: invoice.currency,
-        sourceRef: `invoice:${invoice.id}`,
-        occurredAt: new Date(invoice.created * 1000),
-        metadata: {
-          discountIds: lines.map((line) =>
-            typeof line.discount === 'string' ? line.discount : line.discount.id,
-          ),
-        },
+        amountCents: discount.discountMinorUnits,
+        currency: discount.currency,
+        sourceRef: `invoice:${discount.invoiceReference}`,
+        occurredAt: discount.occurredAt,
+        metadata: { discountIds: discount.discountReferences },
       },
       db,
     );
-    discountsRecorded += 1;
   }
 
   return {
-    examined: pending.length + invoices.length,
+    examined: balanceEntries.length + invoiceDiscounts.length,
     feesRecorded,
     feesAttributed,
     adjustmentsRecorded,
-    discountsRecorded,
+    discountsRecorded: invoiceDiscounts.length,
   };
 }
 
