@@ -150,7 +150,11 @@ describe('public billing truth', () => {
       expect(pricing['maxVariant15x']).toBe(`${topPlanOverPro?.fiveHour}x`);
       expect(pricing['compareSubheading']).toContain('{{topPlan}}');
       expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
-      for (const key of ['usageMultiplierAll', 'usageMultiplierSplit', 'usageMultiplierSplitMonthly']) {
+      for (const key of [
+        'usageMultiplierAll',
+        'usageMultiplierSplit',
+        'usageMultiplierSplitMonthly',
+      ]) {
         expect(pricing[key], `${locale}/pricing.json ${key} hard-codes a multiplier`).not.toMatch(
           /\d+x/,
         );

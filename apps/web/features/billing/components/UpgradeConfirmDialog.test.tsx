@@ -103,7 +103,9 @@ describe('UpgradeConfirmDialog', () => {
       />,
     );
 
-    expect(await screen.findByText(/After that, Team renews at \$75\/month plus tax/i)).toBeTruthy();
+    expect(
+      await screen.findByText(/After that, Team renews at \$75\/month plus tax/i),
+    ).toBeTruthy();
   });
 
   it('quotes the published catalog amount for the requested interval', async () => {
