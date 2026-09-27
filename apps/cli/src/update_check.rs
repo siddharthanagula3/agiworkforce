@@ -7,13 +7,14 @@
 
 use semver::Version;
 use serde::Deserialize;
+use std::path::Path;
 use std::time::Duration;
 
 use crate::tier_cache;
 
 const RELEASE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 const CLI_RELEASE_PATH: &str = "/api/releases/cli/latest";
-const NPM_PACKAGE_MANIFEST: &str = include_str!("../npm/package.json");
+const INSTALL_SCRIPT_URL: &str = "https://agiworkforce.com/install.sh";
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -84,21 +85,38 @@ pub fn render_verdict(running: &str, release: &CliRelease, install_command: &str
     lines
 }
 
-/// The published npm package name, read from the wrapper manifest the release
-/// workflow publishes, so the printed instruction cannot drift from it.
 pub fn install_command() -> String {
-    let name = serde_json::from_str::<serde_json::Value>(NPM_PACKAGE_MANIFEST)
-        .ok()
-        .and_then(|manifest| {
-            manifest
-                .get("name")
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string)
-        });
-    match name {
-        Some(name) => format!("npm install -g {name}"),
-        None => "see the CLI README for install instructions".to_string(),
+    format!("curl -fsSL {INSTALL_SCRIPT_URL} | bash")
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn install_command_for(version: &str, executable: &Path) -> Result<String, String> {
+    if cfg!(windows) {
+        return Err(format!(
+            "Windows cannot replace a running agi. Close it, then run this from Git Bash or WSL: {}",
+            install_command()
+        ));
     }
+    if executable
+        .components()
+        .any(|part| part.as_os_str().to_string_lossy().ends_with(".app"))
+    {
+        return Err("This agi is bundled with AGI Cloud and updates with the app.".to_string());
+    }
+    let Some(directory) = executable.parent() else {
+        return Err(format!(
+            "Could not tell where this agi is installed. Install the update with: {}",
+            install_command()
+        ));
+    };
+    Ok(format!(
+        "curl -fsSL {INSTALL_SCRIPT_URL} | bash -s -- --version {} --install-dir {} --no-modify-path",
+        shell_quote(version),
+        shell_quote(&directory.to_string_lossy())
+    ))
 }
 
 /// What `--install` is about to run, and why the run may still not produce a
@@ -108,23 +126,23 @@ pub struct InstallPlan {
     pub running: String,
     pub published: String,
     pub verdict: UpdateVerdict,
-    pub command: String,
+    pub command: Result<String, String>,
 }
 
 impl InstallPlan {
-    pub fn new(running: &str, release: &CliRelease) -> Self {
+    pub fn new(running: &str, release: &CliRelease, executable: &Path) -> Self {
         Self {
             running: running.to_string(),
             published: release.version.clone(),
             verdict: compare_versions(running, &release.version),
-            command: install_command(),
+            command: install_command_for(&release.version, executable),
         }
     }
 
     /// True when running the command could actually change the installed
     /// build. An up-to-date or ahead-of-feed build has nothing to install.
     pub fn has_work(&self) -> bool {
-        matches!(self.verdict, UpdateVerdict::Available)
+        matches!(self.verdict, UpdateVerdict::Available) && self.command.is_ok()
     }
 
     /// The lines printed before the confirmation prompt. Nothing runs until
@@ -134,43 +152,38 @@ impl InstallPlan {
             format!("Running:   {}", self.running),
             format!("Published: {}", self.published),
         ];
-        match &self.verdict {
-            UpdateVerdict::Available => {
+        match (&self.verdict, &self.command) {
+            (UpdateVerdict::Available, Ok(command)) => {
                 lines.push(String::new());
                 lines.push("Will run:".to_string());
-                lines.push(format!("  {}", self.command));
+                lines.push(format!("  {command}"));
                 lines.push(String::new());
-                lines.push(
-                    "Installing replaces the binary this shell resolves as `agi`.".to_string(),
-                );
+                lines.push("Installing replaces this agi with the published release.".to_string());
                 lines.push(INSTALL_SIGNING_NOTE.to_string());
             }
-            UpdateVerdict::UpToDate => lines
+            (UpdateVerdict::Available, Err(reason)) => lines.push(reason.clone()),
+            (UpdateVerdict::UpToDate, _) => lines
                 .push("Already on the newest published release, nothing to install.".to_string()),
-            UpdateVerdict::AheadOfPublished => lines.push(
+            (UpdateVerdict::AheadOfPublished, _) => lines.push(
                 "This build is newer than the newest published release, nothing to install."
                     .to_string(),
             ),
-            UpdateVerdict::Unknown(reason) => lines.push(reason.clone()),
+            (UpdateVerdict::Unknown(reason), _) => lines.push(reason.clone()),
         }
         lines
     }
 }
 
-/// Stated wherever `--install` is described. The install routes are gated on a
-/// signed release: `scripts/install.sh` refuses an archive without `SHA256SUMS`
-/// and its sigstore bundle, and the npm package carries the same artifacts. No
-/// published CLI release carries them yet, so an install can legitimately fail
-/// on provenance rather than on anything the user did wrong.
-pub const INSTALL_SIGNING_NOTE: &str =
-    "Install needs a signed release: the install routes refuse an archive without its \
-signed checksum manifest, and no published CLI release carries one yet.";
+/// Stated wherever `--install` is described: `scripts/install.sh` checks the
+/// release's signed checksum manifest before it installs anything.
+pub const INSTALL_SIGNING_NOTE: &str = "The installer verifies the release's signed checksum \
+manifest and refuses to install anything it cannot verify.";
 
 /// Run the install command through the shell, streaming its output.
 pub fn run_install_command(command: &str) -> anyhow::Result<std::process::ExitStatus> {
-    let status = std::process::Command::new("sh")
+    let status = std::process::Command::new("bash")
         .arg("-c")
-        .arg(command)
+        .arg(format!("set -o pipefail; {command}"))
         .status()
         .map_err(|error| anyhow::anyhow!("failed to start `{command}`: {error}"))?;
     Ok(status)
@@ -257,8 +270,11 @@ mod tests {
     }
 
     #[test]
-    fn install_command_reads_the_published_package_name() {
-        assert!(install_command().starts_with("npm install -g @"));
+    fn install_command_is_the_published_install_script() {
+        assert_eq!(
+            install_command(),
+            "curl -fsSL https://agiworkforce.com/install.sh | bash"
+        );
     }
 
     fn release(version: &str) -> CliRelease {
@@ -271,17 +287,25 @@ mod tests {
 
     #[test]
     fn the_install_plan_shows_the_exact_command_before_running_it() {
-        let plan = InstallPlan::new("1.0.0", &release("9.9.9"));
+        let plan = InstallPlan::new(
+            "1.0.0",
+            &release("9.9.9"),
+            std::path::Path::new("/home/dev/.agi/bin/agi"),
+        );
         assert!(plan.has_work());
         let rendered = plan.render().join("\n");
         assert!(rendered.contains("Will run:"));
-        assert!(rendered.contains(&install_command()));
-        assert!(rendered.contains("signed release"));
+        assert!(rendered.contains("https://agiworkforce.com/install.sh | bash -s -- --version '9.9.9' --install-dir '/home/dev/.agi/bin'"));
+        assert!(rendered.contains("signed checksum manifest"));
     }
 
     #[test]
     fn an_up_to_date_build_has_no_install_work() {
-        let plan = InstallPlan::new("1.7.1", &release("1.7.1"));
+        let plan = InstallPlan::new(
+            "1.7.1",
+            &release("1.7.1"),
+            std::path::Path::new("/home/dev/.agi/bin/agi"),
+        );
         assert!(!plan.has_work());
         let rendered = plan.render().join("\n");
         assert!(rendered.contains("nothing to install"));
@@ -293,14 +317,22 @@ mod tests {
 
     #[test]
     fn a_build_ahead_of_the_feed_has_no_install_work() {
-        let plan = InstallPlan::new("2.0.0", &release("1.7.1"));
+        let plan = InstallPlan::new(
+            "2.0.0",
+            &release("1.7.1"),
+            std::path::Path::new("/home/dev/.agi/bin/agi"),
+        );
         assert!(!plan.has_work());
         assert!(plan.render().join("\n").contains("nothing to install"));
     }
 
     #[test]
     fn an_uncomparable_version_reports_why_and_installs_nothing() {
-        let plan = InstallPlan::new("nightly", &release("1.7.1"));
+        let plan = InstallPlan::new(
+            "nightly",
+            &release("1.7.1"),
+            std::path::Path::new("/home/dev/.agi/bin/agi"),
+        );
         assert!(!plan.has_work());
         assert!(plan.render().join("\n").contains("cannot compare"));
     }
@@ -312,7 +344,7 @@ mod tests {
             published_at: "2026-09-12T10:00:00Z".to_string(),
             downloads: vec![],
         };
-        let lines = render_verdict("1.0.0", &release, "npm install -g pkg");
-        assert!(lines.iter().any(|line| line.contains("npm install -g pkg")));
+        let lines = render_verdict("1.0.0", &release, &install_command());
+        assert!(lines.iter().any(|line| line.contains(&install_command())));
     }
 }

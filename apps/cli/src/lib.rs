@@ -767,16 +767,14 @@ enum Command {
     /// Compare this build against the newest published CLI release.
     ///
     /// Reads the release feed by default and downloads nothing. `--install`
-    /// runs the documented install command after printing it and asking.
-    ///
-    /// Installing needs a signed release: the install routes refuse an archive
-    /// without its signed checksum manifest, and no published CLI release
-    /// carries one yet, so an install can fail on provenance.
+    /// runs the install script into the directory this agi runs from, after
+    /// printing the exact command and asking. The installer verifies the
+    /// release's signed checksum manifest before it installs anything.
     Update {
         /// Exit non-zero when a newer release is published, for scripts.
         #[arg(long)]
         check: bool,
-        /// Run the documented install command when a newer release exists.
+        /// Run the install script when a newer release exists.
         #[arg(long)]
         install: bool,
         /// Skip the confirmation prompt. Only meaningful with `--install`.
@@ -2448,16 +2446,19 @@ fn held_to_managed_policy(
 
 /// Print what `agi update --install` will run, ask, then run it.
 fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bool) -> Result<()> {
-    let plan = update_check::InstallPlan::new(running, release);
+    let executable = std::env::current_exe()
+        .and_then(std::fs::canonicalize)
+        .context("could not tell where this agi is installed")?;
+    let plan = update_check::InstallPlan::new(running, release, &executable);
     for line in plan.render() {
         println!("{line}");
     }
-    if !plan.has_work() {
+    let (true, Ok(command)) = (plan.has_work(), &plan.command) else {
         return Ok(());
-    }
+    };
     if !yes {
         let confirmed = dialoguer::Confirm::new()
-            .with_prompt(format!("Run `{}` now?", plan.command))
+            .with_prompt(format!("Run `{command}` now?"))
             .default(false)
             .interact()
             .unwrap_or(false);
@@ -2466,14 +2467,13 @@ fn run_update_install(running: &str, release: &update_check::CliRelease, yes: bo
             return Ok(());
         }
     }
-    let status = update_check::run_install_command(&plan.command)?;
+    let status = update_check::run_install_command(command)?;
     if status.success() {
         println!("Installed. Re-run `agi update` to confirm the new version.");
         Ok(())
     } else {
         anyhow::bail!(
-            "`{}` exited with {}. {}",
-            plan.command,
+            "`{command}` exited with {}. {}",
             status.code().unwrap_or(-1),
             update_check::INSTALL_SIGNING_NOTE
         )
