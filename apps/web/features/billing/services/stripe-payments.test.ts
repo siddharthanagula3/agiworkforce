@@ -103,7 +103,38 @@ describe('stripe payments', () => {
       currency: 'usd',
       previewToken: 'signed-preview-token',
       charge: null,
+      promotion: null,
+      replacesScheduledChange: false,
     });
+  });
+
+  it('sends a promotion code with the preview and returns the discount the server applied', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        amountDueNowCents: 1_500,
+        currency: 'usd',
+        previewToken: 'signed-preview-token',
+        promotion: { code: 'SPRING', percentOff: 25, duration: 'once' },
+        replacesScheduledChange: true,
+      }),
+    } as Response);
+
+    const result = await previewUpgrade({ plan: 'pro', promotionCode: 'SPRING' });
+
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      plan: 'pro',
+      promotionCode: 'SPRING',
+    });
+    expect(result.promotion).toEqual({
+      code: 'SPRING',
+      percentOff: 25,
+      amountOffCents: null,
+      currency: null,
+      duration: 'once',
+      durationInMonths: null,
+    });
+    expect(result.replacesScheduledChange).toBe(true);
   });
 
   it('passes through the itemized charge so the dialog can show a receipt', async () => {
@@ -175,13 +206,13 @@ describe('stripe payments', () => {
       json: async () => ({ url: 'https://checkout.example/top-up' }),
     } as Response);
 
-    await startTopUpCheckout(10);
+    await startTopUpCheckout(20);
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/billing/top-up',
       expect.objectContaining({ method: 'POST' }),
     );
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ amountUsd: 10 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ amountUsd: 20 });
     expect(window.location.href).toBe('https://checkout.example/top-up');
   });
 
