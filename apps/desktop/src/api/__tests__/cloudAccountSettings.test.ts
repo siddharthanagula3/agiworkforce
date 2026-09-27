@@ -219,13 +219,11 @@ describe('cloudAccountSettings', () => {
 
   describe('security posture', () => {
     it('reads two-factor status', async () => {
-      mocks.cloudFetch.mockResolvedValue(
-        jsonResponse({ enabled: true, backup_codes_remaining: 3 }),
-      );
+      mocks.cloudFetch.mockResolvedValue(jsonResponse({ enabled: true, backup_codes_ready: true }));
 
       await expect(getCloudTwoFactorStatus()).resolves.toEqual({
         enabled: true,
-        backupCodesRemaining: 3,
+        backupCodesReady: true,
       });
       expect(lastRequest().url).toBe('https://cloud.agi.example/api/settings/2fa');
     });
