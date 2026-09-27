@@ -103,7 +103,8 @@ export class SignalingClient {
     });
   }
 
-  close() {
+  close(options: { endPairing?: boolean } = {}) {
+    if (options.endPairing) this.send({ type: 'end_pairing' });
     this.closed = true;
     if (this.heartbeatTimer !== undefined) {
       clearInterval(this.heartbeatTimer);
