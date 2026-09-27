@@ -29,6 +29,7 @@ import {
   setApiKey,
   clearAccountToken,
   clearApiKey,
+  fetchBilledCredits,
   AgiWorkforceClientUpdateRequiredError,
 } from '../utils/api';
 import { BILLING_PLAN_PRICING, classifyManagedQuotaErrorCode } from '@agiworkforce/types';
@@ -655,6 +656,94 @@ describe('cloud request retry policy', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await pending;
     expect(https.request).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('billed credits for a settled turn', () => {
+  function answerTurnPolls(...answers: Array<{ status: number; body: unknown }>): string[] {
+    const paths: string[] = [];
+    vi.mocked(https.request).mockImplementation(((
+      options: https.RequestOptions,
+      callback: (res: EventEmitter & { statusCode?: number }) => void,
+    ) => {
+      paths.push(String(options.path));
+      const next = answers.shift() ?? { status: 500, body: 'exhausted' };
+      const res = Object.assign(new EventEmitter(), { statusCode: next.status });
+      queueMicrotask(() => {
+        callback(res);
+        const body = typeof next.body === 'string' ? next.body : JSON.stringify(next.body);
+        res.emit('data', Buffer.from(body, 'utf8'));
+        res.emit('end');
+      });
+      return Object.assign(new EventEmitter(), {
+        end: () => undefined,
+        destroy: () => undefined,
+        setTimeout: () => undefined,
+      });
+    }) as never);
+    return paths;
+  }
+
+  async function billedCredits(requestId: string): Promise<number | null> {
+    const context = new ExtensionContext();
+    await setApiKey(context.secrets, 'agi-test-key');
+    const settled = fetchBilledCredits(context.secrets, requestId);
+    await vi.advanceTimersByTimeAsync(10_000);
+    return settled;
+  }
+
+  beforeEach(() => {
+    vi.mocked(https.request).mockReset();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reads the credits a turn was billed once the ledger settles it', async () => {
+    const paths = answerTurnPolls(
+      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'pending', credits: null } },
+      { status: 200, body: { requestId: 'agi.vscode.chat.turn-1', status: 'settled', credits: 0.35 } },
+    );
+
+    await expect(billedCredits('agi.vscode.chat.turn-1')).resolves.toBe(0.35);
+    expect(paths).toEqual([
+      '/api/usage/turns/agi.vscode.chat.turn-1',
+      '/api/usage/turns/agi.vscode.chat.turn-1',
+    ]);
+  });
+
+  it('counts a settled turn that recorded no charge as zero credits', async () => {
+    answerTurnPolls({
+      status: 200,
+      body: { requestId: 'agi.vscode.chat.turn-2', status: 'settled', credits: null },
+    });
+
+    await expect(billedCredits('agi.vscode.chat.turn-2')).resolves.toBe(0);
+  });
+
+  it('reports a turn still pending after the last poll as not settled', async () => {
+    const pending = { requestId: 'agi.vscode.chat.turn-3', status: 'pending', credits: null };
+    const paths = answerTurnPolls(
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+      { status: 200, body: pending },
+    );
+
+    await expect(billedCredits('agi.vscode.chat.turn-3')).resolves.toBeNull();
+    expect(paths).toHaveLength(4);
+  });
+
+  it.each([
+    ['an error status', { status: 404, body: { error: 'not found' } }],
+    ['a body this editor cannot read', { status: 200, body: { status: 'settled', credits: -1 } }],
+  ])('stops polling on %s', async (_case, answer) => {
+    const paths = answerTurnPolls(answer);
+
+    await expect(billedCredits('agi.vscode.chat.turn-4')).resolves.toBeNull();
+    expect(paths).toHaveLength(1);
   });
 });
 
