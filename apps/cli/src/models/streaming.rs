@@ -108,28 +108,40 @@ fn quota_warning_scope_label(scope: &str) -> Option<&'static str> {
     }
 }
 
-fn notify_quota_warning(data: &serde_json::Value) {
-    let Some(header) = data.get("value").and_then(|value| value.as_str()) else {
-        return;
-    };
+struct QuotaWarning {
+    scope: String,
+    level: String,
+    notice: String,
+}
+
+fn quota_warning(data: &serde_json::Value) -> Option<QuotaWarning> {
+    let header = data.get("value").and_then(|value| value.as_str())?;
     let fields: HashMap<&str, &str> = header
         .split(';')
         .filter_map(|part| part.split_once('='))
         .map(|(key, value)| (key.trim(), value.trim()))
         .collect();
-    let (Some(level), Some(scope), Some(used)) = (
-        fields.get("level").copied(),
-        fields.get("scope").copied(),
-        fields
-            .get("used_percent")
-            .and_then(|value| value.parse::<u32>().ok()),
-    ) else {
+    let level = fields.get("level").copied()?;
+    let scope = fields.get("scope").copied()?;
+    let used = fields
+        .get("used_percent")
+        .and_then(|value| value.parse::<u32>().ok())?;
+    let window = quota_warning_scope_label(scope)?;
+    Some(QuotaWarning {
+        scope: scope.to_string(),
+        level: level.to_string(),
+        notice: format!(
+            "You have used {}% of your {window}. Run `agi usage` to see what is left.",
+            used.min(100)
+        ),
+    })
+}
+
+fn notify_quota_warning(data: &serde_json::Value) {
+    let Some(warning) = quota_warning(data) else {
         return;
     };
-    let Some(window) = quota_warning_scope_label(scope) else {
-        return;
-    };
-    let key = (scope.to_string(), level.to_string());
+    let key = (warning.scope, warning.level);
     let Ok(mut last) = LAST_QUOTA_WARNING.lock() else {
         return;
     };
@@ -138,14 +150,10 @@ fn notify_quota_warning(data: &serde_json::Value) {
     }
     *last = Some(key);
     drop(last);
-    let msg = format!(
-        "You have used {}% of your {window}. Run `agi usage` to see what is left.",
-        used.min(100)
-    );
     if crate::tui::tui_active() {
-        crate::tui::push_tui_notice(msg);
+        crate::tui::push_tui_notice(warning.notice);
     } else {
-        eprintln!("AGI: {msg}");
+        eprintln!("AGI: {}", warning.notice);
     }
 }
 
@@ -1153,6 +1161,57 @@ mod tests {
         let cli = err.downcast_ref::<CliError>().expect("CliError");
         assert!(matches!(cli, CliError::RateLimited { .. }), "{cli:?}");
         assert!(cli.is_retryable());
+    }
+
+    #[test]
+    fn a_quota_warning_names_the_window_and_how_much_of_it_is_used() {
+        let warning = |value: &str| {
+            quota_warning(&serde_json::json!({ "value": value }))
+                .map(|warning| (warning.scope, warning.level, warning.notice))
+        };
+        assert_eq!(
+            warning(
+                "level=warning; scope=rolling_five_hour; used_percent=82; threshold_percent=80"
+            ),
+            Some((
+                "rolling_five_hour".to_string(),
+                "warning".to_string(),
+                "You have used 82% of your 5-hour window. Run `agi usage` to see what is left."
+                    .to_string()
+            ))
+        );
+        assert_eq!(
+            warning("level=critical; scope=rolling_weekly; used_percent=96")
+                .map(|(_, _, notice)| notice),
+            Some(
+                "You have used 96% of your weekly allowance. Run `agi usage` to see what is left."
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            warning("level=critical; scope=billing_period; used_percent=140")
+                .map(|(_, _, notice)| notice),
+            Some(
+                "You have used 100% of your monthly allowance. Run `agi usage` to see what is left."
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn a_quota_warning_the_cli_cannot_state_is_not_shown() {
+        for value in [
+            "level=warning; scope=computer_use_soft_cap; used_percent=90",
+            "level=warning; scope=rolling_weekly",
+            "scope=rolling_weekly; used_percent=85",
+            "level=warning; scope=rolling_weekly; used_percent=eighty",
+        ] {
+            assert!(
+                quota_warning(&serde_json::json!({ "value": value })).is_none(),
+                "{value}"
+            );
+        }
+        assert!(quota_warning(&serde_json::json!({})).is_none());
     }
 
     #[test]
