@@ -224,7 +224,19 @@ function candidateSql(options: {
       from retrieval_chunks c
       join retrieval_documents d on d.id = c.document_id
       ${joins.join('\n      ')}
-     where ${present.join(' or ')}`;
+     where (${present.join(' or ')})
+       and not exists (
+         select 1 from web_conversations t
+          where t.is_temporary
+            and t.id = coalesce(
+              d.conversation_id,
+              (select a.conversation_id from web_artifacts a where a.id = d.artifact_id),
+              (select r.conversation_id from research_reports r where r.id = d.research_report_id)
+            )
+       )
+       and not exists (
+         select 1 from media_assets m where m.id = d.media_asset_id and m.temporary_chat
+       )`;
 }
 
 /**
