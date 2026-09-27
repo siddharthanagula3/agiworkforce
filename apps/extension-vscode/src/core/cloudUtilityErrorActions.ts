@@ -192,12 +192,14 @@ async function showPaywallActions(
     alternative === undefined ? undefined : `Use ${modelDisplayLabel(alternative)}`;
   const actions = [
     ...(switchLabel === undefined ? [] : [switchLabel]),
-    ...(error.recoveryAction === 'manage_billing' ? [] : ['Upgrade']),
+    ...(error.recoveryAction === 'manage_billing' ? [] : ['Compare plans', 'Upgrade']),
     'Manage billing',
   ];
   const choice = await vscode.window.showWarningMessage(message, ...actions);
   if (choice === switchLabel && alternative !== undefined) {
     await switchToModel(alternative, options);
+  } else if (choice === 'Compare plans') {
+    await vscode.commands.executeCommand('agi-workforce.comparePlans');
   } else if (choice === 'Upgrade') {
     const query = new URLSearchParams({
       from: 'vscode-extension-paywall',

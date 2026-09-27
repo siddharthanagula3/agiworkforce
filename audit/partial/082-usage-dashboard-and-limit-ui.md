@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: Users can see usage broken down by model (at least the flagship-model cap and per-model spend).
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add a by-model breakdown on mobile; it shows only the flagship-class weekly bar although /api/usage/history (callable with the mobile token) returns spend by model. | ui |
-| cli | partial | CLI shows the flagship-weekly window and the session model, but no spend by model. | ui |
-| vscode | partial | VS Code shows the flagship bucket row but no spend by model. | ui |
-| chrome | partial | Chrome already fetches /api/usage (which carries the flagship-weekly figure) but shows only one overall percentage. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/mobile/services/usage.ts:45-49`, `apps/cli/src/usage_summary.rs:232-258`, `apps/cli/src/usage_summary.rs:146-170`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:353-358`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.05: Per-feature usage.
 
@@ -73,29 +70,25 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 - Done when: Users can see how much of their usage went to research (Deep Research).
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The research branch of resolveChatWorkload is unreachable from the chat route (work_mode enum excludes 'research'; quotaFeature is chat/image/video/computer_use), so Deep Research spend lands under Chat. Only a unit test calls the branch directly. |  |
-| desktop | partial | Hosted-web mirror of web: research turns are attributed to Chat. |  |
 | mobile | partial | Add the research share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
-| api | partial | The API's byWorkload has no research rows for the same attribution reason. |  |
 
-Code: `apps/web/features/settings/sections/UsageSection.tsx:370-391`, `apps/web/features/settings/sections/UsageSection.tsx:216-230`, `apps/web/lib/services/account-usage-history-service.ts:85-114`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.10: Coding/work usage.
 
 - Done when: Users can see how much of their usage went to coding and agentic work.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Add the coding/work share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
-| cli | partial | CLI shows this session's tokens and a locally priced estimate (/usage, /cost); account-level coding and work usage is only on web. | surface-only |
-| vscode | partial | VS Code shows session tokens and a rough session estimate; account-level coding/work usage is only on web. | surface-only |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.11: Storage usage.
 
@@ -197,14 +190,13 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 - Done when: Before or while a task runs, the user sees an estimate of what it will cost.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile shows no estimate; the server-side reservation estimate is not exposed to clients. | ui, api |
 | cli | partial | The cited 'estimate' is a retrospective session cost (estimated because it is priced locally), not an estimate of what a task will cost; during a turn the status line reuses the pre-turn total. |  |
 | vscode | partial | The quick-pick figure sums measured usage of finished requests; it says nothing about a task before or while it runs. |  |
-| api | partial | Only live voice sessions return an estimated cost (reservation handle); chat completions and other operations expose no estimate. | api |
 
 Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cli/src/usage_summary.rs:382-396`, `apps/cli/src/tui/tui_app.rs:3897-3911`, `apps/extension-vscode/src/core/commandSetup.ts:2044-2047`
 
@@ -224,40 +216,37 @@ Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:179-184
 
 - Done when: Users are warned before they hit a usage limit.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Warn mobile users in chat before a limit; today only the Usage screen bar changes colour at 90%. | ui |
-| api | partial | Document X-Quota-Warning in the OpenAPI bundle; the server already sends it at 80%/95% but API callers are never told it exists. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:75-79`, `apps/mobile/services/usage.ts:45-49`, `apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts:307-310`, `apps/web/lib/server/managed-usage-policy.ts:206-252`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:75-79`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.26: Alternative eligible model suggestion.
 
 - Done when: When a limit or plan blocks the chosen model, the user is offered an eligible alternative model.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile shows only the server reason text in the paywall sheet; it never proposes an eligible model. | ui |
-| api | partial | Error bodies carry a recovery hint and the flagship message says 'choose a standard model', but no eligible model id is returned. | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/web/lib/services/managed-usage-request-service.ts:392-416`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`
 
 ## S82.27: Wait-until-reset option.
 
 - Done when: At a limit, the user is offered waiting until the reset, with the reset time, as an alternative to paying.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile's paywall shows the server reason ('wait for earlier usage to leave the window') but no reset time; reset times appear only on the Usage screen. | ui |
-| api | partial | Limit errors carry a recovery hint and message but no reset timestamp; callers must poll /api/usage for reset times. | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:300-309`, `apps/web/lib/services/managed-usage-request-service.ts:392-416`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:300-309`
 
 ## S82.29: Extra-usage purchase.
 

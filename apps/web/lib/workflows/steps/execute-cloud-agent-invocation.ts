@@ -95,6 +95,18 @@ const UsageSchema = z
     cacheWriteTokens: z.number().int().nonnegative(),
     cacheWrite1hTokens: z.number().int().nonnegative(),
     reasoningTokens: z.number().int().nonnegative(),
+    webSearchRequests: z.number().int().nonnegative().optional(),
+    webFetchRequests: z.number().int().nonnegative().optional(),
+    hostedCodeExecution: z
+      .object({
+        provider: z.string().min(1),
+        requests: z.number().nonnegative(),
+        containerIds: z.array(z.string().min(1)),
+        elapsedMs: z.number().nonnegative(),
+      })
+      .strict()
+      .optional(),
+    toolSpendMicrousd: z.number().nonnegative().optional(),
     providerCostDollars: z.number().finite().nonnegative().optional(),
     providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
   })

@@ -17,6 +17,7 @@ import {
 import {
   PROVIDER_DISPLAY,
   canUseBillingPlanCapability,
+  formatCredits,
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
@@ -1888,6 +1889,20 @@ export class ChatStateManager {
     }
   }
 
+  private async _reportBilledTurn(requestIds: readonly string[]): Promise<void> {
+    const settled = await getTokenCounter().settleBillingRequests(this._secrets, requestIds);
+    const billed = settled.filter((credits): credits is number => credits !== null);
+    if (billed.length === 0) return;
+    const total = billed.reduce((sum, credits) => sum + credits, 0);
+    const open = settled.length - billed.length;
+    vscode.window.setStatusBarMessage(
+      open === 0
+        ? `AGI Workforce: this turn was billed ${formatCredits(total, { maximumFractionDigits: 2 })}`
+        : `AGI Workforce: this turn was billed ${formatCredits(total, { maximumFractionDigits: 2 })} so far, ${open} ${open === 1 ? 'request' : 'requests'} not settled yet`,
+      10_000,
+    );
+  }
+
   private _expirePendingApprovals(turnId: string): void {
     for (const [requestId, pending] of [...this._pendingApprovals]) {
       if (pending.turnId !== turnId) continue;
@@ -2941,6 +2956,9 @@ export class ChatStateManager {
         },
       });
       getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
+      if (event.managedRequestIds !== undefined && event.managedRequestIds.length > 0) {
+        void this._reportBilledTurn(event.managedRequestIds);
+      }
       this._conversationTreeProvider?.refresh();
       complete();
       return;
