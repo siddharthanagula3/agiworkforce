@@ -6,6 +6,7 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FeatureGrid } from '@/features/marketing/components/LandingSections';
 import { DevBand, FinalCta, TrustTriptych } from '@/features/marketing/components/SurfaceSections';
 import { MARKETING, SURFACE_STATUS } from '../../lib/marketing-constants';
+import { CliInstallCommand } from './CliInstallCommand';
 
 export const metadata = buildMetadata({
   title: 'AGI CLI: the agi agent in your terminal',
@@ -205,6 +206,7 @@ export default function CliPage() {
             release&rsquo;s signature and checksum before it installs anything, and the download
             page shows which platforms a signed release covers.
           </p>
+          <CliInstallCommand />
           <div className="agi-fl-cta-row">
             <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--secondary">
               Check availability
