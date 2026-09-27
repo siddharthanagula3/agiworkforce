@@ -193,10 +193,10 @@ Code: `apps/extension/src/side_panel.ts:9843-9867`, `apps/extension/src/side_pan
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
+| web | partial | Same as S55.20: detail offers Connect on an expired connection; browser verification against a real expired grant is still owed. | states |
 | desktop | partial | Settings marks an expired connector "Needs to be reconnected" but offers only Disconnect (which deletes its saved tool permissions); Reconnect exists only as the in-chat card after a tool call fails. | ui |
 
-Code: `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`, `packages/ui/unified-chat/src/components/ConnectorConnectCard.tsx:15-25`
+Code: `packages/ui/ui/src/settings-modal/SettingsModal.tsx:281-281`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:513-518`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:295-298`, `apps/web/features/chat/components/messages/ToolTimeline.tsx:466-470`
 
 ## S10.20: Select among connected accounts.
 
