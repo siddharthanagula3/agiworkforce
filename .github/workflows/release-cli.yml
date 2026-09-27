@@ -324,20 +324,32 @@ jobs:
             echo "ERROR: the AGI_CLI_RELEASE_SIGNING_KEY secret is required to sign a CLI release" >&2
             exit 1
           fi
+          pinned="$RUNNER_TEMP/pinned-keys"
+          mkdir -p "$pinned"
           sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            > "$RUNNER_TEMP/release-signing.pub"
-          if [ ! -s "$RUNNER_TEMP/release-signing.pub" ]; then
-            echo "ERROR: apps/web/public/install.sh carries no RELEASE_SIGNING_KEY, so no installer could verify this release" >&2
+            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+
+          ( umask 077 && printf '%s\n' "$AGI_CLI_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.key" )
+          openssl ec -in "$RUNNER_TEMP/release-signing.key" -pubout -outform DER -out "$RUNNER_TEMP/signing.der" 2>/dev/null
+          signing_key_is_pinned=false
+          for key in "$pinned"/*.pem; do
+            [ -e "$key" ] || continue
+            if openssl pkey -pubin -in "$key" -outform DER | cmp -s - "$RUNNER_TEMP/signing.der"; then
+              signing_key_is_pinned=true
+            fi
+          done
+          if [ "$signing_key_is_pinned" != true ]; then
+            rm -f "$RUNNER_TEMP/release-signing.key"
+            echo "ERROR: the AGI_CLI_RELEASE_SIGNING_KEY public key is not pinned in RELEASE_SIGNING_KEY in apps/web/public/install.sh, so neither the installer nor agi update could verify this release" >&2
             exit 1
           fi
 
           cd archives
           sha256sum agiworkforce-* > SHA256SUMS
-
-          ( umask 077 && printf '%s\n' "$AGI_CLI_RELEASE_SIGNING_KEY" > "$RUNNER_TEMP/release-signing.key" )
           openssl dgst -sha256 -sign "$RUNNER_TEMP/release-signing.key" -out SHA256SUMS.sig SHA256SUMS
           rm -f "$RUNNER_TEMP/release-signing.key"
-          openssl dgst -sha256 -verify "$RUNNER_TEMP/release-signing.pub" -signature SHA256SUMS.sig SHA256SUMS
+          openssl dgst -sha256 -verify <(openssl pkey -pubin -inform DER -in "$RUNNER_TEMP/signing.der") \
+            -signature SHA256SUMS.sig SHA256SUMS
 
           cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
           cosign verify-blob \
@@ -384,10 +396,21 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          pinned="$RUNNER_TEMP/pinned-keys"
+          mkdir -p "$pinned"
           sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
-            > "$RUNNER_TEMP/release-signing.pub"
-          openssl dgst -sha256 -verify "$RUNNER_TEMP/release-signing.pub" \
-            -signature archives/SHA256SUMS.sig archives/SHA256SUMS
+            | awk -v dir="$pinned" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+          verified=false
+          for key in "$pinned"/*.pem; do
+            [ -e "$key" ] || continue
+            if openssl dgst -sha256 -verify "$key" -signature archives/SHA256SUMS.sig archives/SHA256SUMS; then
+              verified=true
+            fi
+          done
+          if [ "$verified" != true ]; then
+            echo "ERROR: SHA256SUMS.sig verifies against no key pinned in apps/web/public/install.sh" >&2
+            exit 1
+          fi
           cosign verify-blob \
             --bundle archives/SHA256SUMS.sigstore.json \
             --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/${RELEASE_TAG}" \

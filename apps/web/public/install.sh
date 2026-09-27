@@ -129,10 +129,19 @@ verify_manifest() {
   command -v openssl >/dev/null 2>&1 \
     || fail "openssl is required to verify the release signature. Install it, then run the installer again."
 
-  local key_file="${WORK_DIR}/release-signing-key.pem"
-  printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key_file"
-  openssl dgst -sha256 -verify "$key_file" -signature "$signature" "$manifest" >/dev/null 2>&1 \
-    || fail "Release signature verification failed; refusing to install."
+  local keys_dir="${WORK_DIR}/release-keys"
+  mkdir -p "$keys_dir"
+  printf '%s\n' "$RELEASE_SIGNING_KEY" \
+    | awk -v dir="$keys_dir" '/-----BEGIN PUBLIC KEY-----/ { n++ } n { print > (dir "/" n ".pem") }'
+  local key verified=false
+  for key in "$keys_dir"/*.pem; do
+    [ -e "$key" ] || continue
+    if openssl dgst -sha256 -verify "$key" -signature "$signature" "$manifest" >/dev/null 2>&1; then
+      verified=true
+      break
+    fi
+  done
+  [ "$verified" = true ] || fail "Release signature verification failed; refusing to install."
 
   if command -v cosign >/dev/null 2>&1; then
     local bundle="${WORK_DIR}/SHA256SUMS.sigstore.json"
