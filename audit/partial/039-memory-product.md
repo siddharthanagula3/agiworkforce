@@ -23,30 +23,25 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3931`, `apps/cli/src/agent/mod.rs:1660-1
 
 - Done when: A control separate from the Memory switch decides whether the assistant may look up excerpts from other past chats.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | 'Search and reference chats' writes the account's master memory flag (capabilities.memory), not searchPastChats, so turning it off also turns web Memory off and it never enables server past-chat recall. | states |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/memory/components/MemoryControlsCard.tsx:53-64`, `apps/mobile/services/cloudSettingsMapping.ts:133-139`
 
 ## S39.04: Saved-Memory list.
 
 - Done when: The user can open a list of every memory the assistant has saved about them.
 - Wave: 3
-- Already works on: mobile, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The list and its count show at most the first 100 account memories (store fetch ?limit=100, route max 100) with no paging, so larger memories are invisible and uncounted. | states |
-| desktop | partial | The list and its count show at most the first 100 account memories (store fetch ?limit=100, route max 100) with no paging, so larger memories are invisible and uncounted. | states |
 | chrome | partial | The drawer lists only the first 100 account memories (GET /api/memory?limit=100) with no paging or count. | states |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:242-260`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:113-122`, `apps/web/app/api/memory/route.ts:29-57`
+Code: `apps/extension/src/side_panel.ts:7870-7915`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-110`, `apps/extension/src/background.ts:3842-3851`
 
 ## S39.05: Memory search.
 
@@ -66,17 +61,16 @@ Code: `apps/extension-vscode/src/features/surfaces/index.ts:333-341`
 
 - Done when: Saved memories are grouped by topic (e.g. preferences, work, background) when the user reviews them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Group the Memory list by the category the server already stores and returns; the list is one flat, pinned-first column. | ui |
-| desktop | partial | Group the Memory list by the category the server already stores and returns; the list is one flat, pinned-first column. | ui |
 | mobile | partial | Group memories by topic; the Memory summary groups only by origin (pinned, learned from chats, added by you) and the list filters only All/Pinned. | ui |
 | cli | partial | Show topic-grouped memory: consolidation groups learned facts by topic only inside ~/.agiworkforce/memories/raw_memories.md (Managed mode), no command displays it, and agi memory list is flat. | ui |
 | vscode | partial | Group facts by category; the category appears only in each fact's hover tooltip. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:242-260`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `apps/web/app/api/memory/route.ts:63-78`, `apps/mobile/app/(app)/settings/memory-summary.tsx:92-120`
+Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:92-120`, `apps/mobile/src/features/memory/services/consolidation.ts:54-70`, `apps/cli/src/memory_pipeline.rs:350-358`, `apps/cli/src/lib.rs:2058-2076`
 
 ## S39.07: Profile summary.
 
@@ -114,15 +108,13 @@ Code: `apps/web/features/settings/sections/ReflectSection.tsx:180-196`, `apps/we
 
 - Done when: The user can type a new fact and save it to their memory, where later chats can use it.
 - Wave: 3
-- Already works on: mobile, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | states |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Adding calls POST /api/memory, whose writer inserts columns that exist only in pending migration 0285; at the applied schema every add fails and the fact stays only in this browser while still listed as saved. | states |
 | vscode | partial | Saving works (account sync push), but the prompt says the fact is 'Stored locally' when it is saved to the account, and it refuses unless a workspace folder is open although memory is account-wide. | states |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:174-204`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:176-207`, `apps/web/app/api/memory/route.ts:140-159`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1902`, `apps/extension-vscode/src/core/commandSetup.ts:1866-1870`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:135-145`
 
 ## S39.11: Explicit “remember this” action.
 
@@ -156,45 +148,29 @@ Code: `apps/cli/src/app_server/developer_host.rs:1676-1685`
 
 - Done when: The user can change the text of a saved memory and the corrected text is what later chats use.
 - Wave: 3
-- Already works on: mobile, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Edits are fire-and-forget: a refused or failed save (e.g. a never-remember term) still shows the new text with no error until the next reload restores the old one. | states |
-| desktop | partial | Edits are fire-and-forget: a refused or failed save (e.g. a never-remember term) still shows the new text with no error until the next reload restores the old one. | states |
 | cli | partial | Add an edit command for account memories (agi memory has list/add/forget only); /memory edit opens a CLAUDE.md file in $EDITOR and only in the --no-tui REPL, the TUI refuses. | ui |
 | vscode | partial | Editing updates the account memory, but the prompt calls it a 'locally stored fact', and it refuses unless a workspace folder is open. | states |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:251-277`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:210-222`, `apps/web/app/api/memory/[id]/route.ts:96-145`
-
-## S39.14: Delete individual Memory.
-
-- Done when: The user can delete one saved memory so the assistant stops using it.
-- Wave: 3
-- Already works on: mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | A failed delete is silent: the row disappears from the list while the server keeps the memory and keeps using it, until the next reload shows it again. | states |
-| desktop | partial | A failed delete is silent: the row disappears from the list while the server keeps the memory and keeps using it, until the next reload shows it again. | states |
-
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:336-352`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:235-243`, `apps/web/app/api/memory/[id]/route.ts:148-172`
+Code: `apps/cli/src/repl/registry.rs:1507-1527`, `apps/extension-vscode/src/core/commandSetup.ts:1904-1933`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:147-160`
 
 ## S39.15: Delete all Memory.
 
 - Done when: One action deletes every saved memory, after a confirmation, and afterwards none remain.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | 'Clear all memories' deletes only the at most 100 memories loaded into the page, one request each with failures ignored; there is no server-side delete-all. | states |
-| desktop | partial | 'Clear all memories' deletes only the at most 100 memories loaded into the page, one request each with failures ignored; there is no server-side delete-all. | states |
 | mobile | partial | Add a memory-only delete-all; the only bulk option wipes every conversation, setting and model on the device, and Cloud memories cannot be bulk-deleted. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | 'Forget everything' deletes only the facts cached at the last refresh (it does not re-pull first) and stale versions come back as refusals; there is no server-side delete-all. | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/MemorySection.tsx:85-94`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:245-253`, `apps/mobile/app/(app)/settings/storage.tsx:172-196`
+Code: `apps/mobile/app/(app)/settings/storage.tsx:172-196`, `apps/extension-vscode/src/core/commandSetup.ts:1815-1845`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:176-188`
 
 ## S39.16: Prioritize Memory.
 
@@ -214,17 +190,16 @@ Code: `apps/cli/src/lib.rs:2069-2074`
 
 - Done when: Each saved memory shows where it came from (typed by the user, imported, or learned from a named conversation).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show where each memory came from (typed, imported or learned, and from which chat); the list shows only dates although the API returns a source label, and the chat link needs pending migration 0285. | ui |
 | mobile | partial | Name the chat a memory came from; the summary only sorts on-device facts into 'Learned from chats' or 'Added by you', and in Cloud mode every memory is filed as 'Added by you'. | ui, states |
 | cli | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Show which chat a memory came from; agi memory list prints only the writer label (web, mobile, auto...), and the chat link needs pending migration 0285. | ui |
 | vscode | partial | Show where each memory came from; the Memory tree tooltip shows only category and dates although the sync feed returns a source label. | ui |
 | chrome | partial | Show where each memory came from; drawer rows show only text and a relative time although GET /api/memory returns a source label. | ui |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:303-313`, `apps/web/app/api/memory/route.ts:62-68`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`, `apps/mobile/src/features/memory/services/consolidation.ts:62-69`
+Code: `apps/mobile/src/features/memory/services/consolidation.ts:62-69`, `apps/mobile/src/features/memory/services/consolidation.ts:86-93`, `apps/mobile/src/features/memory/store.ts:85-94`, `apps/cli/src/lib.rs:2070-2074`
 
 ## S39.18: Last-updated information.
 
@@ -319,17 +294,13 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 
 - Done when: Memories can be confined to one project, are used only in that project, and the user can tell which memories are project-only.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Project memories are only created by automatic learning inside a project chat, whose writer needs pending migration 0285; there is no way to add a memory to a project by hand. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:255-264`, `packages/ui/unified-chat/src/components/MemoryEditor.tsx:295-302`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1198-1210`, `apps/web/lib/services/managed-auto-memory-service.ts:101-116`
 
 ## S39.26: Organization knowledge distinct from personal Memory.
 
@@ -394,17 +365,16 @@ Code: `packages/ai/agent-core/src/memory.ts:78-104`, `apps/mobile/src/features/m
 
 - Done when: The user can reset all memory without deleting chats, and deleting chats does not silently wipe (or silently keep) memory.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Resetting memory leaves chats alone and deleting chats leaves memory alone, but the reset removes only the first 100 memories (ignoring failures) and the delete-chats dialog never says learned memories stay. | handler, states |
-| desktop | partial | Resetting memory leaves chats alone and deleting chats leaves memory alone, but the reset removes only the first 100 memories (ignoring failures) and the delete-chats dialog never says learned memories stay. | handler, states |
 | mobile | partial | Add a memory-only reset; deleting a chat keeps its memories, but the only bulk reset also wipes every chat, setting and model on the device. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | 'Forget everything' clears memory without touching chats, but it deletes only the facts cached at the last refresh, with no server-side reset. | handler |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/MemorySection.tsx:85-94`, `apps/web/features/settings/components/WebSettingsModal.tsx:206-206`, `packages/ui/unified-chat/src/stores/memoryStore.ts:245-253`, `apps/web/features/settings/sections/PrivacySection.tsx:321-326`
+Code: `apps/mobile/storage/conversations.ts:114-120`, `apps/mobile/app/(app)/settings/storage.tsx:172-196`, `apps/extension-vscode/src/core/commandSetup.ts:1815-1845`, `apps/extension-vscode/src/memory/accountMemoryStore.ts:176-188`
 
 ## S39.31: Cross-model personalization.
 
@@ -416,7 +386,7 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:85-94`, `apps/web/f
 | --- | --- | --- | --- |
 | web | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 | desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
-| mobile | partial | Local mode feeds on-device memory to on-device models while Cloud mode uses account memory, so what a model knows about the user depends on the mode, not one shared memory. | handler |
+| mobile | partial | Local mode feeds on-device memory to on-device models and Cloud mode uses account memory. One shared memory would move Local data to the cloud, which the trust boundary in AGENTS.md section 6 forbids, so this needs an owner decision (for example, Cloud memory readable in Local mode, never the reverse). | handler |
 
 Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1376`
 
@@ -424,13 +394,11 @@ Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/
 
 - Done when: A memory saved on one client appears and is used on every other client signed in to the same account.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | states |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Memories from other clients show here (first 100 only), but memories added on web go through a writer that needs pending migration 0285, so they never reach other clients at the applied schema. | states |
-| mobile | partial | Account memory syncs only in Cloud mode; the default Local mode keeps a separate on-device memory that no other client sees. | states |
+| mobile | partial | Account memory syncs in Cloud mode; Local mode keeps a separate on-device memory. Syncing Local memory would move Local data to the cloud, which AGENTS.md section 6 forbids, so continuity across the two modes needs an owner decision. | states |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Reads, edits and deletes reach the account, but adds from the drawer go through POST /api/memory, whose writer needs pending migration 0285, and the drawer lists only the first 100. | states |
 
-Code: `packages/ui/unified-chat/src/components/MemoryEditor.tsx:242-260`, `apps/web/app/api/memory/route.ts:42-56`, `apps/web/app/api/memory/route.ts:140-149`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
+Code: `apps/mobile/src/features/chat/store/appModeStore.ts:15-15`, `apps/mobile/services/cloudSyncEngine.ts:525-536`, `apps/mobile/src/features/memory/store.ts:85-94`, `apps/extension/src/features/cloud-bridge/memoryClient.ts:99-118`
