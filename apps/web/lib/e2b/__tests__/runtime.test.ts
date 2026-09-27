@@ -38,8 +38,9 @@ const reserveSandboxComputeInterval = vi.fn(async (_input: unknown) => ({
   reservation: COMPUTE_RESERVATION,
 }));
 const releaseSandboxComputeReservation = vi.fn(async (_input: unknown) => {});
+const markSandboxComputeStarted = vi.fn(async (_input: unknown) => {});
 vi.mock('../compute-metering', () => ({
-  E2B_COMPUTE_RATE_ENV: 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND',
+  markSandboxComputeStarted: (input: unknown) => markSandboxComputeStarted(input),
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
   sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
   getSandboxComputeMicrousdPerSecond: (shape?: unknown) =>
@@ -1600,5 +1601,38 @@ describe('getE2BExecutor, one hold per admitted sandbox lifetime', () => {
 
     expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(2);
     expect(create).toHaveBeenCalledTimes(2);
+  });
+
+  it('marks the hold started once, when the sandbox it admitted is handed back', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-started', 'user-started');
+
+    await expect(getE2BExecutor(conversation)).resolves.not.toBeNull();
+    await getE2BExecutor(conversation);
+
+    expect(markSandboxComputeStarted).toHaveBeenCalledTimes(1);
+    expect(markSandboxComputeStarted).toHaveBeenCalledWith({
+      userId: 'user-started',
+      reservation: COMPUTE_RESERVATION,
+    });
+  });
+
+  it('refuses the executor, pauses the sandbox and releases its hold when the start cannot be recorded', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const conversation = scope('conv-unrecorded', 'user-unrecorded');
+    const causes: string[] = [];
+    markSandboxComputeStarted.mockRejectedValueOnce(new Error('ledger down'));
+
+    await expect(getE2BExecutor(conversation, (cause) => causes.push(cause))).resolves.toBeNull();
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(staticPause).toHaveBeenCalledWith('sbx-' + sandboxCounter);
+    expect(releaseSandboxComputeReservation).toHaveBeenCalledWith({
+      userId: 'user-unrecorded',
+      reservation: COMPUTE_RESERVATION,
+      reason: 'sandbox_start_unrecorded',
+    });
+    expect(causes).toEqual(['provider-error']);
+    expect(sessions.has(scopeKey(conversation))).toBe(false);
   });
 });
