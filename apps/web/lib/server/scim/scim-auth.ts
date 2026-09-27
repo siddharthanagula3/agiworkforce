@@ -10,10 +10,7 @@ import type { BillingPlanTier } from '@agiworkforce/types';
 import { isTenantLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
-import {
-  resolveOrganizationEntitlementPlan,
-  resolveUserPersonalPlanTier,
-} from '@/lib/services/org-entitlements';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import type { DirectorySyncConnectionRow, OrganizationMemberRow } from '@/lib/server/neon-types';
 import { ScimError } from './scim-protocol';
 import { recordSyncEvent, type ScimConnectionContext } from './scim-provisioning-service';
@@ -111,7 +108,7 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
     );
   }
 
-  const plan = await failClosed(resolveOrganizationEntitlementPlan(verified.organizationId));
+  const plan = await resolveEntitlementPlan(verified.organizationId);
 
   if (!canUseBillingPlanCapability(plan, 'enterprise_controls')) {
     await recordSyncEvent(db, ctx, {
@@ -134,20 +131,13 @@ export async function authenticateScimRequest(request: Request): Promise<ScimReq
   };
 }
 
-async function failClosed(plan: Promise<BillingPlanTier>): Promise<BillingPlanTier> {
+async function resolveEntitlementPlan(organizationId: string): Promise<BillingPlanTier> {
   try {
-    return await plan;
+    return await resolveOrganizationEntitlementPlan(organizationId);
   } catch (error) {
     logger.error({ error }, 'Failed to resolve SCIM entitlement plan; failing closed');
     return normalizeBillingPlanTier(undefined);
   }
-}
-
-export async function resolveEntitlementPlan(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<BillingPlanTier> {
-  return failClosed(resolveUserPersonalPlanTier(db, userId));
 }
 
 export function scimBaseUrl(request: Request): string {
