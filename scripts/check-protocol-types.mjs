@@ -174,17 +174,226 @@ export function checkProtocolTypes(root = repoRoot) {
   return { problems, checked: canonical.size };
 }
 
+export const CLI_USAGE_SUMMARY = path.join('apps', 'cli', 'src', 'usage_summary.rs');
+export const CLI_COST_LEDGER = path.join('apps', 'cli', 'src', 'cost_ledger.rs');
+export const CLI_TIER_CACHE = path.join('apps', 'cli', 'src', 'tier_cache.rs');
+export const MANAGED_USAGE_BALANCE = path.join(
+  'packages',
+  'contracts',
+  'types',
+  'src',
+  'managed-usage-balance.ts',
+);
+export const CREDITS_CONTRACT = path.join('packages', 'contracts', 'types', 'src', 'credits.ts');
+export const SUBSCRIPTION_ENTITLEMENT = path.join(
+  'packages',
+  'contracts',
+  'types',
+  'src',
+  'subscription-entitlement.ts',
+);
+export const BILLING_CATALOG = path.join(
+  'packages',
+  'contracts',
+  'types',
+  'src',
+  'billing-catalog.ts',
+);
+export const USAGE_HISTORY_OWNER = path.join(
+  'apps',
+  'web',
+  'lib',
+  'services',
+  'account-usage-history-service.ts',
+);
+export const USAGE_AGGREGATION_OWNER = path.join(
+  'apps',
+  'web',
+  'lib',
+  'services',
+  'usage-aggregation.ts',
+);
+
+export const CLI_USAGE_MIRRORS = [
+  { rust: 'AccountUsage', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageSummaryResponse' },
+  { rust: 'UsageCreditWindow', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageCreditWindow' },
+  { rust: 'PurchasedCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsagePurchasedCredits' },
+  { rust: 'UsageCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageCredits' },
+  { rust: 'UsageHistory', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageHistory' },
+  { rust: 'UsageHistoryTotals', owner: USAGE_AGGREGATION_OWNER, type: 'UsageTotals' },
+  { rust: 'UsageHistoryDay', owner: USAGE_AGGREGATION_OWNER, type: 'UsageDayRow' },
+  { rust: 'UsageHistoryBreakdown', owner: USAGE_AGGREGATION_OWNER, type: 'UsageBreakdownRow' },
+  { rust: 'UsageHistoryFreshness', owner: USAGE_AGGREGATION_OWNER, type: 'UsageFreshness' },
+];
+
+const CLI_LOCAL_MODE_TIERS = new Set(['byok']);
+
+function stripComments(source) {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+}
+
+function camelCase(name) {
+  return name.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+export function rustStructFields(source, structName) {
+  const pattern = new RegExp(
+    `((?:#\\[[^\\]]*\\]\\s*)*)pub struct ${structName} \\{([\\s\\S]*?)\\n\\}`,
+  );
+  const match = source.match(pattern);
+  if (!match) return null;
+  const renamesToCamel = /rename_all\s*=\s*"camelCase"/.test(match[1]);
+  const fields = [...stripComments(match[2]).matchAll(/^\s*pub (\w+):/gm)].map((field) => field[1]);
+  return renamesToCamel ? fields.map(camelCase) : fields;
+}
+
+export function tsInterfaceFields(source, interfaceName) {
+  const pattern = new RegExp(`export interface ${interfaceName} \\{([\\s\\S]*?)\\n\\}`);
+  const body = source.match(pattern)?.[1];
+  if (body === undefined) return null;
+  return [...stripComments(body).matchAll(/^\s*(\w+)\??:/gm)].map((field) => field[1]);
+}
+
+function readNumber(literal) {
+  const value = Number(literal.replace(/_/g, ''));
+  return Number.isFinite(value) ? value : null;
+}
+
+export function tsConstNumber(source, name) {
+  const literal = source.match(new RegExp(`export const ${name} = ([\\d_.]+);`))?.[1];
+  return literal === undefined ? null : readNumber(literal);
+}
+
+export function rustConstNumber(source, name) {
+  const literal = source.match(new RegExp(`const ${name}: \\w+ = ([\\d_.]+);`))?.[1];
+  return literal === undefined ? null : readNumber(literal);
+}
+
+export function tsConstStrings(source, name) {
+  const body = source.match(new RegExp(`export const ${name} = \\[([^\\]]*)\\]`))?.[1];
+  return body === undefined ? null : [...body.matchAll(/'([^']+)'/g)].map((match) => match[1]);
+}
+
+export function rustConstStrings(source, name) {
+  const body = source.match(new RegExp(`const ${name}: \\[&str; \\d+\\] = \\[([^\\]]*)\\]`))?.[1];
+  return body === undefined ? null : [...body.matchAll(/"([^"]+)"/g)].map((match) => match[1]);
+}
+
+function rustMatchArms(source, functionName) {
+  const body = source.match(
+    new RegExp(`fn ${functionName}\\([^)]*\\)[^{]*\\{([\\s\\S]*?)\\n\\s{0,4}\\}`),
+  )?.[1];
+  if (body === undefined) return null;
+  return new Map(
+    [...body.matchAll(/UserTier::(\w+) => "([^"]+)"/g)].map((match) => [match[1], match[2]]),
+  );
+}
+
+export function rustTierLabels(source) {
+  const labels = rustMatchArms(source, 'label');
+  const ids = rustMatchArms(source, 'tier_to_str');
+  if (labels === null || ids === null || labels.size === 0 || ids.size === 0) return null;
+  const byTier = new Map();
+  for (const [variant, id] of ids) {
+    if (labels.has(variant)) byTier.set(id, labels.get(variant));
+  }
+  return byTier;
+}
+
+export function tsPlanLabels(source) {
+  const labels = new Map(
+    [...source.matchAll(/id: '([\w-]+)',\s*label: '([^']+)'/g)].map((match) => [
+      match[1],
+      match[2],
+    ]),
+  );
+  return labels.size === 0 ? null : labels;
+}
+
+function compareMirrorFields(label, owned, mirrored) {
+  if (owned === null) return [`${label}: the owning TypeScript shape could not be read`];
+  if (mirrored === null) return [`${label}: the CLI mirror could not be read`];
+  const ownedSet = new Set(owned);
+  return mirrored
+    .filter((field) => !ownedSet.has(field))
+    .map((field) => `${label}: the CLI reads ${field}, which the owner no longer declares`);
+}
+
+export function checkCliUsageMirror(root = repoRoot) {
+  const read = (relative) => {
+    const absolute = path.join(root, relative);
+    return fs.existsSync(absolute) ? fs.readFileSync(absolute, 'utf8') : null;
+  };
+  const problems = [];
+  const usageSummary = read(CLI_USAGE_SUMMARY) ?? '';
+
+  for (const mirror of CLI_USAGE_MIRRORS) {
+    problems.push(
+      ...compareMirrorFields(
+        `${mirror.rust} (${mirror.type})`,
+        tsInterfaceFields(read(mirror.owner) ?? '', mirror.type),
+        rustStructFields(usageSummary, mirror.rust),
+      ),
+    );
+  }
+
+  const ownedCredit = tsConstNumber(read(CREDITS_CONTRACT) ?? '', 'MICROUSD_PER_CREDIT');
+  const mirroredCredit = rustConstNumber(read(CLI_COST_LEDGER) ?? '', 'MICROUSD_PER_CREDIT');
+  if (ownedCredit === null || mirroredCredit === null) {
+    problems.push('MICROUSD_PER_CREDIT: the credit value could not be read on both sides');
+  } else if (ownedCredit !== mirroredCredit) {
+    problems.push(
+      `MICROUSD_PER_CREDIT: the CLI prices a credit at ${mirroredCredit} microUSD, the contract at ${ownedCredit}`,
+    );
+  }
+
+  const ownedStatuses = tsConstStrings(
+    read(SUBSCRIPTION_ENTITLEMENT) ?? '',
+    'ENTITLED_SUBSCRIPTION_STATUSES',
+  );
+  const mirroredStatuses = rustConstStrings(usageSummary, 'ENTITLED_SUBSCRIPTION_STATUSES');
+  if (ownedStatuses === null || mirroredStatuses === null) {
+    problems.push('ENTITLED_SUBSCRIPTION_STATUSES: the list could not be read on both sides');
+  } else if (
+    ownedStatuses.length !== mirroredStatuses.length ||
+    !ownedStatuses.every((status) => mirroredStatuses.includes(status))
+  ) {
+    problems.push(
+      `ENTITLED_SUBSCRIPTION_STATUSES: the CLI lists ${mirroredStatuses.join(', ')}, the contract ${ownedStatuses.join(', ')}`,
+    );
+  }
+
+  const ownedLabels = tsPlanLabels(read(BILLING_CATALOG) ?? '');
+  const mirroredLabels = rustTierLabels(read(CLI_TIER_CACHE) ?? '');
+  if (ownedLabels === null || mirroredLabels === null) {
+    problems.push('Plan labels: the catalog or the CLI tier labels could not be read');
+  } else {
+    for (const [tier, label] of mirroredLabels) {
+      if (CLI_LOCAL_MODE_TIERS.has(tier)) continue;
+      const owned = ownedLabels.get(tier);
+      if (owned === undefined) {
+        problems.push(`Plan labels: the CLI labels ${tier}, which the catalog does not sell`);
+      } else if (owned !== label) {
+        problems.push(`Plan labels: the CLI calls ${tier} "${label}", the catalog "${owned}"`);
+      }
+    }
+  }
+
+  return { problems, checked: CLI_USAGE_MIRRORS.length };
+}
+
 function main() {
   const { problems, checked } = checkProtocolTypes();
-  if (problems.length > 0) {
+  const cli = checkCliUsageMirror();
+  if (problems.length > 0 || cli.problems.length > 0) {
     console.error('Protocol types have diverged across languages:');
-    for (const problem of problems) console.error(`- ${problem}`);
+    for (const problem of [...problems, ...cli.problems]) console.error(`- ${problem}`);
     console.error('\nRegenerate with `pnpm generate:protocol-types`, then reconcile the mirrors.');
     return 1;
   }
   console.log(
     `Protocol type parity check passed (${checked} generated modules, crate mirror, ` +
-      'app-server capabilities, tool vocabularies).',
+      `app-server capabilities, tool vocabularies, ${cli.checked} CLI usage mirrors).`,
   );
   return 0;
 }
