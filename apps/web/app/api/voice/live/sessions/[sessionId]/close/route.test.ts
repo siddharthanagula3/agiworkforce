@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
   clientDelivered: vi.fn(),
   backendCost: vi.fn(),
+  priceBackend: vi.fn(() => ({ totalMicrousd: 0 })),
   userScopedDb: vi.fn(),
 }));
 
@@ -29,6 +30,7 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/voice/live-voice-backend-cost', () => ({
   recordLiveVoiceBackendCost: (...args: unknown[]) => mocks.backendCost(...args),
+  priceLiveVoiceBackend: (...args: unknown[]) => mocks.priceBackend(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
@@ -40,11 +42,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 const { POST } = await import('./route');
-const {
-  LIVE_SESSION_CEILING_SECONDS,
-  liveSessionChargeMicrousd,
-  liveSessionProviderCostMicrousd,
-} = await import('@/lib/voice/live-voice-billing');
+const { LIVE_SESSION_CEILING_SECONDS, liveSessionChargeMicrousd, liveSessionProviderCostMicrousd } =
+  await import('@/lib/voice/live-voice-billing');
 
 const SESSION_ID = 'live_1';
 const LIVE_MODEL = getRoutingSlotModel('voice_live');
@@ -195,9 +194,7 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
 
   it('bills an extended session up to the blocks it reserved, never past them', async () => {
     const extendedMicrousd = charge(2 * LIVE_SESSION_CEILING_SECONDS);
-    const startedAt = new Date(
-      Date.now() - 3 * LIVE_SESSION_CEILING_SECONDS * 1_000,
-    ).toISOString();
+    const startedAt = new Date(Date.now() - 3 * LIVE_SESSION_CEILING_SECONDS * 1_000).toISOString();
     scopeWith(
       { started_at: startedAt, closed_at: null, status: 'active' },
       { reservedMicrousd: extendedMicrousd },
@@ -211,9 +208,7 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
   });
 
   it('settles against one block when the reservation cannot be read', async () => {
-    const startedAt = new Date(
-      Date.now() - 2 * LIVE_SESSION_CEILING_SECONDS * 1_000,
-    ).toISOString();
+    const startedAt = new Date(Date.now() - 2 * LIVE_SESSION_CEILING_SECONDS * 1_000).toISOString();
     scopeWith({ started_at: startedAt, closed_at: null, status: 'active' }, 'unreadable');
 
     const response = await close({ seconds: 0, settlement: SETTLEMENT });
@@ -245,16 +240,18 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     expect(body.billedSeconds).toBe(30);
   });
 
-  it('records the delegated backend spend separately from the session charge', async () => {
+  it('charges the delegated backend spend with the session and records its cost row', async () => {
     scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
     const backend = { inputTokens: 1_000, outputTokens: 200, webSearchCalls: 2 };
+    mocks.priceBackend.mockReturnValueOnce({ totalMicrousd: 32_000 });
 
     await close({ seconds: 30, settlement: SETTLEMENT, backend });
 
+    expect(mocks.priceBackend).toHaveBeenCalledWith(expect.objectContaining({ reported: backend }));
     expect(mocks.backendCost).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', sessionId: SESSION_ID, reported: backend }),
     );
-    expect(finalized()['actualCostMicrousd']).toBe(charge(30));
+    expect(finalized()['actualCostMicrousd']).toBe(charge(30) + 32_000);
   });
 
   it('refuses a close that carries no usage report at all', async () => {

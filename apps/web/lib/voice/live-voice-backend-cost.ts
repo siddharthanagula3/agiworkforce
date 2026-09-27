@@ -3,7 +3,8 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { LLMCostCalculator, normalizeProviderId } from '@/lib/services/llm-cost-calculator';
+import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 
 /**
  * `AGI-32`. A live voice session delegates to a backend responses model with
@@ -12,9 +13,9 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
  * rate reached the ledger, so every token the backend model spent, on every
  * voice session ever held, was invisible in `cogs_summary()`.
  *
- * This is a company-cost visibility gap and not a customer charge: the customer
- * pays the per-minute rate and nothing here adds to it, which is why every row
- * written here carries `customerCanonicalCents: 0`.
+ * The session's own settlement charges this spend to the customer at provider
+ * cost, inside the reservation it already holds, so the cost row written here
+ * carries `customerCanonicalCents: 0` and is never billed a second time.
  *
  * The counts are reported by the client that held the WebRTC session, so they
  * are untrusted input: they are clamped to sane bounds before being priced, and
@@ -50,13 +51,20 @@ export interface RecordLiveVoiceBackendCostInput {
   reported: LiveVoiceBackendUsage;
 }
 
-/**
- * Writes the backend model's spend as its own cost event, keyed on the session
- * so a retried close cannot double-count it.
- */
-export async function recordLiveVoiceBackendCost(
-  input: RecordLiveVoiceBackendCostInput,
-): Promise<void> {
+export interface LiveVoiceBackendCost {
+  model: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  cachedTokens: number;
+  searchCalls: number;
+  tokenCostMicrousd: number;
+  searchCostMicrousd: number;
+  totalMicrousd: number;
+}
+
+export function priceLiveVoiceBackend(
+  input: Pick<RecordLiveVoiceBackendCostInput, 'provider' | 'backendModel' | 'reported'>,
+): LiveVoiceBackendCost {
   const model = input.reported.model?.trim() || input.backendModel?.trim() || null;
   const promptTokens = clamp(input.reported.inputTokens, MAX_TOKENS_PER_SESSION);
   const completionTokens = clamp(input.reported.outputTokens, MAX_TOKENS_PER_SESSION);
@@ -65,60 +73,79 @@ export async function recordLiveVoiceBackendCost(
     promptTokens,
   );
   const searchCalls = clamp(input.reported.webSearchCalls, MAX_SEARCH_CALLS_PER_SESSION);
+  const tokenCostMicrousd =
+    model && (promptTokens > 0 || completionTokens > 0)
+      ? LLMCostCalculator.calculateCostMicrousd(input.provider, model, {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+        })
+      : 0;
+  const providerId = normalizeProviderId(input.provider);
+  const searchCostMicrousd =
+    searchCalls > 0 && providerId
+      ? searchCalls * nativeServerToolMicrousdPerRequest(providerId, 'web_search')
+      : 0;
+  return {
+    model,
+    promptTokens,
+    completionTokens,
+    cachedTokens,
+    searchCalls,
+    tokenCostMicrousd,
+    searchCostMicrousd,
+    totalMicrousd: tokenCostMicrousd + searchCostMicrousd,
+  };
+}
 
-  // The backend model's web_search is the PROVIDER's own tool, not the app's
-  // Perplexity fallback and not Google grounding, and the rate card publishes a
-  // price for neither of those two things here. Pricing these calls at another
-  // vendor's rate would put a false number in the ledger under a provider that
-  // never billed it, so the count is carried on the row and the money is left
-  // out until a rate exists. Counted and unpriced beats priced and wrong.
-  if (searchCalls > 0) {
+/**
+ * Writes the backend model's spend as its own cost event, keyed on the session
+ * so a retried close cannot double-count it.
+ */
+export async function recordLiveVoiceBackendCost(
+  input: RecordLiveVoiceBackendCostInput,
+): Promise<void> {
+  const cost = priceLiveVoiceBackend(input);
+  if (cost.searchCalls > 0 && cost.searchCostMicrousd === 0) {
     logger.info(
-      { sessionId: input.sessionId, provider: input.provider, searchCalls },
+      { sessionId: input.sessionId, provider: input.provider, searchCalls: cost.searchCalls },
       'Live voice backend web_search calls recorded without a published unit rate',
     );
   }
-
-  if (promptTokens === 0 && completionTokens === 0) return;
-  if (!model) {
+  if (cost.totalMicrousd === 0) return;
+  if (
+    !cost.model &&
+    cost.tokenCostMicrousd === 0 &&
+    (cost.promptTokens > 0 || cost.completionTokens > 0)
+  ) {
     logger.warn(
       { sessionId: input.sessionId, userId: input.userId },
-      'Live voice backend usage reported without a model; cost cannot be priced',
+      'Live voice backend usage reported without a model; token cost cannot be priced',
     );
-    return;
   }
-
-  const usage = { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
-  const costMicrousd = LLMCostCalculator.calculateCostMicrousd(input.provider, model, usage);
 
   try {
     await recordSettledProviderCost({
       userId: input.userId,
       organizationId: input.organizationId ?? null,
       provider: input.provider,
-      model,
-      actualCostCents: ledgerCentsFromMicrousd(costMicrousd),
-      providerEstimatedCostMicrousd: costMicrousd,
-      // Keyed on the session, so the retry of a close that already settled
-      // collides on `source_ref` and is discarded rather than counted twice.
+      model: cost.model,
+      actualCostCents: ledgerCentsFromMicrousd(cost.totalMicrousd),
+      providerEstimatedCostMicrousd: cost.totalMicrousd,
       sourceRef: `${LIVE_VOICE_BACKEND_COST_SOURCE}:${input.sessionId}`,
       taskOutcome: 'delivered',
       taskRef: `voice-live:${input.sessionId}`,
-      // No `feature`: that field names a rate-card unit price, and this is a
-      // token-priced chat call. `delegatedFrom` in the metadata is what marks
-      // the row as voice spend rather than an ordinary turn.
       surface: input.surface ?? null,
-      // The per-minute session rate is the whole customer charge. This row is
-      // COGS only, and a non-zero value here would bill the session twice.
       customerCanonicalCents: 0,
       usage: {
         operation: 'chat',
         sessionId: input.sessionId,
-        promptTokens,
-        completionTokens,
-        cachedTokens,
-        totalTokens: usage.totalTokens,
-        webSearchCalls: searchCalls,
+        promptTokens: cost.promptTokens,
+        completionTokens: cost.completionTokens,
+        cachedTokens: cost.cachedTokens,
+        totalTokens: cost.promptTokens + cost.completionTokens,
+        webSearchCalls: cost.searchCalls,
+        searchCostMicrousd: cost.searchCostMicrousd,
         delegatedFrom: 'voice_live',
       },
     });
