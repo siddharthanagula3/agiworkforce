@@ -44,9 +44,33 @@ describe('AGI Cloud account presentation', () => {
       subscriptionSource: 'stripe' as const,
     };
 
-    expect(describeAccountPlan(identity)).toMatch(/^Pro plan · ends /);
+    const endsOn = new Date(identity.currentPeriodEnd).toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    expect(describeAccountPlan(identity)).toBe(`Pro plan · ends ${endsOn}`);
     expect(buildAccountIdentityItems(true, identity)[2]).toMatchObject({
-      detail: 'Access remains active through the shown period end',
+      detail: `Access remains active through ${endsOn}, then the plan ends`,
+    });
+  });
+
+  it('keeps an active renewal on its billing owner instead of an end date', () => {
+    const identity = {
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      accountType: 'Personal account' as const,
+      planName: 'Max 20x',
+      tier: 'max_15x',
+      currentPeriodEnd: '2026-09-01T00:00:00.000Z',
+      cancelAtPeriodEnd: false,
+      subscriptionSource: 'stripe' as const,
+    };
+
+    expect(describeAccountPlan(identity)).toBe('Max 20x plan · Web billing');
+    expect(buildAccountIdentityItems(true, identity)[2]).toMatchObject({
+      detail: 'Plan owner and account boundary',
     });
   });
 

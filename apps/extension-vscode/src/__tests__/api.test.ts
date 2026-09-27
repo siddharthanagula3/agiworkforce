@@ -30,6 +30,7 @@ import {
   clearApiKey,
   AgiWorkforceClientUpdateRequiredError,
 } from '../utils/api';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
 
@@ -627,10 +628,23 @@ describe('AgiWorkforcePaywallError', () => {
     expect(err).toBeInstanceOf(AgiWorkforcePaywallError);
   });
 
-  it('generates a descriptive error message', () => {
+  it('names the required plan by its catalog label in the message', () => {
     const err = new AgiWorkforcePaywallError('image', 'pro', 'Image generation requires Pro');
-    expect(err.message).toContain('pro');
-    expect(err.message).toContain('image');
+    expect(err.message).toBe(
+      `Upgrade to ${BILLING_PLAN_PRICING.pro.label} required for image: Image generation requires Pro`,
+    );
+  });
+
+  it('labels the $200 plan from the catalog rather than its tier key', () => {
+    const err = new AgiWorkforcePaywallError('video', 'max_15x', 'Video generation needs more');
+    expect(BILLING_PLAN_PRICING.max_15x.label).toBe('Max 20x');
+    expect(err.message).toBe('Upgrade to Max 20x required for video: Video generation needs more');
+    expect(err.message).not.toContain('max_15x');
+  });
+
+  it('keeps an unknown tier readable instead of dropping it', () => {
+    const err = new AgiWorkforcePaywallError('chat', 'fixture-unknown-tier', 'Not included');
+    expect(err.message).toBe('Upgrade to fixture-unknown-tier required for chat: Not included');
   });
 
   it('is NOT an instance of AgiWorkforceApiError', () => {

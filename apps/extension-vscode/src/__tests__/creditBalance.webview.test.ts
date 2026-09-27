@@ -13,6 +13,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as vscode from 'vscode';
+import { MICROUSD_PER_CREDIT, creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { fetchTierInfo, parseTierInfoResponse } from '../utils/api';
 import { resolveUsageMeter } from '../data/usageMeter';
 import { buildUsageMeterPayload } from '../features/sidebar-webview/ChatStateManager';
@@ -44,6 +45,10 @@ const RAW_USAGE_SUMMARY = {
   credit_balance_cents: 1234,
   overage_enabled: true,
 };
+
+const PUBLISHED_BALANCE_LABEL = formatCredits(
+  creditsFromCents(RAW_USAGE_SUMMARY.credit_balance_cents),
+);
 
 async function payloadFromServerSummary(raw: unknown) {
   vi.mocked(fetchTierInfo).mockResolvedValue(parseTierInfoResponse(raw));
@@ -123,9 +128,11 @@ describe('credit balance in the VS Code meter', () => {
 
     expect(meter.creditBalanceCents).toBe(1234);
     expect(meter.overageEnabled).toBe(true);
+    expect(MICROUSD_PER_CREDIT).toBe(5_000);
+    expect(PUBLISHED_BALANCE_LABEL).toBe('2,468 credits');
     expect(payload.credits).toEqual({
       label: 'Credits',
-      balanceLabel: '617 credits',
+      balanceLabel: PUBLISHED_BALANCE_LABEL,
       spendabilityLabel: 'Spent when a limit stops you',
       topUpLabel: 'Add credits',
     });
@@ -140,7 +147,8 @@ describe('credit balance in the VS Code meter', () => {
     const row = creditRow();
     expect(row).not.toBeNull();
     expect(row?.textContent).toContain('Credits');
-    expect(row?.textContent).toContain('617 credits');
+    expect(row?.textContent).toContain(PUBLISHED_BALANCE_LABEL);
+    expect(row?.textContent).not.toContain('$');
     expect(row?.textContent).toContain('Add credits');
     expect(row?.textContent).toContain('Spent when a limit stops you');
     expect(document.getElementById('meterBuckets')?.style.display).toBe('block');
