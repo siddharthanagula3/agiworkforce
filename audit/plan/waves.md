@@ -17,12 +17,9 @@ ledger cells are updated.
 
 - [01-approval-uploads-skip-injection-guard.md](../blockers/01-approval-uploads-skip-injection-guard.md)
 - [02-approval-provider-native-fetch-and-code-skip-gate.md](../blockers/02-approval-provider-native-fetch-and-code-skip-gate.md)
-- [03-approval-live-voice-tools-skip-policy.md](../blockers/03-approval-live-voice-tools-skip-policy.md)
-- [04-approval-scheduled-runs-ignore-policy.md](../blockers/04-approval-scheduled-runs-ignore-policy.md)
 - [05-approval-deep-research-loop-ungated.md](../blockers/05-approval-deep-research-loop-ungated.md)
 - [06-approval-web-default-policy-autonomous.md](../blockers/06-approval-web-default-policy-autonomous.md)
 - [07-approval-cli-approval-mode-unused.md](../blockers/07-approval-cli-approval-mode-unused.md)
-- [09-routine-trigger-defects.md](../blockers/09-routine-trigger-defects.md)
 - [13-signed-in-home-page-crash.md](../blockers/13-signed-in-home-page-crash.md)
 - [14-desktop-and-vscode-need-unpublished-cli.md](../blockers/14-desktop-and-vscode-need-unpublished-cli.md)
 - [15-desktop-app-has-no-icon.md](../blockers/15-desktop-app-has-no-icon.md)
