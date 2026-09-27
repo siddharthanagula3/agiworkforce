@@ -94,7 +94,7 @@ Nothing left in this wave.
 | 68. Session continuity and remote-session product | 9 | [partial/068-session-continuity-and-remote-session-product.md](../partial/068-session-continuity-and-remote-session-product.md) |
 | 69. Web application | 1 | [partial/069-web-application.md](../partial/069-web-application.md) |
 | 71. Mobile application | 1 | [partial/071-mobile-application.md](../partial/071-mobile-application.md) |
-| 81. Free / Basic / Pro / Max 5x / Max 15x planning structure | 10 | [partial/081-free-basic-pro-max-5x-max-15x-planning-structure.md](../partial/081-free-basic-pro-max-5x-max-15x-planning-structure.md) |
+| 81. Free / Basic / Pro / Max 5x / Max 20x planning structure | 10 | [partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md](../partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md) |
 | 82. Usage dashboard and limit UI | 1 | [partial/082-usage-dashboard-and-limit-ui.md](../partial/082-usage-dashboard-and-limit-ui.md) |
 | 83. Billing and subscription screens | 14 | [partial/083-billing-and-subscription-screens.md](../partial/083-billing-and-subscription-screens.md) |
 | 88. Support, trust, and policy product | 2 | [partial/088-support-trust-and-policy-product.md](../partial/088-support-trust-and-policy-product.md) |
@@ -191,7 +191,7 @@ Nothing left in this wave.
 | 76. Model-capability registry | 19 | [partial/076-model-capability-registry.md](../partial/076-model-capability-registry.md) |
 | 78. UI gating and adaptation components | 23 | [partial/078-ui-gating-and-adaptation-components.md](../partial/078-ui-gating-and-adaptation-components.md) |
 | 79. Routing and model-neutral orchestration | 19 | [partial/079-routing-and-model-neutral-orchestration.md](../partial/079-routing-and-model-neutral-orchestration.md) |
-| 81. Free / Basic / Pro / Max 5x / Max 15x planning structure | 4 | [partial/081-free-basic-pro-max-5x-max-15x-planning-structure.md](../partial/081-free-basic-pro-max-5x-max-15x-planning-structure.md) |
+| 81. Free / Basic / Pro / Max 5x / Max 20x planning structure | 4 | [partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md](../partial/081-free-basic-pro-max-5x-max-20x-planning-structure.md) |
 | 82. Usage dashboard and limit UI | 21 | [partial/082-usage-dashboard-and-limit-ui.md](../partial/082-usage-dashboard-and-limit-ui.md) |
 | 83. Billing and subscription screens | 4 | [partial/083-billing-and-subscription-screens.md](../partial/083-billing-and-subscription-screens.md) |
 | 84. General and appearance settings | 14 | [partial/084-general-and-appearance-settings.md](../partial/084-general-and-appearance-settings.md) |
@@ -297,7 +297,7 @@ Nothing left in this wave.
 | 71. Mobile application | 4 | [missing/071-mobile-application.md](../missing/071-mobile-application.md) |
 | 74. Browser extension | 8 | [missing/074-browser-extension.md](../missing/074-browser-extension.md) |
 | 76. Model-capability registry | 7 | [missing/076-model-capability-registry.md](../missing/076-model-capability-registry.md) |
-| 81. Free / Basic / Pro / Max 5x / Max 15x planning structure | 1 | [missing/081-free-basic-pro-max-5x-max-15x-planning-structure.md](../missing/081-free-basic-pro-max-5x-max-15x-planning-structure.md) |
+| 81. Free / Basic / Pro / Max 5x / Max 20x planning structure | 1 | [missing/081-free-basic-pro-max-5x-max-20x-planning-structure.md](../missing/081-free-basic-pro-max-5x-max-20x-planning-structure.md) |
 | 82. Usage dashboard and limit UI | 2 | [missing/082-usage-dashboard-and-limit-ui.md](../missing/082-usage-dashboard-and-limit-ui.md) |
 | 83. Billing and subscription screens | 2 | [missing/083-billing-and-subscription-screens.md](../missing/083-billing-and-subscription-screens.md) |
 | 84. General and appearance settings | 7 | [missing/084-general-and-appearance-settings.md](../missing/084-general-and-appearance-settings.md) |
