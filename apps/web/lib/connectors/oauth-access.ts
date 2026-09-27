@@ -19,6 +19,7 @@ import {
 } from '@/lib/connectors/oauth-registry';
 import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
+import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordNotification } from '@/lib/services/notification-service';
 
@@ -113,7 +114,7 @@ export async function resolveConnectorAccessToken(
       grantedScopes: grant.grantedScopes,
     });
 
-    if (outcome.status === 'authorization-server-changed') {
+    if (outcome.status === 'authorization-server-changed' || outcome.status === 'rejected') {
       await dropUnusableGrant(userId, connectorId, provider);
       return { status: 'reauthorization-required', reason: 'refresh-failed' };
     }
@@ -147,6 +148,7 @@ export async function resolveConnectorAccessToken(
       refreshToken,
       tokenEndpoint: grant.tokenEndpoint,
       grantedScopes: grant.grantedScopes,
+      resource: grant.resourceUrl ?? canonicalResourceUri(provider.mcpUrl),
     });
     await updateConnectorOAuthGrantTokens(userId, connectorId, {
       accessToken: refreshed.accessToken,
