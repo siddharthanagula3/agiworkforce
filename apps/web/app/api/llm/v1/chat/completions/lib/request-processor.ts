@@ -1196,17 +1196,30 @@ export function composeManagedSystemPreamble(input: {
  * Exported so the Temporary Chat boundary and prompt-accounting behavior stay
  * covered without importing route or database globals into the test.
  */
+export function accountMemoryRequested(
+  surface: CloudChatSurface,
+  memoryEnabled: boolean | undefined,
+): boolean {
+  return surface === 'api' ? memoryEnabled === true : memoryEnabled !== false;
+}
+
 export async function enrichManagedMemoryContext(params: {
   db: ManagedMemoryContextDb;
   userId: string;
   chatRequest: ChatCompletionRequest;
   isTemporary: boolean;
+  surface: CloudChatSurface;
   projectId?: string | null;
   organizationId?: string | null;
   // Returned rather than only injected, so a later consumer judges the rows
   // this turn actually carried instead of querying for them a second time.
 }): Promise<ManagedMemoryContextItem[]> {
-  if (params.isTemporary || params.chatRequest.memory_enabled === false) return [];
+  if (
+    params.isTemporary ||
+    !accountMemoryRequested(params.surface, params.chatRequest.memory_enabled)
+  ) {
+    return [];
+  }
 
   const [suppressedSources, scope] = await Promise.all([
     loadSuppressedMemorySources(params.db, { userId: params.userId }),
@@ -2959,6 +2972,7 @@ export async function processRequest(
           userId,
           chatRequest,
           isTemporary: conversationIsTemporary,
+          surface: chatSurface,
           projectId: conversationProjectId,
           organizationId: scoped.organizationId,
         }),
