@@ -1045,6 +1045,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await vscode.env.openExternal(vscode.Uri.parse(UPGRADE_URL));
     }),
 
+    register('agi-workforce.openReferrals', async () => {
+      await vscode.env.openExternal(
+        vscode.Uri.parse(`${getCloudWebOrigin()}/settings/referrals?from=vscode-extension`),
+      );
+    }),
+
     register('agi-workforce.signOut', async () => {
       await signOutOfAgiCloud(context.secrets);
       await clearAccountTierCache(context);
