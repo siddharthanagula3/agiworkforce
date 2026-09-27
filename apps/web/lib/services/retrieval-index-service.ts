@@ -76,6 +76,8 @@ export const RETRIEVAL_FAILURE_MESSAGES: Readonly<Record<RetrievalEmbeddingFailu
     'Semantic indexing was paused by your usage limits; keyword search still works and indexing retries automatically.',
   provider_failed:
     'The embedding provider did not respond; keyword search still works and indexing retries automatically.',
+  daily_limit:
+    'Semantic search reached the Free plan daily limit; keyword search still works and semantic search resumes tomorrow.',
 };
 
 const INDEX_WRITE_FAILED_MESSAGE = 'This source could not be indexed. Retry indexing to try again.';
