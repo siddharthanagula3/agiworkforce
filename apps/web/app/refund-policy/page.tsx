@@ -13,6 +13,7 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
+import { RefundRequestForm } from './RefundRequestForm';
 
 export const metadata = buildMetadata({
   title: 'Refund policy',
@@ -24,7 +25,7 @@ const WHEN: readonly LedgerRow[] = [
   {
     label: 'Paid subscriptions',
     value:
-      'Cancellation stops the next renewal and access continues through the paid term. Current-period charges are not automatically refunded, except where required by law or when we confirm a duplicate, unauthorized, or billing-error charge.',
+      'Cancellation stops the next renewal and access continues through the paid term. A plan payment you have not used is refunded if you ask within 7 days of the charge, once per account, and the plan ends when it is refunded. Otherwise a current-period charge is not refunded, except where the law requires it or when we confirm a duplicate, unauthorized, or billing-error charge.',
   },
   {
     label: 'Plan upgrades',
@@ -32,9 +33,14 @@ const WHEN: readonly LedgerRow[] = [
       'Immediate upgrades preserve the renewal date and charge the exact prorated price difference Stripe previews for the time remaining in the current period. This is an invoice adjustment, not a reset or refund of already-consumed usage.',
   },
   {
-    label: 'Purchased usage add-ons',
+    label: 'Credit top-ups',
     value:
-      'Used add-ons are not refundable. Contact support about an unused, duplicate, or mistaken purchase; statutory rights still apply.',
+      'Credits you have not spent are refunded if you ask within 7 days of the purchase, once per account. Spent credits are not refundable except where the law requires it or when we confirm a duplicate, mistaken, or unauthorized purchase. A refunded top-up leaves your balance.',
+  },
+  {
+    label: 'Payment disputes',
+    value:
+      'While a dispute you opened with your bank is open, the plan and the credit balance are on hold. If the dispute closes in our favor they are restored as they were; if it closes in yours, the hold is final.',
   },
   {
     label: 'App Store and Play purchases',
@@ -86,12 +92,13 @@ export default function RefundPolicyPage() {
               Statutory withdrawal rights.
             </h2>
             <Prose>
-              <strong>EU, UK and other consumers with a statutory cooling-off right:</strong> where
-              the law gives you a right to withdraw from a distance contract within 14 days, that
-              right applies and this policy does not reduce it. Note that when you ask us to start
-              the service immediately, that right can be lost or reduced in proportion to what you
-              have already used, which is what the law provides for. Tell us within the window and
-              we will apply the statutory outcome, not the commercial one above.
+              <strong>EU and EEA, UK and Turkey:</strong> if you live there, you may withdraw from a
+              subscription payment or a credit purchase within 14 days of paying, without giving a
+              reason. Choose the 14-day withdrawal reason below. We refund the whole payment to the
+              card you paid with as soon as you confirm, and in any case within 14 days of your
+              request; the plan ends and the credits from that payment leave your balance. A
+              statutory right that applies where you live applies alongside this page, and nothing
+              here reduces it.
             </Prose>
           </Stack>
         </Section>
@@ -102,21 +109,25 @@ export default function RefundPolicyPage() {
               How to request.
             </h2>
             <Prose>
-              Email{' '}
-              <a href={contactMailto('Refund request')} className="agi-ds-link">
-                {CONTACT_EMAIL}
-              </a>{' '}
-              with the email on your account, the charge date, and a brief reason. We aim to respond
-              within the support response target for your plan, published at{' '}
+              Signed in, choose the payment and the reason below. A 14-day withdrawal, and an unused
+              payment inside the 7-day window on an account&rsquo;s first such refund, are refunded
+              as soon as you confirm. Anything else waits for a person, who answers within the
+              support response target for your plan, published at{' '}
               <Link href="/sla" className="agi-ds-link">
                 /sla
               </Link>
-              . This page used to promise one business day for everyone, which did not match those
-              targets. Approved refunds are returned through the original payment method on the
-              payment processor&rsquo;s timeline.
+              , and you get a notification with the decision. If you cannot sign in, email{' '}
+              <a href={contactMailto('Refund request')} className="agi-ds-link">
+                {CONTACT_EMAIL}
+              </a>{' '}
+              with the email on your account, the charge date, and a brief reason. Refunds go back
+              to the card you paid with, and your bank usually shows them within 5 to 10 business
+              days.
             </Prose>
+            <div id="request">
+              <RefundRequestForm />
+            </div>
             <ButtonRow>
-              <Button href={contactMailto('Refund request')}>Request a refund</Button>
               <Button href="/terms" variant="secondary">
                 Terms of service
               </Button>

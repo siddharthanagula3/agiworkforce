@@ -158,6 +158,11 @@
           "date": "2026-08-13",
           "digest": "d13877c05d7e454d",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "432cd84fee679ca3",
+          "note": "Adds the signed-in refund request, the 14-day withdrawal refunded in full for the EU and EEA, UK and Turkey, the 7-day unused refund once per account, and the dispute hold, following the ChatGPT and Claude refund practice researched 2026-09-27."
         }
       ]
     },
