@@ -154,6 +154,8 @@ export const ORGANIZATION_UNDELETED_TABLES: Readonly<Record<string, string>> = {
     'organization_id is ON DELETE SET NULL (0212_routing_decision_traces). The trace records which model this product routed a request to and how that turn ended, which is platform routing telemetry rather than workspace content; the workspace reference is detached and the row retires on the routing-trace retention window that deletes every trace.',
   ediscovery_exports:
     'Cascades from organizations after 0273. Direct mutation remains blocked while the workspace exists; the cascade is the deletion behavior 0262 declares for a decommissioned tenant.',
+  bonus_credit_grants:
+    'organization_id is ON DELETE SET NULL (0295_bonus_credit_grants). A bonus grant belongs to the account that earned it, a referral reward or a promo, and is drawn in every workspace; decommissioning a workspace detaches the reference rather than taking unspent credits from the member. The member’s own rows are deleted outright by account erasure.',
 };
 
 const PG_UNDEFINED_TABLE = '42P01';
