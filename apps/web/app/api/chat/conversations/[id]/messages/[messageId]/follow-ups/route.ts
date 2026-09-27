@@ -5,7 +5,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { collectMessageResearchSources } from '@/features/chat/utils/research-sources';
 import {
   FOLLOW_UP_SUGGESTIONS_METADATA_KEY,
@@ -69,12 +69,11 @@ async function handleGenerateFollowUps(request: NextRequest, context: RouteConte
     return NextResponse.json({ suggestions: [], cached: false });
   }
 
-  const subscription = await SubscriptionService.getSubscription(db, userId);
   const suggestions = await generateFollowUpSuggestions({
     db,
     userId,
     organizationId,
-    planTier: subscription?.plan_tier ?? 'free',
+    planTier: await resolveEntitledPlanTier(db, userId),
     conversationId,
     messageId,
     answer: message.content,
