@@ -45,6 +45,8 @@ vi.mock('@/lib/custom-connector-crypto', () => ({
   BEARER_VALUE_PREFIX: 'Bearer ',
   CONNECTOR_TOKEN_STORAGE_UNAVAILABLE: 'storage unavailable',
   isConnectorTokenStorageAvailable: vi.fn(() => true),
+  encryptConnectorToken: vi.fn(() => 'enc'),
+  decryptConnectorToken: vi.fn(),
   openCustomConnectorCredential: vi.fn(),
   sealCustomConnectorCredential: (...args: unknown[]) => mocks.seal(...args),
 }));

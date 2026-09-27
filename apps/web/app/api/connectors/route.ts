@@ -266,6 +266,9 @@ async function handleGetConnectors(request: NextRequest) {
   for (const c of customConnectors) {
     const linked = await findDirectoryTargetByRemoteUrl(c.url);
     const toolConnectorId = customConnectorId(c.shortId);
+    const signInGrant = oauthGrants.find((grant) => grant.connectorId === toolConnectorId);
+    const signInPending =
+      c.signInRequired && (!signInGrant || signInGrant.needsReauthorization === true);
     connectors.push({
       id: c.id,
       connectorId: linked ? linked.connectorId : toolConnectorId,
@@ -276,7 +279,7 @@ async function handleGetConnectors(request: NextRequest) {
       updatedAt: c.updatedAt,
       source: 'custom',
       name: c.name,
-      ...(c.credentialUnreadable ? { needsReauthorization: true } : {}),
+      ...(c.credentialUnreadable || signInPending ? { needsReauthorization: true } : {}),
     });
   }
 
