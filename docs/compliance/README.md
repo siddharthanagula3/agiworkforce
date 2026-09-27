@@ -27,6 +27,7 @@ procurement or security reviewer starts from.
 | `security.txt`            | `/.well-known/security.txt` | `apps/web/app/.well-known/security.txt/route.ts` |
 | SLA                       | `/sla`                      | `apps/web/app/sla/page.tsx`                      |
 | Refunds                   | `/refund-policy`            | `apps/web/app/refund-policy/page.tsx`            |
+| Referral program terms    | `/referral-terms`           | `apps/web/app/referral-terms/page.tsx`           |
 | Accessibility             | `/accessibility`            | `apps/web/app/accessibility/page.tsx`            |
 | EU representative         | `/legal/eu-representative`  | `apps/web/app/legal/eu-representative/page.tsx`  |
 | Mobile surface terms      | `/mobile/legal`             | `apps/web/app/mobile/legal/page.tsx`             |

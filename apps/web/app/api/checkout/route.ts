@@ -37,6 +37,8 @@ import {
   holdsLivePaidSubscription,
   waitlistAccessRequiredResponse,
 } from '@/lib/server/billing-waitlist-access';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { absoluteUrl } from '@/lib/seo/site';
 import { referralTrialDays } from '@/lib/services/referral-service';
 import { TRIAL_REMINDER_DAYS, formatChargeAmount } from '@/lib/services/trial-reminder-service';
 
@@ -57,6 +59,7 @@ function trialDisclosure(input: {
   amountMinor: number;
   currency: string;
   billingInterval: 'monthly' | 'yearly';
+  referral: boolean;
 }): string {
   const endsOn = new Date(input.startedAt.getTime() + input.trialDays * DAY_MS).toLocaleDateString(
     'en-US',
@@ -68,7 +71,10 @@ function trialDisclosure(input: {
     `Your ${input.trialDays}-day free trial ends on ${endsOn}. On that date your card is ` +
     `charged ${price} plus any applicable tax, and again every ${period}, unless you cancel ` +
     `before then. ${TRIAL_REMINDER_DAYS} days before the trial ends we email you a reminder ` +
-    'with a one-click cancel link, and you can also cancel any time in Settings > Billing.'
+    'with a one-click cancel link, and you can also cancel any time in Settings > Billing.' +
+    (input.referral
+      ? ` The [referral program terms](${absoluteUrl(CANONICAL_POLICY_ROUTES.referralTerms)}) apply.`
+      : '')
   );
 }
 
@@ -397,6 +403,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
                 amountMinor: priceSelection.amountMinor * quantity,
                 currency,
                 billingInterval,
+                referral: getPlanTrialDays(plan) === null,
               }),
             },
           },

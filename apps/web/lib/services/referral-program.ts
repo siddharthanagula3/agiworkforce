@@ -20,6 +20,8 @@ export type ReferralProgramTerms = typeof REFERRAL_PROGRAM;
 
 export const REFERRAL_ATTRIBUTION_COOKIE = 'agi_referral';
 
+export const REFERRAL_WELCOME_PATH = '/r/welcome';
+
 export const REFERRAL_STATUSES = [
   'signed_up',
   'converted',

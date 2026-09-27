@@ -89,6 +89,11 @@ const DOCS: { href: string; label: string; body: string }[] = [
     label: 'Refund policy',
     body: 'When refunds are issued and how to request one.',
   },
+  {
+    href: '/referral-terms',
+    label: 'Referral program terms',
+    body: 'Who can take part in the referral program, the friend trial and its reminder, bonus credits, and the rules against abuse.',
+  },
   { href: '/accessibility', label: 'Accessibility', body: 'WCAG 2.1 AA stance and known gaps.' },
   {
     href: '/trust',
