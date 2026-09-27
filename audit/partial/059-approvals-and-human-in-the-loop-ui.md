@@ -100,20 +100,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, 
 
 Code: `apps/web/app/api/connectors/permissions/route.ts:151-152`
 
-## S59.08: Permission-mode selector.
-
-- Done when: The user can pick a permission mode (ask every time / auto for low risk / skip approvals) that governs how every tool runs.
-- Wave: 3
-- Already works on: cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-| desktop | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-| mobile | partial | Live voice and scheduled runs now honour the selected mode (live-voice-tools.ts:209-235, scheduled-agent-executor.ts:178-799). Still open: provider-native code execution (the default while AGI_E2B_EXECUTION is off) and Anthropic native web_fetch run inside the provider turn without reaching the gate (blocker 02). | handler |
-
-Code: `apps/web/features/settings/components/ToolApprovalDefaultsPanel.tsx:141-145`, `apps/web/features/code/components/CodeComposer.tsx:857-860`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:381-391`, `apps/web/app/api/llm/v1/chat/completions/route.ts:759-768`
-
 ## S59.09: Read-only mode.
 
 - Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.

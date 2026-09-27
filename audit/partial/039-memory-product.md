@@ -10,15 +10,14 @@ nothing is left.
 
 - Done when: A visible switch turns Memory on or off, and when off the assistant neither reads nor saves memories.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode
+- Already works on: web, desktop, mobile, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The only switch (/memories Auto-memory) stops learning; CLAUDE.md files, raw_memories.md and account memory are always injected, so Memory cannot be turned off. | handler |
 | chrome | missing | Not built on this surface. |  |
-| api | partial | API-key chat calls read the account's saved memories whenever Memory is on; the only per-call opt-out, memory_enabled:false, is undocumented (absent from openapi.json). | api |
 
-Code: `apps/cli/src/tui/tui_app.rs:3914-3931`, `apps/cli/src/agent/mod.rs:1660-1670`, `apps/cli/src/agent/mod.rs:578-588`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:406-406`
+Code: `apps/cli/src/tui/tui_app.rs:3914-3931`, `apps/cli/src/agent/mod.rs:1660-1670`, `apps/cli/src/agent/mod.rs:578-588`
 
 ## S39.03: Separate past-chat-reference control.
 
@@ -411,14 +410,13 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:85-94`, `apps/web/f
 
 - Done when: Saved memory and personalization apply the same way whichever model the user picks.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 | desktop | partial | Apply memory to every model: free-pool models (free-quota, experiential-free routes) and local Ollama/LM Studio models never receive saved memory; only the managed route injects it. | handler |
 | mobile | partial | Local mode feeds on-device memory to on-device models while Cloud mode uses account memory, so what a model knows about the user depends on the mode, not one shared memory. | handler |
-| api | partial | API-key calls get saved memory for every model through the managed route, but this is undocumented and the only opt-out (memory_enabled:false) is missing from openapi.json. | api |
 
 Code: `apps/web/features/chat/lib/free-quota-selection.ts:35-42`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2904-2921`, `apps/web/app/api/models/free-quota/completions/route.ts:586-590`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1376`
 
