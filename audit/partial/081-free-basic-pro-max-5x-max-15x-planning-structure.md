@@ -121,13 +121,13 @@ Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/lib/validations/checkou
 
 - Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
 - Wave: 2
+- Already works on: chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No plan sets trialDays, so checkout never offers a trial; the invite-code trial route (/api/claim-offer) has no web caller; and nothing expires a code-granted trialing subscription when its period ends. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, handler, states, flag-off |
+| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
+| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
 | mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
-| chrome | partial | Chrome can redeem an invite code into a trialing plan via /api/claim-offer, but nothing ends that trial: a code-granted trialing row is never moved to expired, so plan features stay unlocked. | states |
 
 Code: `apps/web/app/api/checkout/route.ts:83-106`, `packages/contracts/types/src/billing-catalog.ts:43-52`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`
 
