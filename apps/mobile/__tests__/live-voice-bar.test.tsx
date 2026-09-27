@@ -26,6 +26,8 @@ function renderLiveBar(props: Partial<React.ComponentProps<typeof LiveVoiceBar>>
         interrupted={false}
         turns={[]}
         error={null}
+        approvals={[]}
+        onDecideApproval={jest.fn()}
         onToggleMute={jest.fn()}
         onSwitchToText={jest.fn()}
         onRetry={jest.fn()}
@@ -85,6 +87,8 @@ describe('LiveVoiceBar', () => {
           interrupted
           turns={[]}
           error={null}
+          approvals={[]}
+          onDecideApproval={jest.fn()}
           onToggleMute={jest.fn()}
           onSwitchToText={jest.fn()}
           onRetry={jest.fn()}
@@ -123,6 +127,8 @@ describe('LiveVoiceBar', () => {
           interrupted={false}
           turns={[]}
           error={null}
+          approvals={[]}
+          onDecideApproval={jest.fn()}
           onToggleMute={jest.fn()}
           onSwitchToText={jest.fn()}
           onRetry={jest.fn()}

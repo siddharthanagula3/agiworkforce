@@ -39,6 +39,8 @@ export function LiveVoiceComposer({
       interrupted={controller.interrupted}
       turns={controller.turns}
       error={controller.error}
+      approvals={controller.approvals}
+      onDecideApproval={controller.decideToolApproval}
       onToggleMute={controller.toggleMute}
       onSwitchToText={onSwitchToText}
       onRetry={controller.retry}
