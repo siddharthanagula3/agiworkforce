@@ -101,11 +101,18 @@ resolve_version() {
   local requested="$VERSION"
   if [ -z "$requested" ]; then
     echo -e "${BLUE}Finding the newest CLI release...${NC}" >&2
-    local feed
-    if ! feed=$(curl -fsSL "$RELEASE_FEED_URL" 2>/dev/null); then
-      fail "No signed AGI CLI release is published yet."
-    fi
-    requested=$(printf '%s' "$feed" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    local response status
+    response=$(curl -sSL -w $'\n%{http_code}' "$RELEASE_FEED_URL" 2>/dev/null) \
+      || fail "Could not reach agiworkforce.com to find the newest release."
+    status="${response##*$'\n'}"
+    case "$status" in
+      200) ;;
+      404) fail "No signed AGI CLI release is published yet." ;;
+      451) fail "AGI Workforce is not available in your region." ;;
+      *) fail "The release feed answered HTTP ${status}." ;;
+    esac
+    requested=$(printf '%s' "${response%$'\n'*}" \
+      | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
     [ -n "$requested" ] || fail "The release feed did not name a version."
   fi
   requested="${requested#"$TAG_PREFIX"}"

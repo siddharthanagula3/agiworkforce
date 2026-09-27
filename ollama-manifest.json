@@ -4,9 +4,7 @@
   "description": "Multi-model AI agent, 24 providers, desktop automation, 150+ skills, BYOK",
   "version": "0.1.0",
   "install": {
-    "npm": "@agiworkforce/cli",
-    "curl": "https://agiworkforce.com/install.sh",
-    "cargo": "agiworkforce-cli"
+    "curl": "https://agiworkforce.com/install.sh"
   },
   "launch": {
     "command": "agiworkforce",

@@ -327,16 +327,6 @@ jobs:
         # of bug where TypeScript syntax leaks into a JS template literal.
         run: pnpm --filter agi-workforce test:webview
 
-      - name: Test CLI npm wrapper
-        # apps/cli/npm is intentionally outside pnpm-workspace.yaml (it's the
-        # npm-publish staging package, not a workspace member) and has zero
-        # dependencies, so this needs no install, it guards bin/agi.js, the
-        # actual entrypoint every `npx agi`/`npm i -g` install resolves to.
-        # Lives in js-verify (unconditional), because npm wrapper changes do
-        # not compile the Rust CLI and do not select the native lanes.
-        working-directory: apps/cli/npm
-        run: node --test test/agi.test.mjs
-
       # CRIT-018. This step scanned NOTHING for an unknown but long period, and
       # reported success while doing it.
       #

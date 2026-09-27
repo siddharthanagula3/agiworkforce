@@ -6,7 +6,7 @@ name: Release CLI
 #
 # Required GitHub Secrets:
 #   AGI_CLI_RELEASE_SIGNING_KEY, the PEM private key whose public half is
-#   RELEASE_SIGNING_KEY in scripts/install.sh
+#   RELEASE_SIGNING_KEY in apps/web/public/install.sh
 #
 # Existing secrets reused:
 #   GITHUB_TOKEN, auto-provided by GitHub Actions
@@ -324,10 +324,10 @@ jobs:
             echo "ERROR: the AGI_CLI_RELEASE_SIGNING_KEY secret is required to sign a CLI release" >&2
             exit 1
           fi
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' scripts/install.sh \
+          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
             > "$RUNNER_TEMP/release-signing.pub"
           if [ ! -s "$RUNNER_TEMP/release-signing.pub" ]; then
-            echo "ERROR: scripts/install.sh carries no RELEASE_SIGNING_KEY, so no installer could verify this release" >&2
+            echo "ERROR: apps/web/public/install.sh carries no RELEASE_SIGNING_KEY, so no installer could verify this release" >&2
             exit 1
           fi
 
@@ -384,7 +384,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' scripts/install.sh \
+          sed -n '/-----BEGIN PUBLIC KEY-----/,/-----END PUBLIC KEY-----/p' apps/web/public/install.sh \
             > "$RUNNER_TEMP/release-signing.pub"
           openssl dgst -sha256 -verify "$RUNNER_TEMP/release-signing.pub" \
             -signature archives/SHA256SUMS.sig archives/SHA256SUMS
