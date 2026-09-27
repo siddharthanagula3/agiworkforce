@@ -166,6 +166,17 @@ export async function deleteSessionsForDevice(
   return { data: data.map((row) => String(row.code)), error: null };
 }
 
+export async function listStoredSessionCodes(
+  codes: readonly string[],
+): Promise<QueryResultWrapper<string[]>> {
+  const { data, error } = await queryRows<{ code: string }>(
+    'SELECT code FROM signaling_sessions WHERE code = ANY($1::text[])',
+    [codes],
+  );
+  if (error || !data) return { data: null, error };
+  return { data: data.map((row) => String(row.code)), error: null };
+}
+
 export async function extendSessionExpiry(
   code: string,
   expiresAt: number,

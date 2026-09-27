@@ -29,6 +29,7 @@ import {
   getSessionExpiresAtByCode,
   extendSessionExpiry,
   insertSession,
+  listStoredSessionCodes,
 } from './db.js';
 import {
   deviceIdSchema,
@@ -1081,6 +1082,7 @@ const cleanupInterval = setInterval(() => {
   }
 
   cleanupAuthFailures();
+  void endPairingsDeletedElsewhere();
 
   if (expiredCount > 0 || staleCount > 0) {
     logger.info({ expiredCount, staleCount }, 'Cleaned up expired/stale sessions');
@@ -1336,6 +1338,7 @@ async function handleRegister(
         'Registration refused for a revoked device',
       );
       metrics.recordError('device_revoked');
+      await endRevokedPairing(session);
     }
     return;
   }
@@ -1346,9 +1349,9 @@ async function handleRegister(
       'Registration refused for a pairing whose other device was revoked',
     );
     metrics.recordError('pairing_device_revoked');
-    endPairing(session);
     socket.send(JSON.stringify({ type: 'error', error: 'pairing_not_found' }));
     socket.close();
+    await endRevokedPairing(session);
     return;
   }
 
@@ -1586,6 +1589,12 @@ function endPairing(session: Session): void {
   pendingApprovals.delete(session.code);
 }
 
+async function endRevokedPairing(session: Session): Promise<void> {
+  endPairing(session);
+  const { error } = await deleteSessionByCode(session.code);
+  if (error) logger.error({ code: session.code, error }, 'Failed to delete a revoked pairing');
+}
+
 function endPairingsNamingDevice(deviceId: string): string[] {
   const ended: string[] = [];
   for (const session of activeSessions.values()) {
@@ -1594,6 +1603,27 @@ function endPairingsNamingDevice(deviceId: string): string[] {
     ended.push(session.code);
   }
   return ended;
+}
+
+async function endPairingsDeletedElsewhere(): Promise<void> {
+  const codes = [...activeSessions.keys()];
+  if (codes.length === 0) return;
+
+  const { data: stored, error } = await listStoredSessionCodes(codes);
+  if (error || !stored) {
+    logger.warn({ error }, 'Failed to check live pairings against the store');
+    return;
+  }
+
+  const kept = new Set(stored);
+  let ended = 0;
+  for (const code of codes) {
+    const session = activeSessions.get(code);
+    if (!session || kept.has(code)) continue;
+    endPairing(session);
+    ended++;
+  }
+  if (ended > 0) logger.info({ ended }, 'Ended live pairings deleted by another instance');
 }
 
 function queuePendingApproval(code: string, payload: Record<string, unknown>): void {
