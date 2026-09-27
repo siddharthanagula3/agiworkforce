@@ -223,7 +223,10 @@ export async function assertTierUnitAllowance(input: {
     const { code, message } = EXHAUSTED_UNIT_ERRORS[input.unit];
     const refusal = new ManagedUsageRequestError(message, 429, code);
     try {
-      refusal.limitContext = { resetsAt: (await readTierUnitPeriod(input.db)).resetAt };
+      refusal.limitContext = {
+        resetsAt: (await readTierUnitPeriod(input.db)).resetAt,
+        alternativeModel: null,
+      };
     } catch (error) {
       logger.warn(
         { error, userId: input.userId, unit: input.unit },
