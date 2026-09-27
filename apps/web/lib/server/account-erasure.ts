@@ -58,6 +58,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_shortcuts', column: 'user_id' },
   { table: 'user_skills', column: 'user_id' },
   { table: 'search_history', column: 'user_id' },
+  { table: 'scheduled_task_shares', column: 'user_id' },
   { table: 'scheduled_tasks', column: 'user_id' },
   { table: 'user_connectors', column: 'user_id' },
   { table: 'user_custom_connectors', column: 'user_id' },
