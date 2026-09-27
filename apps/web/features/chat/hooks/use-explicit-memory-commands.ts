@@ -8,7 +8,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const MEMORY_COMMANDS_PATH = '/api/memory/commands';
-const MEMORY_COMMAND_HINT = /\b(remember|forget|memori[sz]e)\b/i;
+const MEMORY_COMMAND_HINT = /\b(remember(?:ing)?|forget|memor(?:y|ies|i[sz]e))\b/i;
 const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
 const SETTLED_STATUSES = new Set(['stored', 'already_known', 'forgotten']);
 
