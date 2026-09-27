@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { ModelCard } from '../components/ModelCard';
@@ -48,6 +48,15 @@ function renderCard(overrides: Partial<ModelCatalogueEntry>): void {
 }
 
 describe('deprecation on a still-selectable model', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-18T00:00:00Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('names the date the model stops being offered', () => {
     renderCard({ deprecatedOn: '2026-09-27' });
     expect(screen.getByTestId('model-retirement')).toHaveTextContent('Retiring 27 Sept 2026');
