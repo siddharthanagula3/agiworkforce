@@ -335,6 +335,14 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
     return;
   }
 
+  const codeSessionId = readIdentifier(data, 'codeSessionId');
+  if (codeSessionId) {
+    safeNavigate(
+      `/(app)/cloud-code/${encodeURIComponent(codeSessionId)}` as Parameters<typeof router.push>[0],
+    );
+    return;
+  }
+
   const productLink = readProductLink(data);
   if (productLink) {
     const nativeRoute = nativeRouteForProductLink(productLink);

@@ -102,7 +102,7 @@ function ConfigEditorSection() {
   const [saving, setSaving] = useState(false);
   const [model, setModel] = useState('');
   const [provider, setProvider] = useState('');
-  const [approvalMode, setApprovalMode] = useState('');
+  const [permissionMode, setPermissionMode] = useState('');
   const isMounted = useIsMounted();
 
   useEffect(() => {
@@ -115,7 +115,7 @@ function ConfigEditorSection() {
         const defaults = (data['default'] ?? {}) as Record<string, unknown>;
         setModel((defaults['model'] as string) ?? '');
         setProvider((defaults['provider'] as string) ?? '');
-        setApprovalMode((defaults['approval_mode'] as string) ?? '');
+        setPermissionMode((defaults['permission_mode'] as string) ?? '');
       } catch (err) {
         if (mounted) toast.error(`Failed to load config: ${String(err)}`);
       } finally {
@@ -136,7 +136,8 @@ function ConfigEditorSection() {
       };
       if (model) defaults['model'] = model;
       if (provider) defaults['provider'] = provider;
-      if (approvalMode) defaults['approval_mode'] = approvalMode;
+      delete defaults['approval_mode'];
+      if (permissionMode) defaults['permission_mode'] = permissionMode;
       await dotfiles.writeSharedConfig('default', defaults);
       toast.success('Configuration saved');
     } catch (err) {
@@ -146,7 +147,7 @@ function ConfigEditorSection() {
         setSaving(false);
       }
     }
-  }, [config, model, provider, approvalMode, isMounted]);
+  }, [config, model, provider, permissionMode, isMounted]);
 
   if (loading) {
     return (
@@ -175,10 +176,10 @@ function ConfigEditorSection() {
             placeholder: 'e.g. anthropic',
           },
           {
-            label: 'Approval Mode',
-            value: approvalMode,
-            onChange: setApprovalMode,
-            placeholder: 'suggest | auto-edit | full-auto',
+            label: 'Permission mode',
+            value: permissionMode,
+            onChange: setPermissionMode,
+            placeholder: 'default | plan | acceptEdits | dontAsk',
           },
         ].map((field) => (
           <div key={field.label} className="flex items-center gap-3">
@@ -434,7 +435,7 @@ function EcosystemSection() {
                   </span>
                 )}
                 {tool.has_skills && (
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/15 text-green-400">
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-success-fill/10 text-success-text">
                     Skills
                   </span>
                 )}

@@ -4,6 +4,8 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   verifyTOTPCode: vi.fn(),
+  registerSecondFactor: vi.fn(async (..._args: unknown[]) => undefined),
+  rememberMfaEnrollment: vi.fn(async (..._args: unknown[]) => undefined),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
   identityEvent: vi.fn(async (_event: Record<string, unknown>) => ({
     assessment: { level: 'normal', signals: [] },
@@ -15,9 +17,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
@@ -30,9 +29,18 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/features/settings/services/user-preferences', () => ({
   verifyTOTPCode: (...args: unknown[]) => mocks.verifyTOTPCode(...args),
+  generateBackupCodes: vi.fn(() => ['aaaa1111', 'bbbb2222']),
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
   openTotpSecret: vi.fn(() => 'SECRET'),
+}));
+vi.mock('@/lib/server/identity', () => ({
+  getIdentityProvider: () => ({ registerSecondFactor: mocks.registerSecondFactor }),
+  getIdentityUser: vi.fn(),
+  getRequestIdentity: vi.fn(),
+}));
+vi.mock('@/lib/mfa-policy-gate', () => ({
+  rememberMfaEnrollment: (...args: unknown[]) => mocks.rememberMfaEnrollment(...args),
 }));
 vi.mock('@/lib/server/two-factor-security-events', () => ({
   announceTwoFactorChange: (event: Record<string, unknown>) => mocks.identityEvent(event),
@@ -55,32 +63,43 @@ function request(code: string) {
   });
 }
 
+const PENDING = [{ totp_secret_enc: 'enc' }];
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 describe('POST /api/settings/2fa/verify', () => {
-  it('enables 2FA on a valid code', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+  it('registers the authenticator and fresh backup codes as a sign-in factor', async () => {
+    mocks.query.mockResolvedValueOnce(PENDING).mockResolvedValueOnce([]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(true);
 
     const response = await POST(request('123456'));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true });
+    await expect(response.json()).resolves.toEqual({
+      success: true,
+      backup_codes: ['aaaa1111', 'bbbb2222'],
+    });
+    expect(mocks.registerSecondFactor).toHaveBeenCalledWith('user-1', {
+      totpSecret: 'SECRET',
+      backupCodes: ['aaaa1111', 'bbbb2222'],
+    });
+    expect(mocks.rememberMfaEnrollment).toHaveBeenCalledWith('user-1', true);
   });
 
-  it('rejects an invalid code', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+  it('rejects an invalid code and registers nothing', async () => {
+    mocks.query.mockResolvedValueOnce(PENDING);
     mocks.verifyTOTPCode.mockResolvedValueOnce(false);
 
     const response = await POST(request('000000'));
 
     expect(response.status).toBe(401);
+    expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
   });
 
   it('records the enrollment and tells the account holder it happened', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.query.mockResolvedValueOnce(PENDING).mockResolvedValueOnce([]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(true);
 
     await POST(request('123456'));
@@ -95,7 +114,7 @@ describe('POST /api/settings/2fa/verify', () => {
   });
 
   it('records nothing and tells nobody when the code is refused', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.query.mockResolvedValueOnce(PENDING);
     mocks.verifyTOTPCode.mockResolvedValueOnce(false);
 
     await POST(request('000000')).catch(() => undefined);
@@ -105,7 +124,7 @@ describe('POST /api/settings/2fa/verify', () => {
   });
 
   it('records the refused code as a failed authentication for the account', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+    mocks.query.mockResolvedValueOnce(PENDING);
     mocks.verifyTOTPCode.mockResolvedValueOnce(false);
 
     await POST(request('000000')).catch(() => undefined);
@@ -117,23 +136,24 @@ describe('POST /api/settings/2fa/verify', () => {
     );
   });
 
-  it('writes no audit row when 2FA was already on', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: true }]);
+  it('asks for a fresh setup when no enrollment is pending', async () => {
+    mocks.query.mockResolvedValueOnce([]);
 
-    await POST(request('123456'));
+    const response = await POST(request('123456'));
 
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(response.status).toBe(400);
+    expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
     expect(mocks.identityEvent).not.toHaveBeenCalled();
   });
 
-  it('exempts an organization owner from the mfa gate so verification stays reachable', async () => {
-    mocks.query.mockResolvedValueOnce([{ totp_secret_enc: 'enc', enabled: false }]);
+  it('stays reachable for a member whose workspace requires two-factor', async () => {
+    mocks.query.mockResolvedValueOnce(PENDING).mockResolvedValueOnce([]);
     mocks.verifyTOTPCode.mockResolvedValueOnce(true);
 
     await POST(request('123456'));
 
     expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
-      mfaGateExemptForOwner: true,
+      mfaEnrollment: true,
       resolveOrganization: false,
     });
   });

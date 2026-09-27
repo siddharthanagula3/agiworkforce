@@ -14,10 +14,16 @@ export function unsentAttachmentMessage(fileNames: string[]): string {
     : `${named} did not finish uploading, so nothing was sent. Tap Retry on each file, or remove them and send again.`;
 }
 
+export interface UploadChatContext {
+  conversationId?: string;
+  temporary?: boolean;
+}
+
 export async function uploadWithRetry(
   file: UploadFileInput,
   fileName: string,
   attachmentId: string,
+  context: UploadChatContext = {},
 ): Promise<UploadFileResult | null> {
   let lastError: Error | null = null;
 
@@ -26,6 +32,8 @@ export async function uploadWithRetry(
     try {
       const result = await api.uploadFile(file, {
         signal,
+        ...(context.conversationId ? { conversationId: context.conversationId } : {}),
+        ...(context.temporary ? { temporary: true } : {}),
         onProgress: (sent, total) =>
           useUploadLifecycleStore.getState().reportProgress(attachmentId, sent, total),
       });

@@ -64,8 +64,8 @@ describe('SupportWidgetMount', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders nothing at all when the ship gate is off', () => {
-    delete process.env['NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED'];
+  it('renders nothing at all when the kill switch is set', () => {
+    process.env['NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED'] = '0';
     const { container } = render(<SupportWidgetMount />);
     expect(container).toBeEmptyDOMElement();
   });

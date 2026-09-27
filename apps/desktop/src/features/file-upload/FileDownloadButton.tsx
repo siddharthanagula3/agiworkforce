@@ -134,7 +134,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
       >
         {isDownloaded ? (
           <>
-            <CheckCircle className="w-4 h-4 text-green-500" />
+            <CheckCircle className="w-4 h-4 text-success-text" />
             <span>Downloaded</span>
           </>
         ) : (
@@ -181,7 +181,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
         >
           {isDownloaded ? (
             <>
-              <CheckCircle className="w-4 h-4 mr-2 text-green-500 inline" />
+              <CheckCircle className="w-4 h-4 mr-2 text-success-text inline" />
               Downloaded
             </>
           ) : (
@@ -209,7 +209,7 @@ export const FileDownloadButton: React.FC<FileDownloadButtonProps> = ({
     >
       {isDownloaded ? (
         <>
-          <CheckCircle className="w-4 h-4 mr-2 text-green-500 inline" />
+          <CheckCircle className="w-4 h-4 mr-2 text-success-text inline" />
           Downloaded
         </>
       ) : (

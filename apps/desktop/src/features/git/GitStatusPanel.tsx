@@ -220,13 +220,13 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
   const getFileIcon = useCallback((category: FileCategory) => {
     switch (category) {
       case 'staged':
-        return <Check className="h-3 w-3 text-green-500" />;
+        return <Check className="h-3 w-3 text-success-text" />;
       case 'unstaged':
-        return <FileMinus className="h-3 w-3 text-amber-500" />;
+        return <FileMinus className="h-3 w-3 text-warning-text" />;
       case 'untracked':
         return <FileQuestion className="h-3 w-3 text-blue-500" />;
       case 'conflicts':
-        return <AlertCircle className="h-3 w-3 text-red-500" />;
+        return <AlertCircle className="h-3 w-3 text-danger-text" />;
       default:
         return <File className="h-3 w-3" />;
     }
@@ -250,13 +250,13 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
   const getCategoryIcon = useCallback((category: FileCategory) => {
     switch (category) {
       case 'staged':
-        return <FilePlus className="h-4 w-4 text-green-500" />;
+        return <FilePlus className="h-4 w-4 text-success-text" />;
       case 'unstaged':
-        return <FileMinus className="h-4 w-4 text-amber-500" />;
+        return <FileMinus className="h-4 w-4 text-warning-text" />;
       case 'untracked':
         return <FileQuestion className="h-4 w-4 text-blue-500" />;
       case 'conflicts':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
+        return <AlertCircle className="h-4 w-4 text-danger-text" />;
       default:
         return <File className="h-4 w-4" />;
     }
@@ -416,9 +416,9 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
           <span className="text-sm font-medium">{status?.branch ?? 'Loading...'}</span>
           {status && (status.ahead > 0 || status.behind > 0) && (
             <span className="text-xs text-muted-foreground">
-              {status.ahead > 0 && <span className="text-green-500">+{status.ahead}</span>}
+              {status.ahead > 0 && <span className="text-success-text">+{status.ahead}</span>}
               {status.ahead > 0 && status.behind > 0 && ' / '}
-              {status.behind > 0 && <span className="text-amber-500">-{status.behind}</span>}
+              {status.behind > 0 && <span className="text-warning-text">-{status.behind}</span>}
             </span>
           )}
         </div>
@@ -499,7 +499,7 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
           status.conflicts.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-muted-foreground">
             <div className="text-center space-y-1">
-              <Check className="h-8 w-8 mx-auto text-green-500" />
+              <Check className="h-8 w-8 mx-auto text-success-text" />
               <p className="text-sm">Working tree clean</p>
             </div>
           </div>
@@ -521,7 +521,7 @@ export function GitStatusPanel({ repoPath, onFileSelect, className }: GitStatusP
             changes
           </span>
           {status.conflicts.length > 0 && (
-            <span className="text-red-500">{status.conflicts.length} conflicts</span>
+            <span className="text-danger-text">{status.conflicts.length} conflicts</span>
           )}
         </div>
       )}

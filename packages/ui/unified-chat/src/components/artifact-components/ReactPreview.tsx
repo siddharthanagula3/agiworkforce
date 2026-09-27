@@ -283,7 +283,7 @@ export function ReactPreview({
           <span className="text-xs text-muted-foreground animate-pulse">Loading...</span>
         )}
         {error && (
-          <span className="flex items-center gap-1 text-xs text-red-400">
+          <span className="flex items-center gap-1 text-xs text-danger-text">
             <AlertTriangle className="h-3 w-3" />
             Error
           </span>
@@ -354,8 +354,8 @@ export function ReactPreview({
         {!srcDoc && !scriptsBlocked && error && (
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div className="text-center">
-              <AlertTriangle className="h-8 w-8 text-red-400 mx-auto mb-2" />
-              <p className="text-sm text-red-300 font-mono">{error}</p>
+              <AlertTriangle className="h-8 w-8 text-danger-text mx-auto mb-2" />
+              <p className="text-sm text-danger-text font-mono">{error}</p>
             </div>
           </div>
         )}

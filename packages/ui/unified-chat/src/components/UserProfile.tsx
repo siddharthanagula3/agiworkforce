@@ -128,7 +128,7 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
           <button
             type="button"
             onClick={onUpgradeClick}
-            className="flex items-center gap-0.5 text-caption font-medium text-blue-400 hover:text-blue-300 transition-colors"
+            className="flex items-center gap-0.5 text-caption font-medium text-blue-700 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
           >
             Upgrade
             <ArrowUpRight size={10} />
@@ -138,7 +138,10 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
       {/* Progress bar */}
       <div className="h-1 w-full rounded-full bg-[var(--chat-border)]">
         <div
-          className={cn('h-1 rounded-full transition-all', isLow ? 'bg-amber-400' : 'bg-blue-500')}
+          className={cn(
+            'h-1 rounded-full transition-all',
+            isLow ? 'bg-warning-fill' : 'bg-blue-500',
+          )}
           style={{ width: `${barWidth}%` }}
         />
       </div>
@@ -263,8 +266,8 @@ export function UserProfile({ collapsed }: UserProfileProps) {
                   tier === 'local' || tier === 'byok'
                     ? 'bg-[var(--chat-border)] text-[var(--chat-text-muted)]'
                     : tier === 'basic'
-                      ? 'bg-blue-500/15 text-blue-400'
-                      : 'bg-purple-500/15 text-purple-400',
+                      ? 'bg-blue-500/15 text-blue-700 dark:text-blue-400'
+                      : 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
                 )}
               >
                 {planLabel}

@@ -8,16 +8,14 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { generateBackupCodes, hashBackupCode } from '@/features/settings/services/user-preferences';
+import { generateBackupCodes } from '@/features/settings/services/user-preferences';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { getIdentityProvider } from '@/lib/server/identity';
+import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 
 const ENDPOINT = '/api/settings/2fa/backup-codes';
-
-interface TwoFactorRow {
-  enabled: boolean;
-}
 
 async function handleRegenerateBackupCodes(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -28,12 +26,7 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  const [row] = await db.query<TwoFactorRow>(
-    'select enabled from user_two_factor where user_id = $1 limit 1',
-    [userId],
-  );
-
-  if (!row || !row.enabled) {
+  if (!(await readSecondFactorStatus(db, userId)).authenticator) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
@@ -46,17 +39,7 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   });
 
   const newCodes = generateBackupCodes();
-  const hashedCodes = await Promise.all(newCodes.map((c) => hashBackupCode(c)));
-
-  await db.query(
-    `update user_two_factor
-        set backup_codes_hashed     = $2,
-            backup_codes_generated_at = now(),
-            last_verified_at        = now(),
-            updated_at              = now()
-      where user_id = $1`,
-    [userId, hashedCodes],
-  );
+  await getIdentityProvider().registerSecondFactor(userId, { backupCodes: newCodes });
 
   logger.info({ userId, count: newCodes.length }, '2FA backup codes regenerated');
 

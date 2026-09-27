@@ -120,9 +120,9 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
             aria-hidden
           />
         ) : succeeded ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" aria-hidden />
+          <CheckCircle2 className="h-3.5 w-3.5 text-success-text" aria-hidden />
         ) : result ? (
-          <XCircle className="h-3.5 w-3.5 text-rose-500" aria-hidden />
+          <XCircle className="h-3.5 w-3.5 text-danger-text" aria-hidden />
         ) : null}
         {hasOutput ? (
           expanded ? (
@@ -157,13 +157,13 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
 
           {result.stderr ? (
             <div>
-              <p className="mb-1 text-xs font-medium text-rose-400">Stderr</p>
+              <p className="mb-1 text-xs font-medium text-danger-text">Stderr</p>
               <pre
                 data-testid="code-execution-stderr"
                 className={cn(
                   'max-h-48 overflow-x-auto overflow-y-auto rounded-sm',
-                  'border border-rose-500/20 bg-rose-500/5 px-3 py-2',
-                  'font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-rose-300',
+                  'border border-danger-fill/20 bg-danger-fill/5 px-3 py-2',
+                  'font-mono text-xs leading-relaxed whitespace-pre-wrap break-words text-danger-text',
                 )}
               >
                 {result.stderr}
@@ -185,7 +185,7 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
           ))}
 
           {result.returnCode !== 0 ? (
-            <p className="text-xs text-rose-400">Exit code: {result.returnCode}</p>
+            <p className="text-xs text-danger-text">Exit code: {result.returnCode}</p>
           ) : null}
         </div>
       ) : null}

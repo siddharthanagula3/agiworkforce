@@ -73,7 +73,11 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { recordAuditEvent } from '@/lib/security-audit';
 
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE } from '../route';
+
+process.env['CSRF_SECRET'] = 'account-delete-step-up-secret-long-enough';
 
 function auditDetail(): Record<string, unknown> {
   const call = vi.mocked(recordAuditEvent).mock.calls.at(-1)?.[0] as
@@ -82,8 +86,15 @@ function auditDetail(): Record<string, unknown> {
 }
 
 function deleteRequest(url = 'http://localhost:3000/api/user/delete-account') {
+  const { token } = createStepUpGrant({
+    userId: 'user_deleting',
+    action: 'account.delete',
+    resourceId: null,
+    method: 'first_factor',
+  });
   return new Request(url, {
     method: 'DELETE',
+    headers: { [STEP_UP_TOKEN_HEADER]: token },
   }) as never;
 }
 

@@ -34,12 +34,12 @@ function PermissionRow({
       <div className="flex items-start gap-3 flex-1 min-w-0">
         <div className="mt-0.5">
           {granted ? (
-            <div className="rounded-full bg-green-500/10 p-1">
-              <Check className="h-3.5 w-3.5 text-green-500" />
+            <div className="rounded-full bg-success-fill/10 p-1">
+              <Check className="h-3.5 w-3.5 text-success-text" />
             </div>
           ) : (
-            <div className="rounded-full bg-orange-500/10 p-1">
-              <X className="h-3.5 w-3.5 text-orange-500" />
+            <div className="rounded-full bg-warning-fill/10 p-1">
+              <X className="h-3.5 w-3.5 text-warning-text" />
             </div>
           )}
         </div>
@@ -176,15 +176,15 @@ export function AutomationPermissionsSettings() {
       )}
 
       {allGranted && permissions?.automationServiceReady && (
-        <p className="mt-4 text-xs text-green-600 flex items-center gap-1.5">
+        <p className="mt-4 text-xs text-success-text flex items-center gap-1.5">
           <Check className="h-3.5 w-3.5" />
           All permissions granted, agent mode is ready.
         </p>
       )}
 
       {restartRequired && (
-        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-          <p className="text-xs text-amber-700 dark:text-amber-200">
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-warning-fill/30 bg-warning-fill/10 p-3">
+          <p className="text-xs text-warning-text">
             Accessibility is granted. Restart AGI to initialize the protected automation service.
           </p>
           <Button size="sm" onClick={() => void relaunchApp()}>

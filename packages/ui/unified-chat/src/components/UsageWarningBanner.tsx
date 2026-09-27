@@ -29,7 +29,7 @@ export function UsageWarningBanner({
       className={cn(
         'flex items-center gap-3 rounded-t-xl border-x border-t px-4 py-2',
         critical
-          ? 'border-amber-500/40 bg-amber-500/10'
+          ? 'border-warning-fill/40 bg-warning-fill/10'
           : 'border-[var(--chat-border)] bg-[var(--chat-surface-hover)]',
         className,
       )}
@@ -40,7 +40,7 @@ export function UsageWarningBanner({
         <p
           className={cn(
             'truncate text-xs font-medium',
-            critical ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--chat-text-secondary)]',
+            critical ? 'text-warning-text' : 'text-[var(--chat-text-secondary)]',
           )}
         >
           {warning.headline}

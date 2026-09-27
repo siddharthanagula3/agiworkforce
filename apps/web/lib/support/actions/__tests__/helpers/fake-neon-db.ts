@@ -76,6 +76,22 @@ export function createFakeNeonDb(seed?: {
       return [{ id: row.id }];
     }
 
+    if (
+      /^select action_id from public\.support_action_proposals where id = \$1/iu.test(normalized)
+    ) {
+      const [id, userId, tokenHash] = params as [string, string, string];
+      const now = Date.now();
+      const row = proposals.find(
+        (p) =>
+          p.id === id &&
+          p.user_id === userId &&
+          p.token_hash === tokenHash &&
+          p.consumed_at === null &&
+          p.expires_at.getTime() > now,
+      );
+      return row ? [{ action_id: row.action_id }] : [];
+    }
+
     if (/update public\.support_action_proposals set consumed_at = now\(\)/iu.test(normalized)) {
       const [id, userId, tokenHash] = params as [string, string, string];
       const now = Date.now();

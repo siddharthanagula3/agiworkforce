@@ -12,10 +12,6 @@ const requiredInputs = [
     consumer: 'apps/cli/Cargo.toml package metadata',
   },
   {
-    path: 'apps/cli/npm/README.md',
-    consumer: 'the @agiworkforce/cli npm package',
-  },
-  {
     path: 'apps/cli/src/output_styles/explanatory.md',
     consumer: 'Rust include_str! in apps/cli/src/output_styles.rs',
   },

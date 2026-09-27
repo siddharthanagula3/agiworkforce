@@ -11,3 +11,27 @@ nothing is left.
 - Done when: The product shows users a list of currently known issues with their status or workaround.
 - Wave: 5
 - Build on: web, desktop, mobile, cli, vscode, chrome
+
+## S88.28: Support assistant email and WhatsApp channels.
+
+- Done when: The support assistant answers customers by email and WhatsApp as well as in the web widget, as Intercom Fin does.
+- Wave: 5
+- Build on: web
+
+## S88.29: Multilingual support answers.
+
+- Done when: The support assistant answers in the customer's language from the same help corpus.
+- Wave: 5
+- Build on: web
+
+## S88.30: Support resolution and satisfaction analytics.
+
+- Done when: Operators see how many conversations the assistant resolved, handed off or failed, with customer satisfaction ratings.
+- Wave: 5
+- Build on: web
+
+## S88.31: Support content-gap suggestions.
+
+- Done when: The assistant reports questions it could not answer from the help corpus so the owner can write the missing articles.
+- Wave: 5
+- Build on: web

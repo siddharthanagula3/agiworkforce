@@ -277,15 +277,13 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:649-649`, `apps/web/feat
 
 - Done when: An action requested by voice that needs approval can be approved or denied without leaving voice.
 - Wave: 2
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Voice now reads the approval policy: hosted web search and code attach only when the policy lets them run without asking (live-voice-tools.ts:209-235). A spoken request that needs approval still cannot raise an approval card inside the voice session; that needs client work in features/chat. Approval cards from typed turns stay usable in the chat view. | handler |
-| desktop | partial | Voice now reads the approval policy: hosted web search and code attach only when the policy lets them run without asking (live-voice-tools.ts:209-235). A spoken request that needs approval still cannot raise an approval card inside the voice session; that needs client work in features/chat. Approval cards from typed turns stay usable in the chat view. | handler |
-| mobile | partial | The server now withholds hosted voice tools the policy would ask about (live-voice-tools.ts:209-235), but a spoken request that needs approval cannot raise an approval inside the mobile live bar; approval cards from typed turns stay usable in the message list. |  |
 | cli | partial | A voice turn runs through the normal agent loop, whose approval prompts appear in the terminal. Works only in builds compiled with the off-by-default `voice` cargo feature, and needs the user's own OPENAI_API_KEY or a local whisper binary for transcription. | flag-off |
 
-Code: `apps/web/lib/voice/live-voice-tools.ts:71-71`, `apps/web/lib/voice/live-voice-tools.ts:78-78`, `apps/web/features/chat/pages/WebChatPage.tsx:5714-5714`, `apps/cli/Cargo.toml:118-118`
+Code: `apps/cli/Cargo.toml:118-118`, `apps/cli/src/tui/tui_app.rs:3802-3802`, `apps/cli/src/voice.rs:240-240`
 
 ## S48.28: Open a generated document from Voice.
 

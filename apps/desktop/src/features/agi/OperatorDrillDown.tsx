@@ -128,13 +128,13 @@ function ToolCallRow({ entry, cost }: { entry: ActionLogEntry; cost: number }) {
       <div
         className={cn(
           'mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-          isSuccess ? 'bg-green-400/10' : isFailed ? 'bg-red-400/10' : 'bg-white/10',
+          isSuccess ? 'bg-success-fill/10' : isFailed ? 'bg-danger-fill/10' : 'bg-white/10',
         )}
       >
         {isSuccess ? (
-          <CheckCircle2 className="h-3 w-3 text-green-400" />
+          <CheckCircle2 className="h-3 w-3 text-success-text" />
         ) : isFailed ? (
-          <XCircle className="h-3 w-3 text-red-400" />
+          <XCircle className="h-3 w-3 text-danger-text" />
         ) : (
           <Loader2 className="h-3 w-3 text-muted-foreground animate-spin" />
         )}
@@ -156,7 +156,7 @@ function ToolCallRow({ entry, cost }: { entry: ActionLogEntry; cost: number }) {
         {entry.description && (
           <p className="mt-0.5 text-[11px] text-muted-foreground truncate">{entry.description}</p>
         )}
-        {entry.error && <p className="mt-0.5 text-[11px] text-red-400/80">{entry.error}</p>}
+        {entry.error && <p className="mt-0.5 text-[11px] text-danger-text">{entry.error}</p>}
       </div>
     </div>
   );
@@ -168,9 +168,9 @@ function ApprovalRow({ entry }: { entry: ActionLogEntry }) {
   const timedOut = entry.metadata?.['timedOut'] as boolean | undefined;
 
   const riskColors: Record<string, string> = {
-    high: 'text-red-400 bg-red-400/10',
-    medium: 'text-amber-400 bg-amber-400/10',
-    low: 'text-green-400 bg-green-400/10',
+    high: 'text-danger-text bg-danger-fill/10',
+    medium: 'text-warning-text bg-warning-fill/10',
+    low: 'text-success-text bg-success-fill/10',
   };
 
   return (
@@ -178,7 +178,7 @@ function ApprovalRow({ entry }: { entry: ActionLogEntry }) {
       <Shield
         className={cn(
           'mt-0.5 h-4 w-4 shrink-0',
-          approved ? 'text-green-400' : timedOut ? 'text-orange-400' : 'text-red-400',
+          approved ? 'text-success-text' : timedOut ? 'text-warning-text' : 'text-danger-text',
         )}
       />
       <div className="flex-1 min-w-0">
@@ -197,7 +197,7 @@ function ApprovalRow({ entry }: { entry: ActionLogEntry }) {
           <span
             className={cn(
               'ml-auto text-[10px] font-medium',
-              approved ? 'text-green-400' : timedOut ? 'text-orange-400' : 'text-red-400',
+              approved ? 'text-success-text' : timedOut ? 'text-warning-text' : 'text-danger-text',
             )}
           >
             {approved ? 'Approved' : timedOut ? 'Timed out' : 'Denied'}
@@ -416,14 +416,14 @@ export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
           icon={Shield}
           label="Approvals"
           value={approvalEntries.length}
-          color="text-amber-400"
+          color="text-warning-text"
         />
         {successRate !== null ? (
           <StatCard
             icon={CheckCircle2}
             label="Success Rate"
             value={`${successRate}%`}
-            color={successRate >= 80 ? 'text-green-400' : 'text-amber-400'}
+            color={successRate >= 80 ? 'text-success-text' : 'text-warning-text'}
           />
         ) : (
           <StatCard icon={DollarSign} label="Est. Cost" value={formatCost(totalCost)} />
@@ -453,7 +453,7 @@ export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
           title="Approvals"
           icon={Shield}
           count={approvalEntries.length}
-          badgeColor="bg-amber-400/10 text-amber-400"
+          badgeColor="bg-warning-fill/10 text-warning-text"
         >
           {approvalEntries.map((entry) => (
             <ApprovalRow key={entry.id} entry={entry} />
@@ -467,7 +467,7 @@ export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
           title="Errors"
           icon={AlertCircle}
           count={errorEntries.length}
-          badgeColor="bg-red-400/10 text-red-400"
+          badgeColor="bg-danger-fill/10 text-danger-text"
           defaultExpanded
         >
           {errorEntries.map((entry) => (
@@ -475,11 +475,11 @@ export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
               key={entry.id}
               className="flex items-start gap-2.5 px-4 py-2.5 border-b border-white/[0.04] last:border-b-0"
             >
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger-text" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground/80">{entry.title}</p>
                 {(entry.error ?? entry.description) && (
-                  <p className="mt-0.5 text-[11px] text-red-400/80">
+                  <p className="mt-0.5 text-[11px] text-danger-text">
                     {entry.error ?? entry.description}
                   </p>
                 )}
@@ -495,14 +495,14 @@ export function OperatorDrillDown({ task, className }: OperatorDrillDownProps) {
           title="Artifacts Produced"
           icon={Package}
           count={artifactEntries.length}
-          badgeColor="bg-green-400/10 text-green-400"
+          badgeColor="bg-success-fill/10 text-success-text"
         >
           {artifactEntries.map((entry) => (
             <div
               key={entry.id}
               className="flex items-start gap-2.5 px-4 py-2.5 border-b border-white/[0.04] last:border-b-0"
             >
-              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-green-400" />
+              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-foreground/80">{entry.title}</p>
                 {entry.result && (

@@ -30,6 +30,48 @@ const PRIVACY_ITEMS = [
   },
 ] as const;
 
+const PROCESSING_LOCATIONS = [
+  {
+    feature: 'Chat in Local Mode',
+    where:
+      'On this device. Chat text reaches AGI Cloud only if you sync local chats yourself, and attached files never do.',
+  },
+  {
+    feature: 'Chat in AGI Cloud',
+    where: 'AGI Cloud, then the AI provider that serves the model you chose.',
+  },
+  {
+    feature: 'Files you attach in AGI Cloud',
+    where: 'Stored by AGI Cloud in Cloudflare R2 and sent with your message to the model provider.',
+  },
+  {
+    feature: 'Memory',
+    where: 'On this device in Local Mode. In AGI Cloud it is stored in your account.',
+  },
+  {
+    feature: 'Web search and Deep Research',
+    where: 'Your search queries go from AGI Cloud to Perplexity’s search service.',
+  },
+  {
+    feature: 'Image and video generation',
+    where:
+      'AGI Cloud sends your prompt to Google, OpenAI or Stability for images, and to Runway, Google or OpenRouter for video.',
+  },
+  {
+    feature: 'Dictation',
+    where: 'Speech recognition runs on this device.',
+  },
+  {
+    feature: 'Voice mode',
+    where:
+      'AGI Cloud sets up the call, then your audio streams directly between this device and OpenAI.',
+  },
+  {
+    feature: 'Read aloud, text scanning and translation',
+    where: 'On this device.',
+  },
+] as const;
+
 export default function CloudPrivacyScreen() {
   const colors = useThemeColors();
 
@@ -65,6 +107,54 @@ export default function CloudPrivacyScreen() {
             </Text>
           </View>
         ))}
+      </View>
+
+      <View style={{ marginBottom: 18 }}>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 12,
+            fontWeight: '700',
+            textTransform: 'uppercase',
+            marginBottom: 8,
+            paddingHorizontal: 2,
+          }}
+        >
+          Where each feature processes your data
+        </Text>
+        <SettingsGroup>
+          {PROCESSING_LOCATIONS.map((entry, index) => (
+            <View
+              key={entry.feature}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                gap: 3,
+                borderBottomWidth: index === PROCESSING_LOCATIONS.length - 1 ? 0 : 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                {entry.feature}
+              </Text>
+              <Text style={{ color: colors.textSecondary, fontSize: 13, lineHeight: 18 }}>
+                {entry.where}
+              </Text>
+            </View>
+          ))}
+        </SettingsGroup>
+        <Text
+          style={{
+            color: colors.textMuted,
+            fontSize: 12,
+            lineHeight: 17,
+            marginTop: 8,
+            paddingHorizontal: 2,
+          }}
+        >
+          AGI Cloud runs in the United States. The full list of providers, and what each one
+          receives, is at agiworkforce.com/subprocessors.
+        </Text>
       </View>
 
       <ChineseHqProviderConsentGroup />

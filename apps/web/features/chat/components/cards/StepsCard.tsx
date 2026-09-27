@@ -284,8 +284,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
             variant="secondary"
             className={cn(
               'shrink-0 text-xs',
-              allComplete &&
-                'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-300',
+              allComplete && 'bg-success-fill/10 text-success-text',
             )}
           >
             {completedSteps.size}/{parsed.steps.length}
@@ -319,7 +318,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                 className={cn(
                   'rounded-lg border transition-colors',
                   isCompleted
-                    ? 'border-emerald-200/50 bg-emerald-50/30 dark:border-emerald-800/20 dark:bg-emerald-950/10'
+                    ? 'border-success-fill/50 bg-success-fill/10'
                     : 'border-transparent hover:border-border hover:bg-muted/30',
                 )}
               >
@@ -335,7 +334,7 @@ export function StepsCard({ content, messageId }: StepsCardProps) {
                       className={cn(
                         'flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-all',
                         isCompleted
-                          ? 'border-emerald-700 bg-emerald-700 text-white'
+                          ? 'border-success-fill bg-success-fill text-success-on-fill'
                           : 'border-muted-foreground/30 hover:border-[var(--chat-accent-primary)]',
                       )}
                       aria-label={

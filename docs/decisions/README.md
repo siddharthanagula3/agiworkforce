@@ -81,7 +81,7 @@ Archived source material:
     Evidence: `docs/README.md`, `docs/development/agent-operability.md`.
 
 15. The primary CLI command is `agi`. `agiworkforce` remains a compatibility alias, not the preferred user-facing command. User docs and command examples should prefer `agi`; packages, crates, release archives, repo URLs, and existing `~/.agiworkforce` state paths keep `agiworkforce` unless a separate migration plan is approved.
-    Evidence: `docs/standards/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/cli/npm/package.json`, `scripts/install.sh`.
+    Evidence: `docs/standards/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/web/public/install.sh`.
 
 16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `docs/work/` for dated execution queues, root `TODO.md` was retired in commit `906fe5cda`, `CHANGELOG.md` for completed work, durable knowledge in the `docs/` taxonomy described by `docs/README.md`, and evidence ledgers in the live root `audit/` directory. The former `reports/`, `tasks/`, and `docs/archive/` roots were removed on 2026-06-28 (git history only).
     Evidence: `docs/standards/naming-conventions.md`, `docs/development/agent-operability.md`, `scripts/check-structure-conventions.mjs`.
@@ -158,17 +158,23 @@ Archived source material:
     guide](https://nextjs.org/docs/app/guides/content-security-policy), reviewed
     2026-09-22.
 
-26. Web v1 support is the help centre, signed-in tickets and direct email to
-    `contact@agiworkforce.com`. The dormant AI assistant and live-handoff widget
-    are not launch scope and must not mount or enter a public bundle merely
-    because their source exists. The signed-in account menu exposes the direct
-    mail channel in two clicks; Free through Max promise no response time.
-    Shipping the widget later requires complete endpoints, safe abstention for
-    prices, plan entitlements and account state, configured staff notification
-    and fallback email, and an exercised operator handoff. Code can verify the
-    route and address but not that a person watches the inbox, so confirmed
-    monitoring remains a founder-operated Web launch gate.
-    Evidence: `apps/web/shared/components/layout/AccountMenuItems.tsx`,
+26. Web support is the help centre, the support assistant, signed-in tickets
+    and direct email to `contact@agiworkforce.com`. The founder decided on
+    2026-09-27, in the manner of Intercom Fin as Anthropic runs it, that the
+    assistant mounts on the website and inside the product and is on by
+    default, with two kill switches: `NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED=0`
+    hides the widget and `SUPPORT_AGENT_ENABLED=0` stops automated answers,
+    after which the widget offers to send the question to a person. This
+    supersedes the earlier Web v1 decision to keep the widget unmounted. Its
+    client graph loads after hydration through `next/dynamic`, so the public
+    root bundle does not carry it. The signed-in account menu still exposes the
+    direct mail channel in two clicks; Free through Max promise no response
+    time. Code can verify the route and address but not that a person watches
+    the inbox, so confirmed monitoring remains a founder-operated launch gate.
+    Evidence: `apps/web/features/support/components/SupportWidgetEntry.tsx`,
+    `apps/web/features/support/lib/widget-flag.ts`,
+    `apps/web/lib/support/agent/answer/model-route.ts`,
+    `apps/web/shared/components/layout/AccountMenuItems.tsx`,
     `apps/web/e2e/support-entry.spec.ts`, `docs/runbooks/support-operations.md`
     and `audit/decisions/founder-actions.md`.
 

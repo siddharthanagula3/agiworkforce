@@ -13,6 +13,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { parseImportFile, type ImportSource } from '@/src/features/memory/services/memoryImport';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 type ImportStatus = 'idle' | 'picking' | 'parsing' | 'importing' | 'done' | 'error';
 
@@ -45,6 +46,7 @@ const IMPORT_SOURCES: ImportSource[] = ['chatgpt', 'claude', 'gemini', 'text'];
 export default function MemoryImportScreen() {
   const colors = useThemeColors();
   const { bulkInsert } = useMemoryStore();
+  const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   const [state, setState] = useState<ImportState>({
     status: 'idle',
@@ -130,7 +132,10 @@ export default function MemoryImportScreen() {
           onPress: async () => {
             setState((s) => ({ ...s, status: 'importing', source, factsFound: facts.length }));
             try {
-              const { inserted, skipped } = await bulkInsert(facts.map((f) => f.fact));
+              const { inserted, skipped } = await bulkInsert(
+                facts.map((f) => f.fact),
+                source === 'text' ? 'other' : source,
+              );
               setState((s) => ({ ...s, status: 'done', inserted, skipped }));
             } catch (err) {
               setState((s) => ({
@@ -198,11 +203,12 @@ export default function MemoryImportScreen() {
             }}
           >
             <Text className="text-xs font-semibold mb-1" style={{ color: colors.teal }}>
-              On-device only
+              {isCloud ? 'Saved to your AGI Cloud account' : 'On-device only'}
             </Text>
             <Text className="text-xs leading-5" style={{ color: colors.textSecondary }}>
-              Files are read locally. No data is uploaded to any server. Your imports stay on this
-              device.
+              {isCloud
+                ? 'Files are read on this device. Only the facts you import are sent to your AGI Cloud account, where they sync to your other devices.'
+                : 'Files are read locally. No data is uploaded to any server. Your imports stay on this device.'}
             </Text>
           </View>
         </Animated.View>

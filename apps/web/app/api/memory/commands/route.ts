@@ -7,7 +7,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { runMemoryCommand } from '@/lib/services/memory-commands';
+import { memoryCommandSource, runMemoryCommand } from '@/lib/services/memory-commands';
+import { readSurfaceHint } from '@/lib/free-chat-surface-policy';
 
 export const runtime = 'nodejs';
 
@@ -61,6 +62,7 @@ async function handleMemoryCommand(request: NextRequest): Promise<Response> {
       projectId: parsed.data.projectId ?? null,
       conversationId,
       temporaryChat: conversation?.is_temporary === true,
+      source: memoryCommandSource(readSurfaceHint(request)),
     },
     { message: parsed.data.message, confirmed: parsed.data.confirmed ?? false },
   );

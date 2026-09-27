@@ -13,6 +13,7 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { API_KEY_SCOPE_VALUES, resolveApiKeyScopes } from '@/lib/api-key-scopes';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 
 const CreateKeySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be at most 100 characters'),
@@ -56,13 +57,10 @@ async function handleList(request: NextRequest) {
 }
 
 async function handleCreate(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'api-keys-create');
-  if (rateLimitResponse) return rateLimitResponse;
-
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const { db, userId } = await getUserScopedDb(request);
+  const { db, userId, organizationId } = await getUserScopedDb(request);
 
   const body = await request.json().catch(() => ({}));
   const parsed = CreateKeySchema.safeParse(body);
@@ -81,6 +79,17 @@ async function handleCreate(request: NextRequest) {
   if (activeCount >= 20) {
     throw createError.validation('You may not have more than 20 active API keys at once');
   }
+
+  await requireStepUp({
+    userId,
+    action: 'api_credential.reveal',
+    organizationId,
+    request,
+    endpoint: '/api/settings/api-keys',
+  });
+
+  const rateLimitResponse = await withRateLimit(request, 'api-keys-create');
+  if (rateLimitResponse) return rateLimitResponse;
 
   const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(
     db,

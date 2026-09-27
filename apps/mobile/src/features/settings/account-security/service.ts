@@ -1,5 +1,12 @@
 import { api } from '@/services/api';
-import { fetchAccountSettings, saveAccountSettings } from '@/services/preferences';
+import {
+  fetchAccountSettings,
+  fetchPreferenceNamespace,
+  saveAccountSettings,
+  savePreferenceNamespace,
+} from '@/services/preferences';
+
+export const WEB_SECURITY_URL = 'https://agiworkforce.com/settings/security';
 
 export const SESSION_TIMEOUT_MINUTES = [15, 30, 60, 120, 480] as const;
 export type SessionTimeoutMinutes = (typeof SESSION_TIMEOUT_MINUTES)[number];
@@ -39,8 +46,7 @@ export function groupAuditEntries(entries: AuditLogEntry[]): GroupedAuditEntry[]
 
 export interface AccountSecurityStatus {
   twoFactorEnabled: boolean;
-  enabledAt: string | null;
-  backupCodesRemaining: number;
+  backupCodesReady: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,33 +57,17 @@ export function parseAccountSecurityStatus(value: unknown): AccountSecurityStatu
   if (!isRecord(value) || typeof value['enabled'] !== 'boolean') {
     throw new Error('Account security returned an invalid response.');
   }
-
-  const backupCodesRemaining = value['backup_codes_remaining'];
-  if (
-    typeof backupCodesRemaining !== 'number' ||
-    !Number.isInteger(backupCodesRemaining) ||
-    backupCodesRemaining < 0
-  ) {
-    throw new Error('Account security returned an invalid response.');
-  }
-
-  const rawEnabledAt = value['enabled_at'];
-  const enabledAt =
-    rawEnabledAt === undefined || rawEnabledAt === null
-      ? null
-      : typeof rawEnabledAt === 'string' && Number.isFinite(Date.parse(rawEnabledAt))
-        ? rawEnabledAt
-        : undefined;
-
-  if (enabledAt === undefined) {
-    throw new Error('Account security returned an invalid response.');
-  }
-
   return {
     twoFactorEnabled: value['enabled'],
-    enabledAt,
-    backupCodesRemaining,
+    backupCodesReady: value['backup_codes_ready'] === true,
   };
+}
+
+export async function fetchWorkspaceMfaRequirement(signal?: AbortSignal): Promise<boolean> {
+  const response = await api.get<{ required?: unknown }>('/api/settings/2fa/requirement', {
+    signal,
+  });
+  return response?.required === true;
 }
 
 export async function fetchAccountSecurityStatus(
@@ -159,6 +149,29 @@ export async function revokeAccountSession(sessionId: string): Promise<void> {
   await api.delete(`/api/settings/sessions/${encodeURIComponent(sessionId)}`);
 }
 
+export async function revokeAllAccountSessions(headers: Record<string, string>): Promise<void> {
+  await api.delete('/api/settings/sessions', { headers });
+}
+
+export interface PasswordChange {
+  currentPassword: string | null;
+  newPassword: string;
+}
+
+export async function changeAccountPassword(
+  change: PasswordChange,
+  headers: Record<string, string>,
+): Promise<void> {
+  await api.post(
+    '/api/settings/password',
+    {
+      newPassword: change.newPassword,
+      ...(change.currentPassword === null ? {} : { currentPassword: change.currentPassword }),
+    },
+    { headers },
+  );
+}
+
 export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<AuditLogEntry[]> {
   const response = await api.get<unknown>(
     `/api/settings/audit-logs?limit=${limit}`,
@@ -183,4 +196,15 @@ export async function fetchAuditLog(limit = 20, signal?: AbortSignal): Promise<A
       },
     ];
   });
+}
+
+const LOCKDOWN_PREFERENCE_NAMESPACE = 'lockdown';
+
+export async function fetchLockdownMode(): Promise<boolean> {
+  const settings = await fetchPreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE);
+  return (settings as { enabled?: unknown }).enabled === true;
+}
+
+export async function saveLockdownMode(enabled: boolean): Promise<void> {
+  await savePreferenceNamespace(LOCKDOWN_PREFERENCE_NAMESPACE, { enabled });
 }

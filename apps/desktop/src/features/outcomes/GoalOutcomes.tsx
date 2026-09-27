@@ -49,8 +49,8 @@ export const GoalOutcomes: React.FC<GoalOutcomesProps> = ({ goalId }) => {
 
   if (error) {
     return (
-      <div className="p-3 bg-red-50 border border-red-200 rounded text-sm">
-        <p className="text-red-600">{error}</p>
+      <div className="p-3 bg-danger-fill/10 border border-danger-fill/30 rounded text-sm">
+        <p className="text-danger-text">{error}</p>
       </div>
     );
   }
@@ -72,7 +72,9 @@ export const GoalOutcomes: React.FC<GoalOutcomesProps> = ({ goalId }) => {
         <h3 className="font-semibold text-lg">Outcome Tracking</h3>
         <div
           className={`px-3 py-1 rounded-full text-sm font-medium ${
-            overallSuccess ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+            overallSuccess
+              ? 'bg-success-fill/10 text-success-text'
+              : 'bg-warning-fill/10 text-warning-text'
           }`}
         >
           {achievedCount}/{outcomes.length} achieved
@@ -97,7 +99,9 @@ const OutcomeCard: React.FC<{ outcome: TrackedOutcome }> = ({ outcome }) => {
   return (
     <div
       className={`p-3 border rounded-lg ${
-        outcome.achieved ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'
+        outcome.achieved
+          ? 'bg-success-fill/10 border-success-fill/30'
+          : 'bg-warning-fill/10 border-warning-fill/30'
       }`}
     >
       <div className="flex items-start justify-between mb-2">
@@ -110,7 +114,7 @@ const OutcomeCard: React.FC<{ outcome: TrackedOutcome }> = ({ outcome }) => {
           </div>
         </div>
         <div
-          className={`flex items-center ${outcome.achieved ? 'text-green-600' : 'text-yellow-600'}`}
+          className={`flex items-center ${outcome.achieved ? 'text-success-text' : 'text-warning-text'}`}
         >
           {outcome.achieved ? (
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -148,7 +152,7 @@ const OutcomeCard: React.FC<{ outcome: TrackedOutcome }> = ({ outcome }) => {
         <div className="flex justify-between text-xs">
           <span className="text-gray-600">Achievement:</span>
           <span
-            className={`font-medium ${achievement >= 100 ? 'text-green-600' : 'text-yellow-600'}`}
+            className={`font-medium ${achievement >= 100 ? 'text-success-text' : 'text-warning-text'}`}
           >
             {achievement.toFixed(1)}%
           </span>
@@ -158,7 +162,7 @@ const OutcomeCard: React.FC<{ outcome: TrackedOutcome }> = ({ outcome }) => {
       <div className="mt-2">
         <div className="w-full bg-gray-200 rounded-full h-1.5">
           <div
-            className={`h-1.5 rounded-full ${outcome.achieved ? 'bg-green-500' : 'bg-yellow-500'}`}
+            className={`h-1.5 rounded-full ${outcome.achieved ? 'bg-success-fill' : 'bg-warning-fill'}`}
             style={{ width: `${Math.min(achievement, 100)}%` }}
           ></div>
         </div>

@@ -236,13 +236,13 @@ function DataPrivacySection() {
                 )}
               </Button>
               {exportSuccess && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-green-600">
+                <div className="mt-3 flex items-center gap-2 text-sm text-success-text">
                   <Check className="h-4 w-4" />
                   <span>Data exported successfully!</span>
                 </div>
               )}
               {exportError && (
-                <div className="mt-3 flex items-center gap-2 text-sm text-red-600">
+                <div className="mt-3 flex items-center gap-2 text-sm text-danger-text">
                   <X className="h-4 w-4" />
                   <span>{exportError}</span>
                 </div>
@@ -281,15 +281,13 @@ function DataPrivacySection() {
 
         {/* Cloud sync toggle removed for v1 LOCAL ONLY. Re-add when cloud is ungated. */}
 
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">
+        <div className="rounded-lg border border-danger-fill/20 bg-danger-fill/5 p-6">
           <div className="flex items-start gap-4">
-            <div className="rounded-md bg-red-500/10 p-3">
-              <Database className="h-6 w-6 text-red-500" />
+            <div className="rounded-md bg-danger-fill/10 p-3">
+              <Database className="h-6 w-6 text-danger-text" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold mb-2 text-red-600 dark:text-red-400">
-                Clear Local Storage
-              </h4>
+              <h4 className="font-semibold mb-2 text-danger-text">Clear Local Storage</h4>
               <p className="text-sm text-muted-foreground mb-4">
                 Reset the application to its initial state. This will clear all chat history,
                 settings, cached data, and encrypted local credentials. This action cannot be
@@ -303,7 +301,7 @@ function DataPrivacySection() {
               >
                 {clearingData ? 'Clearing...' : 'Clear All Data'}
               </Button>
-              {clearError && <p className="mt-3 text-sm text-red-600">{clearError}</p>}
+              {clearError && <p className="mt-3 text-sm text-danger-text">{clearError}</p>}
             </div>
           </div>
         </div>
@@ -312,25 +310,23 @@ function DataPrivacySection() {
           <h4 className="font-semibold mb-2">Privacy &amp; Security</h4>
           <ul className="space-y-2 text-sm text-muted-foreground">
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
               <span>Chat history and settings are stored locally on your device</span>
             </li>
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
               <span>Integration credentials are encrypted and stored locally on your device</span>
             </li>
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-500" />
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
               <span>You can export your data at any time in standard JSON format</span>
             </li>
           </ul>
         </div>
 
-        <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-4">
-          <h4 className="font-semibold text-yellow-600 dark:text-yellow-400 mb-2">
-            GDPR Compliance
-          </h4>
-          <p className="text-sm text-yellow-600 dark:text-yellow-400">
+        <div className="rounded-lg border border-warning-fill/50 bg-warning-fill/10 p-4">
+          <h4 className="font-semibold text-warning-text mb-2">GDPR Compliance</h4>
+          <p className="text-sm text-warning-text">
             AGI Workforce respects your right to data portability and privacy. Use the export
             feature above to exercise your GDPR rights. To delete all your data, simply uninstall
             the application and remove the data directory.

@@ -137,7 +137,7 @@ export function GitCommitDialog({
                 <div className="space-y-1">
                   {status?.staged.map((file) => (
                     <div key={file} className="flex items-center gap-2 text-sm">
-                      <Check className="h-3 w-3 text-green-500 shrink-0" />
+                      <Check className="h-3 w-3 text-success-text shrink-0" />
                       <span className="font-mono text-xs truncate" title={file}>
                         {file}
                       </span>
@@ -200,8 +200,8 @@ export function GitCommitDialog({
 
           {/* No staged files warning */}
           {(status?.staged.length ?? 0) === 0 && !loading && (
-            <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30">
-              <p className="text-sm text-amber-600 dark:text-amber-400">
+            <div className="p-3 rounded-md bg-warning-fill/10 border border-warning-fill/30">
+              <p className="text-sm text-warning-text">
                 No files are staged for commit. Stage some changes first.
               </p>
             </div>

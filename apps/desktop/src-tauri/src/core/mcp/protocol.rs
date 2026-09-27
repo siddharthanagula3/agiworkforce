@@ -18,19 +18,6 @@ pub struct JsonRpcResponse {
     pub id: RequestId,
 }
 
-/// JSON-RPC error code for `UnsupportedProtocolVersionError` (MCP 2026-07-28).
-///
-/// A modern-only server rejecting our legacy `initialize` SHOULD return this
-/// with `data.supported` listing the revisions it speaks. The spec calls that
-/// message out specifically because legacy clients cannot fall forward, it may
-/// be the only diagnostic a user ever sees, so it is worth classifying rather
-/// than folding into the generic server-error bucket.
-///
-/// Only the code is modelled. The engine flattens JSON-RPC error frames to a
-/// string before the desktop taxonomy sees them, so `data.supported` does not
-/// survive; a typed struct for it would be a shape nothing can populate.
-pub const UNSUPPORTED_PROTOCOL_VERSION_CODE: i32 = -32022;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonRpcError {
     pub jsonrpc: String,
@@ -107,29 +94,6 @@ impl McpMessage {
             McpMessage::Notification(notif) => serde_json::to_string(notif),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct InitializeParams {
-    #[serde(rename = "protocolVersion")]
-    pub protocol_version: String,
-    pub capabilities: ClientCapabilities,
-    #[serde(rename = "clientInfo")]
-    pub client_info: Implementation,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ClientCapabilities {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub roots: Option<RootsCapability>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sampling: Option<HashMap<String, Value>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RootsCapability {
-    #[serde(rename = "listChanged")]
-    pub list_changed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

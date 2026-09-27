@@ -255,7 +255,7 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
         </div>
 
         {(approvalTimeoutPolicy ?? 'auto-deny') === 'auto-approve' && (
-          <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          <div className="flex items-start gap-2 rounded-md border border-warning-fill/30 bg-warning-fill/10 px-3 py-2 text-xs text-warning-text">
             <span className="mt-0.5">!</span>
             <span>
               Auto-approve allows the agent to proceed without confirmation. Only use this in
@@ -386,7 +386,7 @@ export function AgentExecutionSettings({ onSettingsChange }: AgentExecutionSetti
             </div>
 
             {terminalSandbox.backend === 'srt' && terminalSandbox.allowedDomains.length === 0 && (
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+              <div className="rounded-md border border-warning-fill/30 bg-warning-fill/10 px-3 py-2 text-xs text-warning-text">
                 Network is currently blocked for sandboxed commands because no domains are
                 allowlisted.
               </div>

@@ -67,11 +67,9 @@ function normalizeRecordedAction(payload: unknown): RecordedAction | null {
           y: Number(targetRaw['y'] ?? 0),
           elementId: (targetRaw['elementId'] ?? targetRaw['element_id']) as string | undefined,
           elementName: (targetRaw['elementName'] ?? targetRaw['element_name']) as
-            | string
-            | undefined,
+            string | undefined,
           elementType: (targetRaw['elementType'] ?? targetRaw['element_type']) as
-            | string
-            | undefined,
+            string | undefined,
         }
       : undefined,
     value: typeof raw['value'] === 'string' ? raw['value'] : undefined,
@@ -410,7 +408,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             {isRecording ? (
-              <span className="h-2 w-2 rounded-full bg-red-500 motion-safe:animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-danger-fill motion-safe:animate-pulse" />
             ) : (
               <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
             )}
@@ -474,7 +472,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
 
         {emptyCapture && !isRecording && (
           <div
-            className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"
+            className="mb-4 rounded-xl border border-warning-fill/30 bg-warning-fill/5 p-4"
             role="alert"
           >
             <h3 className="text-sm font-semibold">That recording has nothing to learn from</h3>
@@ -503,7 +501,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
         )}
 
         {permissions && missingPermissions.length > 0 && !isRecording && (
-          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+          <div className="mb-4 rounded-xl border border-warning-fill/30 bg-warning-fill/5 p-4">
             <h3 className="text-sm font-medium">Allow Desktop control to record and replay</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               macOS requires these permissions. After granting them, return here and check again.
@@ -573,9 +571,9 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
                     className={cn(
                       'mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md',
                       action.actionType === 'type' || action.actionType === 'hotkey'
-                        ? 'bg-emerald-500/10 text-emerald-500'
+                        ? 'bg-success-fill/10 text-success-text'
                         : action.actionType === 'narration'
-                          ? 'bg-amber-500/10 text-amber-500'
+                          ? 'bg-warning-fill/10 text-warning-text'
                           : 'bg-blue-500/10 text-blue-500',
                     )}
                   >

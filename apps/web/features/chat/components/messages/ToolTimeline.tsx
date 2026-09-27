@@ -676,7 +676,7 @@ function ToolTimeline({
           aria-label="Expand tool details"
         >
           <span>{summary}</span>
-          {errorCount > 0 && <span className="text-rose-400 text-xs">{errorCount} failed</span>}
+          {errorCount > 0 && <span className="text-danger-text text-xs">{errorCount} failed</span>}
           {deniedCount > 0 && <span className="text-xs">{deniedCount} denied</span>}
           <ChevronRight className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
         </button>
@@ -714,7 +714,7 @@ function ToolTimeline({
             <>
               {summary}
               {errorCount > 0 && (
-                <span className="text-rose-400 ml-1.5 text-xs">{errorCount} failed</span>
+                <span className="text-danger-text ml-1.5 text-xs">{errorCount} failed</span>
               )}
               {deniedCount > 0 && <span className="ml-1.5 text-xs">{deniedCount} denied</span>}
             </>
@@ -768,8 +768,8 @@ function ToolTimeline({
                           className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-3 ml-2"
                         >
                           <div className="flex items-center gap-1 mb-0.5">
-                            <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                            <span className="text-caption text-blue-400/70 font-mono">
+                            <GitBranch className="w-2.5 h-2.5 text-blue-700 dark:text-blue-400 shrink-0" />
+                            <span className="text-caption text-blue-700 dark:text-blue-400 font-mono">
                               parallel
                             </span>
                           </div>

@@ -55,25 +55,25 @@ function getNotificationIcon(type: NotificationType) {
     case 'system':
       return <Settings className="h-4 w-4" />;
     case 'task_complete':
-      return <CheckCircle className="h-4 w-4 text-green-500" />;
+      return <CheckCircle className="h-4 w-4 text-success-text" />;
     case 'task_failed':
-      return <AlertCircle className="h-4 w-4 text-red-500" />;
+      return <AlertCircle className="h-4 w-4 text-danger-text" />;
     case 'agent_activity':
       return <Zap className="h-4 w-4 text-purple-500" />;
     case 'mcp_server':
       return <Settings className="h-4 w-4 text-blue-500" />;
     case 'reminder':
-      return <Clock className="h-4 w-4 text-yellow-500" />;
+      return <Clock className="h-4 w-4 text-yellow-700 dark:text-yellow-500" />;
     case 'achievement':
-      return <Trophy className="h-4 w-4 text-amber-500" />;
+      return <Trophy className="h-4 w-4 text-amber-700 dark:text-amber-500" />;
     case 'team':
       return <Users className="h-4 w-4 text-indigo-500" />;
     case 'info':
       return <Info className="h-4 w-4 text-blue-500" />;
     case 'warning':
-      return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      return <AlertTriangle className="h-4 w-4 text-warning-text" />;
     case 'error':
-      return <AlertCircle className="h-4 w-4 text-red-500" />;
+      return <AlertCircle className="h-4 w-4 text-danger-text" />;
     default:
       return <Bell className="h-4 w-4" />;
   }
@@ -101,16 +101,16 @@ function getPriorityConfig(priority: NotificationPriority) {
     case 'urgent':
       return {
         label: 'Critical',
-        dotColor: 'bg-red-500',
-        badgeClass: 'bg-red-500/15 text-red-500 border-red-500/30',
-        ringClass: 'ring-1 ring-red-500/20',
+        dotColor: 'bg-danger-fill',
+        badgeClass: 'bg-danger-fill/10 text-danger-text border-danger-fill/30',
+        ringClass: 'ring-1 ring-danger-fill/20',
       };
     case 'high':
       return {
         label: 'High',
-        dotColor: 'bg-orange-500',
-        badgeClass: 'bg-orange-500/15 text-orange-500 border-orange-500/30',
-        ringClass: 'ring-1 ring-orange-500/10',
+        dotColor: 'bg-warning-fill',
+        badgeClass: 'bg-warning-fill/10 text-warning-text border-warning-fill/30',
+        ringClass: 'ring-1 ring-warning-fill/10',
       };
     case 'normal':
       return {

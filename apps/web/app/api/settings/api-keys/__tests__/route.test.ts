@@ -23,6 +23,10 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
+process.env['CSRF_SECRET'] = 'api-key-reveal-step-up-secret-long-enough';
+
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { GET, POST } from '../route';
 import { DELETE } from '../[keyId]/route';
 
@@ -37,8 +41,15 @@ function params(keyId: string) {
 }
 
 function createRequest(body: Record<string, unknown>) {
+  const { token } = createStepUpGrant({
+    userId: 'user-1',
+    action: 'api_credential.reveal',
+    resourceId: null,
+    method: 'first_factor',
+  });
   return req('http://localhost:3000/api/settings/api-keys', {
     method: 'POST',
+    headers: { [STEP_UP_TOKEN_HEADER]: token },
     body: JSON.stringify(body),
   });
 }
@@ -107,12 +118,7 @@ describe('creating an API key', () => {
       },
     ]);
 
-    const response = await POST(
-      req('http://localhost:3000/api/settings/api-keys', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'New key', scopes: ['models:read'] }),
-      }),
-    );
+    const response = await POST(createRequest({ name: 'New key', scopes: ['models:read'] }));
 
     expect(response.status).toBe(201);
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user-1']);
@@ -167,7 +173,9 @@ describe('creating an API key', () => {
       expect.stringContaining('INSERT INTO api_keys'),
       expect.anything(),
     );
-    expect(mockAudit).not.toHaveBeenCalled();
+    expect(mockAudit).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'api_key_created' }),
+    );
   });
 });
 

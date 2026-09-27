@@ -25,11 +25,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agiworkforce_mcp::elicitation::{
-    AutoDeclineHandler, ElicitationHandler, ElicitationRequest, ElicitationResponse,
+    AutoDeclineHandler, ElicitationHandler, ElicitationMode, ElicitationRequest,
+    ElicitationResponse,
 };
 use agiworkforce_mcp::{
-    BrowserAuthorizer, ClientHooks, ClientInfo, McpClient, McpTimeouts, OAuthConfig, OAuthToken,
-    TokenStore, TransportConfig,
+    BrowserAuthorizer, ClientHooks, ClientInfo, ClientRegistration, McpClient, McpTimeouts,
+    OAuthConfig, OAuthToken, TokenStore, TransportConfig,
 };
 
 pub mod connection_pool;
@@ -45,7 +46,7 @@ pub use connection_pool::McpConnectionManager;
 pub use oauth_store::McpOAuthStore;
 #[allow(unused_imports)]
 pub use oauth_store::McpOAuthToken;
-use oauth_store::{McpServerOAuthStore, McpServerToken};
+use oauth_store::McpServerOAuthStore;
 #[allow(unused_imports)]
 pub use resources::{McpResource, McpResourceList};
 #[allow(unused_imports)]
@@ -342,32 +343,8 @@ fn mcp_token_to_crate(t: &McpOAuthToken) -> OAuthToken {
         auth_server_metadata_url: t.auth_server_metadata_url.clone(),
         token_url: t.token_url.clone(),
         client_id: t.client_id.clone(),
-    }
-}
-
-fn secure_mcp_token_to_crate(token: McpServerToken) -> OAuthToken {
-    OAuthToken {
-        access_token: token.access_token,
-        refresh_token: token.refresh_token,
-        token_type: token.token_type,
-        expires_at: token.expires_at,
-        scope: token.scope,
-        auth_server_metadata_url: token.auth_server_metadata_url,
-        token_url: token.token_url,
-        client_id: token.client_id,
-    }
-}
-
-fn crate_token_to_secure_mcp(token: OAuthToken) -> McpServerToken {
-    McpServerToken {
-        access_token: token.access_token,
-        refresh_token: token.refresh_token,
-        token_type: token.token_type,
-        expires_at: token.expires_at,
-        scope: token.scope,
-        auth_server_metadata_url: token.auth_server_metadata_url,
-        token_url: token.token_url,
-        client_id: token.client_id,
+        issuer: None,
+        resource: None,
     }
 }
 
@@ -379,24 +356,27 @@ impl TokenStore for KeyringTokenStore {
     fn get(&self, server_url: &str) -> Option<OAuthToken> {
         let secure_store = McpServerOAuthStore::new().ok()?;
         if let Some(token) = secure_store.load(server_url).ok()? {
-            return Some(secure_mcp_token_to_crate(token));
+            return Some(token);
         }
 
         let mut legacy = McpOAuthStore::load().ok()?;
-        let token = legacy.get(server_url)?.clone();
-        secure_store
-            .save(
-                server_url,
-                &crate_token_to_secure_mcp(mcp_token_to_crate(&token)),
-            )
-            .ok()?;
+        let token = mcp_token_to_crate(legacy.get(server_url)?);
+        secure_store.save(server_url, &token).ok()?;
         legacy.remove(server_url);
         legacy.save().ok()?;
-        Some(mcp_token_to_crate(&token))
+        Some(token)
     }
 
     fn set(&self, server_url: &str, token: OAuthToken) -> anyhow::Result<()> {
-        McpServerOAuthStore::new()?.save(server_url, &crate_token_to_secure_mcp(token))
+        McpServerOAuthStore::new()?.save(server_url, &token)
+    }
+
+    fn client(&self, issuer: &str) -> Option<ClientRegistration> {
+        McpServerOAuthStore::new().ok()?.load_client(issuer).ok()?
+    }
+
+    fn set_client(&self, issuer: &str, client: ClientRegistration) -> anyhow::Result<()> {
+        McpServerOAuthStore::new()?.save_client(issuer, &client)
     }
 }
 
@@ -429,6 +409,10 @@ impl HookFiringElicitationHandler {
 }
 
 impl ElicitationHandler for HookFiringElicitationHandler {
+    fn modes(&self) -> &'static [ElicitationMode] {
+        self.inner.modes()
+    }
+
     fn handle<'a>(
         &'a self,
         server_name: &'a str,
@@ -616,41 +600,46 @@ pub async fn login_to_remote_server_for_client(
     name: &str,
     config: &McpServerConfig,
 ) -> Result<McpCredentialState> {
-    if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
-        bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
-    }
-    let transport = to_transport_config(config);
-    let timeouts = McpTimeouts::default();
-    let hooks = build_client_hooks_with_browser(
-        Arc::new(AutoDeclineHandler),
-        Arc::new(ClientBrowserAuthorizer),
-    );
-    let mut client = McpClient::connect(name, transport, timeouts, hooks)
-        .await
-        .with_context(|| format!("could not authorize MCP server '{name}'"))?;
-    let _ = client.shutdown().await;
+    sign_in(name, config, Arc::new(ClientBrowserAuthorizer)).await?;
     Ok(credential_state(config))
 }
 
 /// Authorize a registered remote MCP server and leave its token in the store
 /// every later connection reads.
-///
-/// This does not implement a second OAuth flow. The HTTP transport already
-/// runs RFC 9728 → RFC 8414 → RFC 7591 → PKCE on the first 401 and persists
-/// the result through [`KeyringTokenStore`]; `agi mcp login` just performs
-/// that first connect on demand, at a moment the user chose, instead of in the
-/// middle of a turn. The engine's flow stays the single implementation.
 pub async fn login_to_remote_server(name: &str, config: &McpServerConfig) -> Result<()> {
-    {
-        if !crate::interactive::can_prompt() {
-            bail!("`agi mcp login` needs an interactive terminal to open the browser");
-        }
+    if !crate::interactive::can_prompt() {
+        bail!("`agi mcp login` needs an interactive terminal to open the browser");
     }
-    let mut connection = McpConnection::connect(name, config)
-        .await
-        .with_context(|| format!("could not authorize MCP server '{name}'"))?;
-    let _ = connection.shutdown().await;
+    sign_in(name, config, Arc::new(CliBrowserAuthorizer)).await
+}
+
+async fn sign_in(
+    name: &str,
+    config: &McpServerConfig,
+    browser: Arc<dyn BrowserAuthorizer>,
+) -> Result<()> {
+    if matches!(config.as_transport(), McpTransport::Stdio { .. }) {
+        bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
+    }
+    let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
+    let mut client = McpClient::connect(
+        name,
+        to_transport_config(config),
+        McpTimeouts::default(),
+        hooks,
+    )
+    .await
+    .with_context(|| format!("could not authorize MCP server '{name}'"))?;
+    let _ = client.shutdown().await;
     Ok(())
+}
+
+fn needs_sign_in(error: &anyhow::Error) -> bool {
+    error.chain().any(|cause| {
+        cause
+            .downcast_ref::<agiworkforce_mcp::McpError>()
+            .is_some_and(agiworkforce_mcp::McpError::is_authorization_required)
+    })
 }
 
 /// Forget the stored OAuth token for a remote MCP server. Returns whether a
@@ -670,7 +659,10 @@ pub fn logout_from_remote_server(server_url: &str) -> Result<bool> {
 /// [`AutoDeclineHandler`], while the full-screen TUI injects its interactive
 /// queue. The wrapper keeps the CLI hook lifecycle identical in both cases.
 fn build_client_hooks(elicitation: Arc<dyn ElicitationHandler>) -> ClientHooks {
-    build_client_hooks_with_browser(elicitation, Arc::new(CliBrowserAuthorizer))
+    build_client_hooks_with_browser(
+        elicitation,
+        Arc::new(agiworkforce_mcp::hooks::DenyBrowserAuthorizer),
+    )
 }
 
 /// Same bundle with an explicit browser surface, for a client that owns a
@@ -687,8 +679,16 @@ fn build_client_hooks_with_browser(
             name: "agiworkforce-cli".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
         },
+        client_metadata_url: client_metadata_document_url(),
         on_log: agiworkforce_mcp::hooks::noop_log(),
     }
+}
+
+fn client_metadata_document_url() -> Option<String> {
+    let raw = std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| crate::tier_cache::default_api_base().to_string());
+    let base = crate::tier_cache::resolve_agi_api_base(&raw)?;
+    agiworkforce_mcp::oauth::client_metadata_document_url(&base, "cli")
 }
 
 // ---------------------------------------------------------------------------
@@ -702,6 +702,13 @@ pub struct McpConnection {
     server_name: String,
     client: McpClient,
     timeouts: McpTimeouts,
+    notifications: Option<tokio::sync::mpsc::Receiver<agiworkforce_mcp::McpNotification>>,
+}
+
+#[derive(Default)]
+struct ListChanges {
+    tools: bool,
+    prompts: bool,
 }
 
 impl McpConnection {
@@ -722,12 +729,28 @@ impl McpConnection {
             .with_context(|| format!("MCP server '{name}' must run sandboxed"))?;
         let timeouts = McpTimeouts::default();
         let hooks = build_client_hooks(elicitation);
-        let client = McpClient::connect(name, transport, timeouts.clone(), hooks).await?;
+        let mut client = McpClient::connect(name, transport, timeouts.clone(), hooks).await?;
+        let notifications = client.notifications();
         Ok(Self {
             server_name: name.to_string(),
             client,
             timeouts,
+            notifications,
         })
+    }
+
+    fn take_list_changes(&mut self) -> ListChanges {
+        let mut changes = ListChanges::default();
+        if let Some(notifications) = self.notifications.as_mut() {
+            while let Ok(notification) = notifications.try_recv() {
+                match notification.method.as_str() {
+                    "notifications/tools/list_changed" => changes.tools = true,
+                    "notifications/prompts/list_changed" => changes.prompts = true,
+                    _ => {}
+                }
+            }
+        }
+        changes
     }
 
     /// Discover tools from the MCP server, validated and namespaced.
@@ -1273,11 +1296,18 @@ impl McpManager {
                 },
                 Err(e) => {
                     if !quiet {
-                        eprintln!(
-                            "  MCP server '{}': failed to connect: {}",
-                            crate::terminal_text::sanitize_terminal_text(name),
-                            crate::terminal_text::sanitize_terminal_text(&e.to_string())
-                        );
+                        let name = crate::terminal_text::sanitize_terminal_text(name);
+                        if needs_sign_in(&e) {
+                            eprintln!(
+                                "  MCP server '{name}': needs sign-in, run `agi mcp login {name}`"
+                            );
+                        } else {
+                            eprintln!(
+                                "  MCP server '{}': failed to connect: {}",
+                                name,
+                                crate::terminal_text::sanitize_terminal_text(&e.to_string())
+                            );
+                        }
                     }
                 }
             }
@@ -1444,7 +1474,47 @@ impl McpManager {
             .get_mut(&tool.server_name)
             .context(format!("[{}] MCP server not connected", tool.server_name))?;
 
-        conn.call_tool(&tool.original_name, arguments).await
+        let result = conn
+            .call_tool(&tool.original_name, arguments)
+            .await
+            .map_err(|error| {
+                if needs_sign_in(&error) {
+                    anyhow::anyhow!(
+                        "{error:#}. Run `agi mcp login {}` to sign in again.",
+                        tool.server_name
+                    )
+                } else {
+                    error
+                }
+            });
+        self.refresh_changed_servers().await;
+        result
+    }
+
+    async fn refresh_changed_servers(&mut self) {
+        let mut refreshed_tools = Vec::new();
+        let mut refreshed_prompts = Vec::new();
+        for (name, conn) in self.connections.iter_mut() {
+            let changes = conn.take_list_changes();
+            if changes.tools {
+                if let Ok(tools) = conn.list_tools().await {
+                    refreshed_tools.push((name.clone(), tools));
+                }
+            }
+            if changes.prompts {
+                if let Ok(prompts) = conn.list_prompts().await {
+                    refreshed_prompts.push((name.clone(), prompts));
+                }
+            }
+        }
+        for (name, tools) in refreshed_tools {
+            self.tools.retain(|tool| tool.server_name != name);
+            self.register_discovered_tools(tools);
+        }
+        for (name, prompts) in refreshed_prompts {
+            self.prompts.retain(|prompt| prompt.server_name != name);
+            self.prompts.extend(prompts);
+        }
     }
 
     pub async fn expand_prompt_invocation(
@@ -2183,7 +2253,10 @@ def write_frame(frame):
     print(json.dumps(frame), flush=True)
 
 init = read_frame()
-write_frame({"jsonrpc": "2.0", "id": init["id"], "result": {"serverInfo": {"name": "t"}}})
+while init.get("method") == "server/discover":
+    write_frame({"jsonrpc": "2.0", "id": init["id"], "error": {"code": -32601, "message": "Method not found"}})
+    init = read_frame()
+write_frame({"jsonrpc": "2.0", "id": init["id"], "result": {"protocolVersion": "2025-11-25", "serverInfo": {"name": "t", "version": "0"}}})
 read_frame()  # notifications/initialized
 while True:
     req = read_frame()

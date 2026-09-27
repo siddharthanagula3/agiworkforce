@@ -212,6 +212,7 @@ import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonom
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
+import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -725,6 +726,37 @@ async function deleteConversationMessage(params: {
 
   const body = (await response.json().catch(() => ({}))) as { activeLeafMessageId?: string | null };
   return body.activeLeafMessageId ?? null;
+}
+
+const MESSAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function keepTemporaryChat(params: {
+  conversationId: string;
+  title: string | null;
+  messages: readonly Message[];
+}): Promise<void> {
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  const response = await fetch(`/api/chat/conversations/${params.conversationId}/keep`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      ...(params.title ? { title: params.title } : {}),
+      messages: params.messages.map((message) => ({
+        ...(MESSAGE_ID_PATTERN.test(message.id) ? { id: message.id } : {}),
+        role: message.role,
+        content: message.content,
+        ...(message.model ? { model: message.model } : {}),
+        ...(message.metadata ? { metadata: message.metadata } : {}),
+      })),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'This chat could not be saved.'));
+  }
+}
+
+function describeKeptMessages(count: number): string {
+  return count === 1 ? 'The message in this chat' : `All ${count} messages in this chat`;
 }
 
 const subscribeToMessageVariantsMode = () => () => {};
@@ -3898,12 +3930,51 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * used to call. It returns false when the write fails so the composer can say
    * so instead of showing a privacy mode the database does not have.
    */
+  const { confirm: confirmKeepTemporaryChat, dialog: keepTemporaryChatDialog } = useConfirmAction();
   const handleSetTemporaryChat = useCallback(
     async (isTemporary: boolean): Promise<boolean> => {
       if (!displayedConversationId) return false;
-      return updateConversation(displayedConversationId, { isTemporary });
+      const conversationId = displayedConversationId;
+      const keptMessages = isTemporary
+        ? []
+        : displayedMessages.filter(
+            (message) =>
+              (message.role === 'user' || message.role === 'assistant') &&
+              !message.isStreaming &&
+              message.content.trim().length > 0,
+          );
+      if (keptMessages.length === 0) {
+        return updateConversation(conversationId, { isTemporary });
+      }
+      const localTitle = useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.title;
+      return new Promise<boolean>((resolve) => {
+        confirmKeepTemporaryChat({
+          title: 'Save this chat?',
+          description: `${describeKeptMessages(keptMessages.length)}, and any files you attached, will be kept in your history. From now on it follows your memory and data settings like any other chat.`,
+          confirmLabel: 'Save chat',
+          destructive: false,
+          onCancel: () => resolve(true),
+          onConfirm: async () => {
+            try {
+              await keepTemporaryChat({
+                conversationId,
+                title: localTitle && !AUTO_TITLE_PLACEHOLDERS.has(localTitle) ? localTitle : null,
+                messages: keptMessages,
+              });
+              useChatStore.getState().updateConversation(conversationId, { isTemporary: false });
+              toast.success('Chat saved to your history.');
+            } catch (error) {
+              toast.error(toUserMessage(error, 'This chat could not be saved.'));
+            } finally {
+              resolve(true);
+            }
+          },
+        });
+      });
     },
-    [displayedConversationId, updateConversation],
+    [confirmKeepTemporaryChat, displayedConversationId, displayedMessages, updateConversation],
   );
 
   const composerProjectPicker = useMemo(
@@ -5129,6 +5200,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
+        {...(turnNeedsTwoFactor(lastChatMessage)
+          ? {
+              actionSlot: (
+                <button
+                  type="button"
+                  onClick={() => openSettings('security')}
+                  className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
+                >
+                  Turn on two-factor
+                </button>
+              ),
+            }
+          : {})}
         action={{
           label: 'Retry',
           ariaLabel: 'Retry this turn',
@@ -5387,6 +5471,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           instance for the page; `confirmDestructive` fills in the copy. */}
       {destructiveConfirmDialog}
       {memoryCommandDialog}
+      {keepTemporaryChatDialog}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
@@ -5621,9 +5706,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div
                 role="alert"
                 aria-live="polite"
-                className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
+                className="flex shrink-0 items-start justify-between gap-3 border-b border-danger-fill/30 bg-danger-fill/10 px-4 py-2 text-sm"
               >
-                <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
+                <span className="min-w-0 flex-1 break-words font-medium text-danger-text">
                   {turnFailureNotice.message}
                 </span>
                 {(retryableTurnId || retryableCardResumeMessageId) && (
@@ -5664,9 +5749,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
             {/* Notification permission banner · shown during long generations */}
             {showNotifBanner && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-warning-fill/10 px-4 py-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                  <Bell className="h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />
                   <span className="text-[var(--chat-text-secondary)]">
                     Get notified when the response is ready.
                   </span>
@@ -5675,7 +5760,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   <button
                     type="button"
                     onClick={() => void handleRequestNotifPermission()}
-                    className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-md bg-warning-fill px-3 py-1 text-xs font-medium text-warning-on-fill transition-opacity hover:opacity-90"
                   >
                     Enable
                   </button>

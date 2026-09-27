@@ -52,8 +52,11 @@ const SHUTDOWN_GRACE_MS = 1_500;
 const MAX_FRAME_BYTES = 4 * 1024 * 1024;
 const STDERR_TAIL_BYTES = 8 * 1024;
 
+const BUNDLED_BINARY = path.join('agi-cli', 'agi');
+const INSTALLED_BINARY = path.join('.agi', 'bin', 'agi');
+
 const DOWNLOAD_HINT =
-  'Install the AGI CLI from agiworkforce.com/download, then set its path under Settings if it is not on your PATH.';
+  'Install the AGI CLI with curl -fsSL https://agiworkforce.com/install.sh | bash, or set its path under Settings.';
 
 export type DeveloperSessionEmitter = (rootId: string, event: DeveloperSessionEvent) => void;
 
@@ -145,6 +148,26 @@ function resolveBinaryPath(binary: string): string | null {
   return null;
 }
 
+function isExecutableFile(candidate: string): boolean {
+  try {
+    accessSync(candidate, fsConstants.X_OK);
+    return statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function locateBinary(): string {
+  const configured = resolveBinary().trim();
+  if (configured !== '') return configured;
+  const resources = (process as { resourcesPath?: string }).resourcesPath;
+  const candidates = [
+    ...(resources ? [path.join(resources, BUNDLED_BINARY)] : []),
+    path.join(os.homedir(), INSTALLED_BINARY),
+  ];
+  return candidates.find(isExecutableFile) ?? DEFAULT_BINARY;
+}
+
 function displayPath(absolute: string): string {
   const home = os.homedir();
   return absolute.startsWith(`${home}${path.sep}`) ? `~${absolute.slice(home.length)}` : absolute;
@@ -188,7 +211,7 @@ function readVersion(binary: string): Promise<string | null> {
  * than spawning on every open.
  */
 export async function readDeveloperRuntimeStatus(): Promise<DeveloperRuntimeStatus> {
-  const binary = resolveBinary().trim() || DEFAULT_BINARY;
+  const binary = locateBinary();
   if (cachedStatus?.binary !== binary) {
     cachedStatus = { binary, status: await resolveRuntimeStatus(binary) };
   }
@@ -553,7 +576,7 @@ async function refreshOtherModels(source: RunningServer): Promise<void> {
  * `logout` needs neither.
  */
 function runCliLogout(): Promise<void> {
-  const binary = resolveBinary().trim() || DEFAULT_BINARY;
+  const binary = locateBinary();
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
     try {
@@ -680,7 +703,7 @@ function ensureServer(root: WorkspaceRoot): RunningServer {
     );
   }
 
-  const binary = resolveBinary().trim() || DEFAULT_BINARY;
+  const binary = locateBinary();
   let child: ChildProcessWithoutNullStreams;
   try {
     child = spawnRuntime(binary, ['app-server'], {
@@ -993,12 +1016,14 @@ export async function resumeDeveloperSession(
 export async function startDeveloperSession(
   rootId: string,
   model?: string,
+  title?: string,
 ): Promise<LocalDeveloperSession> {
   const root = requireRoot(rootId);
   const server = await readyServer(root);
   const result = await request(server, 'thread/start', {
     cwd: root.path,
     ...(model ? { model } : {}),
+    ...(title ? { title } : {}),
   });
   return requireSession(rootId, result);
 }

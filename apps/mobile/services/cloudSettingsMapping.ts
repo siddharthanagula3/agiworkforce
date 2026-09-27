@@ -9,6 +9,21 @@ import {
   useCloudSettingsStore,
   type CloudSettingsState,
 } from '@/stores/settings/cloudSettingsStore';
+import {
+  PREFERRED_LENGTHS,
+  RESPONSE_LANGUAGE_AUTO,
+  TECHNICAL_LEVELS,
+  type PreferredLength,
+  type TechnicalLevel,
+} from '@agiworkforce/types';
+
+function isPreferredLength(value: unknown): value is PreferredLength {
+  return (PREFERRED_LENGTHS as readonly unknown[]).includes(value);
+}
+
+function isTechnicalLevel(value: unknown): value is TechnicalLevel {
+  return (TECHNICAL_LEVELS as readonly unknown[]).includes(value);
+}
 
 export interface CloudAppearance {
   theme?: ThemeMode;
@@ -26,11 +41,15 @@ export interface CloudPersonalization {
   enthusiasm?: number;
   headersLists?: number;
   emoji?: number;
+  preferredLength?: PreferredLength;
+  technicalLevel?: TechnicalLevel;
+  responseLanguage?: string;
 }
 
 export interface CloudGeneral {
   preferredName?: string;
   workDescription?: string;
+  aboutYou?: string;
   instructions?: string;
 }
 
@@ -121,10 +140,14 @@ export function toCloudSettings(
       enthusiasm: personalization.enthusiasm,
       headersLists: personalization.headersLists,
       emoji: personalization.emoji,
+      preferredLength: personalization.preferredLength ?? 'default',
+      technicalLevel: personalization.technicalLevel ?? 'unspecified',
+      responseLanguage: personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO,
     },
     general: {
       preferredName: personalization.nickname,
       workDescription: personalization.occupation,
+      aboutYou: personalization.aboutYou ?? '',
       instructions: personalization.instructions,
     },
     notifications: {
@@ -171,8 +194,16 @@ export function applyCloudSettings(partial: CloudSettings): void {
       enthusiasm,
       headersLists,
       emoji,
+      preferredLength,
+      technicalLevel,
+      responseLanguage,
     } = partial.personalization;
     const patch: Partial<Personalization> = {};
+    if (isPreferredLength(preferredLength)) patch.preferredLength = preferredLength;
+    if (isTechnicalLevel(technicalLevel)) patch.technicalLevel = technicalLevel;
+    if (typeof responseLanguage === 'string' && responseLanguage) {
+      patch.responseLanguage = responseLanguage;
+    }
     if (fullName !== undefined) patch.fullName = fullName;
     if (nickname !== undefined) patch.nickname = nickname;
     if (occupation !== undefined) patch.occupation = occupation;
@@ -186,10 +217,11 @@ export function applyCloudSettings(partial: CloudSettings): void {
   }
 
   if (partial.general) {
-    const { preferredName, workDescription, instructions } = partial.general;
+    const { preferredName, workDescription, aboutYou, instructions } = partial.general;
     const patch: Partial<Personalization> = {};
     if (preferredName !== undefined) patch.nickname = preferredName;
     if (workDescription !== undefined) patch.occupation = workDescription;
+    if (typeof aboutYou === 'string') patch.aboutYou = aboutYou;
     if (instructions !== undefined) patch.instructions = instructions;
     if (Object.keys(patch).length > 0) store.setPersonalization(patch);
   }

@@ -7,6 +7,7 @@ import '@/features/marketing/components/legacy-pages.css';
 import Providers from './providers';
 import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
 import { CookieConsent } from '@shared/components/CookieConsent';
+import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetEntry';
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
@@ -182,6 +183,7 @@ export default async function RootLayout({
            * `ANALYTICS_REQUIRES_CONSENT` in shared/lib/cookie-consent.ts.
            */}
           <CookieConsent />
+          <SupportWidgetEntry />
           {gaTrackingId && <AnalyticsConsentGate trackingId={gaTrackingId} nonce={nonce} />}
         </BrowserIdentityBoundary>
       </body>

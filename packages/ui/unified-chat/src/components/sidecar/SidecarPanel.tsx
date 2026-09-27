@@ -74,36 +74,36 @@ export interface SidecarPanelProps {
 }
 
 const PANEL_ICONS: Record<Exclude<SidecarPanelType, null>, React.ReactNode> = {
-  terminal: <Terminal className="h-4 w-4 text-emerald-400" />,
-  browser: <MousePointerClick className="h-4 w-4 text-sky-400" />,
-  extension: <Globe className="h-4 w-4 text-teal-400" />,
-  code: <Braces className="h-4 w-4 text-amber-400" />,
-  video: <Video className="h-4 w-4 text-orange-400" />,
-  media: <ImageIcon className="h-4 w-4 text-indigo-400" />,
-  files: <FileText className="h-4 w-4 text-slate-300" />,
-  data: <Database className="h-4 w-4 text-blue-400" />,
-  preview: <PanelTopOpen className="h-4 w-4 text-orange-400" />,
+  terminal: <Terminal className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />,
+  browser: <MousePointerClick className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
+  extension: <Globe className="h-4 w-4 text-teal-700 dark:text-teal-400" />,
+  code: <Braces className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
+  video: <Video className="h-4 w-4 text-orange-700 dark:text-orange-400" />,
+  media: <ImageIcon className="h-4 w-4 text-indigo-700 dark:text-indigo-400" />,
+  files: <FileText className="h-4 w-4 text-slate-700 dark:text-slate-300" />,
+  data: <Database className="h-4 w-4 text-blue-700 dark:text-blue-400" />,
+  preview: <PanelTopOpen className="h-4 w-4 text-orange-700 dark:text-orange-400" />,
   diff: <FileText className="h-4 w-4 text-foreground" />,
-  canvas: <Braces className="h-4 w-4 text-pink-400" />,
-  artifact: <Code2 className="h-4 w-4 text-amber-400" />,
-  tasks: <Activity className="h-4 w-4 text-cyan-400" />,
-  git: <GitBranch className="h-4 w-4 text-orange-400" />,
-  database: <Database className="h-4 w-4 text-blue-400" />,
-  filesystem: <FolderOpen className="h-4 w-4 text-yellow-400" />,
-  vision: <Eye className="h-4 w-4 text-purple-400" />,
-  'computer-use': <Monitor className="h-4 w-4 text-cyan-400" />,
-  swarm: <Zap className="h-4 w-4 text-amber-400" />,
-  scheduler: <Calendar className="h-4 w-4 text-green-400" />,
-  documents: <FileOutput className="h-4 w-4 text-rose-400" />,
-  automation: <Activity className="h-4 w-4 text-red-400" />,
-  marketplace: <Store className="h-4 w-4 text-violet-400" />,
-  messaging: <MessageSquare className="h-4 w-4 text-teal-400" />,
-  productivity: <Gauge className="h-4 w-4 text-lime-400" />,
-  cloud: <Cloud className="h-4 w-4 text-sky-400" />,
-  governance: <ShieldCheck className="h-4 w-4 text-emerald-400" />,
-  'agent-collab': <Zap className="h-4 w-4 text-fuchsia-400" />,
-  'visual-editor': <Code2 className="h-4 w-4 text-teal-400" />,
-  'dynamic-canvas': <Braces className="h-4 w-4 text-rose-400" />,
+  canvas: <Braces className="h-4 w-4 text-pink-700 dark:text-pink-400" />,
+  artifact: <Code2 className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
+  tasks: <Activity className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />,
+  git: <GitBranch className="h-4 w-4 text-orange-700 dark:text-orange-400" />,
+  database: <Database className="h-4 w-4 text-blue-700 dark:text-blue-400" />,
+  filesystem: <FolderOpen className="h-4 w-4 text-yellow-700 dark:text-yellow-400" />,
+  vision: <Eye className="h-4 w-4 text-purple-700 dark:text-purple-400" />,
+  'computer-use': <Monitor className="h-4 w-4 text-cyan-700 dark:text-cyan-400" />,
+  swarm: <Zap className="h-4 w-4 text-amber-700 dark:text-amber-400" />,
+  scheduler: <Calendar className="h-4 w-4 text-green-700 dark:text-green-400" />,
+  documents: <FileOutput className="h-4 w-4 text-rose-700 dark:text-rose-400" />,
+  automation: <Activity className="h-4 w-4 text-red-700 dark:text-red-400" />,
+  marketplace: <Store className="h-4 w-4 text-violet-700 dark:text-violet-400" />,
+  messaging: <MessageSquare className="h-4 w-4 text-teal-700 dark:text-teal-400" />,
+  productivity: <Gauge className="h-4 w-4 text-lime-700 dark:text-lime-400" />,
+  cloud: <Cloud className="h-4 w-4 text-sky-700 dark:text-sky-400" />,
+  governance: <ShieldCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-400" />,
+  'agent-collab': <Zap className="h-4 w-4 text-fuchsia-700 dark:text-fuchsia-400" />,
+  'visual-editor': <Code2 className="h-4 w-4 text-teal-700 dark:text-teal-400" />,
+  'dynamic-canvas': <Braces className="h-4 w-4 text-rose-700 dark:text-rose-400" />,
 };
 
 function panelLabel(panelType: SidecarPanelType): string {
@@ -124,12 +124,12 @@ export function SidecarPanel({
 
   const securityBadge =
     allowStatus === 'allowed' ? (
-      <div className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-caption font-medium text-emerald-700 dark:text-emerald-300">
+      <div className="inline-flex items-center gap-1 rounded-full border border-success-fill/30 bg-success-fill/10 px-2 py-1 text-caption font-medium text-success-text">
         <ShieldCheck className="h-3 w-3" />
         {allowedDirectory ?? 'Allowed'}
       </div>
     ) : (
-      <div className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-1 text-caption font-medium text-amber-300">
+      <div className="inline-flex items-center gap-1 rounded-full border border-warning-fill/30 bg-warning-fill/10 px-2 py-1 text-caption font-medium text-warning-text">
         <ShieldAlert className="h-3 w-3" />
         Restricted
       </div>
