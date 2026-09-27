@@ -320,7 +320,7 @@ export function PrivacySection() {
         : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted. Memories learned from these chats stay until you delete them in Settings > Memory.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
