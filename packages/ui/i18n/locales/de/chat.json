@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "Spracheingabe wird in diesem Browser nicht unterstützt. Versuchen Sie Chrome oder Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI hat gesagt:",
     "assistantThinking": "Assistent denkt nach",
     "cancelEdit": "Abbrechen",
     "copied": "Kopiert",
@@ -210,7 +211,8 @@
     "messageAttachments": "Nachrichtenanhänge",
     "retryResponse": "Diese Antwort erneut versuchen",
     "saveEdit": "Speichern",
-    "toolResult": "Ergebnis"
+    "toolResult": "Ergebnis",
+    "userSaid": "Du hast gesagt:"
   },
   "goalHandoff": {
     "action": "Als Aufgabe ausführen",

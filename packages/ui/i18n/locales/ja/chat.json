@@ -199,6 +199,7 @@
     "voiceUnsupportedHint": "このブラウザでは音声入力に対応していません。Chrome または Edge をお試しください。"
   },
   "bubble": {
+    "assistantSaid": "AGIの発言:",
     "assistantThinking": "アシスタントが考えています",
     "cancelEdit": "キャンセル",
     "copied": "コピーしました",
@@ -210,7 +211,8 @@
     "messageAttachments": "メッセージの添付ファイル",
     "retryResponse": "この返信を再試行",
     "saveEdit": "保存",
-    "toolResult": "結果"
+    "toolResult": "結果",
+    "userSaid": "あなたの発言:"
   },
   "goalHandoff": {
     "action": "タスクとして実行",
