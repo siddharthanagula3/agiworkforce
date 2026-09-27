@@ -690,7 +690,6 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
         promptTokens: completion.promptTokens,
         completionTokens: completion.completionTokens,
         totalTokens: completion.totalTokens,
-        costCents: ledgerCentsFromMicrousd(completion.costMicrousd),
       },
       billingStatus: finalization.settlementStatus ?? finalization.requestStatus,
     };
