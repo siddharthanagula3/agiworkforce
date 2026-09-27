@@ -48,6 +48,7 @@ const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 const CATALOG_VERSION = 2;
 
 const VERSION_NEGOTIATION = { mode: 'auto' } as const;
+const INTERACTIVE_ELICITATION_CAPABILITY = { form: {}, url: {} };
 
 const MCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const MCP_TOOL_NAME_MAX_LENGTH = 128;
@@ -438,6 +439,7 @@ export interface ConnectMcpServerParams {
   >;
   /** Registers SDK request handlers (elicitation, sampling, roots) before connect. */
   configureClient?: (client: Client) => void | Promise<void>;
+  interactive?: boolean;
 }
 
 export type McpConnectionRuntimeOptions = Omit<
@@ -521,6 +523,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
       ...params.clientOptions,
       capabilities: {
         ...params.clientOptions?.capabilities,
+        ...(params.interactive ? { elicitation: INTERACTIVE_ELICITATION_CAPABILITY } : {}),
         extensions: {
           ...params.clientOptions?.capabilities?.extensions,
           [MCP_TASKS_EXTENSION_ID]: {},
@@ -535,6 +538,9 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     },
   );
 
+  if (params.interactive) {
+    client.setRequestHandler('elicitation/create', () => ({ action: 'cancel' }));
+  }
   await params.configureClient?.(client);
 
   const timeoutMs = config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
