@@ -279,6 +279,21 @@ export function createFreeTrialToolSpend(input: {
   };
 }
 
+export function scopeFreeTrialToolSpend(
+  parent: FreeTrialToolSpend,
+): FreeTrialToolSpend & { spentMicrousd(): number } {
+  let spentMicrousd = 0;
+  return {
+    hold: (providerMicrousd) => parent.hold(providerMicrousd),
+    settle(heldMicrousd, spent) {
+      spentMicrousd += nonNegativeMicrousd(spent);
+      parent.settle(heldMicrousd, spent);
+    },
+    exhausted: () => parent.exhausted(),
+    spentMicrousd: () => spentMicrousd,
+  };
+}
+
 export function fitsFreeTrialWindow(providerMicrousd: number): boolean {
   const { fiveHourBudgetMicrousd, weeklyBudgetMicrousd, monthlyBudgetMicrousd } =
     FREE_TRIAL_INTERNAL_USAGE_POLICY;
