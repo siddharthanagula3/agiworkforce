@@ -44,6 +44,8 @@ export const RATE_LIMIT_PAIRING_LOOKUP = 60;
 
 export const RATE_LIMIT_PAIRING_DELETE = 10;
 
+export const RATE_LIMIT_DEVICE_REVOKE = 60;
+
 export const RATE_LIMIT_HEALTH_CHECK = 100;
 
 export const MAX_CONNECTIONS_PER_IP = 10;
