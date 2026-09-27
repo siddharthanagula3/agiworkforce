@@ -16,6 +16,7 @@ import {
   previewUpgrade,
   startPlanCheckout,
   upgradePlanMidCycle,
+  type CheckoutTrialTerms,
   type UpgradeChargeBreakdown,
 } from '../services/stripe-payments';
 import {
@@ -46,6 +47,24 @@ function formatRenewalDate(iso: string): string {
   return formatBillingDate(iso) ?? '';
 }
 
+function describeTrial(input: {
+  planLabel: string;
+  trial: CheckoutTrialTerms;
+  dueTodayCents: number;
+  currency: string;
+  intervalWord: string;
+}): string {
+  const { planLabel, trial, currency } = input;
+  const convertsOn = formatRenewalDate(trial.convertsAt);
+  return (
+    `${planLabel} is free for ${trial.days} days, so you pay ` +
+    `${formatMoney(input.dueTodayCents, currency)} today. ` +
+    `Checkout asks for a card, and on ${convertsOn} it is charged ` +
+    `${formatMoney(trial.amountCents, currency)} plus tax, then every ${input.intervalWord} ` +
+    `until you cancel. Cancel before ${convertsOn} in Settings > Billing and you won't be charged.`
+  );
+}
+
 export function UpgradeConfirmDialog({
   request,
   onCancel,
@@ -62,6 +81,7 @@ export function UpgradeConfirmDialog({
   const [checkoutRequired, setCheckoutRequired] = useState<{
     cents: number;
     currency: string;
+    trial: CheckoutTrialTerms | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,7 +117,11 @@ export function UpgradeConfirmDialog({
         if (!cancelled) {
           if (e instanceof CheckoutRequiredError) {
             if (e.amountDueNowCents !== null && e.currency) {
-              setCheckoutRequired({ cents: e.amountDueNowCents, currency: e.currency });
+              setCheckoutRequired({
+                cents: e.amountDueNowCents,
+                currency: e.currency,
+                trial: e.trial ?? null,
+              });
             } else {
               setError('Could not verify the full checkout price. Please refresh and try again.');
             }
@@ -162,13 +186,21 @@ export function UpgradeConfirmDialog({
           <DialogDescription>
             {previewing
               ? 'Calculating your prorated cost…'
-              : checkoutRequired
-                ? `Your current plan has no paid Stripe charge to credit, so this is not a prorated upgrade. Starting ${planLabel} costs ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)} today. Your existing AGI usage will carry over after checkout completes.`
-                : amountDue
-                  ? amountDue.charge
-                    ? 'Review the charge before it goes to your saved card.'
-                    : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
-                  : 'Review your upgrade before it is charged to your saved card.'}
+              : checkoutRequired?.trial
+                ? describeTrial({
+                    planLabel,
+                    trial: checkoutRequired.trial,
+                    dueTodayCents: checkoutRequired.cents,
+                    currency: checkoutRequired.currency,
+                    intervalWord,
+                  })
+                : checkoutRequired
+                  ? `Your current plan has no paid Stripe charge to credit, so this is not a prorated upgrade. Starting ${planLabel} costs ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)} today. Your existing AGI usage will carry over after checkout completes.`
+                  : amountDue
+                    ? amountDue.charge
+                      ? 'Review the charge before it goes to your saved card.'
+                      : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
+                    : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -266,11 +298,13 @@ export function UpgradeConfirmDialog({
           >
             {confirming
               ? 'Upgrading…'
-              : checkoutRequired
-                ? `Start ${planLabel} · pay ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)}`
-                : amountDue
-                  ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
-                  : 'Confirm'}
+              : checkoutRequired?.trial
+                ? 'Start free trial'
+                : checkoutRequired
+                  ? `Start ${planLabel} · pay ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)}`
+                  : amountDue
+                    ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
+                    : 'Confirm'}
           </Button>
         </DialogFooter>
       </DialogContent>

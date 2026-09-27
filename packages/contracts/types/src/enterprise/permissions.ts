@@ -133,6 +133,17 @@ export function legacyOrganizationPermission(value: string): LegacyOrganizationP
   return CANONICAL_TO_LEGACY.get(value) ?? null;
 }
 
+export function canonicalOrganizationPermissions(
+  values: Iterable<string>,
+): CanonicalOrganizationPermission[] {
+  const canonical = new Set<CanonicalOrganizationPermission>();
+  for (const value of values) {
+    const key = canonicalOrganizationPermission(value);
+    if (key) canonical.add(key);
+  }
+  return [...canonical].sort();
+}
+
 export function adminPermissionKey(
   area: AdminPermissionArea,
   level: Exclude<OrganizationPermissionLevel, 'none'>,

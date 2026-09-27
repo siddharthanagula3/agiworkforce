@@ -456,6 +456,24 @@
       "table": "web_conversations",
       "class": "retention-sweep",
       "why": "A retention sweep ages out rows by their own clock and must see withdrawn rows to collect them."
+    },
+    {
+      "file": "apps/web/lib/services/account-usage-history-service.ts",
+      "table": "user_projects",
+      "class": "data-export",
+      "why": "Usage history and its CSV are the account's record of what it spent, so a turn made in a project that was later deleted or archived keeps that project's name. Filtering the withdrawn project would relabel real past spend as belonging to no project."
+    },
+    {
+      "file": "apps/web/lib/services/tier-unit-quota-service.ts",
+      "table": "web_conversations",
+      "class": "write-path",
+      "why": "The Free daily cap counts the conversations and messages created today. A row deleted or archived after it was written still counts, or deleting would reset the cap."
+    },
+    {
+      "file": "apps/web/lib/services/tier-unit-quota-service.ts",
+      "table": "web_messages",
+      "class": "write-path",
+      "why": "The Free daily cap counts the conversations and messages created today. A row deleted or archived after it was written still counts, or deleting would reset the cap."
     }
   ],
   "hardDeleteStores": {

@@ -336,6 +336,7 @@ import {
   applyFreeTrialProviderBudget,
   createFreeTrialToolSpend,
   freeTrialResetAt,
+  scopeFreeTrialToolSpend,
   freeTrialRetryAfterSeconds,
   isFreePlanTier,
   type FreeTrialReservation,
@@ -623,6 +624,7 @@ export interface ToolLoopToolResult {
   generatedFiles?: GeneratedFileWire[];
   /** Set when a connector call paused for additional input (MCP input_required). */
   inputRequired?: McpInputRequiredState;
+  freeTrialSpendMicrousd?: number;
 }
 
 export interface ToolLoopToolExecution {
@@ -3529,6 +3531,7 @@ export async function* runToolLoop(
    */
   async function admitSearchCall(
     callOrdinal: number,
+    freeSpend: FreeTrialToolSpend | undefined,
   ): Promise<{ refusal: ToolLoopToolResult } | { admission: SearchAdmission }> {
     const userId = options.userId;
     if (!userId) return { admission: INCLUDED_SEARCH_ADMISSION };
@@ -3541,8 +3544,8 @@ export async function* runToolLoop(
         planTier: processed.subscriptionTier ?? null,
         callerKind: searchCallerKind,
       });
-      if (freeTrialSpend && decision.outcome !== 'blocked') {
-        return admitOnFreeTrialWindows(freeTrialSpend);
+      if (freeSpend && decision.outcome !== 'blocked') {
+        return admitOnFreeTrialWindows(freeSpend);
       }
       if (decision.outcome === 'included') return { admission: INCLUDED_SEARCH_ADMISSION };
       if (decision.outcome === 'blocked') {
@@ -3574,8 +3577,8 @@ export async function* runToolLoop(
       });
     } catch (error) {
       logger.warn({ error }, '[tool-loop] search budget not resolved; treating call as included');
-      return freeTrialSpend
-        ? admitOnFreeTrialWindows(freeTrialSpend)
+      return freeSpend
+        ? admitOnFreeTrialWindows(freeSpend)
         : { admission: INCLUDED_SEARCH_ADMISSION };
     }
 
@@ -3599,11 +3602,12 @@ export async function* runToolLoop(
     callOrdinal: number,
     admission: SearchAdmission,
     spend: WebSearchSpend,
+    freeSpend: FreeTrialToolSpend | undefined,
   ): Promise<void> {
     const userId = options.userId;
     if (!userId) return;
     const perCallMicrousd = perplexitySearchMicrousdPerCall();
-    freeTrialSpend?.settle(perCallMicrousd, spend.billableCalls * perCallMicrousd);
+    freeSpend?.settle(perCallMicrousd, spend.billableCalls * perCallMicrousd);
     await settlePerplexitySearchCall({
       userId,
       organizationId: processed.organizationId ?? null,
@@ -3932,10 +3936,11 @@ export async function* runToolLoop(
         }
       }
       const searchCallOrdinal = webSearchCallsUsed;
-      const executeUntraced = async () => {
+      const executeUntraced = async (): Promise<ToolLoopToolResult> => {
+        const callSpend = freeTrialSpend ? scopeFreeTrialToolSpend(freeTrialSpend) : undefined;
         let searchAdmission: SearchAdmission | null = null;
         if (isWebSearchTool(tc.qualifiedName)) {
-          const admission = await admitSearchCall(searchCallOrdinal);
+          const admission = await admitSearchCall(searchCallOrdinal, callSpend);
           if ('refusal' in admission) {
             toolGovernor.withdraw(tc.qualifiedName, 'budget');
             return admission.refusal;
@@ -3943,8 +3948,14 @@ export async function* runToolLoop(
           searchAdmission = admission.admission;
         }
         let searchSpend: WebSearchSpend = { billableCalls: 0, answered: false };
+        const settleSearch = async () => {
+          const admitted = searchAdmission;
+          if (!admitted) return;
+          searchAdmission = null;
+          await settleSearchCall(searchCallOrdinal, admitted, searchSpend, callSpend);
+        };
         try {
-          return await runMcpTool(
+          const result = await runMcpTool(
             tc,
             resolveE2BExecutor,
             availableTools,
@@ -3962,7 +3973,7 @@ export async function* runToolLoop(
               onWebSearchSpend: (spend) => {
                 searchSpend = spend;
               },
-              ...(freeTrialSpend ? { freeTrialSpend } : {}),
+              ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
               loadSkillInstallOverrides,
               ...(processed.chatRequest?.client_timezone
@@ -3974,9 +3985,11 @@ export async function* runToolLoop(
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
             },
           );
+          await settleSearch();
+          const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
+          return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;
         } finally {
-          if (searchAdmission)
-            await settleSearchCall(searchCallOrdinal, searchAdmission, searchSpend);
+          await settleSearch();
         }
       };
       const execute = () =>
@@ -5749,6 +5762,7 @@ export async function* runToolLoop(
     );
     yield* flushTerminal('error', 'partial');
   } finally {
+    await recordGroundingSpend(false);
     if (e2bExecutor) {
       if (e2bSessionScope) {
         if (e2bExecutor.pause) {

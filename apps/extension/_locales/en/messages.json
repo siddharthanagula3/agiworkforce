@@ -1171,7 +1171,7 @@
     "placeholders": {
       "model": {
         "content": "$1",
-        "example": "Claude Opus"
+        "example": "Premium model"
       },
       "fallback": {
         "content": "$2",

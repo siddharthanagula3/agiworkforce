@@ -27,6 +27,7 @@
   },
   "machine": {
     "apps/web/app/api/code/sessions/[sessionId]/provider-proxy/[...path]/route.ts": "a sandbox-scoped provider proxy token minted for one code session is the principal",
+    "apps/web/app/api/cron/allocate-infrastructure-costs/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/drain-audit-streams/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/drain-background-jobs/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/enforce-billing-collection/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",

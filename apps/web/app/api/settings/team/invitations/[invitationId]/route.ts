@@ -98,6 +98,7 @@ async function handleResend(
     organizationName: await readOrganizationName(db, organizationId),
     expiresAt: String(invitation.expires_at),
     replacesPreviousLink: true,
+    sender: { db, userId },
   });
 
   logger.info(
