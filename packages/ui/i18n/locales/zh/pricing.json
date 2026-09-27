@@ -210,5 +210,7 @@
   "usageExplainer": "每个付费套餐都在三个时间窗口内提供积分：每 5 小时、每周和每月。{{baseline}} 包含每 5 小时 {{fiveHour, number}} 积分、每周 {{weekly, number}}、每月 {{monthly, number}}，5x 之类的倍数会同时放大这三个窗口的额度。",
   "flagshipShare": "在 {{baseline}} 及更高套餐中，最强大的模型最多可使用每周积分的 {{percent}}%。",
   "switchToPlanCta": "切换到 {{plan}}",
-  "downgradeScheduledToast": "你的套餐将于 {{date}} 切换为 {{plan}}。"
+  "downgradeScheduledToast": "你的套餐将于 {{date}} 切换为 {{plan}}。",
+  "pricingFootnote": "所示价格不含适用税费。付款不予退还，但我们的退款政策另有规定或当地法律要求的除外。",
+  "refundPolicyLink": "退款政策"
 }
