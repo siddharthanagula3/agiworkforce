@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { ApprovalCard } from '@agiworkforce/ui';
-import type {
-  ManagedCloudScheduleMutation,
-  ManagedCloudScheduleRecurrence,
-  ManagedCloudScheduleRun,
-  ManagedCloudScheduleRunApproval,
-  ManagedCloudScheduleTask,
+import {
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  type ManagedCloudScheduleMutation,
+  type ManagedCloudScheduleRecurrence,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleSources,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { getCloudModels, type CloudModelInfo } from '../../api/cloudApi';
@@ -30,6 +32,7 @@ import {
   desktopCloudSchedules,
   type DesktopCloudSchedulesApi,
 } from '../../services/desktopCloudSchedules';
+import { DesktopScheduleAccessFields } from './DesktopScheduleAccessFields';
 
 const SCHEDULE_PAGE_SIZE = 50;
 const RUN_PAGE_SIZE = 20;
@@ -70,6 +73,8 @@ interface ScheduleDraft {
   isActive: boolean;
   expiresLocal: string;
   maxExecutions: string;
+  sources: ManagedCloudScheduleSources;
+  connectors: string[] | null;
 }
 
 interface HistoryState {
@@ -116,6 +121,8 @@ function initialDraft(model = ''): ScheduleDraft {
     isActive: true,
     expiresLocal: '',
     maxExecutions: '',
+    sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES },
+    connectors: null,
   };
 }
 
@@ -282,6 +289,8 @@ function draftFromSchedule(
     isActive: schedule.isEnabled,
     expiresLocal: isoToLocalInput(schedule.expiresAt, schedule.timezone),
     maxExecutions: schedule.maxExecutions === null ? '' : String(schedule.maxExecutions),
+    sources: { ...(schedule.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES) },
+    connectors: schedule.connectors ? [...schedule.connectors] : null,
   };
 }
 
@@ -352,6 +361,8 @@ function mutationFromDraft(draft: ScheduleDraft): ManagedCloudScheduleMutation {
     isActive: draft.isActive,
     expiresAt,
     maxExecutions,
+    sources: draft.sources,
+    connectors: draft.connectors,
   };
 }
 
@@ -1478,6 +1489,13 @@ function AuthenticatedDesktopCloudSchedules({
                 <span className="text-sm text-[var(--chat-text-secondary)]">Enabled</span>
               </label>
             </div>
+
+            <DesktopScheduleAccessFields
+              hasProject={Boolean(editing?.projectId)}
+              sources={draft.sources}
+              connectors={draft.connectors}
+              onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+            />
 
             {formError ? (
               <p role="alert" className="mt-4 text-sm text-[var(--chat-destructive)]">
