@@ -180,6 +180,10 @@ export const PROVIDER_ADAPTER_PATHS = new Map([
     'the image-generation adapter itself',
   ],
   [
+    'apps/web/lib/e2b/hosted-code-execution.ts',
+    "prices each vendor's hosted code-execution container in that vendor's published billing unit",
+  ],
+  [
     'apps/web/lib/services/video-provider-output-service.ts',
     'normalizes each video vendor output shape',
   ],

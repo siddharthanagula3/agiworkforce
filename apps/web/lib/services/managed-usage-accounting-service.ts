@@ -2,7 +2,10 @@ import 'server-only';
 
 import { chargeMicrousdForProviderCost } from '@agiworkforce/types';
 
-import { priceHostedCodeExecution } from '@/lib/e2b/hosted-code-execution';
+import {
+  hostedCodeExecutionProviderOf,
+  priceHostedCodeExecution,
+} from '@/lib/e2b/hosted-code-execution';
 import { logger } from '@/lib/logger';
 import {
   LLMCostCalculator,
@@ -109,8 +112,8 @@ function hostedCodeExecutionMicrousd(
   evidence: HostedCodeExecutionEvidence,
   dynamicFilteringWebTool: boolean,
 ): number {
-  const provider = normalizeProviderId(evidence.provider);
-  if (provider !== 'anthropic' && provider !== 'openai') return 0;
+  const provider = hostedCodeExecutionProviderOf(normalizeProviderId(evidence.provider));
+  if (!provider) return 0;
   return priceHostedCodeExecution({
     provider,
     usage: { server_tool_use: { code_execution_requests: evidence.requests } },

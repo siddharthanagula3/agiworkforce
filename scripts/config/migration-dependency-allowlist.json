@@ -22,11 +22,6 @@
       "reason": "Names bonus_credit_grants only as a string in its retention classification and issues no query, so it runs unchanged before and after 0295."
     },
     {
-      "file": "apps/web/lib/services/managed-usage-summary-service.ts",
-      "migration": 295,
-      "reason": "Reads the bonus balance for the usage summary. Before 0295 is applied that read fails and the bonus balance is reported as unavailable while every plan window still reads."
-    },
-    {
       "file": "apps/web/lib/services/referral-service.ts",
       "migration": 295,
       "reason": "Grants referral bonus credit into bonus_credit_grants and ships with 0295: the deploy applies 0295 before this release reaches production."
