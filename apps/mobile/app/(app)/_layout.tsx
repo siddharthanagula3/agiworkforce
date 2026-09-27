@@ -60,6 +60,10 @@ export default function AppLayout() {
         {/* Agent routes */}
         <Drawer.Screen name="tasks" options={HIDDEN} />
 
+        {/* AGI Code */}
+        <Drawer.Screen name="cloud-code/index" options={HIDDEN} />
+        <Drawer.Screen name="cloud-code/[sessionId]" options={HIDDEN} />
+
         {/* Companion */}
         <Drawer.Screen name="companion/index" options={HIDDEN} />
         <Drawer.Screen name="companion/agent/[id]" options={HIDDEN} />
