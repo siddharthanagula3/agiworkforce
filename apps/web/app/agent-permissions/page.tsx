@@ -207,8 +207,8 @@ export default function AgentPermissionsPage() {
                     items={[
                       {
                         meta: 'Coverage',
-                        title: 'Pasted and attached content is not counted',
-                        body: 'Untrusted content is recognised when a tool fetched it: a web page, a search result, a pull-request diff. Content you paste or attach yourself is not counted, and that is a real injection vector this check does not see.',
+                        title: 'Pasted text is not counted',
+                        body: 'Untrusted content is recognised when a tool fetched it (a web page, a search result, a pull-request diff), when you attach a file or image, and when a project knowledge file or connector context you selected enters the chat. Text you paste yourself is not counted, and that is a real injection vector this check does not see.',
                       },
                       {
                         meta: 'Bias',
