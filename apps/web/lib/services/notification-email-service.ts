@@ -99,8 +99,8 @@ export async function sendSpendAlertEmail(input: SpendAlertEmailInput): Promise<
     ? `${input.workspaceName} reached its monthly spend limit`
     : `${input.workspaceName} passed ${input.thresholdPct}% of its monthly spend limit`;
   const headline = reachedCap
-    ? `${input.workspaceName} has spent ${input.spent} this month, reaching its ${input.cap} limit.`
-    : `${input.workspaceName} has spent ${input.spent} this month, past ${input.thresholdPct}% of its ${input.cap} limit.`;
+    ? `${input.workspaceName} has used ${input.spent} this month, reaching its limit of ${input.cap}.`
+    : `${input.workspaceName} has used ${input.spent} this month, past ${input.thresholdPct}% of its limit of ${input.cap}.`;
   const consequence =
     reachedCap && input.enforcement === 'block'
       ? 'Managed Cloud requests from members are now refused until an owner or admin raises the limit or the month resets.'

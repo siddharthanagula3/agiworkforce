@@ -40,7 +40,7 @@ function cell(value: string | number): string {
 
 function rowsFor(usage: OrganizationUsage, dimension: Dimension): string[][] {
   if (dimension === 'daily') {
-    return usage.daily.map((row) => [row.day, String(row.requests), String(row.costCents)]);
+    return usage.daily.map((row) => [row.day, String(row.requests), String(row.credits)]);
   }
 
   const breakdown = {
@@ -56,14 +56,14 @@ function rowsFor(usage: OrganizationUsage, dimension: Dimension): string[][] {
     String(row.requests),
     String(row.inputTokens),
     String(row.outputTokens),
-    String(row.costCents),
+    String(row.credits),
   ]);
 }
 
 function headerFor(dimension: Dimension): string[] {
   return dimension === 'daily'
-    ? ['day', 'requests', 'cost_cents']
-    : [dimension, 'requests', 'input_tokens', 'output_tokens', 'cost_cents'];
+    ? ['day', 'requests', 'credits']
+    : [dimension, 'requests', 'input_tokens', 'output_tokens', 'credits'];
 }
 
 /**
