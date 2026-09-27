@@ -64,7 +64,7 @@ export function contactMailto(subject?: string): string {
 
 export const POLICY_LAST_UPDATED = {
   terms: '2026-09-23',
-  privacy: '2026-09-22',
+  privacy: '2026-09-27',
   acceptableUse: '2026-09-22',
   dpa: '2026-08-17',
   cookies: '2026-09-23',
@@ -72,7 +72,8 @@ export const POLICY_LAST_UPDATED = {
   security: '2026-08-14',
   trust: '2026-09-21',
   sla: '2026-09-04',
-  refunds: '2026-08-13',
+  refunds: '2026-09-27',
+  referralTerms: '2026-09-27',
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',
   mobile: '2026-09-21',
@@ -94,6 +95,7 @@ export const CANONICAL_POLICY_ROUTES = {
   security: '/security',
   sla: '/sla',
   refunds: '/refund-policy',
+  referralTerms: '/referral-terms',
   accessibility: '/accessibility',
   trust: '/trust',
   legalIndex: '/legal',

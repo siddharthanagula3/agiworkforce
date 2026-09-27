@@ -190,3 +190,75 @@ export function autoReloadConsentText(terms: {
     'You can turn off auto-reload at any time in Settings > Billing, which stops future charges.',
   ].join(' ');
 }
+
+export interface PurchasedCreditExpiryRule {
+  country: string;
+  appStoreStorefront: string;
+  months: number;
+  reminderDays: number;
+}
+
+export const PURCHASED_CREDIT_EXPIRY_RULES: readonly PurchasedCreditExpiryRule[] = [
+  { country: 'JP', appStoreStorefront: 'JPN', months: 6, reminderDays: 7 },
+];
+
+export interface PurchasedCreditMetadata {
+  purchase_country?: string;
+  purchase_expires_at?: string;
+}
+
+export function normalizePurchaseCountry(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const country = value.trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(country) ? country : null;
+}
+
+export function purchaseCountryFromAppStoreStorefront(storefront: unknown): string | null {
+  if (typeof storefront !== 'string') return null;
+  const code = storefront.trim().toUpperCase();
+  return (
+    PURCHASED_CREDIT_EXPIRY_RULES.find((rule) => rule.appStoreStorefront === code)?.country ?? null
+  );
+}
+
+export function purchasedCreditExpiryRule(
+  country: string | null | undefined,
+): PurchasedCreditExpiryRule | null {
+  return PURCHASED_CREDIT_EXPIRY_RULES.find((rule) => rule.country === country) ?? null;
+}
+
+export function purchasedCreditExpiresAt(
+  country: string | null | undefined,
+  purchasedAt: Date,
+): Date | null {
+  const rule = purchasedCreditExpiryRule(country);
+  if (!rule) return null;
+  const expiresAt = new Date(
+    Date.UTC(
+      purchasedAt.getUTCFullYear(),
+      purchasedAt.getUTCMonth() + rule.months,
+      1,
+      purchasedAt.getUTCHours(),
+      purchasedAt.getUTCMinutes(),
+      purchasedAt.getUTCSeconds(),
+      purchasedAt.getUTCMilliseconds(),
+    ),
+  );
+  const lastDayOfMonth = new Date(
+    Date.UTC(expiresAt.getUTCFullYear(), expiresAt.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  expiresAt.setUTCDate(Math.min(purchasedAt.getUTCDate(), lastDayOfMonth));
+  return expiresAt;
+}
+
+export function purchasedCreditMetadata(
+  country: unknown,
+  purchasedAt: Date,
+): PurchasedCreditMetadata {
+  const purchaseCountry = normalizePurchaseCountry(country);
+  if (!purchaseCountry) return {};
+  const expiresAt = purchasedCreditExpiresAt(purchaseCountry, purchasedAt);
+  return expiresAt
+    ? { purchase_country: purchaseCountry, purchase_expires_at: expiresAt.toISOString() }
+    : { purchase_country: purchaseCountry };
+}

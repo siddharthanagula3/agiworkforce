@@ -93,6 +93,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 15 requests per minute (allows retries and page refreshes)
     failClosed: false, // Allow checkout even if Redis fails - business critical
   },
+  'billing-refund-request': {
+    limit: 10,
+    window: '1 h',
+    failClosed: true,
+  },
   'device-link': {
     limit: 10,
     window: '1 m', // 10 device codes per minute (prevents abuse)

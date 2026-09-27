@@ -1,4 +1,4 @@
-import { getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
+import { formatCredits, getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleCondition,
   ManagedCloudScheduleDaypart,
@@ -83,6 +83,7 @@ export interface ScheduleDraft {
   isActive: boolean;
   expiresLocal: string;
   maxExecutions: string;
+  creditCap: string;
   projectId: string | null;
   recurrenceRule: string;
   daypartPreset: DaypartPreset;
@@ -108,6 +109,7 @@ export interface ScheduleMutation {
   isActive: boolean;
   expiresAt: string | null;
   maxExecutions: number | null;
+  creditCap: number | null;
   projectId: string | null;
   recurrenceRule: string | null;
   dayparts: ManagedCloudScheduleDaypart[] | null;
@@ -207,12 +209,13 @@ export interface ScheduleRunUsage {
   model: string | null;
   provider: string | null;
   totalTokens: number | null;
-  costCents: number | null;
+  credits: number | null;
 }
 
+const RUN_CREDIT_FRACTION_DIGITS = 2;
+
 export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
-  const result = run.result;
-  if (!result) return null;
+  const result = run.result ?? {};
   const usage = result['usage'];
   const usageRecord =
     usage !== null && typeof usage === 'object' ? (usage as Record<string, unknown>) : null;
@@ -226,18 +229,15 @@ export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
     model: nonEmptyString(result['model']),
     provider: nonEmptyString(result['provider']),
     totalTokens: finiteNumber(usageRecord?.['totalTokens']),
-    costCents: finiteNumber(usageRecord?.['costCents']),
+    credits: finiteNumber(run.creditsUsed),
   };
 
   const hasAnything = Object.values(summary).some((value) => value !== null);
   return hasAnything ? summary : null;
 }
 
-export function formatCostCents(costCents: number): string {
-  if (costCents === 0) return '$0.00';
-  const dollars = costCents / 100;
-  if (dollars < 0.01) return `<$0.01`;
-  return `$${dollars.toFixed(2)}`;
+export function formatRunCredits(credits: number): string {
+  return formatCredits(credits, { maximumFractionDigits: RUN_CREDIT_FRACTION_DIGITS });
 }
 
 export function formatTokenCount(tokens: number): string {

@@ -242,6 +242,7 @@ export type AuditEventType =
   | 'member_joined'
   | 'member_invitation_declined'
   | 'plan_changed'
+  | 'refund_requested'
   | 'mobile_purchase_verified'
   | 'waitlist_access_redeemed'
   | 'checkout_started'
@@ -734,6 +735,8 @@ function inferResourceType(eventType: AuditEventType): string {
       return 'subscription';
     case 'mobile_purchase_verified':
       return 'mobile_iap_purchase';
+    case 'refund_requested':
+      return 'refund_request';
     case 'data_exported':
       return 'user_data';
     case 'account_deletion_requested':

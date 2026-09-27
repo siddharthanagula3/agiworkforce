@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { getModels, isModelLive } from '@agiworkforce/types';
 
-import { formatCostCents, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
+import { formatRunCredits, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
 import type { ScheduleRun } from './index';
 
-function run(result: Record<string, unknown> | null): ScheduleRun {
+function run(result: Record<string, unknown> | null, creditsUsed?: number | null): ScheduleRun {
   return {
     id: 'run-1',
     taskId: 'task-1',
@@ -19,25 +19,29 @@ function run(result: Record<string, unknown> | null): ScheduleRun {
     idempotencyKey: 'key-1',
     leaseExpiresAt: null,
     attemptCount: 1,
+    ...(creditsUsed === undefined ? {} : { creditsUsed }),
   } as ScheduleRun;
 }
 
 describe('scheduleRunUsage', () => {
-  it('reads what the executor recorded', () => {
+  it('reads what the executor recorded and the credits the run was charged', () => {
     const usage = scheduleRunUsage(
-      run({
-        text: 'done',
-        model: 'fixture-model',
-        provider: 'anthropic',
-        usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500, costCents: 0.45 },
-      }),
+      run(
+        {
+          text: 'done',
+          model: 'fixture-model',
+          provider: 'anthropic',
+          usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500 },
+        },
+        0.9,
+      ),
     );
 
     expect(usage).toEqual({
       model: 'fixture-model',
       provider: 'anthropic',
       totalTokens: 1500,
-      costCents: 0.45,
+      credits: 0.9,
     });
   });
 
@@ -53,13 +57,13 @@ describe('scheduleRunUsage', () => {
       model: 'fixture-model',
       provider: null,
       totalTokens: null,
-      costCents: null,
+      credits: null,
     });
   });
 
   it('rejects non-finite and wrongly-typed values instead of rendering them', () => {
     const usage = scheduleRunUsage(
-      run({ model: 42, usage: { totalTokens: Number.NaN, costCents: '0.45' } }),
+      run({ model: 42, usage: { totalTokens: Number.NaN } }, Number.NaN),
     );
 
     expect(usage).toBeNull();
@@ -71,19 +75,19 @@ describe('scheduleRunUsage', () => {
   });
 });
 
-describe('formatCostCents', () => {
-  it('shows an exact zero as free, because it is', () => {
-    expect(formatCostCents(0)).toBe('$0.00');
+describe('formatRunCredits', () => {
+  it('shows an exact zero as zero credits, because it is', () => {
+    expect(formatRunCredits(0)).toBe('0 credits');
   });
 
-  it('does not round a real cost down to free', () => {
-    expect(formatCostCents(0.45)).toBe('<$0.01');
-    expect(formatCostCents(0.0001)).toBe('<$0.01');
+  it('does not round the smallest real charge down to nothing', () => {
+    expect(formatRunCredits(0.01)).toBe('0.01 credits');
+    expect(formatRunCredits(0.05)).toBe('0.05 credits');
   });
 
-  it('formats ordinary costs as dollars', () => {
-    expect(formatCostCents(150)).toBe('$1.50');
-    expect(formatCostCents(1)).toBe('$0.01');
+  it('formats ordinary amounts in credits', () => {
+    expect(formatRunCredits(300)).toBe('300 credits');
+    expect(formatRunCredits(1)).toBe('1 credit');
   });
 });
 

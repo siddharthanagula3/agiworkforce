@@ -1,15 +1,19 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type {
-  ManagedCloudScheduleRun,
-  ManagedCloudScheduleTask,
+import {
+  MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import {
+  creditsFromMicrousd,
+  formatCredits,
   getBillingPlanPricing,
   getModelMetadataById,
   getPlanMaxScheduledTasks,
   isAutoModeModelId,
+  microusdFromCredits,
 } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
@@ -49,6 +53,7 @@ import {
 import { enqueueJob } from '@/lib/jobs/job-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { executeScheduledAgent } from './scheduled-agent-executor';
+import { runWithinScheduleRun } from '@/lib/schedules/schedule-run-scope';
 import { evaluateScheduleCondition } from './schedule-condition-service';
 
 const DEFAULT_LEASE_SECONDS = 45;
@@ -128,6 +133,7 @@ export interface ScheduleInput {
   isActive?: boolean;
   expiresAt?: string | null;
   maxExecutions?: number | null;
+  creditCap?: number | null;
   notificationSettings?: unknown;
   projectId?: string | null;
   recurrenceRule?: string | null;
@@ -206,6 +212,9 @@ interface TaskRow extends Record<string, unknown> {
   missed_execution_policy?: string | null;
   condition?: ScheduleCondition | null;
   condition_state?: ScheduleConditionState | null;
+  credit_cap_microusd?: number | string | null;
+  paused_reason?: string | null;
+  credits_used_microusd?: number | string | null;
 }
 
 interface RunRow extends Record<string, unknown> {
@@ -222,6 +231,7 @@ interface RunRow extends Record<string, unknown> {
   idempotency_key: string;
   lease_expires_at: string | null;
   attempt_count: number;
+  credits_used_microusd?: number | string | null;
 }
 
 type ClaimRow = TaskRow & {
@@ -297,6 +307,12 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
     missedExecutionPolicy: row.missed_execution_policy === 'skip' ? 'skip' : 'run_once',
     condition: row.condition ?? null,
     conditionState: row.condition_state ?? null,
+    creditCap:
+      row.credit_cap_microusd === null || row.credit_cap_microusd === undefined
+        ? null
+        : creditsFromMicrousd(Number(row.credit_cap_microusd)),
+    creditsUsed: creditsFromMicrousd(Number(row.credits_used_microusd ?? 0)),
+    pausedReason: row.paused_reason === 'credit_cap_reached' ? 'credit_cap_reached' : null,
   };
 }
 
@@ -315,6 +331,14 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     idempotencyKey: row.idempotency_key,
     leaseExpiresAt: row.lease_expires_at,
     attemptCount: row.attempt_count,
+    ...(row.credits_used_microusd === undefined
+      ? {}
+      : {
+          creditsUsed:
+            row.credits_used_microusd === null
+              ? null
+              : creditsFromMicrousd(Number(row.credits_used_microusd)),
+        }),
   };
 }
 
@@ -353,6 +377,45 @@ function validDate(value: unknown, label: string): Date | null {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) throw new ScheduleValidationError(`${label} is invalid`);
   return date;
+}
+
+const CREDITS_USED_SQL = `(
+  select coalesce(sum(charge.actual_cost_microusd), 0)
+    from public.managed_usage_requests charge
+   where charge.user_id = task.user_id
+     and charge.scheduled_task_id = task.id
+     and charge.status = 'completed'
+) as credits_used_microusd`;
+
+async function readCreditsUsedMicrousd(
+  db: DatabaseAdapter,
+  userId: string,
+  taskId: string,
+): Promise<number> {
+  const [row] = await db.query<{ used: number | string | null }>(
+    `select coalesce(sum(actual_cost_microusd), 0) as used
+       from public.managed_usage_requests
+      where user_id = $1
+        and scheduled_task_id = $2
+        and status = 'completed'`,
+    [userId, taskId],
+  );
+  const used = Number(row?.used ?? 0);
+  return Number.isFinite(used) ? used : 0;
+}
+
+function creditCapMicrousdOf(task: ScheduleTask): number | null {
+  return task.creditCap === null || task.creditCap === undefined
+    ? null
+    : microusdFromCredits(task.creditCap);
+}
+
+function isCreditCapReached(capMicrousd: number | null, usedMicrousd: number): boolean {
+  return capMicrousd !== null && usedMicrousd >= capMicrousd;
+}
+
+function creditCapMessage(capMicrousd: number, usedMicrousd: number): string {
+  return `This routine reached its ${formatCredits(creditsFromMicrousd(capMicrousd))} cap after using ${formatCredits(creditsFromMicrousd(usedMicrousd))}. Raise the cap to run it again.`;
 }
 
 function normalizeModel(
@@ -395,6 +458,7 @@ interface ValidatedScheduleDefinition {
   isEnabled: boolean;
   expiresAt: string | null;
   maxExecutions: number | null;
+  creditCapMicrousd: number | null;
   nextExecutionAt: string | null;
   status: ScheduleTask['status'];
   metadata: Record<string, unknown>;
@@ -416,6 +480,7 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'isActive',
   'expiresAt',
   'maxExecutions',
+  'creditCap',
   'notificationSettings',
   'projectId',
   'recurrenceRule',
@@ -471,6 +536,17 @@ function validateScheduleInput(
       (!Number.isInteger(maxExecutions) || maxExecutions < 1 || maxExecutions > 1_000_000)
     ) {
       throw new ScheduleValidationError('maxExecutions must be an integer from 1 to 1,000,000');
+    }
+    const creditCap = input.creditCap ?? null;
+    if (
+      creditCap !== null &&
+      (!Number.isInteger(creditCap) ||
+        creditCap < 1 ||
+        creditCap > MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP)
+    ) {
+      throw new ScheduleValidationError(
+        `creditCap must be a whole number of credits from 1 to ${MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP.toLocaleString('en-US')}`,
+      );
     }
 
     const retryMaxAttempts = input.retryMaxAttempts ?? 0;
@@ -582,6 +658,7 @@ function validateScheduleInput(
       isEnabled,
       expiresAt: expiresAt?.toISOString() ?? null,
       maxExecutions,
+      creditCapMicrousd: creditCap === null ? null : microusdFromCredits(creditCap),
       nextExecutionAt,
       status: isEnabled ? 'active' : 'paused',
       metadata: {
@@ -652,9 +729,9 @@ export async function listSchedules(
 ): Promise<ScheduleTask[]> {
   const rows = page.projectId
     ? await db.query<TaskRow>(
-        `select * from scheduled_tasks
+        `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
          where user_id = $1 and project_id = $2
-         order by created_at desc, id desc
+         order by task.created_at desc, task.id desc
          limit $3 offset $4`,
         [
           userId,
@@ -664,9 +741,9 @@ export async function listSchedules(
         ],
       )
     : await db.query<TaskRow>(
-        `select * from scheduled_tasks
+        `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
          where user_id = $1
-         order by created_at desc, id desc
+         order by task.created_at desc, task.id desc
          limit $2 offset $3`,
         [userId, clampInteger(page.limit, 1, MAX_PAGE_SIZE), clampInteger(page.offset, 0, 10_000)],
       );
@@ -679,11 +756,28 @@ export async function getSchedule(
   taskId: string,
 ): Promise<ScheduleTask> {
   const [row] = await db.query<TaskRow>(
-    `select * from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
+    `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
+      where task.id = $1 and task.user_id = $2 limit 1`,
     [taskId, userId],
   );
   if (!row) throw new ScheduleNotFoundError();
   return mapScheduleTask(row);
+}
+
+async function lockSchedule(
+  db: DatabaseAdapter,
+  userId: string,
+  taskId: string,
+): Promise<{ task: ScheduleTask; creditsUsedMicrousd: number }> {
+  const [row] = await db.query<TaskRow>(
+    `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
+     where id = $1 and user_id = $2
+     for update of task`,
+    [taskId, userId],
+  );
+  if (!row) throw new ScheduleNotFoundError();
+  const used = Number(row.credits_used_microusd ?? 0);
+  return { task: mapScheduleTask(row), creditsUsedMicrousd: Number.isFinite(used) ? used : 0 };
 }
 
 async function getScheduleForUpdate(
@@ -691,14 +785,7 @@ async function getScheduleForUpdate(
   userId: string,
   taskId: string,
 ): Promise<ScheduleTask> {
-  const [row] = await db.query<TaskRow>(
-    `select * from scheduled_tasks
-     where id = $1 and user_id = $2
-     for update`,
-    [taskId, userId],
-  );
-  if (!row) throw new ScheduleNotFoundError();
-  return mapScheduleTask(row);
+  return (await lockSchedule(db, userId, taskId)).task;
 }
 
 export async function createSchedule(
@@ -717,13 +804,13 @@ export async function createSchedule(
        interval_ms, timezone, is_enabled, expires_at, max_executions,
        action_type, action_config, prompt, model, status, next_execution_at, metadata,
        project_id, recurrence_rule, dayparts, retry_max_attempts, retry_backoff_seconds,
-       missed_execution_policy, condition
+       missed_execution_policy, condition, credit_cap_microusd
      ) values (
        $1, $2, $3, $4, $5, $6,
        $7, $8, $9, $10, $11,
        'agent', null, $12, $13, $14, $15, $16::jsonb,
        $17, $18, $19::jsonb, $20, $21,
-       $22, $23::jsonb
+       $22, $23::jsonb, $24
      ) returning *`,
     [
       userId,
@@ -749,6 +836,7 @@ export async function createSchedule(
       definition.retryBackoffSeconds,
       definition.missedExecutionPolicy,
       definition.condition ? JSON.stringify(definition.condition) : null,
+      definition.creditCapMicrousd,
     ],
   );
   if (!row) throw new Error('Schedule insert returned no row');
@@ -788,6 +876,7 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     isActive: task.isEnabled,
     expiresAt: task.expiresAt,
     maxExecutions: task.maxExecutions,
+    creditCap: task.creditCap ?? null,
     projectId: task.projectId ?? null,
     recurrenceRule: task.recurrenceRule ?? null,
     dayparts: task.dayparts ?? null,
@@ -806,7 +895,7 @@ export async function updateSchedule(
   options: { planTier: string; now?: Date },
 ): Promise<ScheduleTask> {
   return db.transaction(async (tx) => {
-    const current = await getScheduleForUpdate(tx, userId, taskId);
+    const { task: current, creditsUsedMicrousd } = await lockSchedule(tx, userId, taskId);
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be edited');
     }
@@ -861,6 +950,16 @@ export async function updateSchedule(
     if (definition.projectId && definition.projectId !== (current.projectId ?? null)) {
       await assertProjectOwnership(tx, userId, definition.projectId);
     }
+    const capReached = isCreditCapReached(definition.creditCapMicrousd, creditsUsedMicrousd);
+    if (definition.isEnabled && capReached && definition.creditCapMicrousd !== null) {
+      throw new ScheduleConflictError(
+        creditCapMessage(definition.creditCapMicrousd, creditsUsedMicrousd),
+      );
+    }
+    const pausedReason =
+      !definition.isEnabled && capReached && current.pausedReason === 'credit_cap_reached'
+        ? 'credit_cap_reached'
+        : null;
 
     const [row] = await tx.query<TaskRow>(
       `update scheduled_tasks
@@ -874,6 +973,7 @@ export async function updateSchedule(
            retry_attempt = case when $25::boolean then 0 else least(retry_attempt, $21) end,
            retry_scheduled_for = case when $25::boolean then null else retry_scheduled_for end,
            condition_state = case when $26::boolean then null else condition_state end,
+           credit_cap_microusd = $27, paused_reason = $28,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
@@ -904,10 +1004,12 @@ export async function updateSchedule(
         definition.condition ? JSON.stringify(definition.condition) : null,
         timingChanged || retryPolicyChanged || activationChanged,
         conditionChanged,
+        definition.creditCapMicrousd,
+        pausedReason,
       ],
     );
     if (!row) throw new ScheduleNotFoundError();
-    return mapScheduleTask(row);
+    return mapScheduleTask({ ...row, credits_used_microusd: creditsUsedMicrousd });
   });
 }
 
@@ -919,7 +1021,7 @@ export async function setScheduleEnabled(
   options: { now?: Date } = {},
 ): Promise<ScheduleTask> {
   return db.transaction(async (tx) => {
-    const current = await getScheduleForUpdate(tx, userId, taskId);
+    const { task: current, creditsUsedMicrousd } = await lockSchedule(tx, userId, taskId);
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be enabled');
     }
@@ -928,6 +1030,10 @@ export async function setScheduleEnabled(
     if (enabled) {
       if (current.maxExecutions !== null && current.executionCount >= current.maxExecutions) {
         throw new ScheduleConflictError('Schedule has reached its execution limit');
+      }
+      const capMicrousd = creditCapMicrousdOf(current);
+      if (capMicrousd !== null && isCreditCapReached(capMicrousd, creditsUsedMicrousd)) {
+        throw new ScheduleConflictError(creditCapMessage(capMicrousd, creditsUsedMicrousd));
       }
       const expiresAt = current.expiresAt ? new Date(current.expiresAt) : null;
       if (expiresAt && expiresAt <= now) {
@@ -953,13 +1059,14 @@ export async function setScheduleEnabled(
       `update scheduled_tasks
        set is_enabled = $3, status = $4, next_execution_at = $5,
            retry_attempt = 0, retry_scheduled_for = null,
+           paused_reason = null,
            last_error = null, updated_at = now()
        where id = $1 and user_id = $2
        returning *`,
       [taskId, userId, enabled, enabled ? 'active' : 'paused', nextExecutionAt],
     );
     if (!row) throw new ScheduleNotFoundError();
-    return mapScheduleTask(row);
+    return mapScheduleTask({ ...row, credits_used_microusd: creditsUsedMicrousd });
   });
 }
 
@@ -1103,7 +1210,13 @@ export async function listScheduleRuns(
        order by run.started_at desc, run.id desc
        limit $3 offset $4
      )
-     select owner.id as owner_task_id, paged_runs.*
+     select owner.id as owner_task_id, paged_runs.*,
+            (select sum(charge.actual_cost_microusd)
+               from public.managed_usage_requests charge
+              where charge.user_id = $2
+                and charge.scheduled_task_id = $1
+                and charge.scheduled_task_run_id = paged_runs.id
+                and charge.status = 'completed') as credits_used_microusd
      from owner
      left join paged_runs on true`,
     [taskId, userId, limit, offset],
@@ -1205,6 +1318,13 @@ async function createOnDemandScheduleRun(
     if (task.maxExecutions !== null && task.executionCount >= task.maxExecutions) {
       throw new ScheduleConflictError('Schedule has reached its execution limit');
     }
+    const capMicrousd = creditCapMicrousdOf(task);
+    if (capMicrousd !== null) {
+      const creditsUsedMicrousd = await readCreditsUsedMicrousd(tx, input.userId, input.taskId);
+      if (isCreditCapReached(capMicrousd, creditsUsedMicrousd)) {
+        throw new ScheduleConflictError(creditCapMessage(capMicrousd, creditsUsedMicrousd));
+      }
+    }
 
     const [runRow] = await tx.query<RunRow>(
       `insert into scheduled_task_runs (
@@ -1284,7 +1404,12 @@ export async function finalizeScheduleRun(
   const durationMs = Math.max(0, outcome.completedAt.getTime() - startedAt.getTime());
 
   return db.transaction(async (tx) => {
-    const currentTask = await getScheduleForUpdate(tx, claim.task.userId, claim.task.id);
+    const { task: currentTask, creditsUsedMicrousd } = await lockSchedule(
+      tx,
+      claim.task.userId,
+      claim.task.id,
+    );
+    const result = outcome.result ?? null;
     const [runRow] = await tx.query<RunRow>(
       `update scheduled_task_runs
        set status = $1,
@@ -1299,7 +1424,7 @@ export async function finalizeScheduleRun(
         outcome.status,
         completedAt,
         durationMs,
-        JSON.stringify(outcome.result ?? null),
+        JSON.stringify(result),
         boundedError(outcome.error),
         claim.runId,
         claim.task.id,
@@ -1322,7 +1447,9 @@ export async function finalizeScheduleRun(
     let retryScheduledFor: string | null = null;
     const scheduled = (claim.triggerSource ?? 'schedule') === 'schedule';
     const retriesSpent = Math.max(0, (claim.attemptCount ?? 1) - 1);
+    const capReached = isCreditCapReached(creditCapMicrousdOf(currentTask), creditsUsedMicrousd);
     const retryable =
+      !capReached &&
       scheduled &&
       (outcome.status === 'failed' || outcome.status === 'timeout') &&
       retriesSpent < (currentTask.retryMaxAttempts ?? 0) &&
@@ -1380,6 +1507,13 @@ export async function finalizeScheduleRun(
       }
     }
 
+    const pausedForCreditCap = capReached && nextStatus === 'active';
+    if (pausedForCreditCap) {
+      nextExecutionAt = null;
+      nextStatus = 'paused';
+      nextEnabled = false;
+    }
+
     await tx.query(
       `update scheduled_tasks
        set last_executed_at = $2,
@@ -1392,6 +1526,10 @@ export async function finalizeScheduleRun(
            is_enabled = case when status = 'active' then $6 else is_enabled end,
            retry_attempt = case when $9::boolean then $7 else retry_attempt end,
            retry_scheduled_for = case when $9::boolean then $8::timestamptz else retry_scheduled_for end,
+           paused_reason = case
+             when status = 'active' and $11::boolean then 'credit_cap_reached'
+             else paused_reason
+           end,
            updated_at = now()
        where id = $1 and user_id = $10
        returning id`,
@@ -1406,6 +1544,7 @@ export async function finalizeScheduleRun(
         retryScheduledFor,
         scheduled,
         claim.task.userId,
+        pausedForCreditCap,
       ],
     );
     return mapScheduleRun(runRow);
@@ -1514,6 +1653,16 @@ async function auditMissedExecution(
   });
 }
 
+async function pauseForCreditCap(db: DatabaseAdapter, claim: ClaimedScheduleRun): Promise<void> {
+  await db.execute(
+    `update scheduled_tasks
+        set status = 'paused', is_enabled = false, next_execution_at = null,
+            paused_reason = 'credit_cap_reached', updated_at = now()
+      where id = $1 and user_id = $2 and status = 'active'`,
+    [claim.task.id, claim.task.userId],
+  );
+}
+
 /**
  * A claim spends one of the task's allowed executions. An occurrence that never
  * ran, because it was skipped as missed or its condition did not hold, gives
@@ -1585,6 +1734,24 @@ async function runClaimedSchedule(
     if (claim.scope.userId !== claim.task.userId) {
       throw new Error('Scheduled claim owner does not match its task owner');
     }
+    const capMicrousd = creditCapMicrousdOf(claim.task);
+    if (capMicrousd !== null) {
+      const creditsUsedMicrousd = await readCreditsUsedMicrousd(
+        db,
+        claim.task.userId,
+        claim.task.id,
+      );
+      if (isCreditCapReached(capMicrousd, creditsUsedMicrousd)) {
+        await pauseForCreditCap(db, claim);
+        await releaseExecutionSlot(db, claim);
+        return await finalizeScheduleRun(db, claim, {
+          status: 'cancelled',
+          result: { creditCapReached: true },
+          error: creditCapMessage(capMicrousd, creditsUsedMicrousd),
+          completedAt: now(),
+        });
+      }
+    }
     const missedExecution = detectMissedExecution(claim, now());
     if (missedExecution) {
       await auditMissedExecution(claim, missedExecution);
@@ -1609,7 +1776,10 @@ async function runClaimedSchedule(
       });
     }
     const executed = await Promise.race([
-      execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
+      runWithinScheduleRun(
+        { userId: claim.task.userId, taskId: claim.task.id, runId: claim.runId },
+        () => execute(claim.task, signal, claim.runId, { ...claim.scope, db }),
+      ),
       aborted,
     ]);
     const result =

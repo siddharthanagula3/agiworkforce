@@ -79,12 +79,16 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   },
   { path: 'apps/web/app/api/checkout/', why: 'checkout starts the subscription the payer owns' },
   {
-    path: 'apps/web/features/billing/server/billing-account.ts',
+    path: 'apps/web/lib/server/billing-owner-row.ts',
     why: 'billing management reads the Stripe and store ids on the subscription the payer owns',
   },
   {
     path: 'apps/web/lib/services/auto-reload-service.ts',
     why: 'auto-reload charges the Stripe customer on the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/lib/services/trial-reminder-service.ts',
+    why: 'trial reminders act on the Stripe trial subscription the payer owns',
   },
   {
     path: 'apps/web/app/api/portal/',
@@ -134,6 +138,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   {
     path: 'apps/web/lib/services/billing-reconciliation.ts',
     why: 'reconciliation compares rows with Stripe',
+  },
+  {
+    path: 'apps/web/lib/services/billing-refund-service.ts',
+    why: 'a refund acts on the payment and the subscription the payer owns',
   },
   {
     path: 'apps/web/lib/services/stripe-settlement-reconciliation-service.ts',

@@ -142,27 +142,25 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:210-216`, `apps/m
 
 - Done when: Users can see promotional/bonus credits they were given, how much remains and when they lapse.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Bonus grants appear as "Bonus credit" rows in credit history, but nothing shows how much promotional credit remains or that it lapses with the billing period (it is added to the period allowance). | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
 | mobile | partial | Mobile has no credit history; /api/billing/credit-history (which labels bonus grants) is not called. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:70-76`, `apps/web/features/settings/sections/BillingSection.tsx:1154-1161`, `apps/web/app/api/billing/credit-history/route.ts:24-34`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`
 
 ## S82.16: Credit-expiry information.
 
 - Done when: Users can see when each kind of credit expires (plan allowance reset, purchased balance lifetime, bonus lapse).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Show the date each purchased or bonus balance expires; today only the rule is stated (purchased credits carry up to 12 months) and the plan reset date is shown. | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
 | mobile | partial | Mobile states the 12-month carry rule only inside the Stripe top-up info block and never shows an expiry date. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:984-989`, `apps/web/features/settings/sections/UsageSection.tsx:121-138`, `apps/web/db/neon/0111_credit_top_up_carry.sql:202-214`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:391-395`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:391-395`
 
 ## S82.18: Daily/weekly/monthly history.
 

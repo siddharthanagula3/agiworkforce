@@ -72,14 +72,124 @@
       "reason": "Names auto_reload_settings only as a string in its retention classification and issues no query, so it runs unchanged before and after 0297."
     },
     {
-      "file": "apps/web/lib/services/cogs-ledger-service.ts",
-      "migration": 304,
-      "reason": "Writes the attribution_kind and attribution_ref columns when it imports Stripe fees. The deploy applies 0304 before this release reaches production. Until then the daily import in reconcile-credits fails, logs cogs_stripe_import_failed and leaves every other reconciliation step running, and its three-day lookback re-imports the missed fees once 0304 is applied."
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 298,
+      "reason": "Reads the account's expiring_credit_purchases rows for its own export section. Before 0298 is applied that query fails and the export ledger marks only that section unavailable, as it does for any absent table."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 298,
+      "reason": "Deletes the account's expiring_credit_purchases rows. Before 0298 is applied the delete sees an absent table and is recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 298,
+      "reason": "Names expiring_credit_purchases only as a string in its retention classification and issues no query, so it runs unchanged before and after 0298."
+    },
+    {
+      "file": "apps/web/lib/services/purchased-credit-expiry-service.ts",
+      "migration": 298,
+      "reason": "Owns expiring_credit_purchases and ships with 0298: the deploy applies 0298 before this release reaches production."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/dispute-events.ts",
+      "migration": 299,
+      "reason": "Owns billing_disputes and ships with 0299: the deploy applies 0299 before this release reaches production. Before it, a dispute event fails and Stripe redelivers it, so no dispute is processed without its record."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 299,
+      "reason": "Reads the account's refund requests and disputes for their own export sections. Before 0299 is applied those queries fail and the export ledger marks only those sections unavailable, as it does for any absent table."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 299,
+      "reason": "Deletes the account's refund requests and detaches its disputes. Before 0299 is applied both statements see an absent table and are recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
+    },
+    {
+      "file": "apps/web/lib/services/billing-refund-service.ts",
+      "migration": 299,
+      "reason": "Owns billing_refund_requests and reads billing_disputes, and ships with 0299: the deploy applies 0299 before this release reaches production. Before it, a refund request or an operator lookup fails with an error and nothing is refunded."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 299,
+      "reason": "Names billing_disputes and billing_refund_requests only as strings in its retention classification and issues no query, so it runs unchanged before and after 0299."
+    },
+    {
+      "file": "apps/web/app/api/checkout/route.ts",
+      "migration": 300,
+      "reason": "Names plan_catalog_version only as Stripe Checkout metadata and issues no query on it, so it runs unchanged before and after 0300."
+    },
+    {
+      "file": "apps/web/app/api/cron/reset-credits/route.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version. Stripe redelivers the event once 0300 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/credit-service.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/entitlement-resolution.ts",
+      "migration": 300,
+      "reason": "Every entitlement read selects the subscription's plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Released ahead of it, entitlement reads fail rather than resolve a grandfathered subscriber on the wrong allowances, so the migration must lead the release."
+    },
+    {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 300,
+      "reason": "Reads the credit period's plan catalog version with the reservation's headroom. Before 0300 is applied that lookup fails, is logged, and the reservation proceeds on the current catalog with no overage headroom, which is what every subscriber has today."
+    },
+    {
+      "file": "apps/web/lib/services/mobile-iap-ledger-service.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/subscription-service.ts",
+      "migration": 300,
+      "reason": "Every entitlement read selects the subscription's plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Released ahead of it, entitlement reads fail rather than resolve a grandfathered subscriber on the wrong allowances, so the migration must lead the release."
+    },
+    {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 301,
+      "reason": "Links a request reserved inside a routine run to that routine, which ships with 0301: the deploy applies 0301 before this release reaches production. Outside a routine run the statement never runs; inside one, before 0301 it fails and the run fails rather than spending past its credit cap uncounted."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-service.ts",
+      "migration": 301,
+      "reason": "Owns the routine credit cap and ships with 0301: the deploy applies 0301 before this release reaches production. Released ahead of it, schedule reads and runs fail rather than run a routine without its cap."
     },
     {
       "file": "apps/web/lib/services/infrastructure-allocation-service.ts",
       "migration": 303,
       "reason": "Owns infrastructure_vendor_bills and ships with 0303: the deploy applies 0303 before this release reaches production. Until then the monthly allocation cron fails on its first read, reports 500 and writes nothing, so no ledger row depends on a table that does not exist."
+    },
+    {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 304,
+      "reason": "Writes the attribution_kind and attribution_ref columns when it imports Stripe fees. The deploy applies 0304 before this release reaches production. Until then the daily import in reconcile-credits fails, logs cogs_stripe_import_failed and leaves every other reconciliation step running, and its three-day lookback re-imports the missed fees once 0304 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 306,
+      "reason": "Names free_daily_usage_reservations only in its cascade notes and deletes by user_id; it reads no column 0306 adds, so it runs unchanged before and after 0306."
+    },
+    {
+      "file": "apps/web/lib/services/free-trial-service.ts",
+      "migration": 306,
+      "reason": "Writes the lease, provider and model columns on each Free reservation and ships with 0306: the deploy applies 0306 before this release reaches production. Until then every Free reservation fails, which is why 0306 must be applied first."
+    },
+    {
+      "file": "apps/web/lib/services/infrastructure-allocation-service.ts",
+      "migration": 306,
+      "reason": "Counts active accounts from free_daily_usage_reservations by user and creation time only; it reads no column 0306 adds, so it runs unchanged before and after 0306."
     }
   ]
 }

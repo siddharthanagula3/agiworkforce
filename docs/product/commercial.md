@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-09-21
+Last updated: 2026-09-27
 
 ## Bootstrap Rule
 
@@ -115,9 +115,12 @@ The current enterprise control-plane foundation is the first step, not the final
 ## Plan Change, Proration, And Subscription State Transitions
 
 Upgrade (paid to strictly larger paid allowance) runs through `apps/web/app/api/upgrade`.
-Stripe is called with `proration_behavior: 'always_invoice'` and the same signed
-`proration_date` for both preview and apply, so the customer is invoiced only the
-prorated difference for the remainder of the period and the renewal date is preserved.
+Stripe is called with `proration_behavior: 'always_invoice'` and the anchor
+`planChangeAnchor` in `apps/web/lib/server/stripe-plan-change.ts` picks for both preview
+and apply. A tier upgrade uses `billing_cycle_anchor: 'now'`: a new billing period starts
+that day, and the customer pays the new plan's price minus a credit for the unused time
+on the old one. A seat increase keeps the renewal date, and the preview and the charge
+share one signed `proration_date`.
 Raw usage survives the change: `SubscriptionService.carryCreditsForUpgradePeriod`
 refuses any non-upgrade delta and `CreditService.carryUsageIntoUpgradedPeriod` mutates
 the existing `token_credits` row in place, `credits_used_cents` is never reset and
@@ -153,13 +156,42 @@ rule for a transition, and the webhook already refuses the specific resurrection
 where an out-of-order Stripe update would move a `canceled` row back to entitled.
 
 Disputes and chargebacks share the rank-1 `past_due` state. `charge.dispute.created`
-stores `past_due`, sets `cancel_at_period_end`, revokes the entire remaining credit
-balance through `deduct_credits`, and writes a `plan_changed` audit event. Because the
-revocation drives `credits_used_cents` to the allocation, the next
-`reset_credits_for_period` carries zero purchased balance, a chargeback can never
-restore purchased value at renewal. A top-up refund instead calls
-`handle_top_up_refund`, which retires `top_up_allocated_cents` even after the balance
-was spent.
+records the dispute in `billing_disputes` with the subscription state before it, stores
+`past_due`, sets `cancel_at_period_end`, revokes the remaining balance of the current
+credit period through `revoke_disputed_credits_microusd` and records how much of it was
+purchased. `apps/web/app/api/stripe-webhook/lib/dispute-events.ts` settles the outcome.
+A dispute that closes won, an inquiry that closes, or one that was prevented restores
+what the opening revoked, once: inside the same period the revocation is reversed; after
+a renewal only the purchased part comes back, because the period's allowance would have
+lapsed anyway; and the plan hold lifts to the subscription's state in Stripe once no
+other dispute on the account is open. A lost dispute is final, and a later win in Stripe
+still restores it.
+
+A plan refund takes back the refunded share of the plan allowance of the period the
+payment covered, through `revoke_plan_allowance_microusd`, and never purchased credits.
+It ends the entitlement only when the current period's payment is refunded in full; a
+refund of an earlier period's payment changes neither credits nor plan. A top-up refund
+calls `handle_top_up_refund`, which retires `top_up_allocated_cents` even after the
+balance was spent. Operators refund from `/admin/refunds`, and customers request refunds
+on `/refund-policy`; both issue the refund in Stripe, and the `charge.refunded` webhook is
+the only path that changes credits or plan.
+
+An EU, EEA or UK customer who asks within 14 days of a plan payment or a top-up gets the
+payment back. Both checkouts require the statement in
+`apps/web/lib/billing/withdrawal-consent.ts`, a request for immediate access that
+acknowledges a reduced refund, through Stripe `consent_collection` and
+`custom_text.terms_of_service_acceptance`; the webhook records its version and time in the
+subscription or payment intent metadata. With that record the refund is prorated by the
+credits used, as Claude does (support.claude.com/en/articles/12386328): a plan payment by
+the share of the period's plan credits not used, a top-up by the share of its credits not
+spent. Without it the whole payment is refunded, because EU and UK law allows a deduction
+only after an express request for immediate performance.
+`apps/web/lib/services/billing-refund-service.ts` issues the refund on request, cancels a
+withdrawn plan in Stripe, and records the amount in
+`billing_refund_requests.assessed_refund_cents`; an operator settling that request cannot
+refund less. The country is the payment's billing address, then the Stripe customer's
+address or tax location, then the card's issuing country. Both paths reach Stripe only
+through `apps/web/lib/server/payments/stripe-provider.ts`.
 
 ## Allowance And Purchased Balance Are Distinct Entitlements
 
@@ -167,13 +199,13 @@ was spent.
 `credits_allocated_cents` is the spendable total and `top_up_allocated_cents` is the
 purchased portion inside it.
 
-| Attribute         | Included plan allowance   | Purchased balance                                                                      |
-| ----------------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| Expiry            | End of the billing period | Carries across renewals; a purchase older than 12 months is excluded at the next carry |
-| Refundable        | No                        | Yes, `handle_top_up_refund` retires the purchase even after it was spent               |
-| Revocable         | Yes, on dispute           | Yes, on dispute                                                                        |
-| Transferable      | No                        | No                                                                                     |
-| Consumption order | First                     | Second, reachable only once the included allowance is exhausted                        |
+| Attribute         | Included plan allowance                | Purchased balance                                                                      |
+| ----------------- | -------------------------------------- | -------------------------------------------------------------------------------------- |
+| Expiry            | End of the billing period              | Carries across renewals; a purchase older than 12 months is excluded at the next carry |
+| Refundable        | In proportion, current period only     | Yes, `handle_top_up_refund` retires the purchase even after it was spent               |
+| Revocable         | Yes, on dispute; restored if it is won | Yes, on dispute; restored if it is won                                                 |
+| Transferable      | No                                     | No                                                                                     |
+| Consumption order | First                                  | Second, reachable only once the included allowance is exhausted                        |
 
 The consumption order is enforced by `reserve_managed_usage_request_with_limits`, which
 tags purchased-funded spend `is_overage` and excludes it from the plan window, and by
@@ -183,6 +215,32 @@ remaining purchased budget. Non-transferability is enforced by migration
 `0126_credit_balance_transferability.sql`: the owner of a credit account and of a ledger
 entry is immutable, so no write can detach a balance from the identity that paid for it
 and from its refund and dispute path.
+
+## Grandfathered Plans And Catalog Versions
+
+A subscription records the billing plan catalog version it was sold under,
+`subscriptions.plan_catalog_version` (0300). Checkout sends the current
+`BILLING_PLAN_CATALOG_VERSION`; the webhook records it at purchase, keeps it at each
+renewal while the subscription stays on the same Stripe price, and records the current
+version when the price changes. `resolveEntitlementBundle` reads the subscription
+through `resolveSubscriberPlan` in `apps/web/lib/services/plan-catalog-service.ts`, so
+every entitlement answer carries the plan and the version the subscriber holds. Each
+credit period records the version it was allocated under in
+`token_credits.plan_catalog_version`, which is what the reservation path reads for the
+5-hour and weekly caps. Allowances per version live in
+`packages/contracts/types/src/managed-usage-limits.ts` and resolve through
+`managedUsageLimitsForCatalogVersion`, so a reprice or a new allowance table reaches new
+buyers while an existing subscriber keeps what they bought for as long as they stay on
+that price. `resolvePurchasablePlan` sends a buyer of a withdrawn plan to its successor.
+
+Moving an existing subscriber off the version they bought follows the stricter of the
+two leaders: Anthropic's consumer terms (section 6, fetched 2026-09-27) change fees only
+from the next renewal term with at least 30 days' notice and a right to cancel first,
+and OpenAI's terms of use (read from the search index 2026-09-27, direct fetch blocked)
+give 30 days' notice effective at the next renewal. Neither extends that promise to usage
+limits; we do, because the allowance is part of what the subscriber bought. Any such move
+needs at least 30 days' notice by email and in the product, takes effect only at a
+renewal, and states the right to cancel before it applies.
 
 ## Cost Of Goods Ledger
 

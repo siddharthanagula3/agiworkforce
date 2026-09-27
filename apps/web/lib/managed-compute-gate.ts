@@ -422,7 +422,7 @@ export async function buildSpendLimitGateResponse(
   if (decision.allowed) return null;
 
   logger.warn(
-    { userId, code: decision.code, spentCents: decision.state?.spentCents },
+    { userId, code: decision.code, spentCredits: decision.state?.spentCredits },
     '[spend-limit] request refused by workspace budget',
   );
 

@@ -231,6 +231,7 @@ async function handleGetMe(request: NextRequest) {
     const capability_handshake = buildMeCapabilityHandshake({
       userId,
       tier: effectiveTier,
+      catalogVersion: entitlement.catalogVersion,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
       closedCapabilities: platformCapabilitiesOf(killSwitches?.closedCapabilities ?? []),

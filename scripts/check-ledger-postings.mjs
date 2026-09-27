@@ -40,6 +40,12 @@ export const LEDGER_WRITE_PROTECTION = Object.freeze({
     table: 'credit_transactions',
     why: 'Each bonus grant, spend or expiry posts once per grant event.',
   },
+  post_purchased_credit_adjustment: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_purchased_credit_event',
+    table: 'credit_transactions',
+    why: 'Each expiring purchase posts its expiry once per purchase event.',
+  },
   deduct_credits_microusd: {
     kind: 'idempotency_key',
     why: 'The caller supplies the key and a replay returns the stored result.',
@@ -59,6 +65,24 @@ export const LEDGER_WRITE_PROTECTION = Object.freeze({
     type: 'refund',
     description: 'p_reason',
     why: 'Same receipt: the retired purchase is recorded under the charge it came from.',
+  },
+  revoke_plan_allowance_microusd: {
+    kind: 'caller_receipt',
+    type: 'refund',
+    description: 'p_reason',
+    why: 'The plan refund is recorded under the charge it came from, and the webhook subtracts what that charge already revoked.',
+  },
+  revoke_disputed_credits_microusd: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_dispute_postings',
+    table: 'credit_transactions',
+    why: 'The revocation names its dispute, once per dispute.',
+  },
+  restore_disputed_credits_microusd: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_dispute_postings',
+    table: 'credit_transactions',
+    why: 'The restoration names its dispute, once per dispute.',
   },
 });
 

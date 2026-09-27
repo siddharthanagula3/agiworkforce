@@ -24,6 +24,7 @@ export type SubscriptionRow = {
   stripe_coupon_id: string | null;
   apple_original_transaction_id: string | null;
   google_purchase_token: string | null;
+  plan_catalog_version?: number | null;
   updated_at: string;
 };
 

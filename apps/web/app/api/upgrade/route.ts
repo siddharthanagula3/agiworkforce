@@ -16,13 +16,13 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
-import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
-import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import {
+  resolveStripeSubscriptionForUpgrade,
   resolveUpgradePromotion,
   upgradeDiscounts,
   type UpgradePromotion,
-} from '@/lib/server/stripe-upgrade-promotion';
+} from '@/lib/server/stripe-upgrade-subscription';
+import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   assertSameCheckoutBillingInterval,

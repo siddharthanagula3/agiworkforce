@@ -288,6 +288,24 @@ const ALLOWLIST = [
       'is a device credential, not a user, and the whole point is that it may belong to anyone',
   },
   {
+    match: /lib\/services\/billing-refund-service\.ts$/,
+    tables: ['billing_refund_requests', 'profiles'],
+    functions: [
+      'recordRefundDecision',
+      'listPendingRefundRequests',
+      'resolveOperatorQuery',
+      'readPendingRequest',
+      'issueOperatorRefund',
+    ],
+    reason:
+      'the operator refund console and the automatic refund decision. listPendingRefundRequests ' +
+      'and resolveOperatorQuery serve api/admin/billing-refunds, which reads across accounts by ' +
+      'design; readPendingRequest reads the request the operator named, and issueOperatorRefund ' +
+      'the account a Stripe charge belongs to; recordRefundDecision writes the decision to the ' +
+      'one request id that was just resolved. A customer files and reads their own requests on ' +
+      'the caller connection',
+  },
+  {
     match: /lib\/services\/schedule-service\.ts$/,
     tables: ['scheduled_tasks'],
     reason:
@@ -626,6 +644,17 @@ const ALLOWLIST = [
       'lists the accounts holding grants past their expiry by date alone, then reconciles each ' +
       'account by its own id. It would otherwise pass on the user_id it groups by, which names ' +
       'the accounts it found rather than scoping the read to one of them.',
+  },
+  {
+    match: /lib\/services\/purchased-credit-expiry-service\.ts$/,
+    tables: ['expiring_credit_purchases'],
+    functions: ['expireDuePurchasedCredits', 'remindExpiringPurchasedCredits'],
+    reason:
+      'the daily purchased credit expiry sweep, reached only from api/cron/expire-purchased-credits: ' +
+      'it lists purchases under a local-law expiry that are due or within their reminder window ' +
+      'by date alone, then reminds or reconciles each account by its own id. It would otherwise ' +
+      'pass on the user_id it groups or selects, which names the accounts it found rather than ' +
+      'scoping the read to one of them.',
   },
   {
     match: /lib\/server\/copyright-notices\.ts$/,

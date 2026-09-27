@@ -42,6 +42,7 @@ import {
   resolvePlanLimitAlternativeModel,
   type PlanLimitAlternativeKind,
 } from '@/lib/server/plan-limit-alternative';
+import { currentScheduleRun } from '@/lib/schedules/schedule-run-scope';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -520,22 +521,58 @@ async function planLimitRefusal(
   return error;
 }
 
-async function resolveOverageHeadroomMicrousd(
+interface ReservationLedgerContext {
+  topUpHeadroomMicrousd: number;
+  catalogVersion: number | null;
+}
+
+/** Headroom is the lesser of what is left and what was purchased, never more. */
+async function resolveReservationLedgerContext(
   db: DatabaseAdapter,
   userId: string,
-): Promise<number> {
+): Promise<ReservationLedgerContext> {
   try {
-    const rows = await db.query<{ headroom_microusd: number | string | null }>(
-      `select balances.overage_headroom_microusd as headroom_microusd
+    const rows = await db.query<{
+      headroom_microusd: number | string | null;
+      plan_catalog_version: number | null;
+    }>(
+      `select balances.overage_headroom_microusd as headroom_microusd,
+              (select credits.plan_catalog_version
+                 from public.token_credits credits
+                where credits.user_id = $1
+                  and credits.period_end > now()
+                order by credits.period_end desc
+                limit 1) as plan_catalog_version
          from public.prepaid_credit_balances_microusd($1::text) balances`,
       [userId],
     );
     const value = Number(rows[0]?.headroom_microusd ?? 0);
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+    return {
+      topUpHeadroomMicrousd: Number.isFinite(value) && value > 0 ? Math.floor(value) : 0,
+      catalogVersion: rows[0]?.plan_catalog_version ?? null,
+    };
   } catch (error) {
-    logger.warn({ error, userId }, 'Overage headroom lookup failed; treating as no headroom');
-    return 0;
+    logger.warn(
+      { error, userId },
+      'Reservation ledger lookup failed; treating as no headroom on the current catalog',
+    );
+    return { topUpHeadroomMicrousd: 0, catalogVersion: null };
   }
+}
+
+async function attributeToScheduleRun(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+): Promise<void> {
+  const run = currentScheduleRun();
+  if (!run || run.userId !== userId) return;
+  await db.execute(
+    `update public.managed_usage_requests
+        set scheduled_task_id = $3, scheduled_task_run_id = $4
+      where user_id = $1 and idempotency_key = $2 and scheduled_task_id is null`,
+    [userId, idempotencyKey, run.taskId, run.runId],
+  );
 }
 
 export async function reserveManagedUsageRequest(
@@ -566,10 +603,14 @@ export async function reserveManagedUsageRequest(
 
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(input.planTier);
-  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(input.planTier);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(input.planTier);
-  const topUpHeadroomMicrousd = await resolveOverageHeadroomMicrousd(input.db, input.userId);
+  const { topUpHeadroomMicrousd, catalogVersion } = await resolveReservationLedgerContext(
+    input.db,
+    input.userId,
+  );
+  const allowance = { tier: input.planTier, catalogVersion };
+  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
+  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
   const row = await queryOne(
     input.db,
     `select * from public.reserve_managed_usage_request_with_limits_microusd(
@@ -604,6 +645,7 @@ export async function reserveManagedUsageRequest(
       model: input.model,
     });
   }
+  await attributeToScheduleRun(input.db, input.userId, idempotencyKey);
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||
@@ -654,14 +696,15 @@ export async function reserveManagedUsageProviderStep(
     );
   }
 
-  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(input.planTier);
-  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(input.planTier);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(input.planTier);
   const reservation = input.reservation;
-  const topUpHeadroomMicrousd = await resolveOverageHeadroomMicrousd(
+  const { topUpHeadroomMicrousd, catalogVersion } = await resolveReservationLedgerContext(
     reservation.db,
     reservation.userId,
   );
+  const allowance = { tier: input.planTier, catalogVersion };
+  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
+  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
+  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
   const row = await queryOne(
     reservation.db,
     `select * from public.extend_managed_usage_request_provider_step_microusd(

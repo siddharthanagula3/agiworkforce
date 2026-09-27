@@ -5,9 +5,9 @@ import { AlertCircle, CheckCircle2, Clock3, Coins, Loader2, XCircle } from 'luci
 import type { ScheduleRun } from '../types';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
 import {
-  formatCostCents,
   formatDateTime,
   formatDuration,
+  formatRunCredits,
   formatTokenCount,
   scheduleModelLabel,
   scheduleResultText,
@@ -70,19 +70,19 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
         </span>
         <span aria-hidden="true">·</span>
         <span className="capitalize">{run.triggerSource}</span>
-        {usage?.costCents !== null && usage?.costCents !== undefined && (
+        {usage?.credits !== null && usage?.credits !== undefined && (
           <>
             <span aria-hidden="true">·</span>
             <span
               className="inline-flex items-center gap-1 tabular-nums"
               title={
                 usage.model
-                  ? `${formatCostCents(usage.costCents)} on ${scheduleModelLabel(usage.model)}`
-                  : formatCostCents(usage.costCents)
+                  ? `${formatRunCredits(usage.credits)} on ${scheduleModelLabel(usage.model)}`
+                  : formatRunCredits(usage.credits)
               }
             >
               <Coins className="h-3.5 w-3.5" aria-hidden="true" />
-              {formatCostCents(usage.costCents)}
+              {formatRunCredits(usage.credits)}
             </span>
           </>
         )}

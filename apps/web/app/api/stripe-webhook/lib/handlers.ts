@@ -10,17 +10,14 @@ import {
   handleCreditTopUp,
   upsertSubscriptionFromSession,
   updateSubscriptionFromStripeSubscription,
-  CreditService,
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
 import { handleAutoReloadEvent } from './auto-reload-events';
-import {
-  handleReferralChargeReversal,
-  handleReferralInvoicePaid,
-  notifyTrialEnding,
-} from './referral-events';
-import { topUpChargedCents } from '@agiworkforce/types';
+import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
+import { handleReferralChargeReversal, handleReferralInvoicePaid } from './referral-events';
+import { handleChargeRefunded } from './refund-events';
+import { recordWithdrawalConsent } from './withdrawal-consent-events';
 import {
   endEnterpriseContractIfPresent,
   recordEnterpriseInvoiceEvent,
@@ -81,6 +78,7 @@ export async function dispatchStripeEvent(
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
+      await recordWithdrawalConsent(stripe, session, event.created);
       if (session.metadata?.['type'] === 'credit_topup') {
         logger.info({ sessionId: session.id }, 'Processing credit top-up checkout');
         if (session.payment_status === 'unpaid') {
@@ -168,9 +166,6 @@ export async function dispatchStripeEvent(
       await handleReferralInvoicePaid(db, stripe, invoice);
       break;
     }
-    case 'customer.subscription.trial_will_end':
-      await notifyTrialEnding(db, stripe, event.data.object as Stripe.Subscription);
-      break;
     case 'invoice.created':
     case 'invoice.finalized':
     case 'invoice.updated':
@@ -307,212 +302,24 @@ export async function dispatchStripeEvent(
     }
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
-      const stripeCustomerId = charge.customer as string | null;
       await handleReferralChargeReversal(db, stripe, charge, 'refund');
-
-      const isCreditTopUpCharge = charge.metadata?.['type'] === 'credit_topup';
-      const fullyRefunded =
-        charge.refunded === true || (charge.amount > 0 && charge.amount_refunded >= charge.amount);
-      const revokesPlan = fullyRefunded && !isCreditTopUpCharge;
-      let refundedCreditTarget = charge.amount_refunded;
-      if (isCreditTopUpCharge) {
-        const purchasedCents = Number(charge.metadata?.['credit_amount_cents']);
-        const chargedCents = topUpChargedCents({
-          conversion: charge.metadata?.['conversion'],
-          amountCents: purchasedCents,
-          units: Number(charge.metadata?.['top_up_units']),
-          priceCents: Number(charge.metadata?.['price_cents']),
-          amountUsd: Number(charge.metadata?.['amount_usd']),
-          autoReload: charge.metadata?.['auto_reload'] === 'true',
-        });
-        if (chargedCents === null || charge.amount < chargedCents) {
-          throw new Error(`Invalid credit top-up refund metadata for Charge ${charge.id}`);
-        }
-        refundedCreditTarget = fullyRefunded
-          ? purchasedCents
-          : Math.floor((purchasedCents * charge.amount_refunded) / charge.amount);
-      }
-
-      logger.info(
-        {
-          chargeId: charge.id,
-          customerId: stripeCustomerId,
-          amountRefundedCumulative: charge.amount_refunded,
-          revokesPlan,
-        },
-        'Processing charge refund',
-      );
-
-      if (stripeCustomerId && (charge.amount_refunded > 0 || revokesPlan)) {
-        const profiles = await db.query<{
-          id: string;
-        }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId]);
-
-        const profile = profiles[0];
-        if (profile?.id) {
-          const refundLedgerDescription = `Refund for charge ${charge.id}`;
-          const [revoked] = await db.query<{ revoked_cents: string | number | null }>(
-            `select coalesce(sum(-amount_cents), 0) as revoked_cents
-               from credit_transactions
-              where user_id = $1 and transaction_type = 'refund' and description = $2`,
-            [profile.id, refundLedgerDescription],
-          );
-          const alreadyRevoked = Number(revoked?.revoked_cents ?? 0) || 0;
-          const refundedAmount = Math.max(0, refundedCreditTarget - alreadyRevoked);
-
-          if (refundedAmount > 0) {
-            const params = [profile.id, refundedAmount, refundLedgerDescription];
-            if (isCreditTopUpCharge) {
-              await db.execute('select handle_top_up_refund($1, $2, $3)', params);
-            } else {
-              await db.execute('select handle_refund($1, $2, $3)', params);
-            }
-            logger.info(
-              {
-                userId: profile.id,
-                refundedAmount,
-                alreadyRevoked,
-                amountRefundedCumulative: charge.amount_refunded,
-                chargeId: charge.id,
-              },
-              'Credits revoked for refund successfully',
-            );
-          }
-
-          if (revokesPlan) {
-            const [previous] = await db.query<{ plan_tier: string | null }>(
-              'select plan_tier from subscriptions where stripe_customer_id = $1 limit 1',
-              [stripeCustomerId],
-            );
-
-            await db.execute(
-              `update subscriptions
-                  set status = 'past_due', plan_tier = 'free', cancel_at_period_end = true
-                where stripe_customer_id = $1`,
-              [stripeCustomerId],
-            );
-
-            await recordAuditEvent({
-              userId: profile.id,
-              eventType: 'plan_changed',
-              endpoint: '/api/stripe-webhook',
-              surface: 'stripe_webhook',
-              detail: {
-                resourceType: 'subscription',
-                previousPlanTier: previous?.plan_tier ?? 'unknown',
-                planTier: 'free',
-                source: 'stripe_webhook',
-                status: 'past_due',
-                reason: 'charge_refunded',
-              },
-            });
-
-            logger.warn(
-              {
-                userId: profile.id,
-                chargeId: charge.id,
-                previousPlanTier: previous?.plan_tier ?? 'unknown',
-              },
-              'Entitlement revoked for fully refunded charge; the Stripe subscription itself was left alone and must be canceled in Stripe if the refund was meant to end it',
-            );
-          }
-        } else {
-          logger.warn(
-            { stripeCustomerId, chargeId: charge.id },
-            'No user found for refunded charge - credits not revoked',
-          );
-        }
-      }
+      await handleChargeRefunded(db, stripe, charge);
       break;
     }
     case 'charge.dispute.created': {
       const dispute = event.data.object as Stripe.Dispute;
-      const chargeId = dispute.charge as string;
-      const amount = dispute.amount;
-      const reason = dispute.reason;
-
-      logger.warn(
-        { disputeId: dispute.id, chargeId, amount, reason },
-        'CRITICAL: Charge dispute created - requires immediate attention',
+      const charge = await stripe.charges.retrieve(
+        typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id,
       );
-
-      const charge = await stripe.charges.retrieve(chargeId);
-      const stripeCustomerId = charge.customer as string | null;
       await handleReferralChargeReversal(db, stripe, charge, 'dispute');
-
-      if (stripeCustomerId) {
-        const profiles = await db.query<{
-          id: string;
-          email: string | null;
-        }>('select id, email from profiles where stripe_customer_id = $1 limit 1', [
-          stripeCustomerId,
-        ]);
-
-        const profile = profiles[0];
-        if (profile?.id) {
-          await db.execute(
-            "update subscriptions set status = 'past_due', cancel_at_period_end = true where stripe_customer_id = $1",
-            [stripeCustomerId],
-          );
-
-          const balance = await CreditService.getBalance(db, profile.id);
-          if (balance && balance.credits_remaining_cents > 0) {
-            const deduction = await CreditService.deductCredits(
-              db,
-              profile.id,
-              balance.credits_remaining_cents,
-              `Credits revoked due to charge dispute ${dispute.id}`,
-              { type: 'dispute', disputeId: dispute.id, reason },
-              `stripe-dispute:${dispute.id}`,
-            );
-            if (!deduction.success) {
-              throw new Error(deduction.error || 'Failed to revoke credits for dispute');
-            }
-            logger.info(
-              {
-                userId: profile.id,
-                revokedCents: balance.credits_remaining_cents,
-                disputeId: dispute.id,
-              },
-              'Credits revoked due to dispute',
-            );
-          }
-
-          await recordAuditEvent({
-            userId: profile.id,
-            eventType: 'plan_changed',
-            severity: 'warning',
-            endpoint: '/api/stripe-webhook',
-            surface: 'stripe_webhook',
-            detail: {
-              resourceType: 'subscription',
-              resourceId: dispute.id,
-              source: 'stripe_webhook',
-              status: 'past_due',
-              reason: 'charge_dispute_created',
-            },
-          });
-
-          logger.warn(
-            {
-              userId: profile.id,
-              email: profile.email,
-              disputeId: dispute.id,
-              chargeId,
-              amount,
-              reason,
-            },
-            'ALERT: User subscription flagged due to dispute',
-          );
-        } else {
-          logger.error(
-            { stripeCustomerId, disputeId: dispute.id },
-            'Could not find user for disputed charge',
-          );
-        }
-      }
+      await handleDisputeCreated(db, dispute, charge);
       break;
     }
+    case 'charge.dispute.updated':
+    case 'charge.dispute.closed':
+    case 'charge.dispute.funds_reinstated':
+      await handleDisputeOutcome(db, stripe, event.data.object as Stripe.Dispute, event.created);
+      break;
     // A warning is Stripe's issuer-sourced signal that a dispute is likely, not
     // proof of fraud. What to DO about one, claw back, suspend, pre-refund, is
     // a risk-appetite decision that has not been made, so this records the
