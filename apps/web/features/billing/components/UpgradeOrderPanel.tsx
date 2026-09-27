@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -14,6 +14,7 @@ import {
   upgradePlanMidCycle,
   type SavedPaymentMethod,
   type UpgradeChargeBreakdown,
+  type UpgradePromotionSummary,
 } from '../services/stripe-payments';
 import {
   getBillingPlanDisplay,
@@ -37,6 +38,20 @@ function formatMoney(cents: number, currency: string): string {
 
 function formatRenewalDate(iso: string): string {
   return formatBillingDate(iso) ?? '';
+}
+
+function describePromotion(promotion: UpgradePromotionSummary): string {
+  const amount =
+    promotion.percentOff !== null
+      ? `${promotion.percentOff}% off`
+      : promotion.amountOffCents !== null && promotion.currency
+        ? `${formatMoney(promotion.amountOffCents, promotion.currency)} off`
+        : 'A discount';
+  if (promotion.duration === 'forever') return `${amount} every billing period`;
+  if (promotion.duration === 'repeating' && promotion.durationInMonths) {
+    return `${amount} for ${promotion.durationInMonths} ${promotion.durationInMonths === 1 ? 'month' : 'months'}`;
+  }
+  return `${amount} this payment`;
 }
 
 /**
@@ -77,6 +92,13 @@ export function UpgradeOrderPanel({
   const [paymentMethod, setPaymentMethod] = useState<SavedPaymentMethod | null>(null);
   const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false);
   const [paymentMethodError, setPaymentMethodError] = useState<string | null>(null);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [replacesScheduledChange, setReplacesScheduledChange] = useState(false);
+  const [promotion, setPromotion] = useState<UpgradePromotionSummary | null>(null);
+  const [promotionOpen, setPromotionOpen] = useState(false);
+  const [promotionInput, setPromotionInput] = useState('');
+  const [promotionPending, setPromotionPending] = useState(false);
+  const [promotionError, setPromotionError] = useState<string | null>(null);
 
   /**
    * Returning from the Stripe portal is a fresh page load, and Clerk has not
@@ -99,6 +121,7 @@ export function UpgradeOrderPanel({
     let cancelled = false;
     setPreviewing(true);
     setError(null);
+    setPromotion(null);
     previewUpgrade({
       plan,
       billingInterval,
@@ -112,6 +135,7 @@ export function UpgradeOrderPanel({
           previewToken: r.previewToken,
           charge: r.charge,
         });
+        setReplacesScheduledChange(r.replacesScheduledChange);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -131,7 +155,7 @@ export function UpgradeOrderPanel({
     return () => {
       cancelled = true;
     };
-  }, [plan, billingInterval, seats, authInitialized, signedIn]);
+  }, [plan, billingInterval, seats, authInitialized, signedIn, previewKey]);
 
   useEffect(() => {
     if (!authInitialized || !signedIn) return;
@@ -162,6 +186,41 @@ export function UpgradeOrderPanel({
     }
   }, [returnPath]);
 
+  async function applyPromotion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const code = promotionInput.trim();
+    if (!code || promotionPending) return;
+    setPromotionPending(true);
+    setPromotionError(null);
+    try {
+      const result = await previewUpgrade({
+        plan,
+        billingInterval,
+        ...(seats === undefined ? {} : { seats }),
+        promotionCode: code,
+      });
+      setAmountDue({
+        cents: result.amountDueNowCents,
+        currency: result.currency,
+        previewToken: result.previewToken,
+        charge: result.charge,
+      });
+      setReplacesScheduledChange(result.replacesScheduledChange);
+      setPromotion(result.promotion);
+    } catch (cause) {
+      setPromotionError(toUserMessage(cause, 'That promotion code could not be applied.'));
+    } finally {
+      setPromotionPending(false);
+    }
+  }
+
+  function removePromotion() {
+    setPromotion(null);
+    setPromotionInput('');
+    setPromotionError(null);
+    setPreviewKey((value) => value + 1);
+  }
+
   async function handleSubscribe() {
     setConfirming(true);
     setError(null);
@@ -180,6 +239,7 @@ export function UpgradeOrderPanel({
         billingInterval,
         previewToken: amountDue.previewToken,
         ...(seats === undefined ? {} : { seats }),
+        ...(promotion ? { promotionCode: promotion.code } : {}),
       });
       onUpgraded?.();
     } catch (e) {
@@ -233,6 +293,14 @@ export function UpgradeOrderPanel({
               <dt className="text-muted-foreground">Subtotal</dt>
               <dd className="tabular-nums">{formatMoney(charge.subtotalCents, currency)}</dd>
             </div>
+            {charge.discountCents !== 0 ? (
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">
+                  Discount{promotion ? ` (${promotion.code})` : ''}
+                </dt>
+                <dd className="tabular-nums">{formatMoney(-charge.discountCents, currency)}</dd>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Tax</dt>
               <dd className="tabular-nums">{formatMoney(charge.taxCents, currency)}</dd>
@@ -274,6 +342,69 @@ export function UpgradeOrderPanel({
           </p>
         )}
       </section>
+
+      {!previewing && amountDue && !checkoutRequired ? (
+        <section aria-label="Promotion code" className="flex flex-col gap-2 text-sm">
+          {promotion ? (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>
+                Promotion {promotion.code}: {describePromotion(promotion)}.
+              </span>
+              <button
+                type="button"
+                onClick={removePromotion}
+                className="font-medium underline underline-offset-2 pointer-coarse:min-h-11"
+              >
+                Remove
+              </button>
+            </p>
+          ) : promotionOpen ? (
+            <form onSubmit={(event) => void applyPromotion(event)} className="flex flex-wrap gap-2">
+              <label className="sr-only" htmlFor="upgrade-promotion-code">
+                Promotion code
+              </label>
+              <input
+                id="upgrade-promotion-code"
+                value={promotionInput}
+                onChange={(event) => setPromotionInput(event.target.value)}
+                autoComplete="off"
+                autoCapitalize="characters"
+                placeholder="Promotion code"
+                className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 pointer-coarse:h-11"
+              />
+              <Button
+                type="submit"
+                variant="outline"
+                size="sm"
+                className="pointer-coarse:h-11"
+                disabled={!promotionInput.trim() || promotionPending}
+                isLoading={promotionPending}
+              >
+                Apply
+              </Button>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPromotionOpen(true)}
+              className="self-start font-medium underline underline-offset-2 pointer-coarse:min-h-11"
+            >
+              Add a promotion code
+            </button>
+          )}
+          {promotionError ? (
+            <p role="alert" className="text-danger">
+              {promotionError}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {!previewing && replacesScheduledChange ? (
+        <p className="text-sm text-muted-foreground">
+          Upgrading cancels your scheduled switch to a smaller plan.
+        </p>
+      ) : null}
 
       {!previewing && (charge || amountDue || checkoutRequired) ? (
         <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">

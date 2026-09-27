@@ -472,6 +472,7 @@ const turnTerminalEventSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
   error: z.string().nullable().optional(),
   failure: turnFailureSchema.nullable().optional().catch(null),
+  managedRequestIds: z.array(z.string().min(1).max(200)).max(500).optional().catch(undefined),
 });
 const approvalRequestedEventSchema = z.object({
   threadId: z.string().min(1),

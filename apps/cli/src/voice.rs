@@ -268,6 +268,7 @@ pub async fn run_voice_mode(
                         crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
+                output::print_billed_turn(&turn.managed_request_ids).await;
             }
             Err(e) => {
                 output::print_error(&format!("{:#}", e));

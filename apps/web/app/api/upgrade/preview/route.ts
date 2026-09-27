@@ -6,10 +6,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { CheckoutRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
+import { UpgradePreviewRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
@@ -20,6 +20,12 @@ import {
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
+import {
+  promotionDiscountCents,
+  resolveUpgradePromotion,
+  upgradeDiscounts,
+  type UpgradePromotion,
+} from '@/lib/server/stripe-upgrade-promotion';
 import {
   assertSameCheckoutBillingInterval,
   classifyPlanChange,
@@ -58,6 +64,7 @@ export interface UpgradeChargeBreakdown {
   /** One row per proration line, in Stripe's order, for an itemized receipt. */
   lineItems: { description: string; amountCents: number }[];
   subtotalCents: number;
+  discountCents: number;
   taxCents: number;
   /** Invoice total before the customer balance is applied. */
   totalCents: number;
@@ -105,6 +112,7 @@ function immediateProrationBreakdown(
   const lines = anchor === 'unchanged' ? allLines.filter(isProrationLine) : allLines;
 
   let subtotalCents = 0;
+  let discountCents = 0;
   let taxCents = 0;
   const lineItems = lines.map((line) => {
     const tax = (line.taxes ?? []).reduce(
@@ -112,6 +120,7 @@ function immediateProrationBreakdown(
       0,
     );
     subtotalCents += line.amount;
+    discountCents += (line.discount_amounts ?? []).reduce((sum, entry) => sum + entry.amount, 0);
     taxCents += tax;
     return { description: line.description ?? '', amountCents: line.amount };
   });
@@ -121,12 +130,13 @@ function immediateProrationBreakdown(
   const chargeLine = lines.find((line) => line.amount > 0);
   const periodEnd = (chargeLine as { period?: { end?: number } } | undefined)?.period?.end;
 
-  const totalCents = subtotalCents + taxCents;
+  const totalCents = subtotalCents - discountCents + taxCents;
   const appliedBalanceCents = preview.starting_balance ?? 0;
 
   return {
     lineItems,
     subtotalCents,
+    discountCents,
     taxCents,
     totalCents,
     appliedBalanceCents,
@@ -151,12 +161,12 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     throw createError.validation('Invalid request body');
   }
 
-  const parsed = CheckoutRequestSchema.safeParse(rawBody);
+  const parsed = UpgradePreviewRequestSchema.safeParse(rawBody);
   if (!parsed.success) {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw createError.validation(`Invalid request: ${msg}`);
   }
-  const { plan: targetPlan, billingInterval } = parsed.data;
+  const { plan: targetPlan, billingInterval, promotionCode } = parsed.data;
   const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
   const stripe = getStripeClient();
@@ -260,6 +270,8 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   let subscriptionEndsAt: number | null = null;
   let currentSeats = 1;
   let currentPriceRecurring: Stripe.Price.Recurring | null = null;
+  let subscriptionForDiscounts: Stripe.Subscription | null = null;
+  let scheduleId: string | null = null;
   try {
     const resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
@@ -318,11 +330,18 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     subscriptionCurrency = stripeSub.currency;
     cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
     subscriptionEndsAt = stripeSub.cancel_at ?? stripeSub.items.data[0]?.current_period_end ?? null;
+    subscriptionForDiscounts = stripeSub;
+    scheduleId =
+      typeof stripeSub.schedule === 'string'
+        ? stripeSub.schedule
+        : (stripeSub.schedule?.id ?? null);
   } catch (err) {
     logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for preview');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
-  if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
+  if (!stripeItemId || !customerId || !subscriptionForDiscounts) {
+    throw createError.internal('Subscription has no items');
+  }
 
   if (cancelAtPeriodEnd) {
     return NextResponse.json(
@@ -373,6 +392,19 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   const prorationDate = Math.floor(Date.now() / 1000);
   const anchor = planChangeAnchor(planChange.kind);
 
+  let promotion: UpgradePromotion | null = null;
+  if (promotionCode) {
+    try {
+      promotion = await resolveUpgradePromotion(stripe, promotionCode, customerId);
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logger.error({ err, userId }, 'Promotion code lookup failed');
+      throw createError
+        .serviceUnavailable('The promotion code could not be checked. Please try again.')
+        .asUserSafe();
+    }
+  }
+
   let preview: Stripe.Invoice;
   try {
     preview = await stripe.invoices.createPreview({
@@ -382,10 +414,23 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
         ...planChangeProration(anchor, prorationDate),
       },
+      ...(promotion
+        ? {
+            discounts: upgradeDiscounts(subscriptionForDiscounts, promotion),
+            expand: ['lines.data.discount_amounts.discount'],
+          }
+        : {}),
     });
   } catch (err) {
     logger.error({ err, userId, stripeSubId, targetPlan }, 'Stripe upgrade preview failed');
+    if (promotion) {
+      throw createError.validation('That promotion code cannot be used for this upgrade.');
+    }
     throw createError.internal('Failed to preview the upgrade cost');
+  }
+
+  if (promotion && promotionDiscountCents(preview.lines?.data ?? [], promotion) <= 0) {
+    throw createError.validation('That promotion code does not apply to this upgrade.');
   }
 
   const charge = immediateProrationBreakdown(preview, anchor);
@@ -398,6 +443,8 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     charge,
     recurringAmountCents: priceSelection.amountMinor * requestedSeats,
     seats: requestedSeats,
+    promotion,
+    replacesScheduledChange: scheduleId !== null,
     previewToken: createUpgradePreviewToken(
       {
         userId,
@@ -405,6 +452,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         billingInterval,
         stripeSubscriptionId: stripeSubId,
         seats: requestedSeats,
+        promotionCodeId: promotion?.id ?? null,
         prorationDate,
       },
       requireEnv('STRIPE_SECRET_KEY'),

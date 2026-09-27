@@ -210,5 +210,7 @@
   "usageExplainer": "有料プランには、5時間、1週間、1か月の3つの枠でクレジットが含まれます。{{baseline}} には 5時間ごとに {{fiveHour, number}} クレジット、週 {{weekly, number}}、月 {{monthly, number}} が含まれ、5x などの倍率はこの3つの枠すべてに適用されます。",
   "flagshipShare": "{{baseline}} 以上のプランでは、最も高性能なモデルに毎週のクレジットの最大 {{percent}}% を使えます。",
   "switchToPlanCta": "{{plan}} に切り替える",
-  "downgradeScheduledToast": "{{date}} に {{plan}} へ切り替わります。"
+  "downgradeScheduledToast": "{{date}} に {{plan}} へ切り替わります。",
+  "pricingFootnote": "表示価格には適用される税金は含まれていません。お支払いは返金不可です。ただし、当社の返金ポリシーに別段の定めがある場合、または現地の法律で求められる場合を除きます。",
+  "refundPolicyLink": "返金ポリシー"
 }

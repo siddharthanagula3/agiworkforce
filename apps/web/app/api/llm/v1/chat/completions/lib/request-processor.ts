@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
   parseDesktopHostDeclaration,
@@ -59,6 +60,7 @@ import {
   type RequiredExecutionEnforcement,
 } from '@/lib/code-execution/required-execution';
 import { placesBackendConfigured, placesSearchToolDef } from '@/lib/places/places-tool';
+import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
   REQUIRED_PLACES_SYSTEM_NUDGE,
@@ -86,6 +88,9 @@ import {
   FREE_TRIAL_MODEL,
   applyFreeTrialProviderBudget,
   beginFreeTrialRequest,
+  fitsFreeTrialWindow,
+  freeTrialResetAt,
+  freeTrialRetryAfterSeconds,
   isEventPromotedRequest,
   isFreeTrialRequest,
   isFreePlanTier,
@@ -2196,8 +2201,12 @@ function managedUsageErrorResponse(
   );
 }
 
-function freeTrialBudgetReachedResponse(subscription?: SubscriptionInfo): ProcessFailure {
+function freeTrialBudgetReachedResponse(
+  subscription: SubscriptionInfo | undefined,
+  resetAt: string | null,
+): ProcessFailure {
   const recovery = quotaRecoveryFor('free_trial_token_budget_reached', subscription);
+  const retryAfterSeconds = freeTrialRetryAfterSeconds(resetAt);
   return {
     ok: false,
     response: NextResponse.json(
@@ -2207,10 +2216,16 @@ function freeTrialBudgetReachedResponse(subscription?: SubscriptionInfo): Proces
           type: 'insufficient_quota',
           code: 'free_trial_token_budget_reached',
           trial: { model: FREE_TRIAL_MODEL },
+          ...(resetAt ? { reset_at: resetAt } : {}),
           ...(recovery ? { recovery } : {}),
         },
       },
-      { status: 429 },
+      {
+        status: 429,
+        ...(retryAfterSeconds === undefined
+          ? {}
+          : { headers: { 'Retry-After': String(retryAfterSeconds) } }),
+      },
     ),
   };
 }
@@ -3821,7 +3836,9 @@ export async function processRequest(
     userMessage: lastUserText,
     toolsCapable: resolvedModelCaps?.tools ?? true,
     stream: chatRequest.stream,
-    backendConfigured: placesBackendConfigured(),
+    backendConfigured:
+      placesBackendConfigured() &&
+      (!freeTrialEnabled || fitsFreeTrialWindow(placesSearchMicrousdPerCall())),
   });
 
   applyMapSearchCardCapability(chatRequest, {
@@ -4081,6 +4098,16 @@ export async function processRequest(
       estimatedPromptTokens,
       maxTokens,
     );
+  const turnCodeExecutionInput = {
+    provider: providerLower,
+    stream: chatRequest.stream,
+    e2bEnabled: e2bProvisioningReady(),
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
+  };
+  const codeExecutionHoldMicrousd = chatRequest.code_execution
+    ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
+    : 0;
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -4267,13 +4294,16 @@ export async function processRequest(
           requestHash: managedRequestHash,
           provider,
           model: chatRequest.model,
-          estimatedCostMicrousd,
+          estimatedCostMicrousd: estimatedCostMicrousd + codeExecutionHoldMicrousd,
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
           quotaFeature,
           attribution: {
-            workload: resolveChatWorkload({ workMode: chatRequest.work_mode, quotaFeature }),
+            workload: resolveChatWorkload({
+              workMode: researchMode ? 'research' : chatRequest.work_mode,
+              quotaFeature,
+            }),
             projectId: conversationProjectId,
             sessionId: chatRequest.conversation_id ?? null,
           },
@@ -4438,13 +4468,7 @@ export async function processRequest(
 
   let codeExecutionUnavailable = false;
   if (chatRequest.code_execution) {
-    const turnCodeExecution = resolveTurnCodeExecutionTools({
-      provider: providerLower,
-      stream: chatRequest.stream,
-      e2bEnabled: e2bProvisioningReady(),
-      toolsCapable: resolvedModelCaps?.tools ?? true,
-      codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
-    });
+    const turnCodeExecution = resolveTurnCodeExecutionTools(turnCodeExecutionInput);
     if (turnCodeExecution.tools.length > 0) {
       resolvedTools = [...(resolvedTools ?? []), ...turnCodeExecution.tools];
     }
@@ -4607,18 +4631,22 @@ export async function processRequest(
         requestedModel,
         planTier: subscription.plan_tier,
       }),
+      freePoolRoute: freeLanePlan !== null,
     });
-    if (!trialReservationResult.ok) return freeTrialBudgetReachedResponse(subscription);
+    if (!trialReservationResult.ok) {
+      return freeTrialBudgetReachedResponse(subscription, trialReservationResult.resetAt);
+    }
 
     freeTrial = trialReservationResult.reservation;
     const fitted = applyFreeTrialProviderBudget({
       reservation: freeTrial,
       provider,
       request: llmRequest,
+      priorCostMicrousd: codeExecutionHoldMicrousd,
     });
     if (!fitted.ok) {
       await settleFreeTrialRequest({ reservation: freeTrial, outcome: 'failed' });
-      return freeTrialBudgetReachedResponse(subscription);
+      return freeTrialBudgetReachedResponse(subscription, await freeTrialResetAt(userId));
     }
     maxTokens = llmRequest.max_tokens;
   }

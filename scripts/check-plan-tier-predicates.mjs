@@ -100,6 +100,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     why: 'an offer is claimed against the subscription the payer owns',
   },
   {
+    path: 'apps/web/lib/services/code-trial-expiry.ts',
+    why: 'ends the code-granted trial rows themselves once their period is over',
+  },
+  {
     path: 'apps/web/app/api/mobile/iap/catalog/route.ts',
     why: 'the store catalog is priced against the store subscription the user owns',
   },
@@ -118,10 +122,6 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   {
     path: 'apps/web/lib/server/spendable-credits.ts',
     why: 'purchased credits and the overage opt-in live on the payer’s own row',
-  },
-  {
-    path: 'apps/web/lib/services/managed-usage-request-service.ts',
-    why: 'overage headroom reads the payer’s own overage opt-in',
   },
   {
     path: 'apps/web/lib/server/subscription-owner-handoff.ts',

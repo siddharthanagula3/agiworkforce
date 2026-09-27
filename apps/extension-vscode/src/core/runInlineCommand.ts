@@ -125,5 +125,6 @@ export async function runInlineCommand(
   await showCloudUtilityErrorActions(failure, {
     title: `AGI Workforce: ${commandLabel(command)} failed`,
     retry: () => runInlineCommand(context, command, targetRange),
+    secrets: context.secrets,
   });
 }

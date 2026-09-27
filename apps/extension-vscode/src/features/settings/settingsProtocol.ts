@@ -9,6 +9,7 @@ import {
 import type { CustomInstructionScope, InstructionContextSnapshot } from '../instructions';
 import { MAX_CUSTOM_INSTRUCTION_CHARS } from '../instructions';
 import type { AccountIdentity, TierInfo } from '../../utils/api';
+import type { CreditWindowRow, UsageHistorySummary } from '../../data/usagePresentation';
 
 export const SETTINGS_SECTIONS = [
   'general',
@@ -116,11 +117,27 @@ export type SettingsWebviewMessage =
       value: string;
     };
 
+export interface SettingsPlanUsage {
+  planLabel: string;
+  windows: CreditWindowRow[];
+  credits: {
+    label: string;
+    balance: string;
+    spendability: string;
+    topUpLabel: string;
+  } | null;
+}
+
+export type SettingsUsageHistory =
+  { status: 'ready'; summary: UsageHistorySummary } | { status: 'unavailable'; message: string };
+
 export interface SettingsPanelState extends ExtensionSettingsSnapshot {
   accountConnected: boolean | null;
   accountStatus: 'loading' | 'signed-in' | 'signed-out' | 'expired';
   accountIdentity?: AccountIdentity;
   tierInfo?: TierInfo;
+  planUsage?: SettingsPlanUsage;
+  usageHistory?: SettingsUsageHistory;
   agentConfigPath: string;
   instructionContext: InstructionContextSnapshot;
 }

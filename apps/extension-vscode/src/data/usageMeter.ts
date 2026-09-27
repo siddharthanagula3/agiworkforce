@@ -1,12 +1,14 @@
 import * as vscode from 'vscode';
 import {
   canUseBillingPlanCapability,
+  creditAmount,
   creditsFromCents,
   formatCredits,
   formatPrivacyModeLabel,
   MANAGED_USAGE_BUCKET_ORDER,
   type ManagedUsageBucket,
   type ManagedUsageBucketReading,
+  type ManagedUsageCredits,
   type UsageMeter,
   type UIPlanTier,
 } from '@agiworkforce/types';
@@ -52,6 +54,7 @@ export type ExtensionUsageMeter = UsageMeter & {
   bindingBucket?: ManagedUsageBucket;
   creditBalanceCents?: number;
   overageEnabled?: boolean;
+  credits?: ManagedUsageCredits;
 };
 
 export function selectBindingUsageBucket(
@@ -99,13 +102,15 @@ function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
       ? {}
       : { subscriptionStatus: tierInfo.subscriptionStatus };
 
-  const credits =
-    tierInfo.creditBalanceCents === undefined
+  const credits = {
+    ...(tierInfo.creditBalanceCents === undefined
       ? {}
       : {
           creditBalanceCents: tierInfo.creditBalanceCents,
           overageEnabled: tierInfo.overageEnabled === true,
-        };
+        }),
+    ...(tierInfo.credits === undefined ? {} : { credits: tierInfo.credits }),
+  };
 
   const buckets = tierInfo.usageBuckets ?? [];
   const binding = selectBindingUsageBucket(buckets);
@@ -202,13 +207,12 @@ export async function resolveUsageMeter(
   };
 }
 
-export function formatManagedUsageLabel(
-  remaining: number,
-  limitTokens: number,
-  reportedUsedTokens?: number,
-): string {
-  const usedTokens = reportedUsedTokens ?? Math.round((1 - remaining) * limitTokens);
-  return `${fmtK(usedTokens)}/${fmtK(limitTokens)} tokens`;
+export function formatBucketCreditsLeft(reading: ManagedUsageBucketReading): string | null {
+  const { allowanceCredits, usedCredits } = reading;
+  if (allowanceCredits === undefined || usedCredits === undefined || allowanceCredits <= 0) {
+    return null;
+  }
+  return `${creditAmount(allowanceCredits - usedCredits)} of ${formatCredits(allowanceCredits)} left`;
 }
 
 export const CREDIT_BALANCE_LABEL = 'Credits';
@@ -233,12 +237,6 @@ export function formatUsageMeterFallbackLabel(source: UsageMeter['source']): str
     case 'managed-plan':
       return `${formatPrivacyModeLabel('managed')} usage unavailable`;
   }
-}
-
-function fmtK(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
 }
 
 export function daysUntilReset(resetsAt: string): number {

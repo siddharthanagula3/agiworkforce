@@ -575,16 +575,25 @@ pub fn render_rate_limit_options(session: &AgentSession) -> String {
 }
 
 pub fn render_stats(session: &AgentSession) -> String {
-    format!(
-        "Session stats\n  turns: {}\n  input tokens: {}\n  output tokens: {}\n  cache read: {}\n  cache write: {}\n  estimated cost: ${:.6}\n  checkpoints: {}",
-        session.turn_count,
-        session.total_input_tokens,
-        session.total_output_tokens,
-        session.total_cache_read_tokens,
-        session.total_cache_creation_tokens,
-        session.cost_ledger.total_usd,
-        session.checkpoint_count(),
-    )
+    let mut lines = vec![
+        "Session stats".to_string(),
+        format!("  turns: {}", session.turn_count),
+        format!("  input tokens: {}", session.total_input_tokens),
+        format!("  output tokens: {}", session.total_output_tokens),
+        format!("  cache read: {}", session.total_cache_read_tokens),
+        format!("  cache write: {}", session.total_cache_creation_tokens),
+        format!(
+            "  estimated: {}",
+            crate::cost_ledger::format_usd_as_credits(session.cost_ledger.total_usd)
+        ),
+    ];
+    lines.extend(
+        crate::usage_summary::session_model_lines(&session.cost_ledger.model_breakdown())
+            .into_iter()
+            .map(|line| format!("  {line}")),
+    );
+    lines.push(format!("  checkpoints: {}", session.checkpoint_count()));
+    lines.join("\n")
 }
 
 pub fn render_passes(session: &AgentSession) -> String {
