@@ -9,6 +9,7 @@ import { chargeMicrousdForProviderCost, getModelMetadataById } from '@agiworkfor
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
+import { rollingResetAt, toIsoTimestamp } from '@/lib/server/capability-limit-resets';
 import {
   reserveEventSpend,
   settleEventSpend,
@@ -691,19 +692,8 @@ export async function settleFreeTrialRequest(params: {
   }
 }
 
-function toIsoTimestamp(value: string | Date | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-}
-
-function getRollingResetAt(
-  oldestAt: string | Date | null | undefined,
-  windowHours: number,
-): string | null {
-  const oldestTimestamp = toIsoTimestamp(oldestAt);
-  if (!oldestTimestamp) return null;
-  return new Date(Date.parse(oldestTimestamp) + windowHours * 60 * 60 * 1_000).toISOString();
+function getRollingResetAt(oldestAt: string | Date | null, windowHours: number): string | null {
+  return rollingResetAt(toIsoTimestamp(oldestAt), windowHours);
 }
 
 function nonNegativeMicrousd(value: number | undefined): number {
