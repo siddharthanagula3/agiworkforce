@@ -139,13 +139,17 @@ import {
   clearApiKey,
   fetchTierInfo,
   fetchAccountIdentity,
+  fetchUsageHistory,
   getCloudWebOrigin,
 } from '../utils/api';
 import { signOutOfAgiCloud } from '../features/account-auth/deviceAuth';
 import {
   buildAccountIdentityItems,
   buildTrustReviewItems,
+  scheduledCancellationDate,
+  withEffectivePlan,
 } from '../features/account-auth/accountPresentation';
+import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
@@ -1029,6 +1033,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await showCloudUtilityErrorActions(failure, {
         title: 'AGI Workforce: Code review failed',
         retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
+        secrets: context.secrets,
       });
     }),
 
@@ -1983,14 +1988,24 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   context.subscriptions.push(
     register('agi-workforce.showAccountUsage', async () => {
-      const { getTokenCounter } = await import('../data/tokenCounter');
+      const { getTokenCounter, formatSessionCreditEstimate } = await import('../data/tokenCounter');
+      const {
+        CREDIT_BALANCE_LABEL,
+        formatCreditBalance,
+        formatCreditSpendability,
+        formatUsageMeterFallbackLabel,
+        resolveUsageMeter,
+      } = await import('../data/usageMeter');
+      const { creditWindowRows, summarizeUsageHistory } = await import('../data/usagePresentation');
 
       const counter = getTokenCounter();
-      const [capturedAccountToken, capturedTierInfo, capturedAccountIdentity] = await Promise.all([
-        getAccountToken(context.secrets),
-        fetchTierInfo(context.secrets),
-        fetchAccountIdentity(context.secrets),
-      ]);
+      const [capturedAccountToken, capturedTierInfo, capturedAccountIdentity, usageHistory] =
+        await Promise.all([
+          getAccountToken(context.secrets),
+          fetchTierInfo(context.secrets),
+          fetchAccountIdentity(context.secrets),
+          fetchUsageHistory(context.secrets),
+        ]);
       const accountToken = await getAccountToken(context.secrets);
       const authInvalidated = capturedAccountToken !== undefined && accountToken === undefined;
       if (authInvalidated || accountToken === undefined) {
@@ -1999,9 +2014,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await refreshAccountTierCache(context, async () => capturedTierInfo);
       }
       const tierInfo = authInvalidated ? null : capturedTierInfo;
-      const accountIdentity = authInvalidated ? null : capturedAccountIdentity;
+      const accountIdentity =
+        authInvalidated || capturedAccountIdentity === undefined
+          ? null
+          : withEffectivePlan(capturedAccountIdentity, tierInfo);
       const tier =
         tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'unknown';
+      const planLabel = planDisplayLabel(tierInfo?.accountPlanTier ?? tier) ?? tier;
+      const cancellationDate = scheduledCancellationDate(accountIdentity);
       const subscriptionNeedsAttention = Boolean(
         tierInfo?.accountPlanTier && !isEntitledSubscriptionStatus(tierInfo.subscriptionStatus),
       );
@@ -2013,6 +2033,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         | 'reset-counter'
         | 'manage-usage'
         | 'manage-billing'
+        | 'add-credits'
         | 'connectors'
         | 'teams'
         | 'permission-docs'
@@ -2043,22 +2064,28 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
         {
           label: `$(calculator) Rough session estimate`,
-          description: `$${counter.estimatedCostUsd.toFixed(4)} · not an invoice, provider bill, or AGI quota`,
+          description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
         },
       );
 
-      if (tierInfo?.usagePercentage !== undefined) {
+      if (tierInfo?.credits !== undefined) {
+        items.push(
+          { label: `${planLabel} plan usage`, kind: vscode.QuickPickItemKind.Separator },
+          ...creditWindowRows(tierInfo.credits).map((row) => ({
+            label: `$(pulse) ${row.label}: ${row.usage}`,
+            description: row.reset ?? 'No reset pending',
+          })),
+        );
+      } else if (tierInfo?.usagePercentage !== undefined) {
         const pct = Math.round(tierInfo.usagePercentage);
         items.push(
           { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
           {
             label: `$(pulse) Cloud usage: ${pct}% used`,
-            description: `Plan: ${tier}`,
+            description: `Plan: ${planLabel}`,
           },
         );
       } else {
-        const { resolveUsageMeter, formatUsageMeterFallbackLabel } =
-          await import('../data/usageMeter');
         const meter = await resolveUsageMeter(context.secrets, 0);
         if (meter.source !== 'managed-plan') {
           items.push(
@@ -2074,11 +2101,44 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
       }
 
+      if (tierInfo?.creditBalanceCents !== undefined) {
+        items.push({
+          label: `$(credit-card) ${CREDIT_BALANCE_LABEL}: ${formatCreditBalance(tierInfo.creditBalanceCents)}`,
+          description: formatCreditSpendability(
+            tierInfo.creditBalanceCents,
+            tierInfo.overageEnabled === true,
+          ),
+        });
+      }
+
       if (tierInfo?.accountPlanTier && subscriptionNeedsAttention) {
         items.push({
-          label: `$(warning) ${tierInfo.accountPlanTier} subscription: ${(tierInfo.subscriptionStatus ?? 'inactive').replace('_', ' ')}`,
+          label: `$(warning) ${planLabel} subscription: ${(tierInfo.subscriptionStatus ?? 'inactive').replace('_', ' ')}`,
           description: 'Paid Cloud capabilities are paused until billing is resolved',
         });
+      }
+
+      if (tierInfo) {
+        if (usageHistory.kind === 'ready') {
+          const summary = summarizeUsageHistory(usageHistory.history);
+          items.push(
+            {
+              label: `Usage by model, ${summary.rangeLabel}`,
+              kind: vscode.QuickPickItemKind.Separator,
+            },
+            { label: `$(graph) Total: ${summary.total}`, description: summary.totalRequests },
+            ...summary.byModel.map((row) => ({
+              label: `$(symbol-namespace) ${row.label}`,
+              description: `${row.credits} · ${row.requests}`,
+            })),
+            ...(summary.unsettled === null ? [] : [{ label: `$(sync) ${summary.unsettled}` }]),
+          );
+        } else {
+          items.push(
+            { label: 'Usage by model', kind: vscode.QuickPickItemKind.Separator },
+            { label: '$(warning) Usage history unavailable', description: usageHistory.reason },
+          );
+        }
       }
 
       items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
@@ -2099,13 +2159,22 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Plan usage, reset windows, and billing details',
           action: 'manage-usage',
         });
+        if (tierInfo?.creditBalanceCents !== undefined) {
+          items.push({
+            label: '$(add) Add credits',
+            description: 'Buy credits in Settings > Billing on Web',
+            action: 'add-credits',
+          });
+        }
         items.push({
           label: '$(credit-card) Manage billing & subscription',
           description: subscriptionNeedsAttention
             ? 'Restore paid Cloud access on Web'
-            : accountIdentity?.cancelAtPeriodEnd === true
-              ? 'Review the scheduled cancellation on Web'
-              : 'Invoices, payment method, and subscription controls',
+            : cancellationDate !== undefined
+              ? `Access ends ${cancellationDate}; review or resume the plan on Web`
+              : accountIdentity?.cancelAtPeriodEnd === true
+                ? 'Review the scheduled cancellation on Web'
+                : 'Invoices, payment method, and subscription controls',
           action: 'manage-billing',
         });
         items.push({
@@ -2142,7 +2211,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
 
       const pick = await vscode.window.showQuickPick(items, {
-        title: `AGI Workforce, Account & Usage (${tier})`,
+        title: `AGI Workforce, Account & Usage (${planLabel})`,
         placeHolder: 'Session stats',
         matchOnDescription: true,
       });
@@ -2160,6 +2229,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } else if (pick?.action === 'manage-billing') {
         await vscode.env.openExternal(
           vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension'),
+        );
+      } else if (pick?.action === 'add-credits') {
+        await vscode.env.openExternal(
+          vscode.Uri.parse(
+            `${getCloudWebOrigin()}/settings/billing?from=vscode-extension-add-credits`,
+          ),
         );
       } else if (pick?.action === 'connectors') {
         await vscode.env.openExternal(

@@ -1,7 +1,26 @@
 import * as vscode from 'vscode';
 import { AGENT_MODE_LABEL, type AgentMode } from '@agiworkforce/types';
 
-import type { AccountIdentity } from '../../utils/api';
+import { accountTypeForTier, type AccountIdentity, type TierInfo } from '../../utils/api';
+import { planDisplayLabel } from './planLabel';
+
+export function withEffectivePlan(
+  identity: AccountIdentity,
+  tierInfo: TierInfo | null | undefined,
+): AccountIdentity {
+  if (!tierInfo) return identity;
+  const planTier = tierInfo.accountPlanTier ?? tierInfo.tier;
+  const planName = planDisplayLabel(planTier);
+  if (planName === undefined) return identity;
+  return { ...identity, planName, tier: planTier, accountType: accountTypeForTier(planTier) };
+}
+
+export function scheduledCancellationDate(
+  identity: AccountIdentity | null | undefined,
+): string | undefined {
+  if (identity?.cancelAtPeriodEnd !== true) return undefined;
+  return formatDate(identity.currentPeriodEnd);
+}
 
 function formatDate(iso: string | undefined): string | undefined {
   if (iso === undefined) return undefined;
@@ -31,9 +50,9 @@ function billingOwnerLabel(source: AccountIdentity['subscriptionSource']): strin
 }
 
 export function describeAccountPlan(identity: AccountIdentity): string {
-  const periodEnd = formatDate(identity.currentPeriodEnd);
-  if (identity.cancelAtPeriodEnd === true && periodEnd !== undefined) {
-    return `${identity.planName} plan · ends ${periodEnd}`;
+  const endsOn = scheduledCancellationDate(identity);
+  if (endsOn !== undefined) {
+    return `${identity.planName} plan · ends ${endsOn}`;
   }
   const owner = billingOwnerLabel(identity.subscriptionSource);
   return owner === undefined ? `${identity.planName} plan` : `${identity.planName} plan · ${owner}`;
@@ -44,6 +63,7 @@ export function buildAccountIdentityItems(
   identity: AccountIdentity | undefined,
 ): vscode.QuickPickItem[] {
   if (!isSignedIn) return [];
+  const endsOn = scheduledCancellationDate(identity);
 
   return [
     { label: 'AGI Cloud account', kind: vscode.QuickPickItemKind.Separator },
@@ -62,9 +82,9 @@ export function buildAccountIdentityItems(
           label: `$(organization) ${identity.accountType}`,
           description: describeAccountPlan(identity),
           detail:
-            identity.cancelAtPeriodEnd === true
-              ? 'Access remains active through the shown period end'
-              : 'Plan owner and account boundary',
+            endsOn === undefined
+              ? 'Plan owner and account boundary'
+              : `Access remains active through ${endsOn}, then the plan ends`,
         }
       : {
           label: '$(organization) Plan owner unavailable',

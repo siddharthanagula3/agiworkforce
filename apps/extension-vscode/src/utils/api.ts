@@ -5,14 +5,24 @@ import * as https from 'https';
 import { URL } from 'url';
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
-import { TierInfoSchema, type TierInfoResponse } from '../protocol/apiResponses';
-import { notifyAccountTierMayHaveChanged } from '../integrations/tierRevalidation';
 import {
+  TierInfoSchema,
+  UsageHistorySchema,
+  type TierInfoResponse,
+  type UsageHistory,
+} from '../protocol/apiResponses';
+import { notifyAccountTierMayHaveChanged } from '../integrations/tierRevalidation';
+import { planDisplayLabel } from '../features/account-auth/planLabel';
+import {
+  classifyManagedQuotaErrorCode,
   effectivePlanTier,
   normalizeUsagePercentage,
   type AccountAuthState,
+  type ManagedQuotaBlockPresentation,
   type ManagedUsageBucket,
   type ManagedUsageBucketReading,
+  type ManagedUsageCreditWindow,
+  type ManagedUsageCredits,
 } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { MINIMUM_API_VERSION_RESPONSE_HEADER } from '@agiworkforce/cloud-contracts';
@@ -85,9 +95,50 @@ export class AgiWorkforcePaywallError extends Error {
     public readonly reason: string,
     public readonly code?: string,
   ) {
-    super(`Upgrade to ${requiredTier} required for ${feature}: ${reason}`);
+    super(
+      `Upgrade to ${planDisplayLabel(requiredTier) ?? requiredTier} required for ${feature}: ${reason}`,
+    );
     this.name = 'AgiWorkforcePaywallError';
     this.recoveryAction = code === 'subscription_inactive' ? 'manage_billing' : 'upgrade';
+  }
+}
+
+export type ManagedQuotaRecoveryAction = 'top_up' | 'upgrade' | 'view_usage' | 'contact_support';
+
+export interface ManagedQuotaRecovery {
+  action: ManagedQuotaRecoveryAction;
+  href: string;
+}
+
+const QUOTA_RECOVERY_ACTIONS: ReadonlySet<string> = new Set<ManagedQuotaRecoveryAction>([
+  'top_up',
+  'upgrade',
+  'view_usage',
+  'contact_support',
+]);
+
+function readQuotaRecovery(value: unknown): ManagedQuotaRecovery | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const action = record['action'];
+  const href = record['href'];
+  if (typeof action !== 'string' || !QUOTA_RECOVERY_ACTIONS.has(action)) return undefined;
+  if (typeof href !== 'string' || !href.startsWith('/') || href.startsWith('//')) return undefined;
+  return { action: action as ManagedQuotaRecoveryAction, href };
+}
+
+export class AgiWorkforceUsageLimitError extends AgiWorkforceApiError {
+  public readonly kind = 'usage-limit' as const;
+
+  constructor(
+    message: string,
+    statusCode: number,
+    code: string,
+    public readonly block: ManagedQuotaBlockPresentation,
+    public readonly recovery: ManagedQuotaRecovery | undefined,
+  ) {
+    super(message, statusCode, code);
+    this.name = 'AgiWorkforceUsageLimitError';
   }
 }
 
@@ -97,6 +148,7 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, delayMs = 1000): 
   } catch (err) {
     if (
       retries <= 0 ||
+      err instanceof AgiWorkforcePaywallError ||
       (err instanceof AgiWorkforceApiError && err.statusCode !== undefined && err.statusCode < 500)
     ) {
       throw err;
@@ -427,6 +479,17 @@ export function parseCloudCompletionError(
 
   if (statusCode === 401 || statusCode === 402) notifyAccountTierMayHaveChanged();
 
+  const quotaBlock = classifyManagedQuotaErrorCode(code);
+  if (code !== undefined && quotaBlock !== null && quotaBlock.kind !== 'rate_limit') {
+    return new AgiWorkforceUsageLimitError(
+      message ?? quotaBlock.reason,
+      statusCode,
+      code,
+      quotaBlock,
+      readQuotaRecovery(nested?.['recovery']),
+    );
+  }
+
   return new AgiWorkforceApiError(
     message ??
       (statusCode === 429
@@ -663,6 +726,7 @@ export interface TierInfo {
   usageBuckets?: ManagedUsageBucketReading[];
   creditBalanceCents?: number;
   overageEnabled?: boolean;
+  credits?: ManagedUsageCredits;
 }
 
 export interface AccountIdentity {
@@ -683,6 +747,10 @@ function unixSecondsToIso(value: number | null): string | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
+export function accountTypeForTier(tier: string): AccountIdentity['accountType'] {
+  return tier === 'team' || tier === 'enterprise' ? 'Organization account' : 'Personal account';
+}
+
 export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | undefined {
   const parsed = MeResponseSchema.safeParse(raw);
   if (!parsed.success) return undefined;
@@ -694,16 +762,13 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
     parsed.data.name.trim() ||
     email ||
     'AGI Cloud account';
-  const planName =
-    parsed.data.plan.display_name.trim() ||
-    (tier ? `${tier.charAt(0).toUpperCase()}${tier.slice(1)}` : 'Unknown');
+  const planName = planDisplayLabel(tier) ?? (parsed.data.plan.display_name.trim() || 'Unknown');
 
   const currentPeriodEnd = unixSecondsToIso(parsed.data.plan.current_period_end);
   return {
     displayName,
     email,
-    accountType:
-      tier === 'team' || tier === 'enterprise' ? 'Organization account' : 'Personal account',
+    accountType: accountTypeForTier(tier),
     planName,
     tier,
     subscriptionStatus: parsed.data.plan.status,
@@ -714,39 +779,55 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
 }
 
 function readUsageBuckets(summary: TierInfoResponse): ManagedUsageBucketReading[] {
+  const credits = summary.credits;
   const windows: ReadonlyArray<{
     bucket: ManagedUsageBucket;
     usedPercentage: number | undefined;
     resetAt: string | null | undefined;
+    creditWindow: ManagedUsageCreditWindow | null | undefined;
   }> = [
     {
       bucket: 'session',
       usedPercentage: summary.session_usage_percentage,
       resetAt: summary.session_reset_at,
+      creditWindow: credits?.five_hour,
     },
     {
       bucket: 'weekly',
       usedPercentage: summary.weekly_usage_percentage,
       resetAt: summary.weekly_reset_at,
+      creditWindow: credits?.weekly,
     },
     {
       bucket: 'weeklyFlagship',
       usedPercentage: summary.flagship_weekly_usage_percentage,
       resetAt: summary.flagship_weekly_reset_at,
+      creditWindow: credits === undefined ? undefined : credits.flagship_weekly,
     },
     {
       bucket: 'period',
       usedPercentage: summary.usage_percentage,
       resetAt: summary.usage_reset_at,
+      creditWindow: credits?.monthly,
     },
   ];
 
   return windows
-    .filter((window) => typeof window.usedPercentage === 'number')
+    .filter(
+      (window) =>
+        typeof window.usedPercentage === 'number' &&
+        !(credits !== undefined && !window.creditWindow),
+    )
     .map((window) => ({
       bucket: window.bucket,
       percentRemaining: 100 - normalizeUsagePercentage(window.usedPercentage),
       resetAt: window.resetAt ?? null,
+      ...(window.creditWindow && window.creditWindow.allowance > 0
+        ? {
+            allowanceCredits: window.creditWindow.allowance,
+            usedCredits: window.creditWindow.used,
+          }
+        : {}),
     }));
 }
 
@@ -778,6 +859,9 @@ export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   if (typeof parsed.data.credit_balance_cents === 'number') {
     tierInfo.creditBalanceCents = parsed.data.credit_balance_cents;
     tierInfo.overageEnabled = parsed.data.overage_enabled === true;
+  }
+  if (parsed.data.credits !== undefined) {
+    tierInfo.credits = parsed.data.credits;
   }
   return tierInfo;
 }
@@ -834,16 +918,13 @@ export async function fetchAccountIdentity(
   });
 }
 
-export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
-  const credential = await getCloudCredential(secrets);
-  if (credential.kind === 'none') {
-    return undefined;
-  }
+type CloudJsonResponse =
+  | { kind: 'ok'; body: unknown }
+  | { kind: 'http-error'; status: number }
+  | { kind: 'unreadable' }
+  | { kind: 'unreachable' };
 
-  const endpoint = getCloudApiEndpoint();
-  const rootOrigin = endpoint.replace(/\/api\/llm\/v1$/, '').replace(/\/api\/llm$/, '');
-  const url = `${rootOrigin}/api/usage`;
-
+function getCloudJson(url: string, token: string): Promise<CloudJsonResponse> {
   return new Promise((resolve) => {
     const parsed = new URL(url);
     const isHttps = parsed.protocol === 'https:';
@@ -855,7 +936,7 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${credential.token}`,
+        Authorization: `Bearer ${token}`,
         ...platformRequestHeaders(),
       },
     };
@@ -864,37 +945,84 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
-        if ((res.statusCode ?? 0) >= 400) {
-          if (res.statusCode === 401) {
-            notifyAccountTierMayHaveChanged();
-            if (credential.kind === 'account') {
-              void invalidateAccountToken(secrets, credential.token);
-            }
-          }
-          resolve(undefined);
+        const status = res.statusCode ?? 0;
+        if (status >= 400) {
+          resolve({ kind: 'http-error', status });
           return;
         }
         try {
-          const body = Buffer.concat(chunks).toString('utf8');
-          const raw = JSON.parse(body);
-          const tierInfo = parseTierInfoResponse(raw);
-          if (tierInfo === undefined) {
-            resolve(undefined);
-            return;
-          }
-          resolve(tierInfo);
+          resolve({ kind: 'ok', body: JSON.parse(Buffer.concat(chunks).toString('utf8')) });
         } catch {
-          resolve(undefined);
+          resolve({ kind: 'unreadable' });
         }
       });
-      res.on('error', () => resolve(undefined));
+      res.on('error', () => resolve({ kind: 'unreachable' }));
     });
 
-    req.on('error', () => resolve(undefined));
+    req.on('error', () => resolve({ kind: 'unreachable' }));
     req.setTimeout(5_000, () => {
       req.destroy();
-      resolve(undefined);
+      resolve({ kind: 'unreachable' });
     });
     req.end();
   });
+}
+
+function cloudAccountApiUrl(path: string): string {
+  const rootOrigin = getCloudApiEndpoint()
+    .replace(/\/api\/llm\/v1$/, '')
+    .replace(/\/api\/llm$/, '');
+  return `${rootOrigin}${path}`;
+}
+
+async function getAccountJson(
+  secrets: vscode.SecretStorage,
+  path: string,
+): Promise<CloudJsonResponse | undefined> {
+  const credential = await getCloudCredential(secrets);
+  if (credential.kind === 'none') return undefined;
+  const response = await getCloudJson(cloudAccountApiUrl(path), credential.token);
+  if (response.kind === 'http-error' && response.status === 401) {
+    notifyAccountTierMayHaveChanged();
+    if (credential.kind === 'account') {
+      void invalidateAccountToken(secrets, credential.token);
+    }
+  }
+  return response;
+}
+
+export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
+  const response = await getAccountJson(secrets, '/api/usage');
+  return response?.kind === 'ok' ? parseTierInfoResponse(response.body) : undefined;
+}
+
+export type UsageHistoryResult =
+  { kind: 'ready'; history: UsageHistory } | { kind: 'unavailable'; reason: string };
+
+export async function fetchUsageHistory(
+  secrets: vscode.SecretStorage,
+): Promise<UsageHistoryResult> {
+  const response = await getAccountJson(secrets, '/api/usage/history');
+  if (response === undefined) {
+    return { kind: 'unavailable', reason: 'Sign in to AGI Cloud to see your usage history.' };
+  }
+  if (response.kind === 'ok') {
+    const parsed = UsageHistorySchema.safeParse(response.body);
+    return parsed.success
+      ? { kind: 'ready', history: parsed.data }
+      : {
+          kind: 'unavailable',
+          reason: 'AGI Cloud returned usage history this editor cannot read.',
+        };
+  }
+  if (response.kind === 'http-error') {
+    return {
+      kind: 'unavailable',
+      reason:
+        response.status === 401
+          ? 'Your AGI Cloud session expired. Sign in again to see usage history.'
+          : `Usage history is unavailable right now (HTTP ${response.status}).`,
+    };
+  }
+  return { kind: 'unavailable', reason: 'AGI Cloud could not be reached for usage history.' };
 }
