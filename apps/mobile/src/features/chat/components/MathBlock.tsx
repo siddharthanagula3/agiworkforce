@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
 import { Text } from '@/components/ui/text';
