@@ -748,6 +748,12 @@ enum Command {
         base: Option<String>,
         #[arg(long)]
         commit: Option<String>,
+        /// Review a hosted pull request by number, URL or branch, read with the GitHub CLI.
+        #[arg(long = "pr", conflicts_with_all = ["base", "commit"])]
+        pull_request: Option<String>,
+        /// Post the review to the pull request as a comment.
+        #[arg(long, requires = "pull_request")]
+        post: bool,
         prompt: Option<String>,
         #[arg(short, long)]
         model: Option<String>,
@@ -3661,14 +3667,17 @@ pub async fn run_main() -> Result<()> {
             Command::Review {
                 base,
                 commit,
+                pull_request,
+                post,
                 prompt,
                 model,
-                ..
             } => {
                 let opts = review::ReviewOptions {
-                    uncommitted: base.is_none() && commit.is_none(),
+                    uncommitted: base.is_none() && commit.is_none() && pull_request.is_none(),
                     base_branch: base.clone(),
                     commit: commit.clone(),
+                    pull_request: pull_request.clone(),
+                    post: *post,
                     instructions: prompt.clone(),
                     model: model.clone(),
                 };
