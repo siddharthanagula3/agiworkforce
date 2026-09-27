@@ -236,9 +236,9 @@ export const CLI_USAGE_MIRRORS = [
   { rust: 'PurchasedCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsagePurchasedCredits' },
   { rust: 'UsageCredits', owner: MANAGED_USAGE_BALANCE, type: 'ManagedUsageCredits' },
   { rust: 'UsageHistory', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageHistory' },
-  { rust: 'UsageHistoryTotals', owner: USAGE_AGGREGATION_OWNER, type: 'UsageTotals' },
-  { rust: 'UsageHistoryDay', owner: USAGE_AGGREGATION_OWNER, type: 'UsageDayRow' },
-  { rust: 'UsageHistoryBreakdown', owner: USAGE_AGGREGATION_OWNER, type: 'UsageBreakdownRow' },
+  { rust: 'UsageHistoryTotals', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageTotals' },
+  { rust: 'UsageHistoryPeriod', owner: USAGE_HISTORY_OWNER, type: 'AccountUsagePeriodRow' },
+  { rust: 'UsageHistoryBreakdown', owner: USAGE_HISTORY_OWNER, type: 'AccountUsageBreakdownRow' },
   { rust: 'UsageHistoryFreshness', owner: USAGE_AGGREGATION_OWNER, type: 'UsageFreshness' },
 ];
 
@@ -264,10 +264,22 @@ export function rustStructFields(source, structName) {
 }
 
 export function tsInterfaceFields(source, interfaceName) {
-  const pattern = new RegExp(`export interface ${interfaceName} \\{([\\s\\S]*?)\\n\\}`);
-  const body = source.match(pattern)?.[1];
-  if (body === undefined) return null;
-  return [...stripComments(body).matchAll(/^\s*(\w+)\??:/gm)].map((field) => field[1]);
+  const pattern = new RegExp(
+    `export interface ${interfaceName}(?: extends ([\\w, ]+))? \\{([\\s\\S]*?)\\n\\}`,
+  );
+  const match = source.match(pattern);
+  if (!match) return null;
+  const own = [...stripComments(match[2]).matchAll(/^\s*(\w+)\??:/gm)].map((field) => field[1]);
+  const inherited = [];
+  for (const parent of (match[1] ?? '')
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean)) {
+    const fields = tsInterfaceFields(source, parent);
+    if (fields === null) return null;
+    inherited.push(...fields);
+  }
+  return [...inherited, ...own];
 }
 
 function readNumber(literal) {

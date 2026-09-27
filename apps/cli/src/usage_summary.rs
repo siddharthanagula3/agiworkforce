@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use std::time::Duration;
 
-use crate::cost_ledger::{credit_amount, credits_for_cents, format_credits, format_usd_as_credits};
+use crate::cost_ledger::{credit_amount, format_credits, format_usd_as_credits};
 use crate::tier_cache::{self, UserTier};
 
 const USAGE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
@@ -31,7 +31,7 @@ const USAGE_WORKLOAD_LABELS: [(&str, &str); 6] = [
     ("browser", "Browser"),
     ("unknown", "Not attributed"),
 ];
-const HISTORY_DAY_LIMIT: usize = 7;
+const HISTORY_PERIOD_LIMIT: usize = 7;
 const SECONDS_PER_DAY: i64 = 86_400;
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -96,23 +96,25 @@ pub fn parse_account_usage(body: &str) -> Result<AccountUsage, serde_json::Error
 #[serde(rename_all = "camelCase")]
 pub struct UsageHistoryTotals {
     pub requests: u64,
-    pub cost_cents: f64,
+    pub credits: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct UsageHistoryDay {
-    pub day: String,
+pub struct UsageHistoryPeriod {
+    pub start: String,
     pub requests: u64,
-    pub cost_cents: f64,
+    pub credits: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UsageHistoryBreakdown {
     pub key: String,
+    #[serde(default)]
+    pub label: Option<String>,
     pub requests: u64,
-    pub cost_cents: f64,
+    pub credits: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -126,8 +128,9 @@ pub struct UsageHistoryFreshness {
 pub struct UsageHistory {
     pub from: String,
     pub to: String,
+    pub granularity: String,
     pub totals: UsageHistoryTotals,
-    pub daily: Vec<UsageHistoryDay>,
+    pub periods: Vec<UsageHistoryPeriod>,
     pub by_workload: Vec<UsageHistoryBreakdown>,
     pub by_model: Vec<UsageHistoryBreakdown>,
     pub freshness: UsageHistoryFreshness,
@@ -688,10 +691,24 @@ fn history_window_days(history: &UsageHistory) -> Option<i64> {
     Some(((seconds + SECONDS_PER_DAY / 2) / SECONDS_PER_DAY).max(1))
 }
 
-fn history_day_label(day: &str) -> String {
-    DateTime::parse_from_rfc3339(day)
-        .map(|parsed| parsed.with_timezone(&Utc).format("%Y-%m-%d").to_string())
-        .unwrap_or_else(|_| day.to_string())
+fn history_period_heading(granularity: &str) -> &'static str {
+    match granularity {
+        "week" => "  By week (UTC):",
+        "month" => "  By month (UTC):",
+        _ => "  By day (UTC):",
+    }
+}
+
+fn history_period_label(start: &str, granularity: &str) -> String {
+    let Ok(parsed) = DateTime::parse_from_rfc3339(start) else {
+        return start.to_string();
+    };
+    let start = parsed.with_timezone(&Utc);
+    match granularity {
+        "week" => format!("Week of {}", start.format("%Y-%m-%d")),
+        "month" => start.format("%Y-%m").to_string(),
+        _ => start.format("%Y-%m-%d").to_string(),
+    }
 }
 
 pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
@@ -700,10 +717,10 @@ pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
         .unwrap_or_else(|| format!("{} to {}", history.from, history.to));
     let mut lines = vec![format!(
         "Usage history, {window}: {}, {}",
-        format_credits(credits_for_cents(history.totals.cost_cents)),
+        format_credits(history.totals.credits),
         request_count(history.totals.requests)
     )];
-    if history.by_model.is_empty() && history.by_workload.is_empty() && history.daily.is_empty() {
+    if history.by_model.is_empty() && history.by_workload.is_empty() && history.periods.is_empty() {
         lines.push("  No settled usage in this window".to_string());
     }
     if !history.by_workload.is_empty() {
@@ -711,8 +728,10 @@ pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
         lines.extend(history.by_workload.iter().map(|row| {
             format!(
                 "    {}: {}, {}",
-                usage_workload_label(&row.key),
-                format_credits(credits_for_cents(row.cost_cents)),
+                row.label
+                    .as_deref()
+                    .unwrap_or_else(|| usage_workload_label(&row.key)),
+                format_credits(row.credits),
                 request_count(row.requests)
             )
         }));
@@ -727,27 +746,29 @@ pub fn render_usage_history(history: &UsageHistory) -> Vec<String> {
                 .map(|row| {
                     format!(
                         "    {}: {}, {}",
-                        crate::model_catalog::display_name(&row.key),
-                        format_credits(credits_for_cents(row.cost_cents)),
+                        row.label
+                            .clone()
+                            .unwrap_or_else(|| crate::model_catalog::display_name(&row.key)),
+                        format_credits(row.credits),
                         request_count(row.requests)
                     )
                 }),
         );
     }
-    if !history.daily.is_empty() {
-        lines.push("  By day (UTC):".to_string());
+    if !history.periods.is_empty() {
+        lines.push(history_period_heading(&history.granularity).to_string());
         lines.extend(
             history
-                .daily
+                .periods
                 .iter()
                 .rev()
-                .take(HISTORY_DAY_LIMIT)
-                .map(|day| {
+                .take(HISTORY_PERIOD_LIMIT)
+                .map(|period| {
                     format!(
                         "    {}: {}, {}",
-                        history_day_label(&day.day),
-                        format_credits(credits_for_cents(day.cost_cents)),
-                        request_count(day.requests)
+                        history_period_label(&period.start, &history.granularity),
+                        format_credits(period.credits),
+                        request_count(period.requests)
                     )
                 }),
         );
