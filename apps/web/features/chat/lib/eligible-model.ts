@@ -1,6 +1,5 @@
-import { getModelMetadataById, getModelRegistryFacts } from '@agiworkforce/types';
+import { getModelMetadataById, getModelRegistryFacts, isFlagshipModel } from '@agiworkforce/types';
 import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
-import { isFlagshipModel } from '@/lib/billing/flagship-models';
 
 export interface EligibleModel {
   id: string;
