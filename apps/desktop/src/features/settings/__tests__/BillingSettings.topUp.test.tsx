@@ -43,7 +43,8 @@ vi.mock('../../../lib/stripeCheckout', () => ({
   openTopUpCheckout,
 }));
 
-vi.mock('../../../utils/navigation', () => ({
+vi.mock('../../../utils/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/navigation')>()),
   openExternalUrl,
 }));
 
