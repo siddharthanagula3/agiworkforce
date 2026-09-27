@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -22,7 +21,7 @@ import {
 } from '@/lib/services/cloud-code-agent-approval-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { managedUsageErrorResponse } from '@/lib/services/cloud-code-route-errors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import {
   buildManagedComputeAccessGateResponse,
@@ -107,17 +106,17 @@ async function handleDecideApproval(request: NextRequest, context: RouteContext)
   }
 
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,
-    subscription,
+    entitlement.subscription,
     resolveCloudChatSurface(request),
     { request },
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
 
   try {
     const result = await decideCloudCodeAgentApproval({

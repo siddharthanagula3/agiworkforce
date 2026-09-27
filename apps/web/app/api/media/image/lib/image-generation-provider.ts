@@ -8,13 +8,14 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
 import {
-  customerChargeMicrousd,
+  chargeMicrousdForProviderCost,
   getModelMetadataById,
   getModelsForProvider,
   getProviderDefaultModelId,
   isExecutableImageModel,
   type ExecutableImageModel,
   type ModelMetadata,
+  resolveFeatureRate,
   type RateCardFeature,
 } from '@agiworkforce/types';
 import {
@@ -42,13 +43,8 @@ export interface ImageEditContext {
   transparentBackground: boolean;
 }
 
-/**
- * The rate card publishes microUSD, which is the unit the ledger settles in
- * since 0182. centsFromMicrousdCeil is kept only for the surfaces that report
- * a whole-cent figure.
- */
 function rateCardMicrousd(feature: RateCardFeature): number {
-  return customerChargeMicrousd(feature);
+  return resolveFeatureRate(feature).providerCogsMicrousd ?? 0;
 }
 
 const MICROUSD_PER_USD = 1_000_000;
@@ -336,8 +332,7 @@ export function resolveImageProviderFromCatalogModel(modelId: string): ImageProv
   }
 }
 
-/** The published per-image price, charged exactly rather than rounded up. */
-export function estimateImageCostMicrousd(
+export function imageProviderCostMicrousd(
   provider: ImageProvider,
   imageCount: number,
   quality: string | undefined,
@@ -356,6 +351,17 @@ export function estimateImageCostMicrousd(
   }
 
   return FALLBACK_IMAGE_ESTIMATE_MICROUSD_BY_PROVIDER[provider] * imageCount;
+}
+
+export function estimateImageCostMicrousd(
+  provider: ImageProvider,
+  imageCount: number,
+  quality: string | undefined,
+  requestedModelId?: string,
+): number {
+  return chargeMicrousdForProviderCost(
+    imageProviderCostMicrousd(provider, imageCount, quality, requestedModelId),
+  );
 }
 
 const GOOGLE_API_KEY_ENV_KEYS = ['GOOGLE_API_KEY', 'GOOGLE_AI_API_KEY', 'GEMINI_API_KEY'] as const;

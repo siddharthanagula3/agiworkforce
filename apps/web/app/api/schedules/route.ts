@@ -18,7 +18,7 @@ import {
   listSchedules,
   type ScheduleInput,
 } from '@/lib/services/schedule-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   MANAGED_CLOUD_SCHEDULES_MAX_PAGE_SIZE,
@@ -82,10 +82,10 @@ async function handleCreateSchedule(request: NextRequest) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const planTier = await resolveEntitledPlanTier(db, userId);
   try {
-    if (getPlanMaxScheduledTasks(subscription?.plan_tier) === 0) {
-      await assertScheduleQuota(db, userId, subscription?.plan_tier);
+    if (getPlanMaxScheduledTasks(planTier) === 0) {
+      await assertScheduleQuota(db, userId, planTier);
     }
   } catch (error) {
     rethrowScheduleError(error);
@@ -103,9 +103,9 @@ async function handleCreateSchedule(request: NextRequest) {
   try {
     const schedule = await db.transaction(async (tx) => {
       await tx.execute('select pg_advisory_xact_lock(hashtext($1))', [`scheduled_tasks:${userId}`]);
-      await assertScheduleQuota(tx, userId, subscription?.plan_tier);
+      await assertScheduleQuota(tx, userId, planTier);
       return createSchedule(tx, userId, body as unknown as ScheduleInput, {
-        planTier: subscription?.plan_tier ?? 'free',
+        planTier,
       });
     });
     return NextResponse.json({ schedule }, { status: 201 });
