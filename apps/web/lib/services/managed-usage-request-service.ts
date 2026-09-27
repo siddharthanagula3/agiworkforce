@@ -31,6 +31,13 @@ import { readOrganizationPolicy } from '@/lib/services/organization-policy-servi
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
 import { maybeTriggerAutoReload } from '@/lib/services/auto-reload-service';
+import { getRollingUsage } from '@/lib/server/rolling-usage';
+import {
+  ROLLING_SESSION_WINDOW_HOURS,
+  ROLLING_WEEKLY_WINDOW_HOURS,
+  rollingResetAt,
+  toIsoTimestamp,
+} from '@/lib/server/capability-limit-resets';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -41,7 +48,13 @@ export const USAGE_HREF = '/settings/usage';
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const PROVIDER_OPERATION_KEY_PATTERN = /^provider:[1-9]\d{0,8}$/;
 
+export interface ManagedUsageLimitContext {
+  resetsAt: string | null;
+}
+
 export class ManagedUsageRequestError extends Error {
+  limitContext: ManagedUsageLimitContext | null = null;
+
   constructor(
     message: string,
     readonly status: number,
@@ -89,6 +102,7 @@ export function createManagedUsageErrorBody(
       type,
       code: error.code,
       contract_version: error.contractVersion,
+      ...(error.limitContext?.resetsAt ? { resets_at: error.limitContext.resetsAt } : {}),
       ...(recovery ? { recovery } : {}),
     },
   };
@@ -423,6 +437,67 @@ function reservationError(decision: string): ManagedUsageRequestError {
   }
 }
 
+type PlanLimitWindow =
+  { kind: 'rolling'; hours: number; flagshipOnly: boolean } | { kind: 'billing_period' };
+
+const PLAN_LIMIT_WINDOWS: ReadonlyMap<string, PlanLimitWindow> = new Map<string, PlanLimitWindow>([
+  [
+    'session_limit',
+    {
+      kind: 'rolling',
+      hours: ROLLING_SESSION_WINDOW_HOURS,
+      flagshipOnly: false,
+    },
+  ],
+  [
+    'weekly_limit',
+    {
+      kind: 'rolling',
+      hours: ROLLING_WEEKLY_WINDOW_HOURS,
+      flagshipOnly: false,
+    },
+  ],
+  [
+    'flagship_weekly_limit',
+    {
+      kind: 'rolling',
+      hours: ROLLING_WEEKLY_WINDOW_HOURS,
+      flagshipOnly: true,
+    },
+  ],
+  ['declined', { kind: 'billing_period' }],
+]);
+
+async function readPlanLimitResetAt(
+  db: DatabaseAdapter,
+  userId: string,
+  window: PlanLimitWindow,
+): Promise<string | null> {
+  if (window.kind === 'billing_period') {
+    return toIsoTimestamp((await CreditService.getBalance(db, userId))?.period_end ?? null);
+  }
+  const usage = await getRollingUsage(db, userId, window.hours, window.flagshipOnly);
+  return rollingResetAt(usage.oldestAt, window.hours);
+}
+
+async function planLimitRefusal(
+  decision: string,
+  input: { db: DatabaseAdapter; userId: string },
+): Promise<ManagedUsageRequestError> {
+  const error = reservationError(decision);
+  const window = PLAN_LIMIT_WINDOWS.get(decision);
+  if (!window) return error;
+  try {
+    error.limitContext = { resetsAt: await readPlanLimitResetAt(input.db, input.userId, window) };
+  } catch (contextError) {
+    logger.warn(
+      { error: contextError, userId: input.userId, decision },
+      'Plan limit refusal context could not be read; the refusal is sent without it',
+    );
+  }
+  return error;
+}
+
 /** Headroom is the lesser of what is left and what was purchased, never more. */
 async function resolveOverageHeadroomMicrousd(
   db: DatabaseAdapter,
@@ -510,7 +585,9 @@ export async function reserveManagedUsageRequest(
 
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';
-  if (decision !== 'acquired') throw reservationError(decision);
+  if (decision !== 'acquired') {
+    throw await planLimitRefusal(decision, { db: input.db, userId: input.userId });
+  }
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||
@@ -592,7 +669,7 @@ export async function reserveManagedUsageProviderStep(
 
   const decision = typeof row['extension_decision'] === 'string' ? row['extension_decision'] : '';
   if (decision !== 'covered' && decision !== 'extended' && decision !== 'already_extended') {
-    throw reservationError(decision);
+    throw await planLimitRefusal(decision, { db: reservation.db, userId: reservation.userId });
   }
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (row['request_status'] !== 'provider_started' || reservedMicrousd === null) {
