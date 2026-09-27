@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
   getModelsForTierAndSurface,
+  managedUsageMultiplier,
+  managedUsageMultipliers,
   MIN_PURCHASABLE_SEATS,
   type BillingPlanPricing,
 } from '@agiworkforce/types';
@@ -133,30 +135,26 @@ describe('public billing truth', () => {
   });
 
   it('aligns both locales with the canonical paid-plan usage ratios', () => {
-    for (const locale of ['en', 'es']) {
-      const pricing = JSON.parse(read(`../../packages/ui/i18n/locales/${locale}/pricing.json`)) as {
-        basicTierBody: string;
-        proTierBody: string;
-        proFeature1: string;
-        maxTierBody: string;
-        maxFeature1: string;
-        compareSubheading: string;
-        compareBasicUsage: string;
-        compareProUsage: string;
-        compareMaxUsage: string;
-      };
+    expect(managedUsageMultiplier('pro', 'basic')).toBe(5);
+    expect(managedUsageMultiplier('max', 'pro')).toBe(5);
+    const topPlanOverPro = managedUsageMultipliers('max_15x', 'pro');
 
-      expect(pricing.basicTierBody).toMatch(/base|starting paid|plan inicial de pago/i);
-      expect(pricing.compareBasicUsage).toMatch(/base|básico/i);
-      expect(`${pricing.proTierBody} ${pricing.proFeature1}`).toMatch(/5x|cinco veces/i);
-      expect(`${pricing.proTierBody} ${pricing.proFeature1}`).toMatch(/Basic/i);
-      expect(`${pricing.maxTierBody} ${pricing.maxFeature1}`).toMatch(/5x|cinco veces/i);
-      expect(`${pricing.maxTierBody} ${pricing.maxFeature1}`).toMatch(/Pro/i);
-      expect(pricing.compareProUsage).toMatch(/5x|cinco veces/i);
-      expect(pricing.compareProUsage).toMatch(/Basic/i);
-      expect(pricing.compareMaxUsage).toMatch(/5x|cinco veces/i);
-      expect(pricing.compareMaxUsage).toMatch(/Pro/i);
-      expect(pricing.compareSubheading).toMatch(/Max 15x/i);
+    for (const locale of ['en', 'es']) {
+      const pricing = JSON.parse(
+        read(`../../packages/ui/i18n/locales/${locale}/pricing.json`),
+      ) as Record<string, string>;
+
+      expect(pricing['basicTierBody']).toMatch(/starting paid|plan inicial de pago/i);
+      expect(pricing['proTierBody']).toMatch(/five times basic|cinco veces el uso de basic/i);
+      expect(pricing['maxTierBody']).toMatch(/five times pro|cinco veces el uso de pro/i);
+      expect(pricing['maxVariant15x']).toBe(`${topPlanOverPro?.fiveHour}x`);
+      expect(pricing['compareSubheading']).toContain('{{topPlan}}');
+      expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
+      for (const key of ['usageMultiplierAll', 'usageMultiplierSplit', 'usageMultiplierSplitMonthly']) {
+        expect(pricing[key], `${locale}/pricing.json ${key} hard-codes a multiplier`).not.toMatch(
+          /\d+x/,
+        );
+      }
     }
   });
 
@@ -167,11 +165,11 @@ describe('public billing truth', () => {
         const pricing = JSON.parse(read(bundle(locale))) as Record<string, string>;
         const teamCopy = [
           pricing['teamTierBody'],
-          pricing['teamFeature1'],
+          pricing['teamFeature2'],
           pricing['teamFeature4'],
           pricing['teamCta'],
           pricing['compareTeamBilling'],
-          pricing['compareTeamUsage'],
+          pricing['planCreditWindowsPerSeat'],
         ].join(' ');
 
         expect(teamCopy).toMatch(/per seat|por licencia/i);
@@ -179,7 +177,10 @@ describe('public billing truth', () => {
 
         expect(teamCopy).not.toMatch(/[$€₹]\s?\d/);
 
-        expect(pricing['compareTeamUsage']).not.toMatch(/contracted|contratad/i);
+        expect(managedUsageMultiplier('team', 'pro')).toBe(1);
+        expect(pricing['teamTierBody']).toMatch(/Pro-level|nivel Pro/i);
+        expect(pricing['planCreditWindowsPerSeat']).toMatch(/for each seat|por asiento/i);
+        expect(pricing['planCreditWindowsPerSeat']).not.toMatch(/contracted|contratad/i);
         expect(pricing['teamTierBody']).not.toMatch(
           /contracted (managed )?capacity|capacidad contratada/i,
         );

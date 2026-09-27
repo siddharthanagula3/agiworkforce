@@ -39,7 +39,7 @@ describe('UpgradePlanDialog', () => {
     expect(screen.getByText('Basic')).toBeTruthy();
     expect(screen.getByText('Pro')).toBeTruthy();
     expect(screen.getByText('Max 5x')).toBeTruthy();
-    expect(screen.getByText('Max 15x')).toBeTruthy();
+    expect(screen.getByText('Max 20x')).toBeTruthy();
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByText('1 project')).toBeTruthy();
     expect(screen.getByText('1 custom MCP server')).toBeTruthy();
@@ -97,8 +97,8 @@ describe('UpgradePlanDialog', () => {
       />,
     );
 
-    expect(screen.getAllByText('Upgrade to Max 15x').length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole('button', { name: 'Upgrade to Max 15x' })).toBeInTheDocument();
+    expect(screen.getAllByText('Upgrade to Max 20x').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Upgrade to Max 20x' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Upgrade to Max 5x' })).toBeNull();
   });
 });
