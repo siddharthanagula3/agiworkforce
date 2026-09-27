@@ -32,11 +32,7 @@ const CancelVideoSchema = z
 function cancellationState(
   job: VideoGenerationJob,
 ):
-  | 'not_applicable'
-  | 'unsupported'
-  | 'requested'
-  | 'provider_request_acknowledged'
-  | 'unconfirmed' {
+  'not_applicable' | 'unsupported' | 'requested' | 'provider_request_acknowledged' | 'unconfirmed' {
   if (!job.cancelRequestedAt) return 'not_applicable';
   if (job.provider !== 'runway') return 'unsupported';
   if (job.providerCancelAcknowledgedAt) return 'provider_request_acknowledged';
@@ -54,7 +50,7 @@ function responseForCancellation(request: NextRequest, job: VideoGenerationJob, 
       provider_cancellation: cancellationState(job),
       message:
         job.provider !== 'runway' && job.cancelRequestedAt
-          ? 'Cancellation was recorded, but this provider exposes no verified cancellation operation. AGI will keep reconciling the task and bill only a deliverable result.'
+          ? 'Cancelled. This provider cannot stop a video it has started, so AGI will not deliver the result and you will not be charged for it.'
           : job.providerCancelAcknowledgedAt
             ? 'Runway acknowledged the task-management request. AGI will verify the terminal provider state before settling the billing reservation.'
             : job.cancelRequestedAt
