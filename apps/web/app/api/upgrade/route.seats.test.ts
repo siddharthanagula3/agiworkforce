@@ -109,6 +109,7 @@ function tokenFor(seats: number, plan: 'team' | 'max' = 'team') {
       billingInterval: 'monthly',
       stripeSubscriptionId: 'sub_live123',
       seats,
+      promotionCodeId: null,
       prorationDate: PRORATION_DATE,
     },
     SECRET,
@@ -277,7 +278,7 @@ describe('POST /api/upgrade, Team seat quantity', () => {
       idempotencyKey: string;
     };
     expect(options.idempotencyKey).toBe(
-      `upgrade:sub_live123:price_team_usd:price_team_usd:20:${PRORATION_DATE}`,
+      `upgrade:sub_live123:price_team_usd:price_team_usd:20:${PRORATION_DATE}:none`,
     );
     expect(options.idempotencyKey).toContain(':20:');
   });
