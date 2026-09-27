@@ -17,6 +17,7 @@ const CONNECTOR_BRAND_SLUGS: Readonly<Record<string, string>> = {
   evernote: 'evernote',
   asana: 'asana',
   github: 'github',
+  'github-mcp': 'github',
   gitlab: 'gitlab',
   bitbucket: 'bitbucket',
   linear: 'linear',
