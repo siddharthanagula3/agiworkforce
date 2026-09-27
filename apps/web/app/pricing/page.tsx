@@ -56,6 +56,7 @@ import {
 } from '@features/billing/components/UpgradeConfirmDialog';
 import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
 import { DowngradeReviewDialog } from '@features/billing/components/DowngradeReviewDialog';
+import { fetchPlanChangeState } from '@features/billing/services/billing-account';
 import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { formatBillingDate } from '@features/billing/lib/billing-format';
@@ -360,9 +361,8 @@ export default function PricingPage() {
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
-  // Team is the only plan sold yearly. Its cadence defaults to monthly and only
-  // becomes yearly when the yearly Team Price is configured and checkout-ready.
-  const [teamAnnual, setTeamAnnual] = useState(false);
+  const [teamAnnualChoice, setTeamAnnualChoice] = useState<boolean | null>(null);
+  const [subscribedInterval, setSubscribedInterval] = useState<BillingInterval | null>(null);
 
   // Team CTAs across marketing, billing, chat upgrades, and Team settings all
   // link to this anchor. The Team card lives behind the business audience tab,
@@ -444,17 +444,35 @@ export default function PricingPage() {
     1,
     teamSeats,
   );
+  const hasActivePaidPlan =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['active', 'trialing'].includes(billing.status ?? '');
+  const stripeSubscriber =
+    hasActivePaidPlan && accountSubscription?.subscription_source === 'stripe';
+
+  useEffect(() => {
+    if (!stripeSubscriber) return;
+    let cancelled = false;
+    fetchPlanChangeState()
+      .then((state) => {
+        if (!cancelled) setSubscribedInterval(state.price?.interval ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [stripeSubscriber]);
+
   // Yearly Team is offered ONLY when the yearly Price is configured and its
   // amount matches the catalog (checkoutReady). Absent env → not offered, and
   // the cadence stays monthly (fail-closed at the display layer; the checkout
   // route refuses a yearly Team price it cannot resolve regardless).
   const teamYearlyAvailable = localizedPlans?.team.yearly?.checkoutReady === true;
+  const teamAnnual =
+    teamAnnualChoice ?? (hasActivePaidPlan ? subscribedInterval === 'yearly' : true);
   const teamInterval: BillingInterval = teamAnnual && teamYearlyAvailable ? 'yearly' : 'monthly';
   const teamSavingsPct = annualSavingsPct(team);
-  // The annual seat price normalised to a month, so the cadence toggle compares
-  // like with like ($25/seat/mo against $20/seat/mo) instead of asking the
-  // reader to divide $240 by twelve. What is charged is still the yearly amount,
-  // which the cadence line above states.
   const teamYearlySeatPricePerMonth = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
@@ -466,10 +484,6 @@ export default function PricingPage() {
     1,
     teamSeats,
   );
-  const hasActivePaidPlan =
-    billing != null &&
-    !isFreeBillingPlanTier(billing.plan) &&
-    ['active', 'trialing'].includes(billing.status ?? '');
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
     !authInitialized ||
@@ -885,8 +899,15 @@ export default function PricingPage() {
     {
       planId: 'team',
       label: team.label,
-      price: t('perSeatPrice', { price: teamSeatPrice }),
-      billingInterval: t('compareTeamBilling'),
+      price: teamYearlyAvailable
+        ? t('compareTeamPriceYearly', {
+            yearly: teamYearlySeatPricePerMonth,
+            monthly: teamSeatPrice,
+          })
+        : t('perSeatPrice', { price: teamSeatPrice }),
+      billingInterval: teamYearlyAvailable
+        ? t('compareTeamBillingYearly')
+        : t('compareTeamBilling'),
       usageCapacity: usageCapacityCopy('team', 'pro'),
       ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
@@ -979,7 +1000,6 @@ export default function PricingPage() {
               {t('audienceBusiness')}
             </button>
           </div>
-
         </div>
 
         <section
@@ -1008,7 +1028,7 @@ export default function PricingPage() {
                   <button
                     type="button"
                     aria-pressed={!teamAnnual}
-                    onClick={() => setTeamAnnual(false)}
+                    onClick={() => setTeamAnnualChoice(false)}
                     className={
                       teamAnnual
                         ? 'agi-tier-toggle-btn'
@@ -1020,7 +1040,7 @@ export default function PricingPage() {
                   <button
                     type="button"
                     aria-pressed={teamAnnual}
-                    onClick={() => setTeamAnnual(true)}
+                    onClick={() => setTeamAnnualChoice(true)}
                     className={
                       teamAnnual
                         ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
@@ -1038,26 +1058,12 @@ export default function PricingPage() {
               ) : null}
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">
-                  {teamInterval === 'yearly' ? teamYearlyTotalPrice : teamTotalPrice}
+                  {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
                 </span>
+                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>
                 <span className="agi-tier-price-sub">
-                  {teamInterval === 'yearly'
-                    ? t('seatCadenceAnnual', { count: teamSeats })
-                    : t('seatCadenceMonthly', { count: teamSeats })}
+                  {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
                 </span>
-              </p>
-              <p
-                className="agi-tier-seats-total"
-                style={{
-                  marginTop: 'calc(var(--space-2) * -1)',
-                  marginBottom: 'var(--space-4)',
-                  fontSize: 13,
-                  color: 'var(--agi-ink-quiet)',
-                }}
-              >
-                {teamInterval === 'yearly'
-                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
-                  : t('perSeatPrice', { price: teamSeatPrice })}
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
@@ -1111,6 +1117,14 @@ export default function PricingPage() {
                   }}
                 />
               </div>
+              <p
+                className="agi-tier-seats-total"
+                style={{ margin: 0, fontSize: 13, color: 'var(--agi-ink-quiet)' }}
+              >
+                {teamInterval === 'yearly'
+                  ? t('seatTotalAnnual', { count: teamSeats, total: teamYearlyTotalPrice })
+                  : t('seatTotal', { count: teamSeats, total: teamTotalPrice })}
+              </p>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(
                   'team',
