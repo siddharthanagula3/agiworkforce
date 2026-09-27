@@ -16,7 +16,8 @@ vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/services/notification-service', () => ({
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/notification-service')>()),
   recordNotification: vi.fn().mockResolvedValue({ recorded: true }),
 }));
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const billingMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(),
@@ -234,36 +234,87 @@ describe('BillingSection', () => {
     expect(screen.getByText('Adjust plan')).toBeTruthy();
   });
 
-  it('shows the $10 minimum and sends the canonical 500-unit top-up to checkout', async () => {
+  it('sells each credit pack at its discounted price and sends the chosen pack to checkout', async () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
     billingMocks.startTopUpCheckout.mockResolvedValue(undefined);
 
     render(<BillingSection />);
 
-    expect(screen.getByText('50 credits for every $1')).toBeTruthy();
-    expect(screen.getByText(/Minimum \$10/)).toBeTruthy();
-    const buyButton = screen.getByRole('button', { name: 'Buy 500 credits · $10' });
-    fireEvent.click(buyButton);
-    await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(10));
+    const packs = within(screen.getByRole('group', { name: 'Credit pack' }));
+    expect(packs.getByRole('radio', { name: '1,000 credits $20' })).toBeChecked();
+    expect(packs.getByRole('radio', { name: '2,500 credits Save 5% $47.50' })).toBeTruthy();
+    expect(packs.getByRole('radio', { name: '5,000 credits Save 10% $90' })).toBeTruthy();
+    expect(packs.getByRole('radio', { name: '12,500 credits Save 20% $200' })).toBeTruthy();
+    expect(packs.getByRole('radio', { name: '50,000 credits Save 30% $700' })).toBeTruthy();
+
+    expect(screen.getByRole('button', { name: 'Buy 1,000 credits' })).toBeEnabled();
+
+    fireEvent.click(packs.getByRole('radio', { name: '12,500 credits Save 20% $200' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Buy 12,500 credits' }));
+    await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(250));
+    expect(billingMocks.startTopUpCheckout).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the usage top-up block as a section label, not a bordered card', () => {
+  it('renders the credit top-up block as a labelled section, not a bordered card', () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
 
     render(<BillingSection />);
 
-    const label = screen.getByText('Usage top-up');
-    expect(label.closest('section')).toBeNull();
+    const block = screen.getByRole('region', { name: 'Buy credits' });
+    expect(block.className).not.toMatch(/\bborder\b/);
+    expect(block.getAttribute('style')).toBeNull();
   });
 
-  it('disables top-up checkout below the minimum', () => {
+  it('prices an Other amount at its bracket and refuses one outside whole dollars from $20 to $1,000', async () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    billingMocks.startTopUpCheckout.mockResolvedValue(undefined);
+    render(<BillingSection />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Other amount' }));
+    const amount = screen.getByRole('spinbutton', { name: 'Amount in US dollars' });
+
+    for (const refused of ['19', '1001', '20.5']) {
+      fireEvent.change(amount, { target: { value: refused } });
+      expect(screen.getByText('Whole dollars from $20 to $1,000')).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Buy credits' })).toBeDisabled();
+    }
+
+    fireEvent.change(amount, { target: { value: '60' } });
+    expect(screen.getByText('3,000 credits for $57, save 5%')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Buy 3,000 credits' }));
+    await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(60));
+  });
+
+  it('tells a Pro subscriber which plan gives more credits per dollar than a pack', () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
     render(<BillingSection />);
 
-    fireEvent.change(screen.getByLabelText('Custom top-up amount in dollars'), {
-      target: { value: '9' },
-    });
-    expect(screen.getByRole('button', { name: 'Minimum $10' })).toBeDisabled();
+    const block = within(screen.getByRole('region', { name: 'Buy credits' }));
+    expect(
+      block.getByText('Max 5x gives you 2x more credits per dollar than this pack.'),
+    ).toBeTruthy();
+    expect(block.getByRole('link', { name: 'See Max 5x' })).toHaveAttribute('href', '/upgrade/max');
+  });
+
+  it('keeps packs off sale for a Free account and points it at the plans instead', () => {
+    mockSubscription = {
+      tier: 'free',
+      display_name: 'Free',
+      status: 'active',
+      current_period_end: null,
+    };
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+    render(<BillingSection />);
+
+    const block = within(screen.getByRole('region', { name: 'Buy credits' }));
+    expect(
+      block.getByText('Credit packs are available on paid plans billed by AGI Workforce.'),
+    ).toBeTruthy();
+    expect(block.queryByRole('radio')).toBeNull();
+    expect(
+      block.getByText('Pro gives you 2x more credits per dollar than a credit pack.'),
+    ).toBeTruthy();
+    expect(block.getByRole('link', { name: 'Compare plans' })).toHaveAttribute('href', '/pricing');
   });
 
   it('keeps failed billing detail requests distinct from honest empty states', async () => {
@@ -339,7 +390,7 @@ describe('BillingSection', () => {
 
     mockSubscription.cancel_at_period_end = true;
     render(<BillingSection />);
-    expect(screen.getByText('Cancels on')).toBeTruthy();
+    expect(screen.getByText('Ends on')).toBeTruthy();
     expect(screen.queryByText('Renews on')).toBeNull();
   });
 });
@@ -349,14 +400,39 @@ describe('past-due payment notice', () => {
   // this panel rendered nothing about it, so a user whose card was declined
   // had no way to learn that from the product - and /payment-failure, the page
   // written to explain it, had no inbound link from anywhere.
-  it('says the payment failed and links to the explainer', async () => {
+  it('says the renewal failed, states the no-grace rule and offers both fixes', async () => {
     mockSubscription = { ...mockSubscription, status: 'past_due' };
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const body = String(input).includes('/api/billing/invoices')
+        ? {
+            invoices: [
+              {
+                id: 'in_open',
+                number: 'AGI-0001',
+                status: 'open',
+                amount: 2_000,
+                currency: 'usd',
+                created_at: '2026-09-01T00:00:00.000Z',
+                hosted_invoice_url: 'https://invoice.stripe.com/i/in_open',
+              },
+            ],
+          }
+        : {};
+      return { ok: true, json: async () => body } as Response;
+    });
     render(<BillingSection />);
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('did not go through');
-    expect(alert.textContent).toContain('past due');
-    expect(alert.querySelector('a')?.getAttribute('href')).toBe('/payment-failure');
+    const alert = (await screen.findByText(/payment didn.t go through/)).closest('[role="alert"]');
+    expect(alert).not.toBeNull();
+    const notice = within(alert as HTMLElement);
+    expect(alert?.textContent).toContain('so the plan is past due');
+    expect(alert?.textContent).toContain('no grace period');
+    expect(await notice.findByRole('link', { name: 'Pay $20.00 now' })).toHaveAttribute(
+      'href',
+      'https://invoice.stripe.com/i/in_open',
+    );
+    fireEvent.click(notice.getByRole('button', { name: 'Update payment method' }));
+    await waitFor(() => expect(billingMocks.openBillingPortal).toHaveBeenCalled());
   });
 
   it('stays silent on a healthy subscription', async () => {

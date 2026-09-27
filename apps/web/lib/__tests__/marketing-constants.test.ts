@@ -20,7 +20,12 @@ describe('marketing plan matrix', () => {
       expect.arrayContaining([
         expect.objectContaining({ planId: 'pro', label: 'Pro', price: '$20/mo' }),
         expect.objectContaining({ planId: 'max', label: 'Max 5x', price: '$100/mo' }),
-        expect.objectContaining({ planId: 'max_15x', label: 'Max 15x', price: '$200/mo' }),
+        expect.objectContaining({
+          planId: 'max_15x',
+          label: 'Max 20x',
+          price: '$200/mo',
+          usageCapacity: '20x Pro per 5 hours, 10x per week',
+        }),
         expect.objectContaining({
           planId: 'team',
           label: 'Team',
@@ -31,10 +36,10 @@ describe('marketing plan matrix', () => {
     );
   });
 
-  it('does not expose a retired Hobby or Max 20x plan', () => {
+  it('does not expose a retired Hobby plan or the retired Max 15x name', () => {
     const serialized = JSON.stringify(MARKETING_FEATURE_MATRIX);
     expect(serialized).not.toMatch(/hobby/i);
-    expect(serialized).not.toMatch(/20x/i);
+    expect(serialized).not.toMatch(/max 15x/i);
   });
 
   /**

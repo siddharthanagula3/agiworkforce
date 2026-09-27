@@ -1,6 +1,17 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import {
+  BILLING_PLAN_PRICING,
+  MANAGED_USAGE_LIMITS,
+  isByokPlanTier,
+  isLocalOnlyPlanTier,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
+import {
+  canUseManagedCloudChatSurface,
+  getCloudChatSurfaceCapability,
+} from '@/lib/free-chat-surface-policy';
 
 /**
  * Claim guards for the surface and audience pages, written after the flagship
@@ -450,6 +461,40 @@ describe('/docs, the Chrome card names the route the panel actually answers on',
   });
 });
 
+describe('/support chrome-extension, managed chat is on every cloud plan', () => {
+  const plans = Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[];
+  const cloudPlans: BillingPlanTier[] = plans.filter(
+    (plan) => !isLocalOnlyPlanTier(plan) && !isByokPlanTier(plan),
+  );
+
+  it('gives the Chrome side panel managed chat on every cloud plan, Free included', () => {
+    expect(cloudPlans).toContain('free');
+    for (const plan of cloudPlans) {
+      expect(canUseManagedCloudChatSurface(plan, 'chrome'), plan).toBe(true);
+    }
+    for (const plan of plans.filter((candidate) => !cloudPlans.includes(candidate))) {
+      expect(canUseManagedCloudChatSurface(plan, 'chrome'), plan).toBe(false);
+    }
+  });
+
+  it('gates and meters Chrome chat under the same capability as web chat', () => {
+    expect(getCloudChatSurfaceCapability('chrome')).toBe(getCloudChatSurfaceCapability('web'));
+    for (const plan of plans) {
+      expect(canUseManagedCloudChatSurface(plan, 'chrome'), plan).toBe(
+        canUseManagedCloudChatSurface(plan, 'web'),
+      );
+    }
+  });
+
+  it('no longer sells Chrome managed cloud as a higher-tier feature', () => {
+    const article = collapsed('content/support/chrome-extension.md');
+    expect(article).toContain(
+      'Managed chat in the Chrome side panel works on every cloud plan, Free included',
+    );
+    expect(/higher paid tiers/iu.test(article)).toBe(false);
+  });
+});
+
 describe('/about, the colophon names every face the page is set in', () => {
   it('loads Newsreader as the display face of the agi design system', () => {
     const layout = readFileSync(join(WEB_ROOT, 'app', 'layout.tsx'), 'utf8');
@@ -763,10 +808,13 @@ describe('/changelog, desktop signing is a pipeline and is dated as one', () => 
 
 describe('/contact-sales, capacity matches the pool Enterprise is actually given', () => {
   it('reads Enterprise off the same shared managed pool as every other plan', () => {
-    const caps = collapsed('lib/billing/managed-usage-caps.ts');
-    expect(caps).toMatch(
-      /enterprise: \{ monthlyUnits: 0, weeklyUnits: 0, fiveHourUnits: 0, dailyUnits: 0, unlimited: true, \}/u,
-    );
+    expect(MANAGED_USAGE_LIMITS.enterprise).toEqual({
+      monthlyCredits: 0,
+      weeklyCredits: 0,
+      fiveHourCredits: 0,
+      dailyCredits: 0,
+      unlimited: true,
+    });
     expect(collapsed('app/faq/page.tsx')).toMatch(/What is NOT built: dedicated capacity/u);
   });
 

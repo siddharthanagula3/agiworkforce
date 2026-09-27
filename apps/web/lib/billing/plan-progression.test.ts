@@ -6,8 +6,11 @@ import {
   BILLING_PLAN_PRODUCT_LIMITS,
   ENTITLED_SUBSCRIPTION_STATUSES,
   FEATURE_RATE_CARD,
+  MANAGED_USAGE_LIMITS,
+  PLAN_CREDIT_ALLOWANCES,
   RATE_CARD_FEATURES,
   creditLedgerRemainingMicroUsd,
+  customerChargeMicrousd,
   effectivePlanTier,
   getPlanPriceCents,
   toEntitlement,
@@ -17,8 +20,6 @@ import {
   type BillingPlanTier,
 } from '@agiworkforce/types';
 
-import { MANAGED_USAGE_LIMITS } from './managed-usage-caps';
-import { PLAN_CREDIT_ALLOWANCES } from './plan-credits';
 import { getPlanUsageBudgetCents } from '../server/managed-usage-policy';
 
 /**
@@ -71,7 +72,7 @@ describe('moving up the ladder never takes something away', () => {
   });
 
   it.each(ADJACENT_PAIRS)('%s to %s raises or holds every usage window', (lower, higher) => {
-    for (const window of ['monthlyUnits', 'weeklyUnits', 'fiveHourUnits'] as const) {
+    for (const window of ['monthlyCredits', 'weeklyCredits', 'fiveHourCredits'] as const) {
       const before = MANAGED_USAGE_LIMITS[lower].unlimited
         ? Number.POSITIVE_INFINITY
         : MANAGED_USAGE_LIMITS[lower][window];
@@ -158,7 +159,7 @@ describe('what the plan includes is not what the customer bought', () => {
   it('gives the free plan no paid ledger to spend from', () => {
     expect(getPlanUsageBudgetCents('free')).toBe(0);
     expect(MANAGED_USAGE_LIMITS.free.unlimited).toBe(false);
-    for (const window of ['monthlyUnits', 'weeklyUnits', 'fiveHourUnits'] as const) {
+    for (const window of ['monthlyCredits', 'weeklyCredits', 'fiveHourCredits'] as const) {
       expect(MANAGED_USAGE_LIMITS.free[window]).toBeGreaterThan(0);
     }
   });
@@ -167,35 +168,31 @@ describe('what the plan includes is not what the customer bought', () => {
     for (const tier of ['local-only', 'byok'] as const) {
       expect(getPlanUsageBudgetCents(tier)).toBe(0);
       expect(MANAGED_USAGE_LIMITS[tier].unlimited).toBe(false);
-      expect(MANAGED_USAGE_LIMITS[tier].monthlyUnits).toBe(0);
+      expect(MANAGED_USAGE_LIMITS[tier].monthlyCredits).toBe(0);
     }
   });
 });
 
 describe('every metered feature carries a decided price', () => {
-  it('prices or explicitly defers every feature the platform meters', () => {
+  it('prices every feature the platform meters from a published provider cost', () => {
     for (const feature of RATE_CARD_FEATURES) {
       const entry = FEATURE_RATE_CARD[feature];
       expect(entry.source.length, `${feature} names no source`).toBeGreaterThan(0);
-      if (entry.customerBasis === 'rate_card') {
-        expect(
-          entry.customerMicrousd,
-          `${feature} is on the rate card with no price`,
-        ).toBeGreaterThan(0);
-      } else {
-        expect(entry.customerMicrousd, `${feature} prices without a rate-card basis`).toBeNull();
-      }
+      expect(
+        entry.providerCogsMicrousd,
+        `${feature} is on the rate card with no provider cost`,
+      ).toBeGreaterThan(0);
     }
   });
 
-  it('never passes an upstream figure through as the customer price', () => {
+  it('never charges a billable action below what the provider charges', () => {
     for (const feature of RATE_CARD_FEATURES) {
       const entry = FEATURE_RATE_CARD[feature];
-      if (entry.customerMicrousd === null || entry.providerCogsMicrousd === null) continue;
+      if (entry.includedInPlans === 'all_plans') continue;
       expect(
-        entry.customerMicrousd,
-        `${feature} charges the customer exactly what the provider charges`,
-      ).not.toBe(entry.providerCogsMicrousd);
+        customerChargeMicrousd(feature),
+        `${feature} charges the customer less than the provider charges`,
+      ).toBeGreaterThanOrEqual(entry.providerCogsMicrousd ?? Number.POSITIVE_INFINITY);
     }
   });
 });

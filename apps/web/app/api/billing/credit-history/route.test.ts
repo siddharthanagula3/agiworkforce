@@ -150,10 +150,10 @@ describe('GET /api/billing/credit-history', () => {
       transactions: { credits: number; feature: string | null; model: string | null }[];
     };
 
-    expect(body.transactions[0]?.credits).toBe(-1.5);
+    expect(body.transactions[0]?.credits).toBe(-6);
     expect(body.transactions[0]?.feature).toBe('chat');
     expect(body.transactions[0]?.model).toBe(model.name);
-    expect(body.transactions[1]?.credits).toBe(500);
+    expect(body.transactions[1]?.credits).toBe(2_000);
     expect(body.transactions[1]?.feature).toBeNull();
     expect(JSON.stringify(body)).not.toContain('a-gateway');
     expect(JSON.stringify(body)).not.toContain('a-route-model');
