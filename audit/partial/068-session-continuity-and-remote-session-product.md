@@ -397,10 +397,10 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
+| web | partial | Cloud Code turns now notify the browser and the in-app feed when they need approval, finish or fail, and a tap opens /code/<id> (partials/sessions 8d2590e2d). Still open: local sessions on desktop, the CLI and VS Code send no activity notifications. | handler |
 | desktop | missing | Not built on this surface. |  |
-| mobile | partial | Notification taps can open a code session at its approval, but no sender posts code-session events as notifications; only desktop disconnects and agent-dispatch approvals notify. | handler |
+| mobile | partial | Cloud Code turns now push to the phone when they need approval, finish or fail, and a tap opens the session (partials/sessions 8d2590e2d). Still open: local sessions on desktop, the CLI and VS Code send no activity notifications. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/services/notifications.ts:292-302`, `apps/mobile/services/companionNotifications.ts:84-89`
+Code: `apps/web/lib/services/agent-notification-service.ts:305-305`, `apps/web/lib/services/agent-notification-service.ts:321-321`, `apps/web/public/sw.js:54-54`, `apps/web/features/notifications/lib/notification-target.ts:31-31`
