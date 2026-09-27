@@ -23,6 +23,12 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   createPendingAuthorization: mocks.savePending,
   upsertConnectorOAuthGrant: mocks.saveGrant,
 }));
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal()),
+  assertResolvedPublicHostname: vi.fn(async () => undefined),
+  pinnedPublicFetch: (input: unknown, init?: unknown) =>
+    (globalThis.fetch as unknown as (i: unknown, n?: unknown) => Promise<Response>)(input, init),
+}));
 
 import {
   beginMcpAuthorization,
