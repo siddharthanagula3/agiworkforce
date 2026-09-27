@@ -253,18 +253,6 @@ Code: `apps/cli/src/output.rs:30-35`, `apps/cli/src/tui/shimmer.rs:21-21`, `apps
 
 Code: `apps/cli/src/tui/tui_app.rs:316-322`, `apps/cli/src/tui/markdown_renderer.rs:28-28`, `apps/extension/src/tokens.ts:11-15`
 
-## S6.33: High-contrast treatment.
-
-- Done when: A high-contrast treatment exists (OS setting and/or in-app) that strengthens text, borders and focus.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI code highlighting now honours NO_COLOR, but there is no high-contrast theme: the Colorblind palette re-hues status colours and keeps the mid-grey muted text. | ui |
-
-Code: `apps/cli/src/tui/terminal_palette.rs:172-177`
-
 ## S6.34: Selected, focused, hovered, pressed, and disabled states.
 
 - Done when: Interactive controls show distinct selected, focused, hovered, pressed and disabled states.
