@@ -79,6 +79,10 @@ jest.mock('../src/features/settings/account-security/service', () => ({
     .groupAuditEntries,
   SESSION_TIMEOUT_MINUTES: [15, 30, 60, 120, 480],
   DEFAULT_SESSION_TIMEOUT: 60,
+  WEB_SECURITY_URL: 'https://agiworkforce.com/settings/security',
+  fetchLockdownMode: jest.fn(async () => false),
+  saveLockdownMode: jest.fn(async () => undefined),
+  revokeAllAccountSessions: jest.fn(async () => undefined),
 }));
 
 jest.mock('../src/features/settings/common', () => {
@@ -131,6 +135,11 @@ jest.mock('../src/features/settings/common', () => {
         <Text>Chat is set to Local Mode</Text>
       </Pressable>
     ),
+    SettingsSwitchRow: ({ label, value }: { label: string; value: boolean }) => (
+      <View accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}>
+        <Text>{label}</Text>
+      </View>
+    ),
   };
 });
 
@@ -181,7 +190,7 @@ describe('Mobile Account Security screen', () => {
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
     expect(
       screen.getByText(
-        'Passkeys, SMS MFA, and Lockdown mode are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them.',
+        'Passkeys and SMS MFA are not exposed by the current AGI account contracts, so Mobile does not show editable controls for them.',
       ),
     ).toBeTruthy();
 

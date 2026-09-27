@@ -55,11 +55,15 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub privacy_mode: Option<String>,
 
-    /// Terminal theme slug: dark | light | ansi | high-contrast-dark |
+    /// Terminal theme slug: auto | dark | light | ansi | high-contrast-dark |
     /// high-contrast-light | colorblind. Read at startup so a theme chosen in the picker or via
     /// `/theme` survives a restart.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
+
+    /// Hold the full-screen TUI's spinner and shimmer still.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduced_motion: Option<bool>,
 
     /// Line-editing mode for the classic REPL: `emacs` or `vi`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -696,6 +700,12 @@ impl CliConfig {
         if other.ui.edit_mode.is_some() {
             self.ui.edit_mode = other.ui.edit_mode.clone();
         }
+        if other.ui.theme.is_some() {
+            self.ui.theme = other.ui.theme.clone();
+        }
+        if other.ui.reduced_motion.is_some() {
+            self.ui.reduced_motion = other.ui.reduced_motion;
+        }
         for (action, binding) in &other.ui.keybindings {
             self.ui.keybindings.insert(action.clone(), binding.clone());
         }
@@ -882,6 +892,12 @@ impl CliConfig {
         if let Some(ref edit_mode) = self.ui.edit_mode {
             out.push_str(&format!("REPL edit mode: {}\n", edit_mode));
         }
+        if let Some(ref theme) = self.ui.theme {
+            out.push_str(&format!("Theme: {}\n", theme));
+        }
+        if let Some(reduced_motion) = self.ui.reduced_motion {
+            out.push_str(&format!("Reduced motion: {}\n", reduced_motion));
+        }
         if !self.ui.keybindings.is_empty() {
             out.push_str("Keybindings:\n");
             for (action, binding) in &self.ui.keybindings {
@@ -983,6 +999,10 @@ impl CliConfig {
             "output-style" | "ui.output-style" | "ui.output_style" => self.ui.output_style.clone(),
             "privacy-mode" | "ui.privacy-mode" | "ui.privacy_mode" => self.ui.privacy_mode.clone(),
             "edit-mode" | "ui.edit-mode" | "ui.edit_mode" => self.ui.edit_mode.clone(),
+            "theme" | "ui.theme" => self.ui.theme.clone(),
+            "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
+                self.ui.reduced_motion.map(|reduced| reduced.to_string())
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
             }
@@ -1060,6 +1080,24 @@ impl CliConfig {
                 }
                 self.ui.edit_mode = Some(mode);
             }
+            "theme" | "ui.theme" => {
+                let choice = crate::tui::widgets::theme_picker::ThemeChoice::from_arg(value.trim())
+                    .with_context(|| {
+                        format!(
+                            "theme must be one of: {}",
+                            crate::tui::widgets::theme_picker::ThemeChoice::available()
+                        )
+                    })?;
+                self.ui.theme = Some(choice.slug().to_string());
+            }
+            "reduced-motion" | "ui.reduced-motion" | "ui.reduced_motion" => {
+                self.ui.reduced_motion = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("reduced-motion must be true or false")?,
+                );
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 self.telemetry.crash_reports = value
                     .trim()
@@ -1077,7 +1115,7 @@ impl CliConfig {
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
-                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, crash-reports, and ui.keybindings.<action>",
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, crash-reports, and ui.keybindings.<action>",
                         key
                     );
                 }

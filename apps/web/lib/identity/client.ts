@@ -152,6 +152,7 @@ export interface IdentityPasskeysState {
   isSupported: boolean;
   passkeys: readonly IdentityPasskey[];
   create: () => Promise<void>;
+  rename: (passkeyId: string, name: string) => Promise<void>;
   remove: (passkeyId: string) => Promise<void>;
 }
 
@@ -174,6 +175,16 @@ export function usePasskeys(): IdentityPasskeysState {
     await user.reload();
   }, [user]);
 
+  const rename = useCallback(
+    async (passkeyId: string, name: string) => {
+      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
+      if (!user || !passkey) throw new Error('That passkey is no longer on this account.');
+      await passkey.update({ name });
+      await user.reload();
+    },
+    [user],
+  );
+
   const remove = useCallback(
     async (passkeyId: string) => {
       const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
@@ -184,7 +195,7 @@ export function usePasskeys(): IdentityPasskeysState {
     [user],
   );
 
-  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, remove };
+  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, rename, remove };
 }
 
 export type IdentityVerificationLevel = 'first_factor' | 'second_factor';
