@@ -34,6 +34,7 @@ import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
+import { readCloudCodeProjectInstructions } from './cloud-code-project-instructions';
 import {
   cloudCodeTurnNotificationEvent,
   notifyCloudCodeTurnEvent,
@@ -786,6 +787,10 @@ async function runClaimedAgentTurn(
         },
       });
     } else {
+      const projectInstructions = await readCloudCodeProjectInstructions(
+        executor,
+        session.workspacePath,
+      );
       result = await runCloudCodeAgentTurn({
         adapter: buildServerProviderAdapter(provider),
         model,
@@ -798,6 +803,7 @@ async function runClaimedAgentTurn(
         maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
         repositoryUrl: session.repositoryUrl,
         workspacePath: session.workspacePath,
+        projectInstructions,
         ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
         ...(input.preApproved ? { preApproved: input.preApproved } : {}),
         onStepCommitted: async (step: number) => {

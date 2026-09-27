@@ -106,6 +106,7 @@ export * from './managed-usage-balance';
 
 export * from './cloud-code';
 export * from './cloud-code-agent-model';
+export * from './project-instructions';
 
 export * from './scheduler';
 
