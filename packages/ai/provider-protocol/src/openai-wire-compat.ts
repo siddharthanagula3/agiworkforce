@@ -113,17 +113,22 @@ function wireContentToBlocks(content: Array<Record<string, unknown>>): ContentBl
       continue;
     }
     if (type === 'image_url') {
-      const imageUrl = part['image_url'] as { url?: string } | undefined;
+      const imageUrl = part['image_url'] as { url?: string; detail?: unknown } | undefined;
       const url = imageUrl?.url;
+      const detail =
+        imageUrl?.detail === 'auto' || imageUrl?.detail === 'low' || imageUrl?.detail === 'high'
+          ? { detail: imageUrl.detail }
+          : {};
       if (typeof url === 'string' && url.length > 0) {
         const dataUrlMatch = /^data:([^;]+);base64,([\s\S]*)$/.exec(url);
         if (dataUrlMatch && dataUrlMatch[1] && dataUrlMatch[2] !== undefined) {
           blocks.push({
             type: 'image',
             source: { type: 'base64', mediaType: dataUrlMatch[1], data: dataUrlMatch[2] },
+            ...detail,
           });
         } else {
-          blocks.push({ type: 'image', source: { type: 'url', url } });
+          blocks.push({ type: 'image', source: { type: 'url', url }, ...detail });
         }
       }
       continue;
