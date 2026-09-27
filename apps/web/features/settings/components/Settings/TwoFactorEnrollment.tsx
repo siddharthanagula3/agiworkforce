@@ -20,6 +20,8 @@ import settingsService, {
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/use-step-up';
 import { toUserMessage } from '@/lib/user-error-message';
+import { queryClient } from '@shared/stores/query-client';
+import { WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../WorkspaceMfaNotice';
 
 type Stage =
   | { name: 'idle' }
@@ -100,6 +102,7 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
     setStatus(data);
     setStatusError(error ?? null);
     onStatusChangeRef.current?.(data);
+    void queryClient.invalidateQueries({ queryKey: WORKSPACE_MFA_REQUIREMENT_QUERY_KEY });
   }, []);
 
   useEffect(() => {
