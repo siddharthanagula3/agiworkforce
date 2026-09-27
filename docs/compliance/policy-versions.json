@@ -68,6 +68,11 @@
           "date": "2026-09-22",
           "digest": "d03a2be0d91b4997",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-22",
+          "digest": "f5fa55928ecda09e",
+          "note": "Appeals now point to the in-product appeal and the /appeal form, each with a reference, beside the existing email route; no obligation or effective date changes. Whether to move the date is the founder's decision, reported 2026-09-27."
         }
       ]
     },
