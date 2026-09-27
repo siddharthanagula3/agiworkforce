@@ -1,5 +1,6 @@
 import { act, type ComponentProps } from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SettingsDataAdapter, SettingsModal } from '@agiworkforce/ui';
 
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   deleteCustomConnector: vi.fn(),
   disconnectConnector: vi.fn(),
   listCloudSkills: vi.fn(),
+  openExternalUrl: vi.fn(),
 }));
 
 // exactly the bug worth catching: 'safety' shipped in the real nav with no
@@ -35,6 +37,12 @@ vi.mock('../../../api/cloudSkills', () => ({
   listCloudSkills: mocks.listCloudSkills,
 }));
 
+vi.mock('../../../utils/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/navigation')>()),
+  openExternalUrl: mocks.openExternalUrl,
+}));
+
+import { WEB_APP_URL } from '../../../api/config';
 import { DesktopCloudSettingsModal } from '../DesktopCloudSettingsModal';
 
 type CapturedSettingsProps = ComponentProps<typeof SettingsModal>;
@@ -51,6 +59,7 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     mocks.listConnectors.mockResolvedValue({ connectors: [], available: [] });
     mocks.listCloudSkills.mockResolvedValue([]);
     mocks.createCustomConnector.mockResolvedValue(undefined);
+    mocks.openExternalUrl.mockResolvedValue(undefined);
   });
 
   it('keeps every signed-in Web settings surface reachable inside Desktop', () => {
@@ -86,6 +95,24 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
       .map((item) => item.key);
 
     expect(deadItems).toEqual([]);
+  });
+
+  it('hands the Referrals entry off to the web referrals page', async () => {
+    const user = userEvent.setup();
+    render(<DesktopCloudSettingsModal open={false} onClose={vi.fn()} />);
+
+    const props = latestSettingsProps();
+    const navKeys = (props.navGroups ?? []).flatMap((group) => group.items.map((item) => item.key));
+    expect(navKeys).toContain('referrals');
+
+    render(<>{props.sectionContent['referrals']}</>);
+    await user.click(await screen.findByRole('button', { name: 'Open referrals' }));
+
+    await waitFor(() =>
+      expect(mocks.openExternalUrl).toHaveBeenCalledWith(
+        new URL('/settings/referrals', WEB_APP_URL).toString(),
+      ),
+    );
   });
 
   it('can reach archived chats and shared links, the surfaces web links from Privacy', () => {

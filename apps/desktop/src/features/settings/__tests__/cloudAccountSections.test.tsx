@@ -57,6 +57,7 @@ import { CloudReflectMemoryRequiredError } from '../../../api/cloudAccountSettin
 import { CloudNotificationsSection } from '../cloud/CloudNotificationsSection';
 import { CloudPluginsSection } from '../cloud/CloudPluginsSection';
 import { CloudProfileSection } from '../cloud/CloudProfileSection';
+import { CloudReferralsSection } from '../cloud/CloudReferralsSection';
 import { CloudReflectSection } from '../cloud/CloudReflectSection';
 import { CloudSafetySection } from '../cloud/CloudSafetySection';
 import { CloudTeamSection } from '../cloud/CloudTeamSection';
@@ -323,6 +324,31 @@ describe('CloudPluginsSection', () => {
     await user.click(screen.getByRole('button', { name: 'Open Connectors' }));
 
     expect(onOpenSection).toHaveBeenCalledWith('connectors');
+  });
+});
+
+describe('CloudReferralsSection', () => {
+  it('opens the web referrals page in the system browser', async () => {
+    const user = userEvent.setup();
+
+    render(<CloudReferralsSection />);
+    await user.click(screen.getByRole('button', { name: 'Open referrals' }));
+
+    await waitFor(() => expect(mocks.openExternalUrl).toHaveBeenCalledTimes(1));
+    expect(new URL(String(mocks.openExternalUrl.mock.calls[0]?.[0])).pathname).toBe(
+      '/settings/referrals',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('says so when the browser could not be opened', async () => {
+    const user = userEvent.setup();
+    mocks.openExternalUrl.mockRejectedValueOnce(new Error('No browser is available.'));
+
+    render(<CloudReferralsSection />);
+    await user.click(screen.getByRole('button', { name: 'Open referrals' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No browser is available.');
   });
 });
 

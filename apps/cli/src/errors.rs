@@ -1375,6 +1375,104 @@ mod tests {
         }
     }
 
+    fn standard_model() -> String {
+        crate::model_catalog::standard_model_for_tier(&crate::tier_cache::UserTier::Max15x)
+            .expect("the catalog names a standard model a Max 20x plan includes")
+    }
+
+    #[test]
+    fn a_plan_limit_prints_its_message_its_reset_a_model_it_spares_and_where_to_go() {
+        let model = standard_model();
+        let error = anyhow::Error::new(CliError::UsageLimit {
+            code: "flagship_weekly_limit_reached".to_string(),
+            message: "You have used your weekly capacity for the most capable models.".to_string(),
+            recovery_href: Some("/settings/usage".to_string()),
+            retry_after: None,
+            resets_in: Some("1d 12h".to_string()),
+            alternative_model: Some(model.clone()),
+        });
+        assert_eq!(
+            terminal_text(&error),
+            format!(
+                "You have used your weekly capacity for the most capable models.\nIt resets in \
+                 1d 12h. Your plan also includes {}, which this limit does not cover: switch \
+                 with `/model {model}` or `--model {model}`. See every usage window at \
+                 https://agiworkforce.com/settings/usage.",
+                crate::model_catalog::display_name(&model)
+            )
+        );
+    }
+
+    #[test]
+    fn a_plan_limit_with_no_known_reset_sends_the_reader_to_agi_usage() {
+        let hint = |href: Option<&str>| {
+            CliError::usage_limit(
+                "monthly_credit_limit_reached",
+                "Your plan usage for this billing period is used up.",
+                href.map(str::to_string),
+                None,
+            )
+            .hint()
+        };
+        assert_eq!(hint(None), "Run `agi usage` to see when it resets.");
+        assert_eq!(
+            hint(Some("/settings/billing")),
+            "Run `agi usage` to see when it resets. Add credits or fix billing at \
+             https://agiworkforce.com/settings/billing."
+        );
+        assert_eq!(
+            hint(Some("/pricing")),
+            "Run `agi usage` to see when it resets. Compare plans at \
+             https://agiworkforce.com/pricing."
+        );
+        assert_eq!(
+            hint(Some("/support")),
+            "Run `agi usage` to see when it resets. More options at \
+             https://agiworkforce.com/support."
+        );
+    }
+
+    #[test]
+    fn a_plan_limit_is_never_retried_and_states_only_the_wait_the_server_sent() {
+        let limit = CliError::usage_limit(
+            "rolling_five_hour_limit_reached",
+            "You have used your rolling 5-hour capacity.",
+            None,
+            Some(120),
+        );
+        assert!(!limit.is_retryable());
+        assert_eq!(limit.exit_code(), ExitClass::Configuration.code());
+        let failure = limit.turn_failure();
+        assert_eq!(failure.code, TurnFailureCode::UsageLimitReached);
+        assert_eq!(failure.retry_after_seconds, Some(120));
+        assert_eq!(
+            CliError::usage_limit("insufficient_credits", "Used up.", None, None)
+                .turn_failure()
+                .retry_after_seconds,
+            None
+        );
+    }
+
+    #[test]
+    fn a_plan_that_excludes_a_model_names_one_it_includes() {
+        let model = standard_model();
+        let hint = CliError::PlanExcludesModel {
+            model: "fixture-flagship-model".to_string(),
+            tier: "Pro".to_string(),
+            alternative_model: Some(model.clone()),
+        }
+        .hint();
+        assert!(
+            hint.starts_with(&format!(
+                "Choose a model your plan includes, such as {} (`--model {model}`), or set that \
+                 provider's own key. Run `agi plans` to see what each plan includes.",
+                crate::model_catalog::display_name(&model)
+            )),
+            "{hint}"
+        );
+        assert!(hint.ends_with(PAID_UPGRADES_ARE_STAGED), "{hint}");
+    }
+
     #[test]
     fn a_stream_failure_with_no_stated_wait_states_none() {
         let failure = CliError::stream_error("managed_cloud", "dropped", true).turn_failure();
@@ -1835,6 +1933,7 @@ mod tests {
             },
             CliError::ModelUnavailable { model: "m".into() },
             CliError::paywall("chat", "pro", "quota"),
+            CliError::usage_limit("rolling_weekly_limit_reached", "Weekly limit.", None, None),
             CliError::ClientUpdateRequired {
                 message: None,
                 minimum_api_version: None,
@@ -1860,6 +1959,7 @@ mod tests {
             ("plan_excludes_model", ExitClass::Configuration),
             ("model_unavailable", ExitClass::Unavailable),
             ("paywall", ExitClass::Configuration),
+            ("usage_limit", ExitClass::Configuration),
             ("client_update_required", ExitClass::ProtocolTooOld),
         ];
         let actual: Vec<(&str, ExitClass)> = every_failure()

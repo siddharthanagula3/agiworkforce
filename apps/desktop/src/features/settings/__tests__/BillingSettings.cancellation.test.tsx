@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authState = vi.hoisted(() => ({
+  plan: 'pro',
   subscriptionStatus: 'active',
   currentPeriodEnd: Date.UTC(2026, 8, 1),
   planDisplayName: 'Pro',
@@ -12,6 +13,7 @@ const authState = vi.hoisted(() => ({
 
 vi.mock('../../../stores/auth', () => ({
   selectHasCloudAccountSession: () => true,
+  selectPlan: (state: typeof authState) => state.plan,
   useAuthStore: (selector: (state: typeof authState) => unknown) => selector(authState),
 }));
 

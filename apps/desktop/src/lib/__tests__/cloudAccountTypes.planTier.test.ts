@@ -56,7 +56,8 @@ describe('PLAN_DISPLAY_NAMES', () => {
   it('uses the canonical display labels for the new tiers', () => {
     expect(PLAN_DISPLAY_NAMES['local-only']).toBe('Local Mode');
     expect(PLAN_DISPLAY_NAMES.byok).toBe('Local Mode + BYOK');
-    expect(PLAN_DISPLAY_NAMES.max_15x).toBe('Max 15x');
+    expect(PLAN_DISPLAY_NAMES.max).toBe('Max 5x');
+    expect(PLAN_DISPLAY_NAMES.max_15x).toBe('Max 20x');
     expect(PLAN_DISPLAY_NAMES.team).toBe('Team');
   });
 
