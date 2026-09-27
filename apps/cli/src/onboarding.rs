@@ -1,5 +1,6 @@
 use anyhow::{bail, Context, Result};
 
+use crate::cli_options::PermissionMode;
 use crate::model_catalog;
 use crate::project_scope::resolve_project_scope;
 use crate::terminal_style as ts;
@@ -636,6 +637,40 @@ pub(crate) fn update_config_model(
     provider: &str,
     reasoning: Option<&str>,
 ) -> Result<()> {
+    edit_default_config(|default| {
+        default.insert(
+            "model".to_string(),
+            toml::Value::String(model_id.to_string()),
+        );
+        default.insert(
+            "provider".to_string(),
+            toml::Value::String(provider.to_string()),
+        );
+        match reasoning {
+            Some(effort) => {
+                default.insert(
+                    "reasoning_effort".to_string(),
+                    toml::Value::String(effort.to_string()),
+                );
+            }
+            None => {
+                default.remove("reasoning_effort");
+            }
+        }
+    })
+}
+
+pub(crate) fn update_config_permission_mode(mode: PermissionMode) -> Result<()> {
+    edit_default_config(|default| {
+        default.remove("approval_mode");
+        default.insert(
+            "permission_mode".to_string(),
+            toml::Value::String(mode.name().to_string()),
+        );
+    })
+}
+
+fn edit_default_config(edit: impl FnOnce(&mut toml::Table)) -> Result<()> {
     let dir = crate::config::CliConfig::config_dir()?;
     std::fs::create_dir_all(&dir)?;
     let config_path = dir.join("config.toml");
@@ -653,29 +688,11 @@ pub(crate) fn update_config_model(
     if !default_value.is_table() {
         *default_value = toml::Value::Table(toml::Table::new());
     }
-
-    let default = default_value
-        .as_table_mut()
-        .context("Failed to update [default] config table")?;
-    default.insert(
-        "model".to_string(),
-        toml::Value::String(model_id.to_string()),
+    edit(
+        default_value
+            .as_table_mut()
+            .context("Failed to update [default] config table")?,
     );
-    default.insert(
-        "provider".to_string(),
-        toml::Value::String(provider.to_string()),
-    );
-    match reasoning {
-        Some(effort) => {
-            default.insert(
-                "reasoning_effort".to_string(),
-                toml::Value::String(effort.to_string()),
-            );
-        }
-        None => {
-            default.remove("reasoning_effort");
-        }
-    }
 
     let rendered = toml::to_string_pretty(&toml::Value::Table(root))
         .context("Failed to serialize config.toml")?;
@@ -689,7 +706,7 @@ pub(crate) fn update_config_model(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Safety notes + approval mode
+// Safety notes + permission mode
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn print_safety_notes() {
@@ -713,11 +730,11 @@ fn print_safety_notes() {
     eprintln!();
 }
 
-fn select_approval_mode() -> Result<String> {
+fn select_permission_mode() -> Result<PermissionMode> {
     let choices = &[
-        "Suggest        Ask before every tool call (safest, recommended)",
-        "Auto-edit      Auto-approve file edits, ask for shell commands",
-        "Full-auto      Auto-approve everything (use with caution)",
+        "Ask            Ask before every file edit and command (safest, recommended)",
+        "Accept edits   File edits run without asking, commands still ask",
+        "Plan first     Read-only until you approve a plan",
     ];
 
     eprintln!(
@@ -726,67 +743,17 @@ fn select_approval_mode() -> Result<String> {
     );
 
     let selection = dialoguer::Select::new()
-        .with_prompt("  Default interaction mode")
+        .with_prompt("  Default permission mode")
         .items(choices)
         .default(0)
         .interact()
         .context("Failed to display mode menu")?;
 
     Ok(match selection {
-        1 => "auto-edit".to_string(),
-        2 => "full-auto".to_string(),
-        _ => "suggest".to_string(),
+        1 => PermissionMode::AcceptEdits,
+        2 => PermissionMode::Plan,
+        _ => PermissionMode::Default,
     })
-}
-
-/// Update approval_mode in ~/.agiworkforce/config.toml if non-default.
-fn update_config_approval_mode(mode: &str) -> Result<()> {
-    if mode == "suggest" {
-        return Ok(()); // Default, no need to write
-    }
-
-    let dir = crate::config::CliConfig::config_dir()?;
-    let config_path = dir.join("config.toml");
-    let mut content = std::fs::read_to_string(&config_path).unwrap_or_default();
-
-    // Replace or append the approval_mode line under [default]
-    if content.contains("approval_mode") {
-        // Replace existing line
-        let lines: Vec<&str> = content.lines().collect();
-        let updated: Vec<String> = lines
-            .iter()
-            .map(|line| {
-                if line.trim().starts_with("approval_mode")
-                    || line.trim().starts_with("# approval_mode")
-                {
-                    format!("approval_mode = \"{}\"", mode)
-                } else {
-                    line.to_string()
-                }
-            })
-            .collect();
-        content = updated.join("\n");
-    } else if content.contains("[default]") {
-        // Append after [default] section
-        content = content.replace(
-            "[default]",
-            &format!("[default]\napproval_mode = \"{}\"", mode),
-        );
-    } else {
-        // Append at end
-        content.push_str(&format!("\n[default]\napproval_mode = \"{}\"\n", mode));
-    }
-
-    std::fs::write(&config_path, content)?;
-    // Match the hardening in `update_config_model`: this path can create or
-    // rewrite config.toml, so restrict it to owner read/write (0o600) instead
-    // of leaving world-readable default permissions.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&config_path, std::fs::Permissions::from_mode(0o600));
-    }
-    Ok(())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -969,26 +936,36 @@ pub async fn run_onboarding() -> Result<bool> {
         }
     }
 
-    // Step 6: Safety notes + approval mode
+    // Step 6: Safety notes + permission mode
     print_safety_notes();
 
-    let approval_mode = match select_approval_mode() {
-        Ok(mode) => mode,
-        Err(_) => {
-            eprintln!(
-                "\n  {}",
-                ts::muted("Setup interrupted. Run again to continue.")
-            );
-            return Ok(false);
-        }
-    };
-
-    if let Err(e) = update_config_approval_mode(&approval_mode) {
+    if let Some(pinned) = crate::permissions::managed_permission_mode() {
         eprintln!(
-            "  {} Failed to save approval mode: {}",
-            ts::warning_header("⚠"),
-            e
+            "  {}",
+            ts::muted(format!(
+                "Your organization's policy sets tool approval to {}.",
+                pinned.name()
+            ))
         );
+    } else {
+        let permission_mode = match select_permission_mode() {
+            Ok(mode) => mode,
+            Err(_) => {
+                eprintln!(
+                    "\n  {}",
+                    ts::muted("Setup interrupted. Run again to continue.")
+                );
+                return Ok(false);
+            }
+        };
+
+        if let Err(e) = update_config_permission_mode(permission_mode) {
+            eprintln!(
+                "  {} Failed to save permission mode: {}",
+                ts::warning_header("⚠"),
+                e
+            );
+        }
     }
 
     // Step 7: Wait for Enter

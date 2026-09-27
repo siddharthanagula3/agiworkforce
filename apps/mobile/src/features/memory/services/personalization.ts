@@ -1,3 +1,4 @@
+import { normalizeResponseStylePreference, responseStyleLines } from '@agiworkforce/types';
 import type { Personalization, PersonalizationStyle } from '@/stores/settingsStore';
 
 const HIGH = 75;
@@ -23,6 +24,19 @@ export function renderPersonalizationBlock(p: Personalization): string {
 
   const occupation = p.occupation.trim();
   if (occupation) lines.push(`The user works as: ${occupation}. Tailor examples accordingly.`);
+
+  const aboutYou = (p.aboutYou ?? '').trim();
+  if (aboutYou) lines.push(`More about the user, in their words: ${aboutYou}`);
+
+  lines.push(
+    ...responseStyleLines(
+      normalizeResponseStylePreference({
+        preferredLength: p.preferredLength,
+        technicalLevel: p.technicalLevel,
+        responseLanguage: p.responseLanguage,
+      }),
+    ),
+  );
 
   if (p.style && p.style !== 'default') lines.push(STYLE_INSTRUCTIONS[p.style]);
 

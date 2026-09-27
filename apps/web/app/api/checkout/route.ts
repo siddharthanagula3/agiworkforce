@@ -429,7 +429,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       },
     });
 
-    return NextResponse.json({ url: checkoutSession.url });
+    return NextResponse.json({ url: checkoutSession.url, sessionId: checkoutSession.id });
   } catch (error) {
     if (error instanceof Stripe.errors.StripeError) {
       logger.error(

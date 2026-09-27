@@ -6,7 +6,7 @@
     "cli": {
       "current": "1.7.1",
       "previousRelease": "v-cli-1.0.0",
-      "artifacts": "GitHub release assets (agiworkforce-linux-x64.tar.gz and four more). The npm package @agiworkforce/cli is scaffolded but unpublished; the registry 404s, which is why localRuntimeClient.ts keeps CLI_IS_PUBLISHED false."
+      "artifacts": "GitHub release assets (agiworkforce-linux-x64.tar.gz and five more) with a SHA256SUMS manifest signed by the pinned release key. https://agiworkforce.com/install.sh is the only install route; there is no npm package."
     },
     "desktop": {
       "current": "1.2.0",

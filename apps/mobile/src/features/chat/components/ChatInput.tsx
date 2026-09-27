@@ -496,6 +496,7 @@ export function ChatInput({
         { uri: target.uri, name: target.fileName, type: target.mimeType },
         target.fileName,
         target.id,
+        { temporary: useSettingsStore.getState().isTemporaryChat },
       ).then((result) => {
         if (!result) return;
         // A resumed upload owns a Cloud asset, so the next send reuses it

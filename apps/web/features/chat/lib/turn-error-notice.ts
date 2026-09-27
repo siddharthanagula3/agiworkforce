@@ -55,6 +55,7 @@ export type IncompleteTurnCause =
   | 'contentFiltered'
   | 'planRestriction'
   | 'workspacePolicy'
+  | 'twoFactorRequired'
   | 'sessionExpired'
   | 'accountLimit'
   | 'sharedFreeAllowance'
@@ -91,6 +92,8 @@ export const INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE: Readonly<Record<string, Incomp
   content_blocked: 'contentFiltered',
   provider_rejected_request: 'modelRestriction',
   organization_policy: 'workspacePolicy',
+  MFA_REQUIRED: 'twoFactorRequired',
+  mfa_required: 'twoFactorRequired',
   session_expired: 'sessionExpired',
   insufficient_credits: 'accountLimit',
   rolling_five_hour_limit_reached: 'accountLimit',
@@ -121,6 +124,8 @@ const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, str
     'The selected model is not part of your plan. Choose a model your plan includes.',
   workspacePolicy:
     'Your workspace administrator has turned this off for your account. Ask an administrator if you need it.',
+  twoFactorRequired:
+    'Your workspace requires two-factor authentication. Turn it on in Settings, then retry.',
   sessionExpired: 'Your session ended before this turn finished. Sign in again, then retry.',
   accountLimit:
     'You have reached a usage limit on your account. Open Usage to see when it resets, then retry.',
@@ -130,6 +135,14 @@ const INCOMPLETE_TURN_MESSAGE_BY_CAUSE: Readonly<Record<IncompleteTurnCause, str
     'The response stopped part way through. The part that arrived is kept above. Retry to get a complete answer.',
   emptyResponse: 'The model returned no response for this turn. Retry, or rephrase your message.',
 };
+
+export function turnNeedsTwoFactor(message: ChatMessage | undefined | null): boolean {
+  const errorCode = (message?.metadata as { errorCode?: unknown } | undefined)?.errorCode;
+  return (
+    typeof errorCode === 'string' &&
+    INCOMPLETE_TURN_CAUSE_BY_ERROR_CODE[errorCode] === 'twoFactorRequired'
+  );
+}
 
 export const INCOMPLETE_TURN_DEFAULT_MESSAGE =
   "This turn didn't complete. No response was received.";

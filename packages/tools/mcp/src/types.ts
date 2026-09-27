@@ -5,11 +5,11 @@ import type {
   ResponseCacheStore,
 } from '@modelcontextprotocol/client';
 import type {
-  CancelTaskResult,
-  CreateTaskResult,
-  GetTaskResult,
-  UpdateTaskResult,
-} from '@modelcontextprotocol/ext-tasks/schema/2026-07-28/schema';
+  CancelTaskResultV2 as CancelTaskResult,
+  CreateTaskResultV2 as CreateTaskResult,
+  GetTaskResultV2 as GetTaskResult,
+  UpdateTaskResultV2 as UpdateTaskResult,
+} from '@modelcontextprotocol/ext-tasks/core/v2';
 
 export interface McpServerConfig {
   command?: string;
@@ -106,16 +106,28 @@ export interface McpCatalogDiscoveryError {
   message: string;
 }
 
+export type McpServerTransport = 'stdio' | 'sse' | 'streamable-http';
+
+export type McpToolRejectionReason = 'non-canonical-name' | 'invalid-input-schema';
+
+export interface McpRejectedTool {
+  toolName?: string;
+  reason: McpToolRejectionReason;
+  detail?: string;
+}
+
 export interface McpServerCatalog {
   serverName: string;
   safeServerName: string;
   protocolEra: 'modern' | 'legacy';
   protocolVersion?: string;
   serverInfo?: { name: string; version: string };
+  transport?: McpServerTransport;
   capabilities: Record<string, unknown>;
   tasksSupported: boolean;
   discover?: DiscoverResult;
   tools: McpCatalogTool[];
+  rejectedTools?: McpRejectedTool[];
   resources: McpCatalogResource[];
   resourceTemplates: McpCatalogResourceTemplate[];
   prompts: McpCatalogPrompt[];

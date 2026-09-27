@@ -51,6 +51,7 @@ const RUN_TICK_INTERVAL_MS = 1_000;
 const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 const AGI_WORK_RUNNING_PREFIX = 'Working for';
 const AGI_WORK_COMPLETED_PREFIX = 'Worked for';
+const INPUT_WAIT_LABEL = 'Waiting for your input';
 
 export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
@@ -82,6 +83,7 @@ export interface AgentActivityTimelineProps {
    * renders the same step without an image rather than a broken one.
    */
   screenshotFor?: (toolCallId: string) => string | undefined;
+  renderInputRequest?: (entry: AgentActivityToolEntry) => ReactNode;
 }
 
 export function hasCanonicalToolActivity(
@@ -110,6 +112,13 @@ export function hasOpenApprovalDecision(
         entry.approval !== undefined &&
         entry.approval.decision === undefined,
     ) ?? false
+  );
+}
+
+function isWaitingForInput(activity: Pick<AgentActivityState, 'entries' | 'status'>): boolean {
+  return (
+    (activity.status === 'paused' || activity.status === 'awaiting-approval') &&
+    activity.entries.some((entry) => entry.kind === 'tool' && entry.inputRequest !== undefined)
   );
 }
 
@@ -327,6 +336,9 @@ export function buildAgentActivitySummary(
   const isAgiWork = workMode === AGI_WORK_MODE;
   const active = latestActiveSummary(activity);
   const status = settledActivityStatus(activity);
+  if (isWaitingForInput(activity)) {
+    return active ? `${INPUT_WAIT_LABEL} · ${active}` : INPUT_WAIT_LABEL;
+  }
   if (status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
@@ -351,6 +363,9 @@ export function buildAgentActivitySummary(
 function buildAgentActivityAnnouncement(activity: AgentActivityState, summary: string): string {
   const active = latestActiveSummary(activity);
   const status = settledActivityStatus(activity);
+  if (isWaitingForInput(activity)) {
+    return active ? `${INPUT_WAIT_LABEL}: ${active}` : INPUT_WAIT_LABEL;
+  }
   if (status === 'awaiting-approval') {
     return active ? `Approval needed: ${active}` : 'Approval needed';
   }
@@ -773,6 +788,7 @@ export function AgentActivityTimeline({
   failureReason,
   failureActions,
   screenshotFor,
+  renderInputRequest,
 }: AgentActivityTimelineProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
@@ -783,7 +799,9 @@ export function AgentActivityTimeline({
 
   const isAgiWork = workMode === AGI_WORK_MODE;
   const settledStatus = settledActivityStatus(activity);
-  const isActive = settledStatus === 'running' || settledStatus === 'awaiting-approval';
+  const waitingForInput = isWaitingForInput(activity);
+  const isActive =
+    settledStatus === 'running' || settledStatus === 'awaiting-approval' || waitingForInput;
   const hasConnectRequest = useMemo(
     () => activity.entries.some((e) => e.kind === 'tool' && connectRequestFor(e) !== null),
     [activity.entries],
@@ -796,7 +814,7 @@ export function AgentActivityTimeline({
   const isOpen = userForcedClosed
     ? false
     : !isStreamingCollapsed &&
-      (settledStatus === 'awaiting-approval' || hasConnectRequest || expanded);
+      (settledStatus === 'awaiting-approval' || waitingForInput || hasConnectRequest || expanded);
 
   const prevActive = useRef(isActive);
   useEffect(() => {
@@ -1016,13 +1034,26 @@ export function AgentActivityTimeline({
               const screenAction =
                 entry.category === 'computer-use' ? screenStepAction(entry) : null;
               const screenshot = screenshotFor?.(entry.toolCallId);
+              const awaitingInput = waitingForInput && entry.inputRequest !== undefined;
+              const inputStatus: ToolCallStatus | undefined =
+                entry.inputRequest === undefined
+                  ? undefined
+                  : awaitingInput
+                    ? 'pending'
+                    : 'cancelled';
               return (
                 <div key={entry.id} className="relative py-1 pl-7">
                   <ToolCallCard
                     id={entry.toolCallId}
                     name={traceRowName(entry)}
-                    status={entry.id === lastVisibleSearchId ? 'complete' : toToolStatus(entry)}
-                    requiresApproval={entry.status === 'awaiting-approval'}
+                    status={
+                      entry.id === lastVisibleSearchId
+                        ? 'complete'
+                        : (inputStatus ?? toToolStatus(entry))
+                    }
+                    requiresApproval={
+                      entry.status === 'awaiting-approval' && entry.inputRequest === undefined
+                    }
                     riskLevel={entry.approval?.riskLevel}
                     args={asRecord(entry.input)}
                     result={connectRequest ? undefined : asResult(entry.output)}
@@ -1055,6 +1086,15 @@ export function AgentActivityTimeline({
                         request={connectRequest}
                         {...(onRetryTurn ? { onRetryTurn } : {})}
                       />
+                    </div>
+                  ) : null}
+                  {awaitingInput ? (
+                    <div className="mt-1.5">
+                      {renderInputRequest ? (
+                        renderInputRequest(entry)
+                      ) : (
+                        <p className="text-xs text-muted-foreground">{INPUT_WAIT_LABEL}</p>
+                      )}
                     </div>
                   ) : null}
                 </div>

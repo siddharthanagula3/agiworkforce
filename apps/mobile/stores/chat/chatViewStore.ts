@@ -6,7 +6,12 @@ import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
 export type ChatMode = 'chat' | 'research' | 'create';
 
-export type ChatStyle = 'normal' | 'concise' | 'detailed' | 'creative';
+export type ChatStyle = 'normal' | 'concise' | 'explanatory' | 'formal';
+
+const RETIRED_CHAT_STYLES: Readonly<Record<string, ChatStyle>> = {
+  detailed: 'explanatory',
+  creative: 'normal',
+};
 
 export interface ChatFeatures {
   webSearch: boolean;
@@ -225,10 +230,16 @@ async function runSearch(
 
 export function migratePersistedChatView(
   persisted: unknown,
-  _version: number,
+  version: number,
 ): Record<string, unknown> {
   const next = { ...((persisted ?? {}) as Record<string, unknown>) };
   delete next.toolAccess;
+  if (version < 2 && typeof next.chatStyle === 'string') {
+    next.chatStyle =
+      next.chatStyle === 'concise'
+        ? 'normal'
+        : (RETIRED_CHAT_STYLES[next.chatStyle] ?? next.chatStyle);
+  }
   return next;
 }
 
@@ -241,7 +252,7 @@ export const useChatViewStore = create<ViewState>()(
       isSearching: false,
       chatMode: 'chat',
       workMode: 'chat',
-      chatStyle: 'concise',
+      chatStyle: 'normal',
       features: {
         webSearch: true,
         imageGen: true,
@@ -305,7 +316,7 @@ export const useChatViewStore = create<ViewState>()(
     {
       name: 'chat-view-store',
       storage: createJSONStorage(() => mmkvStorage),
-      version: 1,
+      version: 2,
       migrate: migratePersistedChatView,
       skipHydration: true,
       partialize: (state) => ({

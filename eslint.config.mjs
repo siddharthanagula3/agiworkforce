@@ -458,17 +458,6 @@ export default [
   },
 
   {
-    files: ['apps/cli/npm/**/*.js', 'apps/cli/npm/**/*.mjs'],
-    languageOptions: {
-      globals: {
-        process: 'readonly',
-        console: 'readonly',
-        Buffer: 'readonly',
-      },
-    },
-  },
-
-  {
     files: ['**/__mocks__/**/*.js'],
     languageOptions: {
       sourceType: 'commonjs',

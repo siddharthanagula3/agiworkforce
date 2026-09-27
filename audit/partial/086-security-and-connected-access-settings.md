@@ -219,18 +219,6 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:47-5
 
 Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:28-40`
 
-## S86.24: Default permission mode.
-
-- Done when: The user can set the default approval posture for agent actions (ask every time, auto-approve safe, autonomous) and it is enforced.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The onboarding "Default interaction mode" choice writes approval_mode, which nothing reads; the default that is actually applied is permission_mode, set only by editing config.toml or from VS Code. Shift+Tab and --permission-mode change it per session/run. | handler |
-
-Code: `apps/cli/src/onboarding.rs:716-760`, `apps/cli/src/config.rs:103-115`, `apps/cli/src/lib.rs:4474-4478`
-
 ## S86.25: Revoke all optional grants.
 
 - Done when: One action withdraws every optional permission granted to AGI (connectors, saved approvals, device grants, folders).

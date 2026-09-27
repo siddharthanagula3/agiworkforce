@@ -13,6 +13,7 @@ import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { TEMPORARY_CHAT_NOT_SAVED } from '@/lib/temporary-chat-policy';
 import { scheduleArtifactIndexing } from '../lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import {
@@ -65,8 +66,12 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
 
   const { messages } = parsed.data;
 
-  const [conv] = await db.query<{ id: string; active_leaf_message_id: string | null }>(
-    `select id, active_leaf_message_id
+  const [conv] = await db.query<{
+    id: string;
+    active_leaf_message_id: string | null;
+    is_temporary: boolean;
+  }>(
+    `select id, active_leaf_message_id, is_temporary
        from web_conversations
       where id = $1
         and user_id = $2
@@ -76,6 +81,7 @@ async function handleBulkSave(request: NextRequest, context: RouteContext) {
     [conversationId, userId, organizationId],
   );
   if (!conv) throw createError.notFound('Conversation not found');
+  if (conv.is_temporary) throw createError.conflict(TEMPORARY_CHAT_NOT_SAVED);
 
   await assertFreeDailyAllowance({
     db,

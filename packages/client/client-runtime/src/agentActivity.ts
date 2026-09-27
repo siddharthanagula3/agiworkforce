@@ -79,6 +79,7 @@ export interface AgentActivityToolEntry {
    * go to; nothing here says what the step will read.
    */
   deviceStep?: AgentActivityDeviceStep;
+  inputRequest?: AgentActivityInputRequest;
   query?: string;
   sources?: AgentEventSource[];
   /**
@@ -110,6 +111,12 @@ export interface AgentActivityDeviceStep {
   deviceId: string;
   deviceName: string;
   expiresAtMs: number;
+}
+
+export interface AgentActivityInputRequest {
+  connectorId: string;
+  inputRequests: unknown;
+  round: number;
 }
 
 export interface AgentActivitySourcesEntry {
@@ -928,6 +935,11 @@ function applyAgentEvent(
         next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
           ...entry,
           status: 'awaiting-approval',
+          inputRequest: {
+            connectorId: event.connectorId,
+            inputRequests: event.inputRequests,
+            round: event.round,
+          },
         }));
       }
       next.status = 'awaiting-approval';
@@ -939,10 +951,11 @@ function applyAgentEvent(
       const index = next.entries.findIndex((entry) => entry.id === id);
       const resolvedStatus = event.outcome === 'cancelled' ? 'cancelled' : 'running';
       if (index >= 0) {
-        next.entries = updateAt<AgentActivityToolEntry>(next.entries, index, (entry) => ({
-          ...entry,
-          status: resolvedStatus,
-        }));
+        next.entries = updateAt<AgentActivityToolEntry>(
+          next.entries,
+          index,
+          ({ inputRequest: _answered, ...entry }) => ({ ...entry, status: resolvedStatus }),
+        );
       }
       next.status = resolvedStatus === 'cancelled' ? 'cancelled' : 'running';
       return next;
