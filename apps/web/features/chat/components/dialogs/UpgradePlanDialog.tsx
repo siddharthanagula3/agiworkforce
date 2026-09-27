@@ -89,7 +89,7 @@ const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.flatMap((id) => {
       perSeat: display.pricing.perSeat === true,
       yearlyPricePerMonth: getPublishedPlanPricePerMonthUsd(id, 'yearly'),
       tagline: PLAN_TAGLINES[id],
-      features: display.features,
+      features: [...display.usage, ...display.features],
       popular: id === 'pro',
     },
   ];

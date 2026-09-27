@@ -1,16 +1,14 @@
 import {
   BILLING_PLAN_CAPABILITY_LABELS,
+  MANAGED_USAGE_BASELINES,
   canUseBillingPlanCapability,
   formatCredits,
   getBillingPlanPricing,
   getBillingPlanProductLimits,
   getPlanCreditAllowance,
   getPlanPriceUsd,
-  isMax15xPlanTier,
-  isMaxPlanTier,
-  isPerSeatBillingPlan,
-  isProPlanTier,
   managedUsageComparisonLabel,
+  managedUsageComparisonLines,
   normalizeBillingPlanTier,
   type BillingPlanCapability,
   type BillingPlanLimit,
@@ -53,15 +51,9 @@ export function formatPlanCreditWindows(plan: string | null | undefined): string
   ].join(' · ');
 }
 
-function usageBaselineOf(plan: BillingPlanTier): BillingPlanTier | null {
-  if (isProPlanTier(plan)) return 'basic';
-  if (isMaxPlanTier(plan) || isMax15xPlanTier(plan) || isPerSeatBillingPlan(plan)) return 'pro';
-  return null;
-}
-
 export function planUsageComparisonLabel(plan: string | null | undefined): string | null {
   const tier = normalizeBillingPlanTier(plan);
-  const baseline = usageBaselineOf(tier);
+  const baseline = MANAGED_USAGE_BASELINES[tier];
   return baseline
     ? managedUsageComparisonLabel(tier, baseline, getBillingPlanPricing(baseline).label)
     : null;
@@ -194,6 +186,7 @@ export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier):
 export interface BillingPlanDisplay {
   pricing: BillingPlanPricing;
   monthlyPriceUsd: number | null;
+  usage: string[];
   features: string[];
 }
 
@@ -203,8 +196,6 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
   const limits = getBillingPlanProductLimits(plan);
   const features: string[] = [];
 
-  const creditWindows = formatPlanCreditWindows(plan);
-  if (creditWindows) features.push(creditWindows);
   if (canUseBillingPlanCapability(plan, 'managed_chat')) {
     features.push(BILLING_PLAN_CAPABILITY_LABELS.managed_chat);
   }
@@ -221,6 +212,7 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
   return {
     pricing,
     monthlyPriceUsd,
+    usage: managedUsageComparisonLines(plan),
     features,
   };
 }
