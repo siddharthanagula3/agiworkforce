@@ -41,7 +41,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const caller = await resolveWorkspaceApiCaller(request, ROUTE, 'GET');
   const payload: ServicePrincipalsResponse = {
     organizationId: caller.organizationId,
-    canManage: caller.permissions?.has('identity.manage') ?? false,
+    canManage: caller.kind === 'member' && caller.permissions.has('identity.manage'),
     reachableRoutes: servicePrincipalRoutes(),
     principals: await listServicePrincipals(getNeonDb(), caller.organizationId),
   };

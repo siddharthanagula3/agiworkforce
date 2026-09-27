@@ -1,4 +1,8 @@
-import type { OrganizationPermission } from '@agiworkforce/types';
+import {
+  canonicalOrganizationPermissions,
+  type CanonicalOrganizationPermission,
+  type OrganizationPermission,
+} from '@agiworkforce/types';
 
 export type WorkspaceRouteMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
@@ -61,6 +65,14 @@ const ACCESS = new Map(
 
 export function workspaceRouteAccess(route: string, method: string): WorkspaceRouteAccess | null {
   return ACCESS.get(`${method.toUpperCase()} ${route}`) ?? null;
+}
+
+export function servicePrincipalScopes(): CanonicalOrganizationPermission[] {
+  return canonicalOrganizationPermissions(
+    WORKSPACE_ROUTE_ACCESS.filter((entry) => entry.servicePrincipals === 'allowed').map(
+      (entry) => entry.permission,
+    ),
+  );
 }
 
 export function servicePrincipalRoutes(): string[] {

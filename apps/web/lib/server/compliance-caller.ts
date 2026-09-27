@@ -26,6 +26,7 @@ export interface ComplianceCaller {
   role: string;
   keyId: string | null;
   servicePrincipalId: string | null;
+  permissions: ReadonlySet<OrganizationPermission>;
 }
 
 function bearerToken(request: Request): string | null {
@@ -68,13 +69,19 @@ export async function resolveComplianceCaller(
       role: 'service_principal',
       keyId: verified.keyId,
       servicePrincipalId: verified.principalId,
+      permissions: verified.scopes,
     };
   }
 
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
-  await requireMemberPermission(membership.organizationId, userId, permission, deniedMessage);
+  const permissions = await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    permission,
+    deniedMessage,
+  );
   return {
     kind: 'member',
     db,
@@ -83,5 +90,6 @@ export async function resolveComplianceCaller(
     role: membership.role,
     keyId: null,
     servicePrincipalId: null,
+    permissions,
   };
 }
