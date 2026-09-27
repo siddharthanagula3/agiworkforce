@@ -214,7 +214,7 @@ export function BillingPlanNotices({
             : ''}
           .
         </p>
-        <p>You keep {planLabel} and its credits until then. Nothing is charged today.</p>
+        <p>You keep {planLabel} and its credits until then.</p>
       </Notice>,
     );
   }
