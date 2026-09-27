@@ -8,6 +8,7 @@ import {
   type ExplicitMemoryCommand,
   type ExplicitMemoryPorts,
   type ExplicitRememberOutcome,
+  type MemoryCommandKind,
   type MemoryCommandMatch,
 } from '@agiworkforce/agent-core';
 import { logger } from '@/lib/logger';
@@ -191,4 +192,41 @@ export async function runMemoryCommand(
     '[memory-commands] explicit forget',
   );
   return { kind: 'forget', command, outcome };
+}
+
+export const MEMORY_COMMAND_TURN_STATUSES = [
+  'stored',
+  'already_known',
+  'refused',
+  'confirmation_required',
+  'nothing_to_forget',
+  'forgotten',
+  'failed',
+] as const;
+
+export type MemoryCommandTurnStatus = (typeof MEMORY_COMMAND_TURN_STATUSES)[number];
+
+const MEMORY_COMMAND_TURN_OUTCOMES: Readonly<Record<MemoryCommandTurnStatus, string>> = {
+  stored: 'It was saved to memory.',
+  already_known: 'It was already in memory, so nothing changed.',
+  refused:
+    'It was not saved: memory is off, or this is something memory does not keep. Do not say you will remember it.',
+  confirmation_required:
+    'The app is asking the user to confirm the deletion, so nothing has been deleted yet. Do not say it was forgotten.',
+  nothing_to_forget: 'No saved memory matched, so nothing was deleted.',
+  forgotten: 'The matching memories were deleted.',
+  failed: 'Memory did not respond, so nothing changed. Do not say it was saved or deleted.',
+};
+
+export function memoryCommandTurnNote(
+  message: string,
+  reported: { kind: MemoryCommandKind; status: MemoryCommandTurnStatus },
+): string | null {
+  const command = parseExplicitMemoryCommand(message);
+  if (!command || command.kind !== reported.kind) return null;
+  return [
+    `The user asked you to ${command.kind} ${JSON.stringify(command.subject)}, and the app has already handled it.`,
+    MEMORY_COMMAND_TURN_OUTCOMES[reported.status],
+    'Tell the user the outcome in one short sentence, and never describe a memory change this note does not report.',
+  ].join(' ');
 }

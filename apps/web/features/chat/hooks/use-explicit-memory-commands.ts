@@ -9,12 +9,32 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 const MEMORY_COMMANDS_PATH = '/api/memory/commands';
 const MEMORY_COMMAND_HINT = /\b(remember(?:ing)?|forget|memor(?:y|ies|i[sz]e))\b/i;
+const MEMORY_COMMAND_KIND_HINT: ReadonlyArray<[MemoryCommandKind, RegExp]> = [
+  ['forget', /\bforget\b/i],
+  ['remember', /\bremember/i],
+];
 const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
 const SETTLED_STATUSES = new Set(['stored', 'already_known', 'forgotten']);
 
+type MemoryCommandKind = 'remember' | 'forget';
+
+export type MemoryCommandStatus =
+  | 'stored'
+  | 'already_known'
+  | 'refused'
+  | 'confirmation_required'
+  | 'nothing_to_forget'
+  | 'forgotten'
+  | 'failed';
+
+export interface MemoryCommandReport {
+  kind: MemoryCommandKind;
+  status: MemoryCommandStatus;
+}
+
 interface MemoryCommandResponse {
-  command: { kind: 'remember' | 'forget'; subject: string } | null;
-  status?: string;
+  command: { kind: MemoryCommandKind; subject: string } | null;
+  status?: MemoryCommandStatus;
   message?: string;
   requiresConfirmation?: boolean;
   memories?: Array<{ id: string; content: string }>;
@@ -45,7 +65,7 @@ export function useExplicitMemoryCommands(): {
   runExplicitMemoryCommand: (
     message: string,
     scope: { conversationId: string | null; projectId: string | null },
-  ) => void;
+  ) => Promise<MemoryCommandReport | null>;
   memoryCommandDialog: ReactElement | null;
 } {
   const { confirm, dialog } = useConfirmAction();
@@ -65,39 +85,45 @@ export function useExplicitMemoryCommands(): {
   );
 
   const runExplicitMemoryCommand = useCallback(
-    (message: string, scope: { conversationId: string | null; projectId: string | null }) => {
-      if (!MEMORY_COMMAND_HINT.test(message)) return;
+    async (
+      message: string,
+      scope: { conversationId: string | null; projectId: string | null },
+    ): Promise<MemoryCommandReport | null> => {
+      if (!MEMORY_COMMAND_HINT.test(message)) return null;
       const request: MemoryCommandRequest = { message, ...scope };
-      void (async () => {
-        let result: MemoryCommandResponse;
-        try {
-          result = await postMemoryCommand(request);
-        } catch (error) {
-          toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
-          return;
-        }
-        if (!result.command) return;
-        const matches = result.memories ?? [];
-        if (!result.requiresConfirmation || matches.length === 0) {
-          announce(result);
-          return;
-        }
-        confirm({
-          title:
-            matches.length === 1 ? 'Forget this memory?' : `Forget ${matches.length} memories?`,
-          description: `${matches.map((memory) => `“${memory.content}”`).join(' ')} Chats stop using ${
-            matches.length === 1 ? 'it' : 'them'
-          }, and ${matches.length === 1 ? 'it' : 'they'} cannot be restored.`,
-          confirmLabel: 'Forget',
-          onConfirm: async () => {
-            try {
-              announce(await postMemoryCommand({ ...request, confirmed: true }));
-            } catch (error) {
-              toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
-            }
-          },
-        });
-      })();
+      let result: MemoryCommandResponse;
+      try {
+        result = await postMemoryCommand(request);
+      } catch (error) {
+        toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
+        const kind = MEMORY_COMMAND_KIND_HINT.find(([, pattern]) => pattern.test(message))?.[0];
+        return kind ? { kind, status: 'failed' } : null;
+      }
+      if (!result.command) return null;
+      const report: MemoryCommandReport = {
+        kind: result.command.kind,
+        status: result.status ?? 'failed',
+      };
+      const matches = result.memories ?? [];
+      if (!result.requiresConfirmation || matches.length === 0) {
+        announce(result);
+        return report;
+      }
+      confirm({
+        title: matches.length === 1 ? 'Forget this memory?' : `Forget ${matches.length} memories?`,
+        description: `${matches.map((memory) => `“${memory.content}”`).join(' ')} Chats stop using ${
+          matches.length === 1 ? 'it' : 'them'
+        }, and ${matches.length === 1 ? 'it' : 'they'} cannot be restored.`,
+        confirmLabel: 'Forget',
+        onConfirm: async () => {
+          try {
+            announce(await postMemoryCommand({ ...request, confirmed: true }));
+          } catch (error) {
+            toast.error(toUserMessage(error, MEMORY_UNAVAILABLE_MESSAGE));
+          }
+        },
+      });
+      return report;
     },
     [announce, confirm],
   );
