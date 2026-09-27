@@ -285,15 +285,35 @@ describe('getManagedModelAccess', () => {
           weekly_reset_at: '2026-07-31T20:00:00.000Z',
           flagship_weekly_usage_percentage: 5,
           flagship_weekly_reset_at: '2026-07-31T20:00:00.000Z',
+          credits: {
+            monthly: {
+              allowance: 2_000,
+              used: 740,
+              remaining: 1_260,
+              reset_at: '2026-08-01T00:00:00.000Z',
+            },
+            weekly: { allowance: 500, used: 105, remaining: 395, reset_at: null },
+            five_hour: { allowance: 50, used: 6, remaining: 44, reset_at: null },
+            flagship_weekly: null,
+            purchased: { remaining: 1_200, overage_enabled: true },
+          },
         }),
       );
 
     await expect(getManagedModelAccess('session-token')).resolves.toMatchObject({
       subscriptionTier: 'team',
       subscriptionStatus: 'active',
-      usagePercentage: 37,
-      usageResetAt: '2026-08-01T00:00:00.000Z',
-      hasUsageRemaining: true,
+      usage: {
+        plan_tier: 'team',
+        usage_percentage: 37,
+        usage_reset_at: '2026-08-01T00:00:00.000Z',
+        has_usage_remaining: true,
+        credits: {
+          monthly: { allowance: 2_000, used: 740, remaining: 1_260 },
+          flagship_weekly: null,
+          purchased: { remaining: 1_200, overage_enabled: true },
+        },
+      },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
