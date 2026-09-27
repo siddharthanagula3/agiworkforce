@@ -108,6 +108,14 @@ const ADMIN_CONTROLS: ReadonlyArray<{
     external: true,
   },
   {
+    name: 'Refunds and disputes',
+    href: '/admin/refunds',
+    service: 'GET/POST /api/admin/billing-refunds',
+    detail:
+      'Refund a payment in full or in part through Stripe with a recorded reason, decide the refund requests customers filed, and see each account’s disputes and how they closed.',
+    external: true,
+  },
+  {
     name: 'Background jobs',
     href: '/operator#jobs',
     service: 'GET/POST /api/admin/background-jobs',

@@ -32,6 +32,11 @@
       "reason": "Deletes the account's refund requests and detaches its disputes. Before 0299 is applied both statements see an absent table and are recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
     },
     {
+      "file": "apps/web/lib/services/billing-refund-service.ts",
+      "migration": 299,
+      "reason": "Owns billing_refund_requests and reads billing_disputes, and ships with 0299: the deploy applies 0299 before this release reaches production. Before it, a refund request or an operator lookup fails with an error and nothing is refunded."
+    },
+    {
       "file": "apps/web/lib/services/credit-service.ts",
       "migration": 300,
       "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
