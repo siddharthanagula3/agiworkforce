@@ -5,7 +5,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { logger } from '@/lib/logger';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
-import { MICROUSD_PER_CREDIT, getModelMetadataById } from '@agiworkforce/types';
+import { chargeMicrousdForProviderCost, getModelMetadataById } from '@agiworkforce/types';
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
@@ -18,11 +18,11 @@ import {
   getPlanFiveHourUsageBudgetMicrousd,
   getPlanMonthlyUsageBudgetMicrousd,
   getPlanWeeklyUsageBudgetMicrousd,
+  toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
-  unitMicrousd: MICROUSD_PER_CREDIT,
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
   fiveHourWindowHours: 5,
   weeklyBudgetMicrousd: getPlanWeeklyUsageBudgetMicrousd('free'),
@@ -46,6 +46,23 @@ export type FreeTrialReservation = {
 
 type FreeTrialSettlementOutcome = 'completed' | 'failed' | 'cancelled';
 
+export type FreeTrialCost = { tokenMicrousd: number; toolMicrousd: number };
+
+export interface FreeTrialToolSpend {
+  hold(providerMicrousd: number): boolean;
+  settle(heldMicrousd: number, spentMicrousd: number): void;
+  exhausted(): boolean;
+}
+
+type FreeTrialUsageSnapshotRow = {
+  five_hour_used_microusd: number | string;
+  weekly_used_microusd: number | string;
+  monthly_used_microusd: number | string;
+  five_hour_oldest_at: string | Date | null;
+  weekly_oldest_at: string | Date | null;
+  account_period_end: string | Date;
+};
+
 type FreeTrialReservationRow = {
   window_started_at: string | Date;
   reserved_microusd: number | string;
@@ -53,7 +70,8 @@ type FreeTrialReservationRow = {
 };
 
 type ReserveResult =
-  { ok: true; reservation: FreeTrialReservation } | { ok: false; code: 'budget_reached' };
+  | { ok: true; reservation: FreeTrialReservation }
+  | { ok: false; code: 'budget_reached'; resetAt: string | null };
 
 export type FreeTrialPublicUsage = {
   usagePercentage: number;
@@ -67,6 +85,65 @@ export type FreeTrialPublicUsage = {
   weeklyUsedMicrousd: number;
   fiveHourUsedMicrousd: number;
 };
+
+const FREE_USAGE_SNAPSHOT_SQL = `
+  with account_anchor as (
+    select created_at,
+           greatest(
+             0,
+             (extract(year from now())::integer - extract(year from created_at)::integer) * 12
+               + extract(month from now())::integer
+               - extract(month from created_at)::integer
+           ) as month_guess
+    from public.profiles
+    where id = $1
+  ),
+  account_month as (
+    select created_at,
+           greatest(
+             0,
+             month_guess - case
+               when created_at + make_interval(months => month_guess) > now() then 1
+               else 0
+             end
+           ) as elapsed_months
+    from account_anchor
+  ),
+  account_period as (
+    select created_at + make_interval(months => elapsed_months) as period_start,
+           created_at + make_interval(months => elapsed_months + 1) as period_end
+    from account_month
+  ),
+  relevant_usage as (
+    select reservation.created_at,
+           coalesce(reservation.actual_cost_microusd, reservation.reserved_microusd) as used_microusd
+    from public.free_daily_usage_reservations as reservation
+    cross join account_period
+    where reservation.user_id = $1
+      and reservation.created_at >= least(
+        now() - $3 * interval '1 hour',
+        account_period.period_start
+      )
+  )
+  select coalesce(sum(used_microusd) filter (
+           where created_at >= now() - $2 * interval '1 hour'
+         ), 0)::bigint as five_hour_used_microusd,
+         coalesce(sum(used_microusd) filter (
+           where created_at >= now() - $3 * interval '1 hour'
+         ), 0)::bigint as weekly_used_microusd,
+         coalesce(sum(used_microusd) filter (
+           where created_at >= account_period.period_start
+         ), 0)::bigint as monthly_used_microusd,
+         min(created_at) filter (
+           where created_at >= now() - $2 * interval '1 hour' and used_microusd > 0
+         ) as five_hour_oldest_at,
+         min(created_at) filter (
+           where created_at >= now() - $3 * interval '1 hour' and used_microusd > 0
+         ) as weekly_oldest_at,
+         account_period.period_end as account_period_end
+  from account_period
+  left join relevant_usage on true
+  group by account_period.period_start, account_period.period_end`;
 
 type FreeTrialBudgetResult =
   { ok: true; maxOutputTokens: number } | { ok: false; code: 'budget_reached' };
@@ -91,30 +168,27 @@ export function fitFreeTrialOutputBudget(input: {
   model: string;
   estimatedInputTokens: number;
   requestedMaxOutputTokens: number;
-  priorCostDollars?: number;
+  priorCostMicrousd?: number;
 }): FreeTrialBudgetResult {
   const promptTokens = toNonNegativeInteger(input.estimatedInputTokens);
-  const priorCostDollars = Number.isFinite(input.priorCostDollars)
-    ? Math.max(0, input.priorCostDollars ?? 0)
-    : 0;
+  const priorCostMicrousd = nonNegativeMicrousd(input.priorCostMicrousd);
   const requestedMaxOutputTokens = toNonNegativeInteger(input.requestedMaxOutputTokens);
   if (requestedMaxOutputTokens === 0) {
     return { ok: false, code: 'budget_reached' };
   }
-  if (input.reservation.unmetered && !input.reservation.eventBudget) {
+  if (input.reservation.unmetered) {
     return { ok: true, maxOutputTokens: requestedMaxOutputTokens };
   }
   if (input.reservation.reservedMicrousd <= 0) return { ok: false, code: 'budget_reached' };
 
   const costFor = (nextOutputTokens: number): number =>
-    Math.ceil(
-      (priorCostDollars +
-        LLMCostCalculator.calculateCostDollars(input.provider, input.model, {
+    chargeMicrousdForProviderCost(
+      priorCostMicrousd +
+        LLMCostCalculator.calculateCostMicrousd(input.provider, input.model, {
           promptTokens,
           completionTokens: nextOutputTokens,
           totalTokens: promptTokens + nextOutputTokens,
-        })) *
-        1_000_000,
+        }),
     );
 
   if (costFor(1) > input.reservation.reservedMicrousd) {
@@ -144,7 +218,7 @@ export function applyFreeTrialProviderBudget(input: {
     max_tokens: number;
     usePromptCache?: boolean;
   };
-  priorCostDollars?: number;
+  priorCostMicrousd?: number;
 }): FreeTrialBudgetResult {
   const result = fitFreeTrialOutputBudget({
     reservation: input.reservation,
@@ -156,13 +230,70 @@ export function applyFreeTrialProviderBudget(input: {
       tools: input.request.tools,
     }),
     requestedMaxOutputTokens: input.request.max_tokens,
-    priorCostDollars: input.priorCostDollars,
+    priorCostMicrousd: input.priorCostMicrousd,
   });
   if (result.ok) {
     input.request.max_tokens = result.maxOutputTokens;
     input.request.usePromptCache = false;
   }
   return result;
+}
+
+export function freeTrialSpendMicrousd(
+  reservation: FreeTrialReservation,
+  cost: FreeTrialCost,
+): number {
+  return (
+    (reservation.unmetered ? 0 : nonNegativeMicrousd(cost.tokenMicrousd)) +
+    nonNegativeMicrousd(cost.toolMicrousd)
+  );
+}
+
+export function createFreeTrialToolSpend(input: {
+  reservation: FreeTrialReservation;
+  spent: () => FreeTrialCost;
+  record: (spentMicrousd: number) => void;
+}): FreeTrialToolSpend {
+  let heldMicrousd = 0;
+  let exhausted = false;
+  return {
+    hold(providerMicrousd) {
+      const spent = input.spent();
+      const committed = freeTrialSpendMicrousd(input.reservation, {
+        tokenMicrousd: spent.tokenMicrousd,
+        toolMicrousd: spent.toolMicrousd + heldMicrousd + nonNegativeMicrousd(providerMicrousd),
+      });
+      if (chargeMicrousdForProviderCost(committed) > input.reservation.reservedMicrousd) {
+        exhausted = true;
+        return false;
+      }
+      heldMicrousd += nonNegativeMicrousd(providerMicrousd);
+      return true;
+    },
+    settle(released, spentMicrousd) {
+      heldMicrousd = Math.max(0, heldMicrousd - nonNegativeMicrousd(released));
+      input.record(nonNegativeMicrousd(spentMicrousd));
+    },
+    exhausted: () => exhausted,
+  };
+}
+
+export function fitsFreeTrialWindow(providerMicrousd: number): boolean {
+  const { fiveHourBudgetMicrousd, weeklyBudgetMicrousd, monthlyBudgetMicrousd } =
+    FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  return (
+    chargeMicrousdForProviderCost(providerMicrousd) <=
+    Math.min(fiveHourBudgetMicrousd, weeklyBudgetMicrousd, monthlyBudgetMicrousd)
+  );
+}
+
+export function freeTrialRetryAfterSeconds(
+  resetAt: string | null,
+  nowMs: number = Date.now(),
+): number | undefined {
+  const resetMs = resetAt ? Date.parse(resetAt) : Number.NaN;
+  if (!Number.isFinite(resetMs)) return undefined;
+  return Math.max(1, Math.ceil((resetMs - nowMs) / 1_000));
 }
 
 export function buildFreeWebsiteSubscription(userId: string): SubscriptionInfo {
@@ -191,7 +322,7 @@ export function isFreePlanTier(planTier: string | null | undefined): boolean {
  *
  * An active event promotion answers yes for the models it covers. The
  * promotion widens which models a Free account may name and remains bounded by
- * its shared event ceiling; permanently free models have no account meter.
+ * its shared event ceiling and by the account's Free windows.
  */
 export function isFreeTrialRequest(params: {
   requestedModel: string;
@@ -219,22 +350,132 @@ export function isEventPromotedRequest(params: {
   return eventAllowsModel(requestedModel, params.planTier);
 }
 
-export async function getFreeTrialPublicUsage(
-  _db: DatabaseAdapter,
-  _userId: string,
-): Promise<FreeTrialPublicUsage> {
+function usageFromSnapshot(snapshot: FreeTrialUsageSnapshotRow): {
+  fiveHourUsed: number;
+  weeklyUsed: number;
+  monthlyUsed: number;
+} {
   return {
-    usagePercentage: 0,
-    resetAt: null,
-    sessionUsagePercentage: 0,
-    sessionResetAt: null,
-    weeklyUsagePercentage: 0,
-    weeklyResetAt: null,
-    hasUsageRemaining: true,
-    monthlyUsedMicrousd: 0,
-    weeklyUsedMicrousd: 0,
-    fiveHourUsedMicrousd: 0,
+    fiveHourUsed: toNonNegativeInteger(snapshot.five_hour_used_microusd),
+    weeklyUsed: toNonNegativeInteger(snapshot.weekly_used_microusd),
+    monthlyUsed: toNonNegativeInteger(snapshot.monthly_used_microusd),
   };
+}
+
+function remainingFromSnapshot(snapshot: FreeTrialUsageSnapshotRow): number {
+  const { fiveHourBudgetMicrousd, weeklyBudgetMicrousd, monthlyBudgetMicrousd } =
+    FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const { fiveHourUsed, weeklyUsed, monthlyUsed } = usageFromSnapshot(snapshot);
+  return Math.max(
+    0,
+    Math.min(
+      fiveHourBudgetMicrousd - fiveHourUsed,
+      weeklyBudgetMicrousd - weeklyUsed,
+      monthlyBudgetMicrousd - monthlyUsed,
+    ),
+  );
+}
+
+function bindingResetAt(snapshot: FreeTrialUsageSnapshotRow): string | null {
+  const {
+    fiveHourBudgetMicrousd,
+    fiveHourWindowHours,
+    weeklyBudgetMicrousd,
+    weeklyWindowHours,
+    monthlyBudgetMicrousd,
+  } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const { fiveHourUsed, weeklyUsed, monthlyUsed } = usageFromSnapshot(snapshot);
+  const windows = [
+    {
+      remaining: fiveHourBudgetMicrousd - fiveHourUsed,
+      resetAt: getRollingResetAt(snapshot.five_hour_oldest_at, fiveHourWindowHours),
+    },
+    {
+      remaining: weeklyBudgetMicrousd - weeklyUsed,
+      resetAt: getRollingResetAt(snapshot.weekly_oldest_at, weeklyWindowHours),
+    },
+    {
+      remaining: monthlyBudgetMicrousd - monthlyUsed,
+      resetAt: toIsoTimestamp(snapshot.account_period_end),
+    },
+  ];
+  const least = Math.min(...windows.map((window) => window.remaining));
+  return windows
+    .filter((window) => window.remaining === least)
+    .map((window) => window.resetAt)
+    .filter((reset): reset is string => reset !== null)
+    .reduce<string | null>(
+      (latest, reset) => (latest === null || reset > latest ? reset : latest),
+      null,
+    );
+}
+
+async function readFreeUsageSnapshot(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<FreeTrialUsageSnapshotRow | undefined> {
+  const { fiveHourWindowHours, weeklyWindowHours } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const [snapshot] = await db.query<FreeTrialUsageSnapshotRow>(FREE_USAGE_SNAPSHOT_SQL, [
+    userId,
+    fiveHourWindowHours,
+    weeklyWindowHours,
+  ]);
+  return snapshot;
+}
+
+export async function getFreeTrialPublicUsage(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<FreeTrialPublicUsage> {
+  const {
+    fiveHourBudgetMicrousd,
+    fiveHourWindowHours,
+    weeklyBudgetMicrousd,
+    weeklyWindowHours,
+    monthlyBudgetMicrousd,
+  } = FREE_TRIAL_INTERNAL_USAGE_POLICY;
+  const snapshot = await readFreeUsageSnapshot(db, userId);
+
+  if (!snapshot) {
+    return {
+      usagePercentage: 0,
+      resetAt: null,
+      sessionUsagePercentage: 0,
+      sessionResetAt: null,
+      weeklyUsagePercentage: 0,
+      weeklyResetAt: null,
+      hasUsageRemaining: true,
+      monthlyUsedMicrousd: 0,
+      weeklyUsedMicrousd: 0,
+      fiveHourUsedMicrousd: 0,
+    };
+  }
+
+  const { fiveHourUsed, weeklyUsed, monthlyUsed } = usageFromSnapshot(snapshot);
+
+  return {
+    usagePercentage: toPublicUsagePercentage(monthlyUsed, monthlyBudgetMicrousd),
+    resetAt: toIsoTimestamp(snapshot.account_period_end),
+    sessionUsagePercentage: toPublicUsagePercentage(fiveHourUsed, fiveHourBudgetMicrousd),
+    sessionResetAt: getRollingResetAt(snapshot.five_hour_oldest_at, fiveHourWindowHours),
+    weeklyUsagePercentage: toPublicUsagePercentage(weeklyUsed, weeklyBudgetMicrousd),
+    weeklyResetAt: getRollingResetAt(snapshot.weekly_oldest_at, weeklyWindowHours),
+    hasUsageRemaining: remainingFromSnapshot(snapshot) > 0,
+    monthlyUsedMicrousd: monthlyUsed,
+    weeklyUsedMicrousd: weeklyUsed,
+    fiveHourUsedMicrousd: fiveHourUsed,
+  };
+}
+
+export async function freeTrialResetAt(userId: string): Promise<string | null> {
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  try {
+    const snapshot = await readFreeUsageSnapshot(db, userId);
+    return snapshot ? bindingResetAt(snapshot) : null;
+  } catch (error) {
+    logger.warn({ error, userId }, 'Free-tier reset time could not be read');
+    return null;
+  }
 }
 
 export async function beginFreeTrialRequest(params: {
@@ -242,29 +483,102 @@ export async function beginFreeTrialRequest(params: {
   requestId: string;
   /** The requested model is selectable only because the event promotes it. */
   eventPromoted?: boolean;
+  freePoolRoute?: boolean;
 }): Promise<ReserveResult> {
-  const reservation: FreeTrialReservation = {
-    kind: 'free_trial',
+  const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: params.userId,
-    requestId: params.requestId,
-    reservedMicrousd: Number.MAX_SAFE_INTEGER,
-    unmetered: true,
-  };
+    organizationId: null,
+  });
+  const unmetered = params.freePoolRoute === true ? { unmetered: true as const } : {};
 
-  if (params.eventPromoted !== true) return { ok: true, reservation };
+  const userReservation = await db.transaction(async (tx): Promise<ReserveResult> => {
+    await tx.execute('insert into public.profiles (id) values ($1) on conflict (id) do nothing', [
+      params.userId,
+    ]);
 
-  // Event-only models remain bounded by the shared promotion ceiling even
-  // though Free accounts no longer carry individual usage allowances.
-  const eventReservationMicrousd = FREE_TRIAL_INTERNAL_USAGE_POLICY.monthlyBudgetMicrousd;
-  const eventBudget = await reserveEventSpend(eventReservationMicrousd);
-  if (!eventBudget) {
-    return { ok: false, code: 'budget_reached' };
+    await tx.execute(
+      `insert into public.website_auto_economy_trial_usage
+         (user_id, prompt_count, period_tokens_used, period_started_at,
+          daily_cost_microusd, daily_reserved_microusd, daily_started_at,
+          first_prompt_at, last_prompt_at)
+       values ($1, 0, 0, now(), 0, 0, now(), now(), now())
+       on conflict (user_id) do nothing`,
+      [params.userId],
+    );
+
+    const [lockedUsage] = await tx.query<{ user_id: string }>(
+      `select user_id
+       from public.website_auto_economy_trial_usage
+       where user_id = $1
+       for update`,
+      [params.userId],
+    );
+    if (!lockedUsage) throw new Error('Free-tier usage ledger unavailable');
+
+    const [existingReservation] = await tx.query<FreeTrialReservationRow>(
+      `select window_started_at, reserved_microusd, settled_at
+       from public.free_daily_usage_reservations
+       where user_id = $1 and request_id = $2
+       for update`,
+      [params.userId, params.requestId],
+    );
+    if (existingReservation) return { ok: false, code: 'budget_reached', resetAt: null };
+
+    const snapshot = await readFreeUsageSnapshot(tx, params.userId);
+    if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
+
+    const remainingMicrousd = remainingFromSnapshot(snapshot);
+    if (remainingMicrousd === 0) {
+      if (params.freePoolRoute !== true) {
+        return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
+      }
+      return {
+        ok: true,
+        reservation: {
+          kind: 'free_trial',
+          userId: params.userId,
+          requestId: params.requestId,
+          reservedMicrousd: 0,
+          ...unmetered,
+        },
+      };
+    }
+
+    const reserved = await tx.execute(
+      `insert into public.free_daily_usage_reservations
+         (user_id, request_id, window_started_at, reserved_microusd)
+       values ($1, $2, now(), $3)`,
+      [params.userId, params.requestId, remainingMicrousd],
+    );
+    if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
+
+    return {
+      ok: true,
+      reservation: {
+        kind: 'free_trial',
+        userId: params.userId,
+        requestId: params.requestId,
+        reservedMicrousd: remainingMicrousd,
+        ...unmetered,
+      },
+    };
+  });
+
+  if (
+    !userReservation.ok ||
+    params.eventPromoted !== true ||
+    userReservation.reservation.reservedMicrousd === 0
+  ) {
+    return userReservation;
   }
 
-  return {
-    ok: true,
-    reservation: { ...reservation, reservedMicrousd: eventReservationMicrousd, eventBudget },
-  };
+  const eventBudget = await reserveEventSpend(userReservation.reservation.reservedMicrousd);
+  if (!eventBudget) {
+    await settleFreeTrialRequest({ reservation: userReservation.reservation, outcome: 'failed' });
+    return { ok: false, code: 'budget_reached', resetAt: null };
+  }
+
+  return { ok: true, reservation: { ...userReservation.reservation, eventBudget } };
 }
 
 export async function settleFreeTrialRequest(params: {
@@ -273,26 +587,22 @@ export async function settleFreeTrialRequest(params: {
   provider?: string;
   model?: string;
   usage?: TokenUsage;
-  measuredCostDollars?: number;
+  cost?: FreeTrialCost;
 }): Promise<void> {
+  if (params.reservation.reservedMicrousd <= 0) return;
+
   const usage = params.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
   const tokens = Math.max(0, Math.floor(usage.totalTokens));
-  const measuredCostMicrousd = Number.isFinite(params.measuredCostDollars)
-    ? Math.ceil(Math.max(0, params.measuredCostDollars ?? 0) * 1_000_000)
-    : params.provider && params.model
-      ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
-      : 0;
-  const minimumCompletedChargeMicrousd =
-    params.outcome === 'completed' ? FREE_TRIAL_INTERNAL_USAGE_POLICY.unitMicrousd : 0;
-  if (params.reservation.unmetered) {
-    if (params.reservation.eventBudget) {
-      await settleEventSpend(
-        params.reservation.eventBudget,
-        params.outcome === 'completed' ? measuredCostMicrousd : 0,
-      );
-    }
-    return;
-  }
+  const cost = params.cost ?? {
+    tokenMicrousd:
+      params.provider && params.model
+        ? LLMCostCalculator.calculateCostMicrousd(params.provider, params.model, usage)
+        : 0,
+    toolMicrousd: 0,
+  };
+  const chargedMicrousd = chargeMicrousdForProviderCost(
+    Math.ceil(freeTrialSpendMicrousd(params.reservation, cost)),
+  );
   // Settlement is reached from stream teardown and from a durable workflow
   // step, neither of which carries the request's connection, so the scope is
   // derived from the reservation's own owner rather than left unbound.
@@ -318,7 +628,7 @@ export async function settleFreeTrialRequest(params: {
 
       const costMicrousd = Math.min(
         toNonNegativeInteger(reservation.reserved_microusd),
-        Math.max(measuredCostMicrousd, minimumCompletedChargeMicrousd),
+        chargedMicrousd,
       );
 
       await tx.execute(
@@ -379,6 +689,25 @@ export async function settleFreeTrialRequest(params: {
   if (params.reservation.eventBudget && settledCostMicrousd !== null) {
     await settleEventSpend(params.reservation.eventBudget, settledCostMicrousd);
   }
+}
+
+function toIsoTimestamp(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function getRollingResetAt(
+  oldestAt: string | Date | null | undefined,
+  windowHours: number,
+): string | null {
+  const oldestTimestamp = toIsoTimestamp(oldestAt);
+  if (!oldestTimestamp) return null;
+  return new Date(Date.parse(oldestTimestamp) + windowHours * 60 * 60 * 1_000).toISOString();
+}
+
+function nonNegativeMicrousd(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.max(0, value ?? 0) : 0;
 }
 
 function toNonNegativeInteger(value: number | string): number {

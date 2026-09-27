@@ -41,6 +41,11 @@ import {
   estimateMicrousdOf,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import {
+  hostedCodeExecutionEvidence,
+  priceServerToolUsage,
+} from '@/lib/services/managed-usage-accounting-service';
+import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
@@ -62,6 +67,11 @@ interface StreamBillingUsage {
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
   providerReportedCostUsd?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: string[];
+  providerElapsedMs?: number;
 }
 
 /**
@@ -141,30 +151,56 @@ async function settleStreamBilling(input: {
       ...(input.latencyMs !== undefined ? { latencyMs: input.latencyMs } : {}),
     });
   }
-  if (processed.freeTrial) {
-    await settleFreeTrialRequest({
-      reservation: processed.freeTrial,
-      outcome: input.outcome ?? 'completed',
-      provider,
-      model,
-      usage: {
-        promptTokens: usage.inputTokens,
-        completionTokens: usage.outputTokens,
-        totalTokens,
-        reasoningTokens: usage.reasoningOutputTokens,
-        cacheReadInputTokens: usage.cacheReadInputTokens,
-        cacheCreationInputTokens: usage.cacheCreationInputTokens,
-        cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
-      },
-    });
-    return;
-  }
-
   const billedOutcome = resolveBilledOutcome({
     ...(input.outcome === undefined ? {} : { outcome: input.outcome }),
     ...(input.cancelled === undefined ? {} : { cancelled: input.cancelled }),
     totalTokens,
   });
+  const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
+    codeExecutionRequests: usage.codeExecutionRequests,
+    codeExecutionContainerIds: usage.codeExecutionContainerIds,
+    elapsedMs: usage.providerElapsedMs,
+  });
+  const serverTools = priceServerToolUsage({
+    provider,
+    webSearchRequests: usage.webSearchRequests,
+    webFetchRequests: usage.webFetchRequests,
+    hostedCodeExecution,
+    dynamicFilteringWebTool: offersDynamicFilteringWebTool(processed.llmRequest.tools),
+  });
+
+  if (processed.freeTrial) {
+    const freeTokenUsage = {
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens,
+      reasoningTokens: usage.reasoningOutputTokens,
+      cacheReadInputTokens: usage.cacheReadInputTokens,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
+    };
+    await settleFreeTrialRequest({
+      reservation: processed.freeTrial,
+      outcome: input.outcome ?? 'completed',
+      provider,
+      model,
+      usage: freeTokenUsage,
+      cost:
+        billedOutcome === 'failed'
+          ? { tokenMicrousd: 0, toolMicrousd: 0 }
+          : {
+              tokenMicrousd: LLMCostCalculator.calculateCostMicrousd(
+                provider,
+                model,
+                freeTokenUsage,
+                undefined,
+                buildServingRouteId(provider, model),
+              ),
+              toolMicrousd: serverTools.providerMicrousd,
+            },
+    });
+    return;
+  }
 
   const reportedCostUsd = usage.providerReportedCostUsd;
   const hasReportedCost =
@@ -204,11 +240,13 @@ async function settleStreamBilling(input: {
         'Ignored provider-reported cost outside the catalog sanity band',
       );
     }
-    providerCostMicrousd = reportedAdmitted
+    const tokenProviderCostMicrousd = reportedAdmitted
       ? reportedCostMicrousdFromUsd(reportedCostUsd as number)
       : estimateCostMicrousd;
+    providerCostMicrousd = tokenProviderCostMicrousd + serverTools.providerMicrousd;
     billedCostMicrousd =
-      LLMCostCalculator.calculateListCostMicrousd(model, tokenUsage) ?? providerCostMicrousd;
+      (LLMCostCalculator.calculateListCostMicrousd(model, tokenUsage) ??
+        tokenProviderCostMicrousd) + serverTools.chargeMicrousd;
     costSource = reportedAdmitted ? 'provider_reported' : 'estimated';
   } else {
     providerCostMicrousd = estimateMicrousdOf(processed);
@@ -229,6 +267,9 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
+        ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
+        ...(usage.webFetchRequests ? { webFetchRequests: usage.webFetchRequests } : {}),
+        ...(hostedCodeExecution ? { hostedCodeExecution } : {}),
         ...(totalTokens > 0 && billedOutcome !== 'failed' ? { costSource } : {}),
         ...compactionUsageFields(processed.contextTrim),
         ...buildCpstUsageFields(processed, {
@@ -318,6 +359,11 @@ export async function buildStreamResponse(
   let cacheReadInputTokens: number | undefined;
   let cacheCreationInputTokens: number | undefined;
   let cacheCreation1hInputTokens: number | undefined;
+  let reportedWebSearchRequests = 0;
+  let answeredWebSearches = 0;
+  let webFetchRequests = 0;
+  let codeExecutionRequests = 0;
+  const codeExecutionContainerIds = new Set<string>();
   let buffer = '';
   let hasTerminalSentinel = false;
   const encoder = new TextEncoder();
@@ -345,6 +391,32 @@ export async function buildStreamResponse(
 
           try {
             const event = JSON.parse(jsonStr);
+
+            if (event.type === 'message_start' && event.message?.container?.id) {
+              codeExecutionContainerIds.add(event.message.container.id);
+            }
+            if (event.type === 'message_delta' && event.delta?.container?.id) {
+              codeExecutionContainerIds.add(event.delta.container.id);
+            }
+            if (
+              event.type === 'content_block_start' &&
+              event.content_block?.type === 'web_search_tool_result' &&
+              Array.isArray(event.content_block.content)
+            ) {
+              answeredWebSearches += 1;
+            }
+            const serverToolUse = event.usage?.server_tool_use;
+            if (serverToolUse) {
+              reportedWebSearchRequests = Math.max(
+                reportedWebSearchRequests,
+                serverToolUse.web_search_requests || 0,
+              );
+              webFetchRequests = Math.max(webFetchRequests, serverToolUse.web_fetch_requests || 0);
+              codeExecutionRequests = Math.max(
+                codeExecutionRequests,
+                serverToolUse.code_execution_requests || 0,
+              );
+            }
 
             if (event.type === 'message_start' && event.message?.usage) {
               inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
@@ -723,6 +795,11 @@ export async function buildStreamResponse(
             cacheReadInputTokens,
             cacheCreationInputTokens,
             cacheCreation1hInputTokens,
+            webSearchRequests: Math.min(reportedWebSearchRequests, answeredWebSearches),
+            webFetchRequests,
+            codeExecutionRequests,
+            codeExecutionContainerIds: [...codeExecutionContainerIds],
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
         });
       } catch (reconciliationError) {
@@ -1007,6 +1084,11 @@ export async function buildAdapterStreamResponse(
               cacheCreationInputTokens: usage.cacheCreationInputTokens,
               cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
               providerReportedCostUsd: usage.providerReportedCostUsd,
+              webSearchRequests: usage.webSearchRequests,
+              webFetchRequests: usage.webFetchRequests,
+              codeExecutionRequests: usage.codeExecutionRequests,
+              codeExecutionContainerIds: usage.codeExecutionContainerIds,
+              providerElapsedMs: Date.now() - streamStartedAt,
             },
             outcome: 'failed',
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -1114,6 +1196,11 @@ export async function buildAdapterStreamResponse(
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
             providerReportedCostUsd: usage.providerReportedCostUsd,
+            webSearchRequests: usage.webSearchRequests,
+            webFetchRequests: usage.webFetchRequests,
+            codeExecutionRequests: usage.codeExecutionRequests,
+            codeExecutionContainerIds: usage.codeExecutionContainerIds,
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
@@ -1228,6 +1315,11 @@ export async function buildAdapterStreamResponse(
             cacheCreationInputTokens: usage.cacheCreationInputTokens,
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
             providerReportedCostUsd: usage.providerReportedCostUsd,
+            webSearchRequests: usage.webSearchRequests,
+            webFetchRequests: usage.webFetchRequests,
+            codeExecutionRequests: usage.codeExecutionRequests,
+            codeExecutionContainerIds: usage.codeExecutionContainerIds,
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
           outcome: 'failed',
           cancelled: true,
