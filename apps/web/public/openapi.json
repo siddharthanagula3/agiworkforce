@@ -921,6 +921,135 @@
             "type": "integer"
           }
         }
+      },
+      "AccountUsageTotals": {
+        "type": "object",
+        "required": ["requests", "inputTokens", "outputTokens", "credits"],
+        "properties": {
+          "requests": {
+            "type": "integer"
+          },
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "credits": {
+            "type": "number",
+            "description": "Credits charged, to two decimal places"
+          }
+        }
+      },
+      "AccountUsageBreakdownRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          {
+            "type": "object",
+            "required": ["key", "label"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Workload, model id or project id"
+              },
+              "label": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        ]
+      },
+      "AccountUsageHistory": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "granularity",
+          "totals",
+          "periods",
+          "byWorkload",
+          "byModel",
+          "byProject",
+          "freshness"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": ["day", "week", "month"]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["start", "requests", "credits"],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "credits": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "byWorkload": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by product area, including research"
+          },
+          "byModel": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            }
+          },
+          "byProject": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by project; turns outside a project are not included"
+          },
+          "freshness": {
+            "type": "object",
+            "required": ["asOf", "latestActivityAt", "unsettledRequests"],
+            "properties": {
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "latestActivityAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "unsettledRequests": {
+                "type": "integer"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -1788,8 +1917,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true
+                  "$ref": "#/components/schemas/AccountUsageHistory"
                 }
               }
             }

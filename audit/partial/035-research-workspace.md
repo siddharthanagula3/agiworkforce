@@ -371,14 +371,11 @@ Code: `apps/web/features/chat/components/research/ResearchReportView.tsx:467-470
 
 - Done when: The user can see how much research allowance (runs/credits) remains before starting.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No research-specific allowance is shown; a run only reports the credits it spent after finishing, and the composer shows the web-search allowance, not research runs left. | ui |
-| desktop | partial | Same as web (hosted): No research-specific allowance is shown; a run only reports the credits it spent after finishing, and the composer shows the web-search allowance, not research runs left. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/research/ResearchActivity.tsx:211-212`, `apps/web/app/api/web-search/allowance/route.ts:19-19`
