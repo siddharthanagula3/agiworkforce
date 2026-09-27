@@ -263,8 +263,10 @@ impl HttpConn {
         if !self.hooks.browser.is_interactive() {
             return Err(TransportFault::AuthorizationRequired {
                 server,
+                url: self.url.clone(),
                 status,
                 method: method.to_string(),
+                challenged_scope: parse_insufficient_scope(www_authenticate),
             }
             .into());
         }

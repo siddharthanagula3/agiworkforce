@@ -46,6 +46,17 @@ impl McpError {
             Some(TransportFault::AuthorizationRequired { .. })
         )
     }
+
+    pub fn step_up_scope(&self) -> Option<(&str, &str)> {
+        match fault(self.as_anyhow()) {
+            Some(TransportFault::AuthorizationRequired {
+                url,
+                challenged_scope: Some(scope),
+                ..
+            }) => Some((url, scope)),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Error)]
@@ -81,8 +92,10 @@ pub(crate) enum TransportFault {
     )]
     AuthorizationRequired {
         server: String,
+        url: String,
         status: u16,
         method: String,
+        challenged_scope: Option<String>,
     },
 }
 
