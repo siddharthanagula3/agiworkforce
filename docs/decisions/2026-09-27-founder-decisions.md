@@ -23,11 +23,11 @@ The founder's billing decisions of 2026-09-27, in the shape of
   at its price, with Pro's allowances, until the customer changes or cancels
   it. Nobody is moved, so no customer's price changes and the 30-day notice in
   section 10 of the terms is not triggered. No new yearly purchase of an
-  individual plan is possible. What a yearly subscriber sees, in Settings >
-  Billing, the plan change previews and the changelog: "If you already pay
-  yearly for Pro, nothing changes. Your subscription keeps its price and renews
-  yearly until you switch to monthly or cancel. Once you switch to monthly,
-  yearly billing is no longer available for that plan."
+  individual plan is possible. What a yearly subscriber sees in Settings >
+  Billing and the plan change previews: "If you already pay yearly for Pro,
+  nothing changes. Your subscription keeps its price and renews yearly until
+  you switch to monthly or cancel. Once you switch to monthly, yearly billing
+  is no longer available for that plan."
 - The paths open to a yearly subscriber: renewal stays yearly; upgrading to
   Max 5x or Max 20x moves the subscription to that plan's monthly price at
   once, with the usual proration preview and the unused part of the year
@@ -64,7 +64,7 @@ The founder's billing decisions of 2026-09-27, in the shape of
     catalog has no yearly product (`packages/contracts/types/src/mobile-iap.ts`);
   - `grandfatheredYearlyBillingNotice` in
     `packages/contracts/types/src/billing-plan-catalog.ts` is the one source of
-    the notice, and the 2026-09-27 changelog entry repeats it
+    the notice, and the 2026-09-27 changelog entry announces the change
     (`apps/web/lib/changelog-entries.ts`);
   - founder: archive the yearly Pro Price in Stripe, which stops new use while
     existing subscriptions keep renewing on it, and remove it from the billing
