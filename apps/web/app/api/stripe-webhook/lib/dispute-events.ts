@@ -1,11 +1,11 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import type { Stripe } from '@/lib/stripe-types';
 import { recordNotification } from '@/lib/services/notification-service';
 import { toStoredSubscriptionStatus } from './subscription-status';
 
@@ -75,16 +75,10 @@ interface DisputeParties {
   userId: string | null;
 }
 
-async function resolveParties(
-  db: DatabaseAdapter,
-  stripe: Stripe,
-  dispute: Stripe.Dispute,
-): Promise<DisputeParties> {
-  const chargeId = chargeIdOf(dispute);
-  const charge = await stripe.charges.retrieve(chargeId);
+async function resolveParties(db: DatabaseAdapter, charge: Stripe.Charge): Promise<DisputeParties> {
   const stripeCustomerId = customerIdOf(charge.customer);
   const userId = stripeCustomerId ? await findAccountByCustomer(db, stripeCustomerId) : null;
-  return { chargeId, stripeCustomerId, userId };
+  return { chargeId: charge.id, stripeCustomerId, userId };
 }
 
 async function recordDispute(
@@ -115,8 +109,8 @@ async function recordDispute(
 
 export async function handleDisputeCreated(
   db: DatabaseAdapter,
-  stripe: Stripe,
   dispute: Stripe.Dispute,
+  charge: Stripe.Charge,
 ): Promise<void> {
   logger.warn(
     {
@@ -128,7 +122,7 @@ export async function handleDisputeCreated(
     'CRITICAL: Charge dispute created - requires immediate attention',
   );
 
-  const parties = await resolveParties(db, stripe, dispute);
+  const parties = await resolveParties(db, charge);
   const row = await recordDispute(db, dispute, parties);
   if (!row || row.revoked_at || row.outcome !== 'open') {
     logger.info(
@@ -216,7 +210,7 @@ async function recordDisputeOpenedBeforeTracking(
   stripe: Stripe,
   dispute: Stripe.Dispute,
 ): Promise<DisputeRow | null> {
-  const parties = await resolveParties(db, stripe, dispute);
+  const parties = await resolveParties(db, await stripe.charges.retrieve(chargeIdOf(dispute)));
   await recordDispute(db, dispute, parties);
 
   const [deduction] = parties.userId

@@ -210,5 +210,7 @@
   "usageExplainer": "Chaque formule payante inclut des crédits sur trois périodes : toutes les 5 heures, par semaine et par mois. {{baseline}} inclut {{fiveHour, number}} crédits toutes les 5 heures, {{weekly, number}} par semaine et {{monthly, number}} par mois, et un multiplicateur comme 5x s'applique aux trois périodes de cette allocation.",
   "flagshipShare": "À partir de {{baseline}}, les modèles les plus performants peuvent utiliser jusqu'à {{percent}} % des crédits de chaque semaine.",
   "switchToPlanCta": "Passer à {{plan}}",
-  "downgradeScheduledToast": "Votre formule passe à {{plan}} le {{date}}."
+  "downgradeScheduledToast": "Votre formule passe à {{plan}} le {{date}}.",
+  "pricingFootnote": "Les prix affichés n'incluent pas les taxes applicables. Les paiements ne sont pas remboursables, sauf si notre politique de remboursement en dispose autrement ou si la loi locale l'exige.",
+  "refundPolicyLink": "Politique de remboursement"
 }

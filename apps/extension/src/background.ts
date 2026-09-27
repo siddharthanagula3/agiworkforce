@@ -4997,6 +4997,12 @@ async function handleChatMessage(
             });
             await delivery?.onRunReference?.(cloudRun);
           },
+          onQuotaWarning: (quotaWarning) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              quotaWarning,
+            }),
         }),
         getAuthToken: async () => credential.token,
       },
@@ -5030,6 +5036,7 @@ async function handleChatMessage(
           ? { errorRetryAfterSeconds: result.retryAfterSeconds }
           : {}),
         ...(result.requestId !== undefined ? { errorRequestId: result.requestId } : {}),
+        ...(result.quota ? { errorQuota: result.quota } : {}),
         ...(result.routing ? { routing: result.routing } : {}),
       });
     }
@@ -5273,6 +5280,12 @@ async function handleResolveChatApproval(
                 cloudRun,
               });
             },
+            onQuotaWarning: (quotaWarning) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                quotaWarning,
+              }),
           },
         ),
         getAuthToken: async () => credential.token,
@@ -5298,6 +5311,7 @@ async function handleResolveChatApproval(
           ? { errorRetryAfterSeconds: result.retryAfterSeconds }
           : {}),
         ...(result.requestId !== undefined ? { errorRequestId: result.requestId } : {}),
+        ...(result.quota ? { errorQuota: result.quota } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
     }
@@ -5329,10 +5343,7 @@ function mapInPagePromptFailure(
         'Managed Cloud chat is not available for this AGI account.',
       );
     case 'quota_exceeded':
-      return inPagePromptFailure(
-        'quota_exceeded',
-        'Your shared AGI Managed Cloud usage limit has been reached.',
-      );
+      return inPagePromptFailure('quota_exceeded', result.message);
     case 'account_unavailable':
       return inPagePromptFailure('account_unavailable', result.message, true);
     case 'rate_limited':

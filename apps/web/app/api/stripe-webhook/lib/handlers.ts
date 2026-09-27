@@ -13,7 +13,13 @@ import {
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
+import { handleAutoReloadEvent } from './auto-reload-events';
 import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
+import {
+  handleReferralChargeReversal,
+  handleReferralInvoicePaid,
+  notifyTrialEnding,
+} from './referral-events';
 import { handleChargeRefunded } from './refund-events';
 import {
   endEnterpriseContractIfPresent,
@@ -71,6 +77,7 @@ export async function dispatchStripeEvent(
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
+  if (await handleAutoReloadEvent(db, event)) return;
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -158,8 +165,12 @@ export async function dispatchStripeEvent(
         });
       }
       await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
+      await handleReferralInvoicePaid(db, stripe, invoice);
       break;
     }
+    case 'customer.subscription.trial_will_end':
+      await notifyTrialEnding(db, stripe, event.data.object as Stripe.Subscription);
+      break;
     case 'invoice.created':
     case 'invoice.finalized':
     case 'invoice.updated':
@@ -294,12 +305,21 @@ export async function dispatchStripeEvent(
       });
       break;
     }
-    case 'charge.refunded':
-      await handleChargeRefunded(db, stripe, event.data.object as Stripe.Charge);
+    case 'charge.refunded': {
+      const charge = event.data.object as Stripe.Charge;
+      await handleReferralChargeReversal(db, stripe, charge, 'refund');
+      await handleChargeRefunded(db, stripe, charge);
       break;
-    case 'charge.dispute.created':
-      await handleDisputeCreated(db, stripe, event.data.object as Stripe.Dispute);
+    }
+    case 'charge.dispute.created': {
+      const dispute = event.data.object as Stripe.Dispute;
+      const charge = await stripe.charges.retrieve(
+        typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id,
+      );
+      await handleReferralChargeReversal(db, stripe, charge, 'dispute');
+      await handleDisputeCreated(db, dispute, charge);
       break;
+    }
     case 'charge.dispute.updated':
     case 'charge.dispute.closed':
     case 'charge.dispute.funds_reinstated':

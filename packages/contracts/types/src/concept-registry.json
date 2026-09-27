@@ -1039,9 +1039,21 @@
       "label": "Credit bucket",
       "schema": "packages/contracts/types/src/credits.ts",
       "symbol": "MICROUSD_PER_CREDIT",
-      "tables": ["credit_transactions", "token_credits", "credit_idempotency_keys"],
-      "writeFunctions": [],
-      "mutators": ["apps/web/lib/services/credit-service.ts"],
+      "tables": [
+        "credit_transactions",
+        "token_credits",
+        "credit_idempotency_keys",
+        "bonus_credit_grants"
+      ],
+      "writeFunctions": [
+        "grant_bonus_credits",
+        "revoke_bonus_credit_grant",
+        "reconcile_bonus_credit_grants"
+      ],
+      "mutators": [
+        "apps/web/lib/services/credit-service.ts",
+        "apps/web/lib/services/bonus-credit-service.ts"
+      ],
       "projections": ["packages/contracts/types/src/usage-vocabulary.ts"],
       "providerCopies": [],
       "ownership": "user",
@@ -1541,8 +1553,17 @@
     },
     {
       "table": "referrals",
-      "disposition": "pre-account",
-      "why": "written before an account exists, so it has no owner to scope by and no lifecycle an owner can drive"
+      "disposition": "canonical-gap",
+      "why": "a referral is a product object both accounts see, the invite link its owner shares and each friend's progress toward a reward, and no shared contract type describes it",
+      "becomes": "referral",
+      "fix": "add packages/contracts/types/src/referral.ts exporting ReferralStatus and ReferralSummary (code, link, friends, credits earned) and register the concept over referrals and referral_codes"
+    },
+    {
+      "table": "referral_codes",
+      "disposition": "canonical-gap",
+      "why": "a referral is a product object both accounts see, the invite link its owner shares and each friend's progress toward a reward, and no shared contract type describes it",
+      "becomes": "referral",
+      "fix": "add packages/contracts/types/src/referral.ts exporting ReferralStatus and ReferralSummary (code, link, friends, credits earned) and register the concept over referrals and referral_codes"
     },
     {
       "table": "api_keys",

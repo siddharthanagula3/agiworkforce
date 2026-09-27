@@ -408,11 +408,8 @@ Code: `apps/web/app/api/settings/organization/policy/effective/route.ts:16-40`, 
 
 - Done when: An administrator issues scoped, expiring API keys that let automations perform administrative tasks through a documented API, and can revoke them.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | missing | Not built on this surface. |  |
-| api | partial | Workspace API keys reach only the audit trail, its export, legal-hold exports and the principal list; members, invitations, roles, policies, SSO and billing cannot be managed by API (SCIM covers provisioning). | api |
-
-Code: `apps/web/lib/server/service-principals/route-access.ts:14-56`, `apps/web/lib/server/compliance-caller.ts:48-64`

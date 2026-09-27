@@ -12,6 +12,8 @@ import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import {
   readAccountUsageHistory,
+  resolveUsageHistoryGranularity,
+  usageHistoryWindowStart,
   type AccountUsageHistory,
 } from '@/lib/services/account-usage-history-service';
 import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
@@ -32,13 +34,18 @@ async function handler(request: NextRequest) {
   }
 
   const params = new URL(request.url).searchParams;
-  const window = resolveUsageWindow(params.get('from'), params.get('to'));
+  const granularity = resolveUsageHistoryGranularity(params.get('granularity'));
+  const window = resolveUsageWindow(
+    params.get('from') ?? usageHistoryWindowStart(granularity).toISOString(),
+    params.get('to'),
+  );
 
   try {
     const history: AccountUsageHistoryResponse = await readAccountUsageHistory(
       scoped.db,
       scoped.userId,
       window,
+      granularity,
     );
     return NextResponse.json(history);
   } catch (error) {

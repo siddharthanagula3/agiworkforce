@@ -15,6 +15,7 @@ import {
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { formatObjective, SLO_CATALOGUE } from '@/lib/server/slo/catalogue';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 
 export const metadata = buildMetadata({
   title: 'SLA',
@@ -53,9 +54,18 @@ const SERVICE_LEVELS: readonly LedgerRow[] = SLO_CATALOGUE.map((slo) => ({
   quiet: slo.source === null,
 }));
 
+const INDIVIDUAL_PLAN_LABELS = new Intl.ListFormat('en', {
+  style: 'long',
+  type: 'conjunction',
+}).format(
+  (['free', 'basic', 'pro', 'max', 'max_15x'] as const).map(
+    (plan) => BILLING_PLAN_PRICING[plan].label,
+  ),
+);
+
 const RESPONSE: readonly LedgerRow[] = [
   {
-    label: 'Free, Basic, Pro, and Max (5x and 15x)',
+    label: INDIVIDUAL_PLAN_LABELS,
     value: 'Help centre and email · no response-time commitment',
   },
   {

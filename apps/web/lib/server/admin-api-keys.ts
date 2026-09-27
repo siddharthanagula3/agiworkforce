@@ -4,8 +4,13 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  canonicalOrganizationPermission,
+  canonicalOrganizationPermissions,
+  expandOrganizationPermissions,
+  GRANTABLE_CANONICAL_PERMISSIONS,
   GRANTABLE_ORGANIZATION_PERMISSIONS,
   isOrganizationPermission,
+  type CanonicalOrganizationPermission,
   type OrganizationPermission,
 } from '@agiworkforce/types';
 
@@ -73,7 +78,7 @@ function present(row: AdminApiKeyRow): AdminApiKey {
     organizationId: row.organization_id,
     name: row.name,
     keyPrefix: row.key_prefix,
-    scopes: row.scopes.filter(isOrganizationPermission),
+    scopes: canonicalOrganizationPermissions(row.scopes),
     servicePrincipalId: row.service_principal_id,
     createdBy: row.created_by,
     createdAt: toIso(row.created_at) ?? '',
@@ -103,21 +108,22 @@ export function generateAdminApiKey(): { key: string; prefix: string } {
 export function grantableKeyScopes(
   requested: readonly string[],
   creatorPermissions: ReadonlySet<OrganizationPermission>,
-): { scopes: OrganizationPermission[]; refused: string[] } {
-  const scopes: OrganizationPermission[] = [];
+): { scopes: CanonicalOrganizationPermission[]; refused: string[] } {
+  const scopes = new Set<CanonicalOrganizationPermission>();
   const refused: string[] = [];
   for (const scope of new Set(requested)) {
+    const canonical = canonicalOrganizationPermission(scope);
     if (
-      isOrganizationPermission(scope) &&
-      GRANTABLE_ORGANIZATION_PERMISSIONS.includes(scope) &&
-      creatorPermissions.has(scope)
+      canonical &&
+      GRANTABLE_CANONICAL_PERMISSIONS.includes(canonical) &&
+      creatorPermissions.has(canonical)
     ) {
-      scopes.push(scope);
+      scopes.add(canonical);
     } else {
       refused.push(scope);
     }
   }
-  return { scopes: scopes.sort(), refused };
+  return { scopes: [...scopes].sort(), refused };
 }
 
 export async function createAdminApiKey(
@@ -209,9 +215,7 @@ export async function verifyAdminApiKey(
   if (stored.length !== presented.length || !timingSafeEqual(stored, presented)) return null;
   // The key's scopes are bounded by the principal's ceiling at every call, not
   // only at creation, so narrowing a principal narrows keys already in the wild.
-  const ceiling = new Set(
-    (row.principal_max_scopes ?? []).filter(isOrganizationPermission).filter(isGrantable),
-  );
+  const ceiling = expandOrganizationPermissions(row.principal_max_scopes ?? []);
   return {
     kind: 'service_principal',
     principalId: row.service_principal_id,
@@ -219,7 +223,7 @@ export async function verifyAdminApiKey(
     organizationId: row.organization_id,
     name: row.principal_name ?? '',
     scopes: new Set(
-      row.scopes
+      [...expandOrganizationPermissions(row.scopes)]
         .filter(isOrganizationPermission)
         .filter(isGrantable)
         .filter((scope) => ceiling.has(scope)),

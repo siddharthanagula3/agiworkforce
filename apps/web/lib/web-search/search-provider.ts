@@ -77,13 +77,14 @@ export interface WebSearchProviderItem {
 }
 
 export type WebSearchProviderOutcome =
-  | { ok: true; items: WebSearchProviderItem[] }
+  | { ok: true; items: WebSearchProviderItem[]; billableCalls: number }
   | {
       ok: false;
       errorCode: WebSearchProviderErrorCode;
       error: string;
       status?: number;
       retryable?: boolean;
+      billableCalls: number;
     };
 
 export interface WebSearchProviderRequest {
@@ -95,15 +96,6 @@ export interface WebSearchProviderRequest {
   signal?: AbortSignal;
 }
 
-export interface WebSearchCostInput {
-  userId: string;
-  organizationId: string | null;
-  turnRef: string;
-  calls: number;
-  surface: string | null;
-  customerChargeCents: number | null;
-}
-
 export interface WebSearchProvider {
   readonly id: string;
   readonly delivery: SourceDelivery;
@@ -111,8 +103,6 @@ export interface WebSearchProvider {
   readonly host?: string;
   isConfigured(overrides?: { apiKey?: string }): boolean;
   search(request: WebSearchProviderRequest): Promise<WebSearchProviderOutcome>;
-  /** Present when the provider bills per call, so the caller never names a vendor. */
-  recordCost?(input: WebSearchCostInput): Promise<void>;
 }
 
 export function registerWebSearchProvider(provider: WebSearchProvider): void {

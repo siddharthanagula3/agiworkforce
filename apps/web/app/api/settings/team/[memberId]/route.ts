@@ -2,25 +2,20 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { OrganizationPermission } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { deprovisionMember } from '@/lib/services/deprovision-service';
-import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
+import { changeMemberRole, removeMember } from '@/lib/services/organization-member-admin-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { requireTeamAdminAccess } from '../team-admin-access';
-import { assertMembershipRoleWithinActor } from '../membership-role-ceiling';
 import { getIdentityProvider } from '@/lib/server/identity';
-import { assertOwnerProtection, type OwnerAction } from '@/lib/services/organization-delegation';
 
 const MEMBER_ID_RE = /^([0-9a-f-]{36}):(.+)$/;
 
@@ -34,68 +29,6 @@ function parseMemberId(raw: string): { organizationId: string; userId: string } 
     throw createError.validation('memberId must be in the format "<organizationId>:<userId>"');
   }
   return { organizationId: match[1]!, userId: match[2]! };
-}
-
-interface RequesterAccess {
-  member: OrganizationMemberRow;
-  permissions: ReadonlySet<OrganizationPermission>;
-}
-
-async function requireAdminAccess(
-  db: ReturnType<typeof getNeonDb>,
-  organizationId: string,
-  requesterId: string,
-): Promise<RequesterAccess> {
-  const [row] = await db.query<OrganizationMemberRow>(
-    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-     from public.organization_members
-     where organization_id = $1 and user_id = $2
-     limit 1`,
-    [organizationId, requesterId],
-  );
-
-  if (!row) {
-    throw createError.forbidden('You are not a member of this organization');
-  }
-  const permissions = await requireMemberPermission(
-    organizationId,
-    requesterId,
-    'members.manage',
-    'Your workspace role does not allow managing team members.',
-  );
-  return { member: row, permissions };
-}
-
-/**
- * The owner invariant for both flows. The advisory lock the caller already
- * holds is what makes the count trustworthy: two simultaneous demotions
- * serialize on it, so the second one sees the first one's result.
- */
-async function assertOwnerInvariant(
-  db: ReturnType<typeof getNeonDb>,
-  organizationId: string,
-  requester: Pick<OrganizationMemberRow, 'role'>,
-  target: Pick<OrganizationMemberRow, 'role'>,
-  nextRole: OrganizationMemberRow['role'] | null,
-): Promise<void> {
-  if (target.role !== 'owner' || nextRole === 'owner') {
-    return;
-  }
-
-  const [countRow] = await db.query<{ owner_count: string }>(
-    `select count(*)::text as owner_count
-     from public.organization_members
-     where organization_id = $1 and role = 'owner'`,
-    [organizationId],
-  );
-
-  const action: OwnerAction = nextRole === null ? 'remove' : 'demote';
-  assertOwnerProtection({
-    actorRole: requester.role,
-    targetRole: target.role,
-    ownerCount: Number.parseInt(countRow?.owner_count ?? '0', 10),
-    action,
-  });
 }
 
 async function handleRemove(
@@ -114,44 +47,11 @@ async function handleRemove(
 
   await requireTeamAdminAccess(db, requesterId, organizationId);
 
-  const removedRole = await withSeatAccountingErrors(() =>
-    db.transaction(async (tx) => {
-      await tx.query(
-        `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
-        [organizationId],
-      );
-
-      const { member: requester } = await requireAdminAccess(tx, organizationId, requesterId);
-
-      if (targetUserId === requesterId) {
-        throw createError.validation(
-          'You cannot remove yourself. Use the leave organization flow.',
-        );
-      }
-
-      const [targetRow] = await tx.query<OrganizationMemberRow>(
-        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-       from public.organization_members
-       where organization_id = $1 and user_id = $2
-       limit 1`,
-        [organizationId, targetUserId],
-      );
-
-      if (!targetRow) {
-        throw createError.notFound('Member not found in this organization');
-      }
-
-      await assertOwnerInvariant(tx, organizationId, requester, targetRow, null);
-
-      await tx.execute(
-        `delete from public.organization_members
-       where organization_id = $1 and user_id = $2`,
-        [organizationId, targetUserId],
-      );
-
-      return targetRow.role;
-    }),
-  );
+  const removedRole = await removeMember(db, {
+    organizationId,
+    administrator: { kind: 'member', userId: requesterId },
+    targetUserId,
+  });
 
   await invalidateActiveOrganizationCache(targetUserId);
 
@@ -222,58 +122,13 @@ async function handleUpdateRole(
 
   await requireTeamAdminAccess(db, requesterId, organizationId);
 
-  const previousRole = await withSeatAccountingErrors(() =>
-    db.transaction(async (tx) => {
-      await tx.query(
-        `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
-        [organizationId],
-      );
-
-      const { member: requester, permissions } = await requireAdminAccess(
-        tx,
-        organizationId,
-        requesterId,
-      );
-
-      if (newRole === 'owner') {
-        throw createError.conflict(
-          'An organization has exactly one owner. Use POST /api/settings/organization/transfer-ownership to move ownership.',
-        );
-      }
-
-      await assertMembershipRoleWithinActor({
-        organizationId,
-        actorUserId: requesterId,
-        subject: targetUserId,
-        actorPermissions: permissions,
-        role: newRole,
-        request,
-      });
-
-      const [targetRow] = await tx.query<OrganizationMemberRow>(
-        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-       from public.organization_members
-       where organization_id = $1 and user_id = $2
-       limit 1`,
-        [organizationId, targetUserId],
-      );
-
-      if (!targetRow) {
-        throw createError.notFound('Member not found in this organization');
-      }
-
-      await assertOwnerInvariant(tx, organizationId, requester, targetRow, newRole);
-
-      await tx.execute(
-        `update public.organization_members
-       set role = $1
-       where organization_id = $2 and user_id = $3`,
-        [newRole, organizationId, targetUserId],
-      );
-
-      return targetRow.role;
-    }),
-  );
+  const previousRole = await changeMemberRole(db, {
+    organizationId,
+    administrator: { kind: 'member', userId: requesterId },
+    targetUserId,
+    role: newRole,
+    request,
+  });
 
   await invalidateActiveOrganizationCache(targetUserId);
 

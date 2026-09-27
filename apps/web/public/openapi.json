@@ -3,7 +3,7 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_\u2026`/`sk_test_\u2026`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
+    "description": "OpenAI-compatible inference gateway, the billing and device-authorization endpoints the first-party apps use, and the workspace administration API.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nThree credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_\u2026`/`sk_test_\u2026`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`. A workspace API key (`agiadm_\u2026`, issued in the workspace console under Audit > Workspace API keys) works only on the workspace administration operations that declare `WorkspaceApiKeyAuth`. Every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/standards/api-rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
       "email": "contact@agiworkforce.com",
@@ -31,6 +31,11 @@
         "type": "http",
         "scheme": "bearer",
         "description": "AGI API key (`sk_live_\u2026` / `sk_test_\u2026`) issued under Settings > API Keys. Scopes are chosen at issue time; an operation lists the one it needs in `x-agi-api-key-scope` and answers 403 `insufficient_scope` without it."
+      },
+      "WorkspaceApiKeyAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Workspace API key (`agiadm_\u2026`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
       }
     },
     "schemas": {
@@ -160,6 +165,15 @@
               "code": {
                 "type": "string",
                 "nullable": true
+              },
+              "resets_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "On a plan-limit refusal, when the refusing window resets: the oldest usage leaving a rolling 5-hour or weekly window, the end of the billing period, or the start of the next month for a monthly allowance."
+              },
+              "alternative_model": {
+                "type": "string",
+                "description": "On a plan-limit refusal, a model the caller's plan can use now: a standard model when a flagship limit refused, or a free-pool model when a usage window or the billing period refused. Absent when none is eligible."
               }
             }
           }
@@ -921,6 +935,481 @@
             "type": "integer"
           }
         }
+      },
+      "AccountUsageTotals": {
+        "type": "object",
+        "required": ["requests", "inputTokens", "outputTokens", "credits"],
+        "properties": {
+          "requests": {
+            "type": "integer"
+          },
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "credits": {
+            "type": "number",
+            "description": "Credits charged, to two decimal places"
+          }
+        }
+      },
+      "AccountUsageBreakdownRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          {
+            "type": "object",
+            "required": ["key", "label"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Workload, model id or project id"
+              },
+              "label": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        ]
+      },
+      "AccountUsageHistory": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "granularity",
+          "totals",
+          "periods",
+          "byWorkload",
+          "byModel",
+          "byProject",
+          "freshness"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": ["day", "week", "month"]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["start", "requests", "credits"],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "credits": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "byWorkload": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by product area, including research"
+          },
+          "byModel": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            }
+          },
+          "byProject": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by project; turns outside a project are not included"
+          },
+          "freshness": {
+            "type": "object",
+            "required": ["asOf", "latestActivityAt", "unsettledRequests"],
+            "properties": {
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "latestActivityAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "unsettledRequests": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "WorkspaceApiError": {
+        "type": "object",
+        "description": "Error envelope of the workspace administration endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "For example `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `IP_NOT_ALLOWED`, `SUBSCRIPTION_REQUIRED`, `NOT_FOUND`, `CONFLICT`, `TIMEOUT` or `SERVICE_UNAVAILABLE`."
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "description": "The fields a 400 rejected, when the request failed validation.",
+                    "nullable": true
+                  }
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "`CSRF_VALIDATION_FAILED` when a browser session sent no valid `x-csrf-token`."
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "WorkspaceMember": {
+        "type": "object",
+        "required": ["userId", "email", "name", "role", "status", "joinedAt", "provisioningSource"],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "enum": ["owner", "admin", "member", "viewer"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["invited", "active", "suspended", "deprovisioned"]
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "provisioningSource": {
+            "type": "string",
+            "nullable": true,
+            "description": "How the membership was created, for example `manual`, `invitation` or `scim`. A SCIM-provisioned member is managed by the directory."
+          }
+        }
+      },
+      "WorkspaceMemberList": {
+        "type": "object",
+        "required": ["data", "hasMore", "firstId", "lastId"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMember"
+            }
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "Whether another page follows this one."
+          },
+          "firstId": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Pass as `afterId` to read the next page."
+          }
+        }
+      },
+      "WorkspaceMemberRoleUpdate": {
+        "type": "object",
+        "required": ["role"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": ["owner", "admin", "member", "viewer"]
+          }
+        }
+      },
+      "WorkspaceMemberRemoval": {
+        "type": "object",
+        "required": ["userId", "removed", "previousRole", "revoked", "warnings"],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "removed": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "previousRole": {
+            "type": "string",
+            "enum": ["owner", "admin", "member", "viewer"]
+          },
+          "revoked": {
+            "type": "object",
+            "required": ["sessions", "deviceTokens", "apiKeys"],
+            "properties": {
+              "sessions": {
+                "type": "integer"
+              },
+              "deviceTokens": {
+                "type": "integer"
+              },
+              "apiKeys": {
+                "type": "integer"
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Credentials that could not be revoked. The member is out of the workspace either way."
+          }
+        }
+      },
+      "WorkspaceInvitation": {
+        "type": "object",
+        "required": [
+          "id",
+          "organizationId",
+          "email",
+          "role",
+          "status",
+          "invitedByUserId",
+          "expiresAt",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organizationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "member", "viewer"]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "accepted", "declined", "revoked", "expired"]
+          },
+          "invitedByUserId": {
+            "type": "string",
+            "description": "The member who sent it, or `service_principal:<id>` when a workspace API key did."
+          },
+          "acceptedByUserId": {
+            "type": "string",
+            "nullable": true
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resentAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "resendCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "WorkspaceInvitationList": {
+        "type": "object",
+        "required": ["data", "hasMore", "firstId", "lastId"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceInvitation"
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "firstId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "lastId": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "Pass as `afterId` to read the next page."
+          }
+        }
+      },
+      "WorkspaceInvitationRequest": {
+        "type": "object",
+        "required": ["email"],
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 320
+          },
+          "role": {
+            "type": "string",
+            "enum": ["admin", "member", "viewer"],
+            "default": "member"
+          }
+        }
+      },
+      "WorkspaceInvitationCreated": {
+        "type": "object",
+        "required": ["invitation", "inviteToken", "delivery"],
+        "properties": {
+          "invitation": {
+            "$ref": "#/components/schemas/WorkspaceInvitation"
+          },
+          "inviteToken": {
+            "type": "string",
+            "description": "Returned once. It opens the invitation only for the invited address; deliver it yourself when `delivery.emailSent` is false."
+          },
+          "delivery": {
+            "type": "object",
+            "required": ["emailSent"],
+            "properties": {
+              "emailSent": {
+                "type": "boolean"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why no email was sent."
+              }
+            }
+          }
+        }
+      },
+      "WorkspaceUsageReport": {
+        "type": "object",
+        "required": ["data", "hasMore", "nextPage"],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["startingAt", "endingAt", "results"],
+              "properties": {
+                "startingAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "endingAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "results": {
+                  "type": "array",
+                  "description": "One row per member with settled usage that day, highest credits first. Empty on a day without usage.",
+                  "items": {
+                    "type": "object",
+                    "required": ["userId", "requests", "inputTokens", "outputTokens", "credits"],
+                    "properties": {
+                      "userId": {
+                        "type": "string"
+                      },
+                      "requests": {
+                        "type": "integer"
+                      },
+                      "inputTokens": {
+                        "type": "integer"
+                      },
+                      "outputTokens": {
+                        "type": "integer"
+                      },
+                      "credits": {
+                        "type": "number",
+                        "description": "Credits the usage consumed."
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "hasMore": {
+            "type": "boolean"
+          },
+          "nextPage": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Pass as `page`, with the same `from` and `to`, to read the next day buckets."
+          }
+        }
+      }
+    },
+    "headers": {
+      "XQuotaWarning": {
+        "description": "Sent when this request is projected to take the account to 80% or more of a usage window. Semicolon-separated fields: level (warning from 80%, critical from 95%), scope (billing_period, rolling_five_hour or rolling_weekly, whichever is fullest), used_percent after this request, and threshold_percent. Absent below 80% and on plans without usage limits.",
+        "schema": {
+          "type": "string",
+          "example": "level=warning; scope=rolling_weekly; used_percent=84; threshold_percent=80"
+        }
       }
     }
   },
@@ -1026,6 +1515,11 @@
                 "schema": {
                   "type": "string"
                 }
+              }
+            },
+            "headers": {
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
               }
             }
           },
@@ -1739,7 +2233,7 @@
     "/usage/history": {
       "get": {
         "summary": "Get managed-usage history",
-        "description": "What the calling account's managed usage went on across a window: request and cost totals, a daily series, and breakdowns by workload and by model, with how fresh the figures are. Defaults to the current billing period when no window is given.",
+        "description": "What the calling account's settled managed usage went on across a window, in credits: request and credit totals, a series by UTC day, week or month, and breakdowns by workload, by model and by project, with how fresh the figures are. Without a window it covers the last 30 days by day, the last 12 weeks by week, or the last 12 months by month.",
         "tags": ["Billing"],
         "security": [
           {
@@ -1770,11 +2264,211 @@
               "type": "string",
               "format": "date-time"
             }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "How to group the series: day (the default), week or month, in UTC",
+            "schema": {
+              "type": "string",
+              "enum": ["day", "week", "month"]
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Usage history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountUsageHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/estimate": {
+      "post": {
+        "summary": "Estimate the credits a chat completion will cost",
+        "description": "Takes the body you would send to chat completions and returns an estimated credit range, counted on the model's list price with no provider call and no charge. The minimum is the input alone and the maximum adds max_tokens of output, or the model's default output ceiling. Input tokens are estimated from the text of the messages and tools you send, so server-added instructions and images are not counted. It follows Anthropic's token counting endpoint (https://platform.claude.com/docs/en/build-with-claude/token-counting): same body as the request it estimates, an estimate rather than a bill, free and rate limited separately from completions.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "messages"],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "The model id the completion would use"
+                  },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The estimated credit range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["object", "model", "input_tokens", "max_output_tokens", "credits"],
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": ["usage.estimate"]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "input_tokens": {
+                      "type": "integer"
+                    },
+                    "max_output_tokens": {
+                      "type": "integer"
+                    },
+                    "credits": {
+                      "type": "object",
+                      "required": ["min", "max"],
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a chat completions body, or the model is unknown or has no published per-token price",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/limits": {
+      "get": {
+        "summary": "Get this month's metered allowances",
+        "description": "Voice minutes, video seconds and computer-use requests used this calendar month against the calling account's plan allowance, the images generated this month with their credits, the instant the monthly allowances reset, and how many managed responses are running now against the plan's concurrent limit. A null hard limit means the plan sets no monthly cap.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "responses": {
+          "200": {
+            "description": "This month's metered usage",
             "content": {
               "application/json": {
                 "schema": {
@@ -1810,6 +2504,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/turns/{requestId}": {
+      "get": {
+        "summary": "Get the settled cost of a request",
+        "description": "The credits a managed request settled at, looked up by the Idempotency-Key it was sent with. status is pending while the request is still running or settling, with credits null; poll until it is settled. A request that failed or was released settles at 0 credits.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "description": "The Idempotency-Key the request was sent with",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request's settlement state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["requestId", "status", "credits"],
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["settled", "pending"]
+                    },
+                    "credits": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request ID is not a valid Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No managed request with that ID exists on this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }
@@ -2154,6 +2952,811 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization/members": {
+      "get": {
+        "summary": "List workspace members",
+        "description": "Active members of the caller's workspace, ordered by user id. While `hasMore` is true, pass `lastId` as `afterId` to read the next page. `email` narrows the list to one address.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.view",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "required": false,
+            "description": "Return members after this user id",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "Only the member with this address",
+            "schema": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of members",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMemberList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is out of range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization/members/{userId}": {
+      "get": {
+        "summary": "Get a workspace member",
+        "description": "One member of the caller's workspace in any membership status. The member list returns active members only.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.view",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id, as `userId` in the member list",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The user id is empty or too long",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No member with that id in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Change a member's role",
+        "description": "Sets the member's role to `admin`, `member` or `viewer` and records `member_role_changed` in the audit trail. Ownership moves only through the transfer flow, so `owner` answers 409, and the owner's own role cannot be changed here. Only a caller who holds every permission of the admin role can grant it. A workspace API key assigns only `member` and `viewer`, and cannot change an owner, an admin, or a member whose roles grant admin permissions; make those changes in the workspace console. A browser session sends `x-csrf-token`.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.manage",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id, as `userId` in the member list",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceMemberRoleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The member with the new role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a known role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, the caller lacks a permission of the admin role it tried to grant, only an owner may change an owner, or a workspace API key tried to assign `admin` or to change an owner, an admin, or a member whose roles grant admin permissions. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No member with that id in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The role is `owner`, the change would leave the workspace without an owner, or the plan has no seat for it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a member",
+        "description": "Removes the member from the workspace, revokes the sessions, device tokens and API keys they hold for it, and records `member_removed` in the audit trail. `warnings` names any credential that could not be revoked. A caller cannot remove themselves (they leave the workspace instead), and the last owner cannot be removed. A workspace API key removes only members and viewers whose roles grant no admin permissions. A browser session sends `x-csrf-token`.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.manage",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id, as `userId` in the member list",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The member was removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMemberRemoval"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The caller tried to remove themselves",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, only an owner may remove an owner, or a workspace API key tried to remove an owner, an admin, or a member whose roles grant admin permissions. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No member with that id in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The member is the last owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization/invitations": {
+      "get": {
+        "summary": "List invitations",
+        "description": "Invitations to the caller's workspace in every status, newest first. A pending invitation past its expiry is marked `expired` before the page is read. While `hasMore` is true, pass `lastId` as `afterId` to read the next page.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.view",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "afterId",
+            "in": "query",
+            "required": false,
+            "description": "Return invitations after this invitation id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceInvitationList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is out of range, or `afterId` is not an invitation in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite someone to the workspace",
+        "description": "Creates an invitation, emails the link when email delivery is configured, and records `member_invited` in the audit trail. `invitation.expiresAt` says when the link stops working, and only the invited address can accept it. Only a caller who holds every permission of the admin role can invite an admin, and a workspace API key invites only as `member` or `viewer`. A browser session sends `x-csrf-token`.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.manage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkspaceInvitationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The invitation, its one-time token and whether the email was sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceInvitationCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The address or role is not valid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, the caller lacks a permission of the admin role it tried to grant, or a workspace API key tried to invite an admin. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The address already belongs to a member, an invitation to it is pending, or no seat is free",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization/invitations/{invitationId}": {
+      "delete": {
+        "summary": "Revoke an invitation",
+        "description": "Revokes a pending invitation so its link stops working, and records `member_removed` with reason `invitation_revoked` in the audit trail. A browser session sends `x-csrf-token`.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.members.manage",
+        "parameters": [
+          {
+            "name": "invitationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The revoked invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceInvitation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The invitation id is not a UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.manage` scope. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No invitation with that id in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The invitation is no longer pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings/organization/usage-report": {
+      "get": {
+        "summary": "Get the per-member daily usage report",
+        "description": "Settled managed usage of the caller's workspace in UTC day buckets, with one row per member per day: requests, input and output tokens, and the credits consumed. `from` and `to` snap to UTC day boundaries and may span up to 366 days; `to` defaults to now and never reaches past today. Each page holds up to `limit` buckets: while `hasMore` is true, repeat the request with `page` set to `nextPage`. A turn still in flight appears once it settles. Every page records a data access event in the audit trail.",
+        "tags": ["Workspace administration"],
+        "security": [
+          {
+            "WorkspaceApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-workspace-scope": "admin.billing.view",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "description": "Start of the report, ISO 8601 date or date-time",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "End of the report, exclusive, as an ISO 8601 date or date-time. One day is `from=2026-09-01&to=2026-09-02`.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Day buckets per page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 31,
+              "default": 7
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "The `nextPage` of the previous response",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One page of day buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceUsageReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`from` is missing or in the future, a date does not parse, the window is empty or longer than 366 days, or `page` is not a page of this report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No credential, or a workspace API key that is invalid, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.billing.view` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The report is recovering from errors; retry after the `retry-after` header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "The report took too long; narrow the window or lower `limit`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
                 }
               }
             }

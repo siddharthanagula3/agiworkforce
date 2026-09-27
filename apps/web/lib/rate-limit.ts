@@ -1300,6 +1300,29 @@ export async function acquireManagedTurnSlot(input: {
   }
 }
 
+export interface ManagedTurnSlotReading {
+  limit: number;
+  active: number;
+}
+
+export async function readManagedTurnSlots(input: {
+  userId: string;
+  planTier: string | null | undefined;
+}): Promise<ManagedTurnSlotReading | null> {
+  const limit = getPlanMaxConcurrentTurns(input.planTier);
+  if (limit === null || limit <= 0) return null;
+  const store = getKeyValueStore();
+  if (!store) return null;
+  const reading = store.batch();
+  reading.sortedRangeByScore(
+    managedTurnSlotKey(input.userId),
+    Date.now() - MANAGED_TURN_SLOT_TTL_SECONDS * MILLISECONDS_PER_SECOND,
+    Number.POSITIVE_INFINITY,
+  );
+  const [members] = await reading.exec();
+  return { limit, active: Math.min(limit, sortedMemberCount(members)) };
+}
+
 export function withRateLimitHandler<T extends unknown[]>(
   handler: (...args: T) => Promise<NextResponse>,
   key: RateLimitKey,

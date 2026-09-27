@@ -143,6 +143,11 @@
           "date": "2026-09-04",
           "digest": "870e997d7ff7d480",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-04",
+          "digest": "bdd6ccccf94669b7",
+          "note": "The plan names in the SLA now read from the plan catalog, so the $200 plan appears as Max 20x instead of Max 15x. No service commitment, credit or exclusion changed, so the effective date stays."
         }
       ]
     },

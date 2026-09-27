@@ -82,6 +82,7 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     match: /api\/cron\//,
     reason: 'cron sweeps run over every workspace by design',
   },
+
   {
     match: /lib\/services\/cloud-agent-budget\.ts$/,
     reason:
@@ -106,6 +107,13 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     reason:
       'the scheduler worker writes back to the task id it claimed from the due-set; there is no ' +
       'request workspace to constrain by',
+  },
+  {
+    match: /lib\/services\/tier-unit-quota-service\.ts$/,
+    reason:
+      'a Free daily cap limits the account, not one workspace: it counts the messages and ' +
+      'conversations the account wrote today in every workspace it holds, and each count is ' +
+      'constrained by user_id and returns only a number',
   },
 ];
 
@@ -204,6 +212,16 @@ const ALLOWLIST = [
       'routing_decision_traces table, not a weaker one. The insert is keyed by the decision id ' +
       'the host minted, and the delete is a time-based fleet sweep on the retention window run ' +
       'from the model-rollout cron, which has no caller to constrain by.',
+  },
+  {
+    match: /lib\/services\/infrastructure-allocation-service\.ts$/,
+    tables: ['infrastructure_vendor_bills'],
+    reason:
+      'the table holds one vendor bill total per month and has no tenant column to constrain ' +
+      'by: a bill is the platform paying Vercel, Neon or Clerk, not a row any account owns. ' +
+      '0303 turns RLS on and revokes app_rls as defence in depth. It is read and written only ' +
+      'by the monthly allocation cron, which has no caller to constrain by and keys every ' +
+      'write by the bill id it has just locked.',
   },
   {
     match: /lib\/server\/data-region\.ts$/,
@@ -594,6 +612,36 @@ const ALLOWLIST = [
       'reached only from api/mobile/iap/verify with userId from requireCurrentUserId (session), ' +
       'never client input; the one unscoped read, findExistingReceipt, is a global receipt-' +
       'uniqueness probe whose result is checked against that same userId before use',
+  },
+  {
+    match: /lib\/services\/referral-service\.ts$/,
+    tables: ['referrals', 'referral_codes', 'profiles'],
+    functions: ['attributeReferralSignup'],
+    reason:
+      'sign-up attribution resolves a shared referral code to the account that owns it, which is ' +
+      'the feature: the visitor holds only the code, so the owner is what the lookup finds rather ' +
+      'than a filter it can apply. The row it inserts names both accounts and is keyed by the ' +
+      'signing-up account, which the unique referred_user_id index lets exist once.',
+  },
+  {
+    match: /lib\/services\/referral-service\.ts$/,
+    tables: ['referrals'],
+    functions: ['grantDueReferralRewards', 'settleDueReferral'],
+    reason:
+      'the daily referral reward sweep, reached only from api/cron/grant-referral-rewards: it ' +
+      'selects converted referrals whose hold has passed by status and date alone, then settles ' +
+      'each by the id it selected under a row lock that re-states the status it must still be ' +
+      'in. There is no request subject; the two accounts it acts for are read from the row.',
+  },
+  {
+    match: /lib\/services\/bonus-credit-service\.ts$/,
+    tables: ['bonus_credit_grants'],
+    functions: ['expireDueBonusCredits'],
+    reason:
+      'the daily bonus credit expiry sweep, reached only from api/cron/expire-bonus-credits: it ' +
+      'lists the accounts holding grants past their expiry by date alone, then reconciles each ' +
+      'account by its own id. It would otherwise pass on the user_id it groups by, which names ' +
+      'the accounts it found rather than scoping the read to one of them.',
   },
   {
     match: /lib\/server\/copyright-notices\.ts$/,

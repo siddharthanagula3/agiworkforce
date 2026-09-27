@@ -15,8 +15,8 @@ import {
   type CloudAgentOperationOutcome,
 } from '@/lib/services/cloud-agent-execution-service';
 import {
-  calculateObservedProviderUsageCostDollars,
   finalizeObservedManagedUsage,
+  observedTurnCost,
 } from '@/lib/services/managed-usage-accounting-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
 import {
@@ -171,7 +171,7 @@ async function settleBilling(
     outcome: outcome === 'awaiting_input' || outcome === 'paused' ? 'completed' : outcome,
     provider,
     model,
-    measuredCostDollars: calculateObservedProviderUsageCostDollars(usage, { provider, model }),
+    cost: observedTurnCost(usage, { provider, model }),
     usage: {
       promptTokens: usage.inputTokens,
       completionTokens: usage.outputTokens,

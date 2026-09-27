@@ -58,7 +58,7 @@ Postgres reservation function with three simultaneous cost ceilings in
 cents: a rolling 5-hour cap, a rolling weekly cap, and a weekly cap on
 premium ("flagship") usage set to 30% of the weekly cap. Those ceilings come
 from `apps/web/lib/server/managed-usage-policy.ts`, which converts a plan's
-declared "usage unit" allowance (`apps/web/lib/billing/managed-usage-caps.ts`)
+declared "usage unit" allowance (now `packages/contracts/types/src/managed-usage-limits.ts`)
 into ledger cents at a fixed rate of 2 units per cent. Free's allowance
 converts to a $0 ceiling under this function by explicit check, because Free
 traffic does not run through this paid-budget system at all (see below). A

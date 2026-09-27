@@ -2057,6 +2057,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let mut final_incomplete: Option<crate::errors::IncompleteTurnCause> = None;
             let mut last_response = String::new();
             let mut cumulative_input_tokens = 0u32;
+            let mut managed_request_ids: Vec<String> = Vec::new();
             let mut cumulative_output_tokens = 0u32;
 
             // A route that cannot start is refused before any work is announced,
@@ -2155,6 +2156,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                             cumulative_input_tokens.saturating_add(turn.input_tokens);
                         cumulative_output_tokens =
                             cumulative_output_tokens.saturating_add(turn.output_tokens);
+                        managed_request_ids.extend(turn.managed_request_ids);
                     }
                     Err(error) => {
                         final_status = TurnStatus::Failed;
@@ -2315,6 +2317,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     output_tokens: cumulative_output_tokens,
                     error: final_error,
                     failure: final_failure,
+                    managed_request_ids,
                 },
             ) {
                 let _ = task_notifications.send(notification);

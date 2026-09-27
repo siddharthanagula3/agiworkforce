@@ -2,11 +2,13 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  BASIS_POINTS_PER_WHOLE,
   BILLING_PLAN_PRICING,
   creditsFromMicrousd,
   isBillingPlanTier,
   MICROUSD_PER_CENT,
   MICROUSD_PER_USD,
+  MOBILE_IAP_STORE_COMMISSION,
   RATE_CARD_FEATURES,
 } from '@agiworkforce/types';
 
@@ -15,8 +17,10 @@ import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { CogsCapability } from '@/lib/services/cogs-ledger-service';
 
-export const APPLE_COMMISSION_RATE = 0.3;
-export const GOOGLE_PLAY_COMMISSION_RATE = 0.15;
+export const APPLE_COMMISSION_RATE =
+  MOBILE_IAP_STORE_COMMISSION.ios.subscriptionFirstYearBasisPoints / BASIS_POINTS_PER_WHOLE;
+export const GOOGLE_PLAY_COMMISSION_RATE =
+  MOBILE_IAP_STORE_COMMISSION.android.subscriptionFirstYearBasisPoints / BASIS_POINTS_PER_WHOLE;
 
 const DAYS_PER_BILLING_MONTH = 30;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

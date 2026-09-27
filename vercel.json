@@ -23,6 +23,14 @@
       "schedule": "30 0 * * *"
     },
     {
+      "path": "/api/cron/expire-bonus-credits",
+      "schedule": "50 0 * * *"
+    },
+    {
+      "path": "/api/cron/grant-referral-rewards",
+      "schedule": "10 1 * * *"
+    },
+    {
       "path": "/api/cron/run-schedules",
       "schedule": "*/15 * * * *"
     },
@@ -45,6 +53,10 @@
     {
       "path": "/api/cron/recover-reservations",
       "schedule": "0,15,30,45 * * * *"
+    },
+    {
+      "path": "/api/cron/run-auto-reloads",
+      "schedule": "7,17,27,37,47,57 * * * *"
     },
     {
       "path": "/api/cron/purge-deleted-media",
@@ -85,6 +97,10 @@
     {
       "path": "/api/cron/expire-organization-invitations",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/expire-code-trials",
+      "schedule": "25 * * * *"
     },
     {
       "path": "/api/cron/purge-security-audit-logs",
@@ -145,6 +161,10 @@
     {
       "path": "/api/cron/roll-up-product-metrics",
       "schedule": "40 2 * * *"
+    },
+    {
+      "path": "/api/cron/allocate-infrastructure-costs",
+      "schedule": "0 6 5 * *"
     }
   ]
 }

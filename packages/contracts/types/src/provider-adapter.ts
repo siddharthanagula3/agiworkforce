@@ -311,6 +311,10 @@ export interface StreamChunkUsage {
   costUsd?: number;
   cacheDiscountUsd?: number;
   providerReportedCostUsd?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: string[];
 }
 
 /**

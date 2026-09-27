@@ -40,6 +40,7 @@
         "data_rights_requests",
         "email_preferences",
         "profiles",
+        "referral_codes",
         "referrals",
         "user_settings",
         "waitlist"
@@ -144,8 +145,10 @@
       "capabilities": ["canUseBilling"],
       "concepts": ["credit-bucket"],
       "tables": [
+        "auto_reload_settings",
         "billing_disputes",
         "billing_refund_requests",
+        "bonus_credit_grants",
         "cogs_adjustments",
         "credit_idempotency_keys",
         "credit_settlement_jobs",
@@ -171,6 +174,7 @@
       "concepts": ["usage-reservation"],
       "tables": [
         "free_daily_usage_reservations",
+        "infrastructure_vendor_bills",
         "managed_usage_request_extensions",
         "managed_usage_requests",
         "organization_usage_ledger",

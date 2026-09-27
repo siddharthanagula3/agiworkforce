@@ -180,7 +180,7 @@ export function WorkspaceApiKeys() {
     confirm({
       title: `Revoke "${apiKey.name}"?`,
       description:
-        'Every integration using this key loses access to the audit trail and exports at once. A revoked key cannot be restored; you would issue a new one and update the integration.',
+        'Every integration using this key stops working at once and can no longer read or change anything its scopes allowed. A revoked key cannot be restored; you would issue a new one and update the integration.',
       confirmLabel: 'Revoke key',
       destructive: true,
       onConfirm: () => {
@@ -211,8 +211,13 @@ export function WorkspaceApiKeys() {
         </h2>
         <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
           Keys belong to the workspace, keep working after the person who made them leaves, and can
-          do only what their permissions allow. They read the audit trail, its export and legal hold
-          exports.
+          do only what their scopes allow: read and export the audit trail, list and manage members
+          and invitations, or read the per-member usage report. A key assigns only the member and
+          viewer roles. The{' '}
+          <a href="/openapi.json" style={{ textDecoration: 'underline' }}>
+            API reference
+          </a>{' '}
+          names the scope each endpoint needs.
         </p>
       </div>
 
@@ -290,6 +295,7 @@ export function WorkspaceApiKeys() {
                   }
                 />
                 {PERMISSION_COPY[scope]}
+                <code style={{ color: 'var(--text-3)' }}>{scope}</code>
               </label>
             ))}
           </fieldset>

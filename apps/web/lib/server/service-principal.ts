@@ -2,8 +2,10 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  canonicalOrganizationPermission,
+  canonicalOrganizationPermissions,
+  expandOrganizationPermissions,
   GRANTABLE_ORGANIZATION_PERMISSIONS,
-  isOrganizationPermission,
   type OrganizationPermission,
 } from '@agiworkforce/types';
 
@@ -61,7 +63,7 @@ function present(row: ServicePrincipalRow): ServicePrincipal {
     organizationId: row.organization_id,
     name: row.name,
     description: row.description,
-    maxScopes: row.max_scopes.filter(isOrganizationPermission).sort(),
+    maxScopes: canonicalOrganizationPermissions(row.max_scopes),
     createdByUserId: row.created_by_user_id,
     createdAt: toIso(row.created_at) ?? '',
     disabledAt: toIso(row.disabled_at),
@@ -97,8 +99,12 @@ export function assertServicePrincipalScope(
   permission: OrganizationPermission,
 ): void {
   if (!identity.scopes.has(permission)) {
+    const needed = canonicalOrganizationPermission(permission) ?? permission;
+    const held = canonicalOrganizationPermissions(identity.scopes);
     throw createError
-      .forbidden(`This workspace API key is not scoped for ${permission}.`)
+      .forbidden(
+        `This workspace API key is not scoped for ${needed}. It carries ${held.join(', ') || 'no scopes'}.`,
+      )
       .asUserSafe();
   }
 }
@@ -107,7 +113,7 @@ export function boundedPrincipalScopes(
   requested: readonly OrganizationPermission[],
   maxScopes: readonly OrganizationPermission[],
 ): { scopes: OrganizationPermission[]; refused: OrganizationPermission[] } {
-  const ceiling = new Set(maxScopes);
+  const ceiling = expandOrganizationPermissions(maxScopes);
   const scopes: OrganizationPermission[] = [];
   const refused: OrganizationPermission[] = [];
   for (const scope of new Set(requested)) {
