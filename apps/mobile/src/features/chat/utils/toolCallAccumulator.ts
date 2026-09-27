@@ -128,11 +128,22 @@ export function accumulateToolCallDelta(acc: ToolCallAccumulator, delta: StreamD
       if (Array.isArray(content)) {
         const results = (content as Record<string, unknown>[])
           .filter((r) => r['type'] === 'web_search_result' && typeof r['url'] === 'string')
-          .map((r) => ({
-            url: r['url'] as string,
-            title: (r['title'] as string) || (r['url'] as string),
-            snippet: typeof r['snippet'] === 'string' ? r['snippet'] : undefined,
-          }));
+          .map((r) => {
+            const snippet =
+              typeof r['encrypted_content'] === 'string' && r['encrypted_content']
+                ? r['encrypted_content']
+                : typeof r['snippet'] === 'string'
+                  ? r['snippet']
+                  : undefined;
+            return {
+              url: r['url'] as string,
+              title: (r['title'] as string) || (r['url'] as string),
+              ...(snippet ? { snippet } : {}),
+              ...(typeof r['page_age'] === 'string' && r['page_age']
+                ? { publishedDate: r['page_age'] }
+                : {}),
+            };
+          });
         if (results.length > 0) t.searchResults = results;
       }
     }
