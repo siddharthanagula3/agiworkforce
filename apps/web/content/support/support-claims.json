@@ -1981,6 +1981,34 @@
       ]
     },
     {
+      "id": "billing-individual-plans-monthly-team-yearly",
+      "doc": "billing-and-plans",
+      "section": "Upgrading",
+      "kind": "prose",
+      "sentence": "Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed monthly or yearly.",
+      "implementation": [
+        "packages/contracts/types/src/billing-catalog.ts#planOffersBillingInterval",
+        "apps/web/lib/validations/checkout.ts#planOffersBillingInterval"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/billing-catalog.test.ts",
+          "name": "bills individual plans monthly only and Team monthly or yearly"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/validations/__tests__/checkout.seats.test.ts",
+          "name": "refuses yearly for the individual plan %s"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/pricing/page.test.tsx",
+          "name": "sells individual plans monthly only, with no annual toggle beside them"
+        }
+      ]
+    },
+    {
       "id": "billing-store-subscriptions-not-changeable-here",
       "doc": "billing-and-plans",
       "section": "Subscriptions bought in an app store",

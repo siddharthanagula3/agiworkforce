@@ -271,7 +271,7 @@
         "seats",
         "renewal"
       ],
-      "updated": "2026-09-21",
+      "updated": "2026-09-27",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
         {
@@ -286,7 +286,7 @@
           "ordinal": 1,
           "heading": "Upgrading",
           "headingPath": "Plans, upgrading, and cancelling › Upgrading",
-          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
+          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits.\n\nBasic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed\nmonthly or yearly. A yearly Pro plan bought before 27 September 2026 keeps\nrenewing yearly at its price until you change or cancel it."
         },
         {
           "id": "billing-and-plans#2",
