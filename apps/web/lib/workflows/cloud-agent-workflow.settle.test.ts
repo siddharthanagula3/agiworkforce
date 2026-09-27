@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   assistantText: vi.fn(),
   recordRunUsage: vi.fn(),
   summarize: vi.fn(),
+  observedTurnCost: vi.fn(),
 }));
 
 const db = {
@@ -45,6 +46,8 @@ vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   calculateObservedProviderUsageCostDollars: () => 0.0042,
   createObservedProviderUsage: vi.fn(),
   mergeObservedProviderUsage: vi.fn(),
+  addToolSpend: vi.fn(),
+  observedTurnCost: mocks.observedTurnCost,
 }));
 vi.mock('@/lib/services/free-trial-service', () => ({
   settleFreeTrialRequest: mocks.settleFreeTrial,
@@ -151,6 +154,7 @@ describe('durable cloud agent workflow settlement', () => {
       settlementStatus: 'succeeded',
       actualCostCents: 37,
     });
+    mocks.observedTurnCost.mockReturnValue({ tokenMicrousd: 4_200, toolMicrousd: 10_000 });
     mocks.assistantText.mockResolvedValue({
       text: 'The audit is clean.',
       lastSequence: 41,
@@ -433,6 +437,11 @@ describe('durable cloud agent workflow settlement', () => {
     it('releases the free reservation and never touches managed billing', async () => {
       await settleWorkflowInvocation(freeInput(), 'completed');
 
+      expect(mocks.observedTurnCost).toHaveBeenCalledWith(
+        expect.objectContaining({ inputTokens: 1_200, outputTokens: 340 }),
+        { provider: 'anthropic', model: 'claude-test' },
+      );
+
       expect(mocks.finalize).not.toHaveBeenCalled();
       expect(mocks.settleFreeTrial).toHaveBeenCalledTimes(1);
       expect(mocks.settleFreeTrial).toHaveBeenCalledWith({
@@ -445,7 +454,7 @@ describe('durable cloud agent workflow settlement', () => {
         outcome: 'completed',
         provider: 'anthropic',
         model: 'claude-test',
-        measuredCostDollars: 0.0042,
+        cost: { tokenMicrousd: 4_200, toolMicrousd: 10_000 },
         usage: {
           promptTokens: 1_200,
           completionTokens: 340,

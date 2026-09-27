@@ -7,7 +7,8 @@ const ANTHROPIC_ROUTE_ID = `anthropic/${ANTHROPIC_MODEL}`;
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

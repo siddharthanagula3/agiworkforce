@@ -39,7 +39,8 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
   })),
   resolveManagedQuotaRecovery: vi.fn(),
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

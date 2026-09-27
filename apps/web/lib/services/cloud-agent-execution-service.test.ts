@@ -561,6 +561,7 @@ describe('cloud agent execution service', () => {
         cache_write_tokens: '7',
         cache_write_1h_tokens: '3',
         reasoning_tokens: '11',
+        tool_spend_microusd: '0',
         provider_usage_receipts: [],
       },
     ]);
@@ -609,6 +610,7 @@ describe('cloud agent execution service', () => {
         cache_write_tokens: '0',
         cache_write_1h_tokens: '0',
         reasoning_tokens: '0',
+        tool_spend_microusd: '0',
         provider_usage_receipts: [
           {
             providerCostDollars: 0.00375,
@@ -661,6 +663,7 @@ describe('cloud agent execution service', () => {
         cache_write_tokens: '0',
         cache_write_1h_tokens: '0',
         reasoning_tokens: '0',
+        tool_spend_microusd: '0',
         provider_usage_receipts: [
           { providerCostDollars: 0.002, providerCallObservations: [observation] },
         ],
@@ -695,6 +698,7 @@ describe('cloud agent execution service', () => {
         cache_write_tokens: '0',
         cache_write_1h_tokens: '0',
         reasoning_tokens: '0',
+        tool_spend_microusd: '0',
         provider_usage_receipts: [legacyReceipt, legacyReceipt],
       },
     ]);

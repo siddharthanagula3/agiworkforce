@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -127,9 +128,9 @@ describe('plan ceilings are unchanged by the unit', () => {
   });
 
   it('holds the Pro ceilings the rolling windows are measured against', () => {
-    expect(getPlanSessionUsageCapMicrousd('pro')).toBe(500_000);
-    expect(getPlanWeeklyUsageCapMicrousd('pro')).toBe(2_500_000);
-    expect(getPlanFlagshipWeeklyUsageCapMicrousd('pro')).toBe(750_000);
+    expect(getPlanSessionUsageCapMicrousd('pro')).toBe(50 * MICROUSD_PER_CREDIT);
+    expect(getPlanWeeklyUsageCapMicrousd('pro')).toBe(500 * MICROUSD_PER_CREDIT);
+    expect(getPlanFlagshipWeeklyUsageCapMicrousd('pro')).toBe(150 * MICROUSD_PER_CREDIT);
   });
 
   it('keeps an uncapped tier uncapped and a zero-budget tier at zero', () => {
@@ -151,18 +152,45 @@ describe('overage headroom', () => {
     path.resolve(import.meta.dirname, '..', 'managed-usage-request-service.ts'),
     'utf8',
   );
+  const migrationsDir = path.resolve(import.meta.dirname, '..', '..', '..', 'db', 'neon');
+  const balanceFunction = (() => {
+    const newest = fs
+      .readdirSync(migrationsDir)
+      .filter((name) => /^\d{4}_.+\.sql$/.test(name) && !name.endsWith('.down.sql'))
+      .sort()
+      .reverse()
+      .map((name) => fs.readFileSync(path.join(migrationsDir, name), 'utf8'))
+      .find((sql) => sql.includes('function public.prepaid_credit_balances_microusd('));
+    if (!newest) throw new Error('No migration defines prepaid_credit_balances_microusd');
+    const start = newest.indexOf('function public.prepaid_credit_balances_microusd(');
+    return newest.slice(start, newest.indexOf('$$;', start));
+  })();
 
-  it('is the lesser of what is left and what was purchased, never more, in microUSD', () => {
-    expect(requestService).toContain('greatest(');
-    expect(requestService).toContain(
-      'least(\n                  credits.credits_allocated_microusd - credits.credits_used_microusd,\n                  credits.top_up_allocated_microusd\n                ), 0) as headroom_microusd',
+  it('reads the headroom past the plan windows from the prepaid balance owner', () => {
+    expect(requestService).toContain('balances.overage_headroom_microusd as headroom_microusd');
+    expect(requestService).toContain('from public.prepaid_credit_balances_microusd($1::text) balances');
+  });
+
+  it('never lets the plan allowance fund purchased headroom', () => {
+    expect(balanceFunction).toMatch(
+      /least\(\s*account_row\.purchased_allocated,\s*greatest\(account_row\.remaining \+ in_flight\.amount, 0\)\s*\) as purchased/,
     );
-    // A plan allowance the customer did not buy must never fund overage.
-    expect(requestService).not.toContain('credits_allocated_microusd as headroom_microusd');
+    expect(balanceFunction).not.toContain('credits_allocated_microusd as headroom_microusd');
+  });
+
+  it('counts purchased credits only on an account that opted in to spend them', () => {
+    expect(balanceFunction).toContain('bool_or(subscription_row.overage_enabled)');
+    expect(balanceFunction).toMatch(
+      /greatest\(drawn\.bonus - drawn\.in_flight, 0\)\s*\+ case\s*when drawn\.overage_enabled then greatest\(drawn\.purchased - drawn\.purchased_draw, 0\)\s*else 0\s*end/,
+    );
   });
 
   it('treats an unreadable headroom as none rather than as unlimited', () => {
-    expect(requestService).toContain('Overage headroom lookup failed; treating as no headroom');
-    expect(requestService).toMatch(/catch \(error\) \{[\s\S]{0,220}return 0;/);
+    expect(requestService).toContain(
+      'Reservation ledger lookup failed; treating as no headroom on the current catalog',
+    );
+    expect(requestService).toMatch(
+      /catch \(error\) \{[\s\S]{0,260}return \{ topUpHeadroomMicrousd: 0, catalogVersion: null \};/,
+    );
   });
 });
