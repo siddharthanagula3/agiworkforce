@@ -131,45 +131,29 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 - Done when: Before a send is approved, the approval names exactly who will receive it.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
-| desktop | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
-| mobile | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 | cli | partial | MCP tools that send messages (Slack, email servers) ask for approval, but recipients appear only inside the raw argument preview; the approval does not call out who will receive it. | ui |
 | vscode | partial | MCP tools that send messages ask for approval through the local runtime, but recipients appear only inside the raw argument detail; the approval does not call out who will receive it. | ui |
 | chrome | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:513-514`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`, `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/bubbles.ts:537-537`
 
 ## S59.15: Exact amount or purchase.
 
 - Done when: Before a payment or purchase is approved, the approval shows the exact amount and what is bought.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
-| desktop | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
-| mobile | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
 | cli | partial | Payment or store MCP servers (Stripe, Shopify) can be added, and their calls ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | vscode | partial | Payment or store MCP servers can run through the local runtime and ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | chrome | partial | The browser agent can click a Buy button on a site; its approval card describes the click, not the amount. | ui |
 
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:513-514`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:86-90`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`, `apps/cli/src/agent/tools.rs:116-139`
-
-## S59.18: Proposed-diff preview.
-
-- Done when: Before a file edit is approved, the user sees the proposed diff.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows the edit arguments as text; there is no rendered diff before approving. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
 
 ## S59.19: Allow action.
 
@@ -203,13 +187,13 @@ Code: `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:328-334`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only desktop-companion approvals take a rejection reason; cloud chat approvals are Allow/Deny with no guidance. | ui |
+| mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
 | cli | partial | The overlay answers No or Deny All; the user cannot attach guidance to a denial (they must type a new message after the turn). | ui |
 | vscode | partial | Cloud-run approvals accept guidance, but local runtime approvals are once/session/deny/abort only. | ui |
 | chrome | partial | Chrome approvals are Approve/Decline only. | ui |
 | api | partial | The resume route accepts guidance with decisions but is undocumented in openapi.json. | api |
 
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:79-80`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
 
 ## S59.23: Approval expiration.
 
@@ -280,18 +264,6 @@ Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`, `apps/web/lib/
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `apps/web/lib/services/cloud-agent-run-service.ts:1389-1393`, `apps/mobile/services/notificationCategories.ts:10-16`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:415-421`
-
-## S59.28: Stronger confirmation for sensitive operations.
-
-- Done when: Sensitive or irreversible actions get a stronger confirmation than routine ones (warning, no permanent allow, re-ask).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Web now flags a trifecta re-ask as high risk on the approval card; mobile cloud approvals still look the same whatever the risk, and mobile shows a risk badge only on companion approvals. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
 
 ## S59.29: User takeover.
 

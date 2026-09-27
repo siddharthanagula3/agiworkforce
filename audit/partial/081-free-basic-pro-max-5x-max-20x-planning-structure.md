@@ -66,18 +66,6 @@ Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:298-300`, `apps
 
 Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `apps/web/app/api/llm/v1/chat/completions/lib/auth-gate.ts:71-101`
 
-## S81.12: Separate context limits.
-
-- Done when: Each plan has its own context-size limit, stated to users and enforced per request.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Define and state a per-plan context limit; today context differs only indirectly through which models a plan may use (the long-context slot is Pro and above), and pricing says nothing about context size. | ui, handler |
-| desktop | partial | Same as web (hosted web app): no per-plan context limit is defined or shown. | ui, handler |
-
-Code: `packages/contracts/types/src/model-catalog.ts:1142-1153`, `packages/contracts/types/src/model-catalog.ts:1169-1180`
-
 ## S81.14: Separate generation settings.
 
 - Done when: Plans differ in generation settings (e.g. reasoning effort, manual model choice), the UI shows the gated options, and the server clamps requests to the plan.
@@ -87,18 +75,6 @@ Code: `packages/contracts/types/src/model-catalog.ts:1142-1153`, `packages/contr
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
-
-## S81.17: Monthly and annual billing choices.
-
-- Done when: Users can choose monthly or annual billing where a plan offers both, with the annual saving shown and checkout charging the chosen cadence.
-- Wave: 2
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only Team sells both cadences now; individual plans are monthly only (D-2026-09-27-01). Cadence choice works for Team, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
-| desktop | partial | Only Team sells both cadences now; individual plans are monthly only (D-2026-09-27-01). Cadence choice works for Team, but the upgrade-waitlist gate (hasBillingWaitlistAccess, a beta_redemptions row) still blocks first purchases while the owner keeps it on. | flag-off |
-
-Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/lib/validations/checkout.ts:11-29`, `apps/web/lib/server/localized-pricing-service.ts:34-40`, `apps/web/app/api/checkout/route.ts:208-221`
 
 ## S81.18: Trial entitlements.
 
@@ -147,28 +123,26 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/we
 
 - Done when: Users can opt in to spending purchased credits past a plan limit (overage), off by default, and overage use is accounted separately from the plan windows.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Ship pending migration 0281: until then an admitted overage turn is not classified, so its reservation and later reconciliation rows can push rolling plan usage down (even below zero) and let plan allowance be spent after limits should bind. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Same as web (hosted web app): overage toggle works but correct window accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | cli | partial | Migration 0281 is now applied in production (2026-09-27). Still open: CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 | vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:1091-1129`, `apps/web/app/api/billing/overage/route.ts:73-85`, `apps/web/lib/services/managed-usage-request-service.ts:425-445`, `apps/web/db/neon/0281_managed_usage_overage_classification.sql:1-27`
+Code: `apps/cli/src/usage_summary.rs:317-328`, `apps/extension-vscode/src/data/usageMeter.ts:220-223`
 
 ## S81.23: Upgrade effective time.
 
 - Done when: An upgrade takes effect at a stated time (immediately), with the charge and the new renewal date shown before confirming.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Fix copy that contradicts the charge: tier upgrades restart the billing cycle (billing_cycle_anchor now), but /upgrade says 'you only pay the difference for the rest of this billing period' and the fallback dialog says 'your renewal date stays the same'. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, flag-off |
-| desktop | partial | Same as web (hosted web app). Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | ui, flag-off |
-| mobile | partial | Mobile cannot upgrade in-app, and its info block tells Stripe subscribers an upgrade keeps the renewal date, which the web upgrade does not do. | ui, flag-off |
+| mobile | partial | Mobile copy now says an upgrade starts a new billing period that day; upgrading in the app still needs FEATURES.billing and MOBILE_IAP_ENABLED, which the lead switches on at run end. | flag-off |
 
-Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/stripe-plan-change.ts:50-78`, `apps/web/app/api/upgrade/route.ts:273-283`, `apps/web/features/billing/components/UpgradeOrderPanel.tsx:289-292`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:388-388`
 
 ## S81.28: Plan-specific feature explanations.
 
