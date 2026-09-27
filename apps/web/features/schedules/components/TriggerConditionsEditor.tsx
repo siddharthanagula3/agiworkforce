@@ -277,5 +277,3 @@ export function TriggerConditionsEditor({
     </fieldset>
   );
 }
-
-export default TriggerConditionsEditor;
