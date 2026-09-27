@@ -175,12 +175,10 @@ class ErrorBoundary extends Component<Props, State> {
           aria-live="assertive"
           aria-atomic="true"
         >
-          <div className="mx-4 max-w-lg rounded-lg border border-red-200 bg-white p-8 shadow-lg dark:border-red-800 dark:bg-gray-800">
+          <div className="mx-4 max-w-lg rounded-lg border border-red-200 bg-white p-8 shadow-e3 dark:border-red-800 dark:bg-gray-800">
             <div className="mb-4 flex items-center gap-3">
               <AlertCircle className="h-8 w-8 text-red-500" aria-hidden="true" />
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Something went wrong
-              </h1>
+              <h1 className="text-h1 text-gray-900 dark:text-white">Something went wrong</h1>
             </div>
 
             <p className="mb-4 text-gray-600 dark:text-gray-300">
@@ -280,7 +278,7 @@ export class ChatErrorBoundary extends ErrorBoundary {
         <div className="flex flex-col items-center justify-center h-full p-8 bg-neutral-950 text-white">
           <div className="flex items-center gap-3 mb-4">
             <AlertTriangle className="w-8 h-8 text-amber-500" />
-            <h2 className="text-xl font-semibold">Chat Error</h2>
+            <h2 className="text-h2">Chat Error</h2>
           </div>
           <p className="text-neutral-400 text-center mb-6 max-w-md">
             The chat interface encountered an error. Your conversation history is safe. Click below

@@ -856,7 +856,7 @@ export function AutomationBuilder() {
       {/* Toolbar */}
       <div className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
         <Calendar className="h-4 w-4 text-primary" />
-        <h2 className="text-sm font-semibold text-foreground">Automation Triggers</h2>
+        <h2 className="text-h5 text-foreground">Automation Triggers</h2>
         <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
           {triggers.length}
         </span>

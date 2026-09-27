@@ -51,7 +51,7 @@ function ComparisonColumn({
             className={`h-6 w-6 ${color === 'primary' ? 'text-primary' : 'text-muted-foreground'}`}
           />
         </div>
-        <h3 className="text-lg font-semibold">{title}</h3>
+        <h3 className="text-h3">{title}</h3>
       </div>
 
       <div className="space-y-3">

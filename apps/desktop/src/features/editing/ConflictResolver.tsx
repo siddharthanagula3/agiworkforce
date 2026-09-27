@@ -64,7 +64,7 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <AlertTriangle className="h-5 w-5 text-warning-text" />
-          <h3 className="text-lg font-semibold">Merge Conflicts</h3>
+          <h3 className="text-h3">Merge Conflicts</h3>
           <Badge variant="destructive">
             {fileConflicts.length} conflict{fileConflicts.length !== 1 ? 's' : ''}
           </Badge>

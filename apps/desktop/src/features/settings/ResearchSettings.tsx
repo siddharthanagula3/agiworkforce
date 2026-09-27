@@ -194,7 +194,7 @@ export function ResearchSettings() {
           <FlaskConical className="h-5 w-5" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">Deep Research</h3>
+          <h3 className="text-h3">Deep Research</h3>
           <p className="text-sm text-muted-foreground">
             Configure multi-source research powered by Perplexity AI
           </p>
