@@ -12,6 +12,9 @@ export interface CloudMemoryEntry {
   updatedAt: string;
   serverVersion?: string;
   isDeleted: boolean;
+  origin?: string | null;
+  sourceConversationId?: string | null;
+  sourceConversationTitle?: string | null;
 }
 
 interface CloudMemoryState {

@@ -246,20 +246,18 @@ async function collectConversations(): Promise<DsarConversation[]> {
   const result: DsarConversation[] = [];
   for (const conv of all) {
     const msgs = await getMessagesForConversation(conv.id, { limit: 10_000 });
-    const dsarMessages: DsarMessage[] = msgs.map(
-      (m: Message): DsarMessage => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        mode: m.mode,
-        provider: m.provider,
-        model: m.model,
-        tokens_in: m.tokens_in,
-        tokens_out: m.tokens_out,
-        duration_ms: m.duration_ms,
-        created_at: tsToIso(m.created_at),
-      }),
-    );
+    const dsarMessages: DsarMessage[] = msgs.map((m: Message): DsarMessage => ({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      mode: m.mode,
+      provider: m.provider,
+      model: m.model,
+      tokens_in: m.tokens_in,
+      tokens_out: m.tokens_out,
+      duration_ms: m.duration_ms,
+      created_at: tsToIso(m.created_at),
+    }));
 
     const marked_transcript = buildMarkedTranscript(dsarMessages);
 
@@ -282,31 +280,27 @@ async function collectConversations(): Promise<DsarConversation[]> {
 }
 
 async function collectMemoryFacts(): Promise<DsarMemoryFact[]> {
-  const facts = await listMemoryFacts({ limit: 10_000 });
-  return facts.map(
-    (f: MemoryFact): DsarMemoryFact => ({
-      id: f.id,
-      fact: f.fact,
-      source_conversation_id: f.source_conversation_id,
-      pinned: f.pinned,
-      created_at: tsToIso(f.created_at),
-    }),
-  );
+  const facts = await listMemoryFacts({ limit: 10_000, includeReplaced: true });
+  return facts.map((f: MemoryFact): DsarMemoryFact => ({
+    id: f.id,
+    fact: f.fact,
+    source_conversation_id: f.source_conversation_id,
+    pinned: f.pinned,
+    created_at: tsToIso(f.created_at),
+  }));
 }
 
 async function collectInstalledModels(): Promise<DsarInstalledModel[]> {
   const models = await listInstalledModels();
-  return models.map(
-    (m: InstalledModel): DsarInstalledModel => ({
-      id: m.id,
-      display_name: m.display_name,
-      runtime: m.runtime,
-      format: m.format,
-      size_bytes: m.size_bytes,
-      installed_at: tsToIso(m.installed_at),
-      last_used_at: m.last_used_at ? tsToIso(m.last_used_at) : null,
-    }),
-  );
+  return models.map((m: InstalledModel): DsarInstalledModel => ({
+    id: m.id,
+    display_name: m.display_name,
+    runtime: m.runtime,
+    format: m.format,
+    size_bytes: m.size_bytes,
+    installed_at: tsToIso(m.installed_at),
+    last_used_at: m.last_used_at ? tsToIso(m.last_used_at) : null,
+  }));
 }
 
 function collectComplianceLedger(): DsarComplianceLedger {

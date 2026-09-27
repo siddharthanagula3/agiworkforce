@@ -223,12 +223,14 @@ export function SettingsRow({
   value,
   onPress,
   isLast,
+  destructive,
 }: {
   label: string;
   icon: LucideIcon;
   value?: string;
   onPress?: () => void;
   isLast?: boolean;
+  destructive?: boolean;
 }) {
   const colors = useThemeColors();
   const content = (
@@ -243,8 +245,15 @@ export function SettingsRow({
         borderBottomColor: colors.border,
       }}
     >
-      <Icon size={19} color={colors.textSecondary} />
-      <Text numberOfLines={1} style={{ flex: 1, color: colors.textPrimary, fontSize: 15 }}>
+      <Icon size={19} color={destructive ? colors.agentError : colors.textSecondary} />
+      <Text
+        numberOfLines={1}
+        style={{
+          flex: 1,
+          color: destructive ? colors.agentError : colors.textPrimary,
+          fontSize: 15,
+        }}
+      >
         {label}
       </Text>
       {value ? (
@@ -252,7 +261,7 @@ export function SettingsRow({
           {value}
         </Text>
       ) : null}
-      {onPress ? <ChevronRight size={17} color={colors.textMuted} /> : null}
+      {onPress && !destructive ? <ChevronRight size={17} color={colors.textMuted} /> : null}
     </View>
   );
 
