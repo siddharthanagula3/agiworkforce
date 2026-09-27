@@ -423,7 +423,7 @@ function purchasedRow(purchased: AccountCredits['purchased']): { value: string; 
   }
   return {
     value: purchased.remaining > 0 ? formatCreditAmount(purchased.remaining) : 'None',
-    detail: 'Purchased credits do not expire.',
+    detail: "Purchased credits don't expire.",
   };
 }
 
