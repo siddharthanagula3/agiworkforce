@@ -40,6 +40,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   accountScopedUiStateKey,
@@ -49,6 +50,15 @@ import {
 } from '@/src/features/auth/services/accountScopedUiState';
 
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
+
+function describeMemoryScope(isCloud: boolean, workspaceName: string | null | undefined): string {
+  if (!isCloud) return 'Stored on this device only, outside any account or workspace.';
+  if (workspaceName === undefined) return 'Saved to your AGI Cloud account.';
+  if (workspaceName === null) {
+    return 'Your personal memories. Memories saved in a workspace stay in that workspace.';
+  }
+  return `Memories for the ${workspaceName} workspace. They are never read in your personal chats.`;
+}
 
 function formatCount(n: number): string {
   if (n === 1) return '1 memory';
@@ -151,6 +161,27 @@ export default function MemoryScreen() {
 
   const memoryFreshness = useMemo(() => describeMemoryFreshness(entries), [entries]);
 
+  const [workspaceName, setWorkspaceName] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    setWorkspaceName(undefined);
+    if (!currentIsCloud || screenScopeKey === 'unavailable') return;
+    const controller = new AbortController();
+    fetchWorkspaceOverview(controller.signal)
+      .then((overview) => {
+        if (controller.signal.aborted) return;
+        if (!overview.activeWorkspaceId) {
+          setWorkspaceName(null);
+          return;
+        }
+        const active = overview.workspaces.find(
+          (workspace) => workspace.id === overview.activeWorkspaceId,
+        );
+        setWorkspaceName(active?.name ?? overview.workspace?.name ?? 'active');
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [currentIsCloud, screenScopeKey]);
+
   const localConversations = useChatMessageStore((state) => state.conversations);
   const cloudConversations = useChatCloudMessageStore((state) => state.conversations);
   const conversationTitles = useMemo(() => {
@@ -218,7 +249,13 @@ export default function MemoryScreen() {
     Alert.alert(
       'Reset memory?',
       currentIsCloud
-        ? 'This permanently deletes every memory saved to your AGI Cloud account, on every device. Your chats are not deleted. This cannot be undone.'
+        ? `This permanently deletes every memory ${
+            workspaceName
+              ? `for the ${workspaceName} workspace`
+              : workspaceName === null
+                ? 'in your personal AGI Cloud memory'
+                : 'in this AGI Cloud memory'
+          }, on every device. Your chats are not deleted. This cannot be undone.`
         : 'This permanently deletes every memory saved on this device. Your chats are not deleted. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -232,7 +269,7 @@ export default function MemoryScreen() {
         },
       ],
     );
-  }, [currentIsCloud, isScopeCurrent, resetMemories]);
+  }, [currentIsCloud, isScopeCurrent, resetMemories, workspaceName]);
 
   const handleAddPress = useCallback(() => {
     const actionScope = activeScopeRef.current;
@@ -425,9 +462,12 @@ export default function MemoryScreen() {
       </View>
 
       {/* Count subtitle */}
-      <View className="px-4 mb-2">
+      <View className="px-4 mb-2 gap-0.5">
         <Text style={{ color: colors.textMuted, fontSize: 11 }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+          {describeMemoryScope(currentIsCloud, workspaceName)}
         </Text>
       </View>
 
