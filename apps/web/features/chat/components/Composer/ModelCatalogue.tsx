@@ -35,7 +35,6 @@ const CHIP_GROUP_LABEL = 'Filter by capability';
 const UNAVAILABLE_TEXT = 'Temporarily unavailable';
 const NOT_OFFERED_TEXT = 'Not available in this app';
 const EVENT_TAG_LABEL = 'Free during event';
-const FREE_TAG_LABEL = 'Free';
 const TYPICAL_MESSAGE_NOTE = `A typical message is about ${TYPICAL_MESSAGE_TOKENS.input.toLocaleString()} tokens in and ${TYPICAL_MESSAGE_TOKENS.output.toLocaleString()} out.`;
 
 const RAIL_CLASS =
@@ -127,9 +126,7 @@ function formatMessageCredits(credits: number): string {
 
 function messageCostLabel(credits: number | null): string | null {
   if (credits === null) return null;
-  return credits === 0
-    ? 'free, costs no credits'
-    : `about ${credits.toLocaleString(undefined, { maximumFractionDigits: 2 })} credits per typical message`;
+  return `about ${credits.toLocaleString(undefined, { maximumFractionDigits: 2 })} credits per typical message`;
 }
 
 function PriceBandMark({ filled, scale }: { filled: number; scale: number }) {
@@ -185,11 +182,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         <div>
           <dt className={CARD_LABEL_CLASS}>Typical message</dt>
           <dd className={CARD_VALUE_CLASS}>
-            {messageCredits === null
-              ? NOT_PUBLISHED_TEXT
-              : messageCredits === 0
-                ? FREE_TAG_LABEL
-                : formatMessageCredits(messageCredits)}
+            {messageCredits === null ? NOT_PUBLISHED_TEXT : formatMessageCredits(messageCredits)}
           </dd>
         </div>
         <div>
@@ -218,7 +211,7 @@ function ModelCard({ entry, onBack }: { entry: ModelCatalogueEntry; onBack: () =
         </div>
       </dl>
 
-      {messageCredits !== null && messageCredits > 0 ? (
+      {messageCredits !== null ? (
         <p className={`${CARD_LABEL_CLASS} mt-2`}>{TYPICAL_MESSAGE_NOTE}</p>
       ) : null}
 
@@ -560,13 +553,7 @@ export function ModelCatalogue({
                             {ROUTER_TAG_LABEL}
                           </span>
                         )}
-                        {credits === 0 ? (
-                          <span
-                            className={`${TAG_CLASS} border border-[var(--chat-border)] text-success-text`}
-                          >
-                            {FREE_TAG_LABEL}
-                          </span>
-                        ) : credits !== null ? (
+                        {credits !== null ? (
                           <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
                             {formatMessageCredits(credits)}
                           </span>
