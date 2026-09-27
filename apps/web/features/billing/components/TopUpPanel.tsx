@@ -118,8 +118,13 @@ export function TopUpPanel({ tier, canBuy }: { tier: string; canBuy: boolean }) 
           Buy credits
         </h2>
         <p className="mt-1 text-[13px] text-muted-foreground">
-          Credits you buy are added to your balance. They don&rsquo;t change your plan or renewal
-          date. Up to {formatUsdAmount(DAILY_TOP_UP_LIMIT_USD)} a day.
+          Credits you buy are added to your balance and don&rsquo;t change your plan or renewal
+          date. They don&rsquo;t expire, except where local law requires it, such as in Japan.
+          Purchases are non-refundable except where our{' '}
+          <Link href="/refund-policy" className="underline underline-offset-2">
+            refund policy
+          </Link>{' '}
+          or the law says otherwise. Up to {formatUsdAmount(DAILY_TOP_UP_LIMIT_USD)} a day.
         </p>
       </div>
 

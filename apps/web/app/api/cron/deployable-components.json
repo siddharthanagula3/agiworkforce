@@ -246,6 +246,24 @@
       ]
     },
     {
+      "name": "expire-code-trials",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; a trial past its end is moved to Free under a row lock, so an interrupted run leaves the rest for the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: ends code-granted trials whose period is over and moves the account to Free."
+        }
+      ]
+    },
+    {
       "name": "expire-support-handoffs",
       "role": "cleanup",
       "version": "1.0.0",

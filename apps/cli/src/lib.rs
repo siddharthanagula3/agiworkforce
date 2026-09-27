@@ -915,6 +915,12 @@ enum Command {
     Onboarding,
     /// Show the account's managed allowance from the shared usage ledger.
     Usage,
+    /// Print your referral link. Friends who join with it get a Pro trial, and you both earn bonus credits.
+    Invite {
+        /// Emit the link as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Manage the account's scheduled agent tasks in AGI cloud.
     Schedules {
         #[command(subcommand)]
@@ -4051,6 +4057,18 @@ pub async fn run_main() -> Result<()> {
                 Ok(())
             }
 
+            Command::Invite { json } => {
+                let invite = cloud::referrals::invite()
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                render_structured(
+                    serde_json::to_value(&invite)?,
+                    cloud::referrals::invite_text(&invite),
+                    *json,
+                    cli.output,
+                )
+            }
+
             // --- Schedules ---
             Command::Schedules { action } => handle_schedules_command(action, cli.output).await,
             Command::Projects { action } => handle_projects_command(action, cli.output).await,
@@ -5127,7 +5145,11 @@ pub async fn run_oneshot(
                     sdk_io::StatusUpdateEvent {
                         session_id: budget_session_id.clone(),
                         reason: sdk_io::StatusUpdateReason::BudgetExhausted,
-                        detail: Some(format!("${spent:.4} >= ${limit:.4}")),
+                        detail: Some(format!(
+                            "{} used of {}",
+                            cost_ledger::format_usd_as_credits(spent),
+                            cost_ledger::format_usd_as_credits(limit)
+                        )),
                     },
                 ));
             })));
@@ -5337,6 +5359,7 @@ pub async fn run_oneshot(
                         crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
+                output::print_billed_turn(&turn.managed_request_ids).await;
             }
             Err(e) => {
                 output::print_error(&errors::terminal_text(&e));

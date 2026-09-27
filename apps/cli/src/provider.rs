@@ -218,8 +218,11 @@ pub fn format_model_detail(model: &ModelInfo) -> String {
             "base; request tiers available"
         };
         format!(
-            "${:.2} / ${:.2} per 1M tokens (input/output, {tier_note})",
-            model.input_price_per_1m, model.output_price_per_1m,
+            "{} (input/output, {tier_note})",
+            crate::cost_ledger::format_credits_per_million_tokens(
+                model.input_price_per_1m,
+                model.output_price_per_1m,
+            ),
         )
     };
     let yes_no = |b: bool| if b { "yes" } else { "no" };
@@ -275,8 +278,11 @@ pub fn format_model_list() -> String {
                 "base+tiered"
             };
             format!(
-                "${:.2}/${:.2} {tier_note}",
-                model.input_price_per_1m, model.output_price_per_1m,
+                "{} {tier_note}",
+                crate::cost_ledger::format_credits_per_million_tokens(
+                    model.input_price_per_1m,
+                    model.output_price_per_1m,
+                ),
             )
         };
 
@@ -940,10 +946,12 @@ mod tests {
         assert!(detail.contains(&model.id));
         assert!(detail.contains(&format!("({})", model.provider)));
         assert!(detail.contains(&format!("[{}]", model.status)));
-        assert!(detail.contains(&format!(
-            "${:.2} / ${:.2}",
-            model.input_price_per_1m, model.output_price_per_1m
-        )));
+        assert!(
+            detail.contains(&crate::cost_ledger::format_credits_per_million_tokens(
+                model.input_price_per_1m,
+                model.output_price_per_1m
+            ))
+        );
     }
 
     #[test]
@@ -989,10 +997,12 @@ mod tests {
         assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains(&format!(
-            "${:.2} / ${:.2} per 1M tokens",
-            model.input_price_per_1m, model.output_price_per_1m
-        )));
+        assert!(
+            detail.contains(&crate::cost_ledger::format_credits_per_million_tokens(
+                model.input_price_per_1m,
+                model.output_price_per_1m
+            ))
+        );
         assert!(model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0);
     }
 

@@ -5,6 +5,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
 
 export interface SidePanelChatMessage {
   id: string;
@@ -34,6 +35,7 @@ export interface SidePanelChatMessage {
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
   errorAction?: 'switch-model';
+  errorRecovery?: ManagedQuotaRecovery;
   /**
    * Client-generated UUID reused as the server's `assistant_message_id` and the
    * cloud sync's message id, so a server-persisted turn and the extension's own
@@ -219,6 +221,7 @@ export function statedWait(retryAfterSeconds: unknown): string | undefined {
 export interface StreamFailureDetail {
   retryAfterSeconds?: number;
   requestId?: string;
+  resetLabel?: string;
 }
 
 /**
@@ -233,7 +236,8 @@ export interface StreamFailureDetail {
 export function streamFailureText(errorText: string, detail: StreamFailureDetail = {}): string {
   const wait = statedWait(detail.retryAfterSeconds);
   const withWait = wait && !/\d/.test(errorText) ? `${errorText} Try again in ${wait}.` : errorText;
-  return detail.requestId ? `${withWait} Reference: ${detail.requestId}` : withWait;
+  const withReset = detail.resetLabel ? `${withWait} ${detail.resetLabel}.` : withWait;
+  return detail.requestId ? `${withReset} Reference: ${detail.requestId}` : withReset;
 }
 
 export function applyStreamFailure(
@@ -242,6 +246,7 @@ export function applyStreamFailure(
   errorText: string,
   timestamp = Date.now(),
   errorAction?: 'switch-model',
+  errorRecovery?: ManagedQuotaRecovery,
 ): void {
   const existing = messages.find((message) => message.id === streamId);
   if (existing) {
@@ -249,6 +254,7 @@ export function applyStreamFailure(
     existing.error = true;
     existing.errorText = errorText;
     if (errorAction) existing.errorAction = errorAction;
+    if (errorRecovery) existing.errorRecovery = errorRecovery;
     return;
   }
   messages.push({
@@ -258,6 +264,7 @@ export function applyStreamFailure(
     error: true,
     errorText,
     ...(errorAction ? { errorAction } : {}),
+    ...(errorRecovery ? { errorRecovery } : {}),
     timestamp,
   });
 }

@@ -1,4 +1,8 @@
-import { BILLING_PLAN_PRICING, modelsCatalogJson } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  managedUsageComparisonLabel,
+  modelsCatalogJson,
+} from '@agiworkforce/types';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from './surface-status';
 
 export {
@@ -122,7 +126,8 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: BILLING_PLAN_PRICING.pro.label,
       price: `$${BILLING_PLAN_PRICING.pro.monthlyPriceUsd}/mo`,
       billingInterval: `Monthly or annual ($${BILLING_PLAN_PRICING.pro.yearlyPriceUsd}/yr)`,
-      usageCapacity: '5x Basic hosted capacity',
+      usageCapacity:
+        managedUsageComparisonLabel('pro', 'basic', BILLING_PLAN_PRICING.basic.label) ?? '',
       bestFor: 'Professionals and small teams',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',
@@ -133,7 +138,8 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: BILLING_PLAN_PRICING.max.label,
       price: `$${BILLING_PLAN_PRICING.max.monthlyPriceUsd}/mo`,
       billingInterval: 'Monthly only',
-      usageCapacity: '5x Pro hosted capacity',
+      usageCapacity:
+        managedUsageComparisonLabel('max', 'pro', BILLING_PLAN_PRICING.pro.label) ?? '',
       bestFor: 'Intensive multi-agent workloads',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',
@@ -143,7 +149,8 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: BILLING_PLAN_PRICING.max_15x.label,
       price: `$${BILLING_PLAN_PRICING.max_15x.monthlyPriceUsd}/mo`,
       billingInterval: 'Monthly only',
-      usageCapacity: '15x Pro hosted capacity',
+      usageCapacity:
+        managedUsageComparisonLabel('max_15x', 'pro', BILLING_PLAN_PRICING.pro.label) ?? '',
       bestFor: 'The most intensive individual workflows and video generation',
       ctaLabel: 'Get started',
       ctaHref: '/pricing',

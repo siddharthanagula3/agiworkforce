@@ -6,7 +6,7 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { resolvePlanTier } from '@/lib/price-tier-mapping';
@@ -18,6 +18,11 @@ import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-ser
 import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
 import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
+import {
+  resolveUpgradePromotion,
+  upgradeDiscounts,
+  type UpgradePromotion,
+} from '@/lib/server/stripe-upgrade-promotion';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   assertSameCheckoutBillingInterval,
@@ -54,7 +59,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     const msg = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     throw createError.validation(`Invalid request: ${msg}`);
   }
-  const { plan: targetPlan, billingInterval, previewToken } = parsed.data;
+  const { plan: targetPlan, billingInterval, previewToken, promotionCode } = parsed.data;
   const requestedSeats = resolveCheckoutQuantity(parsed.data);
 
   const stripe = getStripeClient();
@@ -134,6 +139,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   let subscriptionCurrency = 'usd';
   let cancelAtPeriodEnd = false;
   let subscriptionEndsAt: number | null = null;
+  let liveSubscription: Stripe.Subscription | null = null;
   try {
     const resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
@@ -174,11 +180,12 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     subscriptionCurrency = stripeSub.currency;
     cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
     subscriptionEndsAt = stripeSub.cancel_at ?? stripeItem?.current_period_end ?? null;
+    liveSubscription = stripeSub;
   } catch (err) {
     logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
-  if (!stripeItem) throw createError.internal('Subscription has no items');
+  if (!stripeItem || !liveSubscription) throw createError.internal('Subscription has no items');
 
   if (cancelAtPeriodEnd) {
     return NextResponse.json(
@@ -239,6 +246,25 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     throw createError.validation(planChange.reason);
   }
 
+  let promotion: UpgradePromotion | null = null;
+  if (promotionCode) {
+    const customerId =
+      typeof liveSubscription.customer === 'string'
+        ? liveSubscription.customer
+        : liveSubscription.customer.id;
+    try {
+      promotion = await resolveUpgradePromotion(stripe, promotionCode, customerId);
+    } catch (err) {
+      if (isAppError(err)) throw err;
+      logger.error({ err, userId }, 'Promotion code lookup failed');
+      throw createError
+        .serviceUnavailable(
+          'The promotion code could not be checked. Your current plan is unchanged; please retry.',
+        )
+        .asUserSafe();
+    }
+  }
+
   let prorationDate: number;
   try {
     prorationDate = verifyUpgradePreviewToken(
@@ -249,6 +275,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         billingInterval,
         stripeSubscriptionId: stripeSubId,
         seats: requestedSeats,
+        promotionCodeId: promotion?.id ?? null,
       },
       requireEnv('STRIPE_SECRET_KEY'),
     ).prorationDate;
@@ -270,6 +297,27 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
   const newPriceId = priceSelection.priceId;
 
+  const pendingScheduleId =
+    typeof liveSubscription.schedule === 'string'
+      ? liveSubscription.schedule
+      : (liveSubscription.schedule?.id ?? null);
+  if (pendingScheduleId) {
+    try {
+      await stripe.subscriptionSchedules.release(
+        pendingScheduleId,
+        {},
+        { idempotencyKey: `upgrade-release:${pendingScheduleId}` },
+      );
+    } catch (err) {
+      logger.error({ err, userId, stripeSubId }, 'Releasing the scheduled plan change failed');
+      throw createError
+        .serviceUnavailable(
+          'Your scheduled plan change could not be cleared. No charge was made; please retry.',
+        )
+        .asUserSafe();
+    }
+  }
+
   let updatedSubscription: Stripe.Subscription;
   try {
     updatedSubscription = await stripe.subscriptions.update(
@@ -277,6 +325,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
       {
         items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
         ...planChangeProration(planChangeAnchor(planChange.kind), prorationDate),
+        ...(promotion ? { discounts: upgradeDiscounts(liveSubscription, promotion) } : {}),
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
         metadata: {
@@ -287,7 +336,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         },
       },
       {
-        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${requestedSeats}:${prorationDate}`,
+        idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${requestedSeats}:${prorationDate}:${promotion?.id ?? 'none'}`,
       },
     );
   } catch (err) {
