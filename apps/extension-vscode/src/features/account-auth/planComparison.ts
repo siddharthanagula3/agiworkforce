@@ -5,11 +5,10 @@ import {
   SELF_SERVE_PAID_PLAN_TIERS,
   billingPlanCapabilities,
   billingPlanCapabilitiesAddedOver,
-  creditAmount,
   getBillingPlanPricing,
   isBillingPlanTier,
   isFreeBillingPlanTier,
-  isPerSeatBillingPlan,
+  managedUsageComparisonLines,
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -24,7 +23,7 @@ export interface PlanComparisonRow {
   plan: BillingPlanTier;
   label: string;
   current: boolean;
-  credits: string;
+  usage: string;
   features: string;
 }
 
@@ -32,12 +31,10 @@ function capabilityList(capabilities: readonly BillingPlanCapability[]): string 
   return capabilities.map((capability) => BILLING_PLAN_CAPABILITY_LABELS[capability]).join(', ');
 }
 
-export function planCreditsPhrase(plan: BillingPlanTier): string {
-  const allowance = PLAN_CREDIT_ALLOWANCES[plan];
-  if (allowance.unlimited) return 'Usage set by your contract';
-  const window = `${creditAmount(allowance.fiveHour)} / ${creditAmount(allowance.weekly)} / ${creditAmount(allowance.monthly)} credits per 5 hours / week / month`;
-  if (isFreeBillingPlanTier(plan)) return `${window}, free models only`;
-  return isPerSeatBillingPlan(plan) ? `${window} per seat` : window;
+export function planUsagePhrase(plan: BillingPlanTier): string {
+  if (PLAN_CREDIT_ALLOWANCES[plan].unlimited) return 'Usage set by your contract';
+  if (isFreeBillingPlanTier(plan)) return 'A small allowance, free models only';
+  return managedUsageComparisonLines(plan).join(', ');
 }
 
 export function planComparisonRows(currentPlan: string | null | undefined): PlanComparisonRow[] {
@@ -59,7 +56,7 @@ export function planComparisonRows(currentPlan: string | null | undefined): Plan
       plan,
       label: getBillingPlanPricing(plan).label,
       current: isCurrent,
-      credits: planCreditsPhrase(plan),
+      usage: planUsagePhrase(plan),
       features,
     };
   });
@@ -73,7 +70,7 @@ export async function showPlanComparison(
   const items: vscode.QuickPickItem[] = [
     ...planComparisonRows(currentPlan).map((row) => ({
       label: row.current ? `$(check) ${row.label}` : row.label,
-      description: row.current ? `Your plan · ${row.credits}` : row.credits,
+      description: row.current ? `Your plan · ${row.usage}` : row.usage,
       detail: row.features,
     })),
     { label: '', kind: vscode.QuickPickItemKind.Separator },
@@ -81,7 +78,7 @@ export async function showPlanComparison(
   ];
   const pick = await vscode.window.showQuickPick(items, {
     title: 'AGI Workforce, what each plan includes',
-    placeHolder: 'Credits per window and the features each plan adds',
+    placeHolder: 'Usage and the features each plan adds',
     matchOnDescription: true,
     matchOnDetail: true,
   });

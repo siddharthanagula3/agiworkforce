@@ -10,7 +10,6 @@ import {
   WEB_PAID_PLAN_ORDER,
   getBillingPlanDisplay,
   formatCatalogPrice,
-  formatPlanCreditWindows,
   planUsageComparisonLabel,
   type SelectablePaidPlan,
 } from '@features/billing/lib/plan-display';
@@ -58,7 +57,6 @@ export function UpgradeChooser() {
     ? nextDisplay.features.filter((feature) => !currentDisplay.features.includes(feature))
     : [];
   const nextUsageComparison = nextTier ? planUsageComparisonLabel(nextTier) : null;
-  const currentCredits = formatPlanCreditWindows(currentPlan);
 
   const nextIndex = nextTier ? WEB_PAID_PLAN_ORDER.indexOf(nextTier) : -1;
   const secondaryTiers: readonly SelectablePaidPlan[] =
@@ -125,9 +123,6 @@ export function UpgradeChooser() {
                 {priceLabel(currentDisplay.monthlyPriceUsd)}
               </span>
             </div>
-            {currentCredits ? (
-              <p className="mt-1 text-sm text-muted-foreground">{currentCredits}</p>
-            ) : null}
 
             {usedPercent !== null ? (
               <div className="mt-5">

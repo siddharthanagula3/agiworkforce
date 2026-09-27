@@ -33,8 +33,7 @@ function makeProps(
   };
 }
 
-const BASIC_CREDITS_LINE =
-  'Basic includes 10 credits per 5 hours · 100 credits a week · 400 credits a month.';
+const BASIC_USAGE_LINE = '5x more usage per session than Free.';
 
 // ---------------------------------------------------------------------------
 // Test suite
@@ -77,23 +76,22 @@ describe('InlinePaywallCard', () => {
     );
   });
 
-  describe('plan credits', () => {
-    it('states the credit windows of the plan it sells', () => {
+  describe('plan usage', () => {
+    it('states how much more the plan it sells gives, not its credit counts', () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
       expect(
-        screen.getByText(
-          'Max 20x includes 1,000 credits per 5 hours · 5,000 credits a week · 20,000 credits a month.',
-        ),
+        screen.getByText('20x more usage per session and 10x more weekly usage than Pro.'),
       ).toBeInTheDocument();
+      expect(screen.queryByText(/credits per 5 hours/)).toBeNull();
     });
 
-    it('states no plan credits when the way out is not a plan', () => {
+    it('states no plan usage when the way out is not a plan', () => {
       render(
         <InlinePaywallCard
           {...makeProps({ requiredTier: 'max_15x', recoveryAction: 'manage_billing' })}
         />,
       );
-      expect(screen.queryByText(/ includes .* credits per 5 hours/)).toBeNull();
+      expect(screen.queryByText(/more usage/)).toBeNull();
     });
   });
 
@@ -317,13 +315,13 @@ describe('InlinePaywallCard', () => {
     it('does not render a reason paragraph when reason is omitted', () => {
       const { container } = render(<InlinePaywallCard {...makeProps()} />);
       const paras = [...container.querySelectorAll('p.text-muted-foreground')];
-      expect(paras.map((para) => para.textContent)).toEqual([BASIC_CREDITS_LINE]);
+      expect(paras.map((para) => para.textContent)).toEqual([BASIC_USAGE_LINE]);
     });
 
     it('does not render a reason paragraph when reason is an empty string', () => {
       const { container } = render(<InlinePaywallCard {...makeProps({ reason: '' })} />);
       const paras = [...container.querySelectorAll('p.text-muted-foreground')];
-      expect(paras.map((para) => para.textContent)).toEqual([BASIC_CREDITS_LINE]);
+      expect(paras.map((para) => para.textContent)).toEqual([BASIC_USAGE_LINE]);
     });
 
     it('renders reason text when reason is a non-empty string', () => {

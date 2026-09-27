@@ -4,10 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   BILLING_PLAN_CAPABILITY_LABELS,
-  PLAN_CREDIT_ALLOWANCES,
   SELF_SERVE_PAID_PLAN_TIERS,
   billingPlanCapabilities,
-  creditAmount,
   getBillingPlanPricing,
   type BillingPlanTier,
 } from '@agiworkforce/types';
@@ -33,11 +31,6 @@ function getMessage(key: string, substitutions: string[] = []): string {
       (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
     ),
   );
-}
-
-function windowCredits(plan: BillingPlanTier): string {
-  const allowance = PLAN_CREDIT_ALLOWANCES[plan];
-  return [allowance.fiveHour, allowance.weekly, allowance.monthly].map(creditAmount).join(' / ');
 }
 
 function includedLabels(plan: BillingPlanTier): string {
@@ -76,23 +69,19 @@ describe('side panel plan comparison', () => {
     expect(views.some((view) => view.current)).toBe(false);
   });
 
-  it('states each plan in credits per 5 hours, week and month', () => {
+  it('states each plan’s usage relative to the plan below it, never as credit counts', () => {
     const views = planComparisonViews(null);
 
-    expect(row(views, 'pro').credits).toBe(
-      `${windowCredits('pro')} credits per 5 hours / week / month`,
+    expect(row(views, 'basic').usage).toBe('5x more usage per session than Free');
+    expect(row(views, 'pro').usage).toBe('5x more usage than Basic');
+    expect(row(views, 'max').usage).toBe('5x more usage than Pro');
+    expect(row(views, 'max_15x').usage).toBe(
+      '20x more usage per session than Pro, 10x more weekly usage than Pro',
     );
-    expect(row(views, 'max_15x').credits).toBe(
-      `${windowCredits('max_15x')} credits per 5 hours / week / month`,
-    );
-    expect(row(views, 'free').credits).toBe(
-      `${windowCredits('free')} credits per 5 hours / week / month, free models only`,
-    );
-    expect(row(views, 'team').credits).toBe(
-      `${windowCredits('team')} credits per 5 hours / week / month per seat`,
-    );
-    expect(row(views, 'enterprise').credits).toBe('Usage set by your contract');
-    for (const view of views) expect(view.credits).not.toMatch(/\$|USD|token/iu);
+    expect(row(views, 'team').usage).toBe('Same usage as Pro for every seat');
+    expect(row(views, 'free').usage).toBe('A small allowance, free models only');
+    expect(row(views, 'enterprise').usage).toBe('Usage set by your contract');
+    for (const view of views) expect(view.usage).not.toMatch(/\$|USD|token|credits/iu);
   });
 
   it('shows what every plan includes when the account plan is unknown', () => {

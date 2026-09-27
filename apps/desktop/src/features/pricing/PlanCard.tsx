@@ -1,19 +1,18 @@
 import { Check, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
-  PLAN_CREDIT_ALLOWANCES,
   PLAN_LABEL,
   PLAN_DESCRIPTION,
-  creditAmount,
   getPublishedMonthlyPriceUsd,
+  getPublishedPlanPricePerMonthUsd,
   isFreePlan,
-  isSelfServePaidPlanTier,
-  managedUsageComparisonLabel,
+  managedUsageComparisonLines,
   type UIPlanTier,
 } from '@agiworkforce/types';
 
 interface TierContent {
   price: string;
+  priceNote?: string;
   bullets: string[];
   ctaLabel: string;
   ctaVariant: 'primary' | 'current';
@@ -86,18 +85,21 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaLabel: `Upgrade to ${PLAN_LABEL.max_15x}`,
     ctaVariant: 'primary',
   },
+  team: {
+    price: `$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`,
+    priceNote: `Billed yearly, or $${getPublishedMonthlyPriceUsd('team')} per seat billed monthly`,
+    bullets: [
+      'Shared workspaces and organization administration',
+      'Owner and admin roles with member management',
+      'One organization invoice, billed per seat',
+    ],
+    ctaLabel: 'Choose seats',
+    ctaVariant: 'primary',
+  },
 };
 
-function planCreditBullets(tier: UIPlanTier): string[] {
-  if (!isSelfServePaidPlanTier(tier)) return [];
-  const allowance = PLAN_CREDIT_ALLOWANCES[tier];
-  if (allowance.unlimited || allowance.monthly <= 0) return [];
-  const comparison =
-    tier === 'pro' ? null : managedUsageComparisonLabel(tier, 'pro', PLAN_LABEL.pro);
-  return [
-    `${creditAmount(allowance.fiveHour)} credits per 5 hours, ${creditAmount(allowance.weekly)} per week, ${creditAmount(allowance.monthly)} per month`,
-    ...(comparison ? [comparison] : []),
-  ];
+function planUsageBullets(tier: UIPlanTier): string[] {
+  return tier === 'local' ? [] : managedUsageComparisonLines(tier);
 }
 
 export interface PlanCardProps {
@@ -122,7 +124,7 @@ export function PlanCard({
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
   const isFree = isFreePlan(tier);
-  const bullets = [...planCreditBullets(tier), ...content.bullets];
+  const bullets = [...planUsageBullets(tier), ...content.bullets];
 
   return (
     <div
@@ -153,7 +155,12 @@ export function PlanCard({
         </div>
       </div>
 
-      <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
+      <div>
+        <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
+        {content.priceNote ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground">{content.priceNote}</p>
+        ) : null}
+      </div>
 
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (
