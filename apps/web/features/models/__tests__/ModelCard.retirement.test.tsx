@@ -5,6 +5,15 @@ import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { ModelCard } from '../components/ModelCard';
 import { retirementLabel } from '../lib/model-presentation';
 
+function readerDate(isoDay: string): string {
+  return new Date(`${isoDay}T00:00:00Z`).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntry {
   return {
     id: 'fixture-model',
@@ -50,7 +59,9 @@ function renderCard(overrides: Partial<ModelCatalogueEntry>): void {
 describe('deprecation on a still-selectable model', () => {
   it('names the date the model stops being offered', () => {
     renderCard({ deprecatedOn: '2026-09-27' });
-    expect(screen.getByTestId('model-retirement')).toHaveTextContent('Retiring 27 Sept 2026');
+    expect(screen.getByTestId('model-retirement')).toHaveTextContent(
+      `Retiring ${readerDate('2026-09-27')}`,
+    );
   });
 
   it('says nothing when the model has no retirement date', () => {
@@ -69,9 +80,11 @@ describe('retirementLabel', () => {
 
   it('reads as future before the date and as past after it', () => {
     expect(retirementLabel(entry({ deprecatedOn: '2026-09-27' }), now)).toBe(
-      'Retiring 27 Sept 2026',
+      `Retiring ${readerDate('2026-09-27')}`,
     );
-    expect(retirementLabel(entry({ deprecatedOn: '2026-01-05' }), now)).toBe('Retired 5 Jan 2026');
+    expect(retirementLabel(entry({ deprecatedOn: '2026-01-05' }), now)).toBe(
+      `Retired ${readerDate('2026-01-05')}`,
+    );
   });
 
   it('is silent on an absent or unparseable date rather than guessing', () => {
