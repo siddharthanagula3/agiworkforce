@@ -69,6 +69,8 @@ const payload: ScheduleMutation = {
   missedExecutionPolicy: 'run_once',
   condition: null,
   creditCap: null,
+  sources: { project: true, memory: true, web: true },
+  connectors: null,
 };
 
 function response(body: unknown, init: ResponseInit = {}) {
