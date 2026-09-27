@@ -48,14 +48,14 @@ describe('Stripe billing cadence', () => {
         'yearly',
         'team',
       ),
-    ).toThrow(/charged only the prorated difference/i);
+    ).toThrow(/keep your current monthly billing cadence/i);
     expect(() =>
       assertUpgradeBillingInterval(
         { interval: 'year', interval_count: 1 } as never,
         'monthly',
         'team',
       ),
-    ).toThrow(/charged only the prorated difference/i);
+    ).toThrow(/keep your current yearly billing cadence/i);
   });
 
   it('moves a yearly subscriber onto the monthly price of a plan sold monthly only', () => {

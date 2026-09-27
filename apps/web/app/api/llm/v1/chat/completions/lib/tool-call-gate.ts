@@ -38,6 +38,7 @@ export interface ToolCallGateContext {
   approvalMode: 'auto' | 'manual';
   toolApprovalPolicy: ToolApprovalPolicy;
   unattended: boolean;
+  unattendedEscalationPauses?: boolean;
   deviceHostPresent: boolean;
   untrustedContentInContext: boolean;
   sensitiveSourceAvailable: boolean;
@@ -53,7 +54,7 @@ export interface ToolCallGateRequest {
 export type ToolCallGateSubject = ToolCallGateContext &
   ToolCallGateRequest & { readonly trifecta: boolean };
 
-// `escalate` asks interactively and denies unattended: never falls through to allow.
+// `escalate` asks interactively and denies unattended unless the run can pause: never falls through to allow.
 type ToolCallGateOutcome = ToolCallGateVerdict | 'escalate';
 
 export interface ToolCallGateRank {
@@ -146,7 +147,11 @@ export function resolveToolCallGate(
   const matched = TOOL_CALL_GATE_RANKS.find((rank) => rank.applies(subject)) ?? lastRank;
   return {
     verdict:
-      matched.outcome === 'escalate' ? (context.unattended ? 'deny' : 'ask') : matched.outcome,
+      matched.outcome === 'escalate'
+        ? context.unattended && context.unattendedEscalationPauses !== true
+          ? 'deny'
+          : 'ask'
+        : matched.outcome,
     reason: matched.reason,
     rank: matched.rank,
   };

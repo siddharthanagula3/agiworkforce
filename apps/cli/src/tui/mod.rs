@@ -4,6 +4,7 @@ pub(crate) mod approval_broker;
 mod color;
 pub(crate) mod fuzzy;
 pub(crate) mod icons;
+pub(crate) mod motion;
 pub(crate) mod pane_view;
 #[allow(dead_code, unused_imports)]
 mod shimmer;

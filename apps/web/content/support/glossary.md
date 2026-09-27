@@ -5,7 +5,7 @@ path: /docs
 category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
-updated: 2026-09-18
+updated: 2026-09-27
 scope: public
 ---
 
@@ -18,15 +18,15 @@ question phrased with the word alone still finds the right place.
 ## Trust modes
 
 **Trust mode** is which machine and which provider account runs your request.
-AGI runs three and never silently moves work between them.
+AGI runs three and never moves work to a less private one without your approval.
 
 **Local** runs models on your own hardware through a runtime you install. It is
 free, and inference can run offline once the runtime and model are installed.
 
 **BYOK**, "bring your own key", means you supply a provider API key and AGI
-sends your requests directly to that provider with it. Keys are encrypted at
-rest on your machine. Your provider bills the usage, and AGI adds no markup.
-BYOK is free.
+sends your requests directly to that provider with it. By default the CLI stores
+keys in your operating system's credential store. Your provider bills the usage,
+and AGI adds no markup. BYOK is free.
 
 **Managed cloud** runs on AGI-operated provider access. It is metered, and it
 refuses BYOK credentials by design so the two trust boundaries stay separate.
@@ -34,19 +34,21 @@ refuses BYOK credentials by design so the two trust boundaries stay separate.
 ## Usage and billing terms
 
 **Allowance** is the metered capacity a plan carries for managed cloud. When it
-runs out, managed requests stop until it resets; Local and BYOK are unaffected.
+runs out, managed requests stop until it resets, unless **Keep going after a
+usage limit** is on and you have credits; Local and BYOK are unaffected.
 
 **Credits** are a prepaid balance, separate from the allowance, that managed
 usage can draw on once the allowance is exhausted.
 
-**Top-up** is a credit purchase for a custom amount in whole dollars.
+**Top-up** is a credit purchase, either a preset pack or another amount in whole
+dollars.
 
 **Concurrency** is how many responses may be generating at once. Reaching that
 ceiling is not the same as exhausting an allowance: it clears as soon as an
 in-flight response finishes.
 
-**Auto** is the routing choice that picks a model for you. The free lane is
-offered as Auto (free), whose capacity is not guaranteed.
+**Auto** is the routing choice that picks a model for you. Where the free lane is
+offered, it appears as Auto (free), and its capacity is not guaranteed.
 
 ## Chat terms
 
@@ -61,7 +63,7 @@ produces, opened in a panel beside the conversation and versioned as you edit.
 **Library** is where past conversations and artifacts are listed.
 
 **Temporary chat** is a conversation that neither reads memory nor writes to
-it, and that ignores saved approval verdicts.
+it, and that ignores saved **Always allow** verdicts.
 
 **Memory** is what AGI carries between conversations. Persistent memory stores
 facts; search past chats instead reads your history at answer time.
@@ -75,7 +77,9 @@ is scoped to your own account.
 expose tools. Custom MCP endpoints can be added with their own URL.
 
 **Tool approval** is the verdict that decides whether a tool may run without
-asking. The default is to ask before every action, including reads.
+asking. On the website, an account that has never chosen one defaults to **Skip
+approvals**, which runs eligible tools without asking; destructive and unknown
+actions still ask.
 
 **AGI Work** is the mode for a multi-step task rather than a question: the
 session plans, works, and produces files.
@@ -100,4 +104,4 @@ terminal on macOS, Windows and Linux.
 
 **macOS**, **Windows** and **Linux** are the desktop operating systems;
 **iOS** and **Android** are the mobile ones. Support articles tag the platforms
-they apply to, so a question about one platform does not answer with another.
+they apply to.

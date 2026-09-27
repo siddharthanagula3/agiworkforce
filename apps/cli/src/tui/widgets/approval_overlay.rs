@@ -32,7 +32,7 @@ use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
 use super::interactive::{InteractiveView, KeyAction, ViewAction};
 use crate::terminal_text::sanitize_terminal_text;
-use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_warning};
+use crate::tui::terminal_palette::{ui_muted, ui_on_light, ui_surface_elevated, ui_warning};
 use crate::tui::{display_width, pad_to_cols};
 
 // ---------------------------------------------------------------------------
@@ -201,7 +201,8 @@ impl ApprovalOverlayState {
         let block = Block::default()
             .title(" Tool Approval ")
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(ui_warning()));
+            .border_style(Style::default().fg(ui_warning()))
+            .style(Style::default().bg(ui_surface_elevated()));
 
         let inner = block.inner(box_area);
         frame.render_widget(block, box_area);

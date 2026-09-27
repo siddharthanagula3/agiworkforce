@@ -58,9 +58,21 @@ import { createObservedProviderUsage } from '@/lib/services/managed-usage-accoun
 import { setRouteRegistryPricingLookup } from '@/lib/services/llm-cost-calculator';
 import { requireProviderDefaultModel, type StreamChunk } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
 
 const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
+
+function offeredTool(serverId: string, toolName: string): WebMcpToolDef {
+  return {
+    qualifiedName: `mcp__${serverId}__${toolName}`,
+    serverId,
+    toolName,
+    description: toolName,
+    origin: 'operator',
+    inputSchema: { type: 'object' },
+  };
+}
 
 function fakeAdapterStream(chunks: unknown[]) {
   return async function* () {
@@ -260,22 +272,22 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
           {
             type: 'tool-use-start',
             toolUseId: 'call_1',
-            name: 'mcp__search__web_search',
+            name: 'mcp__github__get_pull_request_diff',
             vendorIndex: 4,
           },
-          { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '{"query":' },
-          { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '"weather today"}' },
+          { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '{"pull_number":' },
+          { type: 'tool-use-delta', toolUseId: 'call_1', deltaJson: '4}' },
           { type: 'tool-use-end', toolUseId: 'call_1' },
           {
             type: 'tool-use-start',
             toolUseId: 'call_2',
-            name: 'mcp__search__web_fetch',
+            name: 'mcp__github__get_pull_request_diff',
             vendorIndex: 7,
           },
           {
             type: 'tool-use-delta',
             toolUseId: 'call_2',
-            deltaJson: '{"url":"https://example.com"}',
+            deltaJson: '{"pull_number":7}',
           },
           { type: 'tool-use-end', toolUseId: 'call_2' },
           { type: 'stop', reason: 'tool_use' },
@@ -289,24 +301,31 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
         ]),
       );
 
-    mockExecuteWebMcpTool.mockImplementation((serverId: string, toolName: string) => {
-      if (toolName === 'web_search') {
-        return Promise.resolve({ content: [{ type: 'text', text: 'sunny, 72F' }] });
-      }
-      if (toolName === 'web_fetch') {
-        return Promise.resolve({ content: [{ type: 'text', text: '<html>page body</html>' }] });
-      }
-      throw new Error(`unexpected tool ${serverId}/${toolName}`);
-    });
+    mockExecuteWebMcpTool.mockImplementation(
+      (serverId: string, toolName: string, args: { pull_number?: number }) => {
+        if (toolName === 'get_pull_request_diff' && args.pull_number === 4) {
+          return Promise.resolve({ content: [{ type: 'text', text: 'diff of #4' }] });
+        }
+        if (toolName === 'get_pull_request_diff' && args.pull_number === 7) {
+          return Promise.resolve({ content: [{ type: 'text', text: 'diff of #7' }] });
+        }
+        throw new Error(`unexpected tool ${serverId}/${toolName}`);
+      },
+    );
 
     const processed = makeProcessed();
-    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        mcpTools: [offeredTool('github', 'get_pull_request_diff')],
+      }),
+    );
 
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('search', 'web_search', {
-      query: 'weather today',
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
+      pull_number: 4,
     });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('search', 'web_fetch', {
-      url: 'https://example.com',
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
+      pull_number: 7,
     });
 
     expect(mockAnthropicStream).toHaveBeenCalledTimes(2);
@@ -316,8 +335,8 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const toolMessages = secondStepChatRequest.messages.filter((m) => m.role === 'user');
     expect(toolMessages.length).toBeGreaterThan(0);
 
-    expect(output).toContain('"name":"mcp__search__web_search"');
-    expect(output).toContain('"name":"mcp__search__web_fetch"');
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledTimes(2);
+    expect(output).toContain('"name":"mcp__github__get_pull_request_diff"');
     expect(output).toContain('"status":"completed"');
     expect(output).toContain("Here's what I found.");
     expect(output).toContain('data: [DONE]');
@@ -343,10 +362,10 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
           {
             type: 'tool-use-start',
             toolUseId: 'call_2',
-            name: 'mcp__fs__read_file',
+            name: 'mcp__github__get_pull_request_diff',
             vendorIndex: 0,
           },
-          { type: 'tool-use-delta', toolUseId: 'call_2', deltaJson: '{"path":"/README.md"}' },
+          { type: 'tool-use-delta', toolUseId: 'call_2', deltaJson: '{"pull_number":1}' },
           { type: 'tool-use-end', toolUseId: 'call_2' },
           { type: 'stop', reason: 'tool_use' },
         ]),
@@ -361,10 +380,20 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     mockExecuteWebMcpTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] });
 
     const processed = makeProcessed();
-    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    const output = await drain(
+      runToolLoop(processed, {
+        approvalMode: 'auto',
+        mcpTools: [
+          offeredTool('fs', 'list_directory'),
+          offeredTool('github', 'get_pull_request_diff'),
+        ],
+      }),
+    );
 
     expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'list_directory', { path: '/' });
-    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('fs', 'read_file', { path: '/README.md' });
+    expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('github', 'get_pull_request_diff', {
+      pull_number: 1,
+    });
     expect(mockAnthropicStream).toHaveBeenCalledTimes(3);
     expect(output).toContain('Done.');
     expect(output).toContain('data: [DONE]');

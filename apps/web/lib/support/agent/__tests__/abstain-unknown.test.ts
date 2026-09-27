@@ -66,7 +66,7 @@ describe('unknown questions abstain instead of inventing', () => {
   });
 
   it('abstains, never answers, when the kill switch is off', async () => {
-    delete process.env['SUPPORT_AGENT_ENABLED'];
+    process.env['SUPPORT_AGENT_ENABLED'] = '0';
     const result = await answerSupportQuestion(ask('how do I add my anthropic api key'));
     expect(result.kind).toBe('abstention');
     if (result.kind !== 'abstention') return;

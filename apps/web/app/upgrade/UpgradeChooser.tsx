@@ -49,6 +49,10 @@ export function UpgradeChooser() {
     !isFreeBillingPlanTier(billing.plan) &&
     ['active', 'trialing'].includes(billing.status ?? '');
   const ownerBlocked = hasActivePaidPlan && subscription?.subscription_source !== 'stripe';
+  const paymentOverdue =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['past_due', 'unpaid'].includes(billing.status ?? '');
 
   const currentDisplay = getBillingPlanDisplay(currentPlan ?? 'free');
   const nextTier = ready ? getNextUpgradeTier(currentPlan) : null;
@@ -160,6 +164,16 @@ export function UpgradeChooser() {
               </p>
               <Link href="/settings/billing" className={panelActionClassName}>
                 {billingOwnerPlanActionLabel(subscription?.subscription_source)}
+              </Link>
+            </section>
+          ) : paymentOverdue ? (
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <p className="text-sm text-foreground">
+                Your last {currentDisplay.pricing.label} payment didn&rsquo;t go through. Pay the
+                open invoice or update your payment method in Billing, then come back to upgrade.
+              </p>
+              <Link href="/settings/billing" className={panelActionClassName}>
+                Open billing
               </Link>
             </section>
           ) : !nextTier || !nextDisplay ? (

@@ -69,3 +69,17 @@ The founder's billing decisions of 2026-09-27, in the shape of
   - founder: archive the yearly Pro Price in Stripe, which stops new use while
     existing subscriptions keep renewing on it, and remove it from the billing
     portal's plan-switching products.
+
+## D-2026-09-27-02 Features ChatGPT and Claude do not offer are not built
+
+The founder's standing rule is to match ChatGPT and Claude first, then Gemini
+and Perplexity. Where neither ChatGPT nor Claude offers a control, we do not
+build it, and the audit cell is recorded as not applicable by this decision.
+
+- **Per-routine effort (S63.10).** ChatGPT tasks and Claude routines choose a
+  model only; our routines already choose a model.
+- **Per-routine notification settings (S63.30).** ChatGPT task notifications
+  and Claude's task notifications are account-wide, which ours already are.
+- **In-app display language, text size and reduced motion on mobile (S84.01,
+  S84.05, S84.07).** The mobile apps follow the device settings, as ChatGPT and
+  Claude do (D-2026-09-15-03).

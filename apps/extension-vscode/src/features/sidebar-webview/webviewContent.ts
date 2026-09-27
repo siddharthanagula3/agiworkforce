@@ -8,7 +8,12 @@ import {
   type AgentMode,
   type Effort,
 } from '@agiworkforce/types';
-import { agiVsCodeCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
+import {
+  agiCornerCssVars,
+  agiMotionCssVars,
+  agiVsCodeCssVars,
+  cssVarsToString,
+} from '@agiworkforce/design-tokens';
 import type { ComposerFollowUpBehavior } from '../../platform/config';
 import { SURFACE_MENU_ITEMS } from '../surfaces/surfaceMenu';
 import type { SessionBinding } from '../../protocol/webviewMessages';
@@ -118,9 +123,41 @@ export function getWebviewContent(
       --error-border: var(--vscode-inputValidation-errorBorder, var(--agi-vscode-danger-border));
       --link: var(--vscode-textLink-foreground, var(--accent-teal));
       --link-active: var(--vscode-textLink-activeForeground, var(--link));
-      --radius-md: 8px;
-      --radius-lg: 12px;
-      --transition: cubic-bezier(0.16, 1, 0.3, 1);
+      --pressed: var(--vscode-toolbar-activeBackground, color-mix(in srgb, var(--text-primary) 14%, transparent));
+      ${cssVarsToString(agiCornerCssVars)}
+      ${cssVarsToString(agiMotionCssVars)}
+      --duration-spin: 1000ms;
+      --duration-pulse: 1200ms;
+      --elevation-2: 0 6px 20px var(--vscode-widget-shadow);
+      --elevation-3: 0 10px 28px var(--vscode-widget-shadow);
+      --z-content: 1;
+      --z-dropdown: 20;
+      --z-popover: 30;
+      --z-overlay: 50;
+      --z-sheet: 60;
+      --control-sm: 24px;
+      --control-md: 28px;
+      --control-lg: 32px;
+      --type-display-size: clamp(19px, 6vw, 28px);
+      --type-display-height: 1.1;
+      --type-h2-size: calc(var(--vscode-font-size, 13px) + 3px);
+      --type-h2-height: 1.3;
+      --type-h3-size: calc(var(--vscode-font-size, 13px) + 1px);
+      --type-h3-height: 1.35;
+      --type-title-size: calc(var(--vscode-font-size, 13px) + 2px);
+      --type-title-height: 1.3;
+      --type-body-size: var(--vscode-font-size, 13px);
+      --type-body-height: 1.5;
+      --type-body-small-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+      --type-body-small-height: 1.5;
+      --type-label-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+      --type-label-height: 1.3;
+      --type-caption-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+      --type-caption-height: 1.4;
+      --type-code-family: var(--vscode-editor-font-family, 'SF Mono', Menlo, Consolas, monospace);
+      --type-code-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+      --type-code-height: 1.5;
+      --message-actions-gap: 4px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -133,7 +170,7 @@ export function getWebviewContent(
          which is an accessibility setting, not a preference. The literals stay
          as fallbacks for a host that does not define these. */
       font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
-      font-size: var(--vscode-font-size, 13px);
+      font-size: var(--type-body-size);
       height: 100vh;
       display: flex;
       flex-direction: column;
@@ -154,7 +191,8 @@ export function getWebviewContent(
     }
 
     .header-title {
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       font-weight: 600;
       color: var(--text-primary);
       letter-spacing: -0.01em;
@@ -177,11 +215,12 @@ export function getWebviewContent(
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       letter-spacing: 0.2px;
       padding: 2px 8px;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       color: var(--text-secondary);
       background: var(--bg-overlay);
       border: 1px solid var(--border);
@@ -244,16 +283,16 @@ export function getWebviewContent(
       border: none;
       color: var(--text-secondary);
       cursor: pointer;
-      width: 28px;
-      height: 28px;
+      width: var(--control-md);
+      height: var(--control-md);
       padding: 0;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       font-size: 14px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      transition: color 0.15s var(--transition),
-                  background 0.15s var(--transition);
+      transition: color var(--duration-quick) var(--curve-standard),
+                  background var(--duration-quick) var(--curve-standard);
     }
     .icon-btn:hover {
       color: var(--text-primary);
@@ -270,18 +309,19 @@ export function getWebviewContent(
        * the host warning hue, but build the card on the normal sidebar surface
        * and use the regular foreground for explanatory copy. */
       border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       background: color-mix(in srgb, var(--warning) 10%, var(--bg-elevated));
       color: var(--text-primary);
       display: none;
       flex-direction: column;
       gap: 5px;
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     .runtime-status strong {
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       color: var(--warning);
     }
 
@@ -294,7 +334,7 @@ export function getWebviewContent(
 
     .runtime-status button {
       border: 0;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       padding: 4px 8px;
       background: var(--vscode-button-background);
       color: var(--vscode-button-foreground);
@@ -315,7 +355,7 @@ export function getWebviewContent(
     .onboarding {
       position: fixed;
       inset: 44px 0 0;
-      z-index: 50;
+      z-index: var(--z-overlay);
       min-height: 0;
       padding: clamp(14px, 4vw, 24px);
       overflow: auto;
@@ -337,7 +377,8 @@ export function getWebviewContent(
     }
     .onboarding-progress {
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-variant-numeric: tabular-nums;
       font-weight: 600;
       letter-spacing: 0.04em;
@@ -352,7 +393,7 @@ export function getWebviewContent(
       width: 18px;
       height: 3px;
       border: 0;
-      border-radius: 99px;
+      border-radius: var(--corner-pill);
       background: var(--border);
     }
     .onboarding-dot.active {
@@ -363,7 +404,7 @@ export function getWebviewContent(
       flex: 1;
       flex-direction: column;
       justify-content: flex-end;
-      animation: onboarding-enter 180ms var(--transition);
+      animation: onboarding-enter var(--duration-quick) var(--curve-standard);
     }
     .onboarding-step[hidden] {
       display: none;
@@ -375,10 +416,10 @@ export function getWebviewContent(
     .onboarding h2 {
       max-width: 430px;
       color: var(--text-primary);
-      font-size: clamp(19px, 6vw, 28px);
+      font-size: var(--type-display-size);
       font-weight: 650;
       letter-spacing: -0.035em;
-      line-height: 1.1;
+      line-height: var(--type-display-height);
     }
     /* The step heading takes focus only so a screen reader announces the new
        step; it is not tabbable, so a ring on it reads as a defect. */
@@ -390,8 +431,8 @@ export function getWebviewContent(
       max-width: 490px;
       margin-top: 13px;
       color: var(--text-secondary);
-      font-size: 13px;
-      line-height: 1.65;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
     }
     .onboarding-inline-actions {
       display: flex;
@@ -402,10 +443,11 @@ export function getWebviewContent(
     .onboarding-link,
     .onboarding-button {
       border: 1px solid var(--border);
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 600;
     }
     .onboarding-link {
@@ -427,7 +469,7 @@ export function getWebviewContent(
       border-top: 1px solid var(--border);
     }
     .onboarding-button {
-      min-height: 32px;
+      min-height: var(--control-lg);
       padding: 7px 12px;
     }
     .onboarding-button--secondary {
@@ -452,13 +494,22 @@ export function getWebviewContent(
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 10.5px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     button:focus-visible,
     [role="menuitem"]:focus-visible {
       outline: 2px solid var(--vscode-focusBorder, var(--accent-teal));
       outline-offset: 2px;
+    }
+
+    button:not(:disabled):active,
+    #sendBtn:not(:disabled):active,
+    #stopBtn:not(:disabled):active,
+    [role="menuitem"]:not([aria-disabled="true"]):active,
+    [role="option"]:not([aria-disabled="true"]):active {
+      background-image: linear-gradient(var(--pressed), var(--pressed));
     }
 
     /* ── Messages ── */
@@ -476,14 +527,14 @@ export function getWebviewContent(
     #messages::-webkit-scrollbar-track { background: transparent; }
     #messages::-webkit-scrollbar-thumb {
       background: var(--border);
-      border-radius: 2px;
+      border-radius: var(--corner-detail);
     }
 
     .message {
       max-width: 100%;
       padding: 9px 12px;
-      border-radius: var(--radius-md);
-      line-height: 1.5;
+      border-radius: var(--corner-field);
+      line-height: var(--type-body-height);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -499,7 +550,8 @@ export function getWebviewContent(
       display: block;
       margin-top: 3px;
       color: var(--text-secondary);
-      font-size: 9px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-align: right;
     }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
@@ -521,6 +573,37 @@ export function getWebviewContent(
       padding-inline: 2px;
     }
 
+    .message-actions {
+      display: flex;
+      gap: 2px;
+      margin-top: var(--message-actions-gap);
+      white-space: normal;
+      opacity: 0;
+      transition: opacity var(--duration-quick) var(--curve-standard);
+    }
+    .message.assistant:hover .message-actions,
+    .message.assistant.message--latest .message-actions,
+    .message-actions:focus-within {
+      opacity: 1;
+    }
+    .message-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--control-sm);
+      height: var(--control-sm);
+      padding: 0;
+      border: 0;
+      border-radius: var(--corner-control);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .message-action:hover {
+      background: var(--hover);
+      color: var(--text-primary);
+    }
+
     /* A failed turn is a notice in the transcript, not an input-validation
        box. The error border and the Activity row carry the signal; a saturated
        fill behind a paragraph of prose does not. */
@@ -534,8 +617,8 @@ export function getWebviewContent(
     }
     .error-headline {
       color: var(--text-primary);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
     }
     .error-actions {
       display: flex;
@@ -544,15 +627,16 @@ export function getWebviewContent(
       align-items: center;
     }
     .error-retry {
-      height: 24px;
+      height: var(--control-sm);
       padding: 0 10px;
       border: 1px solid var(--error-border);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: transparent;
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .error-retry:hover { background: var(--hover); }
     .error-details {
@@ -564,15 +648,16 @@ export function getWebviewContent(
       align-items: center;
       gap: 6px;
       width: 100%;
-      min-height: 28px;
+      min-height: var(--control-md);
       padding: 0 4px;
       border: 0;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: transparent;
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       text-align: left;
     }
     .error-details-toggle:hover { background: var(--hover); color: var(--text-primary); }
@@ -582,9 +667,9 @@ export function getWebviewContent(
       max-height: 180px;
       overflow: auto;
       color: var(--text-secondary);
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 11px;
-      line-height: 1.45;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -594,7 +679,7 @@ export function getWebviewContent(
        not look the same twice. */
     .approval-card {
       border: 1px solid var(--warning-border);
-      border-radius: 12px;
+      border-radius: var(--corner-surface);
       background: var(--bg-elevated);
       padding: 12px;
       margin-bottom: 8px;
@@ -605,15 +690,16 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       color: var(--text-primary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 600;
     }
     .approval-card__head .codicon { font-size: 14px; }
     .approval-card__summary {
       margin-top: 6px;
       color: var(--text-primary);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
     }
     .approval-card__verdict {
       display: flex;
@@ -621,12 +707,13 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       margin-top: 8px;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .approval-card__risk {
       padding: 1px 8px;
       border: 1px solid var(--border);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       color: var(--text-secondary);
     }
     .approval-card__risk--medium { color: var(--warning); border-color: var(--warning-border); }
@@ -636,12 +723,12 @@ export function getWebviewContent(
       margin: 8px 0 0;
       padding: 8px 10px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: var(--bg-overlay);
       color: var(--text-primary);
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 11px;
-      line-height: 1.5;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       max-height: 180px;
       overflow: auto;
       white-space: pre-wrap;
@@ -654,15 +741,16 @@ export function getWebviewContent(
       margin-top: 10px;
     }
     .approval-card__action {
-      min-height: 28px;
+      min-height: var(--control-md);
       padding: 0 12px;
       border: 1px solid var(--border);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: transparent;
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .approval-card__action:hover { background: var(--hover); }
     .approval-card__action--primary {
@@ -674,13 +762,15 @@ export function getWebviewContent(
     .approval-card__outcome {
       margin-top: 10px;
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     .message.system {
       text-align: center;
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       background: none;
       padding: 4px 0;
     }
@@ -696,7 +786,7 @@ export function getWebviewContent(
       height: 6px;
       background: var(--accent-teal);
       border-radius: 50%;
-      animation: typing 1.2s ease-in-out infinite;
+      animation: typing var(--duration-pulse) ease-in-out infinite;
     }
     .typing-dot:nth-child(2) { animation-delay: 0.2s; }
     .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -721,13 +811,13 @@ export function getWebviewContent(
     .composer-card {
       background: var(--vscode-input-background, var(--bg-elevated));
       border: 1px solid var(--vscode-input-border, var(--border));
-      border-radius: 14px;
+      border-radius: var(--corner-panel);
       position: relative;
       display: flex;
       flex-direction: column;
       min-height: 84px;
       overflow: visible;
-      transition: border-color 0.15s var(--transition);
+      transition: border-color var(--duration-quick) var(--curve-standard);
     }
     .composer-card:focus-within {
       border-color: var(--vscode-focusBorder, var(--accent-teal));
@@ -763,8 +853,8 @@ export function getWebviewContent(
       /* Follow the editor's configured size, matching :root above. A hardcoded
          13px ignored a user who had raised VS Code's font size for readability.
          in the one control they type into. */
-      font-size: var(--vscode-font-size, 13px);
-      line-height: 1.5;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       min-height: 46px;
       max-height: 140px;
       padding: 0;
@@ -785,17 +875,17 @@ export function getWebviewContent(
     .plus-btn {
       background: none;
       border: none;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       color: var(--text-secondary);
       cursor: pointer;
       font-size: 18px;
-      height: 28px;
-      width: 28px;
+      height: var(--control-md);
+      width: var(--control-md);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
-      transition: background 0.12s var(--transition), color 0.12s var(--transition);
+      transition: background var(--duration-instant) var(--curve-standard), color var(--duration-instant) var(--curve-standard);
       line-height: 1;
     }
     .plus-btn:hover { background: var(--hover); color: var(--text-primary); }
@@ -808,19 +898,20 @@ export function getWebviewContent(
       align-items: center;
       background: none;
       border: none;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       color: var(--text-secondary);
       cursor: pointer;
       flex-shrink: 1;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 500;
-      height: 28px;
+      height: var(--control-md);
       padding: 0 6px;
       white-space: nowrap;
       min-width: 72px;
       max-width: 160px;
       overflow: hidden;
-      transition: background 0.12s var(--transition), color 0.12s var(--transition);
+      transition: background var(--duration-instant) var(--curve-standard), color var(--duration-instant) var(--curve-standard);
     }
     .model-pill-name {
       overflow: hidden;
@@ -836,16 +927,16 @@ export function getWebviewContent(
       color: var(--accent-terra-foreground);
       cursor: pointer;
       font-size: 14px;
-      height: 28px;
-      width: 28px;
+      height: var(--control-md);
+      width: var(--control-md);
       display: flex;
       align-items: center;
       justify-content: center;
       flex-shrink: 0;
       margin-left: auto;
-      transition: opacity 0.15s var(--transition),
-                  transform 0.1s var(--transition),
-                  width 0.15s var(--transition);
+      transition: opacity var(--duration-quick) var(--curve-standard),
+                  transform var(--duration-instant) var(--curve-standard),
+                  width var(--duration-quick) var(--curve-standard);
     }
     #sendBtn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
     #sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -858,9 +949,10 @@ export function getWebviewContent(
       width: auto;
       min-width: 58px;
       padding: 0 9px;
-      border-radius: 13px;
+      border-radius: var(--corner-pill);
       gap: 4px;
-      font-size: 10px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 700;
     }
     #sendBtn.follow-up::before { content: '+'; font-size: 13px; }
@@ -869,8 +961,8 @@ export function getWebviewContent(
 
     #stopBtn {
       display: none;
-      width: 26px;
-      height: 26px;
+      width: var(--control-md);
+      height: var(--control-md);
       flex-shrink: 0;
       align-items: center;
       justify-content: center;
@@ -889,7 +981,8 @@ export function getWebviewContent(
       min-width: 0;
       overflow: hidden;
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-variant-numeric: tabular-nums;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -903,7 +996,8 @@ export function getWebviewContent(
       min-width: 0;
       overflow: hidden;
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
@@ -918,10 +1012,10 @@ export function getWebviewContent(
       left: 10px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
+      border-radius: var(--corner-menu);
+      box-shadow: var(--elevation-2);
       width: min(300px, calc(100vw - 20px));
-      z-index: 20;
+      z-index: var(--z-dropdown);
       overflow: hidden;
       padding: 5px;
     }
@@ -932,13 +1026,14 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       padding: 8px;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       color: var(--text-secondary);
       cursor: pointer;
-      transition: background 0.1s;
+      transition: background var(--duration-instant);
       width: 100%;
       border: 0;
-      border-radius: 7px;
+      border-radius: var(--corner-control);
       background: transparent;
       text-align: left;
       font-family: inherit;
@@ -956,7 +1051,8 @@ export function getWebviewContent(
     .plus-menu-item .pm-icon { font-size: 13px; flex-shrink: 0; }
     .plus-menu-label {
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 600;
       padding: 5px 8px 7px;
     }
@@ -969,12 +1065,12 @@ export function getWebviewContent(
     .plus-menu-title {
       color: var(--text-primary);
       font-weight: 500;
-      line-height: 1.25;
+      line-height: var(--type-label-height);
     }
     .plus-menu-description {
       color: var(--text-secondary);
-      font-size: 10px;
-      line-height: 1.3;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .plus-menu-divider {
       border-top: 1px solid var(--border);
@@ -999,9 +1095,9 @@ export function getWebviewContent(
       overflow-y: auto;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      box-shadow: 0 10px 28px var(--vscode-widget-shadow);
-      z-index: 24;
+      border-radius: var(--corner-menu);
+      box-shadow: var(--elevation-3);
+      z-index: var(--z-popover);
       padding: 6px;
     }
     .model-popover.open { display: block; }
@@ -1013,21 +1109,22 @@ export function getWebviewContent(
     }
     .model-popover__group-title {
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 700;
       letter-spacing: 0.4px;
       text-transform: uppercase;
     }
     .model-popover__group-description {
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
       font-weight: 400;
-      line-height: 1.3;
+      line-height: var(--type-caption-height);
     }
     .model-popover__option {
       width: 100%;
       border: 0;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       background: transparent;
       color: var(--text-primary);
       cursor: pointer;
@@ -1036,7 +1133,7 @@ export function getWebviewContent(
       gap: 2px;
       padding: 8px;
       text-align: left;
-      transition: background 0.12s var(--transition);
+      transition: background var(--duration-instant) var(--curve-standard);
     }
     .model-popover__option:hover,
     .model-popover__option.is-active {
@@ -1051,41 +1148,45 @@ export function getWebviewContent(
     }
     .model-popover__option:disabled:hover { background: transparent; }
     .model-popover__label {
-      font-size: 12px;
+      font-size: var(--type-label-size);
       font-weight: 600;
-      line-height: 1.25;
+      line-height: var(--type-label-height);
     }
     .model-popover__description {
       color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.25;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .model-popover__empty {
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       padding: 10px;
     }
 
     /* ── Code blocks ── */
     /* Code blocks use the same host-derived surface/text aliases as the chat,
        with AGI fallbacks for compatible hosts that omit those colour tokens. */
-    pre { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
-    code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
+    pre { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: var(--corner-control); padding: 12px; overflow-x: auto; margin: 8px 0; }
+    code { font-family: var(--type-code-family); font-size: var(--type-code-size); line-height: var(--type-code-height); }
     pre code { color: var(--text-primary); }
-    :not(pre) > code { background: var(--bg-overlay); padding: 2px 5px; border-radius: 3px; color: var(--text-primary); }
+    :not(pre) > code { background: var(--bg-overlay); padding: 2px 5px; border-radius: var(--corner-compact); color: var(--text-primary); }
     strong { font-weight: 600; }
     em { font-style: italic; }
     del { text-decoration: line-through; opacity: 0.6; }
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
-    h2 { font-size: 16px; } h3 { font-size: 14px; } h4 { font-size: 13px; }
+    h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
+    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
-    .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: 1; display: flex; gap: 4px; }
-    .code-lang { position: absolute; top: 4px; left: 8px; font-size: 10px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
-    .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 4px; color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
+    .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
+    .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
     /* Hover keeps background and foreground on the same host/fallback aliases. */
@@ -1104,15 +1205,16 @@ export function getWebviewContent(
     .controls-summary, .model-chip {
       background: none;
       border: none;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 500;
-      height: 28px;
+      height: var(--control-md);
       padding: 0 8px;
-      transition: color 0.15s var(--transition),
-                  background 0.15s var(--transition);
+      transition: color var(--duration-quick) var(--curve-standard),
+                  background var(--duration-quick) var(--curve-standard);
       white-space: nowrap;
       min-width: 0;
       max-width: 140px;
@@ -1146,11 +1248,12 @@ export function getWebviewContent(
       overflow: hidden;
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--text-secondary);
       flex-shrink: 0;
       min-height: 30px;
-      transition: background 0.15s var(--transition);
+      transition: background var(--duration-quick) var(--curve-standard);
     }
 
     .usage-meter-banner.warn {
@@ -1167,7 +1270,8 @@ export function getWebviewContent(
       padding: 4px 12px 8px;
       background: var(--bg-elevated);
       border-bottom: 1px solid var(--border);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       color: var(--text-secondary);
       flex-shrink: 0;
       overflow: hidden;
@@ -1254,14 +1358,14 @@ export function getWebviewContent(
       flex: 1;
       height: 4px;
       background: var(--vscode-editorWidget-border);
-      border-radius: 2px;
+      border-radius: var(--corner-detail);
       overflow: hidden;
     }
 
     .usage-progress-fill {
       height: 100%;
-      border-radius: 2px;
-      transition: width 0.4s var(--transition), background 0.4s var(--transition);
+      border-radius: var(--corner-detail);
+      transition: width var(--duration-moved) var(--curve-standard), background var(--duration-moved) var(--curve-standard);
     }
 
     /*
@@ -1297,15 +1401,16 @@ export function getWebviewContent(
     .upgrade-btn {
       background: var(--accent-terra);
       border: none;
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       color: var(--accent-terra-foreground);
       cursor: pointer;
-      font-size: 10px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       font-weight: 700;
       letter-spacing: 0.3px;
       padding: 2px 8px;
       flex-shrink: 0;
-      transition: opacity 0.15s;
+      transition: opacity var(--duration-quick);
     }
     .upgrade-btn:hover { opacity: 0.85; }
 
@@ -1314,17 +1419,17 @@ export function getWebviewContent(
       border: none;
       color: var(--text-secondary);
       cursor: pointer;
-      font-size: 11px;
+      font-size: var(--type-label-size);
       /* Was padding 0 2px, giving a ~13px hit area. Pad to a 24px square.
          the minimum comfortable target, without changing the glyph size. */
       display: inline-flex;
       align-items: center;
       justify-content: center;
       min-width: 24px;
-      min-height: 24px;
+      min-height: var(--control-sm);
       padding: 0 4px;
       line-height: 1;
-      transition: color 0.12s;
+      transition: color var(--duration-instant);
       flex-shrink: 0;
     }
     .meter-dismiss-btn:hover, .meter-restore-btn:hover { color: var(--text-primary); }
@@ -1339,17 +1444,18 @@ export function getWebviewContent(
       right: 0;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       max-height: 180px;
       overflow-y: auto;
       display: none;
-      z-index: 10;
+      z-index: var(--z-dropdown);
       margin-bottom: 4px;
     }
     .mention-dropdown.visible { display: block; }
     .mention-item {
       padding: 6px 10px;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       cursor: pointer;
       color: var(--text-secondary);
       overflow: hidden;
@@ -1365,7 +1471,7 @@ export function getWebviewContent(
     .activity-group {
       overflow: hidden;
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: var(--corner-surface);
       background: var(--bg-elevated);
       margin-bottom: 4px;
       /* #messages is a column flex container, so a tall child is squeezed and
@@ -1390,24 +1496,25 @@ export function getWebviewContent(
     .activity-group__summary:hover { background: var(--bg-overlay); }
     .activity-group__icon { color: var(--accent-teal); }
     .activity-group[data-status='working'] .activity-group__icon {
-      animation: tool-spin 1s linear infinite;
+      animation: tool-spin var(--duration-spin) linear infinite;
     }
     .activity-group[data-status='error'] .activity-group__icon {
       color: var(--error);
     }
-    .activity-group__title { font-size: 12px; font-weight: 600; }
+    .activity-group__title { font-size: var(--type-label-size); line-height: var(--type-label-height); font-weight: 600; }
     .activity-group__meta {
       min-width: 0;
       overflow: hidden;
       color: var(--text-secondary);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-overflow: ellipsis;
       white-space: nowrap;
     }
     .activity-group__chevron {
       color: var(--text-secondary);
       font-size: 10px;
-      transition: transform 160ms ease;
+      transition: transform var(--duration-quick) var(--curve-standard);
     }
     .activity-group--collapsed .activity-group__chevron { transform: rotate(-90deg); }
     .activity-group__body {
@@ -1434,10 +1541,11 @@ export function getWebviewContent(
       padding: 0 4px;
       cursor: pointer;
       user-select: none;
-      border-radius: 6px;
-      transition: background 120ms ease;
+      border-radius: var(--corner-control);
+      transition: background var(--duration-instant) var(--curve-standard);
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       width: 100%;
       border: 0;
       background: transparent;
@@ -1454,7 +1562,7 @@ export function getWebviewContent(
       font-size: 14px;
       line-height: 1;
     }
-    .tool-call--pending .tool-call__icon { animation: tool-spin 1s linear infinite; }
+    .tool-call--pending .tool-call__icon { animation: tool-spin var(--duration-spin) linear infinite; }
     @keyframes tool-spin { to { transform: rotate(360deg); } }
 
     .tool-call--error .tool-call__bar { color: var(--error); }
@@ -1475,7 +1583,8 @@ export function getWebviewContent(
 
     .tool-call__summary {
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       margin-left: 4px;
       max-width: 220px;
       white-space: nowrap;
@@ -1489,7 +1598,7 @@ export function getWebviewContent(
       height: 12px;
       color: var(--text-secondary);
       margin-left: auto;
-      transition: transform 160ms ease;
+      transition: transform var(--duration-quick) var(--curve-standard);
       font-size: 10px;
       opacity: 0.6;
     }
@@ -1499,10 +1608,11 @@ export function getWebviewContent(
       display: none;
       background: var(--bg-base);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: var(--corner-field);
       padding: 12px;
-      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-      font-size: 11px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       color: var(--text-primary);
       overflow-x: auto;
       max-height: 320px;
@@ -1521,7 +1631,8 @@ export function getWebviewContent(
     .tool-call__section-label {
       color: var(--text-secondary);
       font-family: var(--vscode-font-family);
-      font-size: 10px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       font-weight: 600;
       letter-spacing: 0.06em;
       margin-bottom: 6px;
@@ -1536,12 +1647,12 @@ export function getWebviewContent(
       margin: 0;
       padding: 8px 10px;
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       background: var(--bg-overlay);
       color: var(--text-primary);
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 11px;
-      line-height: 1.5;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       max-height: 240px;
       overflow: auto;
       white-space: pre;
@@ -1549,31 +1660,35 @@ export function getWebviewContent(
     .tool-call__exit {
       margin-top: 6px;
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .tool-call__exit[data-failed='1'] { color: var(--error); }
     .tool-call__path {
       color: var(--text-primary);
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 11px;
+      font-family: var(--type-code-family);
+      font-size: var(--type-code-size);
+      line-height: var(--type-code-height);
       word-break: break-all;
     }
     .tool-call__diffstat {
       margin-top: 4px;
       color: var(--text-secondary);
-      font-size: 11px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
     .tool-call__open-diff {
       margin-top: 8px;
       min-height: 28px;
       padding: 0 12px;
       border: 1px solid var(--border);
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: transparent;
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 11px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .tool-call__open-diff:hover { background: var(--hover); }
 
@@ -1588,13 +1703,13 @@ export function getWebviewContent(
       font-family: var(--vscode-font-family);
       white-space: normal;
       word-break: normal;
-      line-height: 1.5;
+      line-height: var(--type-body-small-height);
     }
 
     /* ── Structured plan visualization ── */
     .plan-card {
       border: 1px solid var(--border);
-      border-radius: 9px;
+      border-radius: var(--corner-field);
       background: var(--bg-elevated);
       margin: 8px 0;
       overflow: hidden;
@@ -1607,12 +1722,12 @@ export function getWebviewContent(
       min-height: 34px;
       padding: 0 10px;
     }
-    .plan-card__title { color: var(--text-primary); font-size: 12px; font-weight: 600; }
-    .plan-card__count { color: var(--text-secondary); font-size: 10px; margin-left: auto; }
+    .plan-card__title { color: var(--text-primary); font-size: var(--type-label-size); line-height: var(--type-label-height); font-weight: 600; }
+    .plan-card__count { color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); margin-left: auto; }
     .plan-card__explanation {
       color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.4;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       margin: 0;
       padding: 9px 10px 2px;
     }
@@ -1620,12 +1735,12 @@ export function getWebviewContent(
     .plan-card__step {
       align-items: flex-start;
       border-left: 2px solid transparent;
-      border-radius: 5px;
+      border-radius: var(--corner-control);
       color: var(--text-primary);
       display: flex;
-      font-size: 11px;
+      font-size: var(--type-caption-size);
       gap: 7px;
-      line-height: 1.4;
+      line-height: var(--type-caption-height);
       margin: 0;
       padding: 5px 6px;
     }
@@ -1663,18 +1778,18 @@ export function getWebviewContent(
     .empty-state-mark svg { width: 100%; height: 100%; }
 
     .empty-state-headline {
-      font-size: 15px;
+      font-size: var(--type-title-size);
       font-weight: 600;
       color: var(--text-primary);
       letter-spacing: -0.01em;
-      line-height: 1.3;
+      line-height: var(--type-title-height);
     }
 
     .empty-state-copy {
       max-width: 250px;
       color: var(--text-secondary);
-      font-size: 12px;
-      line-height: 1.5;
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
     }
 
     .empty-state--has-recents {
@@ -1695,7 +1810,8 @@ export function getWebviewContent(
 
     .recent-chats-title {
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       text-transform: uppercase;
       font-weight: 600;
       letter-spacing: 0.02em;
@@ -1706,14 +1822,15 @@ export function getWebviewContent(
       align-items: center;
       background: none;
       border: none;
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       color: var(--text-primary);
       cursor: pointer;
       display: flex;
       font: inherit;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       gap: 8px;
-      height: 28px;
+      height: var(--control-md);
       padding: 0 6px;
       text-align: left;
       width: 100%;
@@ -1731,18 +1848,20 @@ export function getWebviewContent(
     .recent-chat-age {
       color: var(--text-secondary);
       flex: 0 0 auto;
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
     }
 
     .recent-chats-all {
       align-self: flex-start;
       background: none;
       border: none;
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       min-height: 24px;
       padding: 0 6px;
     }
@@ -1755,7 +1874,7 @@ export function getWebviewContent(
       position: absolute;
       top: calc(100% + 6px);
       right: 0;
-      z-index: 40;
+      z-index: var(--z-popover);
       display: none;
       flex-direction: column;
       min-width: 208px;
@@ -1764,8 +1883,8 @@ export function getWebviewContent(
       padding: 4px;
       background: var(--bg-overlay);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
+      border-radius: var(--corner-field);
+      box-shadow: var(--elevation-2);
     }
     .actions-menu.open { display: flex; }
 
@@ -1774,15 +1893,16 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       width: 100%;
-      min-height: 28px;
+      min-height: var(--control-md);
       padding: 0 8px;
       background: none;
       border: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       text-align: left;
     }
     .actions-menu-item:hover,
@@ -1803,18 +1923,19 @@ export function getWebviewContent(
     }
     .actions-menu-account-name {
       color: var(--text-primary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .actions-menu-account-plan { color: var(--text-secondary); font-size: 12px; }
+    .actions-menu-account-plan { color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
     /* ── Sessions sheet ── */
     .sessions-sheet {
       position: absolute;
       inset: 0;
-      z-index: 60;
+      z-index: var(--z-sheet);
       display: flex;
       flex-direction: column;
       background: var(--bg-base);
@@ -1831,7 +1952,7 @@ export function getWebviewContent(
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: 13px; font-weight: 600; }
+    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
 
     .sessions-sheet-toggle {
       display: flex;
@@ -1840,18 +1961,19 @@ export function getWebviewContent(
       padding: 2px;
       background: var(--bg-elevated);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
     }
     .sessions-sheet-toggle button {
       flex: 1;
-      min-height: 26px;
+      min-height: var(--control-md);
       background: none;
       border: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--text-secondary);
       cursor: pointer;
       font: inherit;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .sessions-sheet-toggle button[aria-selected='true'] {
       background: var(--hover);
@@ -1863,10 +1985,11 @@ export function getWebviewContent(
       padding: 5px 8px;
       background: var(--vscode-input-background, var(--bg-elevated));
       border: 1px solid var(--vscode-input-border, var(--border));
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       color: var(--vscode-input-foreground, var(--text-primary));
       font: inherit;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .sessions-sheet-search[hidden] { display: none; }
 
@@ -1881,15 +2004,16 @@ export function getWebviewContent(
       align-items: center;
       gap: 8px;
       width: 100%;
-      min-height: 32px;
+      min-height: var(--control-lg);
       padding: 0 8px;
       background: none;
       border: none;
-      border-radius: var(--radius-md);
+      border-radius: var(--corner-field);
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       text-align: left;
     }
     .sessions-sheet-row:hover { background: var(--hover); }
@@ -1900,7 +2024,7 @@ export function getWebviewContent(
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sessions-sheet-row-age { color: var(--text-secondary); font-size: 12px; }
+    .sessions-sheet-row-age { color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
     .sessions-sheet-row-branch {
       font-family: var(--vscode-editor-font-family, monospace);
       max-width: 40%;
@@ -1918,7 +2042,8 @@ export function getWebviewContent(
     .sessions-sheet-empty {
       padding: 16px 10px;
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       text-align: center;
     }
 
@@ -1927,7 +2052,7 @@ export function getWebviewContent(
       position: absolute;
       bottom: calc(100% + 6px);
       left: 0;
-      z-index: 30;
+      z-index: var(--z-dropdown);
       display: none;
       flex-direction: column;
       width: min(320px, 100%);
@@ -1936,8 +2061,8 @@ export function getWebviewContent(
       padding: 4px;
       background: var(--bg-overlay);
       border: 1px solid var(--border);
-      border-radius: var(--radius-md);
-      box-shadow: 0 6px 20px var(--vscode-widget-shadow);
+      border-radius: var(--corner-field);
+      box-shadow: var(--elevation-2);
     }
     .slash-menu.open { display: flex; }
 
@@ -1946,15 +2071,16 @@ export function getWebviewContent(
       align-items: baseline;
       gap: 8px;
       width: 100%;
-      min-height: 28px;
+      min-height: var(--control-md);
       padding: 0 8px;
       background: none;
       border: none;
-      border-radius: 6px;
+      border-radius: var(--corner-control);
       color: var(--text-primary);
       cursor: pointer;
       font: inherit;
-      font-size: 13px;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
       text-align: left;
     }
     .slash-menu-item:hover,
@@ -1964,12 +2090,13 @@ export function getWebviewContent(
     .slash-menu-item-description {
       color: var(--text-secondary);
       flex: 1;
-      font-size: 12px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .slash-menu-empty { padding: 8px; color: var(--text-secondary); font-size: 12px; }
+    .slash-menu-empty { padding: 8px; color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
 
     /* ── Composer status line ── */
     .composer-status {
@@ -1978,7 +2105,8 @@ export function getWebviewContent(
       gap: 6px;
       padding: 6px 4px 0;
       color: var(--text-secondary);
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
 
     .composer-status-route {
@@ -1998,7 +2126,8 @@ export function getWebviewContent(
       color: var(--vscode-textLink-foreground, var(--accent-teal));
       cursor: pointer;
       font: inherit;
-      font-size: 12px;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
     }
     .composer-status-signin[hidden] { display: none; }
     .composer-status-signin:hover { text-decoration: underline; }
@@ -2111,12 +2240,12 @@ export function getWebviewContent(
       gap: 6px;
       max-width: 220px;
       padding: 4px 8px;
-      border-radius: 999px;
+      border-radius: var(--corner-pill);
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       color: var(--text-secondary);
-      font-size: 11px;
-      line-height: 1.2;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3452,6 +3581,51 @@ export function getWebviewContent(
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
       emptyStateEl = mounted;
+    }
+
+    var assistantSources = new WeakMap();
+
+    function settleMessageCopy(button, icon, copied) {
+      icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
+      button.setAttribute('aria-label', copied ? 'Copied' : 'Copy failed');
+      button.title = copied ? 'Copied' : 'Copy failed';
+      setTimeout(function () {
+        icon.className = 'codicon codicon-copy';
+        button.setAttribute('aria-label', 'Copy response');
+        button.title = 'Copy';
+      }, 1500);
+    }
+
+    function appendMessageActions(messageEl, sourceText) {
+      if (!messageEl || !sourceText) return;
+      assistantSources.set(messageEl, sourceText);
+      var previous = messagesEl.querySelectorAll('.message.assistant.message--latest');
+      for (var i = 0; i < previous.length; i++) previous[i].classList.remove('message--latest');
+      messageEl.classList.add('message--latest');
+      var row = document.createElement('div');
+      row.className = 'message-actions';
+      var copy = document.createElement('button');
+      copy.type = 'button';
+      copy.className = 'message-action';
+      copy.setAttribute('aria-label', 'Copy response');
+      copy.title = 'Copy';
+      var icon = document.createElement('span');
+      icon.className = 'codicon codicon-copy';
+      icon.setAttribute('aria-hidden', 'true');
+      copy.appendChild(icon);
+      copy.addEventListener('click', function () {
+        var text = assistantSources.get(messageEl) || '';
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+          settleMessageCopy(copy, icon, false);
+          return;
+        }
+        navigator.clipboard.writeText(text).then(
+          function () { settleMessageCopy(copy, icon, true); },
+          function () { settleMessageCopy(copy, icon, false); }
+        );
+      });
+      row.appendChild(copy);
+      messageEl.appendChild(row);
     }
 
     function addMessage(role, text) {
@@ -5072,6 +5246,7 @@ export function getWebviewContent(
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
           bindCodeBlockActions(currentAssistantEl);
+          appendMessageActions(currentAssistantEl, accumulatedContent);
         }
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
@@ -5316,6 +5491,7 @@ export function getWebviewContent(
             var assistantHistoryEl = addMessage('assistant', '');
             assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
             bindCodeBlockActions(assistantHistoryEl);
+            appendMessageActions(assistantHistoryEl, historyMessage.text || '');
           } else if (historyMessage.role === 'user') {
             addMessage('user', historyMessage.text || '');
           }

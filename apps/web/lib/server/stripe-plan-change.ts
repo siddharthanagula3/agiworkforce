@@ -47,7 +47,7 @@ export function assertUpgradeBillingInterval(
   if (currentInterval === requestedInterval) return;
   if (!planOffersBillingInterval(targetPlan, currentInterval)) return;
   throw new Error(
-    `Mid-cycle upgrades must keep your current ${currentInterval} billing cadence so you are charged only the prorated difference for the remaining period. Select ${currentInterval} or change cadence in billing management.`,
+    `Mid-cycle upgrades keep your current ${currentInterval} billing cadence. Select ${currentInterval} billing to upgrade now.`,
   );
 }
 

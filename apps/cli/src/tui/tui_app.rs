@@ -33,7 +33,6 @@ use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 // Constants
 // ---------------------------------------------------------------------------
 
-const TICK_RATE_MS: u64 = 50;
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
@@ -356,7 +355,7 @@ impl TuiApp {
             .as_deref()
             .and_then(super::widgets::theme_picker::ThemeChoice::from_arg)
             .unwrap_or(super::widgets::theme_picker::ThemeChoice::Dark);
-        crate::tui::terminal_palette::set_active_theme(theme_choice as u8);
+        crate::tui::terminal_palette::set_active_theme(theme_choice.applied() as u8);
 
         let model_name = session.model.clone();
         let provider_name = crate::design_system::provider_label(&session.provider);
@@ -961,7 +960,7 @@ fn run_tui_approval_modal(
             overlay.render_into(frame, chat_area);
         })?;
 
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             match event::read()? {
                 Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
                     ViewAction::Submit(_) | ViewAction::Close => {
@@ -1029,7 +1028,7 @@ fn run_idle_mcp_elicitation_modal(
             let chat_area = draw_app_frame(frame, app);
             render_overlay(frame, chat_area, &overlay, 0);
         })?;
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
                 terminal.draw(|frame| {
                     draw_app_frame(frame, app);
@@ -1054,7 +1053,7 @@ fn run_turn_mcp_elicitation_modal(
             let chat_area = draw_turn_chrome(frame, ctx);
             render_overlay(frame, chat_area, &overlay, 0);
         })?;
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
                 terminal.draw(|frame| {
                     draw_turn_chrome(frame, ctx);
@@ -1167,6 +1166,7 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     install_panic_restore_hook();
     install_signal_restore_hook();
     enable_raw_mode()?;
+    super::terminal_palette::requery_default_colors();
     let mut stdout = io::stdout();
     stdout.execute(EnterAlternateScreen)?;
     stdout.execute(EnableBracketedPaste)?;
@@ -1306,6 +1306,9 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
 /// send future holds `&mut app.session`).
 fn spinner_frame(tick: u8) -> &'static str {
     const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    if super::motion::reduced() {
+        return super::motion::STILL_SPINNER;
+    }
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
@@ -2328,7 +2331,9 @@ fn render_overlay(
     let visible_lines = overlay_area.height as usize;
     let max_scroll = lines.len().saturating_sub(visible_lines) as u16;
     let scroll = scroll_offset.min(max_scroll);
-    let para = Paragraph::new(lines).scroll((scroll, 0));
+    let para = Paragraph::new(lines)
+        .style(Style::default().bg(super::terminal_palette::ui_surface_elevated()))
+        .scroll((scroll, 0));
     frame.render_widget(para, overlay_area);
 }
 
@@ -3098,7 +3103,7 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.theme_choice = choice;
             // Apply the theme: re-routes every `ui_*` semantic token so the whole
             // TUI recolors on the next frame.
-            crate::tui::terminal_palette::set_active_theme(choice as u8);
+            crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
             // Persist so the choice survives a restart.
             let _ = app.config.persist_theme_project(choice.slug());
             app.input.clear();
@@ -3886,7 +3891,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match ThemeChoice::from_arg(arg) {
                     Some(choice) => {
                         app.theme_choice = choice;
-                        crate::tui::terminal_palette::set_active_theme(choice as u8);
+                        crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
                         let _ = app.config.persist_theme_project(choice.slug());
                         SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
                     }
@@ -4442,7 +4447,11 @@ pub async fn run(
                 .map(|mut g| *g = models);
         });
     }
+    super::motion::set_reduced(
+        crate::output::plain_output() || app.config.ui.reduced_motion == Some(true),
+    );
     let mut terminal = setup_terminal()?;
+    crate::tui::terminal_palette::set_active_theme(app.theme_choice.applied() as u8);
 
     let result = run_event_loop(&mut terminal, &mut app, &mut mcp_attach_join).await;
 
@@ -4558,7 +4567,7 @@ async fn run_event_loop(
             render(terminal, app)?;
         }
 
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             let action = match event::read()? {
                 Event::Key(key) => handle_key_event(app, key),
                 Event::Paste(text) => {
