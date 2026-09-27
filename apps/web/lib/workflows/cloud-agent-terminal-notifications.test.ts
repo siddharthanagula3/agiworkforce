@@ -45,6 +45,10 @@ vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
   finalizeObservedManagedUsage: mocks.finalize,
   calculateObservedProviderUsageCostDollars: () => 0,
+  addToolSpend: vi.fn(),
+  createObservedProviderUsage: vi.fn(),
+  mergeObservedProviderUsage: vi.fn(),
+  observedTurnCost: vi.fn(() => ({ tokenMicrousd: 0, toolMicrousd: 0 })),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
@@ -81,6 +85,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-auto-memory-service', () => ({
   recordManagedAutoMemoryTurn: mocks.autoMemory,

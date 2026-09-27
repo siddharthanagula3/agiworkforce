@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { BLOCK_APPEAL_PATH } from '@/lib/security-audit';
 
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
@@ -63,6 +64,10 @@ function fakeDb(rows: Record<string, unknown>[]): DatabaseAdapter {
     dispose: vi.fn(),
   } as unknown as DatabaseAdapter;
 }
+
+const PRO_FIVE_HOUR_MICROUSD = 50 * MICROUSD_PER_CREDIT;
+const PRO_WEEKLY_MICROUSD = 500 * MICROUSD_PER_CREDIT;
+const PRO_FLAGSHIP_WEEKLY_MICROUSD = 150 * MICROUSD_PER_CREDIT;
 
 describe('managed usage request service', () => {
   it('serializes one shared public error envelope while callers choose the error type', () => {
@@ -157,9 +162,9 @@ describe('managed usage request service', () => {
         70_000,
         'lease-1',
         900,
-        500_000,
-        2_500_000,
-        750_000,
+        PRO_FIVE_HOUR_MICROUSD,
+        PRO_WEEKLY_MICROUSD,
+        PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
         0,
       ],
@@ -410,10 +415,11 @@ describe('managed usage request service', () => {
         'lease-5',
         'provider:2',
         50_000,
-        500_000,
-        2_500_000,
-        750_000,
+        PRO_FIVE_HOUR_MICROUSD,
+        PRO_WEEKLY_MICROUSD,
+        PRO_FLAGSHIP_WEEKLY_MICROUSD,
         true,
+        0,
       ],
     );
   });

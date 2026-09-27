@@ -1842,18 +1842,21 @@ describe('spending past the plan allowance', () => {
     ledger = new LedgerDatabase();
   });
 
-  // The catalogue grants no plan an allowance beyond its windows, so the only
-  // thing that can carry a turn past one is balance the account bought. The
-  // statement the service issues is where that is decided.
-  it('asks only for balance that was bought, on an account that opted in', () => {
+  it('asks the prepaid balance owner for bonus and opted-in purchased balance only', () => {
     const source = readFileSync(join(__dirname, '..', 'managed-usage-request-service.ts'), 'utf8');
-    const statement = /select greatest\(([\s\S]*?)as headroom_microusd([\s\S]*?)`/.exec(source);
+    const migrationsDir = join(__dirname, '..', '..', '..', 'db', 'neon');
+    const definition = readdirSync(migrationsDir)
+      .filter((name) => /^\d{4}_.+\.sql$/.test(name) && !name.endsWith('.down.sql'))
+      .sort()
+      .reverse()
+      .map((name) => readFileSync(join(migrationsDir, name), 'utf8'))
+      .find((sql) => sql.includes('function public.prepaid_credit_balances_microusd('));
 
-    expect(statement).not.toBeNull();
-    expect(statement?.[1]).toContain('least(');
-    expect(statement?.[1]).toContain('credits_allocated_microusd - credits.credits_used_microusd');
-    expect(statement?.[1]).toContain('top_up_allocated_microusd');
-    expect(statement?.[2]).toContain('subscription.overage_enabled');
+    expect(source).toContain('from public.prepaid_credit_balances_microusd($1::text) balances');
+    expect(definition).toBeDefined();
+    expect(definition).toContain('top_up_allocated_microusd as purchased_allocated');
+    expect(definition).toContain('bool_or(subscription_row.overage_enabled)');
+    expect(definition).toMatch(/when drawn\.overage_enabled then greatest\(drawn\.purchased/);
   });
 
   it('refuses the turn when nothing was purchased to carry it', async () => {
