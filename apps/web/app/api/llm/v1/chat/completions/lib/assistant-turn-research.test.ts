@@ -27,13 +27,13 @@ describe('buildPersistedTurnResearch', () => {
   it('carries the run settlement through as credits', () => {
     const research = buildPersistedTurnResearch(REPORT, { settledCostMicrousd: 240_000 });
 
-    expect(research.credits).toBe(12);
+    expect(research.credits).toBe(48);
   });
 
   it('falls back to the amount already stored on the report', () => {
     const research = buildPersistedTurnResearch({ ...REPORT, settledCostMicrousd: 100_000 });
 
-    expect(research.credits).toBe(5);
+    expect(research.credits).toBe(20);
   });
 
   it('leaves credits absent when the run was never settled', () => {

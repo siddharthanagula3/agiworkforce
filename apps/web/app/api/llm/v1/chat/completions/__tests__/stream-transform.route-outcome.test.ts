@@ -39,6 +39,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 const mockRecordRouteOutcome = vi.fn(async (..._args: unknown[]) => undefined);
@@ -81,6 +86,7 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   return {
     requestId: 'req-route-outcome-001',
     chatRequest: { model: MODEL, messages: [], stream: true } as any,
+    llmRequest: { model: MODEL, messages: [], stream: true } as any,
     requestedModel: MODEL,
     provider: OPEN_ROUTER_PROVIDER,
     estimatedCostCents: 5,

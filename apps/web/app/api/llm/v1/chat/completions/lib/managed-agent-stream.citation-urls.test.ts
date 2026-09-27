@@ -51,6 +51,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isEventPromotedRequest: () => false,
   isFreePlanTier: () => false,
   isFreeTrialRequest: () => false,
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvents: vi.fn(),

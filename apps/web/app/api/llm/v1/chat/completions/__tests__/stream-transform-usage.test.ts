@@ -45,12 +45,18 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 import { buildStreamResponse } from '../lib/stream-transform';
 import type { ProcessedRequest } from '../lib/request-processor';
 import { recordModelUsage } from '@/lib/cost-tracker';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 
 const mockRecordModelUsage = recordModelUsage as ReturnType<typeof vi.fn>;
 const mockSettleFreeTrialRequest = settleFreeTrialRequest as ReturnType<typeof vi.fn>;
@@ -59,6 +65,7 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   return {
     requestId: 'req-test-001',
     chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    llmRequest: { model: 'fixture-model', messages: [], stream: true } as any,
     requestedModel: 'fixture-model',
     provider: 'openai',
     estimatedCostCents: 0,
@@ -194,6 +201,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
   });
 
   it('records actual free-tier stream usage without trial-budget headers', async () => {
+    vi.mocked(LLMCostCalculator.calculateCostMicrousd).mockReturnValue(1_234);
     const events = [
       JSON.stringify({
         choices: [{ delta: { content: 'Hello' }, index: 0 }],
@@ -231,6 +239,7 @@ describe('buildStreamResponse · final OpenAI usage event capture', () => {
       outcome: 'completed',
       provider: 'openai',
       model: 'fixture-model',
+      cost: { tokenMicrousd: 1_234, toolMicrousd: 0 },
       usage: expect.objectContaining({
         promptTokens: 120,
         completionTokens: 80,
