@@ -180,7 +180,11 @@ pub enum CliError {
     /// No AGI Workforce session, and no other route can run the model.
     AccountSignedOut { model: String },
     /// Signed in, but the account's plan does not include the model.
-    PlanExcludesModel { model: String, tier: String },
+    PlanExcludesModel {
+        model: String,
+        tier: String,
+        alternative_model: Option<String>,
+    },
     /// On the plan, but the hosted list withholds the model right now.
     ModelUnavailable { model: String },
     /// AGI Workforce managed-cloud paywall, user's tier cap reached.
@@ -193,6 +197,14 @@ pub enum CliError {
         feature: String,
         required_tier: String,
         reason: String,
+    },
+    UsageLimit {
+        code: String,
+        message: String,
+        recovery_href: Option<String>,
+        retry_after: Option<u64>,
+        resets_in: Option<String>,
+        alternative_model: Option<String>,
     },
     /// The provider answered and the turn still has nothing to deliver: no
     /// text and no tool calls, a response its safety layer stopped, or an
@@ -334,7 +346,7 @@ impl fmt::Display for CliError {
                     model
                 )
             }
-            CliError::PlanExcludesModel { model, tier } => {
+            CliError::PlanExcludesModel { model, tier, .. } => {
                 write!(
                     f,
                     "Your {} plan does not include '{}', and no provider key for it is set.",
@@ -358,6 +370,7 @@ impl fmt::Display for CliError {
                     urlencoding::encode(feature),
                 )
             }
+            CliError::UsageLimit { message, .. } => f.write_str(message),
         }
     }
 }
@@ -459,6 +472,7 @@ impl CliError {
             CliError::PlanExcludesModel { .. } => "plan_excludes_model",
             CliError::ModelUnavailable { .. } => "model_unavailable",
             CliError::Paywall { .. } => "paywall",
+            CliError::UsageLimit { .. } => "usage_limit",
         }
     }
 
@@ -549,10 +563,19 @@ impl CliError {
                 "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
                     .to_string()
             }
-            CliError::PlanExcludesModel { .. } => format!(
-                "Choose a model your plan includes, or set that provider's own key. \
-                 {PAID_UPGRADES_ARE_STAGED}"
-            ),
+            CliError::PlanExcludesModel {
+                alternative_model, ..
+            } => match alternative_model {
+                Some(model) => format!(
+                    "Choose a model your plan includes, such as {} (`--model {model}`), or set \
+                     that provider's own key. {PAID_UPGRADES_ARE_STAGED}",
+                    crate::model_catalog::display_name(model)
+                ),
+                None => format!(
+                    "Choose a model your plan includes, or set that provider's own key. \
+                     {PAID_UPGRADES_ARE_STAGED}"
+                ),
+            },
             CliError::ModelUnavailable { .. } => {
                 "Choose another model, or try again shortly; `agi models list` shows what is \
                  available now."
@@ -562,8 +585,40 @@ impl CliError {
                 "Run `agi usage` to see when the limit resets, or switch to your own provider \
                  key with `--provider <name>`. {PAID_UPGRADES_ARE_STAGED}"
             ),
+            CliError::UsageLimit {
+                recovery_href,
+                resets_in,
+                alternative_model,
+                ..
+            } => usage_limit_hint(
+                recovery_href.as_deref(),
+                resets_in.as_deref(),
+                alternative_model.as_deref(),
+            ),
         }
     }
+}
+
+fn usage_limit_hint(
+    recovery_href: Option<&str>,
+    resets_in: Option<&str>,
+    alternative_model: Option<&str>,
+) -> String {
+    let mut sentences = Vec::new();
+    match resets_in {
+        Some(resets_in) => sentences.push(format!("It resets in {resets_in}.")),
+        None => sentences.push("Run `agi usage` to see when it resets.".to_string()),
+    }
+    if let Some(model) = alternative_model {
+        sentences.push(format!(
+            "Your plan also includes {}, which this limit does not cover: switch with `/model {model}` or `--model {model}`.",
+            crate::model_catalog::display_name(model)
+        ));
+    }
+    if let Some(href) = recovery_href {
+        sentences.push(crate::usage_summary::recovery_sentence(href));
+    }
+    sentences.join(" ")
 }
 
 // ---------------------------------------------------------------------------
@@ -697,6 +752,22 @@ impl CliError {
         }
     }
 
+    pub fn usage_limit(
+        code: impl Into<String>,
+        message: impl Into<String>,
+        recovery_href: Option<String>,
+        retry_after: Option<u64>,
+    ) -> Self {
+        CliError::UsageLimit {
+            code: code.into(),
+            message: message.into(),
+            recovery_href,
+            retry_after,
+            resets_in: None,
+            alternative_model: None,
+        }
+    }
+
     /// Returns true if this error is a paywall response (exits with EX_CONFIG = 78).
     pub fn is_paywall(&self) -> bool {
         matches!(self, CliError::Paywall { .. })
@@ -732,9 +803,9 @@ impl CliError {
                     ExitClass::Failure
                 }
             }
-            CliError::PlanExcludesModel { .. } | CliError::Paywall { .. } => {
-                ExitClass::Configuration
-            }
+            CliError::PlanExcludesModel { .. }
+            | CliError::Paywall { .. }
+            | CliError::UsageLimit { .. } => ExitClass::Configuration,
             CliError::ModelUnavailable { .. } => ExitClass::Unavailable,
             CliError::ClientUpdateRequired { .. } => ExitClass::ProtocolTooOld,
         }
@@ -769,7 +840,9 @@ impl CliError {
             CliError::AccountSignedOut { .. } => (TurnFailureCode::AccountSignedOut, None),
             CliError::PlanExcludesModel { .. } => (TurnFailureCode::PlanExcludesModel, None),
             CliError::ModelUnavailable { .. } => (TurnFailureCode::ProviderUnavailable, None),
-            CliError::Paywall { .. } => (TurnFailureCode::UsageLimitReached, None),
+            CliError::Paywall { .. } | CliError::UsageLimit { .. } => {
+                (TurnFailureCode::UsageLimitReached, None)
+            }
             CliError::Api {
                 provider, status, ..
             } => (
@@ -806,7 +879,8 @@ impl CliError {
         // Only a figure the provider itself sent in `Retry-After` ever becomes
         // a wait a surface states.
         let failure = match self {
-            CliError::RateLimited { retry_after, .. } => {
+            CliError::RateLimited { retry_after, .. }
+            | CliError::UsageLimit { retry_after, .. } => {
                 failure.with_retry_after_seconds(*retry_after)
             }
             CliError::StreamError { detail, .. } => failure
@@ -1289,6 +1363,7 @@ mod tests {
             CliError::PlanExcludesModel {
                 model: "fixture-model".to_string(),
                 tier: "free".to_string(),
+                alternative_model: None,
             }
             .hint(),
         ] {
@@ -1754,6 +1829,7 @@ mod tests {
             CliError::PlanExcludesModel {
                 model: "m".into(),
                 tier: "free".into(),
+                alternative_model: None,
             },
             CliError::ModelUnavailable { model: "m".into() },
             CliError::paywall("chat", "pro", "quota"),

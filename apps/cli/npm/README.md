@@ -27,19 +27,20 @@ The unique slice: **multi-provider + BYOK + local LLM**. No competitor offers al
 
 Managed Cloud is available to signed-in users and remains a separate trust
 boundary from Local and BYOK. CLI access is a managed developer-surface
-benefit on Pro, Max 5x, Max 15x, Team, and Enterprise. Free and Basic accounts
+benefit on Pro, Max 5x, Max 20x, Team, and Enterprise. Free and Basic accounts
 can keep using Local/BYOK, but the CLI does not present managed models as
-unlocked.
+unlocked. Managed usage is counted in credits per 5-hour window, week and
+month; `agi usage` shows what is left in each.
 
-| Plan           | Public price                     | CLI Managed Cloud |
-| -------------- | -------------------------------- | ----------------- |
-| **Free**       | Free                             | No                |
-| **Basic**      | $7/month                         | No                |
-| **Pro**        | $20/month or $200/year           | Yes               |
-| **Max 5x**     | $100/month                       | Yes               |
-| **Max 15x**    | $200/month                       | Yes               |
-| **Team**       | $25/seat/month or $240/seat/year | Yes               |
-| **Enterprise** | Contract                         | Contract          |
+| Plan           | Public price                     | Credits per 5 hours / week / month | CLI Managed Cloud |
+| -------------- | -------------------------------- | ---------------------------------- | ----------------- |
+| **Free**       | Free                             | 2 / 15 / 20, free models only      | No                |
+| **Basic**      | $7/month                         | 10 / 100 / 400                     | No                |
+| **Pro**        | $20/month or $200/year           | 50 / 500 / 2,000                   | Yes               |
+| **Max 5x**     | $100/month                       | 250 / 2,500 / 10,000               | Yes               |
+| **Max 20x**    | $200/month                       | 1,000 / 5,000 / 20,000             | Yes               |
+| **Team**       | $25/seat/month or $240/seat/year | 50 / 500 / 2,000 per seat          | Yes               |
+| **Enterprise** | Contract                         | Contract                           | Contract          |
 
 Account, billing, Team administration, connector setup, and Enterprise sales
 remain in the Web control plane at

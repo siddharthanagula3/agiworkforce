@@ -40,6 +40,7 @@
         "data_rights_requests",
         "email_preferences",
         "profiles",
+        "referral_codes",
         "referrals",
         "user_settings",
         "waitlist"
@@ -145,6 +146,7 @@
       "concepts": ["credit-bucket"],
       "tables": [
         "auto_reload_settings",
+        "bonus_credit_grants",
         "cogs_adjustments",
         "credit_idempotency_keys",
         "credit_settlement_jobs",

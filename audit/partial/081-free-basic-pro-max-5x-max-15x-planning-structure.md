@@ -98,13 +98,11 @@ Code: `packages/contracts/types/src/model-catalog.ts:1142-1153`, `packages/contr
 
 - Done when: Plans differ in generation settings (e.g. reasoning effort, manual model choice), the UI shows the gated options, and the server clamps requests to the plan.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Not plan marketing: generation settings live in the mobile model picker, which shows plan-locked models (routes to billing) and an effort control. Gated models are shown, gated efforts are not, and the server clamps. |  |
-| cli | partial | CLI model picker gates manual model choice by tier (is_locked) and the server clamps effort, so the item applies; the lock label is misleading. |  |
-| chrome | partial | Chrome has its own effort control (getManagedEffortControlState) and serves Free/Basic, whose efforts are gated; the item applies. Model list comes from the server (plan-filtered) but effort gating is not shown. |  |
 
 ## S81.17: Monthly and annual billing choices.
 
@@ -200,18 +198,6 @@ Code: `packages/contracts/types/src/billing-plan-catalog.ts:28-38`, `apps/web/ap
 | mobile | partial | Mobile cannot upgrade in-app, and its info block tells Stripe subscribers an upgrade keeps the renewal date, which the web upgrade does not do. | ui, flag-off |
 
 Code: `apps/web/app/upgrade/UpgradeChooser.tsx:106-111`, `apps/web/lib/server/stripe-plan-change.ts:50-78`, `apps/web/app/api/upgrade/route.ts:273-283`, `apps/web/features/billing/components/UpgradeOrderPanel.tsx:289-292`
-
-## S81.25: Grace-period behavior.
-
-- Done when: When a renewal payment fails, the plan follows a defined grace rule and the user is told what access remains and how to fix it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI never shows the subscription status; a blocked request only says 'plan payment required' with a pricing link rather than a billing fix. | ui |
-
-Code: `apps/cli/src/usage_summary.rs:107-113`
 
 ## S81.28: Plan-specific feature explanations.
 

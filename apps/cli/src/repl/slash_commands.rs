@@ -133,6 +133,11 @@ pub(super) async fn handle_slash_command(
                 session.cost_ledger.total_usd,
                 crate::design_system::AccessMode::for_provider(&session.provider),
             );
+            for line in
+                crate::usage_summary::session_model_lines(&session.cost_ledger.model_breakdown())
+            {
+                eprintln!("  {line}");
+            }
         }
         "/save" => {
             registry::handle_save(session);
@@ -269,6 +274,7 @@ pub(super) async fn handle_slash_command(
                         cache_read_tokens: session.total_cache_read_tokens,
                         cache_write_tokens: session.total_cache_creation_tokens,
                         estimated_cost_usd: session.cost_ledger.total_usd,
+                        by_model: session.cost_ledger.model_breakdown(),
                         model: session.model.clone(),
                     },
                 )

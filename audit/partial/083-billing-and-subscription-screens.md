@@ -162,18 +162,6 @@ Code: `apps/web/app/pricing/page.tsx:670-682`, `apps/web/lib/billing/tax-policy.
 
 Code: `apps/web/app/billing/UpgradeWelcome.tsx:34-59`, `apps/web/app/billing/page.tsx:21-46`, `apps/web/app/api/checkout/route.ts:365-391`, `apps/web/app/api/checkout/route.ts:208-221`
 
-## S83.14: Payment failure.
-
-- Done when: When a payment fails, the user is told clearly (checkout or renewal) and shown how to fix it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | CLI only says 'plan payment required' with a pricing link; it never names a failed payment or links to billing. | ui |
-
-Code: `apps/cli/src/usage_summary.rs:107-113`
-
 ## S83.15: Retry payment.
 
 - Done when: After a failed payment the user can retry it (pay the open invoice or update the card) from the product.
@@ -198,18 +186,6 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/we
 | mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
-
-## S83.23: Scheduled cancellation.
-
-- Done when: A scheduled (end-of-period) cancellation is shown with its date.
-- Wave: 3
-- Already works on: web, desktop, mobile
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | VS Code notes a scheduled cancellation ('Review the scheduled cancellation on Web') but not its date. | ui |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2104-2109`
 
 ## S83.24: End-of-term access explanation.
 

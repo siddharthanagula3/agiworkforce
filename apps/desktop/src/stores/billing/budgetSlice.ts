@@ -1,3 +1,5 @@
+import { formatProviderCostCredits } from './costSlice';
+
 export type BudgetPeriod = 'daily' | 'weekly' | 'monthly' | 'per-conversation';
 
 export interface TokenBudget {
@@ -231,19 +233,19 @@ export const createBudgetSlice = (
         alerts = pushAlert(
           alerts,
           'exceeded',
-          `Token budget exceeded! Used ${budget.currentUsage.toLocaleString()} of ${budget.limit.toLocaleString()} tokens (Input: ${budget.inputTokens.toLocaleString()}, Output: ${budget.outputTokens.toLocaleString()}). Est. cost: $${budget.estimatedCost.toFixed(4)}`,
+          `Token budget exceeded! Used ${budget.currentUsage.toLocaleString()} of ${budget.limit.toLocaleString()} tokens (Input: ${budget.inputTokens.toLocaleString()}, Output: ${budget.outputTokens.toLocaleString()}). About ${formatProviderCostCredits(budget.estimatedCost)}.`,
         );
       } else if (pct >= 90) {
         alerts = pushAlert(
           alerts,
           'danger',
-          `Token budget at ${pct.toFixed(0)}%! Only ${(budget.limit - budget.currentUsage).toLocaleString()} tokens remaining. Est. cost: $${budget.estimatedCost.toFixed(4)}`,
+          `Token budget at ${pct.toFixed(0)}%! Only ${(budget.limit - budget.currentUsage).toLocaleString()} tokens remaining. About ${formatProviderCostCredits(budget.estimatedCost)} so far.`,
         );
       } else if (pct >= budget.warningThreshold) {
         alerts = pushAlert(
           alerts,
           'warning',
-          `Token budget at ${pct.toFixed(0)}%. Input: ${budget.inputTokens.toLocaleString()}, Output: ${budget.outputTokens.toLocaleString()}. Est. cost: $${budget.estimatedCost.toFixed(4)}`,
+          `Token budget at ${pct.toFixed(0)}%. Input: ${budget.inputTokens.toLocaleString()}, Output: ${budget.outputTokens.toLocaleString()}. About ${formatProviderCostCredits(budget.estimatedCost)} so far.`,
         );
       }
       return { budget, budgetAlerts: alerts };

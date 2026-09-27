@@ -79,6 +79,14 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
   },
   { path: 'apps/web/app/api/checkout/', why: 'checkout starts the subscription the payer owns' },
   {
+    path: 'apps/web/features/billing/server/billing-account.ts',
+    why: 'billing management reads the Stripe and store ids on the subscription the payer owns',
+  },
+  {
+    path: 'apps/web/lib/services/auto-reload-service.ts',
+    why: 'auto-reload charges the Stripe customer on the subscription the payer owns',
+  },
+  {
     path: 'apps/web/app/api/portal/',
     why: 'the Stripe portal manages the subscription the payer owns',
   },

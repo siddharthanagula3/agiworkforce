@@ -37,6 +37,8 @@ import {
   holdsLivePaidSubscription,
   waitlistAccessRequiredResponse,
 } from '@/lib/server/billing-waitlist-access';
+import { formatLocalizedPrice } from '@/lib/regional-pricing';
+import { referralTrialDays } from '@/lib/services/referral-service';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -45,6 +47,29 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
+
+const TRIAL_CHECKOUT_TTL_SECONDS = 3600;
+const DAY_MS = 86_400_000;
+
+function trialDisclosure(input: {
+  trialDays: number;
+  startedAt: Date;
+  amountMinor: number;
+  currency: string;
+  billingInterval: 'monthly' | 'yearly';
+}): string {
+  const endsOn = new Date(input.startedAt.getTime() + input.trialDays * DAY_MS).toLocaleDateString(
+    'en-US',
+    { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' },
+  );
+  const period = input.billingInterval === 'yearly' ? 'year' : 'month';
+  const price = formatLocalizedPrice(input.amountMinor, input.currency, 'en-US');
+  return (
+    `Your ${input.trialDays}-day free trial ends on ${endsOn}. On that date your card is ` +
+    `charged ${price} plus any applicable tax, and again every ${period}, unless you cancel ` +
+    'before then in Settings > Billing. We email you a reminder before the trial ends.'
+  );
+}
 
 async function findLiveStripeSubscription(
   stripe: Stripe,
@@ -85,12 +110,13 @@ async function resolveTrialDaysForCheckout(input: {
   plan: string;
   userId: string;
   stripeCustomerId: string | null;
+  referralTrialDays: number | null;
   existingSubscription: Pick<
     SubscriptionRow,
     'stripe_subscription_id' | 'apple_original_transaction_id' | 'google_purchase_token'
   > | null;
 }): Promise<number | null> {
-  const trialDays = getPlanTrialDays(input.plan);
+  const trialDays = getPlanTrialDays(input.plan) ?? input.referralTrialDays;
   if (trialDays === null) return null;
   const existing = input.existingSubscription;
   return resolveCheckoutTrialDays({
@@ -352,9 +378,28 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     plan,
     userId: user.id,
     stripeCustomerId: hadStoredStripeCustomer ? stripeCustomerId : null,
+    referralTrialDays: await referralTrialDays(db, user.id, plan),
     existingSubscription,
   });
   const trialParams = buildCheckoutTrialParams(trialDays);
+  const checkoutStartedAt = new Date();
+  const trialTerms =
+    trialDays === null
+      ? {}
+      : {
+          expires_at: Math.floor(checkoutStartedAt.getTime() / 1000) + TRIAL_CHECKOUT_TTL_SECONDS,
+          custom_text: {
+            submit: {
+              message: trialDisclosure({
+                trialDays,
+                startedAt: checkoutStartedAt,
+                amountMinor: priceSelection.amountMinor * quantity,
+                currency,
+                billingInterval,
+              }),
+            },
+          },
+        };
 
   const checkoutMetadata = {
     user_id: user.id,
@@ -384,6 +429,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         ...trialParams.subscriptionData,
       },
       ...trialParams.session,
+      ...trialTerms,
       allow_promotion_codes: true,
       ...buildCheckoutTaxParams({ hasExistingCustomer: Boolean(stripeCustomerId) }),
     };

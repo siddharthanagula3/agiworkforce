@@ -279,6 +279,7 @@ pub struct TurnResult {
     /// Present when the answer is real but the provider cut it short. Every
     /// surface states it beside the text; nothing about the answer is dropped.
     pub incomplete: Option<crate::errors::IncompleteTurnCause>,
+    pub managed_request_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone)]

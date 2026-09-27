@@ -60,14 +60,3 @@ Code: `apps/web/lib/billing/tax-policy.ts:94-108`, `apps/web/app/api/checkout/ro
 | platform | partial | Open paid checkout to all eligible users: bonus-credit grants and invite codes work, but promotion codes apply only on Stripe Checkout, where the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 
 Code: `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/features/admin/services/operator-metrics.ts:344-384`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`
-
-## S100.23: Referral service.
-
-- Done when: A referral service issues referral codes, attributes sign-ups and grants rewards.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Build the referral service: a referrals table exists (migration 0016) and is included in data export, but no code creates referral codes, records referred sign-ups or grants rewards. | handler, ui |
-
-Code: `apps/web/db/neon/0016_misc.sql:35-40`, `apps/web/app/api/user/export/route.ts:1225-1241`

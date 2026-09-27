@@ -23,6 +23,14 @@
       "schedule": "30 0 * * *"
     },
     {
+      "path": "/api/cron/expire-bonus-credits",
+      "schedule": "50 0 * * *"
+    },
+    {
+      "path": "/api/cron/grant-referral-rewards",
+      "schedule": "10 1 * * *"
+    },
+    {
       "path": "/api/cron/run-schedules",
       "schedule": "*/15 * * * *"
     },
