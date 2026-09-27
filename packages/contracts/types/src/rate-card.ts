@@ -33,8 +33,6 @@ export const RATE_CARD_FEATURES = [
   'image_generation_google',
   'video_second',
   'voice_live_minute',
-  'visual_camera_minute',
-  'visual_screen_share_minute',
   'transcription_minute',
   'sandbox_vcpu_second',
   'sandbox_gib_second',
@@ -191,8 +189,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
     source: CATALOGUE_SOURCE,
     verifiedOn: '2026-09-10',
   },
-  visual_camera_minute: infrastructureRate('minute'),
-  visual_screen_share_minute: infrastructureRate('minute'),
   transcription_minute: {
     unit: 'minute',
     providerCogsMicrousd: 6_000,
@@ -252,8 +248,6 @@ export const RATE_CARD_PROVIDER_COGS_ENV = {
   notification_delivery_request: 'AGI_NOTIFICATION_MICROUSD_PER_DELIVERY',
   email_message_request: 'AGI_EMAIL_MICROUSD_PER_MESSAGE',
   network_egress_gib: 'AGI_EGRESS_MICROUSD_PER_GIB',
-  visual_camera_minute: 'AGI_VISUAL_CAMERA_MICROUSD_PER_MINUTE',
-  visual_screen_share_minute: 'AGI_VISUAL_SCREEN_SHARE_MICROUSD_PER_MINUTE',
   connector_call_request: 'AGI_CONNECTOR_CALL_MICROUSD_PER_REQUEST',
   artifact_storage_gib_month: 'AGI_ARTIFACT_STORAGE_MICROUSD_PER_GIB_MONTH',
 } as const satisfies Partial<Record<RateCardFeature, string>>;
