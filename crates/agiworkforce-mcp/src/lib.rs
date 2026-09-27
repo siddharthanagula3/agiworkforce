@@ -38,8 +38,10 @@ pub mod error;
 pub mod hooks;
 pub mod notification;
 pub mod oauth;
+pub mod protocol;
 pub mod resources;
 pub mod security;
+pub mod server;
 
 mod jsonrpc;
 mod transport;
