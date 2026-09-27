@@ -6,6 +6,10 @@ import {
   MIN_PURCHASABLE_SEATS,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
+import {
+  apiErrorCode as extractErrorCode,
+  apiErrorMessage as extractErrorMessage,
+} from '../lib/api-error';
 
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
@@ -13,26 +17,6 @@ function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): n
     throw new Error(`${plan} is billed per seat; choose how many seats to buy.`);
   }
   return seats;
-}
-
-function extractErrorMessage(body: unknown, fallback: string): string {
-  if (body && typeof body === 'object') {
-    const err = (body as { error?: unknown }).error;
-    if (typeof err === 'string' && err) return err;
-    if (err && typeof err === 'object') {
-      const message = (err as { message?: unknown }).message;
-      if (typeof message === 'string' && message) return message;
-    }
-  }
-  return fallback;
-}
-
-function extractErrorCode(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const error = (body as { error?: unknown }).error;
-  if (!error || typeof error !== 'object') return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' ? code : null;
 }
 
 export class CheckoutRequiredError extends Error {
@@ -286,6 +270,7 @@ export async function upgradeToTeamPlan(data: {
 export interface UpgradeChargeBreakdown {
   lineItems: { description: string; amountCents: number }[];
   subtotalCents: number;
+  discountCents: number;
   taxCents: number;
   totalCents: number;
   /** Signed as Stripe signs it: positive is owed and adds to what is taken. */
@@ -294,12 +279,38 @@ export interface UpgradeChargeBreakdown {
   renewsAt: string | null;
 }
 
+export interface UpgradePromotionSummary {
+  code: string;
+  percentOff: number | null;
+  amountOffCents: number | null;
+  currency: string | null;
+  duration: string;
+  durationInMonths: number | null;
+}
+
 export interface UpgradePreviewResult {
   amountDueNowCents: number;
   currency: string;
   previewToken: string;
   /** Null when the server sent no breakdown; the dialog then shows the total alone. */
   charge: UpgradeChargeBreakdown | null;
+  promotion: UpgradePromotionSummary | null;
+  replacesScheduledChange: boolean;
+}
+
+function parsePromotion(value: unknown): UpgradePromotionSummary | null {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw['code'] !== 'string' || typeof raw['duration'] !== 'string') return null;
+  const numberOrNull = (entry: unknown) => (typeof entry === 'number' ? entry : null);
+  return {
+    code: raw['code'],
+    percentOff: numberOrNull(raw['percentOff']),
+    amountOffCents: numberOrNull(raw['amountOffCents']),
+    currency: typeof raw['currency'] === 'string' ? raw['currency'] : null,
+    duration: raw['duration'],
+    durationInMonths: numberOrNull(raw['durationInMonths']),
+  };
 }
 
 function parseChargeBreakdown(value: unknown): UpgradeChargeBreakdown | null {
@@ -323,16 +334,18 @@ function parseChargeBreakdown(value: unknown): UpgradeChargeBreakdown | null {
       amountCents: item['amountCents'] as number,
     }));
 
+  const discountCents = typeof raw['discountCents'] === 'number' ? raw['discountCents'] : 0;
   const totalCents =
     typeof raw['totalCents'] === 'number'
       ? raw['totalCents']
-      : raw['subtotalCents'] + raw['taxCents'];
+      : raw['subtotalCents'] - discountCents + raw['taxCents'];
   const appliedBalanceCents =
     typeof raw['appliedBalanceCents'] === 'number' ? raw['appliedBalanceCents'] : 0;
 
   return {
     lineItems,
     subtotalCents: raw['subtotalCents'],
+    discountCents,
     taxCents: raw['taxCents'],
     totalCents,
     appliedBalanceCents,
@@ -345,6 +358,7 @@ export async function previewUpgrade(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
   seats?: number;
+  promotionCode?: string;
 }): Promise<UpgradePreviewResult> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
@@ -363,6 +377,7 @@ export async function previewUpgrade(data: {
         const seats = seatsForPlan(data.plan, data.seats);
         return seats === undefined ? {} : { seats };
       })(),
+      ...(data.promotionCode ? { promotionCode: data.promotionCode } : {}),
     }),
   });
 
@@ -371,6 +386,8 @@ export async function previewUpgrade(data: {
     currency?: unknown;
     previewToken?: unknown;
     charge?: unknown;
+    promotion?: unknown;
+    replacesScheduledChange?: unknown;
     error?: unknown;
     checkout?: {
       amountDueNowCents?: unknown;
@@ -403,6 +420,8 @@ export async function previewUpgrade(data: {
     currency: result.currency,
     previewToken: result.previewToken,
     charge: parseChargeBreakdown(result.charge),
+    promotion: parsePromotion(result.promotion),
+    replacesScheduledChange: result.replacesScheduledChange === true,
   };
 }
 
@@ -411,6 +430,7 @@ export async function upgradePlanMidCycle(data: {
   billingInterval?: 'monthly' | 'yearly';
   seats?: number;
   previewToken: string;
+  promotionCode?: string;
 }): Promise<{ activation: 'webhook_pending' }> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to upgrade.');
@@ -430,6 +450,7 @@ export async function upgradePlanMidCycle(data: {
         const seats = seatsForPlan(data.plan, data.seats);
         return seats === undefined ? {} : { seats };
       })(),
+      ...(data.promotionCode ? { promotionCode: data.promotionCode } : {}),
     }),
   });
 

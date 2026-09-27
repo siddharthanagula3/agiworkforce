@@ -23,6 +23,8 @@ import {
   type FreeTrialMessage,
   type ManagedChatStreamOptions,
   type ManagedModelAccess,
+  type ManagedQuotaBlock,
+  type ManagedQuotaWarningSignal,
 } from './freeTrialClient';
 import { resolveChromeManagedChatRoute } from './managedChatRouting';
 import type { ChromeManagedRoutingMetadata } from '../../types';
@@ -104,6 +106,7 @@ export type ChromeManagedChatResult =
       message: string;
       retryAfterSeconds?: number;
       requestId?: string;
+      quota?: ManagedQuotaBlock;
       routing?: ChromeManagedRoutingResult;
     };
 
@@ -121,6 +124,7 @@ export interface ChromeManagedChatDependencies {
     chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
   ) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
+  onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
 }
 
 export interface ChromeManagedApprovalRequest {
@@ -139,6 +143,7 @@ export type ChromeManagedApprovalResult =
       message: string;
       retryAfterSeconds?: number;
       requestId?: string;
+      quota?: ManagedQuotaBlock;
     };
 
 export interface ChromeManagedApprovalDependencies {
@@ -153,6 +158,7 @@ export interface ChromeManagedApprovalDependencies {
     chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
   ) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
+  onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
 }
 
 const DEFAULT_DEPENDENCIES: Omit<ChromeManagedChatDependencies, 'onText'> = {
@@ -515,6 +521,10 @@ export async function executeChromeManagedChat(
       await dependencies.onRunReference?.(chunk.run);
       continue;
     }
+    if (chunk.type === 'quota-warning') {
+      await dependencies.onQuotaWarning?.(chunk.warning);
+      continue;
+    }
     if (chunk.type === 'error') {
       return {
         status: 'error',
@@ -524,6 +534,7 @@ export async function executeChromeManagedChat(
           ? { retryAfterSeconds: chunk.retryAfterSeconds }
           : {}),
         ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
+        ...(chunk.quota ? { quota: chunk.quota } : {}),
         routing: routingResult,
       };
     }
@@ -598,6 +609,10 @@ export async function executeChromeManagedApproval(
       await dependencies.onRunReference?.(chunk.run);
       continue;
     }
+    if (chunk.type === 'quota-warning') {
+      await dependencies.onQuotaWarning?.(chunk.warning);
+      continue;
+    }
     if (chunk.type === 'error') {
       return {
         status: 'error',
@@ -607,6 +622,7 @@ export async function executeChromeManagedApproval(
           ? { retryAfterSeconds: chunk.retryAfterSeconds }
           : {}),
         ...(chunk.requestId !== undefined ? { requestId: chunk.requestId } : {}),
+        ...(chunk.quota ? { quota: chunk.quota } : {}),
       };
     }
     return { status: 'success' };
@@ -623,7 +639,12 @@ export function createChromeManagedChatDependencies(
   onText: ChromeManagedChatDependencies['onText'],
   callbacks: Pick<
     ChromeManagedChatDependencies,
-    'onRouting' | 'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference'
+    | 'onRouting'
+    | 'onAgentEvent'
+    | 'onGeneratedFiles'
+    | 'onInteractiveCard'
+    | 'onRunReference'
+    | 'onQuotaWarning'
   > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
@@ -633,7 +654,7 @@ export function createChromeManagedApprovalDependencies(
   onText: ChromeManagedApprovalDependencies['onText'],
   callbacks: Pick<
     ChromeManagedApprovalDependencies,
-    'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference'
+    'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference' | 'onQuotaWarning'
   > = {},
 ): ChromeManagedApprovalDependencies {
   return { ...DEFAULT_APPROVAL_DEPENDENCIES, onText, ...callbacks };

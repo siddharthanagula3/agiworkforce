@@ -5,8 +5,6 @@ export {
   isModelReachableForTier,
   MODEL_CONTEXT_LIMITS,
   MODEL_COST_RATES,
-  MODEL_COST_BLENDED,
-  DEFAULT_BLENDED_RATE,
   CHARS_PER_TOKEN,
   normalizeConfiguredModelId,
   normalizeSelectableConfiguredModelId,

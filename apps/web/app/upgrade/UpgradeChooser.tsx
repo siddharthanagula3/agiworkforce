@@ -10,8 +10,11 @@ import {
   WEB_PAID_PLAN_ORDER,
   getBillingPlanDisplay,
   formatCatalogPrice,
+  formatPlanCreditWindows,
+  planUsageComparisonLabel,
   type SelectablePaidPlan,
 } from '@features/billing/lib/plan-display';
+import { formatBillingDate } from '@features/billing/lib/billing-format';
 import {
   billingOwnerPlanActionLabel,
   billingOwnerPlanChangeMessage,
@@ -23,24 +26,11 @@ function priceLabel(usd: number | null): string {
   return `${formatCatalogPrice(usd)}/month`;
 }
 
-/** Same shape the billing panels use, so a date reads identically everywhere. */
-function formatRenewalDate(iso: string | null): string | null {
-  if (!iso) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
-}
+type PeriodEndKind = 'renews' | 'trial' | 'ends';
 
-/**
- * Whether the period end is something to act on. A cancelled subscription ends
- * rather than renews, and saying "renews" there would be wrong.
- */
-function periodEndLabel(status: string | null | undefined): string {
-  return status === 'canceled' || status === 'cancelled' ? 'Access ends' : 'Renews';
+function periodEndLabel(kind: PeriodEndKind): string {
+  if (kind === 'trial') return 'Trial ends';
+  return kind === 'ends' ? 'Access ends' : 'Renews';
 }
 
 const secondaryLinkClassName =
@@ -53,11 +43,6 @@ export function UpgradeChooser() {
   const subscription = useBillingStore((s) => s.subscription);
   const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
-  // Both hooks have to have settled before anything here is trustworthy. A
-  // failed or still-in-flight /api/me read is not proof the account is on
-  // Free, treating it that way is how a Max 15x subscriber previously saw
-  // "Your current plan: Free" next to a $7 "upgrade" that was really a
-  // downgrade. See shared/stores/billing-policy.ts.
   const ready = !isLoading && billingPolicyReady;
   const currentPlan = billing?.plan;
   const hasActivePaidPlan =
@@ -72,26 +57,30 @@ export function UpgradeChooser() {
   const newFeatures = nextDisplay
     ? nextDisplay.features.filter((feature) => !currentDisplay.features.includes(feature))
     : [];
+  const nextUsageComparison = nextTier ? planUsageComparisonLabel(nextTier) : null;
+  const currentCredits = formatPlanCreditWindows(currentPlan);
 
-  // Max 5x and Max 15x are one product at two capacities, chosen on the order
-  // screen where the difference is priced against what the account already
-  // paid, so 15x never appears as its own skip-ahead link here.
   const nextIndex = nextTier ? WEB_PAID_PLAN_ORDER.indexOf(nextTier) : -1;
   const secondaryTiers: readonly SelectablePaidPlan[] =
     nextIndex === -1
       ? []
       : WEB_PAID_PLAN_ORDER.slice(nextIndex + 1).filter((plan) => !isMax15xPlanTier(plan));
 
-  const showProrationNote = ready && !ownerBlocked && nextTier !== null;
+  const showProrationNote = ready && !ownerBlocked && hasActivePaidPlan && nextTier !== null;
 
-  // Rounded for display only; the raw value drives nothing here. A fractional
-  // percentage reads as false precision on a plan summary.
   const rawUsedPercent = billing?.usage?.usedPercent;
   const usedPercent =
     typeof rawUsedPercent === 'number' && Number.isFinite(rawUsedPercent)
       ? Math.max(0, Math.min(100, Math.round(rawUsedPercent)))
       : null;
-  const renewalDate = formatRenewalDate(billing?.current_period_end ?? null);
+  const renewalDate = formatBillingDate(billing?.current_period_end ?? null);
+  const periodEndKind: PeriodEndKind =
+    billing?.status === 'canceled' || subscription?.cancel_at_period_end === true
+      ? 'ends'
+      : billing?.status === 'trialing'
+        ? 'trial'
+        : 'renews';
+  const endingPaidPlan = periodEndKind === 'ends' && !isFreeBillingPlanTier(currentPlan);
 
   return (
     <div className="mx-auto w-full max-w-2xl px-6">
@@ -105,8 +94,8 @@ export function UpgradeChooser() {
       <h1 className="mt-6 text-3xl font-semibold tracking-tight">Upgrade</h1>
       {showProrationNote ? (
         <p className="mt-2 text-sm text-muted-foreground">
-          See what changes before you switch. You only pay the difference for the rest of this
-          billing period.
+          See what changes before you switch. An upgrade starts a new billing period today: you pay
+          the new plan&rsquo;s price, minus a credit for the unused time on your current plan.
         </p>
       ) : null}
 
@@ -121,11 +110,6 @@ export function UpgradeChooser() {
         </div>
       ) : (
         <div className="mt-10 flex flex-col gap-6">
-          {/* The page already fetched the period and the usage and then showed
-              neither, so someone deciding whether to move plans could not see
-              how much of the one they have they are actually using, or when it
-              renews. Every value here comes from /api/usage; nothing is
-              derived or assumed, and each part renders only when present. */}
           <section
             data-testid="upgrade-current-plan"
             className="rounded-2xl border border-border bg-muted/30 p-5"
@@ -141,6 +125,9 @@ export function UpgradeChooser() {
                 {priceLabel(currentDisplay.monthlyPriceUsd)}
               </span>
             </div>
+            {currentCredits ? (
+              <p className="mt-1 text-sm text-muted-foreground">{currentCredits}</p>
+            ) : null}
 
             {usedPercent !== null ? (
               <div className="mt-5">
@@ -160,7 +147,13 @@ export function UpgradeChooser() {
 
             {renewalDate ? (
               <p className="mt-4 text-sm text-muted-foreground" data-testid="upgrade-renewal">
-                {periodEndLabel(billing?.status)} {renewalDate}
+                {periodEndLabel(periodEndKind)} {renewalDate}
+              </p>
+            ) : null}
+            {endingPaidPlan && renewalDate ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                You keep {currentDisplay.pricing.label} until then. After that, your account moves
+                to Free; your chats, projects and files stay.
               </p>
             ) : null}
           </section>
@@ -177,8 +170,8 @@ export function UpgradeChooser() {
           ) : !nextTier || !nextDisplay ? (
             <section className="rounded-2xl border border-border bg-card p-5">
               <p className="text-sm text-foreground">
-                This is the top of our self-serve plans. Manage or cancel your subscription any time
-                in Billing.
+                This is the top of our self-serve plans. Switch to a smaller plan, or manage or
+                cancel your subscription, any time in Billing.
               </p>
               <Link href="/settings/billing" className={panelActionClassName}>
                 Manage billing
@@ -202,6 +195,9 @@ export function UpgradeChooser() {
                     {priceLabel(nextDisplay.monthlyPriceUsd)}
                   </span>
                 </div>
+                {nextUsageComparison ? (
+                  <p className="mt-1 text-sm text-muted-foreground">{nextUsageComparison}</p>
+                ) : null}
 
                 {newFeatures.length > 0 ? (
                   <ul className="mt-5 flex flex-col gap-2 text-sm text-muted-foreground">

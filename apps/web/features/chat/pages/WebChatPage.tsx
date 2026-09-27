@@ -8,6 +8,8 @@ import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import { regenerateModelOptions as selectableRegenerateModelOptions } from '../lib/regenerate-model-options';
+import { pickFreePoolModel } from '../lib/eligible-model';
+import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
@@ -1392,11 +1394,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * what `getWorstUsagePercent` (used by the sidebar widget) has to discard.
    */
   const usageWarning = useMemo(
-    () =>
-      !subscription?.tier || isFreeBillingPlanTier(subscription.tier)
-        ? null
-        : selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
-    [managedUsageSummary, subscription?.tier],
+    () => selectUsageWarning(readManagedUsageBuckets(managedUsageSummary)),
+    [managedUsageSummary],
   );
   const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
   const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
@@ -1648,6 +1647,35 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       return true;
     },
     [displayedConversationId, setSelectedModelId, updateConversation],
+  );
+  const setAccountUsageBlock = useChatStore((s) => s.setAccountUsageBlock);
+  const usageBlockCatalogue = useModelCatalogue(accountUsageBlock !== null);
+  const usageBlockAlternative = useMemo(
+    () =>
+      accountUsageBlock && accountUsageBlock.recoveryAction !== 'manage_billing'
+        ? pickFreePoolModel(usageBlockCatalogue.entries, activeModelId)
+        : null,
+    [accountUsageBlock, usageBlockCatalogue.entries, activeModelId],
+  );
+  const composerUsageBlockWithAlternative = useMemo(
+    () =>
+      composerUsageBlock && usageBlockAlternative
+        ? {
+            ...composerUsageBlock,
+            actionLabel: `Use ${usageBlockAlternative.name}`,
+            onRecover: () => {
+              void handleConversationModelChange(usageBlockAlternative.id).then((switched) => {
+                if (switched) setAccountUsageBlock(null);
+              });
+            },
+          }
+        : composerUsageBlock,
+    [
+      composerUsageBlock,
+      usageBlockAlternative,
+      handleConversationModelChange,
+      setAccountUsageBlock,
+    ],
   );
 
   // Public sharing is always a two-step action: the visible Share control opens
@@ -5695,7 +5723,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           enabled: isWebsiteFreeTrial,
                           limitReached: freeUsageLimitReached,
                         }}
-                        {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
+                        {...(composerUsageBlockWithAlternative
+                          ? { usageBlock: composerUsageBlockWithAlternative }
+                          : {})}
                       />
                     )}
                   </div>
@@ -5803,7 +5833,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           enabled: isWebsiteFreeTrial,
                           limitReached: freeUsageLimitReached,
                         }}
-                        {...(composerUsageBlock ? { usageBlock: composerUsageBlock } : {})}
+                        {...(composerUsageBlockWithAlternative
+                          ? { usageBlock: composerUsageBlockWithAlternative }
+                          : {})}
                         suppressAutoFocus={Boolean(highlightMessageId)}
                       />
                     )}

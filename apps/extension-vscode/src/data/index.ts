@@ -9,12 +9,7 @@ export type {
 export { getVSCodeSendQueue, __resetVSCodeSendQueueForTests } from './sendQueue';
 export type { MementoLike } from './sendQueue';
 
-export {
-  resolvePlanTier,
-  resolveUsageMeter,
-  formatManagedUsageLabel,
-  daysUntilReset,
-} from './usageMeter';
+export { resolvePlanTier, resolveUsageMeter, daysUntilReset } from './usageMeter';
 
 export { TokenCounter, getTokenCounter, activateTokenCounter } from './tokenCounter';
 

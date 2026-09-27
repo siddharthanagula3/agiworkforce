@@ -23,7 +23,9 @@ import {
   LIVE_VOICE_FEATURE,
   liveSessionChargeMicrousd,
   liveSessionProviderCostMicrousd,
+  liveSessionSecondsCoveredBy,
 } from '@/lib/voice/live-voice-billing';
+import { readVoiceReservation } from '../../lib/voice-session-budget';
 import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
 import {
   closeVoiceSession,
@@ -119,9 +121,29 @@ async function handleCloseLiveSession(
   const meteredSeconds = record
     ? meteredVoiceSessionSeconds(record, reportedSeconds, Date.now())
     : reportedSeconds;
-  const billedSeconds = Math.min(meteredSeconds, LIVE_SESSION_CEILING_SECONDS);
   const model = record?.modelId ?? liveModel?.id;
-  const estimatedCostMicrousd = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, model) ?? 0;
+  let estimatedCostMicrousd: number | null = null;
+  try {
+    estimatedCostMicrousd =
+      (
+        await readVoiceReservation({
+          db: scoped.db,
+          userId,
+          idempotencyKey: body.settlement.idempotencyKey,
+          requestHash: body.settlement.requestHash,
+        })
+      )?.reservedMicrousd ?? null;
+  } catch (error) {
+    logger.error(
+      { error, userId, sessionId },
+      'Live voice reservation could not be read; settling against one block',
+    );
+  }
+  estimatedCostMicrousd ??= liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, model) ?? 0;
+  const billedSeconds = Math.min(
+    meteredSeconds,
+    liveSessionSecondsCoveredBy(estimatedCostMicrousd, model),
+  );
   const actualCostMicrousd = Math.min(
     liveSessionChargeMicrousd(billedSeconds, model) ?? 0,
     estimatedCostMicrousd,

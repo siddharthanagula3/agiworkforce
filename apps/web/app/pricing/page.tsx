@@ -9,12 +9,14 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 import {
   BILLING_PLAN_PRICING,
+  FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   getModelMetadataById,
+  getPlanCreditAllowance,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
@@ -23,6 +25,8 @@ import {
   isProPlanTier,
   isMaxPlanTier,
   isMax15xPlanTier,
+  isSelfServeIndividualPlanTier,
+  managedUsageMultipliers,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   PROVIDERS_IN_ORDER,
@@ -49,9 +53,10 @@ import {
   type UpgradeConfirmRequest,
 } from '@features/billing/components/UpgradeConfirmDialog';
 import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
+import { DowngradeReviewDialog } from '@features/billing/components/DowngradeReviewDialog';
 import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
-import { managedUsageMultiplier } from '@/lib/billing/managed-usage-caps';
+import { formatBillingDate } from '@features/billing/lib/billing-format';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import {
@@ -342,10 +347,6 @@ export default function PricingPage() {
     }
   }, [billing?.plan, refetchBilling]);
 
-  // Nine billing tiers exist, but showing all nine at once is where people stall.
-  // ChatGPT and Claude both segment by audience first and then show three or four
-  // cards; `audience` is that first cut, and `maxVariant` keeps Max 5x and Max 15x
-  // in one card so the individual grid really does hold the four it is classed for.
   const [audience, setAudience] = useState<'individual' | 'business'>('individual');
   const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
   const [annual, setAnnual] = useState(false);
@@ -355,6 +356,7 @@ export default function PricingPage() {
   const [portalPending, setPortalPending] = useState(false);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
   const [waitlistRequest, setWaitlistRequest] = useState<UpgradeWaitlistRequest | null>(null);
+  const [downgradePlan, setDowngradePlan] = useState<SelfServeIndividualPlanTier | null>(null);
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
@@ -563,17 +565,29 @@ export default function PricingPage() {
       );
     }
     if (relationship === 'lower') {
-      // Opens the Stripe Customer Portal, which is the only surface that can
-      // actually perform a downgrade. This used to be `<Link href="/billing">`,
-      // and that closed a loop with no exit: /billing redirects to
-      // /settings/billing, which opens the Billing settings modal, the exact
-      // screen whose "Adjust plan" button sent the user to /pricing in the
-      // first place. A Max 15x subscriber who wanted Max 5x could go
-      // Settings → Adjust plan → Pricing → 5x → Manage billing → Settings,
-      // forever, and never reach a control that changes the plan.
-      //
-      // BillingSection hit the identical bug and was fixed the same way; this
-      // copy of it was missed. See the note on `openPortal` there.
+      if (billingPolicyReady && accountSubscription?.subscription_source !== 'stripe') {
+        return (
+          <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
+            {billingOwnerPlanActionLabel(accountSubscription?.subscription_source)}
+          </Link>
+        );
+      }
+      if (
+        billing &&
+        isSelfServeIndividualPlanTier(billing.plan) &&
+        isSelfServeIndividualPlanTier(plan)
+      ) {
+        return (
+          <button
+            type="button"
+            className="agi-tier-cta agi-tier-cta--ghost"
+            disabled={!billingPolicyReady}
+            onClick={() => setDowngradePlan(plan)}
+          >
+            {t('switchToPlanCta', { plan: BILLING_PLAN_PRICING[plan].label })}
+          </button>
+        );
+      }
       return (
         <button
           type="button"
@@ -703,27 +717,103 @@ export default function PricingPage() {
 
   const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
-  const max15xUsageMultiplier = managedUsageMultiplier('max_15x', 'pro');
-  const max15xUsage =
-    max15xUsageMultiplier === null ? ', ' : `${max15xUsageMultiplier}x ${pro.label} usage`;
+  function creditWindowsCopy(plan: BillingPlanTier): string | null {
+    const allowance = getPlanCreditAllowance(plan);
+    if (allowance.unlimited || allowance.monthly <= 0) return null;
+    return t(isPerSeatBillingPlan(plan) ? 'planCreditWindowsPerSeat' : 'planCreditWindows', {
+      fiveHour: allowance.fiveHour,
+      weekly: allowance.weekly,
+      monthly: allowance.monthly,
+    });
+  }
 
+  function usageComparisonCopy(plan: BillingPlanTier, baseline: BillingPlanTier): string | null {
+    const multipliers = managedUsageMultipliers(plan, baseline);
+    if (!multipliers) return null;
+    const { fiveHour, weekly, monthly } = multipliers;
+    const baselineLabel = BILLING_PLAN_PRICING[baseline].label;
+    if (fiveHour === weekly && weekly === monthly) {
+      return fiveHour === 1
+        ? t('usageSameAs', { baseline: baselineLabel })
+        : t('usageMultiplierAll', { factor: fiveHour, baseline: baselineLabel });
+    }
+    return weekly === monthly
+      ? t('usageMultiplierSplit', { fiveHour, weekly, baseline: baselineLabel })
+      : t('usageMultiplierSplitMonthly', { fiveHour, weekly, monthly, baseline: baselineLabel });
+  }
+
+  function presentCopy(parts: Array<string | null>): string[] {
+    return parts.filter((part): part is string => Boolean(part));
+  }
+
+  function usageCapacityCopy(plan: BillingPlanTier, baseline?: BillingPlanTier): string {
+    return presentCopy([
+      creditWindowsCopy(plan),
+      baseline ? usageComparisonCopy(plan, baseline) : null,
+    ]).join(' · ');
+  }
+
+  const proAllowance = getPlanCreditAllowance('pro');
+  const usageExplainer = `${t('usageExplainer', {
+    baseline: pro.label,
+    fiveHour: proAllowance.fiveHour,
+    weekly: proAllowance.weekly,
+    monthly: proAllowance.monthly,
+  })} ${t('flagshipShare', {
+    baseline: pro.label,
+    percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
+  })}`;
+
+  const freeFeatures = presentCopy([
+    creditWindowsCopy('free'),
+    t('freeFeature1'),
+    t('freeFeature2'),
+    t('freeFeature3'),
+    t('freeLocalByok'),
+  ]);
+  const basicFeatures = presentCopy([
+    creditWindowsCopy('basic'),
+    t('basicFeature2'),
+    t('basicFeature3'),
+    t('basicFeature4'),
+    t('basicFeature5'),
+    t('basicFeature6'),
+  ]);
+  const proFeatures = presentCopy([
+    creditWindowsCopy('pro'),
+    usageComparisonCopy('pro', 'basic'),
+    t('proFeature2'),
+    t('proFeature3'),
+    t('proFeature4'),
+    t('proFeature5'),
+    t('proFeature6'),
+  ]);
+  const teamFeatures = presentCopy([
+    creditWindowsCopy('team'),
+    t('teamFeature2'),
+    t('teamFeature3'),
+    t('teamFeature4'),
+    t('teamFeature5'),
+  ]);
   const maxTierFeatures =
     maxVariant === 'max'
-      ? [
-          t('maxFeature1'),
+      ? presentCopy([
+          creditWindowsCopy('max'),
+          usageComparisonCopy('max', 'pro'),
           `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
           t('maxFeature4'),
           t('maxFeature5'),
           t('maxFeature6'),
-        ]
-      : [
-          t('max15xFeature1'),
+        ])
+      : presentCopy([
+          creditWindowsCopy('max_15x'),
+          usageComparisonCopy('max_15x', 'pro'),
           t('max15xFeature2'),
           t('max15xFeature3'),
           t('max15xFeature4'),
           t('max15xFeature5'),
           t('max15xFeature6'),
-        ];
+        ]);
 
   const compareRows: CompareRow[] = [
     {
@@ -767,7 +857,7 @@ export default function PricingPage() {
       label: BILLING_PLAN_PRICING.free.label,
       price: t('free'),
       billingInterval: t('foreverLabel'),
-      usageCapacity: t('compareFreeUsage'),
+      usageCapacity: usageCapacityCopy('free'),
       ...managedPlanCapabilities('free'),
       bestFor: t('compareFreeBestFor'),
     },
@@ -776,7 +866,7 @@ export default function PricingPage() {
       label: basic.label,
       price: `${basicPrice}/mo`,
       billingInterval: t('monthly'),
-      usageCapacity: t('compareBasicUsage'),
+      usageCapacity: usageCapacityCopy('basic'),
       ...managedPlanCapabilities('basic'),
       bestFor: t('compareBasicBestFor'),
     },
@@ -787,7 +877,7 @@ export default function PricingPage() {
       billingInterval: t('compareProInterval', {
         yearly: formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12),
       }),
-      usageCapacity: t('compareProUsage'),
+      usageCapacity: usageCapacityCopy('pro', 'basic'),
       ...managedPlanCapabilities('pro'),
       bestFor: t('compareProBestFor'),
     },
@@ -796,7 +886,7 @@ export default function PricingPage() {
       label: max.label,
       price: `${maxPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: t('compareMaxUsage'),
+      usageCapacity: usageCapacityCopy('max', 'pro'),
       ...managedPlanCapabilities('max'),
       bestFor: t('compareMaxBestFor'),
     },
@@ -805,7 +895,7 @@ export default function PricingPage() {
       label: max15x.label,
       price: `${max15xPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: max15xUsage,
+      usageCapacity: usageCapacityCopy('max_15x', 'pro'),
       ...managedPlanCapabilities('max_15x'),
       bestFor: 'Highest-capacity work and video generation',
     },
@@ -814,7 +904,7 @@ export default function PricingPage() {
       label: team.label,
       price: t('perSeatPrice', { price: teamSeatPrice }),
       billingInterval: t('compareTeamBilling'),
-      usageCapacity: t('compareTeamUsage'),
+      usageCapacity: usageCapacityCopy('team', 'pro'),
       ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
       highlighted: true,
@@ -1020,26 +1110,12 @@ export default function PricingPage() {
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('teamFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('teamFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('teamFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('teamFeature4')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('teamFeature5')}
-                </li>
+                {teamFeatures.map((feature) => (
+                  <li key={feature}>
+                    <CheckIcon />
+                    {feature}
+                  </li>
+                ))}
               </ul>
               <div
                 className="agi-tier-seats"
@@ -1177,22 +1253,12 @@ export default function PricingPage() {
               </p>
               <p className="agi-tier-body">{t('freeTierBody')}</p>
               <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('freeFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('freeFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('freeFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('freeLocalByok')}
-                </li>
+                {freeFeatures.map((feature) => (
+                  <li key={feature}>
+                    <CheckIcon />
+                    {feature}
+                  </li>
+                ))}
               </ul>
               <div className="agi-tier-cta-group">
                 <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
@@ -1210,30 +1276,12 @@ export default function PricingPage() {
                 </p>
                 <p className="agi-tier-body">{t('basicTierBody')}</p>
                 <ul className="agi-tier-features">
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature1')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature2')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature3')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature4')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature5')}
-                  </li>
-                  <li>
-                    <CheckIcon />
-                    {t('basicFeature6')}
-                  </li>
+                  {basicFeatures.map((feature) => (
+                    <li key={feature}>
+                      <CheckIcon />
+                      {feature}
+                    </li>
+                  ))}
                 </ul>
                 <div className="agi-tier-cta-group">{renderPlanAction('basic', t('basicCta'))}</div>
               </Reveal>
@@ -1251,30 +1299,12 @@ export default function PricingPage() {
               </p>
               <p className="agi-tier-body">{t('proTierBody')}</p>
               <ul className="agi-tier-features">
-                <li>
-                  <CheckIcon />
-                  {t('proFeature1')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('proFeature2')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('proFeature3')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('proFeature4')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('proFeature5')}
-                </li>
-                <li>
-                  <CheckIcon />
-                  {t('proFeature6')}
-                </li>
+                {proFeatures.map((feature) => (
+                  <li key={feature}>
+                    <CheckIcon />
+                    {feature}
+                  </li>
+                ))}
               </ul>
               <div className="agi-tier-cta-group">{renderPlanAction('pro', t('proCta'))}</div>
             </Reveal>
@@ -1331,10 +1361,19 @@ export default function PricingPage() {
               <div className="agi-tier-cta-group">
                 {maxVariant === 'max'
                   ? renderPlanAction('max', t('maxCta'))
-                  : renderPlanAction('max_15x', t('max15xCta'))}
+                  : renderPlanAction('max_15x', t('max15xCta', { plan: max15x.label }))}
               </div>
             </Reveal>
           </div>
+          <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-5)' }}>
+            {usageExplainer}
+          </p>
+          <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-2)' }}>
+            {t('pricingFootnote')}{' '}
+            <Link href="/refund-policy" className="agi-ds-link">
+              {t('refundPolicyLink')}
+            </Link>
+          </p>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-compare-title">
@@ -1342,7 +1381,7 @@ export default function PricingPage() {
           <h2 id="pricing-compare-title" className="agi-fl-h2">
             {t('compareHeading')}
           </h2>
-          <p className="agi-fl-section-lede">{t('compareSubheading')}</p>
+          <p className="agi-fl-section-lede">{t('compareSubheading', { topPlan: max15x.label })}</p>
           <details className="agi-compare-disclosure" open>
             <summary className="agi-compare-summary">
               <span>Full capability table</span>
@@ -1614,6 +1653,22 @@ export default function PricingPage() {
         request={waitlistRequest}
         onClose={() => setWaitlistRequest(null)}
         onAccessGranted={startInitialCheckout}
+      />
+      <DowngradeReviewDialog
+        open={downgradePlan !== null}
+        initialPlan={downgradePlan}
+        onClose={() => setDowngradePlan(null)}
+        onScheduled={(state) => {
+          setDowngradePlan(null);
+          const change = state.scheduledChange;
+          if (!change) return;
+          toast.success(
+            t('downgradeScheduledToast', {
+              plan: BILLING_PLAN_PRICING[change.plan].label,
+              date: formatBillingDate(change.effectiveAt) ?? '',
+            }),
+          );
+        }}
       />
     </div>
   );

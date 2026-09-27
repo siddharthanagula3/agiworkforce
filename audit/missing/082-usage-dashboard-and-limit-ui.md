@@ -17,9 +17,3 @@ nothing is left.
 - Done when: Users can choose to have blocked work resume automatically (or be notified) once their limit resets.
 - Wave: 5
 - Build on: web, desktop, mobile
-
-## S82.30: Auto-reload settings.
-
-- Done when: Users can turn on automatic credit reload (top up when the balance falls below a threshold) and configure it.
-- Wave: 5
-- Build on: web, desktop, mobile

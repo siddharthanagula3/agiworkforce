@@ -14,6 +14,12 @@ import {
 } from './db';
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
+import { handleAutoReloadEvent } from './auto-reload-events';
+import {
+  handleReferralChargeReversal,
+  handleReferralInvoicePaid,
+  notifyTrialEnding,
+} from './referral-events';
 import { topUpChargedCents } from '@agiworkforce/types';
 import {
   endEnterpriseContractIfPresent,
@@ -71,6 +77,7 @@ export async function dispatchStripeEvent(
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
+  if (await handleAutoReloadEvent(db, event)) return;
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
@@ -158,8 +165,12 @@ export async function dispatchStripeEvent(
         });
       }
       await recordEnterpriseInvoiceEvent(db, invoice, { eventCreatedAt: event.created });
+      await handleReferralInvoicePaid(db, stripe, invoice);
       break;
     }
+    case 'customer.subscription.trial_will_end':
+      await notifyTrialEnding(db, stripe, event.data.object as Stripe.Subscription);
+      break;
     case 'invoice.created':
     case 'invoice.finalized':
     case 'invoice.updated':
@@ -297,6 +308,7 @@ export async function dispatchStripeEvent(
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
       const stripeCustomerId = charge.customer as string | null;
+      await handleReferralChargeReversal(db, stripe, charge, 'refund');
 
       const isCreditTopUpCharge = charge.metadata?.['type'] === 'credit_topup';
       const fullyRefunded =
@@ -426,6 +438,7 @@ export async function dispatchStripeEvent(
 
       const charge = await stripe.charges.retrieve(chargeId);
       const stripeCustomerId = charge.customer as string | null;
+      await handleReferralChargeReversal(db, stripe, charge, 'dispute');
 
       if (stripeCustomerId) {
         const profiles = await db.query<{
