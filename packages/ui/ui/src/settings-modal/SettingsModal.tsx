@@ -275,20 +275,36 @@ function ConnectorDetail({
             <p className="text-xs text-muted-foreground">{connector.category}</p>
           </div>
         </div>
-        <div className="shrink-0">
+        <div className="flex shrink-0 items-center gap-2">
           {connection ? (
-            <button
-              type="button"
-              onClick={onDisconnect}
-              disabled={mutating}
-              aria-busy={mutating || undefined}
-              className={cn(
-                'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50',
-                FOCUS_RING,
-              )}
-            >
-              {mutating ? 'Disconnecting…' : 'Disconnect'}
-            </button>
+            <>
+              {connection.status === 'warning' && canConnect ? (
+                <button
+                  type="button"
+                  onClick={onConnect}
+                  disabled={mutating}
+                  aria-busy={mutating || undefined}
+                  className={cn(
+                    'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                    FOCUS_RING,
+                  )}
+                >
+                  Connect
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={onDisconnect}
+                disabled={mutating}
+                aria-busy={mutating || undefined}
+                className={cn(
+                  'rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted disabled:opacity-50',
+                  FOCUS_RING,
+                )}
+              >
+                {mutating ? 'Disconnecting…' : 'Disconnect'}
+              </button>
+            </>
           ) : canConnect ? (
             <button
               type="button"
@@ -445,6 +461,9 @@ function AddCustomConnectorForm({
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [oauthClientId, setOauthClientId] = useState('');
+  const [oauthClientSecret, setOauthClientSecret] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -454,7 +473,11 @@ function AddCustomConnectorForm({
 
   const trimmedUrl = url.trim();
   const urlValid = isValidHttpsUrl(trimmedUrl);
-  const canSubmit = name.trim().length > 0 && urlValid && !submitting;
+  const oauthClientSupported = adapter?.customConnectorOAuthClientSupported === true;
+  const trimmedClientId = oauthClientId.trim();
+  const trimmedClientSecret = oauthClientSecret.trim();
+  const clientSecretWithoutId = trimmedClientSecret.length > 0 && trimmedClientId.length === 0;
+  const canSubmit = name.trim().length > 0 && urlValid && !clientSecretWithoutId && !submitting;
 
   const handleImportJsonConfig = useCallback(() => {
     const result = parseCustomMcpJsonConfig(jsonConfigText);
@@ -488,6 +511,12 @@ function AddCustomConnectorForm({
         url: trimmedUrl,
         ...(adapter.customConnectorAuthTokenSupported && authToken.trim()
           ? { authToken: authToken.trim() }
+          : {}),
+        ...(oauthClientSupported && trimmedClientId
+          ? {
+              oauthClientId: trimmedClientId,
+              ...(trimmedClientSecret ? { oauthClientSecret: trimmedClientSecret } : {}),
+            }
           : {}),
       });
       onBack();
@@ -677,6 +706,87 @@ function AddCustomConnectorForm({
           </span>
         )}
       </label>
+
+      {oauthClientSupported ? (
+        <div className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((value) => !value)}
+            aria-expanded={advancedOpen}
+            aria-controls="custom-connector-advanced"
+            className={cn(
+              'flex w-fit items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground',
+              FOCUS_RING,
+            )}
+          >
+            <ChevronDown
+              className={cn('h-3.5 w-3.5 transition-transform', !advancedOpen && '-rotate-90')}
+              aria-hidden="true"
+            />
+            Advanced settings
+          </button>
+          {advancedOpen ? (
+            <div id="custom-connector-advanced" className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-foreground">
+                  OAuth Client ID{' '}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </span>
+                <input
+                  type="text"
+                  value={oauthClientId}
+                  onChange={(e) => setOauthClientId(e.target.value)}
+                  name="mcp-connector-oauth-client-id"
+                  autoComplete="off"
+                  spellCheck={false}
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-xs font-medium text-foreground">
+                  OAuth Client Secret{' '}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </span>
+                <input
+                  type="password"
+                  value={oauthClientSecret}
+                  onChange={(e) => setOauthClientSecret(e.target.value)}
+                  name="mcp-connector-oauth-client-secret"
+                  autoComplete="new-password"
+                  aria-invalid={clientSecretWithoutId || undefined}
+                  aria-describedby="custom-connector-oauth-help"
+                  data-1p-ignore
+                  data-lpignore="true"
+                  data-bwignore
+                  className={inputClass}
+                />
+              </label>
+              <span
+                id="custom-connector-oauth-help"
+                className={cn(
+                  'text-caption',
+                  clientSecretWithoutId ? 'text-danger' : 'text-muted-foreground',
+                )}
+              >
+                {clientSecretWithoutId
+                  ? 'Enter the OAuth Client ID that goes with this secret.'
+                  : 'Only needed when the server does not register clients on its own. Leave the bearer token empty to sign in with OAuth.'}
+              </span>
+              {adapter?.customConnectorOAuthRedirectUri ? (
+                <p className="flex flex-col gap-1 text-caption text-muted-foreground">
+                  Redirect URI to register with the server
+                  <code className="select-all break-all rounded-md border border-border bg-muted/30 px-2 py-1 font-mono text-foreground">
+                    {adapter.customConnectorOAuthRedirectUri}
+                  </code>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <p className="flex items-start gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
         <AlertTriangle
