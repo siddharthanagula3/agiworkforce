@@ -317,16 +317,13 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:381-381`, `apps/w
 
 - Done when: Per routine, the user caps what it may spend (cost, credits, or number of runs).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a maximum number of runs and an expiry date; add a spend or credit cap per routine. | ui |
-| desktop | partial | Only a maximum number of runs and an expiry date; add a spend or credit cap per routine. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:605-605`, `apps/web/lib/services/schedule-service.ts:473-473`
 
 ## S63.32: Required-approval behavior.
 
