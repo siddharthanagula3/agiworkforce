@@ -7,7 +7,11 @@ import type {
   CloudCodeSession,
   ProviderMessage,
 } from '@agiworkforce/types';
-import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS,
+  SLOT_REGISTRY,
+  normalizeModelId,
+} from '@agiworkforce/types';
 import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
 import {
@@ -83,9 +87,10 @@ const MAX_STEP_OUTPUT_LENGTH = 100_000;
  * service: `export const maxDuration = 300` in
  * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
  * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
- * cannot import this, the three values are kept in step by hand.
+ * cannot import this, the route literals and the shared limit clients wait on
+ * are kept in step by hand.
  */
-export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
+export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS;
 
 /**
  * What an agent turn is actually allowed to spend, and why it is not

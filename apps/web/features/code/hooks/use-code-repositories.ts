@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CODE_TIMING } from '../code-surface';
-import type { CloudCodeApi, CloudCodeRepository } from '../services/cloud-code-api';
+import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 
 export type CodeRepositoryState =
   | { status: 'idle' }

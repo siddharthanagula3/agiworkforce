@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CloudCodeAgentStep, CloudCodeTerminalEntry } from '@agiworkforce/types';
-import { buildCodeTranscript, type CodeTurnRecord } from './code-transcript';
+import { buildCodeTranscript, type CodeTurnRecord } from '../cloud-code-transcript';
 
 function entry(id: string, command: string, startedAt: string): CloudCodeTerminalEntry {
   return {

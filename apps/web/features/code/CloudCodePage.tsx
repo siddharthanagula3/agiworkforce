@@ -12,21 +12,27 @@ import {
 } from '@agiworkforce/icons';
 import { Sheet, SheetContent, SheetTitle, Spinner, useConfirmAction } from '@agiworkforce/ui';
 import type {
-  CloudCodeAgentTurnRecord,
   CloudCodeAvailability,
   CloudCodeRuntime,
   CloudCodeSession,
   CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
 import {
-  canAccessModelForSubscriptionTier,
-  getDefaultModelFor,
-  getModelFamilyFallbackChain,
-  getModelFamilySlotForModel,
-  getRoutingSlotModel,
+  cloudCodeStopReasonIsRetryable,
   normalizeBillingPlanTier,
   NOTEBOOK_TEMPLATE_ID,
+  resolveCloudCodeAgentModel,
 } from '@agiworkforce/types';
+import {
+  buildCodeTranscript,
+  CloudCodeApiError,
+  toCodeTurnRecord,
+  type CloudCodeAgentTurn,
+  type CloudCodeApi,
+  type CloudCodeChanges,
+  type CodeApprovalPrompt,
+  type CodeTurnRecord,
+} from '@agiworkforce/cloud-contracts';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
@@ -34,13 +40,7 @@ import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
-import {
-  cloudCodeApi,
-  CloudCodeApiError,
-  type CloudCodeAgentTurn,
-  type CloudCodeApi,
-  type CloudCodeChanges,
-} from './services/cloud-code-api';
+import { cloudCodeApi } from './services/cloud-code-api';
 import {
   CODE_COPY,
   CODE_LIMITS,
@@ -55,14 +55,8 @@ import {
   filterAndSortSessions,
   parseExtraHosts,
   sessionContextChip,
-  stopReasonIsRetryable,
   type CodeSessionFilters,
 } from './code-surface';
-import {
-  buildCodeTranscript,
-  type CodeApprovalPrompt,
-  type CodeTurnRecord,
-} from './code-transcript';
 import type { LocalDeveloperSession } from '@agiworkforce/local-runtime-contract';
 import {
   localFolderChoice,
@@ -88,7 +82,6 @@ import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
 import styles from './CloudCodePage.module.css';
 
-const CODE_ROUTING_SLOT = 'coding_balanced';
 const HEADER_GLYPH_SIZE = 16;
 const NOTICE_GLYPH_SIZE = 16;
 const DEFAULT_SESSION_TITLE_WORDS = 6;
@@ -113,43 +106,9 @@ function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
 }
 
-function toTurnRecord(record: CloudCodeAgentTurnRecord): CodeTurnRecord {
-  return {
-    id: record.turnId,
-    turnId: record.turnId,
-    at: record.createdAt,
-    goal: record.goal,
-    stopReason: record.stopReason,
-    finalMessage: record.finalMessage,
-    errorMessage: record.errorMessage,
-    steps: record.steps,
-    retryable: record.stopReason !== null && stopReasonIsRetryable(record.stopReason),
-  };
-}
-
 function titleFromTask(task: string): string {
   const words = task.trim().split(/\s+/).slice(0, DEFAULT_SESSION_TITLE_WORDS).join(' ');
   return words.length > 0 ? words : CODE_COPY.surface;
-}
-
-function canRunCodeAgent(modelId: string): boolean {
-  return getModelMetadata(modelId)?.capabilities.tools === true;
-}
-
-function resolveAgentModel(selectedModelId: string | null, planTier: string): string {
-  if (selectedModelId && canRunCodeAgent(selectedModelId)) return selectedModelId;
-  const codingModel = getRoutingSlotModel(CODE_ROUTING_SLOT);
-  const codingFamily = getModelFamilySlotForModel(codingModel);
-  const planDefault = getDefaultModelFor(planTier, 'chat');
-  const candidates = [
-    ...(codingFamily ? getModelFamilyFallbackChain(codingFamily) : [codingModel]),
-    planDefault,
-  ];
-  return (
-    candidates.find(
-      (modelId) => canRunCodeAgent(modelId) && canAccessModelForSubscriptionTier(modelId, planTier),
-    ) ?? planDefault
-  );
 }
 
 export interface CloudCodePageProps {
@@ -210,7 +169,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const selectedModelId = useModelStore((state) => state.selectedModelId);
   const planTier = normalizeBillingPlanTier(availability?.planTier);
   const agentModel = useMemo(
-    () => resolveAgentModel(selectedModelId, planTier),
+    () => resolveCloudCodeAgentModel(selectedModelId, planTier),
     [selectedModelId, planTier],
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -359,7 +318,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         // tab, and a response computed before that turn's row existed used to
         // wipe it out of the transcript.
         setTurns((current) => {
-          const stored = body.turns.map(toTurnRecord);
+          const stored = body.turns.map(toCodeTurnRecord);
           const storedIds = new Set(stored.map((record) => record.id));
           return [
             ...stored,
@@ -453,7 +412,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
               finalMessage: turn.finalMessage,
               errorMessage: turn.errorMessage ?? null,
               steps: turn.steps,
-              retryable: stopReasonIsRetryable(turn.stopReason),
+              retryable: cloudCodeStopReasonIsRetryable(turn.stopReason),
             }
           : record,
       ),
