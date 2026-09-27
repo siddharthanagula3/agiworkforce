@@ -9,62 +9,54 @@ nothing is left.
 ## S68.01: Shared session identifier across supported clients.
 
 - Done when: One session identifier names the same coding session on every supported client.
-- Wave: 2
-- Already works on: mobile
+- Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
-| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:809-809`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/cli/src/agent/mod.rs:1640-1649`, `apps/cli/src/lib.rs:1645-1652`
 
 ## S68.02: Same conversation history.
 
 - Done when: Opening the session on any client shows the same conversation history.
-- Wave: 2
-- Already works on: mobile
+- Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
-| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:334-336`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/cli/src/agent/mod.rs:1640-1649`, `apps/cli/src/lib.rs:1645-1652`
 
 ## S68.03: Same active branch.
 
 - Done when: Every client shows and works on the same active git branch for the session.
-- Wave: 2
-- Already works on: mobile
+- Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
-| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/web/features/code/components/CodeChangesPanel.tsx:136-136`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`
 
 ## S68.04: Same repository association.
 
 - Done when: Every client associates the session with the same repository.
-- Wave: 2
-- Already works on: mobile
+- Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | flag-off, surface-only |
-| desktop | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | cli | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 | vscode | partial | Model accepted 2026-09-27, following Claude Code and Codex: a session stays where it runs and moves between local and cloud only through an explicit, reviewed hand-off. Local threads share one id across CLI, VS Code and desktop and reach the phone through Remote Control, and cloud Code sessions open by the same id on every client. Still open: list and open cloud Code sessions by that id on mobile and in the VS Code Cloud view. | surface-only |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:1058-1058`, `apps/web/features/code/components/LocalSessionsSection.tsx:101-101`, `apps/desktop/electron/runtime/developerSessionService.ts:890-898`, `apps/cli/src/lib.rs:829-835`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/tui/tui_app.rs:2708-2713`, `apps/extension-vscode/src/core/commandSetup.ts:1243-1246`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:903-905`
 
 ## S68.05: Same worktree association.
 
