@@ -32,13 +32,13 @@ import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { getSpendableCredits } from '@/lib/server/spendable-credits';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
   isStripeCustomerId,
   isStripeResourceMissing,
   isStripeSubscriptionId,
 } from '@/lib/server/stripe-resource-ids';
+import { getPrepaidCreditBalances } from '@/lib/services/bonus-credit-service';
 import {
   isNotificationEmailConfigured,
   TRANSACTIONAL_EMAIL_FOOTER_STYLE,
@@ -153,6 +153,7 @@ interface ReloadCharge {
   amountCents: number;
   taxCents: number;
   calculationId: string;
+  country: string | null;
 }
 
 const SETTINGS_COLUMNS = `enabled, threshold_credits, amount_usd, reload_attempt_id,
@@ -519,27 +520,9 @@ export async function saveAutoReloadSettings(
   return { status: 'saved', settings: toAutoReloadSettings(row, instrument.card) };
 }
 
-async function readReloadBalanceCredits(
-  db: DatabaseAdapter,
-  userId: string,
-): Promise<number | null> {
-  const [spendable, bonusRows] = await Promise.all([
-    getSpendableCredits(db, userId),
-    db.query<{ remaining_credits: string | number | null }>(
-      `select coalesce(sum(credits_remaining), 0) as remaining_credits
-         from public.bonus_credit_grants
-        where user_id = $1
-          and revoked_at is null
-          and expires_at > now()`,
-      [userId],
-    ),
-  ]);
-  if (spendable.availableMicrousd === null) return null;
-  const bonusCredits = Number(bonusRows[0]?.remaining_credits ?? 0);
-  return (
-    creditsFromMicrousd(spendable.availableMicrousd) +
-    (Number.isFinite(bonusCredits) ? bonusCredits : 0)
-  );
+async function readReloadBalanceCredits(db: DatabaseAdapter, userId: string): Promise<number> {
+  const balances = await getPrepaidCreditBalances(db, userId);
+  return balances.bonusCredits + balances.purchasedCredits;
 }
 
 async function fitsDailyTopUpLimit(
@@ -567,7 +550,6 @@ async function planReload(
   row: AutoReloadRow,
 ): Promise<ReloadPlan | AutoReloadOutcome> {
   const balance = await readReloadBalanceCredits(db, userId);
-  if (balance === null) return 'deferred';
   if (balance >= row.threshold_credits) return 'above_threshold';
   const quote = quoteTopUp(row.amount_usd, { autoReload: true });
   if (!quote) {
@@ -958,6 +940,7 @@ function reloadMetadata(
     top_up_units: String(quote.credits),
     tax_cents: String(charge.taxCents),
     tax_calculation: charge.calculationId,
+    ...(charge.country ? { billing_country: charge.country } : {}),
     auto_reload: 'true',
     auto_reload_attempt_id: attemptId,
   };
@@ -983,6 +966,7 @@ async function calculateReloadCharge(
     amountCents: calculation.amount_total,
     taxCents: calculation.tax_amount_exclusive,
     calculationId: calculation.id,
+    country: calculation.customer_details.address?.country ?? null,
   };
 }
 
