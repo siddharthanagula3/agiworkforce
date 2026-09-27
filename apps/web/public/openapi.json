@@ -434,6 +434,36 @@
           "memory_enabled": {
             "type": "boolean",
             "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
+          },
+          "web_search": {
+            "type": "boolean",
+            "description": "Lets the model search the web while it answers. Each search is billed in credits and shows in your usage as Agentic search."
+          },
+          "research": {
+            "type": "boolean",
+            "description": "Runs Deep Research: the model plans, searches and reads many sources before it writes a cited report. A model that cannot run research answers the request normally instead. Searches are billed as Agentic search."
+          },
+          "research_sources": {
+            "type": "object",
+            "description": "What a Deep Research run may read. Applies only when `research` is true.",
+            "properties": {
+              "files": {
+                "type": "boolean",
+                "description": "Also search the documents indexed in your account."
+              },
+              "allow_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Only read and cite pages on these sites, for example `nature.com`."
+              },
+              "deny_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": { "type": "string", "maxLength": 253 },
+                "description": "Never read or cite pages on these sites."
+              }
+            }
           }
         }
       },
