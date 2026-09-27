@@ -1,3 +1,4 @@
+import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
 import {
   assertDeliverableCadence,
   buildCronExpression,
@@ -44,6 +45,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   isActive: true,
   expiresLocal: '',
   maxExecutions: '',
+  creditCap: '',
   projectId: null,
   recurrenceRule: '',
   daypartPreset: 'any',
@@ -230,6 +232,8 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     isActive: task.isEnabled,
     expiresLocal: isoToZonedLocalInput(task.expiresAt, task.timezone),
     maxExecutions: task.maxExecutions === null ? '' : String(task.maxExecutions),
+    creditCap:
+      task.creditCap === null || task.creditCap === undefined ? '' : String(task.creditCap),
     projectId: task.projectId ?? null,
     recurrenceRule: task.recurrenceRule ?? '',
     daypartPreset: presetForDayparts(task.dayparts),
@@ -446,6 +450,22 @@ export function validateAndBuildScheduleRequest(
     }
   }
 
+  let creditCap: number | null = null;
+  if (draft.creditCap.trim()) {
+    creditCap = Number(draft.creditCap);
+    if (
+      !Number.isInteger(creditCap) ||
+      creditCap < 1 ||
+      creditCap > MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP
+    ) {
+      addError(
+        errors,
+        'creditCap',
+        `Use a whole number of credits from 1 to ${MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP.toLocaleString('en-US')}.`,
+      );
+    }
+  }
+
   if (scheduledAt && expiresAt && new Date(expiresAt) <= new Date(scheduledAt)) {
     addError(errors, 'expiresLocal', 'Expiration must be after the scheduled run.');
   }
@@ -470,6 +490,7 @@ export function validateAndBuildScheduleRequest(
       isActive: draft.isActive,
       expiresAt,
       maxExecutions,
+      creditCap,
       projectId: draft.projectId,
       recurrenceRule,
       dayparts,

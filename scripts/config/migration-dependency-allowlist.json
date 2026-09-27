@@ -57,9 +57,19 @@
       "reason": "Reads the credit period's plan catalog version with the reservation's headroom. Before 0300 is applied that lookup fails, is logged, and the reservation proceeds on the current catalog with no overage headroom, which is what every subscriber has today."
     },
     {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 301,
+      "reason": "Links a request reserved inside a routine run to that routine, which ships with 0301: the deploy applies 0301 before this release reaches production. Outside a routine run the statement never runs; inside one, before 0301 it fails and the run fails rather than spending past its credit cap uncounted."
+    },
+    {
       "file": "apps/web/lib/services/mobile-iap-ledger-service.ts",
       "migration": 300,
       "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-service.ts",
+      "migration": 301,
+      "reason": "Owns the routine credit cap and ships with 0301: the deploy applies 0301 before this release reaches production. Released ahead of it, schedule reads and runs fail rather than run a routine without its cap."
     },
     {
       "file": "apps/web/lib/services/subscription-service.ts",

@@ -30,6 +30,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
+import { currentScheduleRun } from '@/lib/schedules/schedule-run-scope';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -468,6 +469,21 @@ async function resolveReservationLedgerContext(
   }
 }
 
+async function attributeToScheduleRun(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+): Promise<void> {
+  const run = currentScheduleRun();
+  if (!run || run.userId !== userId) return;
+  await db.execute(
+    `update public.managed_usage_requests
+        set scheduled_task_id = $3, scheduled_task_run_id = $4
+      where user_id = $1 and idempotency_key = $2 and scheduled_task_id is null`,
+    [userId, idempotencyKey, run.taskId, run.runId],
+  );
+}
+
 export async function reserveManagedUsageRequest(
   input: {
     db: DatabaseAdapter;
@@ -531,6 +547,7 @@ export async function reserveManagedUsageRequest(
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';
   if (decision !== 'acquired') throw reservationError(decision);
+  await attributeToScheduleRun(input.db, input.userId, idempotencyKey);
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||
