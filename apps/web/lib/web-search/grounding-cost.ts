@@ -7,6 +7,7 @@ import {
   resolveFeatureRate,
 } from '@agiworkforce/types';
 
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { logger } from '@/lib/logger';
 import { settleSearchCall, type SearchAdmission } from '@/lib/web-search/search-budget';
 import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
@@ -51,6 +52,7 @@ export interface GoogleGroundingSettlement {
   billableCalls: number;
   delivered: boolean;
   surface?: string | null;
+  attribution?: UsageAttribution;
   db: DatabaseAdapter;
 }
 
@@ -72,6 +74,7 @@ export function settleGoogleGroundingSpend(input: GoogleGroundingSettlement): Pr
     costRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}:${input.settlementRef}`,
     taskRef: input.turnRef,
     surface: input.surface ?? null,
+    ...(input.attribution ? { attribution: input.attribution } : {}),
     db: input.db,
   });
 }
