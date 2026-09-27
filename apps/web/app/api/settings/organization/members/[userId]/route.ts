@@ -24,6 +24,7 @@ import {
   memberAdministrator,
   readWorkspaceMember,
   removeMember,
+  roleGrantsAdministration,
   type WorkspaceMember,
 } from '@/lib/services/organization-member-admin-service';
 
@@ -93,7 +94,7 @@ async function handlePatch(
     request,
     organizationId: caller.organizationId,
     surface: auditSurfaceOf(caller),
-    severity: role === 'admin' ? 'warning' : 'info',
+    severity: roleGrantsAdministration(role) ? 'warning' : 'info',
     detail: {
       resourceType: 'organization_member',
       source: auditSourceOf(caller),

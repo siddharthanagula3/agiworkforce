@@ -12,6 +12,16 @@
       "reason": "Deletes the account's bonus_credit_grants rows. Before 0295 is applied the delete sees an absent table and is recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
     },
     {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 295,
+      "reason": "Names bonus_credit_grants in its organization-erasure classification and issues no query against it, so it runs unchanged before and after 0295."
+    },
+    {
+      "file": "apps/web/lib/server/workspace-scope/switch-surfaces.ts",
+      "migration": 295,
+      "reason": "Classifies bonus_credit_grants as a provenance-only table for workspace switching and issues no query against it, so it runs unchanged before and after 0295."
+    },
+    {
       "file": "apps/web/lib/services/bonus-credit-service.ts",
       "migration": 295,
       "reason": "Owns bonus_credit_grants and ships with 0295: the deploy applies 0295 before this release reaches production."

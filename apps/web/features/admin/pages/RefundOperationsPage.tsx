@@ -154,6 +154,7 @@ export default function RefundOperationsPage() {
   const [account, setAccount] = useState<OperatorAccountBilling | null>(null);
   const [lookingUp, setLookingUp] = useState(false);
   const [target, setTarget] = useState<RefundTarget | null>(null);
+  const [refundKey, setRefundKey] = useState('');
   const [amount, setAmount] = useState('');
   const [stripeReason, setStripeReason] =
     useState<OperatorRefundStripeReason>('requested_by_customer');
@@ -203,6 +204,7 @@ export default function RefundOperationsPage() {
 
   function openRefund(next: RefundTarget) {
     setTarget(next);
+    setRefundKey(crypto.randomUUID());
     setAmount(
       toMajorUnits(
         next.requestId !== null && next.statutoryCents !== null && next.statutoryCents > 0
@@ -218,12 +220,12 @@ export default function RefundOperationsPage() {
     setError(null);
   }
 
-  async function post<T>(payload: Record<string, unknown>): Promise<T> {
+  async function post<T>(payload: Record<string, unknown>, idempotencyKey?: string): Promise<T> {
     return readJson<T>(ENDPOINT, {
       method: 'POST',
       headers: await addCsrfHeaders({
         'Content-Type': 'application/json',
-        'Idempotency-Key': `agi.refund.admin.${crypto.randomUUID()}`,
+        ...(idempotencyKey ? { 'Idempotency-Key': `agi.refund.admin.${idempotencyKey}` } : {}),
       }),
       body: JSON.stringify(payload),
     });
@@ -265,15 +267,18 @@ export default function RefundOperationsPage() {
       onConfirm: async () => {
         setError(null);
         try {
-          const outcome = await post<RefundOutcome>({
-            action: 'refund',
-            chargeId: target.charge.id,
-            amountCents: amountCents === target.charge.refundableCents ? null : amountCents,
-            note: recordedNote,
-            stripeReason,
-            requestId: target.requestId,
-            endPlan: ending,
-          });
+          const outcome = await post<RefundOutcome>(
+            {
+              action: 'refund',
+              chargeId: target.charge.id,
+              amountCents: amountCents === target.charge.refundableCents ? null : amountCents,
+              note: recordedNote,
+              stripeReason,
+              requestId: target.requestId,
+              endPlan: ending,
+            },
+            refundKey,
+          );
           setNotice(
             `Refund ${outcome.refundId} for ${formatPaymentAmount(outcome.amountCents, outcome.currency)} is ${outcome.refundStatus ?? 'submitted'}${outcome.planEnded ? ', and the subscription is canceled' : ''}.`,
           );
