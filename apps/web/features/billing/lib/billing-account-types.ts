@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   normalizeBillingPlanTier,
+  type AutoReloadSettings,
 } from '@agiworkforce/types';
 import { BillingIntervalSchema } from '@/lib/validations/checkout';
 
@@ -68,7 +69,7 @@ export const BillingRefundSchema = z.object({
   receiptUrl: z.string().url().nullable(),
 });
 
-export const AutoReloadSettingsSchema = z.object({
+export const AutoReloadSettingsSchema: z.ZodType<AutoReloadSettings> = z.object({
   enabled: z.boolean(),
   thresholdCredits: z.number().int().nonnegative(),
   amountUsd: z.number().int().positive(),
@@ -76,11 +77,6 @@ export const AutoReloadSettingsSchema = z.object({
   lastFailure: z.object({ at: IsoDateSchema, reason: z.string() }).nullable(),
 });
 
-export type AutoReloadSettings = z.infer<typeof AutoReloadSettingsSchema>;
-export type AutoReloadUpdate = Pick<
-  AutoReloadSettings,
-  'enabled' | 'thresholdCredits' | 'amountUsd'
->;
 export type RecurringPrice = z.infer<typeof RecurringPriceSchema>;
 export type ScheduledPlanChange = z.infer<typeof ScheduledPlanChangeSchema>;
 export type DowngradeTarget = z.infer<typeof DowngradeTargetSchema>;
