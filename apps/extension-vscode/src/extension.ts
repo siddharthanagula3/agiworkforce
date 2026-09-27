@@ -207,7 +207,6 @@ export function activate(context: vscode.ExtensionContext): void {
               normalizeConfiguredModelId(Config.model()),
               resolveTierSync(context),
             ),
-          titleFor: (goal) => goal.split('\n')[0]?.trim() ?? goal,
         }),
       ),
     );
