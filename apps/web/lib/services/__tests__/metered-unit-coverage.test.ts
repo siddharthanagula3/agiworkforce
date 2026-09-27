@@ -10,7 +10,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
   getNeonDb: () => ({ query: vi.fn(async () => []), execute: vi.fn(async () => 1) }),
 }));
 
-import { RATE_CARD_FEATURES, VISUAL_USAGE_OPERATION } from '@agiworkforce/types';
+import { RATE_CARD_FEATURES } from '@agiworkforce/types';
 import {
   COGS_CAPABILITIES,
   COGS_UNIT_BASES,
@@ -44,13 +44,13 @@ const MEASUREMENT: Readonly<
   notification: { usage: { requests: 2 }, units: 2 },
   email: { usage: { requests: 5 }, units: 5 },
   egress: { usage: { gibibytes: 0.25 }, units: 0.25 },
-  browser: { usage: { computeMinutes: 18 }, units: 18 },
-  work_compute: { usage: { computeMinutes: 45 }, units: 45 },
-  code_compute: { usage: { computeMinutes: 11 }, units: 11 },
   connector: { usage: { requests: 8 }, units: 8 },
   artifact: { usage: { gibibyteMonths: 0.75 }, units: 0.75 },
-  visual: { usage: { visualMinutes: 22 }, units: 22 },
   decision: { usage: { totalTokens: 320 }, units: 320 },
+  hosting: { usage: { activeUserMonths: 1 }, units: 1 },
+  auth: { usage: { activeUserMonths: 1 }, units: 1 },
+  cache: { usage: { activeUserMonths: 1 }, units: 1 },
+  observability: { usage: { activeUserMonths: 1 }, units: 1 },
 };
 
 /** Token counts loud enough that a meter reading them instead would be obvious. */
@@ -64,10 +64,6 @@ const LOUD_TOKENS = {
   cacheWriteTokens: 2_000_000,
 } as const;
 
-function operationOf(capability: CogsCapability): string {
-  return capability === 'visual' ? VISUAL_USAGE_OPERATION : capability;
-}
-
 function tokenBased(capability: CogsCapability): boolean {
   return resolveCogsUnits(capability, {}).unitBasis === 'token';
 }
@@ -78,7 +74,7 @@ describe('every metered capability', () => {
   });
 
   it.each([...COGS_CAPABILITIES])('%s is reachable by name and declares a unit', (capability) => {
-    expect(resolveCogsCapability({ operation: operationOf(capability) })).toBe(capability);
+    expect(resolveCogsCapability({ operation: capability })).toBe(capability);
     expect(COGS_UNIT_BASES).toContain(resolveCogsUnits(capability, {}).unitBasis);
   });
 
@@ -91,22 +87,29 @@ describe('every metered capability', () => {
 describe('a unit that is not a token', () => {
   const nonToken = [...COGS_CAPABILITIES].filter((capability) => !tokenBased(capability));
 
-  it('covers the media, voice, compute and tool work the platform sells', () => {
+  it('covers the media, voice, compute, tool and platform work the platform pays for', () => {
     expect(nonToken).toEqual(
       expect.arrayContaining([
         'image',
         'video',
         'transcription',
-        'visual',
         'tool',
         'connector',
         'computer_use',
-        'browser',
-        'work_compute',
-        'code_compute',
+        'sandbox',
         'artifact',
+        'hosting',
+        'auth',
+        'cache',
+        'observability',
       ]),
     );
+  });
+
+  it('keeps no capability for camera, screen-share or unpriced browser and Work minutes', () => {
+    for (const removed of ['visual', 'browser', 'work_compute', 'code_compute']) {
+      expect(COGS_CAPABILITIES).not.toContain(removed);
+    }
   });
 
   it.each([...COGS_CAPABILITIES].filter((capability) => !tokenBased(capability)))(
@@ -157,9 +160,6 @@ describe('infrastructure a limit has to be able to count', () => {
     'notification',
     'email',
     'egress',
-    'browser',
-    'work_compute',
-    'code_compute',
     'connector',
     'artifact',
   ] as const;

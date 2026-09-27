@@ -8,6 +8,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: vi.fn(async () => []), execute: vi.fn(async () => 1) }),
 }));
 
+import { FEATURE_RATE_CARD, centsFromMicrousdCeil } from '@agiworkforce/types';
 import { COGS_CAPABILITIES, COGS_UNIT_BASES } from '@/lib/services/cogs-ledger-service';
 import {
   infrastructureCostMicrousd,
@@ -26,10 +27,11 @@ const INFRASTRUCTURE: readonly InfrastructureCogsCapability[] = [
   'notification',
   'email',
   'egress',
-  'browser',
-  'work_compute',
-  'code_compute',
+  'connector',
+  'artifact',
 ];
+
+const EGRESS_MICROUSD_PER_GIB = FEATURE_RATE_CARD.network_egress_gib.providerCogsMicrousd as number;
 
 function fakeDb(rows: unknown[] = []) {
   return { query: vi.fn(async () => rows), execute: vi.fn(async () => 1) };
@@ -54,8 +56,12 @@ describe('cost of goods beyond inference', () => {
     for (const capability of INFRASTRUCTURE) {
       expect(COGS_CAPABILITIES).toContain(capability);
     }
+    for (const platform of ['hosting', 'auth', 'cache', 'observability']) {
+      expect(COGS_CAPABILITIES).toContain(platform);
+    }
     expect(COGS_UNIT_BASES).toContain('gibibyte');
     expect(COGS_UNIT_BASES).toContain('gibibyte_month');
+    expect(COGS_UNIT_BASES).toContain('active_user_month');
   });
 
   it('meters each new capability in the unit its vendor bills', () => {
@@ -71,9 +77,13 @@ describe('cost of goods beyond inference', () => {
       unitBasis: 'second',
       units: 12,
     });
-    expect(resolveCogsUnits('work_compute', { computeMinutes: 4 })).toEqual({
+    expect(resolveCogsUnits('sandbox', { sandboxMinutes: 4 })).toEqual({
       unitBasis: 'minute',
       units: 4,
+    });
+    expect(resolveCogsUnits('hosting', { activeUserMonths: 1 })).toEqual({
+      unitBasis: 'active_user_month',
+      units: 1,
     });
     expect(resolveCogsUnits('email', {})).toEqual({ unitBasis: 'request', units: 1 });
   });
@@ -84,8 +94,9 @@ describe('cost of goods beyond inference', () => {
     }
   });
 
-  it('records what was consumed even while the deployment publishes no rate', async () => {
-    expect(infrastructureCostMicrousd('egress', 4)).toBeNull();
+  it('prices what was consumed from the committed rate card rate', async () => {
+    expect(EGRESS_MICROUSD_PER_GIB).toBeGreaterThan(0);
+    expect(infrastructureCostMicrousd('egress', 4)).toBe(4 * EGRESS_MICROUSD_PER_GIB);
     const db = fakeDb();
     await recordInfrastructureCostEvent({
       userId: 'user_1',
@@ -96,12 +107,19 @@ describe('cost of goods beyond inference', () => {
       db: db as never,
     });
     expect(insertedColumn(db, 'units')).toBe(4);
-    expect(insertedColumn(db, 'provider_cost_cents')).toBe(0);
+    expect(insertedColumn(db, 'provider_cost_cents')).toBe(
+      centsFromMicrousdCeil(4 * EGRESS_MICROUSD_PER_GIB),
+    );
     expect(insertedColumn(db, 'unit_basis')).toBe('gibibyte');
     expect(insertedColumn(db, 'feature')).toBe('network_egress_gib');
   });
 
-  it('prices the same consumption once the deployment sets the rate', async () => {
+  it('refuses to price a negative or non-finite consumption', () => {
+    expect(infrastructureCostMicrousd('egress', -1)).toBeNull();
+    expect(infrastructureCostMicrousd('egress', Number.NaN)).toBeNull();
+  });
+
+  it('prices the same consumption at the deployment override when one is set', async () => {
     process.env['AGI_EGRESS_MICROUSD_PER_GIB'] = '90000';
     expect(infrastructureCostMicrousd('egress', 2)).toBe(180_000);
     const db = fakeDb();
