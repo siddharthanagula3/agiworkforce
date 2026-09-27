@@ -31,7 +31,7 @@ export const PROJECTS_DRAWER_CSS = `
     transition: color 0.12s, border-color 0.12s;
   }
   .sp-drawer-projects-new-btn:hover {
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     border-color: var(--agi-ext-accent);
   }
   .sp-drawer-projects-form { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; }
@@ -53,7 +53,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-projects-input:focus,
   .sp-drawer-projects-textarea:focus { border-color: var(--agi-ext-focus); }
   .sp-drawer-projects-input::placeholder,
-  .sp-drawer-projects-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+  .sp-drawer-projects-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
   .sp-drawer-projects-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
   .sp-drawer-projects-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
   .sp-drawer-project {
@@ -88,7 +88,7 @@ export const PROJECTS_DRAWER_CSS = `
   .sp-drawer-project-count { font-size: 12px; color: var(--agi-ext-text-muted); flex-shrink: 0; }
   .sp-drawer-project-active-tag {
     font-size: 12px;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     flex-shrink: 0;
   }
   .sp-drawer-project-detail {
@@ -132,20 +132,20 @@ export const PROJECTS_DRAWER_CSS = `
     cursor: pointer;
     transition: color 0.12s, border-color 0.12s, background 0.12s;
   }
-  .sp-drawer-project-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+  .sp-drawer-project-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-drawer-project-btn:disabled { cursor: wait; opacity: 0.55; }
   .sp-drawer-project-btn.is-danger:hover {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
   }
   .sp-drawer-project-btn.is-confirm {
-    color: var(--agi-ext-on-accent);
+    color: var(--agi-ext-on-danger);
     background: var(--agi-ext-danger);
     border-color: var(--agi-ext-danger);
   }
   .sp-drawer-project-warning {
     font-size: 12px;
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
     line-height: 1.5;
   }
   .sp-drawer-project-warning[hidden] { display: none; }
@@ -162,7 +162,7 @@ export const PROJECTS_DRAWER_CSS = `
     margin-left: 6px;
     padding: 0;
     font: inherit;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     background: none;
     border: none;
     text-decoration: underline;

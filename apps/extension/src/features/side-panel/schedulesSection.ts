@@ -33,12 +33,12 @@ export const SCHEDULES_SECTION_CSS = `
     overflow-wrap: anywhere;
   }
   .sp-schedules-status[hidden] { display: none; }
-  .sp-schedules-status[data-kind='error'] { color: var(--agi-ext-danger); }
+  .sp-schedules-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
   .sp-schedules-status-action {
     margin-left: 6px;
     padding: 0;
     font: inherit;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     background: none;
     border: none;
     text-decoration: underline;
@@ -78,11 +78,11 @@ export const SCHEDULES_SECTION_CSS = `
     color: var(--agi-ext-text-muted);
   }
   .sp-schedule-badge[data-tone='active'] {
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
     border-color: var(--agi-ext-success-border);
   }
   .sp-schedule-badge[data-tone='failed'] {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
   }
   .sp-schedule-sub { font-size: 12px; color: var(--agi-ext-text-muted); }
@@ -97,7 +97,7 @@ export const SCHEDULES_SECTION_CSS = `
     cursor: pointer;
     transition: color 0.12s, border-color 0.12s;
   }
-  .sp-schedule-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+  .sp-schedule-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-schedule-btn:disabled { cursor: wait; opacity: 0.55; }
 `;
 

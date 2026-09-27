@@ -1243,7 +1243,7 @@ function injectStyles(): void {
       border: 1px solid var(--agi-ext-success-border);
       border-radius: 7px;
       background: var(--agi-ext-success-bg);
-      color: var(--agi-ext-success);
+      color: var(--agi-ext-success-text);
       box-shadow: 0 8px 24px var(--agi-ext-modal-shadow);
       font-size: 11px;
       line-height: 1.4;
@@ -1251,7 +1251,7 @@ function injectStyles(): void {
     #sp-tab-group-notice[data-kind='error'] {
       border-color: var(--agi-ext-danger-border);
       background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
     #sp-tab-group-notice[hidden] { display: none; }
 
@@ -1297,7 +1297,7 @@ function injectStyles(): void {
       user-select: text;
     }
     .sp-context-handoff-source { font-size: 11px; overflow-wrap: anywhere; }
-    .sp-context-handoff-redaction { color: var(--agi-ext-accent) !important; font-size: 12px; }
+    .sp-context-handoff-redaction { color: var(--agi-ext-accent-text) !important; font-size: 12px; }
     .sp-context-handoff-status { min-height: 18px; font-size: 12px; }
     .sp-context-handoff-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .sp-context-handoff-destinations { flex-wrap: wrap; justify-content: flex-start; }
@@ -1336,7 +1336,7 @@ function injectStyles(): void {
     .sp-context-handoff-approve {
       border-color: var(--agi-ext-accent) !important;
       background: var(--agi-ext-accent) !important;
-      color: var(--agi-ext-bg) !important;
+      color: var(--agi-ext-on-accent) !important;
       font-weight: 600;
     }
 
@@ -1373,7 +1373,7 @@ function injectStyles(): void {
       cursor: pointer;
     }
     #sp-project-chip-clear:hover {
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       border-color: var(--agi-ext-accent);
     }
     #sp-project-chip-clear:focus-visible {
@@ -1394,7 +1394,7 @@ function injectStyles(): void {
     }
     #sp-model-badge {
       font-size: 10px;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
       border-radius: 4px;
@@ -1514,7 +1514,7 @@ function injectStyles(): void {
     .sp-bubble-error {
       background: var(--agi-ext-danger-bg);
       border-color: var(--agi-ext-danger-border);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
     /* Failure footer: the reason plus a way to act on it. Previously the
        reason was concatenated into the message text as "Error: <string>". */
@@ -1530,7 +1530,7 @@ function injectStyles(): void {
     .sp-bubble-error-text {
       font-size: 11px;
       line-height: 1.45;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       overflow-wrap: anywhere;
     }
     .sp-bubble-retry-btn {
@@ -1574,7 +1574,6 @@ function injectStyles(): void {
     .sp-timestamp {
       font-size: 10px;
       color: var(--agi-ext-text-muted);
-      opacity: 0.5;
       padding: 0 3px;
     }
     .sp-copy-btn {
@@ -1598,7 +1597,7 @@ function injectStyles(): void {
       .sp-copy-btn { opacity: 1; }
     }
     .sp-copy-btn:hover { color: var(--agi-ext-text); background: var(--agi-ext-hover); }
-    .sp-copy-btn.copied { color: var(--agi-ext-success); opacity: 1; }
+    .sp-copy-btn.copied { color: var(--agi-ext-success-text); opacity: 1; }
 
     /* ── Markdown rendering inside assistant bubbles ── */
     .sp-bubble-assistant code {
@@ -1608,7 +1607,7 @@ function injectStyles(): void {
       padding: 1px 4px;
       font-family: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Consolas, monospace;
       font-size: 11px;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
     .sp-bubble-assistant pre {
       background: var(--agi-ext-bg);
@@ -1630,7 +1629,7 @@ function injectStyles(): void {
     }
     .sp-bubble-assistant strong { color: var(--agi-ext-text); font-weight: 600; }
     .sp-bubble-assistant em { color: var(--agi-ext-text-muted); font-style: italic; }
-    .sp-bubble-assistant a { color: var(--agi-ext-accent); text-decoration: underline; }
+    .sp-bubble-assistant a { color: var(--agi-ext-accent-text); text-decoration: underline; }
     .sp-bubble-assistant ul, .sp-bubble-assistant ol {
       padding-left: 16px;
       margin: 4px 0;
@@ -1680,7 +1679,7 @@ function injectStyles(): void {
     }
     .sp-interactive-card__heading > .agi-icon {
       flex: 0 0 15px;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
     .sp-interactive-card__headline {
       min-width: 0;
@@ -1701,7 +1700,7 @@ function injectStyles(): void {
       margin-top: 8px;
       padding-top: 8px;
       border-top: 1px solid var(--agi-ext-border);
-      color: var(--agi-ext-warning);
+      color: var(--agi-ext-warning-text);
       font-size: 10.5px;
       line-height: 1.4;
     }
@@ -1731,7 +1730,7 @@ function injectStyles(): void {
       place-items: center;
       border-radius: 999px;
       background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       font-size: 9px;
       font-weight: 700;
     }
@@ -1779,7 +1778,7 @@ function injectStyles(): void {
     .sp-cursor::after {
       content: '▋';
       animation: sp-blink 0.7s steps(1) infinite;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       font-size: 12px;
     }
     @keyframes sp-blink { 0%, 100% { opacity: 1; }
@@ -1817,7 +1816,6 @@ function injectStyles(): void {
     .tool-call__label { color: var(--agi-ext-text-muted); font-weight: 400; font-size: 12px; }
     .tool-call__summary {
       color: var(--agi-ext-text-muted);
-      opacity: 0.7;
       font-size: 11px;
       margin-left: 4px;
       max-width: 260px;
@@ -1866,9 +1864,9 @@ function injectStyles(): void {
     .tool-call--running .tool-call__icon svg { animation: sp-spin 0.8s linear infinite; }
     @keyframes sp-spin { to { transform: rotate(360deg); }
     }
-    .tool-call--error .tool-call__label { color: var(--agi-ext-danger); }
-    .tool-call--error .tool-call__icon { color: var(--agi-ext-danger); }
-    .tool-call--success .tool-call__icon { color: var(--agi-ext-success); }
+    .tool-call--error .tool-call__label { color: var(--agi-ext-danger-text); }
+    .tool-call--error .tool-call__icon { color: var(--agi-ext-danger-text); }
+    .tool-call--success .tool-call__icon { color: var(--agi-ext-success-text); }
 
     .sp-agent-activity {
       width: min(100%, 420px);
@@ -1919,8 +1917,8 @@ function injectStyles(): void {
     .sp-agent-step > summary:hover { background: var(--agi-ext-hover); }
     .sp-agent-step__icon { flex: 0 0 14px; opacity: 0.78; }
     .sp-agent-step--running .sp-agent-step__icon { animation: sp-spin 0.8s linear infinite; }
-    .sp-agent-step--failed .sp-agent-step__icon { color: var(--agi-ext-danger); }
-    .sp-agent-step--completed .sp-agent-step__icon { color: var(--agi-ext-success); }
+    .sp-agent-step--failed .sp-agent-step__icon { color: var(--agi-ext-danger-text); }
+    .sp-agent-step--completed .sp-agent-step__icon { color: var(--agi-ext-success-text); }
     .sp-agent-step__summary {
       flex: 1;
       min-width: 0;
@@ -1960,7 +1958,7 @@ function injectStyles(): void {
       align-items: center;
       gap: 5px;
       margin-top: 8px;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       font-weight: 600;
       text-decoration: none;
       white-space: normal;
@@ -1982,8 +1980,8 @@ function injectStyles(): void {
       white-space: normal;
     }
     .sp-agent-approval__summary { color: var(--agi-ext-text); line-height: 1.4; }
-    .sp-agent-approval__recorded { color: var(--agi-ext-accent); font-size: 10px; }
-    .sp-agent-approval__error { color: var(--agi-ext-danger); font-size: 10px; }
+    .sp-agent-approval__recorded { color: var(--agi-ext-accent-text); font-size: 10px; }
+    .sp-agent-approval__error { color: var(--agi-ext-danger-text); font-size: 10px; }
     .sp-agent-approval__actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .sp-agent-approval__button {
       border: 1px solid var(--agi-ext-border);
@@ -2056,9 +2054,9 @@ function injectStyles(): void {
       white-space: nowrap;
       flex-shrink: 0;
     }
-    .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-tool-btn.active { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 15%, transparent); }
-    .sp-tool-btn.has-context { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-tool-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-tool-btn.active { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 15%, transparent); }
+    .sp-tool-btn.has-context { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-tool-btn:disabled { opacity: 0.5; cursor: wait; }
 
     /* ── Mic pulsing indicator ── */
@@ -2123,8 +2121,8 @@ function injectStyles(): void {
       line-height: 1.4;
       border-top: 1px solid var(--agi-ext-border);
     }
-    .sp-shortcuts-status[data-kind='error'] { color: var(--agi-ext-danger); }
-    .sp-shortcuts-status[data-kind='success'] { color: var(--agi-ext-success); }
+    .sp-shortcuts-status[data-kind='error'] { color: var(--agi-ext-danger-text); }
+    .sp-shortcuts-status[data-kind='success'] { color: var(--agi-ext-success-text); }
     .sp-shortcuts-status:empty { display: none; }
 
     .sp-shortcuts-empty {
@@ -2161,7 +2159,7 @@ function injectStyles(): void {
       cursor: pointer;
       white-space: nowrap;
     }
-    .sp-save-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-save-shortcut-btn:hover { background: var(--agi-ext-accent-hover); }
     .sp-save-shortcut-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Input row (composer §7) ── */
@@ -2229,12 +2227,12 @@ function injectStyles(): void {
     #sp-usage-warning[data-severity='warning'] {
       border-color: var(--agi-ext-warning-border);
       background: var(--agi-ext-warning-bg);
-      color: var(--agi-ext-warning);
+      color: var(--agi-ext-warning-text);
     }
     #sp-usage-warning[data-severity='critical'] {
       border-color: var(--agi-ext-danger-border);
       background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
     .sp-composer-notice-action {
       flex-shrink: 0;
@@ -2290,7 +2288,7 @@ function injectStyles(): void {
       min-height: 52px;
       overflow-y: auto;
     }
-    #sp-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.78; }
+    #sp-input::placeholder { color: var(--agi-ext-text-placeholder); }
     /* Slash-command autocomplete. Anchored above the composer because the panel
        is short and a downward menu would fall outside the viewport. */
     #sp-slash-menu {
@@ -2337,11 +2335,11 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: background 0.15s, transform 0.1s;
     }
-    #sp-send-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); transform: scale(1.05); }
+    #sp-send-btn:hover:not(:disabled) { background: var(--agi-ext-accent-hover); transform: scale(1.05); }
     #sp-send-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-send-btn:disabled { background: var(--agi-ext-overlay); color: var(--agi-ext-border-strong); cursor: not-allowed; transform: none; }
-    #sp-send-btn[data-mode="stop"] { background: var(--agi-ext-danger); }
-    #sp-send-btn[data-mode="stop"]:hover { background: color-mix(in srgb, var(--agi-ext-danger) 80%, black); }
+    #sp-send-btn[data-mode="stop"] { background: var(--agi-ext-danger); color: var(--agi-ext-on-danger); }
+    #sp-send-btn[data-mode="stop"]:hover { background: var(--agi-ext-danger-hover); }
 
     /* ── Attachment + button and menu ── */
     .sp-attach-wrapper { position: relative; flex-shrink: 0; }
@@ -2362,7 +2360,7 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.15s, background 0.15s;
     }
-    .sp-attach-btn:hover { color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-attach-btn:hover { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     #sp-attach-menu {
       display: none;
       position: absolute;
@@ -2438,10 +2436,10 @@ function injectStyles(): void {
       padding: 0;
       transition: background 0.12s, color 0.12s;
     }
-    .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-attachment-remove:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-attachment-notice {
       flex: 1 1 100%;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       font-size: 11px;
       line-height: 1.4;
     }
@@ -2482,12 +2480,12 @@ function injectStyles(): void {
       white-space: nowrap;
       background: var(--agi-ext-success-bg);
       border: 1px solid var(--agi-ext-success-border);
-      color: var(--agi-ext-success);
+      color: var(--agi-ext-success-text);
     }
     .sp-autonomy-chip[data-mode='full'] {
       background: var(--agi-ext-warning-bg);
       border-color: var(--agi-ext-warning-border);
-      color: var(--agi-ext-warning);
+      color: var(--agi-ext-warning-text);
     }
     .sp-autonomy-chip:hover { filter: brightness(1.12); }
     .sp-autonomy-chip .agi-icon { flex-shrink: 0; }
@@ -2500,9 +2498,9 @@ function injectStyles(): void {
       flex-shrink: 0;
       margin-right: 4px;
     }
-    .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent); }
-    .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info); }
-    .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning); }
+    .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent-text); }
+    .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info-text); }
+    .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning-text); }
 
     /* ── Auth bar ── */
     #sp-auth-bar {
@@ -2532,7 +2530,7 @@ function injectStyles(): void {
     }
     #sp-auth-input:focus { border-color: var(--agi-ext-focus); }
     #sp-auth-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    #sp-auth-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    #sp-auth-input::placeholder { color: var(--agi-ext-text-placeholder); }
     #sp-auth-save-btn {
       background: var(--agi-ext-accent);
       color: var(--agi-ext-on-accent);
@@ -2545,7 +2543,7 @@ function injectStyles(): void {
       transition: background 0.15s;
       white-space: nowrap;
     }
-    #sp-auth-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    #sp-auth-save-btn:hover { background: var(--agi-ext-accent-hover); }
     #sp-auth-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── Connection status pill ── */
@@ -2563,12 +2561,12 @@ function injectStyles(): void {
     }
     #sp-status-pill.connected {
       background: var(--agi-ext-success-bg);
-      color: var(--agi-ext-success);
+      color: var(--agi-ext-success-text);
       border: 1px solid var(--agi-ext-success-border);
     }
     #sp-status-pill.disconnected {
       background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       border: 1px solid var(--agi-ext-danger-border);
     }
     .sp-status-dot {
@@ -2581,7 +2579,7 @@ function injectStyles(): void {
     #sp-status-pill.disconnected .sp-status-dot { background: var(--agi-ext-danger); }
     #sp-status-pill.cloud {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
     }
     #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
@@ -2595,7 +2593,7 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-danger) 8%, transparent);
       border-top: 1px solid var(--agi-ext-danger-border);
       font-size: 11px;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       flex-shrink: 0;
     }
     #sp-bridge-notice.visible { display: flex; }
@@ -2610,7 +2608,7 @@ function injectStyles(): void {
     #sp-bridge-notice-reconnect {
       background: none;
       border: 1px solid var(--agi-ext-danger-border);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       border-radius: 5px;
       padding: 2px 8px;
       font-size: 10px;
@@ -2657,7 +2655,7 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s;
     }
     .sp-tab:hover { color: var(--agi-ext-text); }
-    .sp-tab.sp-tab-active { color: var(--agi-ext-accent); border-bottom-color: var(--agi-ext-accent); }
+    .sp-tab.sp-tab-active { color: var(--agi-ext-accent-text); border-bottom-color: var(--agi-ext-accent); }
     #sp-chat-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
     #sp-chat-panel.sp-tab-hidden { display: none; }
     #sp-workflows { display: none; flex: 1; overflow-y: auto; padding: 12px 10px; flex-direction: column; gap: 16px; }
@@ -2676,27 +2674,27 @@ function injectStyles(): void {
     .sp-wf-shortcut-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sp-wf-shortcut-meta { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; }
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
-    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-btn-replay:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-btn-replay:disabled { cursor: wait; opacity: 0.6; }
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
-    .sp-wf-btn-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-wf-btn-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-task-info { flex: 1; min-width: 0; }
     .sp-wf-task-name { font-size: 12px; font-weight: 500; color: var(--agi-ext-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
+    .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
     .sp-wf-task-toggle:disabled { cursor: wait; opacity: 0.55; }
-    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
+    .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: var(--agi-ext-toggle-knob); top: 2px; left: 2px; transition: transform 0.2s; }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
     .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
-    .sp-wf-task-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-wf-task-delete:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-wf-task-result { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
-    .sp-wf-task-result:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-focus); }
-    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-task-result:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-focus); }
+    .sp-wf-new-task-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-new-task-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-wf-new-task-form { display: none; flex-direction: column; gap: 7px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-new-task-form.open { display: flex; }
@@ -2704,17 +2702,17 @@ function injectStyles(): void {
     .sp-wf-form-input { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; }
     .sp-wf-form-input:focus { border-color: var(--agi-ext-focus); }
     .sp-wf-form-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-wf-form-input::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-wf-form-select { background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; width: 100%; }
     .sp-wf-form-select:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
     .sp-wf-form-save-btn { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: background 0.12s; }
-    .sp-wf-form-save-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-wf-form-save-btn:hover { background: var(--agi-ext-accent-hover); }
     .sp-wf-form-save-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-form-save-btn:disabled { cursor: wait; opacity: 0.6; }
     .sp-wf-form-cancel-btn { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 10px; font-size: 12px; cursor: pointer; align-self: flex-end; transition: color 0.12s; }
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
-    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger); font-size: 11px; line-height: 1.35; }
+    .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger-text); font-size: 11px; line-height: 1.35; }
     .sp-wf-mutation-status {
       min-height: 18px;
       padding: 0 14px;
@@ -2722,9 +2720,9 @@ function injectStyles(): void {
       font-size: 11px;
       line-height: 1.4;
     }
-    .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success); }
-    .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger); }
-    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
+    .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success-text); }
+    .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
+    .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent-text); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
     .sp-create-shortcut-overlay.open { display: flex; }
@@ -2738,52 +2736,52 @@ function injectStyles(): void {
     .sp-create-shortcut-input { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; }
     .sp-create-shortcut-input:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-create-shortcut-input::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-create-shortcut-textarea { background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 5px; color: var(--agi-ext-text); font-size: 12px; padding: 6px 9px; outline: none; font-family: inherit; transition: border-color 0.15s; width: 100%; box-sizing: border-box; resize: none; height: 70px; line-height: 1.4; }
     .sp-create-shortcut-textarea:focus { border-color: var(--agi-ext-focus); }
     .sp-create-shortcut-textarea:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: -2px; }
-    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-create-shortcut-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-create-shortcut-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
     .sp-create-shortcut-cancel { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: color 0.12s; }
     .sp-create-shortcut-cancel:hover { color: var(--agi-ext-text); }
     .sp-create-shortcut-save { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border: none; border-radius: 5px; padding: 6px 14px; font-size: 12px; cursor: pointer; transition: background 0.12s; }
-    .sp-create-shortcut-save:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-create-shortcut-save:hover { background: var(--agi-ext-accent-hover); }
     .sp-create-shortcut-save:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     .sp-wf-group-desc { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.55; }
     .sp-wf-group-btns { display: flex; gap: 8px; flex-wrap: wrap; }
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 6px; color: var(--agi-ext-text-muted); font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
-    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-wf-group-action-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-wf-group-action-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-wf-group-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
-    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
-    .sp-wf-record-btn:hover { background: color-mix(in srgb, var(--agi-ext-danger) 85%, black); transform: scale(1.02); }
-    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); animation: sp-record-pulse 1.5s infinite; }
+    .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: var(--agi-ext-on-danger); font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
+    .sp-wf-record-btn:hover { background: var(--agi-ext-danger-hover); transform: scale(1.02); }
+    .sp-wf-record-btn.recording { background: var(--agi-ext-danger-bg); border: 1px solid var(--agi-ext-danger); color: var(--agi-ext-danger-text); animation: sp-record-pulse 1.5s infinite; }
     .sp-wf-record-btn.recording:hover { background: var(--agi-ext-danger-bg); }
     @keyframes sp-record-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--agi-ext-transparent-shadow); }
     50% { box-shadow: 0 0 0 6px var(--agi-ext-transparent-shadow); }
     }
-    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: white; flex-shrink: 0; }
+    .sp-wf-record-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--agi-ext-on-danger); flex-shrink: 0; }
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
     .sp-wf-record-status { min-height: 18px; margin-top: 7px; color: var(--agi-ext-text-muted); font-size: 11px; line-height: 1.4; }
-    .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger); }
+    .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
     .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--agi-ext-text-muted); cursor: pointer; }
     .sp-wf-capture-values input { cursor: pointer; }
     .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 8px; }
     .sp-wf-save-dialog.open { display: flex; }
-    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent); }
-    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent); border-radius: 9px; padding: 0 5px; }
+    .sp-wf-save-dialog-title { font-size: 12px; font-weight: 600; color: var(--agi-ext-accent-text); }
+    .sp-wf-count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; font-size: 10px; font-weight: 600; background: color-mix(in srgb, var(--agi-ext-accent) 20%, transparent); color: var(--agi-ext-accent-text); border-radius: 9px; padding: 0 5px; }
     .sp-model-selector-wrap { position: relative; min-width: 0; }
-    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
+    #sp-model-selector-btn { display: flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 5px; padding: 3px 8px; color: var(--agi-ext-accent-text); font-size: 10px; font-weight: 500; cursor: pointer; transition: background 0.12s, border-color 0.12s; white-space: nowrap; min-width: 0; max-width: 100%; overflow: hidden; }
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 8px; padding: 4px; z-index: 200; box-shadow: 0 4px 16px var(--agi-ext-modal-shadow); }
     #sp-model-dropdown.open { display: block; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: 5px; cursor: pointer; background: transparent; transition: background 0.12s; font: inherit; font-size: 11px; color: var(--agi-ext-text-muted); text-align: left; }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
-    .sp-model-option.selected { color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
+    .sp-model-option.selected { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
     .sp-model-option-check { width: 14px; text-align: center; font-size: 10px; flex-shrink: 0; }
     .sp-model-option-label { flex: 1; }
 
@@ -2822,7 +2820,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       white-space: nowrap;
     }
-    .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent); opacity: 0.7; }
+    .sp-model-option.selected .sp-model-option-sublabel { color: var(--agi-ext-accent-text); opacity: 0.7; }
     .sp-model-option:hover .sp-model-option-sublabel { color: var(--agi-ext-text-muted); }
 
     /* ── Free-tier model gating: Upgrade badge on premium models ── */
@@ -2833,8 +2831,8 @@ function injectStyles(): void {
       font-weight: 700;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: #fff;
-      background: linear-gradient(90deg, #f59e0b, #f97316);
+      color: var(--agi-ext-on-accent);
+      background: var(--agi-ext-accent);
       border-radius: 3px;
       padding: 1px 5px;
       flex-shrink: 0;
@@ -2848,9 +2846,9 @@ function injectStyles(): void {
     }
     .sp-model-option-auto .sp-model-option-name {
       font-weight: 600;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
-    .sp-model-option-auto:hover .sp-model-option-name { color: var(--agi-ext-accent); opacity: 0.85; }
+    .sp-model-option-auto:hover .sp-model-option-name { color: var(--agi-ext-accent-text); opacity: 0.85; }
     .sp-model-auto-dot {
       width: 16px;
       height: 16px;
@@ -2974,7 +2972,7 @@ function injectStyles(): void {
       margin-bottom: 6px;
     }
     .sp-drawer-launcher-btn:last-child { margin-bottom: 0; }
-    .sp-drawer-launcher-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-drawer-launcher-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-drawer-launcher-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; background: var(--agi-ext-hover); }
     .sp-drawer-launcher-label { flex: 1; }
     .sp-drawer-launcher-desc { font-size: 10px; color: var(--agi-ext-text-muted); margin-top: 1px; font-weight: 400; }
@@ -2999,8 +2997,8 @@ function injectStyles(): void {
       transition: color 0.15s, border-color 0.15s, background 0.15s;
       flex-shrink: 0;
     }
-    .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
-    .sp-drawer-tool-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
+    .sp-drawer-tool-btn.active { color: var(--agi-ext-success-text); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
     .sp-drawer-tool-btn:disabled { opacity: 0.5; cursor: wait; }
     /* History sub-list inside the drawer.
        CSP note (style-src 'self'): these rules used to be applied via
@@ -3024,7 +3022,7 @@ function injectStyles(): void {
       font: inherit;
       font-size: 11px;
     }
-    #sp-drawer-history-search::placeholder { color: var(--agi-ext-text-muted); }
+    #sp-drawer-history-search::placeholder { color: var(--agi-ext-text-placeholder); }
     #sp-drawer-history-search:focus {
       border-color: var(--agi-ext-accent);
       outline: 2px solid color-mix(in srgb, var(--agi-ext-focus) 45%, transparent);
@@ -3033,7 +3031,7 @@ function injectStyles(): void {
     #sp-drawer-history-search[hidden] { display: none; }
     .sp-drawer-history-error {
       margin-top: 6px;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       font-size: 10px;
       line-height: 1.35;
     }
@@ -3099,7 +3097,7 @@ function injectStyles(): void {
     .sp-drawer-pairing-fingerprint {
       font-size: 10px;
       font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-      color: var(--agi-ext-success);
+      color: var(--agi-ext-success-text);
       background: var(--agi-ext-success-bg);
       border: 1px solid var(--agi-ext-success-border);
       border-radius: 4px;
@@ -3107,7 +3105,7 @@ function injectStyles(): void {
     }
     .sp-drawer-pairing-error {
       font-size: 11px;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       min-height: 16px;
       margin-bottom: 6px;
     }
@@ -3141,12 +3139,12 @@ function injectStyles(): void {
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s, background 0.15s;
     }
-    .sp-drawer-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .sp-drawer-btn-primary { background: var(--agi-ext-accent); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
-    .sp-drawer-btn-primary:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
-    .sp-drawer-btn-danger { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
-    .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-btn-primary:hover { background: var(--agi-ext-accent-hover); color: var(--agi-ext-on-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-btn-danger { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-btn-danger:hover { background: var(--agi-ext-danger-bg); color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     /* Allowlist */
     .sp-drawer-allowlist-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
     .sp-drawer-allowlist-current-row {
@@ -3175,8 +3173,8 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.12s, border-color 0.12s, background 0.12s;
     }
-    .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
-    .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-allowlist-toggle-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
+    .sp-drawer-allowlist-toggle-btn.is-remove { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
     .sp-drawer-allowlist-toggle-btn.is-remove:hover { background: var(--agi-ext-danger-bg); }
     .sp-drawer-allowlist-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
     .sp-drawer-allowlist-list { list-style: none; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
@@ -3210,9 +3208,9 @@ function injectStyles(): void {
       transition: color 0.12s, background 0.12s;
       flex-shrink: 0;
     }
-    .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger); background: var(--agi-ext-danger-bg); }
+    .sp-drawer-allowlist-item-remove:hover { color: var(--agi-ext-danger-text); background: var(--agi-ext-danger-bg); }
     .sp-drawer-allowlist-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 0; }
-    .sp-drawer-allowlist-status { font-size: 11px; color: var(--agi-ext-danger); line-height: 1.5; padding: 4px 0; }
+    .sp-drawer-allowlist-status { font-size: 11px; color: var(--agi-ext-danger-text); line-height: 1.5; padding: 4px 0; }
     .sp-drawer-allowlist-status[hidden] { display: none; }
     /* Memory */
     .sp-drawer-memory-help { font-size: 11px; color: var(--agi-ext-text-muted); line-height: 1.5; margin-bottom: 8px; }
@@ -3227,7 +3225,7 @@ function injectStyles(): void {
       transition: color 0.12s, border-color 0.12s;
       margin-bottom: 8px;
     }
-    .sp-drawer-memory-add-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-add-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-memory-editor { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; }
     .sp-drawer-memory-editor.open { display: flex; }
     .sp-drawer-memory-textarea {
@@ -3246,7 +3244,7 @@ function injectStyles(): void {
       box-sizing: border-box;
     }
     .sp-drawer-memory-textarea:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
+    .sp-drawer-memory-textarea::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-drawer-memory-editor-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .sp-drawer-memory-list { list-style: none; display: flex; flex-direction: column; gap: 5px; }
     .sp-drawer-memory-item {
@@ -3266,15 +3264,15 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
       transition: color 0.12s, border-color 0.12s;
     }
-    .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-item-edit-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
     .sp-drawer-memory-item-delete-btn {
       background: none; border: 1px solid var(--agi-ext-border); border-radius: 4px;
       color: var(--agi-ext-text-muted); font-size: 10px; padding: 2px 6px; cursor: pointer;
       transition: color 0.12s, border-color 0.12s, background 0.12s;
     }
-    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
-    .sp-drawer-memory-item-delete-btn.is-confirm { color: white; background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
-    .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
+    .sp-drawer-memory-item-delete-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger-border); }
+    .sp-drawer-memory-item-delete-btn.is-confirm { color: var(--agi-ext-on-danger); background: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-drawer-history-delete.is-confirm { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent); }
     .sp-drawer-memory-item-textarea {
       background: var(--agi-ext-bg);
       border: 1px solid var(--agi-ext-border);
@@ -3304,7 +3302,7 @@ function injectStyles(): void {
       border-radius: 6px;
       cursor: pointer;
     }
-    .sp-drawer-memory-retry-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    .sp-drawer-memory-retry-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
 
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
@@ -3346,7 +3344,7 @@ function injectStyles(): void {
       width: 13px;
       height: 13px;
       border-radius: 50%;
-      background: #ffffff;
+      background: var(--agi-ext-toggle-knob);
       /* Definition ring. The OFF track is --agi-ext-hover, which is #f0f0f0 in
          the light theme, a plain white knob on it was ~1.05:1 and the OFF
          state read as an empty pill. An outset ring costs no layout and
@@ -3364,7 +3362,7 @@ function injectStyles(): void {
       font-size: 10px;
       line-height: 1.4;
     }
-    .sp-drawer-toggle-status[data-kind="error"] { color: var(--agi-ext-danger); }
+    .sp-drawer-toggle-status[data-kind="error"] { color: var(--agi-ext-danger-text); }
     /* Bridge URL inside drawer */
     .sp-drawer-bridge-row { display: flex; gap: 6px; margin-top: 4px; }
     .sp-drawer-bridge-input {
@@ -3381,8 +3379,8 @@ function injectStyles(): void {
       min-width: 0;
     }
     .sp-drawer-bridge-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.6; }
-    .sp-drawer-bridge-error { font-size: 10px; color: var(--agi-ext-danger); padding: 2px 0; margin-top: 2px; }
+    .sp-drawer-bridge-input::placeholder { color: var(--agi-ext-text-placeholder); }
+    .sp-drawer-bridge-error { font-size: 10px; color: var(--agi-ext-danger-text); padding: 2px 0; margin-top: 2px; }
     /* Cloud unlock */
     .sp-drawer-cloud-btn {
       display: flex;
@@ -3393,7 +3391,7 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
       border-radius: 7px;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       font-size: 12px;
       font-weight: 500;
       padding: 8px 14px;
@@ -3424,7 +3422,7 @@ function injectStyles(): void {
       justify-content: center;
       font-size: 11px;
       font-weight: 700;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       flex-shrink: 0;
     }
     .sp-cloud-user-info {
@@ -3454,11 +3452,11 @@ function injectStyles(): void {
       flex-shrink: 0;
       transition: color 0.15s, border-color 0.15s;
     }
-    .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger); }
+    .sp-cloud-signout-btn:hover { color: var(--agi-ext-danger-text); border-color: var(--agi-ext-danger); }
     .sp-cloud-signout-status {
       width: 100%;
       font-size: 10px;
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
     }
     .sp-cloud-signout-status:empty { display: none; }
 
@@ -3478,7 +3476,6 @@ function injectStyles(): void {
     .sp-quota-bar-model {
       font-size: 9px;
       color: var(--agi-ext-text-muted);
-      opacity: 0.7;
     }
     .sp-quota-bar-bg {
       height: 4px;
@@ -3504,7 +3501,7 @@ function injectStyles(): void {
     .sp-quota-upgrade-btn {
       font-size: 10px;
       font-weight: 600;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 25%, transparent);
       border-radius: 5px;
@@ -3541,8 +3538,8 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
     }
     .sp-quota-notice:empty { display: none; }
-    .sp-quota-notice[data-severity='warning'] { color: var(--agi-ext-warning); }
-    .sp-quota-notice[data-severity='critical'] { color: var(--agi-ext-danger); }
+    .sp-quota-notice[data-severity='warning'] { color: var(--agi-ext-warning-text); }
+    .sp-quota-notice[data-severity='critical'] { color: var(--agi-ext-danger-text); }
     .sp-quota-models {
       display: flex;
       flex-direction: column;
@@ -3601,7 +3598,7 @@ function injectStyles(): void {
     }
     .sp-cloud-link-btn:hover {
       border-color: var(--agi-ext-accent);
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
 
     /* Sign-in prompt (when not signed in) */
@@ -3651,7 +3648,7 @@ function injectStyles(): void {
       transition: border-color 0.15s;
     }
     .sp-cloud-token-input:focus { border-color: var(--agi-ext-focus); }
-    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-muted); opacity: 0.55; }
+    .sp-cloud-token-input::placeholder { color: var(--agi-ext-text-placeholder); }
     .sp-cloud-token-save-btn {
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border-strong);
@@ -3668,7 +3665,6 @@ function injectStyles(): void {
     .sp-cloud-token-hint {
       font-size: 9px;
       color: var(--agi-ext-text-muted);
-      opacity: 0.7;
       line-height: 1.4;
     }
 
@@ -3693,12 +3689,12 @@ function injectStyles(): void {
     #sp-quota-badge.visible { display: flex; }
     #sp-quota-badge.has-prompts {
       background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 28%, transparent);
     }
     #sp-quota-badge.exhausted {
       background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger);
+      color: var(--agi-ext-danger-text);
       border: 1px solid var(--agi-ext-danger-border);
     }
     #sp-quota-badge:hover { opacity: 0.8; }
@@ -3832,15 +3828,15 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
     }
     .sp-ob-row-icon svg { width: 16px; height: 16px; display: block; }
-    .sp-ob-row-icon.danger { color: var(--agi-ext-danger); }
+    .sp-ob-row-icon.danger { color: var(--agi-ext-danger-text); }
     .sp-ob-row-text {
       font-size: 12px;
       color: var(--agi-ext-text-muted);
       line-height: 1.5;
     }
-    .sp-ob-row-text.danger { color: var(--agi-ext-danger); }
+    .sp-ob-row-text.danger { color: var(--agi-ext-danger-text); }
     .sp-ob-learn-more {
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
       text-decoration: underline;
       cursor: pointer;
       background: none;
@@ -3926,7 +3922,7 @@ function injectStyles(): void {
       transition: background 0.12s;
       font-family: inherit;
     }
-    .sp-ob-btn-next:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-ob-btn-next:hover { background: var(--agi-ext-accent-hover); }
     .sp-ob-btn-next:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
     /* ── 2026-08 browser-surface polish ───────────────────────────────────
@@ -4039,7 +4035,6 @@ function injectStyles(): void {
       font-size: 14px;
       line-height: 1.5;
     }
-    #sp-input::placeholder { opacity: 0.68; }
     #sp-composer-bar {
       display: flex;
       align-items: center;
@@ -4131,7 +4126,7 @@ function injectStyles(): void {
     .sp-autonomy-option:hover,
     .sp-autonomy-option.selected { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-autonomy-option-warning.selected,
-    .sp-autonomy-option-warning:hover { color: var(--agi-ext-warning); }
+    .sp-autonomy-option-warning:hover { color: var(--agi-ext-warning-text); }
     .sp-autonomy-option-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; }
     .sp-autonomy-option-copy strong { font-size: 11.5px; font-weight: 600; }
     .sp-autonomy-option-copy small {
@@ -4277,7 +4272,7 @@ function injectStyles(): void {
     .sp-autonomy-chip[data-mode='full'] {
       border-color: var(--agi-ext-warning-border);
       background: transparent;
-      color: var(--agi-ext-warning);
+      color: var(--agi-ext-warning-text);
     }
     .sp-autonomy-chip:hover { filter: none; background: var(--agi-ext-hover); }
     #sp-autonomy-icon { display: inline-flex; }
@@ -4288,7 +4283,7 @@ function injectStyles(): void {
       align-items: center;
       width: 14px;
       flex-shrink: 0;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
 
     #sp-attach-menu { min-width: 224px; }
@@ -4303,7 +4298,7 @@ function injectStyles(): void {
       align-items: center;
       width: 14px;
       flex-shrink: 0;
-      color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent-text);
     }
 
     .sp-model-option { font-size: 13px; }
@@ -4315,7 +4310,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
       opacity: 1;
     }
-    .sp-model-option-check { color: var(--agi-ext-accent); }
+    .sp-model-option-check { color: var(--agi-ext-accent-text); }
     .sp-model-option-auto .sp-model-option-name,
     .sp-model-option-auto:hover .sp-model-option-name {
       color: var(--agi-ext-text);
@@ -4398,7 +4393,7 @@ function injectStyles(): void {
       width: 16px;
       height: 16px;
       border-radius: 50%;
-      background: var(--agi-ext-on-accent);
+      background: var(--agi-ext-toggle-knob);
       transition: transform 0.15s;
     }
     .sp-menu-toggle:checked::after { transform: translateX(14px); }
@@ -8430,7 +8425,7 @@ function buildUI(): void {
   });
   const quotaExhaustedLabel = el(
     'span',
-    { style: 'font-size:10px;color:var(--agi-ext-danger)' },
+    { style: 'font-size:10px;color:var(--agi-ext-danger-text)' },
     t('spQuotaFreeElsewhere'),
   );
   const quotaUpgradeBtn = el(

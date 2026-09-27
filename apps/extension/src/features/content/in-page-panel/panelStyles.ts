@@ -52,7 +52,7 @@ export function buildPanelStyles(): string {
       font-size:11px; font-weight:600;
       background:color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
       border:1px solid color-mix(in srgb, var(--agi-ext-accent) 34%, transparent);
-      color:var(--agi-ext-accent);
+      color:var(--agi-ext-accent-text);
       border-radius:12px;
       padding:3px 8px;
       margin-right:8px;
@@ -91,7 +91,7 @@ export function buildPanelStyles(): string {
       white-space:nowrap;
     }
     .agi-action-chip:hover {
-      background:var(--agi-ext-hover); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent);
+      background:var(--agi-ext-hover); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent-text);
     }
     .agi-action-chip:disabled { opacity:0.48; cursor:default; }
 
