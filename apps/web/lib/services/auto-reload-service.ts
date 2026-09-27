@@ -41,6 +41,8 @@ import { recordNotification } from '@/lib/services/notification-service';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
+export const AUTO_RELOAD_CONSENT_VERSION = '2026-09-27';
+
 const RELOAD_LEASE_SECONDS = 600;
 const ATTEMPT_LOOKUP_SLACK_SECONDS = 60;
 const ATTEMPT_LOOKUP_LIMIT = 20;
@@ -48,6 +50,8 @@ const SWEEP_PAGE_SIZE = 100;
 const UNIQUE_VIOLATION = '23505';
 const BILLING_SETTINGS_PATH = '/settings/billing';
 const FAILURE_SUBJECT = 'Auto-reload is off: a payment did not go through';
+const CONSENT_SUBJECT = 'Auto-reload is on';
+const EMAIL_FOOTER = 'You are receiving this because you turned on auto-reload.';
 
 const FAILURE_MESSAGES = {
   authentication_required:
@@ -76,8 +80,19 @@ export type AutoReloadOutcome =
   | 'failed'
   | 'released';
 
+export interface AutoReloadConsent {
+  version: string;
+  text: string;
+}
+
+export interface AutoReloadSettingsView extends AutoReloadSettings {
+  consent: { version: string; acceptedAt: string } | null;
+}
+
 export type AutoReloadSaveResult =
-  { status: 'saved'; settings: AutoReloadSettings } | { status: 'payment_method_required' };
+  | { status: 'saved'; settings: AutoReloadSettingsView }
+  | { status: 'payment_method_required' }
+  | { status: 'consent_required'; consent: AutoReloadConsent };
 
 export interface AutoReloadSweepReport {
   considered: number;
@@ -96,6 +111,8 @@ interface AutoReloadRow {
   last_attempt_at: string | Date | null;
   last_failure_at: string | Date | null;
   last_failure_reason: string | null;
+  consent_version: string | null;
+  consent_accepted_at: string | Date | null;
 }
 
 interface TopUpBillingAccount {
@@ -112,6 +129,7 @@ interface DefaultCard {
 interface BillingInstrument {
   currency: string;
   card: DefaultCard | null;
+  billingEmail: string | null;
 }
 
 interface ReloadPlan {
@@ -135,7 +153,7 @@ interface ReloadPurchase {
 
 const SETTINGS_COLUMNS = `enabled, threshold_credits, amount_usd, reload_attempt_id,
   reload_payment_intent_id, coalesce(reload_lease_expires_at <= now(), false) as lease_expired,
-  last_attempt_at, last_failure_at, last_failure_reason`;
+  last_attempt_at, last_failure_at, last_failure_reason, consent_version, consent_accepted_at`;
 
 export function topUpChargesEnabled(): boolean {
   const value = process.env['STRIPE_CHECKOUT_ENABLED']?.trim().toLowerCase();
@@ -186,10 +204,29 @@ function positiveInteger(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function formatUsdCents(cents: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
+}
+
+export function autoReloadConsentText(terms: {
+  quote: TopUpQuote;
+  thresholdCredits: number;
+  cardLast4: string;
+}): string {
+  const threshold = formatCredits(terms.thresholdCredits);
+  return [
+    `By turning on auto-reload, you authorize AGI Workforce to charge your default card, currently the one ending in ${terms.cardLast4}, ${formatUsdCents(terms.quote.priceCents)} plus any applicable tax for ${formatCredits(terms.quote.credits)} each time your purchased and bonus credits fall below ${threshold}.`,
+    `This can repeat, up to $${DAILY_TOP_UP_LIMIT_USD.toLocaleString('en-US')} of top-ups a day.`,
+    `If your balance is already below ${threshold}, the first charge may happen right away.`,
+    'We email a receipt for every charge. If a charge fails, auto-reload turns off and we email you.',
+    'You can turn off auto-reload at any time in Settings > Billing, which stops future charges.',
+  ].join(' ');
+}
+
 function toAutoReloadSettings(
   row: AutoReloadRow | undefined,
   card: DefaultCard | null,
-): AutoReloadSettings {
+): AutoReloadSettingsView {
   return {
     enabled: row?.enabled ?? false,
     thresholdCredits: row?.threshold_credits ?? AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS,
@@ -198,6 +235,10 @@ function toAutoReloadSettings(
     lastFailure:
       row?.last_failure_at && row.last_failure_reason
         ? { at: toIso(row.last_failure_at), reason: failureMessage(row.last_failure_reason) }
+        : null,
+    consent:
+      row?.consent_version && row.consent_accepted_at
+        ? { version: row.consent_version, acceptedAt: toIso(row.consent_accepted_at) }
         : null,
   };
 }
@@ -216,25 +257,59 @@ async function readSettingsRow(
   return row;
 }
 
-async function upsertSettingsRow(
+async function saveDisabledSettings(
   db: DatabaseAdapter,
   userId: string,
   update: AutoReloadSettingsUpdate,
 ): Promise<AutoReloadRow> {
   const [row] = await db.query<AutoReloadRow>(
-    `insert into public.auto_reload_settings as settings
-       (user_id, enabled, threshold_credits, amount_usd)
-     values ($1, $2, $3, $4)
+    `insert into public.auto_reload_settings (user_id, enabled, threshold_credits, amount_usd)
+     values ($1, false, $2, $3)
      on conflict (user_id) do update
-        set enabled = excluded.enabled,
+        set enabled = false,
             threshold_credits = excluded.threshold_credits,
             amount_usd = excluded.amount_usd,
-            last_failure_at = case when excluded.enabled then null else settings.last_failure_at end,
-            last_failure_reason =
-              case when excluded.enabled then null else settings.last_failure_reason end,
             updated_at = now()
      returning ${SETTINGS_COLUMNS}`,
-    [userId, update.enabled, update.thresholdCredits, update.amountUsd],
+    [userId, update.thresholdCredits, update.amountUsd],
+  );
+  if (!row) throw createError.internal('Auto-reload settings were not saved.');
+  return row;
+}
+
+async function saveConsentedSettings(
+  db: DatabaseAdapter,
+  userId: string,
+  update: AutoReloadSettingsUpdate,
+  card: DefaultCard,
+): Promise<AutoReloadRow> {
+  const [row] = await db.query<AutoReloadRow>(
+    `insert into public.auto_reload_settings
+       (user_id, enabled, threshold_credits, amount_usd, consent_version, consent_accepted_at,
+        consent_amount_usd, consent_threshold_credits, consent_card_brand, consent_card_last4)
+     values ($1, true, $2, $3, $4, now(), $3, $2, $5, $6)
+     on conflict (user_id) do update
+        set enabled = true,
+            threshold_credits = excluded.threshold_credits,
+            amount_usd = excluded.amount_usd,
+            consent_version = excluded.consent_version,
+            consent_accepted_at = excluded.consent_accepted_at,
+            consent_amount_usd = excluded.consent_amount_usd,
+            consent_threshold_credits = excluded.consent_threshold_credits,
+            consent_card_brand = excluded.consent_card_brand,
+            consent_card_last4 = excluded.consent_card_last4,
+            last_failure_at = null,
+            last_failure_reason = null,
+            updated_at = now()
+     returning ${SETTINGS_COLUMNS}`,
+    [
+      userId,
+      update.thresholdCredits,
+      update.amountUsd,
+      AUTO_RELOAD_CONSENT_VERSION,
+      card.brand,
+      card.last4,
+    ],
   );
   if (!row) throw createError.internal('Auto-reload settings were not saved.');
   return row;
@@ -270,24 +345,36 @@ function cardOf(method: string | Stripe.PaymentMethod | null | undefined): Defau
   return { id: method.id, brand: method.card.brand, last4: method.card.last4 };
 }
 
+function liveCustomer(
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer,
+): Stripe.Customer | null {
+  if (typeof customer === 'string' || customer.deleted === true) return null;
+  return customer;
+}
+
 async function readBillingInstrument(
   stripe: Stripe,
   account: TopUpBillingAccount,
 ): Promise<BillingInstrument> {
   const subscription = await stripe.subscriptions.retrieve(account.subscriptionId, {
-    expand: ['default_payment_method'],
+    expand: ['default_payment_method', 'customer.invoice_settings.default_payment_method'],
   });
-  const currency = subscription.currency.trim().toLowerCase();
-  if (subscription.default_payment_method) {
-    return { currency, card: cardOf(subscription.default_payment_method) };
-  }
-  const customer = await stripe.customers.retrieve(account.customerId, {
-    expand: ['invoice_settings.default_payment_method'],
-  });
+  const customer = liveCustomer(subscription.customer);
   return {
-    currency,
-    card: customer.deleted ? null : cardOf(customer.invoice_settings?.default_payment_method),
+    currency: subscription.currency.trim().toLowerCase(),
+    card: subscription.default_payment_method
+      ? cardOf(subscription.default_payment_method)
+      : cardOf(customer?.invoice_settings?.default_payment_method),
+    billingEmail: customer?.email?.trim() || null,
   };
+}
+
+async function readProfileEmail(db: DatabaseAdapter, userId: string): Promise<string | null> {
+  const [profile] = await db.query<{ email: string | null }>(
+    'select email from public.profiles where id = $1 limit 1',
+    [userId],
+  );
+  return profile?.email?.trim() || null;
 }
 
 async function readInstrumentForSettings(
@@ -312,7 +399,7 @@ async function readInstrumentForSettings(
 export async function readAutoReloadSettings(
   db: DatabaseAdapter,
   userId: string,
-): Promise<AutoReloadSettings> {
+): Promise<AutoReloadSettingsView> {
   const [row, account] = await Promise.all([
     readSettingsRow(db, userId),
     readTopUpBillingAccount(db, userId),
@@ -321,15 +408,73 @@ export async function readAutoReloadSettings(
   return toAutoReloadSettings(row, instrument?.card ?? null);
 }
 
+function settingsUrl(): string | null {
+  const origin = (process.env['NEXT_PUBLIC_APP_URL'] ?? '').trim().replace(/\/$/, '');
+  return origin ? `${origin}${BILLING_SETTINGS_PATH}` : null;
+}
+
+function htmlText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+async function emailReloadConsent(
+  userId: string,
+  to: string | null,
+  consentText: string,
+  acceptedAt: string | Date | null,
+): Promise<void> {
+  if (!isNotificationEmailConfigured()) {
+    logger.warn(
+      { userId },
+      'Auto-reload confirmation email not sent: no transactional email provider is configured',
+    );
+    return;
+  }
+  if (!to) {
+    logger.warn({ userId }, 'Auto-reload confirmation email not sent: no email on file');
+    return;
+  }
+
+  const link = settingsUrl();
+  const intro =
+    'Auto-reload is now on for your AGI Workforce account. These are the terms you agreed to:';
+  const action = link
+    ? `Turn auto-reload off at any time in Settings > Billing: ${link}`
+    : 'Turn auto-reload off at any time in Settings > Billing.';
+
+  const result = await sendTransactionalEmail({
+    from: process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim() ?? '',
+    to,
+    subject: CONSENT_SUBJECT,
+    text: [intro, '', consentText, '', action, '', EMAIL_FOOTER].join('\n'),
+    html: [
+      `<p>${htmlText(intro)}</p>`,
+      `<p>${htmlText(consentText)}</p>`,
+      link
+        ? `<p><a href="${link}">Turn auto-reload off in Settings &gt; Billing</a></p>`
+        : `<p>${htmlText(action)}</p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${htmlText(EMAIL_FOOTER)}</p>`,
+    ].join(''),
+    idempotencyKey: `auto-reload-consent:${userId}:${acceptedAt ? toIso(acceptedAt) : AUTO_RELOAD_CONSENT_VERSION}`,
+  });
+  if (!result.delivered) {
+    logger.warn(
+      { userId, reason: result.reason },
+      'Auto-reload confirmation email could not be delivered',
+    );
+  }
+}
+
 export async function saveAutoReloadSettings(
   db: DatabaseAdapter,
   userId: string,
   update: AutoReloadSettingsUpdate,
+  consentVersion: string | null,
 ): Promise<AutoReloadSaveResult> {
   const account = await readTopUpBillingAccount(db, userId);
 
   if (!update.enabled) {
-    const row = await upsertSettingsRow(db, userId, update);
+    const row = await saveDisabledSettings(db, userId, update);
     const instrument = await readInstrumentForSettings(account, userId).catch(() => null);
     return { status: 'saved', settings: toAutoReloadSettings(row, instrument?.card ?? null) };
   }
@@ -354,7 +499,35 @@ export async function saveAutoReloadSettings(
   }
   if (!instrument.card) return { status: 'payment_method_required' };
 
-  const row = await upsertSettingsRow(db, userId, update);
+  const quote = quoteTopUp(update.amountUsd, { autoReload: true });
+  if (!quote) throw createError.validation('Choose a valid auto-reload amount.');
+  const consentText = autoReloadConsentText({
+    quote,
+    thresholdCredits: update.thresholdCredits,
+    cardLast4: instrument.card.last4,
+  });
+  if (consentVersion !== AUTO_RELOAD_CONSENT_VERSION) {
+    return {
+      status: 'consent_required',
+      consent: { version: AUTO_RELOAD_CONSENT_VERSION, text: consentText },
+    };
+  }
+
+  const previous = await readSettingsRow(db, userId);
+  const row = await saveConsentedSettings(db, userId, update, instrument.card);
+  const termsChanged =
+    !previous?.enabled ||
+    previous.amount_usd !== update.amountUsd ||
+    previous.threshold_credits !== update.thresholdCredits ||
+    previous.consent_version !== AUTO_RELOAD_CONSENT_VERSION;
+  if (termsChanged) {
+    await emailReloadConsent(
+      userId,
+      instrument.billingEmail ?? (await readProfileEmail(db, userId)),
+      consentText,
+      row.consent_accepted_at,
+    );
+  }
   return { status: 'saved', settings: toAutoReloadSettings(row, instrument.card) };
 }
 
@@ -492,11 +665,6 @@ async function completeReload(
   );
 }
 
-function settingsUrl(): string | null {
-  const origin = (process.env['NEXT_PUBLIC_APP_URL'] ?? '').trim().replace(/\/$/, '');
-  return origin ? `${origin}${BILLING_SETTINGS_PATH}` : null;
-}
-
 async function emailReloadFailure(
   db: DatabaseAdapter,
   failure: ReloadFailure,
@@ -509,11 +677,7 @@ async function emailReloadFailure(
     );
     return;
   }
-  const [profile] = await db.query<{ email: string | null }>(
-    'select email from public.profiles where id = $1 limit 1',
-    [failure.userId],
-  );
-  const to = profile?.email?.trim();
+  const to = await readProfileEmail(db, failure.userId);
   if (!to) {
     logger.warn({ userId: failure.userId }, 'Auto-reload failure email not sent: no email on file');
     return;
@@ -525,20 +689,19 @@ async function emailReloadFailure(
   const action = link
     ? `Check your card and turn auto-reload back on in Settings > Billing: ${link}`
     : 'Check your card and turn auto-reload back on in Settings > Billing.';
-  const footer = 'You are receiving this because you turned on auto-reload.';
 
   const result = await sendTransactionalEmail({
     from: process.env['AGI_NOTIFICATIONS_FROM_EMAIL']?.trim() ?? '',
     to,
     subject: FAILURE_SUBJECT,
-    text: [headline, '', consequence, '', action, '', footer].join('\n'),
+    text: [headline, '', consequence, '', action, '', EMAIL_FOOTER].join('\n'),
     html: [
-      `<p>${headline}</p>`,
-      `<p>${consequence}</p>`,
+      `<p>${htmlText(headline)}</p>`,
+      `<p>${htmlText(consequence)}</p>`,
       link
         ? `<p><a href="${link}">Open Settings &gt; Billing</a></p>`
-        : '<p>Check your card and turn auto-reload back on in Settings &gt; Billing.</p>',
-      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${footer}</p>`,
+        : `<p>${htmlText(action)}</p>`,
+      `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">${htmlText(EMAIL_FOOTER)}</p>`,
     ].join(''),
     idempotencyKey: `auto-reload-failed:${failure.attemptId}`,
   });
@@ -838,6 +1001,11 @@ async function chargeReload(
     return 'failed';
   }
 
+  const receiptEmail = instrument.billingEmail ?? (await readProfileEmail(db, userId));
+  if (!receiptEmail) {
+    logger.warn({ userId }, 'Auto-reload charge has no email on file to send its receipt to');
+  }
+
   let paymentIntent: Stripe.PaymentIntent;
   try {
     paymentIntent = await stripe.paymentIntents.create(
@@ -851,6 +1019,7 @@ async function chargeReload(
         confirm: true,
         description: `AGI auto-reload, ${formatCredits(plan.quote.credits)}`,
         metadata: reloadMetadata(userId, attemptId, plan.quote),
+        ...(receiptEmail ? { receipt_email: receiptEmail } : {}),
       },
       { idempotencyKey: `auto-reload:${attemptId}` },
     );

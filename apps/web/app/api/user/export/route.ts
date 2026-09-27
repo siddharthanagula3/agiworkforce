@@ -1141,6 +1141,12 @@ const autoReloadSettingsExportSchema = z.object({
   last_attempt_at: nullableTimestampSchema,
   last_failure_at: nullableTimestampSchema,
   last_failure_reason: z.string().nullable(),
+  consent_version: z.string().nullable(),
+  consent_accepted_at: nullableTimestampSchema,
+  consent_amount_usd: nullableNumericSchema,
+  consent_threshold_credits: nullableNumericSchema,
+  consent_card_brand: z.string().nullable(),
+  consent_card_last4: z.string().nullable(),
   created_at: timestampSchema,
   updated_at: timestampSchema,
 });
@@ -1596,7 +1602,9 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     section: 'auto_reload_settings',
     table: 'auto_reload_settings',
     sql: `select enabled, threshold_credits, amount_usd, last_attempt_at, last_failure_at,
-                 last_failure_reason, created_at, updated_at
+                 last_failure_reason, consent_version, consent_accepted_at, consent_amount_usd,
+                 consent_threshold_credits, consent_card_brand, consent_card_last4,
+                 created_at, updated_at
           from auto_reload_settings
           where user_id = $1`,
     schema: autoReloadSettingsExportSchema,

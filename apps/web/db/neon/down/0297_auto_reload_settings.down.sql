@@ -2,8 +2,11 @@
 -- guard.
 --
 -- WHAT THIS COSTS: every account's auto-reload choice, its threshold and pack,
--- and the failure that last turned it off are deleted, so no reload runs until a
--- user turns it on again under a re-applied 0297. A reload whose PaymentIntent is
+-- the failure that last turned it off, and the stored record of its consent to
+-- off-session charges are deleted, so no reload runs until a user consents again
+-- under a re-applied 0297. The auto_reload_changed audit events, with the IP,
+-- user agent and consent version of each change, stay in security_audit_logs as
+-- the remaining evidence of those consents. A reload whose PaymentIntent is
 -- still in flight loses its lease; the Stripe webhook still grants the credits
 -- it paid for, but without the receipt index a webhook redelivery racing another
 -- grant path could credit one PaymentIntent twice. Purchased credits, the ledger

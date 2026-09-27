@@ -16,6 +16,12 @@
 --          reload_payment_intent_id lets the sweep settle a charge whose
 --          webhook never arrived instead of charging again.
 --
+-- Consent: an automatic charge needs the account's express, recorded consent to
+--          the terms it was shown. consent_* holds the consent text version,
+--          when it was accepted, and the pack, threshold and card it named. A
+--          row can only be enabled under a consent that names its current pack
+--          and threshold, so changing either while enabled needs new consent.
+--
 -- Receipt: an auto-reload grant is keyed by its PaymentIntent id, so the
 --          partial unique index below makes a PaymentIntent grant at most once,
 --          as 0111 does for Checkout Session ids.
@@ -40,6 +46,15 @@ create table if not exists public.auto_reload_settings (
   last_failure_at timestamptz,
   last_failure_reason text
     check (last_failure_reason is null or char_length(last_failure_reason) between 1 and 64),
+  consent_version text
+    check (consent_version is null or char_length(consent_version) between 1 and 32),
+  consent_accepted_at timestamptz,
+  consent_amount_usd integer,
+  consent_threshold_credits integer,
+  consent_card_brand text
+    check (consent_card_brand is null or char_length(consent_card_brand) between 1 and 32),
+  consent_card_last4 text
+    check (consent_card_last4 is null or consent_card_last4 ~ '^[0-9]{4}$'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint auto_reload_settings_lease_names_an_attempt
@@ -47,7 +62,24 @@ create table if not exists public.auto_reload_settings (
   constraint auto_reload_settings_intent_belongs_to_an_attempt
     check (reload_payment_intent_id is null or reload_attempt_id is not null),
   constraint auto_reload_settings_failure_has_a_reason
-    check ((last_failure_at is null) = (last_failure_reason is null))
+    check ((last_failure_at is null) = (last_failure_reason is null)),
+  constraint auto_reload_settings_consent_is_whole
+    check (
+      (consent_accepted_at is null) = (consent_version is null)
+      and (consent_accepted_at is null) = (consent_amount_usd is null)
+      and (consent_accepted_at is null) = (consent_threshold_credits is null)
+      and (consent_accepted_at is null) = (consent_card_brand is null)
+      and (consent_accepted_at is null) = (consent_card_last4 is null)
+    ),
+  constraint auto_reload_settings_enabled_under_consent
+    check (
+      not enabled
+      or (
+        consent_accepted_at is not null
+        and consent_amount_usd = amount_usd
+        and consent_threshold_credits = threshold_credits
+      )
+    )
 );
 
 create index if not exists idx_auto_reload_settings_sweep
@@ -77,6 +109,8 @@ comment on column public.auto_reload_settings.reload_attempt_id is
   'The reload currently in flight, also sent to Stripe as the PaymentIntent idempotency key and metadata. NULL when idle.';
 comment on column public.auto_reload_settings.last_failure_reason is
   'A short code for why the last reload failed, such as authentication_required or card_declined. A failure turns auto-reload off.';
+comment on column public.auto_reload_settings.consent_version is
+  'The version of the auto-reload consent text the account accepted. With consent_accepted_at and the pack, threshold and card it named, this is the record that the account authorized off-session charges.';
 
 commit;
 
@@ -103,7 +137,13 @@ commit;
 -- --    DELETE FROM public.auto_reload_settings;           -- EXPECT permission denied
 -- --    RESET ROLE;
 --
--- -- 4. Clean up:
+-- -- 4. Auto-reload cannot be on without consent to its current pack and threshold:
+-- --    INSERT INTO public.auto_reload_settings (user_id, enabled, threshold_credits, amount_usd)
+-- --    VALUES ('<user>', true, 500, 20);
+-- --    EXPECT: ERROR new row violates check constraint
+-- --            "auto_reload_settings_enabled_under_consent"
+--
+-- -- 5. Clean up:
 -- --    DELETE FROM public.credit_transactions WHERE description = 'Credit top-up purchase pi_verify';
 -- --    DELETE FROM public.auto_reload_settings WHERE user_id = '<user>';
 -- =============================================================================
