@@ -1,16 +1,9 @@
-
 import { AlertCircle, Check, Circle, Edit2, FileText, Loader2, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { Button } from '@/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { Textarea } from '@/ui/Textarea';
 
 interface InstructionFilePattern {
@@ -211,8 +204,8 @@ export function InstructionFilesSettings() {
                     <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                   ) : isFound ? (
                     <>
-                      <Check className="h-3.5 w-3.5 text-green-500" />
-                      <span className="text-green-600 dark:text-green-400">Found</span>
+                      <Check className="h-3.5 w-3.5 text-success-text" />
+                      <span className="text-success-text">Found</span>
                     </>
                   ) : (
                     <>

@@ -747,7 +747,7 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                               Archive
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={handleDelete} className="text-red-500">
+                            <DropdownMenuItem onClick={handleDelete} className="text-danger-text">
                               <Trash2 className="h-4 w-4 mr-2" />
                               Delete
                             </DropdownMenuItem>
@@ -1038,9 +1038,9 @@ function getStatusColor(status: string): string {
     case 'streaming':
       return 'border-blue-500 text-blue-500 bg-blue-500/10';
     case 'complete':
-      return 'border-green-500 text-green-500 bg-green-500/10';
+      return 'border-success-fill text-success-text bg-success-fill/10';
     case 'failed':
-      return 'border-red-500 text-red-500 bg-red-500/10';
+      return 'border-danger-fill text-danger-text bg-danger-fill/10';
     case 'archived':
       return 'border-zinc-500 text-zinc-500 bg-zinc-500/10';
     default:

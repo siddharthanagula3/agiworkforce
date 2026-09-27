@@ -23,8 +23,16 @@ import {
   type MemoryIneligibilityReason,
 } from '@/lib/services/managed-memory-context-service';
 import { excludedMemoryMessage } from '@/lib/services/memory-write-service';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 export const MEMORY_COMMAND_SOURCE = 'web';
+
+export const MEMORY_COMMAND_CLIENT_SURFACES: ReadonlySet<CloudChatSurface> =
+  new Set<CloudChatSurface>(['web', 'desktop', 'mobile']);
+
+export function memoryCommandSource(surface: CloudChatSurface | null): string {
+  return surface === 'mobile' || surface === 'desktop' ? surface : MEMORY_COMMAND_SOURCE;
+}
 
 /** A search that matched everything would offer to delete everything. */
 const MIN_FORGET_SUBJECT_CHARS = 3;
@@ -37,6 +45,7 @@ export interface MemoryCommandScope {
   conversationId?: string | null;
   /** A temporary chat may still forget; it may never teach Memory anything. */
   temporaryChat?: boolean;
+  source?: string;
 }
 
 const MEMORY_OFF_REASONS: ReadonlySet<MemoryIneligibilityReason> = new Set([
@@ -78,7 +87,7 @@ export function createMemoryCommandPorts(
         userId: scope.userId,
         content: fact,
         category: null,
-        source: MEMORY_COMMAND_SOURCE,
+        source: scope.source ?? MEMORY_COMMAND_SOURCE,
         organizationId: scope.organizationId,
         projectId: scope.projectId ?? null,
         temporaryChat: scope.temporaryChat === true,
@@ -97,7 +106,7 @@ export function createMemoryCommandPorts(
           userId: scope.userId,
           content: fact,
           category,
-          source: MEMORY_COMMAND_SOURCE,
+          source: scope.source ?? MEMORY_COMMAND_SOURCE,
           organizationId: scope.organizationId,
           projectId: scope.projectId ?? null,
         });

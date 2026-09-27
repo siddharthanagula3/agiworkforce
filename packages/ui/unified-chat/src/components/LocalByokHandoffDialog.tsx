@@ -88,10 +88,7 @@ export function LocalByokHandoffDialog({
         <div className="grid max-h-[calc(100vh-2rem)] grid-rows-[auto,1fr,auto] overflow-hidden">
           <DialogHeader className="border-b border-border/60 px-6 py-5">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                variant="outline"
-                className="gap-1 border-emerald-500/40 text-emerald-700 dark:text-emerald-300"
-              >
+              <Badge variant="outline" className="gap-1 border-success-fill/40 text-success-text">
                 <ShieldCheck className="h-3 w-3" />
                 {localLabel}
               </Badge>
@@ -179,7 +176,7 @@ export function LocalByokHandoffDialog({
                       'mt-2 text-lg font-semibold',
                       findings.length > 0 || unscannedContextCount > 0
                         ? 'text-warning-text'
-                        : 'text-emerald-700 dark:text-emerald-300',
+                        : 'text-success-text',
                     )}
                   >
                     {findings.length}
@@ -208,14 +205,14 @@ export function LocalByokHandoffDialog({
               )}
 
               {notice && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-warning-text">
+                <div className="mt-3 flex gap-2 rounded-lg border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm text-warning-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{notice}</span>
                 </div>
               )}
 
               {blocked && (
-                <div className="mt-3 flex gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-warning-text">
+                <div className="mt-3 flex gap-2 rounded-lg border border-warning-fill/40 bg-warning-fill/10 p-3 text-sm text-warning-text">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>
                     Secret findings block this {flowNoun}.{' '}
@@ -233,12 +230,12 @@ export function LocalByokHandoffDialog({
                     {findings.map((finding) => (
                       <div
                         key={finding.id}
-                        className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3"
+                        className="rounded-lg border border-warning-fill/30 bg-warning-fill/5 p-3"
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <Badge
                             variant="outline"
-                            className="border-amber-500/40 text-warning-text"
+                            className="border-warning-fill/40 text-warning-text"
                           >
                             {finding.severity}
                           </Badge>
@@ -265,9 +262,7 @@ export function LocalByokHandoffDialog({
                     <span
                       className={cn(
                         'inline-flex items-center gap-1 text-xs',
-                        unscannedContextCount > 0
-                          ? 'text-warning-text'
-                          : 'text-emerald-700 dark:text-emerald-300',
+                        unscannedContextCount > 0 ? 'text-warning-text' : 'text-success-text',
                       )}
                     >
                       {unscannedContextCount > 0 ? (

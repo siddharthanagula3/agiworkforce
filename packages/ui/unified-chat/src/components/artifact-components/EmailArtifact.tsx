@@ -1,4 +1,3 @@
-
 import { Check, Copy, Mail } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
@@ -130,7 +129,7 @@ export function EmailArtifact({ artifact, className }: EmailArtifactProps) {
             className="flex h-7 shrink-0 items-center gap-1.5 rounded-compact px-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
             {copied ? (
-              <Check className="h-3.5 w-3.5 text-green-500" aria-hidden="true" />
+              <Check className="h-3.5 w-3.5 text-success-text" aria-hidden="true" />
             ) : (
               <Copy className="h-3.5 w-3.5" aria-hidden="true" />
             )}

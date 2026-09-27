@@ -205,6 +205,12 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
               schedule on Web.
             </Text>
           ) : null}
+          {schedule.pausedReason === 'approval_required' ? (
+            <Text className="mb-2.5 text-xs leading-4" style={{ color: colors.agentWarning }}>
+              Paused: a run needed your approval. Approve or deny it in History; if the request
+              expired, turn the schedule back on to run it again.
+            </Text>
+          ) : null}
 
           {/* Row 4: Model + Last run status */}
           <View className="flex-row items-center gap-2 mb-2">

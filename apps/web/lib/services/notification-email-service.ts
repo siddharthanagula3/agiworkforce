@@ -24,7 +24,8 @@ function escapeHtml(value: string): string {
 export interface ScheduleEmailInput {
   to: string;
   taskName: string;
-  status: 'success' | 'failed' | 'timeout';
+  status: 'success' | 'failed' | 'timeout' | 'awaiting_approval';
+  approvalSummary?: string;
   scheduleUrl?: string;
 }
 
@@ -41,13 +42,19 @@ export async function sendScheduleCompletionEmail(
   }
 
   const succeeded = input.status === 'success';
+  const awaitingApproval = input.status === 'awaiting_approval';
   const verb = succeeded ? 'completed' : input.status === 'timeout' ? 'timed out' : 'failed';
-  const subject = succeeded
-    ? `Scheduled task completed: ${input.taskName}`
-    : `Scheduled task ${verb}: ${input.taskName}`;
+  const subject = awaitingApproval
+    ? `Scheduled task needs your approval: ${input.taskName}`
+    : succeeded
+      ? `Scheduled task completed: ${input.taskName}`
+      : `Scheduled task ${verb}: ${input.taskName}`;
+  const statement = awaitingApproval
+    ? `Your scheduled task “${input.taskName}” is paused until you approve or deny its next step${input.approvalSummary ? `: ${input.approvalSummary}` : ''}. Open Schedules to review it.`
+    : `Your scheduled task “${input.taskName}” ${verb}.`;
 
   const lines = [
-    `Your scheduled task “${input.taskName}” ${verb}.`,
+    statement,
     '',
     ...(input.scheduleUrl ? [`View the run: ${input.scheduleUrl}`, ''] : []),
     'You are receiving this because you enabled schedule notifications in Settings.',
@@ -59,7 +66,7 @@ export async function sendScheduleCompletionEmail(
     subject,
     text: lines.join('\n'),
     html: [
-      `<p>Your scheduled task &ldquo;${escapeHtml(input.taskName)}&rdquo; ${verb}.</p>`,
+      `<p>${escapeHtml(statement)}</p>`,
       input.scheduleUrl ? `<p><a href="${escapeHtml(input.scheduleUrl)}">View the run</a></p>` : '',
       `<p style="${TRANSACTIONAL_EMAIL_FOOTER_STYLE}">You are receiving this because you enabled schedule notifications in Settings.</p>`,
     ]

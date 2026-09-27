@@ -7,6 +7,9 @@ vi.mock('../hooks/use-capabilities-preferences', () => ({
   useCapabilitiesPreferences: () => mockCapabilities(),
 }));
 
+vi.mock('@/features/settings/components/MemoryConflicts', () => ({
+  MemoryConflicts: () => null,
+}));
 vi.mock('@/features/settings/components/MemoryExclusions', () => ({
   MemoryExclusions: () => null,
 }));

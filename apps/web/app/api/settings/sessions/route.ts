@@ -7,6 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import { emitIdentitySecurityEvent } from '@/lib/services/identity-events';
 import { resolveSessionsPrincipal } from './session-principal';
 import type { IdentitySession } from '@agiworkforce/identity';
@@ -183,10 +184,18 @@ async function handleRevokeAll(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-sessions-revoke-all');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId, currentSessionId } = await resolveSessionsPrincipal(request);
+  const { db, userId, organizationId, currentSessionId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
+
+  await requireStepUp({
+    userId,
+    action: 'session.revoke_all',
+    organizationId,
+    request,
+    endpoint: '/api/settings/sessions',
+  });
 
   const identity = getIdentityProvider();
   const result = await revokeEveryOtherSession(identity, userId, currentSessionId);

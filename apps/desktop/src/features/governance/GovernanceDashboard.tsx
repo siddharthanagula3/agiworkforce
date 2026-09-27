@@ -43,15 +43,15 @@ interface AlertItem {
 
 const CARD_TONE_STYLES: Record<SummaryCard['tone'], string> = {
   default: 'border-white/10 bg-white/[0.03] text-zinc-100',
-  success: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100',
-  warning: 'border-amber-500/30 bg-amber-500/10 text-amber-100',
-  danger: 'border-red-500/30 bg-red-500/10 text-red-100',
+  success: 'border-success-fill/30 bg-success-fill/10 text-success-text',
+  warning: 'border-warning-fill/30 bg-warning-fill/10 text-warning-text',
+  danger: 'border-danger-fill/30 bg-danger-fill/10 text-danger-text',
 };
 
 const ALERT_TONE_STYLES: Record<AlertItem['tone'], string> = {
-  success: 'border-emerald-500/25 bg-emerald-500/8 text-emerald-100',
-  warning: 'border-amber-500/25 bg-amber-500/8 text-amber-100',
-  danger: 'border-red-500/25 bg-red-500/8 text-red-100',
+  success: 'border-success-fill/25 bg-success-fill/8 text-success-text',
+  warning: 'border-warning-fill/25 bg-warning-fill/8 text-warning-text',
+  danger: 'border-danger-fill/25 bg-danger-fill/8 text-danger-text',
 };
 
 function formatPercent(numerator: number, denominator: number): string {
@@ -361,7 +361,7 @@ export const GovernanceDashboard: React.FC = () => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-3">
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2 text-emerald-300">
+              <div className="rounded-xl border border-success-fill/30 bg-success-fill/10 p-2 text-success-text">
                 <Shield className="h-5 w-5" />
               </div>
               <div>
@@ -412,7 +412,7 @@ export const GovernanceDashboard: React.FC = () => {
         </div>
 
         {errorMessage && (
-          <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+          <div className="mt-4 rounded-lg border border-danger-fill/30 bg-danger-fill/10 px-3 py-2 text-sm text-danger-text">
             {errorMessage}
           </div>
         )}
@@ -554,8 +554,8 @@ export const GovernanceDashboard: React.FC = () => {
                 className={cn(
                   'rounded-xl border px-4 py-3 text-sm',
                   auditIntegrityReport.tampered_events.length > 0
-                    ? 'border-red-500/30 bg-red-500/10 text-red-200'
-                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+                    ? 'border-danger-fill/30 bg-danger-fill/10 text-danger-text'
+                    : 'border-success-fill/30 bg-success-fill/10 text-success-text',
                 )}
               >
                 <div className="flex items-center gap-2 font-medium">

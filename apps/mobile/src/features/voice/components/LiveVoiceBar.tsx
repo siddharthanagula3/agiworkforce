@@ -1,10 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Keyboard, Mic, MicOff, RotateCcw, X } from 'lucide-react-native';
+import { Check, Keyboard, Mic, MicOff, RotateCcw, ShieldQuestion, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import type {
+  LiveVoicePendingApproval,
+  LiveVoiceToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -23,6 +28,8 @@ export interface LiveVoiceBarProps {
   interrupted: boolean;
   turns: LiveTranscriptTurn[];
   error: string | null;
+  approvals: readonly LiveVoicePendingApproval[];
+  onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
   onSwitchToText: () => void;
   onRetry: () => void;
@@ -30,6 +37,7 @@ export interface LiveVoiceBarProps {
 }
 
 const TRANSCRIPT_MAX_HEIGHT = 180;
+const APPROVAL_TITLE = 'Waiting for your approval';
 
 function statusLabel(
   status: LiveVoiceStatus,
@@ -54,6 +62,8 @@ export function LiveVoiceBar({
   interrupted,
   turns,
   error,
+  approvals,
+  onDecideApproval,
   onToggleMute,
   onSwitchToText,
   onRetry,
@@ -183,6 +193,97 @@ export function LiveVoiceBar({
           ))}
         </ScrollView>
       ) : null}
+
+      {approvals.map((approval) => (
+        <View
+          key={approval.callId}
+          testID="live-voice-approval"
+          accessibilityLabel={`${APPROVAL_TITLE}: ${approval.summary}`}
+          style={{
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: colors.warningBorder,
+            backgroundColor: colors.warningSurface,
+            padding: 12,
+            marginBottom: 12,
+            gap: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ShieldQuestion size={16} color={colors.agentWarning} />
+            <Text style={{ color: colors.textPrimary, fontSize: 13, fontWeight: '600' }}>
+              {APPROVAL_TITLE}
+            </Text>
+          </View>
+          <Text style={{ color: colors.textPrimary, fontSize: 14 }}>{approval.summary}</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 12 }} numberOfLines={1}>
+            {approval.name}
+          </Text>
+          {approval.input ? (
+            <Text
+              style={{ color: colors.textSecondary, fontSize: 12, lineHeight: 17 }}
+              numberOfLines={6}
+            >
+              {approval.input}
+            </Text>
+          ) : null}
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <Pressable
+              onPress={tap(() => onDecideApproval(approval.callId, 'approved'))}
+              disabled={approval.deciding}
+              accessibilityRole="button"
+              accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.approve}: ${approval.summary}`}
+              accessibilityState={{ disabled: approval.deciding, busy: approval.deciding }}
+              testID="live-voice-approve"
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                height: 44,
+                borderRadius: 999,
+                backgroundColor: colors.teal,
+                opacity: approval.deciding ? 0.6 : 1,
+              }}
+            >
+              {approval.deciding ? (
+                <ActivityIndicator size="small" color={colors.accentText} />
+              ) : (
+                <Check size={16} color={colors.accentText} />
+              )}
+              <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '600' }}>
+                {TOOL_APPROVAL_ACTION_LABELS.approve}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={tap(() => onDecideApproval(approval.callId, 'rejected'))}
+              disabled={approval.deciding}
+              accessibilityRole="button"
+              accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny}: ${approval.summary}`}
+              accessibilityState={{ disabled: approval.deciding }}
+              testID="live-voice-deny"
+              style={{
+                flex: 1,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                height: 44,
+                borderRadius: 999,
+                borderWidth: 1,
+                borderColor: colors.agentError,
+                opacity: approval.deciding ? 0.6 : 1,
+              }}
+            >
+              <X size={16} color={colors.agentError} />
+              <Text style={{ color: colors.agentError, fontSize: 14, fontWeight: '600' }}>
+                {TOOL_APPROVAL_ACTION_LABELS.deny}
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ))}
 
       {backendBusy ? (
         <View testID="live-voice-activity" style={{ marginBottom: 12 }}>

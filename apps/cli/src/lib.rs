@@ -1159,6 +1159,29 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Approve the step a paused run is waiting on, and let the run continue.
+    Approve {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// The run to approve. Defaults to the schedule's run that is waiting.
+        #[arg(long)]
+        run: Option<String>,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Deny the step a paused run is waiting on; the run continues without it.
+    Deny {
+        /// Schedule id, or its exact name.
+        id: String,
+        /// The run to deny. Defaults to the schedule's run that is waiting.
+        #[arg(long)]
+        run: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn invocation_requires_project_trust(cli: &Cli) -> bool {
@@ -2218,17 +2241,98 @@ async fn handle_schedules_command(
             match client.runs(&resolved, *limit, *offset).await {
                 Ok(rows) => render(
                     serde_json::to_value(&rows)?,
-                    schedules::render_runs(&rows),
+                    schedules::render_runs(&resolved, &rows),
                     *json,
                 ),
                 Err(error) => Err(anyhow::anyhow!("{error}")),
             }
         }
+        SchedulesSubcommand::Approve { id, run, yes, json } => resolve_schedule_approval(
+            &client,
+            id,
+            run.as_deref(),
+            schedules::ApprovalDecision::Approve,
+            *yes,
+        )
+        .await
+        .and_then(|resolved| {
+            render(
+                serde_json::to_value(&resolved.1)?,
+                schedules::render_runs(&resolved.0, std::slice::from_ref(&resolved.1)),
+                *json,
+            )
+        }),
+        SchedulesSubcommand::Deny { id, run, json } => resolve_schedule_approval(
+            &client,
+            id,
+            run.as_deref(),
+            schedules::ApprovalDecision::Deny,
+            true,
+        )
+        .await
+        .and_then(|resolved| {
+            render(
+                serde_json::to_value(&resolved.1)?,
+                schedules::render_runs(&resolved.0, std::slice::from_ref(&resolved.1)),
+                *json,
+            )
+        }),
     };
 
     match result {
         Ok(()) => Ok(()),
         Err(error) => schedules_command_failure(error.to_string()),
+    }
+}
+
+async fn resolve_schedule_approval(
+    client: &schedules::SchedulesClient,
+    id: &str,
+    run_id: Option<&str>,
+    decision: schedules::ApprovalDecision,
+    confirmed: bool,
+) -> Result<(String, schedules::ScheduleRun)> {
+    let schedule_id = client
+        .resolve_id(id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let waiting = client
+        .awaiting_run(&schedule_id, run_id)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    if decision == schedules::ApprovalDecision::Approve && !confirmed {
+        if let Some(pending) = waiting.pending_approval.as_ref() {
+            eprintln!(
+                "{}",
+                schedules::render_pending_approval(&schedule_id, pending)
+            );
+        }
+        if !confirm_approval("Approve this step and let the run continue?", confirmed) {
+            anyhow::bail!("Nothing was approved; the run is still waiting");
+        }
+    }
+    let resolved = client
+        .resolve_approval(&schedule_id, &waiting, decision)
+        .await
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok((schedule_id, resolved))
+}
+
+fn confirm_approval(prompt: &str, yes: bool) -> bool {
+    match resolve_destructive_decision(yes, interactive::can_prompt()) {
+        DestructiveDecision::Proceed => true,
+        DestructiveDecision::Refuse => {
+            output::print_warn(
+                "Nothing was approved: this run cannot ask for confirmation. Re-run with --yes to \
+                 approve non-interactively.",
+            );
+            false
+        }
+        DestructiveDecision::Prompt => dialoguer::Confirm::new()
+            .with_prompt(prompt)
+            .default(false)
+            .interact()
+            .unwrap_or(false),
     }
 }
 

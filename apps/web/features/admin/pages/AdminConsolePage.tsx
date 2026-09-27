@@ -27,8 +27,8 @@ function managedComputeStatusLabel(open: boolean): string {
 type ReadinessTone = 'ok' | 'warn';
 
 const READINESS_TONE_CLASS: Record<ReadinessTone, string> = {
-  ok: 'border-emerald-600/30 bg-emerald-500/10 text-emerald-800 dark:border-emerald-300/20 dark:bg-emerald-300/10 dark:text-emerald-100',
-  warn: 'border-amber-600/30 bg-amber-500/10 text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100',
+  ok: 'border-success-fill/30 bg-success-fill/10 text-success-text',
+  warn: 'border-warning-fill/30 bg-warning-fill/10 text-warning-text',
 };
 
 interface ReadinessRow {
@@ -222,8 +222,8 @@ export default function AdminConsolePage() {
           <div
             className={
               managedComputeOpen
-                ? 'flex items-center gap-2 rounded-md border border-emerald-600/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-100'
-                : 'flex items-center gap-2 rounded-md border border-amber-600/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100'
+                ? 'flex items-center gap-2 rounded-md border border-success-fill/30 bg-success-fill/10 px-3 py-2 text-sm text-success-text'
+                : 'flex items-center gap-2 rounded-md border border-warning-fill/30 bg-warning-fill/10 px-3 py-2 text-sm text-warning-text'
             }
           >
             {managedComputeOpen ? (
@@ -244,10 +244,7 @@ export default function AdminConsolePage() {
               <div key={tile.label} className="rounded-md border border-border bg-card p-4">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-sm text-muted-foreground">{tile.label}</span>
-                  <Icon
-                    className="h-4 w-4 text-emerald-600 dark:text-emerald-300"
-                    aria-hidden="true"
-                  />
+                  <Icon className="h-4 w-4 text-success-text" aria-hidden="true" />
                 </div>
                 <div className="mt-3 font-mono text-xl text-foreground">{tile.value}</div>
                 <p className="mt-3 text-xs leading-5 text-muted-foreground">{tile.detail}</p>
@@ -301,10 +298,7 @@ export default function AdminConsolePage() {
         >
           <div className="flex flex-col gap-2 border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
-              <DatabaseZap
-                className="h-4 w-4 text-emerald-600 dark:text-emerald-300"
-                aria-hidden="true"
-              />
+              <DatabaseZap className="h-4 w-4 text-success-text" aria-hidden="true" />
               <h2 id="readiness-ledger-title" className="text-sm font-medium text-foreground">
                 Live policy state
               </h2>
@@ -353,10 +347,7 @@ export default function AdminConsolePage() {
 
         <section className="grid gap-3 md:grid-cols-3">
           <div className="rounded-md border border-border bg-card p-4">
-            <KeyRound
-              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
-              aria-hidden="true"
-            />
+            <KeyRound className="h-5 w-5 text-success-text" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-foreground">Identity</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Organization, SSO, and directory-sync configuration have canonical migrations and RLS.
@@ -366,10 +357,7 @@ export default function AdminConsolePage() {
             </p>
           </div>
           <div className="rounded-md border border-border bg-card p-4">
-            <ShieldCheck
-              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
-              aria-hidden="true"
-            />
+            <ShieldCheck className="h-5 w-5 text-success-text" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-foreground">Policy</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Admin, provider, connector, and retention policies are separate so agents can own
@@ -377,10 +365,7 @@ export default function AdminConsolePage() {
             </p>
           </div>
           <div className="rounded-md border border-border bg-card p-4">
-            <LifeBuoy
-              className="h-5 w-5 text-emerald-600 dark:text-emerald-300"
-              aria-hidden="true"
-            />
+            <LifeBuoy className="h-5 w-5 text-success-text" aria-hidden="true" />
             <h2 className="mt-4 text-base font-medium text-foreground">Feedback</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               Support and feedback cases can link to fixes and releases, which is the base for

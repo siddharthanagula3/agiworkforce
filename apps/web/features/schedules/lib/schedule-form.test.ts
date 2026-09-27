@@ -108,6 +108,8 @@ describe('schedule form contract', () => {
         missedExecutionPolicy: 'run_once',
         condition: null,
         creditCap: null,
+        sources: { project: true, memory: true, web: true },
+        connectors: null,
       },
     });
     expect(JSON.stringify(result)).not.toContain('notification');

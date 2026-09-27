@@ -71,7 +71,7 @@ export function UpdateSettings() {
         return {
           title: 'Update Ready',
           description: 'The update has been downloaded. Restart to apply.',
-          icon: <Check className="h-6 w-6 text-green-500" />,
+          icon: <Check className="h-6 w-6 text-success-text" />,
         };
       case 'installing':
         return {
@@ -90,7 +90,7 @@ export function UpdateSettings() {
         return {
           title: 'You have the latest version',
           description: 'No updates are currently available.',
-          icon: <Check className="h-6 w-6 text-green-500" />,
+          icon: <Check className="h-6 w-6 text-success-text" />,
         };
     }
   };

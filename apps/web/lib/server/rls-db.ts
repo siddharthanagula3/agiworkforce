@@ -41,6 +41,7 @@ export interface UserScopedDb {
 export interface UserScopedDbOptions {
   apiKeyScope?: ApiKeyScope;
   mfaGateExemptForOwner?: boolean;
+  mfaEnrollment?: boolean;
   resolveOrganization?: boolean;
 }
 

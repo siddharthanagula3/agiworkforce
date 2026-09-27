@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
 import {
@@ -29,9 +29,13 @@ import {
   SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import {
   DEFAULT_SESSION_TIMEOUT,
   SESSION_TIMEOUT_MINUTES,
+  changeAccountPassword,
   fetchAccountSecurityStatus,
   fetchAccountSessions,
   fetchAuditLog,
@@ -43,6 +47,7 @@ import {
   type AccountSessionRow,
   type AccountSessions,
   type AuditLogEntry,
+  type PasswordChange,
   type SessionTimeoutMinutes,
 } from './service';
 
@@ -96,6 +101,9 @@ export default function AccountSecurityScreen() {
   const [savingTimeout, setSavingTimeout] = useState(false);
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const { withStepUp, modal: stepUpModal } = useStepUp();
+  const hasPassword = clerkUser?.passwordEnabled === true;
   const [sessions, setSessions] = useState<AccountSessions | null>(null);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
@@ -221,47 +229,36 @@ export default function AccountSecurityScreen() {
     })();
   }, [sessionTimeout]);
 
-  const handleChangePassword = useCallback(() => {
-    if (!clerkUser?.updatePassword) {
-      Alert.alert(
-        'Password change unavailable',
-        'This account signs in without a password, so there is none to change.',
-      );
-      return;
-    }
-
-    if (Platform.OS !== 'ios') {
-      openOwnedWebPage(WEB_SECURITY_URL);
-      return;
-    }
-
-    Alert.prompt(
-      'Change password',
-      'Enter a new password for your AGI account.',
-      (newPassword: string) => {
-        const trimmed = newPassword.trim();
-        if (trimmed.length < 8) {
-          Alert.alert('Password too short', 'Use at least 8 characters.');
-          return;
+  const handleChangePassword = useCallback(
+    (change: PasswordChange) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId) return;
+      void (async () => {
+        setChangingPassword(true);
+        try {
+          await withStepUp('password.change', null, (headers) =>
+            changeAccountPassword(change, headers),
+          );
+          if (!isCloudAccountEpochCurrent(account)) return;
+          setPasswordModalOpen(false);
+          Alert.alert(
+            'Password changed',
+            'Your account password has been updated and your other sessions were signed out.',
+          );
+          await clerkUser?.reload();
+        } catch (changeError) {
+          if (isStepUpCancelled(changeError)) return;
+          Alert.alert(
+            'Could not change password',
+            changeError instanceof Error ? changeError.message : 'Please try again.',
+          );
+        } finally {
+          setChangingPassword(false);
         }
-        void (async () => {
-          setChangingPassword(true);
-          try {
-            await clerkUser.updatePassword({ newPassword: trimmed });
-            Alert.alert('Password changed', 'Your account password has been updated.');
-          } catch (changeError) {
-            Alert.alert(
-              'Could not change password',
-              changeError instanceof Error ? changeError.message : 'Please try again.',
-            );
-          } finally {
-            setChangingPassword(false);
-          }
-        })();
-      },
-      'secure-text',
-    );
-  }, [clerkUser, openOwnedWebPage]);
+      })();
+    },
+    [clerkUser, clerkUserId, withStepUp],
+  );
 
   useEffect(() => {
     setStatus(null);
@@ -311,6 +308,15 @@ export default function AccountSecurityScreen() {
 
   return (
     <SettingsScreenShell title="Account Security">
+      <ChangePasswordModal
+        visible={passwordModalOpen}
+        hasPassword={hasPassword}
+        saving={changingPassword}
+        onCancel={() => setPasswordModalOpen(false)}
+        onSubmit={handleChangePassword}
+      >
+        {stepUpModal}
+      </ChangePasswordModal>
       {appMode !== 'cloud' ? (
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : null}
@@ -326,7 +332,7 @@ export default function AccountSecurityScreen() {
           <SettingsRow
             label="Backup codes"
             icon={KeyRound}
-            value={`${status.backupCodesRemaining} remaining`}
+            value={status.backupCodesReady ? 'Ready' : 'Not set'}
           />
         ) : null}
         <SettingsRow
@@ -340,10 +346,10 @@ export default function AccountSecurityScreen() {
 
       <SettingsGroup>
         <SettingsRow
-          label="Change password"
+          label={hasPassword ? 'Change password' : 'Set a password'}
           icon={KeyRound}
-          value={changingPassword ? 'Saving…' : 'Change'}
-          onPress={appMode === 'cloud' ? handleChangePassword : undefined}
+          value={changingPassword ? 'Saving…' : hasPassword ? 'Change' : 'Set'}
+          onPress={appMode === 'cloud' ? () => setPasswordModalOpen(true) : undefined}
           isLast
         />
       </SettingsGroup>

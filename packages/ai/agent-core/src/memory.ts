@@ -183,17 +183,22 @@ export function parseExplicitMemoryCommand(message: string): ExplicitMemoryComma
   return null;
 }
 
+export function passiveMemoryText(message: string, rememberAnswered: boolean): string {
+  if (!message || typeof message !== 'string') return '';
+  return splitMemorySentences(message)
+    .filter((sentence) => {
+      const command = matchExplicitCommand(sentence);
+      return command === null || (command.kind === 'remember' && !rememberAnswered);
+    })
+    .join(' ');
+}
+
 /**
  * Passive extraction with the explicit commands taken out, so a turn that asked
- * for something is never also silently observed. Callers that have not adopted
- * the command handlers keep using {@link extractCandidateMemoryFacts}.
+ * for something is never also silently observed.
  */
 export function extractPassiveMemoryFacts(message: string): string[] {
-  if (!message || typeof message !== 'string') return [];
-  const passive = splitMemorySentences(message)
-    .filter((sentence) => matchExplicitCommand(sentence) === null)
-    .join(' ');
-  return extractCandidateMemoryFacts(passive);
+  return extractCandidateMemoryFacts(passiveMemoryText(message, true));
 }
 
 export type MemoryCommandRefusalReason = 'ineligible' | 'excluded' | 'memory_disabled';
@@ -258,6 +263,19 @@ export async function explicitRememberHandler(
   return { status: 'stored', fact, category, message: `Saved to memory: ${fact}` };
 }
 
+async function findForgetMatches(
+  subject: string,
+  find: ExplicitMemoryPorts['find'],
+): Promise<MemoryCommandMatch[]> {
+  const byId = new Map<string, MemoryCommandMatch>();
+  for (const phrasing of new Set([subject, ...extractCandidateMemoryFacts(subject)])) {
+    for (const match of await find(phrasing)) {
+      if (!byId.has(match.id)) byId.set(match.id, match);
+    }
+  }
+  return [...byId.values()];
+}
+
 /**
  * Deletion is not recoverable, so the handler stops and reports what it found
  * unless the caller has already carried a confirmation. The confirmation itself
@@ -268,7 +286,7 @@ export async function explicitForgetHandler(
   ports: Pick<ExplicitMemoryPorts, 'find' | 'remove'>,
   options: { confirmed?: boolean } = {},
 ): Promise<ExplicitForgetOutcome> {
-  const matches = await ports.find(command.subject);
+  const matches = await findForgetMatches(command.subject, ports.find);
   if (matches.length === 0) {
     return {
       status: 'nothing_to_forget',

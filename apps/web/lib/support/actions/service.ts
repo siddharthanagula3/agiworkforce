@@ -3,6 +3,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent, type AuditOutcome } from '@/lib/security-audit';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import {
   hashActionParams,
   hashConfirmationToken,
@@ -19,6 +20,7 @@ import {
   countRecentProposals,
   finalizeProposal,
   insertProposal,
+  readPendingProposalAction,
 } from './proposal-store';
 import { getSupportAction, type SupportActionDefinition } from './registry';
 import {
@@ -304,10 +306,27 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
   const { userId, surface } = input;
   if (!userId) throw new Error('confirmSupportAction requires an authenticated user id');
 
+  const tokenHash = hashConfirmationToken(input.confirmationToken);
+  const pendingActionId = await readPendingProposalAction({
+    proposalId: input.proposalId,
+    userId,
+    tokenHash,
+  });
+  const stepUp = pendingActionId ? getSupportAction(pendingActionId)?.stepUp : undefined;
+  if (stepUp) {
+    await requireStepUp({
+      userId,
+      action: stepUp,
+      resourceId: input.proposalId,
+      ...(input.request ? { request: input.request } : {}),
+      endpoint: '/api/support/actions/confirm',
+    });
+  }
+
   const claimed = await claimProposal({
     proposalId: input.proposalId,
     userId,
-    tokenHash: hashConfirmationToken(input.confirmationToken),
+    tokenHash,
   });
 
   if (!claimed) {

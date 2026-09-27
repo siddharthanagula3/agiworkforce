@@ -73,9 +73,9 @@ export function OCRViewer({ captureId, imagePath, onClose }: OCRViewerProps) {
   };
 
   const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 0.9) return 'text-green-500';
-    if (confidence >= 0.7) return 'text-yellow-500';
-    return 'text-red-500';
+    if (confidence >= 0.9) return 'text-success-text';
+    if (confidence >= 0.7) return 'text-warning-text';
+    return 'text-danger-text';
   };
 
   return (

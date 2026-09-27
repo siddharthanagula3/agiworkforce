@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
@@ -56,7 +55,7 @@ describe('ToolLabel', () => {
   describe('status icon classes', () => {
     it('shows emerald Check icon for completed status', () => {
       render(<ToolLabel entry={baseEntry} />);
-      expect(document.querySelector('.text-emerald-400')).toBeTruthy();
+      expect(document.querySelector('.text-success-text')).toBeTruthy();
     });
 
     it('shows spinning Loader icon for running status', () => {
@@ -66,19 +65,19 @@ describe('ToolLabel', () => {
 
     it('shows red X icon for error status', () => {
       render(<ToolLabel entry={{ ...baseEntry, status: 'error', error: 'failed' }} />);
-      expect(document.querySelector('.text-red-400')).toBeTruthy();
+      expect(document.querySelector('.text-danger-text')).toBeTruthy();
     });
 
     it('applies red foreground text colour when status is error', () => {
       const { container } = render(
         <ToolLabel entry={{ ...baseEntry, status: 'error', error: 'oops' }} />,
       );
-      expect(container.firstChild).toHaveClass('text-red-400');
+      expect(container.firstChild).toHaveClass('text-danger-text');
     });
 
     it('does not apply red foreground text colour when completed', () => {
       const { container } = render(<ToolLabel entry={baseEntry} />);
-      expect(container.firstChild).not.toHaveClass('text-red-400');
+      expect(container.firstChild).not.toHaveClass('text-danger-text');
     });
   });
 

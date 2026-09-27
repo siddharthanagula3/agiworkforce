@@ -2,6 +2,10 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
+import type {
+  LiveVoicePendingApproval,
+  LiveVoiceToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
@@ -61,6 +65,8 @@ export interface VoiceSessionController {
   deviceName: string;
   backendBusy: boolean;
   toolActivity: readonly LiveVoiceToolActivity[];
+  toolApprovals: readonly LiveVoicePendingApproval[];
+  decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   cancelBackendWork: () => void;
   reconnecting: boolean;
   reconnectAttempt: number;
@@ -309,6 +315,7 @@ export function endLiveVoiceSession(reason: string): void {
   stopVoiceReconnect();
   useVoiceSessionStore.getState().setBackendBusy(false);
   useVoiceSessionStore.getState().setToolActivity([]);
+  useVoiceSessionStore.getState().setToolApprovals([]);
   if (starting) {
     void starting.then(
       (started) => started.close().then((closed) => settleSession(started, { ...closed, reason })),
@@ -372,6 +379,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onSpeaking: (speaking) =>
             store.dispatch({ type: VOICE_SESSION_EVENT.assistantSpeech, active: speaking }),
           onBackendBusy: store.setBackendBusy,
+          onToolApprovals: store.setToolApprovals,
           onTranscript: deliverTranscript,
           onUsage: () => undefined,
           onClosed: (closed) => {
@@ -460,6 +468,7 @@ export function useVoiceSession({
   const pace = useVoiceSessionStore((store) => store.pace);
   const backendBusy = useVoiceSessionStore((store) => store.backendBusy);
   const toolActivity = useVoiceSessionStore((store) => store.toolActivity);
+  const toolApprovals = useVoiceSessionStore((store) => store.toolApprovals);
   const dispatch = useVoiceSessionStore((store) => store.dispatch);
   const reducedMotion = usePrefersReducedMotion();
   const reconnect = useSyncExternalStore(
@@ -566,6 +575,10 @@ export function useVoiceSession({
     controller.session?.cancelBackendWork();
   }, []);
 
+  const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
+    void controller.session?.decideToolApproval(callId, decision);
+  }, []);
+
   const submitTyped = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -590,6 +603,8 @@ export function useVoiceSession({
     deviceName,
     backendBusy,
     toolActivity,
+    toolApprovals,
+    decideToolApproval,
     cancelBackendWork,
     reconnecting: reconnect.active,
     reconnectAttempt: reconnect.attempt,

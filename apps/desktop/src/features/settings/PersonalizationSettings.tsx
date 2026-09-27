@@ -340,7 +340,7 @@ function CustomInstructionsInline() {
         rows={4}
         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-y placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
-      {isDirty && <p className="text-xs text-amber-500">Saving...</p>}
+      {isDirty && <p className="text-xs text-warning-text">Saving...</p>}
       <p className="text-xs text-muted-foreground">
         For more options including enable/disable toggle, see the full{' '}
         <span className="font-medium text-foreground">Custom Instructions</span> panel in the

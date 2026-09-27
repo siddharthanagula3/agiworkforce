@@ -33,9 +33,26 @@ vi.mock('argon2', () => ({
   },
 }));
 
+process.env['CSRF_SECRET'] = 'support-regenerate-step-up-secret-long-enough';
+
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { confirmSupportAction, proposeSupportAction } from '../service';
 
 const USER = 'user_a';
+
+function withRevealProof(proposalId: string): Request {
+  const { token } = createStepUpGrant({
+    userId: USER,
+    action: 'api_credential.reveal',
+    resourceId: proposalId,
+    method: 'first_factor',
+  });
+  return new Request('http://localhost/api/support/actions/confirm', {
+    method: 'POST',
+    headers: { [STEP_UP_TOKEN_HEADER]: token },
+  });
+}
 const KEY_ID = '66666666-6666-4666-8666-666666666666';
 
 describe('support actions, regenerate_api_key', () => {
@@ -73,6 +90,7 @@ describe('support actions, regenerate_api_key', () => {
       proposalId: proposal.id,
       confirmationToken,
       surface: 'web',
+      request: withRevealProof(proposal.id),
     });
 
     expect(result.kind).toBe('secret_once');

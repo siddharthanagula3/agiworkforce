@@ -13,10 +13,7 @@ export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
  * Safety tier determining user interaction required before tool execution.
  */
 export type SafetyTier =
-  | 'Safe'
-  | 'RequiresNotification'
-  | 'RequiresConfirmation'
-  | 'RequiresExplicitApproval';
+  'Safe' | 'RequiresNotification' | 'RequiresConfirmation' | 'RequiresExplicitApproval';
 
 /**
  * Information about a tool's safety tier.
@@ -257,10 +254,10 @@ export function getRiskLevelLabel(level: RiskLevel): string {
 
 export function getRiskLevelColor(level: RiskLevel): string {
   const colors: Record<RiskLevel, string> = {
-    Low: 'text-green-500',
-    Medium: 'text-amber-500',
-    High: 'text-orange-500',
-    Critical: 'text-destructive',
+    Low: 'text-success-text',
+    Medium: 'text-warning-text',
+    High: 'text-danger-text',
+    Critical: 'text-danger-text font-semibold',
   };
   return colors[level] || 'text-muted-foreground';
 }

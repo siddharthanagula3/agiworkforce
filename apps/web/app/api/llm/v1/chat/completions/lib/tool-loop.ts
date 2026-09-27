@@ -301,6 +301,7 @@ import {
 } from './tool-call-gate';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
@@ -1115,17 +1116,6 @@ function interactiveCardEvent(card: InteractiveCard, responseModel: string): Sse
 
 const MAX_INPUT_REQUEST_ENTRIES = 32;
 const MAX_INPUT_REQUESTS_SERIALIZED_BYTES = 16_000;
-
-const MCP_INPUT_PAUSE_ENV = 'AGI_MCP_INPUT_PAUSE';
-
-// Off unless explicitly enabled: the server half of the MCP `input_required`
-// pause is complete (checkpoint, `input-requested` events, /resume-input), but
-// no client surface calls /resume-input yet, so a real pause would strand the
-// turn with no way to answer it. Until a client ships, an `input_required`
-// result takes the fail-safe branch below and the turn finishes cleanly.
-function isMcpInputPauseEnabled(): boolean {
-  return process.env[MCP_INPUT_PAUSE_ENV] === '1';
-}
 
 // Remote `input_required` definitions are UNTRUSTED. Only a JSON object of a
 // bounded field count and serialized size is safe to persist, stream, and later
@@ -2751,7 +2741,7 @@ export async function* runToolLoop(
   // Attended runs opt connector calls into MCP `input_required`. An unattended
   // run (a scheduled task, no human to answer) must never invite a pause it can
   // only fail-safe out of, so it never sets this.
-  const allowConnectorInputRequired = !unattended && isMcpInputPauseEnabled();
+  const allowConnectorInputRequired = !unattended;
   // Set by runAndStreamToolCalls when a connector call paused for input and the
   // loop suspended; every caller returns after seeing it.
   let suspendedForInput = false;
@@ -2857,7 +2847,9 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const connectorPermissions = processed.toolLockdown
+    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
+    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   const privateContextPresent = hasPrivateContext(processed, messages);
@@ -3410,11 +3402,17 @@ export async function* runToolLoop(
   // race past it and each attempt its own sandbox. One attempt per turn, and
   // every caller after the first sees the answer the first one got.
   let e2bResolution: Promise<E2BExecutorResolution> | null = null;
+  const continuesTurn =
+    options.resume !== undefined ||
+    options.resumedFromPause !== undefined ||
+    options.invocationContinuation === true;
   async function stageTurnAttachmentsForSandbox(executor: E2BExecutor): Promise<void> {
     const attachments = processed.turnAttachments ?? [];
     if (attachments.length === 0) return;
     try {
-      const outcome = await stageTurnAttachments(executor, attachments);
+      const outcome = await stageTurnAttachments(executor, attachments, {
+        keepExisting: continuesTurn,
+      });
       if (outcome.failed.length > 0) {
         logger.warn(
           { failed: outcome.failed, staged: outcome.staged.length, conversationId },
