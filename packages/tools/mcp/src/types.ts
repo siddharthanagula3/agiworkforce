@@ -5,11 +5,11 @@ import type {
   ResponseCacheStore,
 } from '@modelcontextprotocol/client';
 import type {
-  CancelTaskResult,
-  CreateTaskResult,
-  GetTaskResult,
-  UpdateTaskResult,
-} from '@modelcontextprotocol/ext-tasks/schema/2026-07-28/schema';
+  CancelTaskResultV2 as CancelTaskResult,
+  CreateTaskResultV2 as CreateTaskResult,
+  GetTaskResultV2 as GetTaskResult,
+  UpdateTaskResultV2 as UpdateTaskResult,
+} from '@modelcontextprotocol/ext-tasks/core/v2';
 
 export interface McpServerConfig {
   command?: string;
