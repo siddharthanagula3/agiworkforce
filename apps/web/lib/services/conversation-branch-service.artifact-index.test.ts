@@ -8,6 +8,11 @@ vi.mock('@/app/api/chat/conversations/[id]/messages/lib/index-artifacts', () => 
   scheduleArtifactIndexing,
 }));
 
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: vi.fn(),
+}));
+
 const { forkConversation } = await import('./conversation-branch-service');
 
 const USER_ID = 'user-1';

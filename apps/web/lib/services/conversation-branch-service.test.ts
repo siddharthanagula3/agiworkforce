@@ -3,8 +3,16 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
 
+const assertFreeDailyAllowance = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance,
+}));
+
 const { forkConversation, listConversationBranchGroups } =
   await import('./conversation-branch-service');
+const { FreeDailyLimitError, freeDailyLimitError } =
+  await import('@/lib/services/tier-unit-quota-service');
 
 const sourceConversation = {
   id: '0190a000-0000-7000-8000-0000000000aa',
@@ -190,5 +198,83 @@ describe('conversation branch service', () => {
       }),
     ).rejects.toThrow('Fork-point message not found');
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('checks the Free daily allowance for one new conversation before it opens the transaction', async () => {
+    const { db, query } = adapter();
+    query.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+
+    await expect(
+      forkConversation(db, 'user-1', {
+        sourceConversationId: sourceConversation.id,
+        messageId: '0190a000-0000-7000-8000-0000000000bb',
+        requestId: '0190a000-0000-7000-8000-0000000000dd',
+      }),
+    ).rejects.toThrow('Conversation not found');
+
+    expect(assertFreeDailyAllowance).toHaveBeenCalledWith({
+      db,
+      userId: 'user-1',
+      requested: { conversation_creates: 1, message_writes: 1 },
+    });
+    expect(assertFreeDailyAllowance.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(db.transaction).mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('refuses a new branch at the Free daily cap without writing anything', async () => {
+    const { db, query, execute } = adapter();
+    assertFreeDailyAllowance.mockRejectedValue(freeDailyLimitError('conversation_creates'));
+    query.mockResolvedValueOnce([]);
+
+    await expect(
+      forkConversation(db, 'user-1', {
+        sourceConversationId: sourceConversation.id,
+        messageId: '0190a000-0000-7000-8000-0000000000bb',
+        requestId: '0190a000-0000-7000-8000-0000000000dd',
+      }),
+    ).rejects.toBeInstanceOf(FreeDailyLimitError);
+
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    const [lookupSql, lookupParams] = query.mock.calls[0]!;
+    expect(lookupSql).toContain('branch.request_id = $2');
+    expect(lookupParams).toEqual(['user-1', '0190a000-0000-7000-8000-0000000000dd']);
+  });
+
+  it('still returns the branch a first request made when its retry lands at the Free daily cap', async () => {
+    const { db, query, execute } = adapter();
+    const targetConversation = {
+      ...sourceConversation,
+      id: '0190a000-0000-7000-8000-0000000000dd',
+      title: 'Source chat (branch)',
+    };
+    assertFreeDailyAllowance.mockRejectedValue(freeDailyLimitError('conversation_creates'));
+    query.mockResolvedValueOnce([targetConversation]);
+
+    await expect(
+      forkConversation(db, 'user-1', {
+        sourceConversationId: sourceConversation.id,
+        messageId: '0190a000-0000-7000-8000-0000000000bb',
+        requestId: targetConversation.id,
+      }),
+    ).resolves.toEqual(targetConversation);
+
+    expect(db.transaction).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a failed allowance read as a replay', async () => {
+    const { db, query } = adapter();
+    assertFreeDailyAllowance.mockRejectedValue(new Error('entitlement lookup failed'));
+
+    await expect(
+      forkConversation(db, 'user-1', {
+        sourceConversationId: sourceConversation.id,
+        messageId: '0190a000-0000-7000-8000-0000000000bb',
+        requestId: '0190a000-0000-7000-8000-0000000000dd',
+      }),
+    ).rejects.toThrow('entitlement lookup failed');
+    expect(query).not.toHaveBeenCalled();
   });
 });

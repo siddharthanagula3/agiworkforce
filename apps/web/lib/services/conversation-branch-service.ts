@@ -8,7 +8,10 @@ import type {
 import { createError } from '@/lib/errors';
 import { scheduleArtifactIndexing } from '@/app/api/chat/conversations/[id]/messages/lib/index-artifacts';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
-import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  FreeDailyLimitError,
+  assertFreeDailyAllowance,
+} from '@/lib/services/tier-unit-quota-service';
 
 type CopiedAssistantMessage = {
   id: string;
@@ -198,11 +201,20 @@ export async function forkConversation(
   // have already handed to an unrelated request.
   let copiedAssistantMessages: CopiedAssistantMessage[] = [];
 
-  await assertFreeDailyAllowance({
-    db,
-    userId,
-    requested: { conversation_creates: 1, message_writes: 1 },
-  });
+  try {
+    await assertFreeDailyAllowance({
+      db,
+      userId,
+      requested: { conversation_creates: 1, message_writes: 1 },
+    });
+  } catch (error) {
+    const replay =
+      error instanceof FreeDailyLimitError
+        ? await findIdempotentBranch(db, userId, input.requestId)
+        : null;
+    if (!replay) throw error;
+    return replay;
+  }
 
   const target = await db.transaction(async (tx) => {
     const existing = await findIdempotentBranch(tx, userId, input.requestId);
