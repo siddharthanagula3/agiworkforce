@@ -243,7 +243,10 @@ export type WebviewToExtMessage =
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
-  | { type: 'done'; payload?: { model?: string; providerLabel?: string; brandColor?: string } }
+  | {
+      type: 'done';
+      payload?: { model?: string; providerLabel?: string; brandColor?: string; stopped?: true };
+    }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
   | {
@@ -3009,7 +3012,7 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
-      this._post({ type: 'done' });
+      this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
