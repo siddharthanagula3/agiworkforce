@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getRoutingSlotModel } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
   finalize: vi.fn(),
@@ -39,18 +40,25 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 const { POST } = await import('./route');
-const { LIVE_SESSION_BLOCK_MINUTES, liveSessionCostCents } =
-  await import('@/lib/voice/live-voice-billing');
+const {
+  LIVE_SESSION_CEILING_SECONDS,
+  liveSessionChargeMicrousd,
+  liveSessionProviderCostMicrousd,
+} = await import('@/lib/voice/live-voice-billing');
 
 const SESSION_ID = 'live_1';
-const CEILING_SECONDS = LIVE_SESSION_BLOCK_MINUTES * 60;
+const LIVE_MODEL = getRoutingSlotModel('voice_live');
 const SETTLEMENT = {
   idempotencyKey: 'agi.voice.live.test',
   leaseToken: 'lease',
   requestHash: 'hash',
-  estimatedCostCents: liveSessionCostCents(CEILING_SECONDS),
-  ceilingSeconds: CEILING_SECONDS,
 };
+
+function charge(seconds: number): number {
+  return liveSessionChargeMicrousd(seconds, LIVE_MODEL) as number;
+}
+
+const ONE_BLOCK_MICROUSD = charge(LIVE_SESSION_CEILING_SECONDS);
 
 interface StoredSession {
   started_at: string;
@@ -66,7 +74,7 @@ function sessionRow(session: StoredSession): Record<string, unknown> {
     conversation_id: 'conv-1',
     provider: 'openai',
     provider_session_id: SESSION_ID,
-    model_id: 'live-model',
+    model_id: LIVE_MODEL,
     surface: 'web',
     voice: 'marin',
     language: null,
@@ -81,11 +89,28 @@ function sessionRow(session: StoredSession): Record<string, unknown> {
   };
 }
 
-function scopeWith(session: StoredSession | null): { statements: string[] } {
+function scopeWith(
+  session: StoredSession | null,
+  reservation: { reservedMicrousd: number } | 'unreadable' | null = {
+    reservedMicrousd: ONE_BLOCK_MICROUSD,
+  },
+): { statements: string[] } {
   const statements: string[] = [];
   const db = {
     query: async (sql: string) => {
       statements.push(sql);
+      if (sql.includes('from public.managed_usage_requests')) {
+        if (reservation === 'unreadable') throw new Error('ledger unavailable');
+        return reservation
+          ? [
+              {
+                reserved_microusd: String(reservation.reservedMicrousd),
+                extension_status: null,
+                extension_microusd: null,
+              },
+            ]
+          : [];
+      }
       if (sql.includes('to_regclass')) return [{ ready: session !== null }];
       if (!session) return [];
       if (sql.startsWith('select')) return [sessionRow(session)];
@@ -105,9 +130,13 @@ function close(body: Record<string, unknown>): Promise<Response> {
   return POST(request, { params: Promise.resolve({ sessionId: SESSION_ID }) });
 }
 
-function settledUsage(): Record<string, unknown> {
+function finalized(): Record<string, unknown> {
   const [call] = mocks.finalize.mock.calls as [[Record<string, unknown>]];
-  return call[0]['usage'] as Record<string, unknown>;
+  return call[0];
+}
+
+function settledUsage(): Record<string, unknown> {
+  return finalized()['usage'] as Record<string, unknown>;
 }
 
 beforeEach(() => {
@@ -125,12 +154,19 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     const response = await close({ seconds: 0, settlement: SETTLEMENT });
 
     expect(response.status).toBe(200);
-    const body = (await response.json()) as { billedSeconds: number; actualCostCents: number };
-    expect(body.billedSeconds).toBeGreaterThanOrEqual(184);
-    expect(body.actualCostCents).toBe(liveSessionCostCents(body.billedSeconds));
+    const body = (await response.json()) as Record<string, unknown>;
+    const billedSeconds = body['billedSeconds'] as number;
+    expect(billedSeconds).toBeGreaterThanOrEqual(184);
+    expect(body).not.toHaveProperty('actualCostCents');
+    expect(finalized()['outcome']).toBe('completed');
+    expect(finalized()['actualCostMicrousd']).toBe(charge(billedSeconds));
+    expect(finalized()['providerCostMicrousd']).toBe(
+      liveSessionProviderCostMicrousd(billedSeconds, LIVE_MODEL),
+    );
     const usage = settledUsage();
     expect(usage['reportedSeconds']).toBe(0);
-    expect(Number(usage['billedSeconds'])).toBe(body.billedSeconds);
+    expect(Number(usage['billedSeconds'])).toBe(billedSeconds);
+    expect(usage['costSource']).toBe('provider_published_rate');
   });
 
   it('never bills less than the client reported', async () => {
@@ -140,17 +176,51 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
 
     const body = (await response.json()) as { billedSeconds: number };
     expect(body.billedSeconds).toBe(45);
+    expect(finalized()['actualCostMicrousd']).toBe(charge(45));
   });
 
-  it('stops at the ceiling the reservation was taken against', async () => {
-    const startedAt = new Date(Date.now() - (CEILING_SECONDS + 3_600) * 1_000).toISOString();
+  it('stops at what the reservation covers', async () => {
+    const startedAt = new Date(
+      Date.now() - (LIVE_SESSION_CEILING_SECONDS + 3_600) * 1_000,
+    ).toISOString();
     scopeWith({ started_at: startedAt, closed_at: null, status: 'active' });
 
     const response = await close({ seconds: 0, settlement: SETTLEMENT });
 
-    const body = (await response.json()) as { billedSeconds: number; actualCostCents: number };
-    expect(body.billedSeconds).toBe(CEILING_SECONDS);
-    expect(body.actualCostCents).toBe(SETTLEMENT.estimatedCostCents);
+    const body = (await response.json()) as { billedSeconds: number };
+    expect(body.billedSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
+    expect(finalized()['actualCostMicrousd']).toBe(ONE_BLOCK_MICROUSD);
+    expect(finalized()['estimatedCostMicrousd']).toBe(ONE_BLOCK_MICROUSD);
+  });
+
+  it('bills an extended session up to the blocks it reserved, never past them', async () => {
+    const extendedMicrousd = charge(2 * LIVE_SESSION_CEILING_SECONDS);
+    const startedAt = new Date(
+      Date.now() - 3 * LIVE_SESSION_CEILING_SECONDS * 1_000,
+    ).toISOString();
+    scopeWith(
+      { started_at: startedAt, closed_at: null, status: 'active' },
+      { reservedMicrousd: extendedMicrousd },
+    );
+
+    const response = await close({ seconds: 0, settlement: SETTLEMENT });
+
+    const body = (await response.json()) as { billedSeconds: number };
+    expect(body.billedSeconds).toBe(2 * LIVE_SESSION_CEILING_SECONDS);
+    expect(finalized()['actualCostMicrousd']).toBe(extendedMicrousd);
+  });
+
+  it('settles against one block when the reservation cannot be read', async () => {
+    const startedAt = new Date(
+      Date.now() - 2 * LIVE_SESSION_CEILING_SECONDS * 1_000,
+    ).toISOString();
+    scopeWith({ started_at: startedAt, closed_at: null, status: 'active' }, 'unreadable');
+
+    const response = await close({ seconds: 0, settlement: SETTLEMENT });
+
+    const body = (await response.json()) as { billedSeconds: number };
+    expect(body.billedSeconds).toBe(LIVE_SESSION_CEILING_SECONDS);
+    expect(finalized()['estimatedCostMicrousd']).toBe(ONE_BLOCK_MICROUSD);
   });
 
   it('settles a repeat close against the same span, so the minutes are metered once', async () => {
@@ -162,9 +232,8 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
 
     const body = (await response.json()) as { billedSeconds: number };
     expect(body.billedSeconds).toBe(60);
-    const [call] = mocks.finalize.mock.calls as [[Record<string, unknown>]];
-    expect(call[0]['idempotencyKey']).toBe(SETTLEMENT.idempotencyKey);
-    expect(call[0]['leaseToken']).toBe(SETTLEMENT.leaseToken);
+    expect(finalized()['idempotencyKey']).toBe(SETTLEMENT.idempotencyKey);
+    expect(finalized()['leaseToken']).toBe(SETTLEMENT.leaseToken);
   });
 
   it('falls back to the report on a deployment with no session store', async () => {
@@ -174,6 +243,18 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
 
     const body = (await response.json()) as { billedSeconds: number };
     expect(body.billedSeconds).toBe(30);
+  });
+
+  it('records the delegated backend spend separately from the session charge', async () => {
+    scopeWith({ started_at: new Date().toISOString(), closed_at: null, status: 'active' });
+    const backend = { inputTokens: 1_000, outputTokens: 200, webSearchCalls: 2 };
+
+    await close({ seconds: 30, settlement: SETTLEMENT, backend });
+
+    expect(mocks.backendCost).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', sessionId: SESSION_ID, reported: backend }),
+    );
+    expect(finalized()['actualCostMicrousd']).toBe(charge(30));
   });
 
   it('refuses a close that carries no usage report at all', async () => {
