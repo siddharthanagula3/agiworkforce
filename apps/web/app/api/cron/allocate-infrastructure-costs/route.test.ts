@@ -8,8 +8,14 @@ const { mockVerifyCron, mockAllocate, mockLogger } = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
-vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mockVerifyCron }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  logger: mockLogger,
+}));
+vi.mock('@/lib/server/cron-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/cron-auth')>()),
+  verifyCronRequest: mockVerifyCron,
+}));
 vi.mock('@/lib/services/infrastructure-allocation-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/infrastructure-allocation-service')>()),
   allocateInfrastructureCosts: mockAllocate,
