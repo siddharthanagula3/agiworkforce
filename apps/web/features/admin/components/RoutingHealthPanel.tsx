@@ -80,7 +80,7 @@ export default function RoutingHealthPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="routing-health-title">
       <div>
-        <h2 id="routing-health-title" className="text-sm font-medium">
+        <h2 id="routing-health-title" className="text-h5">
           Routing health
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -181,7 +181,7 @@ export default function RoutingHealthPanel() {
           {openProvider ? (
             <div className={CARD_CLASS}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h3 className="text-sm font-medium">
+                <h3 className="text-h5">
                   Route lockouts, <span className="font-mono text-xs">{openProvider}</span>
                 </h3>
                 <span className="text-xs text-muted-foreground">

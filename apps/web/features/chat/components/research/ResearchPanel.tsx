@@ -482,7 +482,7 @@ export function ResearchToggleButton({
         'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
         panelOpen
           ? 'bg-primary/15 text-primary'
-          : 'bg-card/60 text-muted-foreground shadow-sm backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
+          : 'bg-card/60 text-muted-foreground shadow-e1 backdrop-blur-sm hover:bg-muted/60 hover:text-foreground',
       )}
       aria-label={panelOpen ? 'Close sources panel' : 'Open sources panel'}
       title="Research sources"

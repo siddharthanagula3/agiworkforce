@@ -79,7 +79,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function SectionHeading({ id, title, caption }: { id: string; title: string; caption?: string }) {
   return (
     <div className="border-b px-5 py-3.5" style={{ borderColor: 'var(--settings-border)' }}>
-      <h2 id={id} className="text-sm font-semibold" style={{ color: 'var(--text-1)' }}>
+      <h2 id={id} className="text-h5" style={{ color: 'var(--text-1)' }}>
         {title}
       </h2>
       {caption ? (
