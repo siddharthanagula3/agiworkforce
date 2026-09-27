@@ -216,6 +216,22 @@ fn persisted_active_mode() -> Option<PermissionMode> {
         .permission_mode
         .as_deref()
         .and_then(crate::cli_options::persisted_permission_mode)
+        .map(|mode| mode.within(managed_permission_mode()))
+}
+
+pub(crate) fn managed_permission_mode() -> Option<PermissionMode> {
+    use crate::platform::policy::managed::{load_managed_policy, ManagedPolicyState};
+    match load_managed_policy() {
+        ManagedPolicyState::Absent => None,
+        ManagedPolicyState::Invalid(_) => Some(PermissionMode::Default),
+        ManagedPolicyState::Loaded { document, .. } => document
+            .config
+            .and_then(|config| config.permission_mode)
+            .map(|raw| {
+                crate::cli_options::persisted_permission_mode(&raw)
+                    .unwrap_or(PermissionMode::Default)
+            }),
+    }
 }
 
 impl PermissionStore {

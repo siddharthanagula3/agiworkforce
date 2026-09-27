@@ -26,6 +26,8 @@ import {
   completeMcpAuthorization,
   type McpAuthorizationFailure,
 } from '@/lib/connectors/mcp-discovery';
+import { authorizationResponseIssuerMatches } from '@/lib/connectors/authorization-response';
+import { canonicalResourceUri } from '@/lib/connectors/registry-authorization';
 
 const MAX_CODE_LENGTH = 2048;
 const COMPLETION_FAILURE_STATUS: Partial<Record<McpAuthorizationFailure, string>> = {
@@ -89,6 +91,15 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return redirectTo(pending.returnPath, pending.connectorId, 'invalid_state');
   }
 
+  const iss = url.searchParams.get('iss') ?? undefined;
+  if (!authorizationResponseIssuerMatches(pending, iss)) {
+    logger.warn(
+      { connectorId: pending.connectorId },
+      '[connector-oauth] callback rejected: the response names a different issuer than the one recorded',
+    );
+    return redirectTo(pending.returnPath, pending.connectorId, 'failed');
+  }
+
   if (providerError) {
     return redirectTo(pending.returnPath, pending.connectorId, 'denied');
   }
@@ -97,12 +108,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   if (pending.mcpUrl) {
-    const completion = await completeMcpAuthorization({
-      pending,
-      state,
-      code,
-      iss: url.searchParams.get('iss') ?? undefined,
-    });
+    const completion = await completeMcpAuthorization({ pending, state, code, iss });
 
     if (completion.status === 'error') {
       logger.warn(
@@ -141,6 +147,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return redirectTo(pending.returnPath, pending.connectorId, 'unavailable');
   }
 
+  const resource = pending.resourceUrl ?? canonicalResourceUri(provider.mcpUrl);
   let grantedScopes: string[];
   try {
     const tokens = await exchangeAuthorizationCode({
@@ -149,6 +156,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       codeVerifier: pending.codeVerifier || null,
       redirectUri: pending.redirectUri,
       requestedScopes: pending.requestedScopes,
+      resource,
     });
     await upsertConnectorOAuthGrant(userId, pending.connectorId, {
       accessToken: tokens.accessToken,
@@ -157,6 +165,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       grantedScopes: tokens.grantedScopes,
       accessTokenExpiresAt: tokens.accessTokenExpiresAt,
       tokenEndpoint: provider.tokenUrl,
+      issuer: pending.issuer ?? null,
+      resourceUrl: resource,
     });
     grantedScopes = tokens.grantedScopes;
   } catch (error) {

@@ -95,13 +95,10 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model is selectable; there is no effort (reasoning depth) control for a routine. | ui |
-| desktop | partial | Model is selectable; there is no effort (reasoning depth) control for a routine. | ui |
-| mobile | partial | Model picker only; no effort control. | ui |
 | cli | partial | --model at creation only; no effort flag and no way to change the model later. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:184-184`, `apps/web/lib/services/schedule-service.ts:575-575`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:321-321`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`
+Code: `apps/cli/src/lib.rs:1118-1118`, `apps/cli/src/lib.rs:1665-1665`
 
 ## S63.11: One-time schedule.
 
@@ -298,13 +295,7 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:356-356`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Alerts are account-wide only; the card links to Settings > Notifications and the server rejects per-schedule notification settings. | ui |
-| desktop | partial | Alerts are account-wide only; the card links to Settings > Notifications and the server rejects per-schedule notification settings. | ui |
-| mobile | partial | Only an account-wide notification category covering schedule runs; no per-routine choice. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | One global "task notifications" toggle in Options covers local task failures; nothing per routine. | ui |
-
-Code: `apps/web/features/schedules/components/ScheduleCard.tsx:381-381`, `apps/web/features/schedules/components/SchedulesPage.tsx:565-565`, `apps/web/lib/services/schedule-service.ts:454-454`, `apps/web/lib/services/schedule-service.ts:1427-1427`
 
 ## S63.31: Budget controls.
 

@@ -108,10 +108,10 @@ Code: `apps/cli/src/config.rs:861-867`, `apps/cli/src/config.rs:1102-1133`
 ## S72.35: Installer and updater.
 
 - Done when: The CLI can be installed via a published package/script and can check for and install updates itself.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | install/update code complete, but no signed release is published, so installs fail the provenance check | surface-only |
+| cli | partial | Install and update verify a signed release manifest. Still open, owner only: set AGI_CLI_RELEASE_SIGNING_KEY, publish the first signed release, then mark the CLI available (surface-status.ts:7). | flag-off |
 
-Code: `apps/cli/src/lib.rs:766-785`, `apps/cli/src/lib.rs:3521-3545`, `apps/cli/src/update_check.rs:89-101`, `apps/cli/src/update_check.rs:160-167`
+Code: `apps/web/public/install.sh:139-139`, `apps/cli/src/update_check.rs:221-221`

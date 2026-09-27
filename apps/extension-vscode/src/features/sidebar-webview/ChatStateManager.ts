@@ -175,6 +175,7 @@ export type WebviewToExtMessage =
   | { type: 'openWorkspace' }
   | { type: 'manageWorkspaceTrust' }
   | { type: 'retryRuntime' }
+  | { type: 'installCli' }
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
@@ -253,6 +254,7 @@ export type ExtToWebviewMessage =
       payload: {
         status: 'ready' | 'probing' | 'unavailable' | 'workspace-required' | 'workspace-untrusted';
         message?: string;
+        cliMissing?: boolean;
       };
     }
   | {
@@ -762,6 +764,11 @@ export class ChatStateManager {
 
       case 'manageWorkspaceTrust': {
         await vscode.commands.executeCommand('workbench.trust.manage');
+        break;
+      }
+
+      case 'installCli': {
+        await vscode.commands.executeCommand('agi-workforce.installCli');
         break;
       }
 
@@ -2144,6 +2151,9 @@ export class ChatStateManager {
         payload: {
           status: 'unavailable',
           message: this._describeLocalRuntimeSetupError(error),
+          ...(error instanceof Error && error.message.startsWith(`${CLI_NOT_FOUND_MARKER}: `)
+            ? { cliMissing: true }
+            : {}),
         },
       });
       return [];

@@ -35,6 +35,10 @@ import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
 import {
+  cloudCodeTurnNotificationEvent,
+  notifyCloudCodeTurnEvent,
+} from './agent-notification-service';
+import {
   createObservedProviderUsage,
   observedProviderUsageLedgerCents,
 } from './managed-usage-accounting-service';
@@ -957,6 +961,21 @@ async function runClaimedAgentTurn(
   }
   if (approvalRecordingFailed) {
     throw new CloudCodeUnavailableError('Approval request could not be recorded');
+  }
+
+  const noticeEvent = cloudCodeTurnNotificationEvent(result.stopReason);
+  if (noticeEvent) {
+    const sessionTitle = await getCloudCodeSession(db, owner, sessionId)
+      .then((current) => current.title)
+      .catch(() => null);
+    await notifyCloudCodeTurnEvent(db, {
+      userId: owner.userId,
+      sessionId,
+      sessionTitle,
+      turnId,
+      event: noticeEvent,
+      ...(pendingApproval ? { approvalStepIndex: pendingApproval.stepIndex } : {}),
+    });
   }
 
   logger.info(

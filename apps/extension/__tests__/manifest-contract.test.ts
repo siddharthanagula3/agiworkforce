@@ -67,9 +67,12 @@ describe('Chrome manifest trust contract', () => {
     expect(manifest['web_accessible_resources']).toBeUndefined();
   });
 
-  it('leaves the DevTools-Protocol shortcut unbound so no browser chord is stolen', () => {
+  it('binds page capture to a chord Chrome and ChromeOS leave free, so no browser chord is stolen', () => {
     const commands = manifest['commands'] as Record<string, { suggested_key?: unknown }>;
-    expect(commands['capture_page']?.suggested_key).toBeUndefined();
+    expect(commands['capture_page']?.suggested_key).toEqual({
+      default: 'Alt+Shift+Y',
+      mac: 'Command+Shift+Y',
+    });
   });
 
   it('carries a written justification for every permission it declares', () => {

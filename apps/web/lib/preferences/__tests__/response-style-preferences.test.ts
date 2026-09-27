@@ -19,6 +19,7 @@ describe('normalizing a stored namespace', () => {
       style: 'default',
       technicalLevel: 'unspecified',
       preferredFormatting: 'unspecified',
+      preferredLength: 'default',
       responseLanguage: RESPONSE_LANGUAGE_AUTO,
       traits: {},
     });

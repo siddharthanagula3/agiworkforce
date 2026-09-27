@@ -76,6 +76,7 @@ vi.mock('@/lib/connectors/oauth-client', () => ({
   ConnectorOAuthTokenError: mocks.ConnectorOAuthTokenError,
   refreshAccessToken: (...a: unknown[]) => mocks.refresh(...a),
   revokeTokenAtProvider: (...a: unknown[]) => mocks.revokeAtProvider(...a),
+  TOKEN_REQUEST_TIMEOUT_MS: 10_000,
 }));
 
 vi.mock('@/lib/connectors/oauth-registry', () => ({
@@ -97,6 +98,7 @@ const PROVIDER = {
   connectorId: 'linear',
   displayName: 'Linear',
   tokenUrl: 'https://auth.example.com/token',
+  mcpUrl: 'https://mcp.example.com/mcp',
   revocationUrl: undefined as string | undefined,
 };
 

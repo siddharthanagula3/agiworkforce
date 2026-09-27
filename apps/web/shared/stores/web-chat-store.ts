@@ -431,12 +431,21 @@ export interface MessageMetadata {
 export interface MessageToolEntry {
   id?: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'awaiting_approval' | 'awaiting_device';
+  status:
+    | 'pending'
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'awaiting_approval'
+    | 'awaiting_device'
+    | 'awaiting_input';
   durationMs?: number;
   args?: string;
   parameters?: Record<string, unknown>;
   parallelGroup?: string;
   error?: string;
+  connectorId?: string;
+  inputRequests?: Record<string, unknown>;
   /** When true, this tool call is blocked on user approval before execution. */
   requiresApproval?: boolean;
   /** Approval decision recorded by the user (true = approved, false = rejected). */

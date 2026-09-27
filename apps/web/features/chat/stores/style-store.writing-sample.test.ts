@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
-  fetchPreferenceNamespace: vi.fn(async (_namespace: string, fallback: unknown) => fallback),
+  fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({ version: null })),
 }));
 
@@ -69,7 +69,7 @@ describe('a custom style carries its writing sample into the instruction', () =>
     const composed = getStyleInstruction('concise', null, 'brief');
 
     expect(composed).not.toContain('writing_sample');
-    expect(composed).toContain('Be brief and direct.');
+    expect(composed).toContain('Keep responses short and direct.');
   });
 });
 

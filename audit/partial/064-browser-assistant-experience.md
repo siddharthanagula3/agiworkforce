@@ -22,14 +22,13 @@ Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src
 
 - Done when: Text the user highlights on a web page reaches the assistant as context for a question.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Chrome's "Ask AGI" sends the selection to AGI Desktop, but the Electron bridge has no handler for it and answers success; build the receiving side. | handler |
 | mobile | partial | Works only through the phone's share sheet; there is no selection action inside a browser and the source page is not attached. | surface-only |
 
-Code: `apps/extension/src/background.ts:4526-4527`, `apps/desktop/electron/browser/bridgeServer.ts:427-443`, `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
+Code: `apps/mobile/src/features/share-preview/index.tsx:31-35`, `apps/mobile/src/features/share-preview/index.tsx:94-103`
 
 ## S64.05: Page summary.
 

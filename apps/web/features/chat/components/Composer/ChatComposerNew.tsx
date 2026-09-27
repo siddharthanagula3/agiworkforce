@@ -4527,12 +4527,14 @@ const ChatComposerNewComponent = ({
                       handleOfficeCreationToggle();
                       closeMenu();
                     }}
-                    memoryEnabled={memoryCapabilityEnabled && memoryEnabledForChat}
-                    memoryDisabled={disabled || !memoryCapabilityEnabled}
+                    memoryEnabled={memoryCapabilityEnabled && memoryEnabledForChat && !isIncognito}
+                    memoryDisabled={disabled || !memoryCapabilityEnabled || isIncognito}
                     memoryTitle={
-                      !memoryCapabilityEnabled
-                        ? 'Turn on Memory in Settings > Capabilities to use it here.'
-                        : undefined
+                      isIncognito
+                        ? 'Temporary chats never read or save memory.'
+                        : !memoryCapabilityEnabled
+                          ? 'Turn on Memory in Settings > Capabilities to use it here.'
+                          : undefined
                     }
                     onToggleMemory={() => {
                       handleMemoryToggle();

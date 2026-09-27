@@ -46,6 +46,8 @@ import {
   listConnectorAccounts,
 } from '@/lib/connectors/oauth-store';
 import { scopeEscalation } from '@/lib/connectors/scopes-escalation';
+import { resolveRegistryAuthorization } from '@/lib/connectors/registry-authorization';
+import { McpPkceUnsupportedError } from '@/lib/connectors/mcp-oauth-provider';
 
 export const OAUTH_START_STATUS_NOT_CONFIGURED = 'not_configured';
 export const OAUTH_START_STATUS_REGISTRATION_REJECTED = 'registration_rejected';
@@ -67,6 +69,8 @@ const FAILURE_STATUS: Record<McpAuthorizationFailure, string> = {
   'registration-rejected': OAUTH_START_STATUS_REGISTRATION_REJECTED,
   'authorization-server-changed': OAUTH_START_STATUS_REAUTHORIZE,
   'discovery-failed': OAUTH_START_STATUS_ERROR,
+  'pkce-unsupported': OAUTH_START_STATUS_ERROR,
+  'issuer-mismatch': OAUTH_START_STATUS_ERROR,
   unexpected: OAUTH_START_STATUS_ERROR,
 };
 
@@ -87,6 +91,13 @@ interface DiscoveredServer {
 
 export function registrationRejectedMessage(serverName: string): string {
   return `${serverName} refused to register this app, so it cannot be connected here.`;
+}
+
+function authorizationServerChangedMessage(serverName: string): string {
+  return (
+    `${serverName} now signs in through a different authorization server than the one this ` +
+    'deployment registered its app with, so it cannot be connected until that app is registered again.'
+  );
 }
 
 async function resolveCredentialReconnectTarget(
@@ -268,19 +279,44 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  const authorization = await resolveRegistryAuthorization(provider);
+  if (authorization.status === 'authorization-server-changed') {
+    logger.warn(
+      { connectorId, issuer: authorization.issuer },
+      '[connector-oauth] the server no longer names the issuer its pre-registered app belongs to',
+    );
+    return fail(
+      OAUTH_START_STATUS_REAUTHORIZE,
+      409,
+      authorizationServerChangedMessage(connectorDisplayName(connectorId)),
+    );
+  }
+  if (authorization.status === 'pkce-unsupported') {
+    return fail(
+      OAUTH_START_STATUS_ERROR,
+      502,
+      new McpPkceUnsupportedError(authorization.issuer).message,
+    );
+  }
+
   const state = generateOAuthState();
-  const pkce = provider.usePkce ? generatePkcePair() : null;
+  const pkce = generatePkcePair();
 
   try {
     await createPendingAuthorization({
       userId,
       connectorId,
       state,
-      codeVerifier: pkce?.verifier ?? '',
-      codeChallengeMethod: pkce ? 'S256' : 'plain',
+      codeVerifier: pkce.verifier,
+      codeChallengeMethod: 'S256',
       redirectUri,
       requestedScopes,
       returnPath,
+      issuer: authorization.context.issuer,
+      resourceUrl: authorization.context.resource,
+      ...(authorization.context.discoveryState
+        ? { discoveryState: authorization.context.discoveryState }
+        : {}),
     });
   } catch (error) {
     if (error instanceof ConnectorOAuthStoreUnavailableError) {
@@ -297,7 +333,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     provider,
     redirectUri,
     state,
-    codeChallenge: pkce?.challenge ?? null,
+    codeChallenge: pkce.challenge,
+    resource: authorization.context.resource,
   });
 
   if (wantsJson) {

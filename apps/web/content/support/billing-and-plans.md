@@ -23,6 +23,11 @@ Checkout is refused to an account that has neither. On a plan you already pay
 for the access step does not apply, and an upgrade shows what it will cost and
 waits for you to confirm before anything is charged.
 
+An upgrade takes effect straight away and starts a new billing period that day:
+you pay the new plan's price, minus a credit for the unused time on your current
+plan, and your renewal date moves to the day you upgrade. Adding seats to a Team
+plan keeps the renewal date and charges only for the rest of the current period.
+
 Local mode and BYOK are free and need no plan at all. Managed cloud plans differ
 in usage capacity and in which features they include: projects, custom MCP
 connections, concurrent responses, sandboxes, connector tools and scheduled

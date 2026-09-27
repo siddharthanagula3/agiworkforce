@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A visible switch turns Memory on or off, and when off the assistant neither reads nor saves memories.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, api
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The only switch (/memories Auto-memory) stops learning; CLAUDE.md files, raw_memories.md and account memory are always injected, so Memory cannot be turned off. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3914-3931`, `apps/cli/src/agent/mod.rs:1660-1670`, `apps/cli/src/agent/mod.rs:578-588`
 
 ## S39.03: Separate past-chat-reference control.
 
@@ -114,17 +111,15 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1902`, `apps/extensio
 ## S39.11: Explicit “remember this” action.
 
 - Done when: From inside a conversation the user can explicitly ask the assistant to remember something and gets confirmation it was saved.
-- Wave: 2
-- Already works on: mobile, cli
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
-| desktop | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
 | vscode | partial | Add a 'remember this' action from a chat or selection; only the separate 'Add a memory fact' command exists. | ui |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
 
-Code: `apps/web/app/api/memory/commands/route.ts:25-66`, `packages/ai/agent-core/src/memory.ts:44-48`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`, `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`, `apps/extension/src/side_panel.ts:7928-7938`
 
 ## S39.12: Automatic Memory update.
 
@@ -291,16 +286,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 
 - Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. On-device (Local) memory has no workspace at all. | ui |
 | cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 | vscode | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. Its list is still labelled 'Workspace memory facts' (VS Code folder), which is not the account workspace. | ui |
 | chrome | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 
-Code: `apps/mobile/src/features/memory/store.ts:85-94`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/cli/src/cloud/mod.rs:322-334`
+Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension-vscode/src/features/surfaces/index.ts:333-341`
 
 ## S39.27: Memory-used indication.
 

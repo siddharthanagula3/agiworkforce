@@ -155,7 +155,8 @@ describe('composer popover keyboard support', () => {
   it('inherits the editor font family and size', () => {
     const html = renderWebview();
     expect(html).toContain('font-family: var(--vscode-font-family');
-    expect(html).toContain('font-size: var(--vscode-font-size');
+    expect(html).toContain('--type-body-size: var(--vscode-font-size');
+    expect(html).toContain('font-size: var(--type-body-size)');
   });
 
   it('keeps Tab focus inside the first-run modal dialog', () => {

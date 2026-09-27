@@ -81,18 +81,30 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   return enrolled;
 }
 
-export async function assertMfaPolicy(userId: string): Promise<void> {
+async function mfaPolicyRefusal(
+  userId: string,
+): Promise<{ organizationId: string; code: string; reason: string } | null> {
   const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId);
-  if (!policy || !policy.requireMfa || !organizationId) return;
+  if (!policy || !policy.requireMfa || !organizationId) return null;
 
   const mfaEnrolled = await resolveMfaEnrolled(userId);
   const decision = evaluateOrganizationPolicy(policy, { resource: 'mfa', mfaEnrolled });
-  if (decision.allowed) return;
+  if (decision.allowed) return null;
+  return { organizationId, code: decision.code, reason: decision.reason };
+}
+
+export async function isBlockedByMfaPolicy(userId: string): Promise<boolean> {
+  return (await mfaPolicyRefusal(userId)) !== null;
+}
+
+export async function assertMfaPolicy(userId: string): Promise<void> {
+  const refusal = await mfaPolicyRefusal(userId);
+  if (!refusal) return;
 
   logger.warn(
-    { userId, organizationId, code: decision.code },
+    { userId, organizationId: refusal.organizationId, code: refusal.code },
     '[mfa-policy] request refused by workspace mfa policy',
   );
 
-  throw new MfaRequiredError(decision.reason);
+  throw new MfaRequiredError(refusal.reason);
 }
