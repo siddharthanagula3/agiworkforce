@@ -20,6 +20,7 @@ directories:
 files:
   - dist/**
   - electron/dist/**
+  - '!electron/dist/cli/**'
   - '!node_modules'
 
 # The macOS input helper is a separate Mach-O executable, so it must sit in
@@ -28,6 +29,10 @@ files:
 extraResources:
   - from: electron/dist/agi-input
     to: agi-input
+  - from: electron/dist/cli/${arch}/agi
+    to: agi-cli/agi
+
+beforePack: ./electron/bundleCli.mjs
 
 mac:
   category: public.app-category.productivity
