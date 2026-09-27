@@ -282,6 +282,13 @@ impl AccountRoute {
             .unwrap_or_else(|| "current".to_string())
     }
 
+    fn eligible_model(&self) -> Option<String> {
+        ["flagship_additions", "pro_additions", "economy"]
+            .into_iter()
+            .flat_map(crate::model_catalog::tier_allowed_models)
+            .find(|candidate| self.runs_managed(candidate))
+    }
+
     /// True when the managed route can run this model. An unknown tier is not
     /// a refusal; the server decides.
     fn runs_managed(&self, model: &str) -> bool {
@@ -388,6 +395,7 @@ pub fn decide_turn_route(
             CliError::PlanExcludesModel {
                 model: model.to_string(),
                 tier: account.tier_label(),
+                alternative_model: account.eligible_model(),
             }
         } else {
             CliError::AccountSignedOut {
