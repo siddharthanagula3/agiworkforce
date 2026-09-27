@@ -43,6 +43,7 @@ const cloudModules = [
   'capability-handshake',
   'schedules',
   'live-voice-tools',
+  'triggers',
   'skills',
   'plugin-marketplaces',
   'device-registry',
