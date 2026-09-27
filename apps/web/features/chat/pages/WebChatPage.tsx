@@ -3935,6 +3935,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       }
       const fallback = clientFallbackTitle(firstUser.content);
       if (!fallback || fallback === placeholderTitle) return;
+      if (isTemporary) {
+        useChatStore.getState().updateConversation(conversationId, { title: fallback });
+        return;
+      }
       void updateConversation(conversationId, { title: fallback });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
