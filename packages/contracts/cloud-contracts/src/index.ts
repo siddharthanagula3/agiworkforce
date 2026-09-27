@@ -40,6 +40,7 @@ export * from './device-steps';
 export * from './connectors';
 export * from './capability-handshake';
 export * from './schedules';
+export * from './schedule-templates';
 export * from './live-voice-tools';
 export * from './triggers';
 export * from './skills';

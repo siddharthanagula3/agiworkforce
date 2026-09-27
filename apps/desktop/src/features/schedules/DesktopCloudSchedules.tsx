@@ -5,6 +5,7 @@ import {
   ChevronUp,
   Clock3,
   History,
+  LayoutTemplate,
   Loader2,
   Pencil,
   Play,
@@ -18,6 +19,8 @@ import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkf
 import { ApprovalCard } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  MANAGED_CLOUD_SCHEDULE_TEMPLATES,
+  type ManagedCloudScheduleTemplate,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRecurrence,
   type ManagedCloudScheduleRun,
@@ -103,6 +106,39 @@ function resolvedTimezone(): string {
   } catch {
     return 'UTC';
   }
+}
+
+function ScheduleTemplateGrid({
+  disabled,
+  onPick,
+}: {
+  disabled: boolean;
+  onPick: (template: ManagedCloudScheduleTemplate) => void;
+}) {
+  return (
+    <ul className="grid gap-3 text-left sm:grid-cols-2 lg:grid-cols-3">
+      {MANAGED_CLOUD_SCHEDULE_TEMPLATES.map((template) => (
+        <li key={template.id}>
+          <button
+            type="button"
+            onClick={() => onPick(template)}
+            disabled={disabled}
+            className="flex h-full w-full flex-col gap-1 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-4 text-left transition-colors hover:bg-[var(--chat-surface-hover)] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span className="text-sm font-medium text-[var(--chat-text-primary)]">
+              {template.name}
+            </span>
+            <span className="text-xs text-[var(--chat-text-secondary)]">
+              {template.description}
+            </span>
+            <span className="mt-1 text-xs text-[var(--chat-text-muted)]">
+              {template.cadenceLabel}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function initialDraft(model = ''): ScheduleDraft {
@@ -440,6 +476,7 @@ function AuthenticatedDesktopCloudSchedules({
   const runAbortable = useAbortableRequests();
   const [schedules, setSchedules] = useState<ManagedCloudScheduleTask[]>([]);
   const [listStatus, setListStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [galleryOpen, setGalleryOpen] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
@@ -544,6 +581,15 @@ function AuthenticatedDesktopCloudSchedules({
     setEditing(null);
     setDraft(initialDraft(modelOptions[0]?.id));
     setFormError(null);
+    setEditorOpen(true);
+  };
+
+  const openCreateFromTemplate = (template: ManagedCloudScheduleTemplate) => {
+    if (!canCreateSchedule) return;
+    setEditing(null);
+    setDraft({ ...initialDraft(modelOptions[0]?.id), ...template.draft });
+    setFormError(null);
+    setGalleryOpen(false);
     setEditorOpen(true);
   };
 
@@ -811,17 +857,49 @@ function AuthenticatedDesktopCloudSchedules({
               ))}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={openCreate}
-            disabled={!canCreateSchedule}
-            title={createBlockedReason}
-            className={PRIMARY_BUTTON}
-          >
-            <Plus className="h-4 w-4" aria-hidden />
-            Create schedule
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {schedules.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setGalleryOpen((open) => !open)}
+                aria-expanded={galleryOpen}
+                aria-controls="desktop-schedule-template-gallery"
+                className={SECONDARY_BUTTON}
+              >
+                <LayoutTemplate className="h-4 w-4" aria-hidden />
+                Templates
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={openCreate}
+              disabled={!canCreateSchedule}
+              title={createBlockedReason}
+              className={PRIMARY_BUTTON}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Create schedule
+            </button>
+          </div>
         </header>
+
+        {galleryOpen && schedules.length > 0 ? (
+          <section
+            id="desktop-schedule-template-gallery"
+            aria-labelledby="desktop-schedule-template-gallery-heading"
+            className="rounded-2xl border border-[var(--chat-border)] p-4"
+          >
+            <h2 id="desktop-schedule-template-gallery-heading" className="text-sm font-medium">
+              Start from a template
+            </h2>
+            <p className="mt-1 text-xs text-[var(--chat-text-muted)]">
+              Each template opens the create form filled in, for you to review before saving.
+            </p>
+            <div className="mt-4">
+              <ScheduleTemplateGrid disabled={!canCreateSchedule} onPick={openCreateFromTemplate} />
+            </div>
+          </section>
+        ) : null}
 
         {!schedulesEnabled ? (
           <div
@@ -930,6 +1008,12 @@ function AuthenticatedDesktopCloudSchedules({
               <Plus className="h-4 w-4" aria-hidden />
               Create schedule
             </button>
+            <p className="mt-10 text-xs font-medium uppercase tracking-wider text-[var(--chat-text-muted)]">
+              Or start from one of these
+            </p>
+            <div className="mx-auto mt-4 max-w-3xl">
+              <ScheduleTemplateGrid disabled={!canCreateSchedule} onPick={openCreateFromTemplate} />
+            </div>
           </div>
         ) : (
           <div className="space-y-3">
