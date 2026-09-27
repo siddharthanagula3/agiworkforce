@@ -6,6 +6,7 @@ import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
+import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { toCsv } from '@/lib/csv';
@@ -37,7 +38,9 @@ async function handler(request: NextRequest) {
   try {
     scoped = await getUserScopedDb(request);
   } catch (error) {
-    if (isMfaRequiredError(error) || isIpNotAllowedError(error)) throw error;
+    if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
+      throw error;
+    }
     throw createError.unauthorized('Authentication required');
   }
 

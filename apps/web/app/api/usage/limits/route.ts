@@ -30,7 +30,7 @@ export interface UsageLimitsResponse {
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;
   try {
-    scoped = await getUserScopedDb(request, { apiKeyScope: 'usage:read' });
+    scoped = await getUserScopedDb(request);
   } catch (error) {
     if (isApiKeyScopeError(error) || isMfaRequiredError(error) || isIpNotAllowedError(error)) {
       throw error;
