@@ -16,4 +16,5 @@ export type TurnEndedNotification = {
   outputTokens: number;
   error: string | null;
   failure: TurnFailure | null;
+  managedRequestIds: Array<string>;
 };

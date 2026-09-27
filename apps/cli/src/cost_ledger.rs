@@ -6,7 +6,6 @@ use crate::model_catalog;
 
 pub const MICROUSD_PER_CREDIT: f64 = 5_000.0;
 const MICROUSD_PER_USD: f64 = 1_000_000.0;
-const CENTS_PER_USD: f64 = 100.0;
 
 pub fn credits_for_usd(usd: f64) -> f64 {
     if usd.is_finite() && usd > 0.0 {
@@ -14,10 +13,6 @@ pub fn credits_for_usd(usd: f64) -> f64 {
     } else {
         0.0
     }
-}
-
-pub fn credits_for_cents(cents: f64) -> f64 {
-    credits_for_usd(cents / CENTS_PER_USD)
 }
 
 pub fn credit_amount(credits: f64) -> String {

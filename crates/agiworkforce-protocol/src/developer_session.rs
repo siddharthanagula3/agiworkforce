@@ -1371,6 +1371,8 @@ pub struct TurnEndedNotification {
     pub output_tokens: u32,
     pub error: Option<String>,
     pub failure: Option<TurnFailure>,
+    #[serde(default)]
+    pub managed_request_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
