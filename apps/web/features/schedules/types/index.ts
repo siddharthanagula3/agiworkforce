@@ -1,4 +1,4 @@
-import { creditsFromCents, getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
+import { formatCredits, getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleCondition,
   ManagedCloudScheduleDaypart,
@@ -212,9 +212,10 @@ export interface ScheduleRunUsage {
   credits: number | null;
 }
 
+const RUN_CREDIT_FRACTION_DIGITS = 2;
+
 export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
-  const result = run.result;
-  if (!result) return null;
+  const result = run.result ?? {};
   const usage = result['usage'];
   const usageRecord =
     usage !== null && typeof usage === 'object' ? (usage as Record<string, unknown>) : null;
@@ -224,18 +225,19 @@ export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
   const nonEmptyString = (value: unknown): string | null =>
     typeof value === 'string' && value.trim() ? value : null;
 
-  const legacyCostCents = finiteNumber(usageRecord?.['costCents']);
   const summary: ScheduleRunUsage = {
     model: nonEmptyString(result['model']),
     provider: nonEmptyString(result['provider']),
     totalTokens: finiteNumber(usageRecord?.['totalTokens']),
-    credits:
-      finiteNumber(result['credits']) ??
-      (legacyCostCents === null ? null : creditsFromCents(legacyCostCents)),
+    credits: finiteNumber(run.creditsUsed),
   };
 
   const hasAnything = Object.values(summary).some((value) => value !== null);
   return hasAnything ? summary : null;
+}
+
+export function formatRunCredits(credits: number): string {
+  return formatCredits(credits, { maximumFractionDigits: RUN_CREDIT_FRACTION_DIGITS });
 }
 
 export function formatTokenCount(tokens: number): string {
