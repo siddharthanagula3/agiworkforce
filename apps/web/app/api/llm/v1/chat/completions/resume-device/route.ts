@@ -48,7 +48,7 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../lib/tool-approval-policy';
+import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
@@ -295,7 +295,11 @@ async function handleDeviceStepResume(request: NextRequest, authResult: AuthGate
   const toolApprovalPolicy =
     processed.toolApprovalPolicy ?? (await loadToolApprovalPolicy(db, userId));
   processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
-    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    approvalRequired: !hostedToolRunsUnasked(
+      toolApprovalPolicy,
+      WEB_SEARCH_TOOL,
+      processed.toolLockdown === true,
+    ),
     genericBackendConfigured: webSearchBackendConfigured(),
   });
 

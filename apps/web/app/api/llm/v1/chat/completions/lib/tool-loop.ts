@@ -301,6 +301,7 @@ import {
 } from './tool-call-gate';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
@@ -2846,7 +2847,9 @@ export async function* runToolLoop(
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
 
-  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const connectorPermissions = processed.toolLockdown
+    ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
+    : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
   const privateContextPresent = hasPrivateContext(processed, messages);
