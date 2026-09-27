@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  BILLING_PLAN_CATALOG_VERSION,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isFreeBillingPlanTier,
   topUpBudgetCentsForCredits,
@@ -27,6 +28,7 @@ type ExistingSubscription = Pick<
   | 'google_purchase_token'
   | 'current_period_start'
   | 'current_period_end'
+  | 'plan_catalog_version'
 >;
 
 function planRank(tier: string | null | undefined): number {
@@ -85,7 +87,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
     const [subscription] = await tx.query<ExistingSubscription>(
       `select id, plan_tier, status, stripe_subscription_id,
               apple_original_transaction_id, google_purchase_token,
-              current_period_start, current_period_end
+              current_period_start, current_period_end, plan_catalog_version
          from public.subscriptions
         where user_id = $1
         limit 1
@@ -199,14 +201,19 @@ export async function recordVerifiedMobileIapPurchase(input: {
       subscription.current_period_start
         ? new Date(subscription.current_period_start)
         : input.verified.purchasedAt;
-    const [upserted] = await tx.query<{ id: string }>(
+    const [upserted] = await tx.query<{ id: string; plan_catalog_version: number | null }>(
       `insert into public.subscriptions (
          user_id, status, plan_tier,
          apple_original_transaction_id, google_purchase_token,
          current_period_start, current_period_end,
-         cancel_at_period_end, canceled_at, updated_at
-       ) values ($1, 'active', $2, $3, $4, $5, $6, false, null, now())
+         cancel_at_period_end, canceled_at, updated_at, plan_catalog_version
+       ) values ($1, 'active', $2, $3, $4, $5, $6, false, null, now(), $8)
        on conflict (user_id) do update set
+         plan_catalog_version = case
+           when subscriptions.plan_tier = excluded.plan_tier
+             then coalesce(subscriptions.plan_catalog_version, excluded.plan_catalog_version)
+           else excluded.plan_catalog_version
+         end,
          status = 'active',
          plan_tier = excluded.plan_tier,
          apple_original_transaction_id = excluded.apple_original_transaction_id,
@@ -218,7 +225,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
          cancel_at_period_end = false,
          canceled_at = null,
          updated_at = now()
-       returning id`,
+       returning id, plan_catalog_version`,
       [
         input.userId,
         input.verified.product.planTier,
@@ -227,6 +234,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
         periodStart.toISOString(),
         input.verified.expiresAt!.toISOString(),
         handoff.clearsStripe,
+        BILLING_PLAN_CATALOG_VERSION,
       ],
     );
     if (!upserted?.id) throw createError.internal('Failed to record the store subscription.');
@@ -247,6 +255,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
         periodStart,
         input.verified.expiresAt!,
         tx,
+        { previous: subscription.plan_catalog_version, next: upserted.plan_catalog_version },
       );
     } else {
       await SubscriptionService.allocateCreditsForPeriod(
@@ -255,7 +264,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
         input.verified.product.planTier,
         periodStart,
         input.verified.expiresAt!,
-        { db: tx },
+        { db: tx, catalogVersion: upserted.plan_catalog_version },
       );
     }
 

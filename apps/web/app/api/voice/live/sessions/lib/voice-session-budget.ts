@@ -55,10 +55,12 @@ export async function planVoiceSessionBlock(input: {
   db: DatabaseAdapter;
   userId: string;
   planTier: string;
+  catalogVersion: number | null;
   modelId: string;
 }): Promise<VoiceBlockPlan> {
-  const sessionCap = getPlanSessionUsageCapMicrousd(input.planTier);
-  const weeklyCap = getPlanWeeklyUsageCapMicrousd(input.planTier);
+  const allowance = { tier: input.planTier, catalogVersion: input.catalogVersion };
+  const sessionCap = getPlanSessionUsageCapMicrousd(allowance);
+  const weeklyCap = getPlanWeeklyUsageCapMicrousd(allowance);
   const [session, weekly, balance, spendable] = await Promise.all([
     getRollingUsage(input.db, input.userId, ROLLING_SESSION_WINDOW_HOURS, false),
     getRollingUsage(input.db, input.userId, ROLLING_WEEKLY_WINDOW_HOURS, false),

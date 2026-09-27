@@ -220,6 +220,21 @@ function parseSettlementResult(row: unknown): CreditSettlementResult {
   };
 }
 
+async function recordAccountCatalogVersion(
+  db: DatabaseAdapter,
+  userId: string,
+  accountId: string,
+  catalogVersion: number | null | undefined,
+): Promise<void> {
+  if (!accountId || catalogVersion === null || catalogVersion === undefined) return;
+  await db.execute(
+    `update public.token_credits
+        set plan_catalog_version = $3, updated_at = now()
+      where id = $1 and user_id = $2 and plan_catalog_version is distinct from $3`,
+    [accountId, userId, catalogVersion],
+  );
+}
+
 export class CreditService {
   static async getBalance(db: DatabaseAdapter, userId: string): Promise<CreditBalance | null> {
     try {
@@ -485,6 +500,7 @@ export class CreditService {
     periodEnd: Date,
     allocationDeltaCents: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     return this.carryUsageIntoUpgradedPeriodMicrousd(
       userId,
@@ -493,6 +509,7 @@ export class CreditService {
       periodEnd,
       microusdFromLedgerCents(allocationDeltaCents),
       db,
+      catalogVersion,
     );
   }
 
@@ -503,6 +520,7 @@ export class CreditService {
     periodEnd: Date,
     allocationDeltaMicrousd: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     const allocationDelta = Math.round(allocationDeltaMicrousd);
     // The receipt key stays in cents so an upgrade already recorded before the
@@ -570,6 +588,7 @@ export class CreditService {
     if (!row?.account_id) {
       throw new Error('No credit account found for paid-plan upgrade');
     }
+    await recordAccountCatalogVersion(db, userId, row.account_id, catalogVersion);
     return row.account_id;
   }
 
@@ -580,6 +599,7 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedCents: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     return this.getOrCreateAccountMicrousd(
       userId,
@@ -588,6 +608,7 @@ export class CreditService {
       periodEnd,
       microusdFromLedgerCents(creditsAllocatedCents),
       db,
+      catalogVersion,
     );
   }
 
@@ -598,6 +619,7 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedMicrousd: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     try {
       const [row] = await db.query<{ get_or_create_credit_account_microusd: string }>(
@@ -611,7 +633,9 @@ export class CreditService {
           Math.round(creditsAllocatedMicrousd),
         ],
       );
-      return row?.get_or_create_credit_account_microusd ?? '';
+      const accountId = row?.get_or_create_credit_account_microusd ?? '';
+      await recordAccountCatalogVersion(db, userId, accountId, catalogVersion);
+      return accountId;
     } catch (error) {
       logger.error({ error, userId, subscriptionId }, 'Error in getOrCreateAccount');
       throw error;
@@ -625,6 +649,7 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedCents: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     return this.resetForPeriodMicrousd(
       userId,
@@ -633,6 +658,7 @@ export class CreditService {
       periodEnd,
       microusdFromLedgerCents(creditsAllocatedCents),
       db,
+      catalogVersion,
     );
   }
 
@@ -643,6 +669,7 @@ export class CreditService {
     periodEnd: Date,
     creditsAllocatedMicrousd: number,
     db: DatabaseAdapter,
+    catalogVersion?: number | null,
   ): Promise<string> {
     try {
       const [row] = await db.query<{ reset_credits_for_period_microusd: string }>(
@@ -656,7 +683,9 @@ export class CreditService {
           Math.round(creditsAllocatedMicrousd),
         ],
       );
-      return row?.reset_credits_for_period_microusd ?? '';
+      const accountId = row?.reset_credits_for_period_microusd ?? '';
+      await recordAccountCatalogVersion(db, userId, accountId, catalogVersion);
+      return accountId;
     } catch (error) {
       logger.error({ error, userId, subscriptionId }, 'Error in resetForPeriod');
       throw error;

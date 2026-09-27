@@ -1,4 +1,45 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/checkout/route.ts",
+      "migration": 300,
+      "reason": "Names plan_catalog_version only as Stripe Checkout metadata and issues no query on it, so it runs unchanged before and after 0300."
+    },
+    {
+      "file": "apps/web/app/api/cron/reset-credits/route.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/db.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version. Stripe redelivers the event once 0300 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/credit-service.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/entitlement-resolution.ts",
+      "migration": 300,
+      "reason": "Every entitlement read selects the subscription's plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Released ahead of it, entitlement reads fail rather than resolve a grandfathered subscriber on the wrong allowances, so the migration must lead the release."
+    },
+    {
+      "file": "apps/web/lib/services/managed-usage-request-service.ts",
+      "migration": 300,
+      "reason": "Reads the credit period's plan catalog version with the reservation's headroom. Before 0300 is applied that lookup fails, is logged, and the reservation proceeds on the current catalog with no overage headroom, which is what every subscriber has today."
+    },
+    {
+      "file": "apps/web/lib/services/mobile-iap-ledger-service.ts",
+      "migration": 300,
+      "reason": "Records or reads the plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Before it, the statement fails on the absent column and the billing path it belongs to errors and is retried rather than recording a subscription without its version."
+    },
+    {
+      "file": "apps/web/lib/services/subscription-service.ts",
+      "migration": 300,
+      "reason": "Every entitlement read selects the subscription's plan catalog version, which ships with 0300: the deploy applies 0300 before this release reaches production. Released ahead of it, entitlement reads fail rather than resolve a grandfathered subscriber on the wrong allowances, so the migration must lead the release."
+    }
+  ]
 }

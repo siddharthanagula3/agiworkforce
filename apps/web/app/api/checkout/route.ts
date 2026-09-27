@@ -23,7 +23,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { buildCheckoutTrialParams, resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
-import { getPlanTrialDays } from '@agiworkforce/types';
+import { BILLING_PLAN_CATALOG_VERSION, getPlanTrialDays } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -359,6 +359,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   const checkoutMetadata = {
     user_id: user.id,
     plan_tier: plan,
+    plan_catalog_version: String(BILLING_PLAN_CATALOG_VERSION),
     requested_seats: String(quantity),
   };
 

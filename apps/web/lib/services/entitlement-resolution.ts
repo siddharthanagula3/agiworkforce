@@ -41,6 +41,7 @@ interface SeatCandidateRow {
   stripe_price_id: string | null;
   apple_original_transaction_id: string | null;
   google_purchase_token: string | null;
+  plan_catalog_version: number | null;
 }
 
 // `public.subscriptions` and `public.organizations` force row-level security, so
@@ -68,7 +69,8 @@ const SEAT_CANDIDATES_SQL = `
     owner_subscription.stripe_subscription_id as stripe_subscription_id,
     owner_subscription.stripe_price_id as stripe_price_id,
     owner_subscription.apple_original_transaction_id as apple_original_transaction_id,
-    owner_subscription.google_purchase_token as google_purchase_token
+    owner_subscription.google_purchase_token as google_purchase_token,
+    owner_subscription.plan_catalog_version as plan_catalog_version
   from public.organization_members membership
   join public.organizations organization
     on organization.id = membership.organization_id
@@ -132,6 +134,7 @@ async function resolveSeatSubscription(userId: string): Promise<SubscriptionInfo
       cancel_at_period_end: row.cancel_at_period_end ?? false,
       stripe_subscription_id: row.stripe_subscription_id,
       stripe_price_id: row.stripe_price_id,
+      plan_catalog_version: row.plan_catalog_version,
       seat_source: { organizationId: row.organization_id, ownerUserId: row.owner_user_id },
     };
   }
@@ -144,7 +147,10 @@ export async function ensureSeatMemberCreditAccount(
   subscription: SubscriptionInfo,
 ): Promise<void> {
   if (!subscription.seat_source) return;
-  const budgetCents = getPlanUsageBudgetCents(subscription.plan_tier, 'monthly');
+  const budgetCents = getPlanUsageBudgetCents(
+    { tier: subscription.plan_tier, catalogVersion: subscription.plan_catalog_version },
+    'monthly',
+  );
   if (budgetCents <= 0) return;
 
   try {
@@ -159,6 +165,7 @@ export async function ensureSeatMemberCreditAccount(
       period.periodEnd,
       budgetCents,
       db,
+      subscription.plan_catalog_version,
     );
   } catch (error) {
     logger.error(
@@ -182,6 +189,7 @@ export type EntitlementSource = 'subscription' | 'seat' | 'none';
 export interface EntitlementBundle {
   userId: string;
   plan: BillingPlanTier;
+  catalogVersion: number | null;
   status: string | null;
   entitled: boolean;
   source: EntitlementSource;
@@ -226,6 +234,7 @@ function buildBundle(
     return {
       userId,
       plan: normalizeBillingPlanTier('free'),
+      catalogVersion: null,
       status: null,
       entitled: false,
       source: 'none',
@@ -238,6 +247,7 @@ function buildBundle(
   return {
     userId,
     plan: normalizeBillingPlanTier(entitled ? subscription.plan_tier : 'free'),
+    catalogVersion: entitled ? (subscription.plan_catalog_version ?? null) : null,
     status: subscription.status,
     entitled,
     source,
