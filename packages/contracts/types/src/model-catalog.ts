@@ -1911,6 +1911,12 @@ export function listChatModels(): ModelMetadata[] {
   return listCanonicalModels().filter((model) => types.has(model.modelType));
 }
 
+export function isCurrentModel(model: ModelMetadata, nowMs: number = Date.now()): boolean {
+  if (model.deprecated === true || model.status === 'deprecated') return false;
+  const retirement = model.deprecation_date ? Date.parse(model.deprecation_date) : NaN;
+  return !Number.isFinite(retirement) || retirement > nowMs;
+}
+
 export const MODEL_PRICE_BAND_SCALE = 4;
 
 export interface ModelPriceBand {
@@ -2851,7 +2857,7 @@ export function getPickerModels(options: PickerModelOptions = {}): PickerModelVi
   return getExecutableModelIds()
     .map((modelId) => getModelMetadataById(modelId))
     .filter((model): model is ModelMetadata => Boolean(model))
-    .filter((model) => includeDeprecated || model.status !== 'deprecated')
+    .filter((model) => includeDeprecated || isCurrentModel(model))
     .filter((model) => allowedTypes.has(model.modelType))
     .filter((model) => (allowedProviderSet ? allowedProviderSet.has(model.provider) : true))
     .sort((left, right) => {
