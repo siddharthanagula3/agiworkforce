@@ -177,5 +177,3 @@ export function ScheduleAccessFields({
     </section>
   );
 }
-
-export default ScheduleAccessFields;

@@ -192,5 +192,3 @@ export function DesktopScheduleAccessFields({
     </section>
   );
 }
-
-export default DesktopScheduleAccessFields;
