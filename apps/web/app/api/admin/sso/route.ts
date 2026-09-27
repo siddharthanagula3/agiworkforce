@@ -23,6 +23,8 @@ import {
   requireOrgRole,
   ssoErrorResponse,
 } from '@/lib/server/sso/sso-route-guard';
+import { canManageSSOOnPlan } from '@/lib/server/sso/sso-access';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 import {
   deleteConnection,
   setConnectionActive,
@@ -141,7 +143,14 @@ export async function GET(request: NextRequest): Promise<Response> {
       [principal.userId],
     );
 
-    const orgIds = memberRows.map((row) => row.organization_id);
+    const entitledOrgIds = await Promise.all(
+      memberRows.map(async (row) =>
+        canManageSSOOnPlan(await resolveOrganizationEntitlementPlan(row.organization_id))
+          ? row.organization_id
+          : null,
+      ),
+    );
+    const orgIds = entitledOrgIds.filter((orgId): orgId is string => orgId !== null);
     if (orgIds.length === 0) {
       return NextResponse.json({
         connections: [],
