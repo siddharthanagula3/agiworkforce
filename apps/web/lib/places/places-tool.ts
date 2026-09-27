@@ -15,9 +15,18 @@ import {
 } from '@agiworkforce/types';
 
 import { createGooglePlacesProvider } from '@/lib/places/google-places-provider';
-import { recordPlacesSearchCost } from '@/lib/places/places-cost';
-import type { PlacesErrorCode, PlacesProvider } from '@/lib/places/places-provider';
+import {
+  reservePlacesSearchCharge,
+  settlePlacesSearchCall,
+  type PlacesSearchBilling,
+} from '@/lib/places/places-cost';
+import type {
+  PlacesErrorCode,
+  PlacesProvider,
+  PlacesSearchOutcome,
+} from '@/lib/places/places-provider';
 import { placesApiKey } from '@/lib/places/places-config';
+import { INCLUDED_SEARCH_ADMISSION, type SearchAdmission } from '@/lib/web-search/search-budget';
 
 export { PLACES_SEARCH_TOOL_NAME };
 
@@ -82,23 +91,26 @@ export function placesSearchToolDef(): {
 
 export type PlacesToolOutcome =
   | { ok: true; payload: PlacesSearchPayload }
-  | { ok: false; errorCode: PlacesErrorCode; message: string };
+  | { ok: false; errorCode: PlacesErrorCode | 'unaffordable'; message: string };
 
 export interface PlacesSearchExecutionContext {
-  userId?: string | undefined;
-  organizationId?: string | null;
   toolCallId: string;
   timeZone?: string | undefined;
   signal?: AbortSignal | undefined;
   now?: () => Date;
   provider?: PlacesProvider;
-  recordCost?: typeof recordPlacesSearchCost;
+  billing?: PlacesSearchBilling;
 }
 
 const UNAVAILABLE_MESSAGE =
   'Places search is unavailable: this server has no places provider configured. Tell the ' +
   'user plainly that live place data is not available here, and do not substitute remembered ' +
   'places, ratings or opening hours.';
+
+const UNAFFORDABLE_MESSAGE =
+  'Places search is unavailable on this account right now: this search is charged and the ' +
+  'account has no credits left for it. Do not substitute remembered places, ratings or ' +
+  'opening hours, and tell the user their credit balance is what stopped the search.';
 
 function formatLocalTime(now: Date, timeZone: string | undefined): string | undefined {
   if (!timeZone || !isValidIanaTimeZone(timeZone)) return undefined;
@@ -132,25 +144,45 @@ export async function executePlacesSearch(
     return { ok: false, errorCode: 'not_configured', message: UNAVAILABLE_MESSAGE };
   }
 
-  const openNowRequested = parsed.data.open_now === true;
-  const outcome = await provider.search({
-    query: parsed.data.query,
-    ...(parsed.data.near ? { near: parsed.data.near } : {}),
-    ...(openNowRequested ? { openNow: true } : {}),
-    limit: parsed.data.limit ?? PLACES_SEARCH_DEFAULT_LIMIT,
-    ...(context.signal ? { signal: context.signal } : {}),
-  });
-
-  if (outcome.billableCalls > 0 && context.userId) {
-    await (context.recordCost ?? recordPlacesSearchCost)({
-      userId: context.userId,
-      organizationId: context.organizationId ?? null,
-      providerId: outcome.providerId,
+  const billing = context.billing;
+  let admission: SearchAdmission = INCLUDED_SEARCH_ADMISSION;
+  if (billing) {
+    const reserved = await reservePlacesSearchCharge(billing, {
+      providerId: provider.id,
       toolCallId: context.toolCallId,
-      calls: outcome.billableCalls,
-      delivered: outcome.ok,
     });
+    if (reserved.outcome === 'refused') {
+      return { ok: false, errorCode: 'unaffordable', message: UNAFFORDABLE_MESSAGE };
+    }
+    admission = reserved.admission;
   }
+
+  const settle = (searched: PlacesSearchOutcome | null): Promise<void> =>
+    billing
+      ? settlePlacesSearchCall(billing, {
+          admission,
+          providerId: searched?.providerId ?? provider.id,
+          toolCallId: context.toolCallId,
+          billableCalls: searched?.billableCalls ?? 0,
+          answered: searched?.ok === true,
+        })
+      : Promise.resolve();
+
+  const openNowRequested = parsed.data.open_now === true;
+  let outcome: PlacesSearchOutcome;
+  try {
+    outcome = await provider.search({
+      query: parsed.data.query,
+      ...(parsed.data.near ? { near: parsed.data.near } : {}),
+      ...(openNowRequested ? { openNow: true } : {}),
+      limit: parsed.data.limit ?? PLACES_SEARCH_DEFAULT_LIMIT,
+      ...(context.signal ? { signal: context.signal } : {}),
+    });
+  } catch (error) {
+    await settle(null);
+    throw error;
+  }
+  await settle(outcome);
 
   if (!outcome.ok) {
     return { ok: false, errorCode: outcome.errorCode, message: outcome.error };
