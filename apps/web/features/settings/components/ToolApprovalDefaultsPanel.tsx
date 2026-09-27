@@ -7,6 +7,7 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_POLICY_OPTIONS,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
@@ -16,14 +17,13 @@ import {
 } from '@shared/types/toolApprovalPolicy';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const WORKSPACE_BLOCKS_AUTONOMY =
-  'Your workspace does not allow skipping approvals. The server will ask before every action.';
+const WORKSPACE_BLOCKS_AUTONOMY = 'Your workspace does not allow skipping approvals.';
 
 export function ToolApprovalDefaultsPanel() {
   const [policy, setPolicy] = useState<ToolApprovalPolicy>(
     WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES.defaultPolicy,
   );
-  const [autonomyAvailable, setAutonomyAvailable] = useState(false);
+  const [autonomyAvailable, setAutonomyAvailable] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -87,6 +87,13 @@ export function ToolApprovalDefaultsPanel() {
     [policy],
   );
 
+  const autonomyForbidden = autonomyAvailable === false;
+  const accountDefaultPolicy = autonomyForbidden
+    ? DEFAULT_TOOL_APPROVAL_POLICY
+    : WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY;
+  const appliedPolicy =
+    autonomyForbidden && policy === 'autonomous' ? DEFAULT_TOOL_APPROVAL_POLICY : policy;
+
   return (
     <section className="space-y-4" aria-labelledby="tool-approvals-heading">
       <div>
@@ -98,7 +105,7 @@ export function ToolApprovalDefaultsPanel() {
         </h3>
         <p className="mt-1 text-xs text-muted-foreground">
           The default answer for connector, plugin, and tool actions across this account. Per-tool
-          Allow, Ask, and Deny choices in Connectors always win over this default.
+          Allow, Ask, and Deny choices in Connectors win over this default.
         </p>
         <p
           className={`mt-2 text-xs ${loadError || saveError ? 'text-danger' : 'text-muted-foreground'}`}
@@ -118,7 +125,7 @@ export function ToolApprovalDefaultsPanel() {
 
       <div role="radiogroup" aria-label="Default approval for tool actions" className="space-y-2">
         {TOOL_APPROVAL_POLICY_OPTIONS.map((option) => {
-          const unavailable = option.policy === 'autonomous' && !autonomyAvailable;
+          const unavailable = option.policy === 'autonomous' && autonomyAvailable !== true;
           return (
             <label
               key={option.policy}
@@ -130,7 +137,7 @@ export function ToolApprovalDefaultsPanel() {
                 type="radio"
                 name="tool-approval-default"
                 value={option.policy}
-                checked={policy === option.policy}
+                checked={appliedPolicy === option.policy}
                 disabled={loadError !== null || saving || unavailable}
                 onChange={() => void persist(option.policy)}
                 className="mt-1"
@@ -138,12 +145,12 @@ export function ToolApprovalDefaultsPanel() {
               <span>
                 <span className="block text-sm font-medium text-foreground">
                   {option.label}
-                  {option.policy === WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY ? (
+                  {option.policy === accountDefaultPolicy ? (
                     <span className="ml-2 text-xs font-normal text-muted-foreground">Default</span>
                   ) : null}
                 </span>
                 <span className="block text-xs text-muted-foreground">{option.description}</span>
-                {unavailable ? (
+                {option.policy === 'autonomous' && autonomyForbidden ? (
                   <span className="mt-1 block text-xs text-muted-foreground">
                     {WORKSPACE_BLOCKS_AUTONOMY}
                   </span>

@@ -9,15 +9,8 @@ import { UpgradeOrderScreen } from './UpgradeOrderScreen';
 import { getRequestIdentity } from '@/lib/server/identity';
 import { sessionExpiredRedirect } from '@/lib/server/session-expired';
 
-export default async function UpgradePlanPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ plan: string }>;
-  searchParams: Promise<{ interval?: string }>;
-}) {
+export default async function UpgradePlanPage({ params }: { params: Promise<{ plan: string }> }) {
   const { plan } = await params;
-  const { interval } = await searchParams;
   // Team is self-serve but priced per seat, and the seat count and interval are
   // chosen on /pricing. Accepting it here would render an order screen that
   // silently bills one seat, monthly.
@@ -29,10 +22,7 @@ export default async function UpgradePlanPage({
 
   return (
     <main className="min-h-screen">
-      <UpgradeOrderScreen
-        plan={plan as SelfServeIndividualPlanTier}
-        billingInterval={interval === 'yearly' ? 'yearly' : 'monthly'}
-      />
+      <UpgradeOrderScreen plan={plan as SelfServeIndividualPlanTier} />
     </main>
   );
 }

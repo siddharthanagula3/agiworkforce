@@ -49,6 +49,7 @@ export interface CloudChat {
 
 export interface CloudCapabilities {
   memory?: boolean;
+  searchPastChats?: boolean;
   generateFromHistory?: boolean;
 }
 
@@ -84,6 +85,7 @@ export function toCloudSettings(
     | 'notificationsEnabled'
     | 'speechLanguage'
     | 'autoListenEnabled'
+    | 'memoryEnabled'
     | 'referencePastChats'
     | 'generateMemoryFromHistory'
     | 'memoryPolicyInitialized'
@@ -97,6 +99,7 @@ export function toCloudSettings(
     notificationsEnabled,
     speechLanguage,
     autoListenEnabled,
+    memoryEnabled,
     referencePastChats,
     generateMemoryFromHistory,
     memoryPolicyInitialized,
@@ -133,7 +136,8 @@ export function toCloudSettings(
     ...(memoryPolicyInitialized
       ? {
           capabilities: {
-            memory: referencePastChats,
+            memory: memoryEnabled,
+            searchPastChats: referencePastChats,
             generateFromHistory: generateMemoryFromHistory,
           },
         }
@@ -199,7 +203,10 @@ export function applyCloudSettings(partial: CloudSettings): void {
   }
 
   if (partial.capabilities?.memory !== undefined) {
-    store.setReferencePastChats(partial.capabilities.memory);
+    store.setMemoryEnabled(partial.capabilities.memory);
+  }
+  if (partial.capabilities?.searchPastChats !== undefined) {
+    store.setReferencePastChats(partial.capabilities.searchPastChats);
   }
   if (partial.capabilities?.generateFromHistory !== undefined) {
     store.setGenerateMemoryFromHistory(partial.capabilities.generateFromHistory);

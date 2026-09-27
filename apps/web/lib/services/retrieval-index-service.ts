@@ -125,7 +125,7 @@ export async function loadRetrievalSourceText(
       }>(
         `select kind, mime_type, prompt, metadata->>'filename' as file_name
            from media_assets
-          where id = $1 and user_id = $2 and deleted_at is null`,
+          where id = $1 and user_id = $2 and deleted_at is null and not temporary_chat`,
         [document.source_id, document.user_id],
       );
       if (!asset) return null;
@@ -169,9 +169,13 @@ export async function loadRetrievalSourceText(
         content: string;
         conversation_id: string;
       }>(
-        `select title, artifact_type, language, content, conversation_id
-           from web_artifacts
-          where id = $1 and deleted_at is null`,
+        `select a.title, a.artifact_type, a.language, a.content, a.conversation_id
+           from web_artifacts a
+           join web_conversations c on c.id = a.conversation_id
+          where a.id = $1
+            and a.deleted_at is null
+            and c.deleted_at is null
+            and c.is_temporary = false`,
         [document.source_id],
       );
       if (!artifact) return null;
@@ -197,9 +201,14 @@ export async function loadRetrievalSourceText(
         content: string;
         conversation_id: string | null;
       }>(
-        `select title, query, summary, content, conversation_id
-           from research_reports
-          where id = $1 and status = 'completed'`,
+        `select r.title, r.query, r.summary, r.content, r.conversation_id
+           from research_reports r
+          where r.id = $1
+            and r.status = 'completed'
+            and not exists (
+              select 1 from web_conversations c
+               where c.id = r.conversation_id and (c.is_temporary or c.deleted_at is not null)
+            )`,
         [document.source_id],
       );
       if (!report) return null;

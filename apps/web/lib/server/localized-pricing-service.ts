@@ -1,6 +1,10 @@
 import 'server-only';
 
-import type { BillingInterval } from '@agiworkforce/types';
+import {
+  SELF_SERVE_PAID_PLAN_TIERS,
+  billingIntervalsForPlan,
+  type BillingInterval,
+} from '@agiworkforce/types';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
 import { getConfiguredPriceId, type ConfiguredCheckoutPlan } from '@/lib/pricing';
 import {
@@ -30,14 +34,6 @@ export interface CheckoutPriceSelection {
   currency: string;
   amountMinor: number;
 }
-
-const PLAN_INTERVALS: Readonly<Record<ConfiguredCheckoutPlan, readonly BillingInterval[]>> = {
-  basic: ['monthly'],
-  pro: ['monthly', 'yearly'],
-  max: ['monthly'],
-  max_15x: ['monthly'],
-  team: ['monthly', 'yearly'],
-};
 
 const PRICE_CACHE_TTL_MS = 10 * 60 * 1000;
 const priceCache = new Map<string, { expiresAt: number; price: StripePriceLike }>();
@@ -85,10 +81,10 @@ export async function getLocalizedPricingCatalog(
   const plans = {} as Record<ConfiguredCheckoutPlan, LocalizedPlanPrices>;
 
   await Promise.all(
-    (Object.keys(PLAN_INTERVALS) as ConfiguredCheckoutPlan[]).map(async (plan) => {
+    SELF_SERVE_PAID_PLAN_TIERS.map(async (plan) => {
       const entries: LocalizedPlanPrices = {};
       await Promise.all(
-        PLAN_INTERVALS[plan].map(async (interval) => {
+        billingIntervalsForPlan(plan).map(async (interval) => {
           const priceId = getConfiguredPriceId(plan, interval, requestedCurrency);
           const stripePrice = priceId ? await retrieveStripePrice(priceId) : null;
           const localized = resolveLocalizedPlanPrice(
@@ -97,6 +93,7 @@ export async function getLocalizedPricingCatalog(
             requestedCurrency,
             stripePrice,
           );
+          if (!localized) return;
           const configuredAmount = stripeAmountForCurrency(stripePrice, localized.currency);
           entries[interval] = {
             ...localized,
@@ -135,6 +132,7 @@ export async function getPriceSelectionForCurrency(
   if (!stripePrice) return null;
 
   const localized = resolveLocalizedPlanPrice(plan, interval, normalizedCurrency, stripePrice);
+  if (!localized) return null;
   const configuredAmount = stripeAmountForCurrency(stripePrice, localized.currency);
   if (configuredAmount === null || configuredAmount !== localized.amountMinor) {
     console.warn(

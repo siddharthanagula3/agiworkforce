@@ -5,7 +5,7 @@ import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
   creditAmount,
-  getPublishedPlanPriceUsd,
+  getPublishedMonthlyPriceUsd,
   isFreePlan,
   isSelfServePaidPlanTier,
   managedUsageComparisonLabel,
@@ -14,7 +14,6 @@ import {
 
 interface TierContent {
   price: string;
-  priceNote?: string;
   bullets: string[];
   ctaLabel: string;
   ctaVariant: 'primary' | 'current';
@@ -55,7 +54,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   basic: {
-    price: `$${getPublishedPlanPriceUsd('basic', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('basic')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -66,20 +65,19 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
-    priceNote: `$${getPublishedPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
+    price: `$${getPublishedMonthlyPriceUsd('pro')} / mo`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max')} / mo`,
     bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPublishedPlanPriceUsd('max_15x', 'monthly')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max_15x')} / mo`,
     bullets: [
       'Highest individual usage limits',
       'Every flagship model included',
@@ -155,12 +153,7 @@ export function PlanCard({
         </div>
       </div>
 
-      <div>
-        <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
-        {content.priceNote && (
-          <p className="text-[10px] text-muted-foreground mt-0.5">{content.priceNote}</p>
-        )}
-      </div>
+      <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
 
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (

@@ -53,7 +53,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-banner-title {
     font-weight: 600;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     margin-bottom: 2px;
   }
 
@@ -70,7 +70,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-banner[data-kind='success'] .sp-cu-banner-title {
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
   }
 
   .sp-cu-banner[data-kind='error'] {
@@ -79,7 +79,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-banner[data-kind='error'] .sp-cu-banner-title {
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
   }
 
   /* Controls bar */
@@ -129,7 +129,7 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-clear-btn:hover {
     border-color: var(--agi-ext-accent);
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
   }
 
   .sp-cu-run-btn {
@@ -146,7 +146,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-run-btn:hover {
-    background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+    background: var(--agi-ext-accent-hover);
   }
 
   .sp-cu-run-btn:disabled {
@@ -157,7 +157,7 @@ export const COMPUTER_USE_PANEL_CSS = `
   .sp-cu-stop-btn {
     display: none;
     background: var(--agi-ext-danger-bg);
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
     border: 1px solid var(--agi-ext-danger-border);
     border-radius: 5px;
     font-size: 11px;
@@ -278,10 +278,10 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   /* Step kind colours */
-  .sp-cu-step.kind-tool_call .sp-cu-step-icon { color: var(--agi-ext-accent); }
-  .sp-cu-step.kind-tool_result .sp-cu-step-icon { color: var(--agi-ext-success); }
-  .sp-cu-step.kind-error .sp-cu-step-icon { color: var(--agi-ext-danger); }
-  .sp-cu-step.kind-final .sp-cu-step-icon { color: var(--agi-ext-success); }
+  .sp-cu-step.kind-tool_call .sp-cu-step-icon { color: var(--agi-ext-accent-text); }
+  .sp-cu-step.kind-tool_result .sp-cu-step-icon { color: var(--agi-ext-success-text); }
+  .sp-cu-step.kind-error .sp-cu-step-icon { color: var(--agi-ext-danger-text); }
+  .sp-cu-step.kind-final .sp-cu-step-icon { color: var(--agi-ext-success-text); }
   .sp-cu-step.kind-screenshot .sp-cu-step-icon { color: var(--agi-ext-text-muted); }
 
   /* P2-7: Usage meter */
@@ -395,12 +395,12 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 
   .sp-cu-approval-allow:hover {
-    background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
+    background: var(--agi-ext-accent-hover);
   }
 
   .sp-cu-approval-deny:hover {
     border-color: var(--agi-ext-danger-border);
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
   }
 
   /* Auth status chip in controls bar */
@@ -418,13 +418,13 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-auth-chip.authed {
     background: var(--agi-ext-success-bg);
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
     border: 1px solid var(--agi-ext-success-border);
   }
 
   .sp-cu-auth-chip.unauthed {
     background: color-mix(in srgb, var(--agi-ext-warning) 12%, transparent);
-    color: var(--agi-ext-warning);
+    color: var(--agi-ext-warning-text);
     border: 1px solid color-mix(in srgb, var(--agi-ext-warning) 35%, transparent);
   }
 

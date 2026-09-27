@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 import type { ConnectorOAuthProvider } from '@/lib/connectors/oauth-registry';
 
-const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
+export const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
 
 const tokenResponseSchema = z.object({
   access_token: z.string().min(1),

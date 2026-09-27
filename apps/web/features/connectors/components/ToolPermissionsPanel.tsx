@@ -51,7 +51,7 @@ const RESET_CONFIRM_LABEL = 'Reset permissions';
 const SAVING_LABEL = 'Saving this permission';
 
 function resetConfirmDescription(connectorName: string): string {
-  return `Every allow and deny you set for ${connectorName} is removed, and each of its tools goes back to asking for approval. This cannot be undone.`;
+  return `Every allow and deny you set for ${connectorName} is removed. Its tools that AGI does not recognise go back to asking before every call, and tools it knows only read data follow your Tool approvals default. This cannot be undone.`;
 }
 
 const INACTIVE_CLASS =

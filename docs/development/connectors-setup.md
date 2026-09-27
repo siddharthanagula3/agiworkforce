@@ -84,9 +84,9 @@ This follows the MCP 2026-07-28 authorization specification:
 6. The callback compares any `iss` it receives with the issuer recorded when the
    flow started, and rejects the response, error responses included, when they
    differ or when the server promises `iss` and omits it.
-7. A token refresh is single-flight per grant across instances: one caller holds
-   a lease on the grant row, and every other caller waits for the rotated token
-   and uses it instead of presenting the refresh token again.
+7. A token refresh is single-flight per grant across instances: the refreshing
+   caller holds a row lock on the grant, and every other caller waits for it and
+   uses the rotated token instead of presenting the refresh token again.
 
 Descriptor fields, validated by `apps/web/lib/connectors/oauth-registry.ts`:
 `connectorId`, `displayName`, `issuer`, `authorizationUrl`, `tokenUrl`,

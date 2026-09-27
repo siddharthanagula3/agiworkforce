@@ -3,16 +3,13 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
-import { evaluatePluginPolicyForUser } from '@/lib/services/connector-policy-gate';
-import { pluginNotPermittedResponse } from '@/features/plugins/server/directory/install-responses';
+import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
 import {
   installWebPlugin,
   listPluginInstallations,
@@ -41,7 +38,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const scope = await getUserScopedDb(request);
+  const { db, userId } = scope;
   const csrf = await requireCsrfToken(request, userId);
   if (csrf) return csrf as NextResponse;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
@@ -55,22 +53,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const featureGate = await buildWorkspaceFeatureGateResponse(
-    userId,
-    request,
-    'plugins',
-    resolveCloudChatSurface(request),
-  );
-  if (featureGate) return featureGate;
-
-  const policy = await evaluatePluginPolicyForUser({
-    db,
-    userId,
-    organizationId,
-    pluginKey: parsed.data.pluginId,
-    request,
+  const refused = await refusePluginInstall(request, scope, {
+    pluginKeys: [parsed.data.pluginId],
   });
-  if (!policy.allowed) return pluginNotPermittedResponse(policy.reason);
+  if (refused) return refused;
   const installation = await installWebPlugin(db, userId, parsed.data.pluginId);
   if (!installation) {
     return NextResponse.json(

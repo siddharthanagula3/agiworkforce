@@ -67,7 +67,7 @@ export function Button({
     switch (variant) {
       case 'secondary':
         return {
-          backgroundColor: pressed ? colors.surfaceHover : colors.terraCotta,
+          backgroundColor: pressed ? colors.textPrimary : colors.terraCotta,
         };
       case 'outline':
         return {
@@ -81,7 +81,7 @@ export function Button({
         };
       case 'destructive':
         return {
-          backgroundColor: pressed ? colors.dangerBorder : colors.dangerSurface,
+          backgroundColor: pressed ? colors.surfaceHover : colors.dangerSurface,
           borderWidth: 1,
           borderColor: colors.dangerBorder,
         };

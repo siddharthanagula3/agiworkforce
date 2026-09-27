@@ -1,6 +1,8 @@
 import type { QueryResult } from '@neondatabase/serverless';
 import { Pool } from '@neondatabase/serverless';
 import { logger } from './logger.js';
+import type { PairTokenRole } from './pair-token.js';
+import { pairingDeviceKey } from './pairing-device.js';
 
 interface DbError {
   code?: string;
@@ -88,6 +90,15 @@ async function queryOne<T>(sql: string, params: unknown[] = []): Promise<QueryRe
   }
 }
 
+async function queryRows<T>(sql: string, params: unknown[] = []): Promise<QueryResultWrapper<T[]>> {
+  try {
+    const result = (await pool.query(sql, params)) as QueryResult;
+    return { data: (result.rows ?? []) as T[], error: null };
+  } catch (error) {
+    return { data: null, error: toDbError(error) };
+  }
+}
+
 async function queryNoReturn(
   sql: string,
   params: unknown[] = [],
@@ -128,6 +139,42 @@ export async function getSessionExpiresAtByCode(
 
 export async function deleteSessionByCode(code: string): Promise<{ error: DbError | null }> {
   return queryNoReturn('DELETE FROM signaling_sessions WHERE code = $1', [code]);
+}
+
+export async function bindSessionDevice(
+  code: string,
+  role: PairTokenRole,
+  deviceId: string,
+  metadata: Record<string, unknown>,
+): Promise<QueryResultWrapper<{ code: string }>> {
+  const sql =
+    'UPDATE signaling_sessions SET metadata = $2 WHERE code = $1 AND coalesce(metadata ->> $3::text, $4::text) = $4::text RETURNING code';
+  return queryOne<{ code: string }>(sql, [code, metadata, pairingDeviceKey(role), deviceId]);
+}
+
+export async function deleteSessionsForDevice(
+  deviceId: string,
+): Promise<QueryResultWrapper<string[]>> {
+  const sql =
+    'DELETE FROM signaling_sessions WHERE metadata ->> $2::text = $1::text OR metadata ->> $3::text = $1::text RETURNING code';
+  const { data, error } = await queryRows<{ code: string }>(sql, [
+    deviceId,
+    pairingDeviceKey('desktop'),
+    pairingDeviceKey('mobile'),
+  ]);
+  if (error || !data) return { data: null, error };
+  return { data: data.map((row) => String(row.code)), error: null };
+}
+
+export async function listStoredSessionCodes(
+  codes: readonly string[],
+): Promise<QueryResultWrapper<string[]>> {
+  const { data, error } = await queryRows<{ code: string }>(
+    'SELECT code FROM signaling_sessions WHERE code = ANY($1::text[])',
+    [codes],
+  );
+  if (error || !data) return { data: null, error };
+  return { data: data.map((row) => String(row.code)), error: null };
 }
 
 export async function extendSessionExpiry(

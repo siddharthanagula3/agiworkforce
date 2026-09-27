@@ -51,22 +51,19 @@ describe('UpgradePlanDialog', () => {
     expect(screen.queryByText('Unlimited Projects')).toBeNull();
   });
 
-  it('never sends an annual interval for monthly-only tiers or Team through personal checkout', () => {
+  it('offers no annual billing and never sends Team through personal checkout', () => {
     const onUpgrade = vi.fn();
     render(
       <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={onUpgrade} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Annual' }));
+    expect(screen.queryByRole('button', { name: 'Annual' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'See all plans' }));
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Basic' }));
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Max 5x' }));
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Pro' }));
 
-    expect(onUpgrade).toHaveBeenCalledWith('basic', false);
-    expect(onUpgrade).toHaveBeenCalledWith('max', false);
-    expect(onUpgrade).toHaveBeenCalledWith('pro', true);
-    expect(onUpgrade).not.toHaveBeenCalledWith('team', expect.anything());
+    expect(onUpgrade.mock.calls).toEqual([['basic'], ['max'], ['pro']]);
   });
 
   it('prices Team per seat and hands off to the seat control instead of sales', () => {

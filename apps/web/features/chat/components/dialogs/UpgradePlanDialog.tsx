@@ -36,7 +36,7 @@ interface UpgradePlanDialogProps {
    * flow on the parent. Managed cloud itself is open by default; this upgrade
    * only buys higher hosted capacity, it is not an access gate.
    */
-  onUpgrade: (plan: UpgradeTarget, annual: boolean) => void;
+  onUpgrade: (plan: UpgradeTarget) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -49,10 +49,8 @@ interface PlanCard {
   id: PlanCardId;
   name: string;
   monthlyPrice: number;
-  yearlyPrice: number;
-  annualAvailable: boolean;
   /**
-   * True when `monthlyPrice`/`yearlyPrice` are PER SEAT rather than per
+   * True when `monthlyPrice` is PER SEAT rather than per
    * account (`BillingPlanPricing.perSeat`). The catalog requires every
    * price-rendering surface to say "/seat"; a bare amount would read as the
    * whole organization's bill.
@@ -80,15 +78,13 @@ const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.flatMap((id) => {
   // This dialog renders a priced card, and `formatPrice` below turns 0 into
   // "Free", so it may only show plans that publish a price. A contract-priced
   // plan is dropped here rather than defaulted with `?? 0` (BIZ-020).
-  const { monthlyPriceUsd, yearlyPriceUsd } = display;
-  if (monthlyPriceUsd === null || yearlyPriceUsd === null) return [];
+  const { monthlyPriceUsd } = display;
+  if (monthlyPriceUsd === null) return [];
   return [
     {
       id,
       name: display.pricing.label,
       monthlyPrice: monthlyPriceUsd,
-      yearlyPrice: yearlyPriceUsd,
-      annualAvailable: display.annualAvailable,
       perSeat: display.pricing.perSeat === true,
       tagline: PLAN_TAGLINES[id],
       features: display.features,
@@ -104,15 +100,6 @@ const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.flatMap((id) => {
 function formatPrice(usd: number): string {
   if (usd === 0) return 'Free';
   return formatCatalogPrice(usd);
-}
-
-function annualPerMonth(yearlyUsd: number): string {
-  return formatCatalogPrice(yearlyUsd / 12);
-}
-
-function annualSavingsPct(monthly: number, yearly: number): number {
-  if (monthly <= 0) return 0;
-  return Math.round((1 - yearly / 12 / monthly) * 100);
 }
 
 function isTierUpgrade(current: string, target: PlanCardId): boolean {
@@ -136,22 +123,16 @@ function FeatureRow({ label }: { label: string }) {
 
 interface PlanCardProps {
   plan: PlanCard;
-  annual: boolean;
   isCurrent: boolean;
   isUpgrade: boolean;
-  onUpgrade: (plan: UpgradeTarget, annual: boolean) => void;
+  onUpgrade: (plan: UpgradeTarget) => void;
 }
 
-function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
-  const usesAnnual = annual && plan.annualAvailable;
-  // Team is a published per-seat price ($25/seat/mo, $240/seat/yr), not a
-  // negotiated one, rendering "Custom" here contradicted both the catalog and
-  // the pricing page, which sells it self-serve.
-  const displayPrice =
-    usesAnnual && plan.monthlyPrice > 0
-      ? annualPerMonth(plan.yearlyPrice)
-      : formatPrice(plan.monthlyPrice);
-  const savingsPct = annualSavingsPct(plan.monthlyPrice, plan.yearlyPrice);
+function PlanCardView({ plan, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) {
+  // Team is a published per-seat price, not a negotiated one, rendering
+  // "Custom" here contradicted both the catalog and the pricing page, which
+  // sells it self-serve.
+  const displayPrice = formatPrice(plan.monthlyPrice);
 
   return (
     <div
@@ -179,16 +160,6 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
             </span>
           )}
         </div>
-        {usesAnnual && savingsPct > 0 && (
-          <span className="mt-0.5 inline-block text-caption font-medium text-primary">
-            save {String(savingsPct)}% annually
-          </span>
-        )}
-        {annual && plan.monthlyPrice > 0 && !plan.annualAvailable ? (
-          <span className="mt-0.5 inline-block text-caption text-muted-foreground">
-            Monthly only
-          </span>
-        ) : null}
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{plan.tagline}</p>
       </div>
 
@@ -219,7 +190,7 @@ function PlanCardView({ plan, annual, isCurrent, isUpgrade, onUpgrade }: PlanCar
         ) : isUpgrade ? (
           <Button
             className="h-9 w-full rounded-xl text-sm"
-            onClick={() => onUpgrade(plan.id as UpgradeTarget, usesAnnual)}
+            onClick={() => onUpgrade(plan.id as UpgradeTarget)}
           >
             Upgrade to {plan.name}
           </Button>
@@ -249,7 +220,6 @@ export function UpgradePlanDialog({
   targetTier = null,
   onUpgrade,
 }: UpgradePlanDialogProps) {
-  const [annual, setAnnual] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const tierKnown = typeof currentTier === 'string' && currentTier.length > 0;
 
@@ -260,7 +230,6 @@ export function UpgradePlanDialog({
         // Reset state after close
         window.setTimeout(() => {
           setExpanded(false);
-          setAnnual(false);
         }, 200);
       }
     },
@@ -317,7 +286,7 @@ export function UpgradePlanDialog({
           {/* pr-10: DialogContent paints its own close control absolutely at
               right-4 with an h-8 w-8 hit area, so it covers the first 3rem of
               this row. Without the reserved gutter the × lands on top of the
-              Annual toggle. Same reservation DialogHeader makes. */}
+              heading. Same reservation DialogHeader makes. */}
           <div className="mb-6 flex items-start justify-between pr-10">
             <div>
               <h2 className="text-xl font-semibold text-foreground">
@@ -327,33 +296,6 @@ export function UpgradePlanDialog({
                 Managed cloud is open by default; sign in and start now. Upgrade for higher hosted
                 capacity. Local and BYOK stay free in the CLI.
               </p>
-            </div>
-            {/* Billing toggle (only meaningful for paid plans) */}
-            <div className="ml-4 flex shrink-0 items-center rounded-full border border-border/60 bg-muted/30 p-0.5 text-xs">
-              <button
-                type="button"
-                onClick={() => setAnnual(false)}
-                className={cn(
-                  'rounded-full px-3 py-1 transition-colors',
-                  !annual
-                    ? 'bg-background font-medium text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                Monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setAnnual(true)}
-                className={cn(
-                  'rounded-full px-3 py-1 transition-colors',
-                  annual
-                    ? 'bg-background font-medium text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                Annual
-              </button>
             </div>
           </div>
 
@@ -372,7 +314,6 @@ export function UpgradePlanDialog({
               <PlanCardView
                 key={plan.id}
                 plan={plan}
-                annual={annual}
                 // With an unknown tier nothing is "current", and every paid
                 // plan is offered neutrally rather than labelled an upgrade
                 // relative to a plan we are only guessing at.

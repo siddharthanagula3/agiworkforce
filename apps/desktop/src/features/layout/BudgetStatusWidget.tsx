@@ -78,9 +78,9 @@ export function BudgetStatusWidget() {
   const usagePercent = status.cap_usd > 0 ? (status.spent_usd / status.cap_usd) * 100 : 0;
   const colorClass =
     usagePercent >= AT_CAP_PERCENT
-      ? 'text-destructive'
+      ? 'text-danger-text'
       : usagePercent >= HIGH_USAGE_PERCENT
-        ? 'text-warning'
+        ? 'text-warning-text'
         : 'text-muted-foreground';
 
   return (

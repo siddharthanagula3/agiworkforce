@@ -3,7 +3,7 @@
 Status: Current
 Owner: Founder + platform lead
 Last reviewed: 2026-09-22
-Last updated: 2026-09-22
+Last updated: 2026-09-27
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -124,7 +124,7 @@ Archived source material:
     the shared percentage/reset-time contract except where an actual purchase
     must show its denomination. Web search and code execution remain separately
     capability-, deployment-, policy-, and trust-gated.
-    Evidence: `docs/product/definition.md` (billing plan table), `packages/contracts/types/src/billing-catalog.ts`, `apps/web/lib/pricing.ts` (the originally cited tier-metering plan, unit-economics doc, and products README were retired in `906fe5cda`; git history only. Team $25/$240 confirmed by founder 2026-08-05). Sonnet 5 retirement: `packages/ai/model-registry/catalog/models.curation.json` (the Anthropic default-model entry's costOverride field), `packages/ai/model-registry/tests/catalog-policy.test.mjs`.
+    Evidence: `docs/product/definition.md` (billing plan table), `packages/contracts/types/src/billing-catalog.ts`, `apps/web/lib/pricing.ts` (the originally cited tier-metering plan, unit-economics doc, and products README were retired in `906fe5cda`; git history only. Team $25/$240 confirmed by founder 2026-08-05; individual plans billed monthly only from 2026-09-27, D-2026-09-27-01 in `docs/decisions/2026-09-27-founder-decisions.md`). Sonnet 5 retirement: `packages/ai/model-registry/catalog/models.curation.json` (the Anthropic default-model entry's costOverride field), `packages/ai/model-registry/tests/catalog-policy.test.mjs`.
 
 23. Routing thesis (founder, 2026-08-05): Different model, provider, reasoning-effort, tool-harness, and deployment configurations occupy different points on the quality–cost–latency frontier. AGI Workforce selects and governs the cheapest configuration that meets a measurable task-specific quality threshold. Implementation contract: routing selects an ExecutionPlan (model snapshot, provider endpoint, reasoning effort, service tier, execution location, harness version, cache policy, verifier, fallback policy, budget, approval policy), never a bare model name; quality thresholds are task-family-specific and measured (CPST plus the eval corpus, per the design doc); hard constraints, trust mode, capability, tier entitlement, latency lane, tenant policy, filter candidates before any cost ranking; auto-routing stays explicit and explainable per Decision #10.
     Evidence: `docs/architecture/execution-plan-contract.md`, `crates/agiworkforce-model-registry/src/lib.rs`, `audit/prior-audits/parity-implementation-matrix.md` (2026-08-05 founder decisions section).

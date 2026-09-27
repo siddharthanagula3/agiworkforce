@@ -4,6 +4,7 @@ import {
   MAX_CONNECTIONS_PER_IP,
   CLOSE_ALL_TIMEOUT_MS,
   CONNECTION_IDLE_TIMEOUT_MS,
+  SESSION_LONG_TTL_MS,
   STALE_CONNECTION_CHECK_INTERVAL_MS,
 } from './constants.js';
 
@@ -42,7 +43,7 @@ class ConnectionManager {
   private ipConnectionCounts = new Map<string, number>();
   private closeReasonCounts = new Map<string, number>();
   private deviceSockets = new Map<string, Set<WebSocket>>();
-  private revokedDevices = new Set<string>();
+  private revokedDevices = new Map<string, number>();
   private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   start(): void {
@@ -52,6 +53,7 @@ class ConnectionManager {
 
     this.cleanupInterval = setInterval(() => {
       this.cleanupIdleConnections();
+      this.forgetLapsedRevocations();
     }, STALE_CONNECTION_CHECK_INTERVAL_MS);
 
     logger.info('Connection manager started');
@@ -161,7 +163,7 @@ class ConnectionManager {
    */
   revokeDevice(deviceId: string, reason: string = DEVICE_REVOKED_REASON): number {
     if (!deviceId) return 0;
-    this.revokedDevices.add(deviceId);
+    this.revokedDevices.set(deviceId, Date.now());
 
     const sockets = this.deviceSockets.get(deviceId);
     if (!sockets || sockets.size === 0) {
@@ -248,6 +250,12 @@ class ConnectionManager {
       socket.close(DEVICE_REVOKED_CLOSE_CODE, reason);
     } catch {
       // A socket that cannot be closed is already gone; the binding is dropped either way.
+    }
+  }
+
+  private forgetLapsedRevocations(now: number = Date.now()): void {
+    for (const [deviceId, revokedAt] of this.revokedDevices) {
+      if (now - revokedAt > SESSION_LONG_TTL_MS) this.revokedDevices.delete(deviceId);
     }
   }
 

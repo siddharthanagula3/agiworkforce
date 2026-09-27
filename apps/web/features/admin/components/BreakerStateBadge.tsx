@@ -11,9 +11,9 @@ const STATE_LABEL: Record<RouteBreakerState, string> = {
 
 const STATE_CLASS: Record<RouteBreakerState, string> = {
   closed: 'border-border bg-muted text-foreground',
-  degraded: 'border-warning bg-muted text-warning-text',
-  open: 'border-destructive bg-muted text-destructive-text',
-  half_open: 'border-info bg-muted text-info-text',
+  degraded: 'border-warning-fill bg-muted text-warning-text',
+  open: 'border-danger-fill bg-muted text-danger-text',
+  half_open: 'border-info-fill bg-muted text-info-text',
 };
 
 export default function BreakerStateBadge({ state }: { state: RouteBreakerState }) {

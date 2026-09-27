@@ -4,10 +4,12 @@ import {
   type BillingPlanPricing,
   type BillingPlanTier,
 } from '../billing-catalog';
+import { BILLING_PLAN_CATALOG_VERSION } from '../billing-plan-catalog';
 import { usdFromCredits } from '../credits';
 import {
   MANAGED_USAGE_LIMITS,
   managedUsageComparisonLabel,
+  managedUsageLimitsForCatalogVersion,
   managedUsageMultiplier,
 } from '../managed-usage-limits';
 
@@ -28,6 +30,22 @@ describe('plan economics', () => {
         (pricing.monthlyPriceUsd ?? 0) * PLAN_COST_CEILING_OF_PRICE,
       );
     }
+  });
+
+  it('prices every yearly plan so a month of it covers twice the monthly allowance', () => {
+    for (const tier of pricedTiers) {
+      const pricing: BillingPlanPricing = BILLING_PLAN_PRICING[tier];
+      if (pricing.yearlyPriceUsd === undefined) continue;
+      const worstCaseUsd = usdFromCredits(MANAGED_USAGE_LIMITS[tier].monthlyCredits);
+      expect(worstCaseUsd).toBeLessThanOrEqual(
+        (pricing.yearlyPriceUsd / 12) * PLAN_COST_CEILING_OF_PRICE,
+      );
+    }
+  });
+
+  it('keeps the allowances a subscription was sold under in catalog 1', () => {
+    expect(BILLING_PLAN_CATALOG_VERSION).toBeGreaterThan(1);
+    expect(managedUsageLimitsForCatalogVersion(1)).toEqual(MANAGED_USAGE_LIMITS);
   });
 
   it('sets the 5-hour window to 10% of the week, and 20% on Max 20x', () => {

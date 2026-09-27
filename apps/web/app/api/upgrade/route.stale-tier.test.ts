@@ -165,3 +165,93 @@ describe('POST /api/upgrade, stale plan_tier vs the live Stripe price', () => {
     expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
   });
 });
+
+describe('POST /api/upgrade, a yearly Pro subscription moving to a plan sold monthly', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'active',
+            plan_tier: 'pro',
+            stripe_subscription_id: 'sub_live123',
+            stripe_customer_id: 'cus_123',
+          },
+        ];
+      }
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_123' }];
+      return [];
+    });
+    dbMocks.execute.mockResolvedValue(1);
+    stripeMocks.retrieveSubscription.mockResolvedValue({
+      id: 'sub_live123',
+      customer: 'cus_123',
+      status: 'active',
+      currency: 'usd',
+      cancel_at_period_end: false,
+      metadata: { user_id: 'user_123' },
+      items: {
+        data: [
+          {
+            id: 'si_123',
+            price: { id: 'price_pro_usd', recurring: { interval: 'year', interval_count: 1 } },
+            quantity: 1,
+          },
+        ],
+      },
+    });
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_usd',
+      currency: 'usd',
+      amountMinor: 10_000,
+    });
+    stripeMocks.updateSubscription.mockResolvedValue({
+      pending_update: null,
+      items: { data: [{ price: { id: 'price_max_usd' }, quantity: 1 }] },
+    });
+  });
+
+  it("changes to Max 5x's monthly price with the proration the preview quoted", async () => {
+    const response = await POST(
+      request({
+        plan: 'max',
+        billingInterval: 'monthly',
+        previewToken: createUpgradePreviewToken(
+          {
+            userId: 'user_123',
+            plan: 'max',
+            billingInterval: 'monthly',
+            stripeSubscriptionId: 'sub_live123',
+            seats: 1,
+            promotionCodeId: null,
+            prorationDate: PRORATION_DATE,
+          },
+          SECRET,
+        ),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(stripeMocks.updateSubscription).toHaveBeenCalledWith(
+      'sub_live123',
+      expect.objectContaining({
+        items: [{ id: 'si_123', price: 'price_max_usd', quantity: 1 }],
+        proration_behavior: 'always_invoice',
+        billing_cycle_anchor: 'now',
+        payment_behavior: 'pending_if_incomplete',
+      }),
+      expect.anything(),
+    );
+  });
+
+  it('refuses a yearly interval for the individual plan it moves to', async () => {
+    const response = await POST(
+      request({ plan: 'max', billingInterval: 'yearly', previewToken: 'unused' }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toMatch(/Max 5x is not sold with yearly billing/);
+    expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
+  });
+});

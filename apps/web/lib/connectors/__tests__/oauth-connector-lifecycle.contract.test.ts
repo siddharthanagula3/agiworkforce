@@ -120,12 +120,6 @@ vi.mock('@agiworkforce/mcp', () => {
 
 vi.mock('@/lib/server/neon-db', () => {
   const nowMs = () => Date.now();
-  const credentialVersionOf = (grant: Row): string =>
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('node:crypto')
-      .createHash('md5')
-      .update(String(grant['access_token_enc'] ?? ''))
-      .digest('hex');
   const run = (sql: string, params: unknown[] = []): Row[] => {
     const q = sql.replace(/\s+/g, ' ').trim();
 
@@ -232,54 +226,6 @@ vi.mock('@/lib/server/neon-db', () => {
       row['refresh_token_enc'] = null;
       return [{ connector_id: connectorId }];
     }
-    if (q.startsWith('update public.connector_oauth_grants set refresh_lease_id = $1')) {
-      const [leaseId, , credentialVersion, userId, connectorId] = params as [
-        string,
-        number,
-        string,
-        string,
-        string,
-      ];
-      const row = mocks.grants.find(
-        (g) =>
-          g['user_id'] === userId &&
-          g['connector_id'] === connectorId &&
-          g['revoked_at'] === null &&
-          !g['refresh_lease_id'] &&
-          credentialVersionOf(g) === credentialVersion,
-      );
-      if (!row) return [];
-      row['refresh_lease_id'] = leaseId;
-      return [{ connector_id: connectorId }];
-    }
-    if (q.startsWith('update public.connector_oauth_grants set refresh_lease_id = null')) {
-      const [leaseId] = params as [string];
-      for (const grant of mocks.grants) {
-        if (grant['refresh_lease_id'] === leaseId) grant['refresh_lease_id'] = null;
-      }
-      return [];
-    }
-    if (q.startsWith('update public.connector_oauth_grants set access_token_enc = $1')) {
-      const [accessEnc, refreshEnc, tokenType, scopes, expiresAt, leaseId] = params as [
-        string,
-        string | null,
-        string,
-        string[],
-        string | null,
-        string,
-      ];
-      const row = mocks.grants.find(
-        (g) => g['refresh_lease_id'] === leaseId && g['revoked_at'] === null,
-      );
-      if (!row) return [];
-      row['access_token_enc'] = accessEnc;
-      if (refreshEnc) row['refresh_token_enc'] = refreshEnc;
-      row['token_type'] = tokenType;
-      row['granted_scopes'] = scopes;
-      row['access_token_expires_at'] = expiresAt;
-      row['refresh_lease_id'] = null;
-      return [{ connector_id: row['connector_id'] }];
-    }
     if (q.startsWith('update public.connector_oauth_grants set access_token_enc')) {
       const [userId, connectorId, accessEnc, refreshEnc, tokenType, scopes, expiresAt] = params as [
         string,
@@ -310,16 +256,12 @@ vi.mock('@/lib/server/neon-db', () => {
           g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
       );
     }
-    if (q.startsWith('select connector_id, md5(')) {
+    if (q.startsWith('select connector_id, access_token_enc')) {
       const [userId, connectorId] = params as [string, string];
-      return mocks.grants
-        .filter(
-          (g) =>
-            g['user_id'] === userId &&
-            g['connector_id'] === connectorId &&
-            g['revoked_at'] === null,
-        )
-        .map((g) => ({ ...g, credential_version: credentialVersionOf(g) }));
+      return mocks.grants.filter(
+        (g) =>
+          g['user_id'] === userId && g['connector_id'] === connectorId && g['revoked_at'] === null,
+      );
     }
     if (q.startsWith('select connector_id, granted_scopes')) {
       const [userId] = params as [string];

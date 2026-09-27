@@ -68,6 +68,7 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
 const streamRequestMock = vi.mocked(buildToolLoopStream);
+const SKIP_APPROVALS = { toolApprovalPolicy: 'autonomous' } as const;
 const OPENAI_CHAT_MODEL = requireProviderDefaultModel('openai');
 const ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
 const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
@@ -189,7 +190,7 @@ describe('research loop, secret handling policy applied to url_fetch results', (
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
+        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }, SKIP_APPROVALS),
       );
 
       expect(raw).not.toContain(STRIPE_KEY);
@@ -210,7 +211,7 @@ describe('research loop, secret handling policy applied to url_fetch results', (
 
     try {
       const raw = await collectRaw(
-        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
+        runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }, SKIP_APPROVALS),
       );
 
       expect(raw).not.toContain(STRIPE_KEY);

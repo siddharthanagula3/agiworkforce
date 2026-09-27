@@ -71,8 +71,8 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No source picker: sources come only from creating the schedule inside a project, and runs silently read account memory and may web-search or run code although the form says they do not; add per-routine source and tool selection and fix the copy. Every run also fails before the model call because the context manifest needs pending migration 0284. | ui |
+| web | partial | The form now says truthfully that runs use memory, web search, code and Always-allow connectors (ScheduleForm.tsx:118-123), and runs no longer fail on the context manifest now that 0284 is applied. Still open: there is no source picker; sources come only from creating the schedule inside a project. | ui |
+| desktop | partial | The form now says truthfully that runs use memory, web search, code and Always-allow connectors (ScheduleForm.tsx:118-123), and runs no longer fail on the context manifest now that 0284 is applied. Still open: there is no source picker; sources come only from creating the schedule inside a project. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -86,8 +86,8 @@ Code: `apps/web/app/chat/projects/[id]/page.tsx:1247-1247`, `apps/web/features/s
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: No per-routine connector picker: a run silently offers every connector tool the account set to Always allow, while the form says tools are unavailable; also every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| web | partial | The form now says truthfully that a run may use every connector tool saved as Always allow (ScheduleForm.tsx:118-123). Still open: there is no per-routine connector picker. | ui |
+| desktop | partial | The form now says truthfully that a run may use every connector tool saved as Always allow (ScheduleForm.tsx:118-123). Still open: there is no per-routine connector picker. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
@@ -164,8 +164,8 @@ Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-4
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Event types, account and repeat suppression are settable; the server's field conditions have no UI; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
+| web | partial | Event types, account and repeat suppression are settable, and runs no longer fail on the context manifest now that 0284 is applied. Still open: the server's field conditions have no UI. | ui |
+| desktop | partial | Event types, account and repeat suppression are settable, and runs no longer fail on the context manifest now that 0284 is applied. Still open: the server's field conditions have no UI. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Only a glob filter for file-watcher triggers, set by hand in triggers.json; webhook and cron triggers take no filters. | ui |
 | chrome | missing | Not built on this surface. |  |
@@ -332,12 +332,12 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:381-381`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
-| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A run that needs approval is stopped and failed, with no way to approve and resume; only tools saved as Always allow are offered; and every run fails before the model call, because the executor writes a context manifest with nine columns that exist only in pending migration 0284. | ui |
-| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The server stops runs that need approval; mobile only shows the failed run's error, with no approve action; runs fail until pending migration 0284 ships. | ui |
-| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same server stop-on-approval; the CLI only prints the error from `agi schedules runs`; runs fail until pending migration 0284 ships. | ui |
-| vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same server stop-on-approval; the runs list shows the error, no approve action; runs fail until pending migration 0284 ships. | ui |
-| chrome | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Cloud schedules run under the same stop-on-approval rule but the side panel shows no run outcome; runs fail until pending migration 0284 ships. | ui |
+| web | partial | Under Ask before every action, a scheduled run now withholds side-effecting tools and says so in its output (scheduled-agent-executor.ts:178-799). ChatGPT instead pauses a task for approval (help.openai.com/en/articles/10291617, read 2026-09-27). Still open: a schedule-run approval checkpoint so a withheld step can be approved and the run resumed. | ui |
+| desktop | partial | Under Ask before every action, a scheduled run now withholds side-effecting tools and says so in its output (scheduled-agent-executor.ts:178-799). ChatGPT instead pauses a task for approval (help.openai.com/en/articles/10291617, read 2026-09-27). Still open: a schedule-run approval checkpoint so a withheld step can be approved and the run resumed. | ui |
+| mobile | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
+| cli | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
+| vscode | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
+| chrome | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
 
 Code: `apps/web/lib/services/scheduled-agent-executor.ts:453-453`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
