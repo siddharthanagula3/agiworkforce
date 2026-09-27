@@ -17,6 +17,8 @@ import {
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
   type RemoteCodeTestRun,
+  type DispatchTaskControlRequest,
+  type DispatchTaskLifecycleStatus,
 } from '@agiworkforce/types';
 import type {
   DeveloperApprovalAnswer,
@@ -34,7 +36,23 @@ export interface CodeRemoteDependencies {
   interruptTurn: (rootId: string, threadId: string, turnId: string) => Promise<boolean>;
   answerApproval: (answer: DeveloperApprovalAnswer) => Promise<boolean>;
   readDiff: (rootId: string, paths: readonly string[]) => Promise<string | null>;
+  startSession: (rootId: string, title?: string) => Promise<{ threadId: string }>;
+  defaultRoot: () => { id: string; name: string } | null;
   now?: () => number;
+}
+
+interface DispatchedTask {
+  requestId: string;
+  rootId: string;
+  threadId: string;
+  turnId: string;
+}
+
+interface DispatchTaskDetail {
+  taskId?: string;
+  message?: string;
+  result?: string;
+  error?: string;
 }
 
 interface ToolInFlight {
@@ -73,6 +91,39 @@ function statusFor(state: ThreadState | undefined, persisted: string): RemoteCod
   return 'unknown';
 }
 
+function boundedText(value: unknown, maxLength?: number): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  return maxLength === undefined || trimmed.length <= maxLength ? trimmed : null;
+}
+
+function parseDispatchTask(action: string, payload: unknown): DispatchTaskControlRequest | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const record = payload as Record<string, unknown>;
+  if (record['version'] !== 1) return null;
+  const requestId = boundedText(record['requestId'], REMOTE_CODE_LIMITS.idLength);
+  const sentAt = record['sentAt'];
+  if (!requestId || typeof sentAt !== 'string' || !Number.isFinite(Date.parse(sentAt))) {
+    return null;
+  }
+  if (action === 'dispatch.task.create') {
+    const prompt = boundedText(record['prompt']);
+    const title = record['title'] === undefined ? undefined : boundedText(record['title']);
+    if (!prompt || title === null) return null;
+    return { action, version: 1, requestId, prompt, ...(title ? { title } : {}), sentAt };
+  }
+  if (action === 'dispatch.task.cancel') {
+    const taskId =
+      record['taskId'] === undefined
+        ? undefined
+        : boundedText(record['taskId'], REMOTE_CODE_LIMITS.idLength);
+    if (taskId === null) return null;
+    return { action, version: 1, requestId, ...(taskId ? { taskId } : {}), sentAt };
+  }
+  return null;
+}
+
 function clipDiff(path: string, patch: string): RemoteCodeDiff {
   const truncated = patch.length > REMOTE_CODE_LIMITS.diffLength;
   return { path, patch: patch.slice(0, REMOTE_CODE_LIMITS.diffLength), truncated };
@@ -89,6 +140,7 @@ function splitDiffByFile(patch: string): RemoteCodeDiff[] {
 export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   const now = deps.now ?? Date.now;
   const threads = new Map<string, ThreadState>();
+  const dispatches = new Map<string, DispatchedTask>();
 
   function iso(): string {
     return new Date(now()).toISOString();
@@ -259,6 +311,108 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     }
   }
 
+  function sendTaskStatus(
+    requestId: string,
+    status: DispatchTaskLifecycleStatus,
+    detail: DispatchTaskDetail = {},
+  ): Promise<boolean> {
+    return deps.send('dispatch.task.status', {
+      version: 1,
+      requestId,
+      status,
+      ...detail,
+      updatedAt: iso(),
+    });
+  }
+
+  function dispatchFor(rootId: string, threadId: string): DispatchedTask | undefined {
+    for (const task of dispatches.values()) {
+      if (task.rootId === rootId && task.threadId === threadId) return task;
+    }
+    return undefined;
+  }
+
+  async function startDispatchedTask(
+    request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.create' }>,
+  ): Promise<void> {
+    const root = deps.defaultRoot();
+    if (!root) {
+      await sendTaskStatus(request.requestId, 'rejected', {
+        error:
+          'No folder is approved on this computer. Approve one in AGI Cloud on the computer, then send the task again.',
+      });
+      return;
+    }
+    let started: DispatchedTask;
+    try {
+      const { threadId } = await deps.startSession(root.id, request.title);
+      const { turnId } = await deps.startTurn({
+        rootId: root.id,
+        threadId,
+        text: request.prompt,
+      });
+      started = { requestId: request.requestId, rootId: root.id, threadId, turnId };
+    } catch (error) {
+      await sendTaskStatus(request.requestId, 'failed', {
+        error: clipRemoteText(
+          error instanceof Error ? error.message : String(error),
+          REMOTE_CODE_LIMITS.partialResponseLength,
+        ).text,
+      });
+      return;
+    }
+    dispatches.set(request.requestId, started);
+    stateFor(started.rootId, started.threadId).activeTurnId ??= started.turnId;
+    await sendTaskStatus(request.requestId, 'running', {
+      taskId: started.threadId,
+      message: `Started in ${root.name}.`,
+    });
+    await publishSessions();
+  }
+
+  async function cancelDispatchedTask(
+    request: Extract<DispatchTaskControlRequest, { action: 'dispatch.task.cancel' }>,
+  ): Promise<void> {
+    const task = dispatches.get(request.requestId);
+    if (!task || (request.taskId !== undefined && request.taskId !== task.threadId)) {
+      await sendTaskStatus(request.requestId, 'rejected', {
+        error: 'No matching task is running on this computer.',
+      });
+      return;
+    }
+    await deps.interruptTurn(task.rootId, task.threadId, task.turnId);
+  }
+
+  async function reportDispatchedTurn(
+    task: DispatchedTask,
+    event: Extract<DeveloperSessionEvent, { type: 'turn-finished' }>,
+  ): Promise<void> {
+    if (event.turnId !== task.turnId) return;
+    dispatches.delete(task.requestId);
+    const response = clipRemoteText(event.response, REMOTE_CODE_LIMITS.partialResponseLength).text;
+    if (event.outcome === 'completed') {
+      await sendTaskStatus(task.requestId, 'completed', {
+        taskId: task.threadId,
+        ...(response ? { result: response } : {}),
+      });
+      return;
+    }
+    if (event.outcome === 'interrupted') {
+      await sendTaskStatus(task.requestId, 'cancelled', {
+        taskId: task.threadId,
+        message: 'The task was stopped on this computer.',
+      });
+      return;
+    }
+    await sendTaskStatus(task.requestId, 'failed', {
+      taskId: task.threadId,
+      error: clipRemoteText(
+        event.failure?.message ?? (response || 'The task failed on this computer.'),
+        REMOTE_CODE_LIMITS.partialResponseLength,
+      ).text,
+    });
+  }
+
   async function handleRequest(request: RemoteCodeRequest): Promise<void> {
     switch (request.action) {
       case 'code.sessions.list':
@@ -295,6 +449,15 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   }
 
   async function handleControl(action: string, payload: unknown): Promise<boolean> {
+    const dispatch = parseDispatchTask(action, payload);
+    if (dispatch?.action === 'dispatch.task.create') {
+      await startDispatchedTask(dispatch);
+      return true;
+    }
+    if (dispatch?.action === 'dispatch.task.cancel') {
+      await cancelDispatchedTask(dispatch);
+      return true;
+    }
     const request = parseRemoteCodeRequest(action, payload);
     if (!request) return false;
     await handleRequest(request);
@@ -340,6 +503,14 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         state.activeTurnId = null;
         state.pendingApprovals.clear();
         await sendEvent(state, { type: 'runtime-stopped', message: event.message });
+      }
+      for (const task of [...dispatches.values()]) {
+        if (task.rootId !== rootId) continue;
+        dispatches.delete(task.requestId);
+        await sendTaskStatus(task.requestId, 'failed', {
+          taskId: task.threadId,
+          error: clipRemoteText(event.message, REMOTE_CODE_LIMITS.partialResponseLength).text,
+        });
       }
       return;
     }
@@ -393,6 +564,13 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         };
         state.pendingApprovals.set(event.requestId, approval);
         await sendEvent(state, { type: 'approval-requested', ...approval });
+        const task = dispatchFor(rootId, event.threadId);
+        if (task) {
+          await sendTaskStatus(task.requestId, 'awaiting_input', {
+            taskId: task.threadId,
+            message: `Waiting for approval: ${approval.summary}`,
+          });
+        }
         return;
       }
       case 'turn-diff': {
@@ -404,15 +582,20 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
         }
         return;
       }
-      case 'approval-answered':
+      case 'approval-answered': {
         state.pendingApprovals.delete(event.requestId);
         await sendEvent(state, {
           type: 'approval-answered',
           requestId: event.requestId,
           approved: event.approved,
         });
+        const task = dispatchFor(rootId, event.threadId);
+        if (task && state.pendingApprovals.size === 0) {
+          await sendTaskStatus(task.requestId, 'running', { taskId: task.threadId });
+        }
         return;
-      case 'turn-finished':
+      }
+      case 'turn-finished': {
         state.activeTurnId = null;
         state.partialResponse = '';
         state.pendingApprovals.clear();
@@ -423,12 +606,15 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
           outcome: event.outcome,
           response: clipRemoteText(event.response, REMOTE_CODE_LIMITS.messageLength).text,
         });
+        const task = dispatchFor(rootId, event.threadId);
+        if (task) await reportDispatchedTurn(task, event);
         if (state.queuedGuidance.length > 0) {
           await deliverGuidance(state);
         } else if (state.attached) {
           await publishSnapshot(state);
         }
         return;
+      }
     }
   }
 

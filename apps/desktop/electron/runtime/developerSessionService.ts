@@ -993,12 +993,14 @@ export async function resumeDeveloperSession(
 export async function startDeveloperSession(
   rootId: string,
   model?: string,
+  title?: string,
 ): Promise<LocalDeveloperSession> {
   const root = requireRoot(rootId);
   const server = await readyServer(root);
   const result = await request(server, 'thread/start', {
     cwd: root.path,
     ...(model ? { model } : {}),
+    ...(title ? { title } : {}),
   });
   return requireSession(rootId, result);
 }
