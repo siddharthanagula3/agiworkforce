@@ -3,7 +3,7 @@ publish = false
 name = "agiworkforce-mcp"
 version = "0.1.0"
 edition = "2024"
-description = "AGI Workforce shared MCP (Model Context Protocol) client engine: JSON-RPC framing/correlation/timeouts, stdio/SSE/Streamable-HTTP transports, and RFC 9728/8414/7591 OAuth. Transport-agnostic; UI/persistence injected by the host app."
+description = "AGI Workforce shared MCP (Model Context Protocol) engine: stateless 2026-07-28 negotiation with a 2025-era fallback, stdio and Streamable HTTP transports, the MCP authorization flow, and the server-side envelope helpers. UI and persistence are injected by the host app."
 
 [lints]
 workspace = true
