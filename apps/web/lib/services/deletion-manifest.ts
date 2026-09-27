@@ -103,6 +103,8 @@ const OPERATIONAL_RECORD = [
   'beta_applications',
   'beta_invites',
   'beta_redemptions',
+  'billing_disputes',
+  'billing_refund_requests',
   'cloud_managed_waitlist',
   'cloud_waitlist',
   'cogs_adjustments',

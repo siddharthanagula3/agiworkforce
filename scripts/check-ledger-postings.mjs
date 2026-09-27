@@ -54,6 +54,24 @@ export const LEDGER_WRITE_PROTECTION = Object.freeze({
     description: 'p_reason',
     why: 'Same receipt: the retired purchase is recorded under the charge it came from.',
   },
+  revoke_plan_allowance_microusd: {
+    kind: 'caller_receipt',
+    type: 'refund',
+    description: 'p_reason',
+    why: 'The plan refund is recorded under the charge it came from, and the webhook subtracts what that charge already revoked.',
+  },
+  revoke_disputed_credits_microusd: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_dispute_postings',
+    table: 'credit_transactions',
+    why: 'The revocation names its dispute, once per dispute.',
+  },
+  restore_disputed_credits_microusd: {
+    kind: 'unique_index',
+    index: 'idx_credit_transactions_dispute_postings',
+    table: 'credit_transactions',
+    why: 'The restoration names its dispute, once per dispute.',
+  },
 });
 
 function migrationFiles(repoRoot) {
