@@ -80,44 +80,40 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:84-89`, `
 
 - Done when: A plan can be granted as a time-limited trial that is shown as a trial and ends (reverts or bills) when its period is over.
 - Wave: 2
-- Already works on: chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
-| desktop | partial | Gate only (owner keeps the upgrade waitlist on): first purchases still need a beta_redemptions row (hasBillingWaitlistAccess); flips when checkout opens. Code-granted trials now expire hourly (code-trial-expiry.ts:36) and a referred friend gets the 7-day Pro trial at Checkout (referral-service.ts). | ui, handler, states, flag-off |
 | mobile | partial | Mobile has an invite-code modal but it is never mounted and its redeem is a local stub that accepts only a built-in alpha code, so no trial can be claimed. | mount, handler |
 
-Code: `apps/web/app/api/checkout/route.ts:83-106`, `packages/contracts/types/src/billing-catalog.ts:43-52`, `apps/web/app/api/claim-offer/route.ts:81-87`, `apps/web/app/api/checkout/route.ts:208-221`
+Code: `apps/mobile/src/features/waitlist/service.ts:85-95`
 
 ## S81.19: Promotional entitlements.
 
 - Done when: Promotional entitlements (promo codes, bonus credits, invite grants) exist, are applied to the account and are visible to the user.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: bonus credits are granted and shown, but promo codes apply only on Stripe Checkout, where the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: bonus credits are granted and shown, but promo codes apply only on Stripe Checkout, where the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | mobile | partial | Mobile cannot apply any promotion: its invite-code modal is unmounted and stubbed, and store purchases (where store offers would apply) are gated off. | mount, handler |
 | chrome | partial | Chrome can redeem an invite code (plan/trial grant) but shows no promotional credit or discount; bonus credits and promo codes are applied on web. | surface-only |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:70-76`, `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/app/api/operator/route.ts:172-187`, `apps/web/features/admin/services/operator-metrics.ts:344-384`
+Code: `apps/mobile/src/features/waitlist/service.ts:85-95`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/extension/src/side_panel.ts:8149-8168`, `apps/extension/src/lib/waitlistService.ts:116-125`
 
 ## S81.20: Purchased credit balances.
 
 - Done when: Users can buy credit top-ups that form a separate purchased balance, which carries over and is shown apart from the plan allowance.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: top-ups need an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so most users cannot buy credits. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: top-ups need an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers, so most users cannot buy credits. | flag-off |
 | mobile | partial | Native top-up products exist but are gated off (MOBILE_IAP_ENABLED unset) and the app never shows the purchased balance. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off, ui |
 | cli | partial | CLI shows the purchased balance and overage state (agi usage) but cannot buy credits; top-ups happen on web. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 | vscode | partial | VS Code shows the credit balance with an 'Add credits' action that opens web billing; no in-extension purchase. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/web/features/settings/sections/BillingSection.tsx:1048-1068`, `apps/web/app/api/billing/top-up/route.ts:156-180`, `apps/web/app/api/stripe-webhook/lib/handlers.ts:77-86`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`, `apps/cli/src/usage_summary.rs:317-329`
 
 ## S81.21: Optional overage.
 

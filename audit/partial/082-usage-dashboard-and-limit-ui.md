@@ -250,14 +250,13 @@ Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `
 
 - Done when: Users can buy extra usage (credits) when they run out, from where they hit the limit.
 - Wave: 2
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
-| desktop | partial | Open paid checkout to all eligible users: buying extra usage needs an active Stripe-billed paid plan, and the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
 | mobile | partial | Native top-up products exist but are gated off by default (MOBILE_IAP_ENABLED unset), so mobile cannot sell extra usage. Even with the flag on, the catalog returns no products to users without an upgrade-waitlist redemption (beta_redemptions). | flag-off |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/web/features/chat/components/InlinePaywallCard.tsx:237-241`, `apps/web/app/api/billing/top-up/route.ts:156-180`, `apps/web/app/api/billing/top-up/route.ts:128-137`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:147-148`, `apps/web/lib/server/mobile-iap-catalog.ts:25-28`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
 ## S82.33: Billing discrepancy report.
 
