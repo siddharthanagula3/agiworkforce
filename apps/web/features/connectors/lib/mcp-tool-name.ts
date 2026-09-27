@@ -22,8 +22,12 @@ export function isCustomConnectorServerId(serverId: string): boolean {
 export interface McpToolDescription {
   serverId: string;
   toolName: string;
+  serverLabel: string;
+  toolLabel: string;
   label: string;
 }
+
+const CUSTOM_CONNECTOR_LABEL = 'Custom connector';
 
 function humanizeMcpToolLabel(toolName: string): string {
   return toolName
@@ -32,15 +36,16 @@ function humanizeMcpToolLabel(toolName: string): string {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+export function mcpServerLabel(serverId: string): string {
+  if (isCustomConnectorServerId(serverId)) return CUSTOM_CONNECTOR_LABEL;
+  return CONNECTORS.find((c) => c.id === serverId)?.name ?? serverId;
+}
+
 export function describeMcpTool(name: string): McpToolDescription | null {
   const parsed = parseQualifiedMcpToolName(name);
   if (!parsed) return null;
   const { serverId, toolName } = parsed;
-  const humanizedToolName = humanizeMcpToolLabel(toolName);
-  if (isCustomConnectorServerId(serverId)) {
-    return { serverId, toolName, label: `Custom connector · ${humanizedToolName}` };
-  }
-  const connector = CONNECTORS.find((c) => c.id === serverId);
-  const displayName = connector?.name ?? serverId;
-  return { serverId, toolName, label: `${displayName} · ${humanizedToolName}` };
+  const serverLabel = mcpServerLabel(serverId);
+  const toolLabel = humanizeMcpToolLabel(toolName);
+  return { serverId, toolName, serverLabel, toolLabel, label: `${serverLabel} · ${toolLabel}` };
 }

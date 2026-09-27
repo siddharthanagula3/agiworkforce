@@ -23,7 +23,9 @@ import { ConnectorCapabilitiesPanel } from '../ConnectorCapabilitiesPanel';
 const EMPTY_CATALOG = {
   connectorId: 'custom-abc123',
   protocolEra: 'modern' as const,
+  supportedVersions: [] as string[],
   tasksSupported: false,
+  rejectedTools: [] as { toolName?: string; reason: string }[],
   tools: [] as { name: string; visibility: string }[],
   resources: [] as { name: string; uri: string }[],
   resourceTemplates: [] as { name: string; uriTemplate: string }[],

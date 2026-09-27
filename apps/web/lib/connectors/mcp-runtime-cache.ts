@@ -12,6 +12,7 @@ import type {
 
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { DEFAULT_CONNECTOR_ACCOUNT_KEY } from '@/lib/connectors/accounts';
 
 const DISCOVERY_TTL_MS = 24 * 60 * 60 * 1_000;
 const PG_UNDEFINED_TABLE = '42P01';
@@ -142,6 +143,87 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
       if (!isCacheSchemaUnavailable(error)) throw error;
     }
   }
+
+  async deleteServerEntries(
+    serverKey: string,
+    partitions: readonly string[],
+    method?: string,
+  ): Promise<void> {
+    try {
+      await getNeonDb().execute(
+        `delete from public.mcp_response_cache
+          where params_key like $1
+            and partition_key = any($2::text[])
+            and ($3::text is null or method = $3::text)`,
+        [`${serverKey}:%`, [...partitions], method ?? null],
+      );
+    } catch (error) {
+      if (!isCacheSchemaUnavailable(error)) throw error;
+    }
+  }
+}
+
+const sharedResponseCache = new NeonMcpResponseCacheStore();
+
+const PUBLIC_PARTITION_KEY = 'public';
+
+function isPublicSdkPartition(partition: string | undefined): boolean {
+  if (!partition) return false;
+  try {
+    const decoded: unknown = JSON.parse(partition);
+    return Array.isArray(decoded) && decoded.length === 2 && decoded[1] === '';
+  } catch {
+    return false;
+  }
+}
+
+export class McpConnectionResponseCacheStore implements ResponseCacheStore {
+  private readonly serverKey: string;
+  private readonly privatePartition: string;
+
+  constructor(
+    serverUrl: string,
+    authorizationContext: string,
+    private readonly store: NeonMcpResponseCacheStore = sharedResponseCache,
+  ) {
+    this.serverKey = normalizedServerKey(serverUrl);
+    this.privatePartition = mcpResponseCachePartitionKey(authorizationContext);
+  }
+
+  private scoped(key: CacheKey): CacheKey {
+    return {
+      method: key.method,
+      params: `${this.serverKey}:${key.params ?? ''}`,
+      partition: isPublicSdkPartition(key.partition) ? PUBLIC_PARTITION_KEY : this.privatePartition,
+    };
+  }
+
+  get(key: CacheKey): Promise<CacheEntry | undefined> {
+    return this.store.get(this.scoped(key));
+  }
+
+  set(
+    key: CacheKey,
+    entry: { value: string; expiresAt?: number; scope?: 'public' | 'private' },
+  ): Promise<number> {
+    return this.store.set(this.scoped(key), entry);
+  }
+
+  delete(key: CacheKey): Promise<void> {
+    return this.store.delete(this.scoped(key));
+  }
+
+  evict(method: string): Promise<void> {
+    return this.store.deleteServerEntries(
+      this.serverKey,
+      [PUBLIC_PARTITION_KEY, this.privatePartition],
+      method,
+    );
+  }
+
+  clear(): Promise<void> {
+    return this.store.deleteServerEntries(this.serverKey, [this.privatePartition]);
+  }
 }
 
 interface DiscoveryRow {
@@ -206,8 +288,10 @@ export async function saveMcpDiscovery(
 export const mcpAuthorizationContext = {
   userCustomConnector: (userId: string, rowId: string) => `user:${userId}:custom:${rowId}`,
   userCustomUrl: (userId: string, url: string) => `user:${userId}:custom-url:${url}`,
-  userOauthConnector: (userId: string, connectorId: string) =>
-    `user:${userId}:oauth:${connectorId}`,
+  userOauthConnector: (userId: string, connectorId: string, accountKey?: string | null) =>
+    accountKey && accountKey !== DEFAULT_CONNECTOR_ACCOUNT_KEY
+      ? `user:${userId}:oauth:${connectorId}:account:${accountKey}`
+      : `user:${userId}:oauth:${connectorId}`,
   operatorConnector: (connectorId: string) => `operator:${connectorId}`,
   organizationSharedServer: (organizationId: string, rowId: string) =>
     `organization:${organizationId}:shared:${rowId}`,
@@ -275,14 +359,12 @@ export async function sweepExpiredMcpDiscoveryCache(): Promise<number> {
   }
 }
 
-const sharedResponseCache = new NeonMcpResponseCacheStore();
-
 export async function getMcpStatelessRuntime(serverUrl: string, authorizationContext: string) {
   const prior = await loadMcpPriorDiscovery(serverUrl, authorizationContext);
   return {
     cache: {
-      partition: digest(authorizationContext),
-      store: sharedResponseCache,
+      partition: mcpResponseCachePartitionKey(authorizationContext),
+      store: new McpConnectionResponseCacheStore(serverUrl, authorizationContext),
     },
     discovery: {
       ...(prior ? { prior } : {}),
