@@ -328,16 +328,38 @@ fn openai_compat_spec(name: &str, base_url: &str, api_key: &str) -> ProviderSpec
 /// the selected upstream provider. The caller-supplied base is validated by
 /// the same host allowlist used by tier lookup before the Bearer token can be
 /// attached, closing the configuration-based credential-exfiltration path.
-fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec> {
+fn managed_cloud_url_for_base(raw_base: &str, path: &str) -> Result<String> {
     let base = crate::tier_cache::resolve_agi_api_base(raw_base).ok_or_else(|| {
         CliError::config("Managed cloud requires a trusted AGI Workforce HTTPS host.".to_string())
     })?;
     let base = base.trim_end_matches('/');
-    let endpoint = if base.ends_with("/api") {
-        format!("{base}/llm/v1/chat/completions")
+    Ok(if base.ends_with("/api") {
+        format!("{base}/{path}")
     } else {
-        format!("{base}/api/llm/v1/chat/completions")
-    };
+        format!("{base}/api/{path}")
+    })
+}
+
+fn managed_cloud_raw_base() -> String {
+    std::env::var("AGIWORKFORCE_API_BASE")
+        .unwrap_or_else(|_| "https://agiworkforce.com".to_string())
+}
+
+#[cfg(feature = "voice")]
+pub(crate) fn managed_cloud_url(path: &str) -> Result<String> {
+    managed_cloud_url_for_base(&managed_cloud_raw_base(), path)
+}
+
+pub(crate) fn managed_cloud_client_headers() -> Vec<(String, String)> {
+    crate::cloud::handshake::headers()
+        .into_iter()
+        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .chain([("X-Requested-With".to_string(), "XMLHttpRequest".to_string())])
+        .collect()
+}
+
+fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec> {
+    let endpoint = managed_cloud_url_for_base(raw_base, "llm/v1/chat/completions")?;
 
     Ok(ProviderSpec {
         id: "managed_cloud".to_string(),
@@ -348,24 +370,18 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
         // surface, and refuses one with no idempotency key. The key is minted
         // per spec, and a spec is built per request, so a retry of one request
         // reuses its key while two turns never share one.
-        extra_headers: crate::cloud::handshake::headers()
+        extra_headers: managed_cloud_client_headers()
             .into_iter()
-            .map(|(name, value)| (name.to_string(), value.to_string()))
-            .chain([
-                ("X-Requested-With".to_string(), "XMLHttpRequest".to_string()),
-                (
-                    "Idempotency-Key".to_string(),
-                    format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
-                ),
-            ])
+            .chain([(
+                "Idempotency-Key".to_string(),
+                format!("agi.cli.chat.{}", uuid::Uuid::new_v4()),
+            )])
             .collect(),
     })
 }
 
 fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {
-    let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| "https://agiworkforce.com".to_string());
-    managed_cloud_spec_for_base(jwt, &raw_base)
+    managed_cloud_spec_for_base(jwt, &managed_cloud_raw_base())
 }
 
 /// Subscription-auth specs (Copilot). Auth resolution happened
