@@ -692,7 +692,8 @@ async function dispatchChatCompletions(
     const connectorPermissionsRequired =
       modelSupportsTools && (userConnectorToolsEnabled || operatorTools.length > 0);
     const toolApprovalPolicyRequired =
-      connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn;
+      processed.toolApprovalPolicy === undefined &&
+      (connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn);
     // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
     // the catalog is built. `deny` tools are dropped from the catalog entirely
     // (so a Blocked tool is never advertised to the model and stops re-surfacing
@@ -702,7 +703,7 @@ async function dispatchChatCompletions(
     // whether the provider-native search below is withdrawn for the gated
     // shape, so skipping the read forced the default onto accounts that had
     // chosen otherwise and broke search-native models.
-    const { connectorPermissions, toolApprovalPolicy } =
+    const turnToolPermissions =
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
             return loadTurnToolPermissions(requestDb, userId, {
@@ -715,6 +716,9 @@ async function dispatchChatCompletions(
             connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
             toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
           };
+    const { connectorPermissions } = turnToolPermissions;
+    const toolApprovalPolicy =
+      processed.toolApprovalPolicy ?? turnToolPermissions.toolApprovalPolicy;
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
