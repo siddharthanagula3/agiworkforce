@@ -151,6 +151,11 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "agi-workforce.openReferrals",
+        "title": "AGI: Invite friends",
+        "icon": "$(gift)"
+      },
+      {
         "command": "agi-workforce.setApiKey",
         "title": "AGI Workforce: Set API Key",
         "icon": "$(key)"

@@ -48,6 +48,7 @@ Top-level subcommands currently declared in `apps/cli/src/lib.rs`:
 | `sync`        |     - | Dotfile/settings sync.              |
 | `a2a`         |     - | Agent-to-agent operations.          |
 | `models`      |     - | Model catalog operations.           |
+| `invite`      |     - | Print your referral link.           |
 
 Nested subcommand groups are owned by their modules. This artifact only tracks the top-level process shape.
 

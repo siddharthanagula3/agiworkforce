@@ -16,6 +16,7 @@ import {
 } from '../model-picker/modelConstants';
 import {
   PROVIDER_DISPLAY,
+  canUseBillingPlanCapability,
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
@@ -58,6 +59,7 @@ import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
+  accountTypeForTier,
   fetchAccountIdentity,
   getAccountAuthState,
   getCloudWebOrigin,
@@ -110,13 +112,14 @@ import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
   daysUntilReset,
+  formatBucketCreditsLeft,
   formatCreditBalance,
   formatCreditSpendability,
-  formatManagedUsageLabel,
   formatUsageMeterFallbackLabel,
   resolveUsageMeter,
   type ExtensionUsageMeter,
 } from '../../data/usageMeter';
+import { developerAccessPlanLabel, planDisplayLabel } from '../account-auth/planLabel';
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
 
@@ -467,6 +470,9 @@ export interface UsageMeterWebviewPayload {
   bucketsEmptyLabel: string | null;
   credits: UsageMeterCreditsRow | null;
   accountPlanTier?: string;
+  accountPlanLabel?: string;
+  accountPlanNeedsBilling?: boolean;
+  developerAccessPlanLabel?: string;
   managedDeveloperEligible?: boolean;
   subscriptionStatus?: string;
 }
@@ -489,6 +495,7 @@ interface PendingChatSend {
 }
 
 const USAGE_METER_UPGRADE_THRESHOLD = 0.2;
+const DEVELOPER_ACCESS_PLAN_LABEL = developerAccessPlanLabel();
 
 function formatResetsIn(resetsAt: string | null): string | null {
   if (resetsAt === null) return null;
@@ -510,7 +517,8 @@ function buildUsageMeterBuckets(meter: ExtensionUsageMeter, nowMs: number): Usag
   if (meter.source !== 'managed-plan' || meter.buckets === undefined) return [];
   return meter.buckets.map((reading) => ({
     label: managedUsageBucketLabel(reading.bucket),
-    remainingLabel: formatUsageRemaining(reading.percentRemaining),
+    remainingLabel:
+      formatBucketCreditsLeft(reading) ?? formatUsageRemaining(reading.percentRemaining),
     resetsIn: formatUsageResetIn(reading.resetAt ?? null, nowMs),
     binding: reading.bucket === meter.bindingBucket,
   }));
@@ -542,8 +550,6 @@ export function buildUsageMeterPayload(
     usageLabel = formatUsageMeterFallbackLabel(meter.source);
   } else if (bindingRow !== undefined) {
     usageLabel = `${bindingRow.label} - ${bindingRow.remainingLabel}`;
-  } else if (meter.limitTokens !== undefined) {
-    usageLabel = formatManagedUsageLabel(meter.remaining ?? 0, meter.limitTokens, meter.usedTokens);
   } else if (meter.remaining !== null) {
     usageLabel = `${Math.round(meter.remaining * 100)}% of plan usage remaining`;
   } else {
@@ -567,7 +573,19 @@ export function buildUsageMeterPayload(
       meter.remaining !== null &&
       meter.remaining < USAGE_METER_UPGRADE_THRESHOLD,
     collapsed,
-    ...(meter.accountPlanTier === undefined ? {} : { accountPlanTier: meter.accountPlanTier }),
+    ...(meter.accountPlanTier === undefined
+      ? {}
+      : {
+          accountPlanTier: meter.accountPlanTier,
+          accountPlanLabel: planDisplayLabel(meter.accountPlanTier) ?? meter.accountPlanTier,
+          accountPlanNeedsBilling: canUseBillingPlanCapability(
+            meter.accountPlanTier,
+            'developer_surfaces',
+          ),
+        }),
+    ...(DEVELOPER_ACCESS_PLAN_LABEL === undefined
+      ? {}
+      : { developerAccessPlanLabel: DEVELOPER_ACCESS_PLAN_LABEL }),
     ...(meter.managedDeveloperEligible === undefined
       ? {}
       : { managedDeveloperEligible: meter.managedDeveloperEligible }),
@@ -1382,8 +1400,8 @@ export class ChatStateManager {
               identity: {
                 displayName: cli.cli.email ?? 'AGI CLI account',
                 email: cli.cli.email ?? null,
-                accountType: 'Personal account',
-                planName: cli.cli.tier ?? 'Unknown',
+                accountType: accountTypeForTier(cli.cli.tier ?? ''),
+                planName: planDisplayLabel(cli.cli.tier) ?? 'Unknown',
                 tier: cli.cli.tier ?? 'unknown',
               },
             },

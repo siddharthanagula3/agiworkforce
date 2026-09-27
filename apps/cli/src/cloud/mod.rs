@@ -11,6 +11,7 @@ pub mod handshake;
 pub mod image;
 pub mod memory;
 pub mod projects;
+pub mod referrals;
 pub mod state;
 
 use std::path::{Path, PathBuf};

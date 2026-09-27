@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
+import { creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
@@ -241,7 +242,7 @@ function CreditMeter({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-medium text-foreground">{label}</p>
         <p className="text-sm tabular-nums text-muted-foreground">
-          ${(remainingCents / 100).toFixed(2)} remaining
+          {formatCredits(creditsFromCents(remainingCents))} left
         </p>
       </div>
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">

@@ -437,6 +437,7 @@ interface Message {
     hasWorkStream?: boolean;
     workStreamData?: Record<string, unknown>;
     isPinned?: boolean;
+    requestId?: string;
     tokensUsed?: number;
     inputTokens?: number;
     outputTokens?: number;
@@ -3103,11 +3104,7 @@ const MessageBubbleComponent = function MessageBubble({
                                 inputTokens={message.metadata.inputTokens}
                                 outputTokens={message.metadata.outputTokens}
                                 model={message.metadata.model}
-                                cost={
-                                  typeof message.metadata.cost === 'number'
-                                    ? message.metadata.cost / 100
-                                    : undefined
-                                }
+                                requestId={message.metadata.requestId}
                               />
                               {typeof message.metadata.totalDurationMs === 'number' && (
                                 <div className="mt-1 text-xs text-muted-foreground">

@@ -947,7 +947,7 @@ message -- revise and call `update_plan` again.\n\n",
             max_budget_usd: self.max_budget_usd,
         };
 
-        let (run_result, completion_usage, incomplete) = {
+        let (run_result, completion_usage, managed_request_ids, incomplete) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -959,12 +959,14 @@ message -- revise and call `update_plan` again.\n\n",
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
+                managed_request_ids: Vec::new(),
                 incomplete: None,
             };
             let result = run_turn(&mut adapter, params, &mut tracker).await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
+                std::mem::take(&mut adapter.managed_request_ids),
                 adapter.incomplete,
             )
         };
@@ -1121,6 +1123,7 @@ message -- revise and call `update_plan` again.\n\n",
             cost_usd,
             via_subscription,
             incomplete,
+            managed_request_ids,
         })
     }
 
@@ -1189,6 +1192,7 @@ struct TurnHostAdapter<'a> {
     /// intentionally remain aggregate for telemetry, but pricing and budget
     /// enforcement must not treat several tool-loop completions as one request.
     completion_usage: Vec<crate::cost_ledger::CompletionUsage>,
+    managed_request_ids: Vec<String>,
     /// Set when the answer this turn delivers is real but was cut short, so
     /// every surface can say so beside the text instead of presenting a
     /// truncated reply as a whole one.
@@ -1347,6 +1351,7 @@ impl TurnHostAdapter<'_> {
                                         stop_reason: Some("end_turn".to_string()),
                                         stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
                                         reasoning_output_tokens: 0,
+                                        managed_request_id: None,
                                     })
                                 } else {
                                     models::stream_completion(
@@ -1380,7 +1385,7 @@ impl TurnHostAdapter<'_> {
             }
         };
 
-        Ok(completion_from_result(result))
+        Ok(self.accept_completion(result))
     }
 
     /// Continuation completion after a tool batch: retry-only recovery (no
@@ -1432,7 +1437,14 @@ impl TurnHostAdapter<'_> {
                 }
             }
         };
-        Ok(completion_from_result(continuation))
+        Ok(self.accept_completion(continuation))
+    }
+
+    fn accept_completion(&mut self, result: models::CompletionResult) -> Completion {
+        if let Some(request_id) = result.managed_request_id.clone() {
+            self.managed_request_ids.push(request_id);
+        }
+        completion_from_result(result)
     }
 
     fn record_completion_usage(&mut self, completion: &Completion) {
@@ -1483,7 +1495,7 @@ impl TurnHostAdapter<'_> {
                     self.session.effort,
                 )
                 .await?;
-                let retried = completion_from_result(retried);
+                let retried = self.accept_completion(retried);
                 self.record_completion_usage(&retried);
                 match judge_generation(&retried.outcome) {
                     GenerationVerdict::Continues | GenerationVerdict::Delivered => Ok(retried),
@@ -2668,8 +2680,9 @@ impl TurnHost for TurnHostAdapter<'_> {
                 narrate!(
                     "\n{}",
                     ts::warning(format!(
-                        "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
-                        cumulative_usd, cap_usd
+                        "  Budget cap reached: {} used of {}. Stopping agent loop.",
+                        crate::cost_ledger::format_usd_as_credits(*cumulative_usd),
+                        crate::cost_ledger::format_usd_as_credits(*cap_usd)
                     ))
                 );
                 // Emit the machine-readable event via the injected callback.
@@ -3079,6 +3092,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
             incomplete: None,
         };
 
@@ -3289,6 +3303,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
             incomplete: None,
         };
 
@@ -3565,6 +3580,7 @@ mod tests {
             stop_reason: Some("end_turn".to_string()),
             stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
             reasoning_output_tokens: 0,
+            managed_request_id: None,
         }
     }
 
@@ -3595,6 +3611,7 @@ mod tests {
                 first_on_chunk: None,
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
+                managed_request_ids: Vec::new(),
                 incomplete: None,
             },
             scripted: completions.into(),
@@ -4149,6 +4166,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
             incomplete: None,
         };
         let settled = adapter
@@ -4175,6 +4193,7 @@ mod tests {
             stop_reason: Some("stop".to_string()),
             stop: Some(agiworkforce_llm::GenerationStop::EndOfTurn),
             reasoning_output_tokens: 0,
+            managed_request_id: None,
         }
     }
 
@@ -4281,6 +4300,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
             incomplete: None,
         };
         let settled = adapter
@@ -4326,6 +4346,7 @@ mod tests {
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
             incomplete: None,
         };
 

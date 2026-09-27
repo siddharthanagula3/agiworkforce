@@ -321,7 +321,7 @@
           "ordinal": 6,
           "heading": "When billing will not let you change plans",
           "headingPath": "Plans, upgrading, and cancelling › When billing will not let you change plans",
-          "text": "- \"Billing ownership is not verified. Refresh your account before changing\n  plans.\" Reload and sign in again.\n- \"Resolve the current billing status in Manage billing before changing plans.\"\n  A payment needs attention first; the payment-failure page lists what to check."
+          "text": "- \"Billing ownership is not verified. Refresh your account before changing\n  plans.\" Reload and sign in again.\n- \"Resolve the current billing status in Manage billing before changing plans.\"\n  A renewal payment failed. Paid features stay off until it succeeds; there is\n  no grace period. In Settings, Billing, pay the open invoice or update your\n  payment method."
         }
       ]
     },

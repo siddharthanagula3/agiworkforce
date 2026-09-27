@@ -258,7 +258,6 @@ async function handleCreateLiveSession(request: NextRequest) {
       userId,
       planTier,
       modelId: liveModel.id,
-      allowOverage: true,
     });
     limitResets = block.resetsAt;
     ceilingSeconds = Math.max(block.blockSeconds, LIVE_SESSION_MIN_BLOCK_SECONDS);

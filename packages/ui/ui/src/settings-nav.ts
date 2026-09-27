@@ -25,6 +25,7 @@ import {
   Laptop,
   type LucideIcon,
   LifeBuoy,
+  Gift,
 } from 'lucide-react';
 
 export type SettingsNavKey =
@@ -61,6 +62,7 @@ export type SettingsNavKey =
   | 'time-focus'
   | 'skills'
   | 'help'
+  | 'referrals'
   // Conversation-data sections. Web registers these as settings sections and
   // routes to them, but deliberately keeps them out of SETTINGS_NAV_GROUPS_WEB
   // and links to them from its Privacy section instead.
@@ -192,6 +194,7 @@ const SETTINGS_NAV_KEY_SET: ReadonlySet<string> = new Set<SettingsNavKey>([
   'time-focus',
   'skills',
   'help',
+  'referrals',
   'archived',
   'deleted-chats',
   'shared-links',
@@ -291,6 +294,12 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'privacy', label: 'Privacy', icon: Shield },
       { key: 'billing', label: 'Billing', icon: CreditCard },
       { key: 'usage', label: 'Usage', icon: Gauge },
+      {
+        key: 'referrals',
+        label: 'Referrals',
+        icon: Gift,
+        keywords: ['invite', 'refer a friend', 'referral link', 'bonus credits'],
+      },
       { key: 'capabilities', label: 'Capabilities', icon: Zap },
       { key: 'security', label: 'Security', icon: Lock },
       { key: 'safety', label: 'Safety', icon: EyeOff },
