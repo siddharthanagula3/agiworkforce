@@ -31,15 +31,13 @@ import {
   storeExactResponseCache,
   type ExactResponseCacheKeyFields,
 } from '@/lib/services/exact-response-cache-service';
+import { fingerprintManagedUsageRequest } from '@/lib/services/managed-usage-request-service';
 import {
-  fingerprintManagedUsageRequest,
-  finalizeManagedUsageRequest,
-  markManagedUsageProviderStarted,
-  reserveManagedUsageRequest,
-} from '@/lib/services/managed-usage-request-service';
+  reserveBackgroundUsage,
+  type BackgroundUsageLease,
+} from '@/lib/services/background-usage-lease';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { estimateTokens } from '@agiworkforce/routing';
 import { assertNoLeaks } from '@/lib/leak-detector';
@@ -200,12 +198,13 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     const planTier = await resolveEntitledPlanTier(input.db, input.userId).catch(() =>
       normalizeBillingPlanTier(null),
     );
-    let reservation;
+    let lease: BackgroundUsageLease;
     try {
-      reservation = await reserveManagedUsageRequest({
+      lease = await reserveBackgroundUsage({
         db: input.db,
         userId: input.userId,
         organizationId: input.organizationId,
+        planTier,
         idempotencyKey: `title:${input.conversationId}`,
         requestHash: fingerprintManagedUsageRequest({
           kind: CONVERSATION_TITLE_QUOTA_FEATURE,
@@ -215,15 +214,11 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         }),
         provider: route.provider,
         model: route.modelKey,
-        estimatedCostCents: LLMCostCalculator.estimateCost(
-          route.provider,
-          route.modelKey,
+        routeId: route.routeId,
+        estimatedPromptTokens:
           estimateTokens(`${TITLE_SYSTEM_PROMPT}\n${source}`, route.modelKey) + 32,
-          MAX_OUTPUT_TOKENS,
-        ),
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
         leaseSeconds: 60,
-        planTier,
-        isFlagship: false,
         quotaFeature: CONVERSATION_TITLE_QUOTA_FEATURE,
       });
     } catch (error) {
@@ -236,7 +231,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
 
     let providerCompleted = false;
     try {
-      await markManagedUsageProviderStarted(reservation);
+      await lease.providerStarted();
       const adapter = buildServerProviderAdapter(dispatchProvider);
       const response = await drainToLlmResponse(
         adapter.stream(chatRequest, new AbortController().signal),
@@ -255,17 +250,12 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         cacheCreationInputTokens: response.cacheCreationInputTokens,
         cacheCreation1hInputTokens: response.cacheCreation1hInputTokens,
       };
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'completed',
-        actualCostCents: LLMCostCalculator.calculateCost(
-          route.provider,
-          route.modelKey,
-          usage,
-          undefined,
-          route.routeId,
-        ),
-        usage: {
+      await lease.completed({
+        provider: route.provider,
+        model: route.modelKey,
+        routeId: route.routeId,
+        usage,
+        record: {
           ...usage,
           type: CONVERSATION_TITLE_QUOTA_FEATURE,
           conversationId: input.conversationId,
@@ -298,21 +288,18 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
       );
     } catch (error) {
       if (!providerCompleted) {
-        await finalizeManagedUsageRequest({
-          ...reservation,
-          outcome: 'failed',
-          actualCostCents: 0,
-          usage: {
+        await lease
+          .failed({
             type: CONVERSATION_TITLE_QUOTA_FEATURE,
             conversationId: input.conversationId,
             reason: error instanceof Error ? error.message : String(error),
-          },
-        }).catch((releaseError: unknown) => {
-          logger.error(
-            { releaseError, conversationId: input.conversationId },
-            '[conversation-title] reservation release failed',
-          );
-        });
+          })
+          .catch((releaseError: unknown) => {
+            logger.error(
+              { releaseError, conversationId: input.conversationId },
+              '[conversation-title] reservation release failed',
+            );
+          });
       }
       logger.warn(
         { error, conversationId: input.conversationId, provider: route.provider },
