@@ -68,31 +68,25 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 
 - Done when: The user chooses which sources (project files, instructions, docs, web) a routine run may read.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The form now says truthfully that runs use memory, web search, code and Always-allow connectors (ScheduleForm.tsx:118-123), and runs no longer fail on the context manifest now that 0284 is applied. Still open: there is no source picker; sources come only from creating the schedule inside a project. | ui |
-| desktop | partial | The form now says truthfully that runs use memory, web search, code and Always-allow connectors (ScheduleForm.tsx:118-123), and runs no longer fail on the context manifest now that 0284 is applied. Still open: there is no source picker; sources come only from creating the schedule inside a project. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1247-1247`, `apps/web/features/schedules/components/SchedulesPage.tsx:669-669`, `apps/web/lib/services/scheduled-agent-executor.ts:588-588`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.08: Connector selection.
 
 - Done when: Per routine, the user chooses which connectors/tools the run may use.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The form now says truthfully that a run may use every connector tool saved as Always allow (ScheduleForm.tsx:118-123). Still open: there is no per-routine connector picker. | ui |
-| desktop | partial | The form now says truthfully that a run may use every connector tool saved as Always allow (ScheduleForm.tsx:118-123). Still open: there is no per-routine connector picker. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:112-112`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.10: Model/effort selection.
 
@@ -101,13 +95,10 @@ Code: `apps/web/features/schedules/components/ScheduleForm.tsx:112-112`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Model is selectable; there is no effort (reasoning depth) control for a routine. | ui |
-| desktop | partial | Model is selectable; there is no effort (reasoning depth) control for a routine. | ui |
-| mobile | partial | Model picker only; no effort control. | ui |
 | cli | partial | --model at creation only; no effort flag and no way to change the model later. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:184-184`, `apps/web/lib/services/schedule-service.ts:575-575`, `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:321-321`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`
+Code: `apps/cli/src/lib.rs:1118-1118`, `apps/cli/src/lib.rs:1665-1665`
 
 ## S63.11: One-time schedule.
 
@@ -161,16 +152,15 @@ Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-4
 
 - Done when: Event triggers can be narrowed (event types, account, field conditions, repeat suppression) so only matching events start the routine.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Event types, account and repeat suppression are settable, and runs no longer fail on the context manifest now that 0284 is applied. Still open: the server's field conditions have no UI. | ui |
-| desktop | partial | Event types, account and repeat suppression are settable, and runs no longer fail on the context manifest now that 0284 is applied. Still open: the server's field conditions have no UI. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Only a glob filter for file-watcher triggers, set by hand in triggers.json; webhook and cron triggers take no filters. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:311-311`, `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:327-327`, `apps/web/lib/triggers/trigger-service.ts:141-141`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/cli/src/features/hooks/hooks.rs:484-484`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.17: Webhook trigger.
 
@@ -305,13 +295,7 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:356-356`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Alerts are account-wide only; the card links to Settings > Notifications and the server rejects per-schedule notification settings. | ui |
-| desktop | partial | Alerts are account-wide only; the card links to Settings > Notifications and the server rejects per-schedule notification settings. | ui |
-| mobile | partial | Only an account-wide notification category covering schedule runs; no per-routine choice. | ui |
 | cli | missing | Not built on this surface. |  |
-| chrome | partial | One global "task notifications" toggle in Options covers local task failures; nothing per routine. | ui |
-
-Code: `apps/web/features/schedules/components/ScheduleCard.tsx:381-381`, `apps/web/features/schedules/components/SchedulesPage.tsx:565-565`, `apps/web/lib/services/schedule-service.ts:454-454`, `apps/web/lib/services/schedule-service.ts:1427-1427`
 
 ## S63.31: Budget controls.
 
@@ -332,12 +316,12 @@ Code: `apps/web/features/schedules/components/ScheduleCard.tsx:381-381`, `apps/w
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Under Ask before every action, a scheduled run now withholds side-effecting tools and says so in its output (scheduled-agent-executor.ts:178-799). ChatGPT instead pauses a task for approval (help.openai.com/en/articles/10291617, read 2026-09-27). Still open: a schedule-run approval checkpoint so a withheld step can be approved and the run resumed. | ui |
-| desktop | partial | Under Ask before every action, a scheduled run now withholds side-effecting tools and says so in its output (scheduled-agent-executor.ts:178-799). ChatGPT instead pauses a task for approval (help.openai.com/en/articles/10291617, read 2026-09-27). Still open: a schedule-run approval checkpoint so a withheld step can be approved and the run resumed. | ui |
-| mobile | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
-| cli | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
-| vscode | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
-| chrome | partial | Scheduled runs now withhold side-effecting tools under Ask and report it in the run output, but this surface has no way to approve a withheld step and resume the run; that needs the schedule-run approval checkpoint first. | ui |
+| web | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
+| desktop | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
+| mobile | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
+| cli | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
+| vscode | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
+| chrome | partial | A run now pauses at a withheld step, notifies the owner (inbox, push and email) and resumes on approve or deny, with approval on web, desktop, mobile, CLI, VS Code and Chrome (schedule-service.ts, runs/[runId]/approval/route.ts), as ChatGPT tasks do. Still open: a lethal-trifecta re-ask in an unattended run fails the step instead of pausing; it needs a gate option in the tool loop. | ui |
 
 Code: `apps/web/lib/services/scheduled-agent-executor.ts:453-453`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/features/schedules/components/ScheduleRunHistory.tsx:104-104`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 

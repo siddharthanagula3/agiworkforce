@@ -13,7 +13,11 @@ import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
-import { ToolApprovalProvider, InteractiveCardResumeProvider } from '@/lib/hooks/useChatStream';
+import {
+  ToolApprovalProvider,
+  ToolInputProvider,
+  InteractiveCardResumeProvider,
+} from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
@@ -115,6 +119,7 @@ import { useStore as useZustandStore } from 'zustand';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { useConversationDraftSync } from '../hooks/use-conversation-draft-sync';
+import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
@@ -207,6 +212,7 @@ import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonom
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
+import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import {
@@ -722,6 +728,37 @@ async function deleteConversationMessage(params: {
   return body.activeLeafMessageId ?? null;
 }
 
+const MESSAGE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function keepTemporaryChat(params: {
+  conversationId: string;
+  title: string | null;
+  messages: readonly Message[];
+}): Promise<void> {
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  const response = await fetch(`/api/chat/conversations/${params.conversationId}/keep`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      ...(params.title ? { title: params.title } : {}),
+      messages: params.messages.map((message) => ({
+        ...(MESSAGE_ID_PATTERN.test(message.id) ? { id: message.id } : {}),
+        role: message.role,
+        content: message.content,
+        ...(message.model ? { model: message.model } : {}),
+        ...(message.metadata ? { metadata: message.metadata } : {}),
+      })),
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'This chat could not be saved.'));
+  }
+}
+
+function describeKeptMessages(count: number): string {
+  return count === 1 ? 'The message in this chat' : `All ${count} messages in this chat`;
+}
+
 const subscribeToMessageVariantsMode = () => () => {};
 
 function useMessageVariantsEnabled(): boolean {
@@ -1009,6 +1046,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ? freeTrialModelId
       : validatedSelectedModelId;
   const localModelSelection = useLocalModelSelection((state) => state.selected);
+  const { runExplicitMemoryCommand, memoryCommandDialog } = useExplicitMemoryCommands();
   const activeModelId = localModelSelection?.id ?? cloudModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
@@ -1326,6 +1364,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     continueGeneration,
     resumeInteractiveCardTurn,
     resolveToolApproval,
+    resolveToolInput,
   } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
@@ -2009,6 +2048,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             useChatStore.getState().pendingTemporaryChat,
             useSettingsStore.getState().newChatsTemporary,
           ) || localModelSelection !== null;
+        const conversationIsTemporary = existingConvId
+          ? useChatStore.getState().conversations.find((c) => c.id === existingConvId)
+              ?.isTemporary === true
+          : temporaryIntent;
+        if (!conversationIsTemporary && localModelSelection === null) {
+          runExplicitMemoryCommand(content, {
+            conversationId: existingConvId || null,
+            projectId: sendProjectId ?? null,
+          });
+        }
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -2167,6 +2216,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       claimSendWindow,
       failAttachmentUploadAttempt,
       updateAttachmentUploadStatus,
+      runExplicitMemoryCommand,
     ],
   );
 
@@ -3880,12 +3930,51 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
    * used to call. It returns false when the write fails so the composer can say
    * so instead of showing a privacy mode the database does not have.
    */
+  const { confirm: confirmKeepTemporaryChat, dialog: keepTemporaryChatDialog } = useConfirmAction();
   const handleSetTemporaryChat = useCallback(
     async (isTemporary: boolean): Promise<boolean> => {
       if (!displayedConversationId) return false;
-      return updateConversation(displayedConversationId, { isTemporary });
+      const conversationId = displayedConversationId;
+      const keptMessages = isTemporary
+        ? []
+        : displayedMessages.filter(
+            (message) =>
+              (message.role === 'user' || message.role === 'assistant') &&
+              !message.isStreaming &&
+              message.content.trim().length > 0,
+          );
+      if (keptMessages.length === 0) {
+        return updateConversation(conversationId, { isTemporary });
+      }
+      const localTitle = useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.title;
+      return new Promise<boolean>((resolve) => {
+        confirmKeepTemporaryChat({
+          title: 'Save this chat?',
+          description: `${describeKeptMessages(keptMessages.length)}, and any files you attached, will be kept in your history. From now on it follows your memory and data settings like any other chat.`,
+          confirmLabel: 'Save chat',
+          destructive: false,
+          onCancel: () => resolve(true),
+          onConfirm: async () => {
+            try {
+              await keepTemporaryChat({
+                conversationId,
+                title: localTitle && !AUTO_TITLE_PLACEHOLDERS.has(localTitle) ? localTitle : null,
+                messages: keptMessages,
+              });
+              useChatStore.getState().updateConversation(conversationId, { isTemporary: false });
+              toast.success('Chat saved to your history.');
+            } catch (error) {
+              toast.error(toUserMessage(error, 'This chat could not be saved.'));
+            } finally {
+              resolve(true);
+            }
+          },
+        });
+      });
     },
-    [displayedConversationId, updateConversation],
+    [confirmKeepTemporaryChat, displayedConversationId, displayedMessages, updateConversation],
   );
 
   const composerProjectPicker = useMemo(
@@ -5111,6 +5200,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
+        {...(turnNeedsTwoFactor(lastChatMessage)
+          ? {
+              actionSlot: (
+                <button
+                  type="button"
+                  onClick={() => openSettings('security')}
+                  className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
+                >
+                  Turn on two-factor
+                </button>
+              ),
+            }
+          : {})}
         action={{
           label: 'Retry',
           ariaLabel: 'Retry this turn',
@@ -5368,6 +5470,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       {/* Destructive-action confirm (delete conversation / delete project). One
           instance for the page; `confirmDestructive` fills in the copy. */}
       {destructiveConfirmDialog}
+      {memoryCommandDialog}
+      {keepTemporaryChatDialog}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
       <ComposerFeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} hideTrigger />
       <KeyboardShortcutsDialog
@@ -5746,47 +5850,49 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                   <ToolApprovalProvider value={resolveToolApproval}>
-                    <MessageInlineEditProvider value={messageInlineEdit}>
-                      <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                        <ChatMessageList
-                          messages={chatMessages}
-                          transcriptPatch={chatMessageProjection.patch}
-                          currentTier={currentTier}
-                          conversationId={displayedConversationId}
-                          isLoading={isLoading && !isStreaming}
-                          isUserTyping={isUserTyping}
-                          onRegenerate={handleRegenerateMessage}
-                          onRetryResearch={handleRetryResearch}
-                          onResearchPlanDecision={handleResearchPlanDecision}
-                          retryingResearchMessageId={retryingResearchMessageId}
-                          onContinue={handleContinueMessage}
-                          onEdit={handleEditMessage}
-                          onDelete={handleDeleteMessage}
-                          onDeleteVariant={handleDeleteVariant}
-                          countVariantFollowers={countVariantFollowers}
-                          onReact={handleReactMessage}
-                          onPin={handlePinMessage}
-                          branchGroupsByMessageId={branchGroupsByMessageId}
-                          branchingMessageId={branchingMessageId}
-                          onBranch={createBranch}
-                          onSwitchBranch={switchBranch}
-                          variantInfoByMessageId={variantInfoByMessageId}
-                          onSelectVariant={handleSelectVariant}
-                          activeLeafId={activeLeafId}
-                          variantAnchorMessageId={variantAnchorMessageId}
-                          isConversationStreaming={isStreaming}
-                          onRegenerateImage={handleRegenerateImageInPlace}
-                          onResumeVideo={handleResumeVideo}
-                          onRetryVideo={handleRetryVideo}
-                          onSendMessage={setComposerPrefill}
-                          onPaywallUpgrade={handlePaywallRecovery}
-                          onPaywallDismiss={handlePaywallDismiss}
-                          onRegenerateWithModel={handleRegenerateWithModel}
-                          regenerateModelOptions={regenerateModelOptions}
-                          turnErrorActive={turnErrorNotice !== null}
-                        />
-                      </InteractiveCardResumeProvider>
-                    </MessageInlineEditProvider>
+                    <ToolInputProvider value={resolveToolInput}>
+                      <MessageInlineEditProvider value={messageInlineEdit}>
+                        <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
+                          <ChatMessageList
+                            messages={chatMessages}
+                            transcriptPatch={chatMessageProjection.patch}
+                            currentTier={currentTier}
+                            conversationId={displayedConversationId}
+                            isLoading={isLoading && !isStreaming}
+                            isUserTyping={isUserTyping}
+                            onRegenerate={handleRegenerateMessage}
+                            onRetryResearch={handleRetryResearch}
+                            onResearchPlanDecision={handleResearchPlanDecision}
+                            retryingResearchMessageId={retryingResearchMessageId}
+                            onContinue={handleContinueMessage}
+                            onEdit={handleEditMessage}
+                            onDelete={handleDeleteMessage}
+                            onDeleteVariant={handleDeleteVariant}
+                            countVariantFollowers={countVariantFollowers}
+                            onReact={handleReactMessage}
+                            onPin={handlePinMessage}
+                            branchGroupsByMessageId={branchGroupsByMessageId}
+                            branchingMessageId={branchingMessageId}
+                            onBranch={createBranch}
+                            onSwitchBranch={switchBranch}
+                            variantInfoByMessageId={variantInfoByMessageId}
+                            onSelectVariant={handleSelectVariant}
+                            activeLeafId={activeLeafId}
+                            variantAnchorMessageId={variantAnchorMessageId}
+                            isConversationStreaming={isStreaming}
+                            onRegenerateImage={handleRegenerateImageInPlace}
+                            onResumeVideo={handleResumeVideo}
+                            onRetryVideo={handleRetryVideo}
+                            onSendMessage={setComposerPrefill}
+                            onPaywallUpgrade={handlePaywallRecovery}
+                            onPaywallDismiss={handlePaywallDismiss}
+                            onRegenerateWithModel={handleRegenerateWithModel}
+                            regenerateModelOptions={regenerateModelOptions}
+                            turnErrorActive={turnErrorNotice !== null}
+                          />
+                        </InteractiveCardResumeProvider>
+                      </MessageInlineEditProvider>
+                    </ToolInputProvider>
                   </ToolApprovalProvider>
                 </div>
 

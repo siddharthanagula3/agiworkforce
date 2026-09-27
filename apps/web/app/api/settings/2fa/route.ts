@@ -9,48 +9,22 @@ import { TWO_FACTOR_SCOPE } from './lib/scope';
 import { logger } from '@/lib/logger';
 import { requireStepUp } from '@/lib/server/step-up-auth';
 import { getIdentityProvider } from '@/lib/server/identity';
-import { getNeonDb } from '@/lib/server/neon-db';
-import { handleIdentitySecurityEvent } from '@/lib/services/identity-events';
+import { rememberMfaEnrollment } from '@/lib/mfa-policy-gate';
+import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
+import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 
 const ENDPOINT = '/api/settings/2fa';
-
-type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
-
-interface TwoFactorRow {
-  user_id: string;
-  totp_secret_enc: string;
-  backup_codes_hashed: string[];
-  enabled: boolean;
-  enabled_at: string | null;
-  backup_codes_generated_at: string | null;
-  last_verified_at: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-async function getTwoFactorRow(db: ScopedDb, userId: string): Promise<TwoFactorRow | null> {
-  const [row] = await db.query<TwoFactorRow>(
-    'select * from user_two_factor where user_id = $1 limit 1',
-    [userId],
-  );
-  return row ?? null;
-}
 
 async function handleGet2FAStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
-  const row = await getTwoFactorRow(db, userId);
-
-  if (!row || !row.enabled) {
-    return NextResponse.json({ enabled: false, backup_codes_remaining: 0 });
-  }
+  const status = await readSecondFactorStatus(db, userId);
 
   return NextResponse.json({
-    enabled: true,
-    enabled_at: row.enabled_at,
-    backup_codes_remaining: (row.backup_codes_hashed ?? []).length,
+    enabled: status.authenticator,
+    backup_codes_ready: status.authenticator && status.backupCodes,
   });
 }
 
@@ -63,10 +37,8 @@ async function handleDisable2FA(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Ahead of the challenge: an account with 2FA already off has nothing to
-  // prove a second factor with, and this answer is idempotent.
-  const row = await getTwoFactorRow(db, userId);
-  if (!row || !row.enabled) {
+  const status = await readSecondFactorStatus(db, userId);
+  if (!status.authenticator) {
     return NextResponse.json({ success: true, message: '2FA was not enabled' });
   }
 
@@ -78,18 +50,13 @@ async function handleDisable2FA(request: NextRequest) {
     endpoint: ENDPOINT,
   });
 
-  await db.query(
-    `update user_two_factor
-        set enabled = false,
-            enabled_at = null,
-            updated_at = now()
-      where user_id = $1`,
-    [userId],
-  );
+  await getIdentityProvider().removeSecondFactor(userId);
+  await db.query('delete from user_two_factor where user_id = $1', [userId]);
+  await rememberMfaEnrollment(userId, false);
 
   logger.info({ userId }, '2FA disabled successfully');
 
-  await handleIdentitySecurityEvent(getNeonDb(), getIdentityProvider(), {
+  await announceTwoFactorChange({
     userId,
     event: 'two_factor_disabled',
     request,

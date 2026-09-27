@@ -59,6 +59,7 @@ const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 const TEST_DEVELOPER_JWT_SECRET = 'test-developer-jwt-secret-at-least-32-bytes';
 process.env['JWT_SECRET'] = TEST_DEVELOPER_JWT_SECRET;
+process.env['CSRF_SECRET'] = 'api-auth-step-up-secret-at-least-32-bytes';
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
@@ -235,6 +236,8 @@ function makeFakeDb() {
 }
 
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
 import {
@@ -254,12 +257,19 @@ import {
 } from '@/lib/observability/trace-context';
 
 function makeCreateRequest(
+  userId: string,
   name = 'round-trip key',
   scopes = ['models:read', 'inference:write'],
 ): NextRequest {
+  const { token } = createStepUpGrant({
+    userId,
+    action: 'api_credential.reveal',
+    resourceId: null,
+    method: 'first_factor',
+  });
   return new NextRequest('http://localhost/api/settings/api-keys', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', [STEP_UP_TOKEN_HEADER]: token },
     body: JSON.stringify({ name, scopes }),
   });
 }
@@ -294,7 +304,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     makeFakeDb();
 
     mockAuth.mockResolvedValue(authSession('user-round-trip'));
-    const createRes = await createApiKeyRoute(makeCreateRequest());
+    const createRes = await createApiKeyRoute(makeCreateRequest('user-round-trip'));
     expect(createRes.status).toBe(201);
     const created = (await createRes.json()) as {
       api_key: { id: string; scopes: string[] };
@@ -316,7 +326,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     makeFakeDb();
 
     mockAuth.mockResolvedValue(authSession('scoped-user'));
-    const createRes = await createApiKeyRoute(makeCreateRequest('models only', ['models:read']));
+    const createRes = await createApiKeyRoute(
+      makeCreateRequest('scoped-user', 'models only', ['models:read']),
+    );
     const created = (await createRes.json()) as { full_key: string };
 
     mockAuth.mockResolvedValue(authSession(null));
@@ -364,7 +376,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     makeFakeDb();
     mockAuth.mockResolvedValue(authSession('scope-required-user'));
 
-    const response = await createApiKeyRoute(makeCreateRequest('scope-less', []));
+    const response = await createApiKeyRoute(
+      makeCreateRequest('scope-required-user', 'scope-less', []),
+    );
 
     expect(response.status).toBe(400);
   });
@@ -373,7 +387,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     makeFakeDb();
 
     mockAuth.mockResolvedValue(authSession('user-revoke-me'));
-    const createRes = await createApiKeyRoute(makeCreateRequest());
+    const createRes = await createApiKeyRoute(makeCreateRequest('user-revoke-me'));
     const created = (await createRes.json()) as { api_key: { id: string }; full_key: string };
 
     mockAuth.mockResolvedValue(authSession('user-revoke-me'));
@@ -616,7 +630,9 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     it('stamps the resolved user id for a verified API-key bearer', async () => {
       makeFakeDb();
       mockAuth.mockResolvedValue(authSession('scoped-user'));
-      const createRes = await createApiKeyRoute(makeCreateRequest('scoped', ['models:read']));
+      const createRes = await createApiKeyRoute(
+        makeCreateRequest('scoped-user', 'scoped', ['models:read']),
+      );
       const created = (await createRes.json()) as { full_key: string };
 
       mockAuth.mockResolvedValue(authSession(null));
@@ -1017,7 +1033,9 @@ describe('getClerkAuthUser · the identity bridge resolves an internal account i
   it('applies the same erasure gate to an API key, which carries the account id already', async () => {
     const db = makeFakeDb();
     mockAuth.mockResolvedValue(authSession('erased-key-owner'));
-    const createRes = await createApiKeyRoute(makeCreateRequest('still valid', ['models:read']));
+    const createRes = await createApiKeyRoute(
+      makeCreateRequest('erased-key-owner', 'still valid', ['models:read']),
+    );
     const created = (await createRes.json()) as { full_key: string };
 
     db.erasedAccounts.add('erased-key-owner');
@@ -1176,7 +1194,7 @@ describe('tenant lockdown at the auth boundary', () => {
   it('refuses an API key whose workspace is locked down, key and scope notwithstanding', async () => {
     makeFakeDb();
     mockAuth.mockResolvedValue(authSession('locked-key-user'));
-    const createRes = await createApiKeyRoute(makeCreateRequest());
+    const createRes = await createApiKeyRoute(makeCreateRequest('locked-key-user'));
     const created = (await createRes.json()) as { full_key: string };
 
     mockAuth.mockResolvedValue(authSession(null));

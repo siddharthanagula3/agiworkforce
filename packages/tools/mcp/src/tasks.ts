@@ -1,73 +1,36 @@
+import type { Client, RequestOptions } from '@modelcontextprotocol/client';
 import {
-  fromJsonSchema,
-  type Client,
-  type JsonSchemaType,
-  type RequestOptions,
-  type StandardSchemaWithJSON,
-} from '@modelcontextprotocol/client';
-import taskExtensionSchema from '@modelcontextprotocol/ext-tasks/schema/2026-07-28/schema.json';
-import type {
-  CancelTaskResult,
-  CreateTaskResult,
-  GetTaskResult,
-  UpdateTaskResult,
-} from '@modelcontextprotocol/ext-tasks/schema/2026-07-28/schema';
+  CancelTaskResultV2Schema,
+  CreateTaskResultV2Schema,
+  GetTaskResultV2Schema,
+  hasTaskServerCapabilityV2,
+  TASKS_EXTENSION_ID_V2,
+  UpdateTaskResultV2Schema,
+  type CancelTaskResultV2,
+  type CreateTaskResultV2,
+  type GetTaskResultV2,
+  type UpdateTaskResultV2,
+} from '@modelcontextprotocol/ext-tasks/core/v2';
 
-export const MCP_TASKS_EXTENSION_ID = 'io.modelcontextprotocol/tasks';
+export const MCP_TASKS_EXTENSION_ID = TASKS_EXTENSION_ID_V2;
 
-type OfficialTaskSchemaName =
-  | 'CreateTaskResult'
-  | 'GetTaskResult'
-  | 'UpdateTaskResult'
-  | 'CancelTaskResult';
-
-/** Use the immutable official extension schema with the SDK's custom-method validator. */
-function officialTaskSchema<T>(name: OfficialTaskSchemaName): StandardSchemaWithJSON<T, T> {
-  return fromJsonSchema<T>({
-    ...(taskExtensionSchema as unknown as JsonSchemaType),
-    $ref: `#/$defs/${name}`,
-  });
-}
-
-async function validateWithOfficialSchema<T>(
-  schema: StandardSchemaWithJSON<T, T>,
-  value: unknown,
-): Promise<T | undefined> {
-  const outcome = await schema['~standard'].validate(value);
-  return outcome.issues ? undefined : outcome.value;
-}
-
-export async function parseCreateTaskResult(value: unknown): Promise<CreateTaskResult | undefined> {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    (value as Record<string, unknown>)['resultType'] !== 'task'
-  ) {
-    return undefined;
-  }
-  return validateWithOfficialSchema(
-    officialTaskSchema<CreateTaskResult>('CreateTaskResult'),
-    value,
-  );
+export function parseCreateTaskResult(value: unknown): CreateTaskResultV2 | undefined {
+  const parsed = CreateTaskResultV2Schema.safeParse(value);
+  return parsed.success ? parsed.data : undefined;
 }
 
 export function serverSupportsTasks(capabilities: Record<string, unknown>): boolean {
-  const extensions = capabilities['extensions'];
-  return (
-    extensions !== null &&
-    typeof extensions === 'object' &&
-    Object.prototype.hasOwnProperty.call(extensions, MCP_TASKS_EXTENSION_ID)
-  );
+  return hasTaskServerCapabilityV2(capabilities);
 }
 
 export async function getTask(
   client: Client,
   taskId: string,
   options?: RequestOptions,
-): Promise<GetTaskResult> {
+): Promise<GetTaskResultV2> {
   return client.request(
     { method: 'tasks/get', params: { taskId } },
-    officialTaskSchema<GetTaskResult>('GetTaskResult'),
+    GetTaskResultV2Schema,
     options,
   );
 }
@@ -77,10 +40,10 @@ export async function updateTask(
   taskId: string,
   inputResponses: Record<string, unknown>,
   options?: RequestOptions,
-): Promise<UpdateTaskResult> {
+): Promise<UpdateTaskResultV2> {
   return client.request(
     { method: 'tasks/update', params: { taskId, inputResponses } },
-    officialTaskSchema<UpdateTaskResult>('UpdateTaskResult'),
+    UpdateTaskResultV2Schema,
     options,
   );
 }
@@ -89,17 +52,17 @@ export async function cancelTask(
   client: Client,
   taskId: string,
   options?: RequestOptions,
-): Promise<CancelTaskResult> {
+): Promise<CancelTaskResultV2> {
   return client.request(
     { method: 'tasks/cancel', params: { taskId } },
-    officialTaskSchema<CancelTaskResult>('CancelTaskResult'),
+    CancelTaskResultV2Schema,
     options,
   );
 }
 
 export type {
-  CancelTaskResult as McpCancelTaskResult,
-  CreateTaskResult as McpCreateTaskResult,
-  GetTaskResult as McpGetTaskResult,
-  UpdateTaskResult as McpUpdateTaskResult,
+  CancelTaskResultV2 as McpCancelTaskResult,
+  CreateTaskResultV2 as McpCreateTaskResult,
+  GetTaskResultV2 as McpGetTaskResult,
+  UpdateTaskResultV2 as McpUpdateTaskResult,
 };

@@ -7,7 +7,11 @@ import type {
   CloudCodeSession,
   ProviderMessage,
 } from '@agiworkforce/types';
-import { SLOT_REGISTRY, normalizeModelId } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS,
+  SLOT_REGISTRY,
+  normalizeModelId,
+} from '@agiworkforce/types';
 import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 import { getE2BExecutor, revokeE2BSessionCredentials } from '@/lib/e2b/runtime';
 import {
@@ -30,6 +34,11 @@ import { selectHarnessRunner } from '@/lib/e2b/harnesses';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
 import { mirrorCloudCodeStopOntoDurableRun } from './cloud-code-durable-run';
 import { createHarnessStepProjector, runCloudCodeHarnessTurn } from './cloud-code-harness-turn';
+import { readCloudCodeProjectInstructions } from './cloud-code-project-instructions';
+import {
+  cloudCodeTurnNotificationEvent,
+  notifyCloudCodeTurnEvent,
+} from './agent-notification-service';
 import {
   createObservedProviderUsage,
   observedProviderUsageLedgerCents,
@@ -83,9 +92,10 @@ const MAX_STEP_OUTPUT_LENGTH = 100_000;
  * service: `export const maxDuration = 300` in
  * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
  * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
- * cannot import this, the three values are kept in step by hand.
+ * cannot import this, the route literals and the shared limit clients wait on
+ * are kept in step by hand.
  */
-export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = 300_000;
+export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS;
 
 /**
  * What an agent turn is actually allowed to spend, and why it is not
@@ -777,6 +787,10 @@ async function runClaimedAgentTurn(
         },
       });
     } else {
+      const projectInstructions = await readCloudCodeProjectInstructions(
+        executor,
+        session.workspacePath,
+      );
       result = await runCloudCodeAgentTurn({
         adapter: buildServerProviderAdapter(provider),
         model,
@@ -789,6 +803,7 @@ async function runClaimedAgentTurn(
         maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
         repositoryUrl: session.repositoryUrl,
         workspacePath: session.workspacePath,
+        projectInstructions,
         ...(input.priorMessages ? { priorMessages: input.priorMessages } : {}),
         ...(input.preApproved ? { preApproved: input.preApproved } : {}),
         onStepCommitted: async (step: number) => {
@@ -952,6 +967,21 @@ async function runClaimedAgentTurn(
   }
   if (approvalRecordingFailed) {
     throw new CloudCodeUnavailableError('Approval request could not be recorded');
+  }
+
+  const noticeEvent = cloudCodeTurnNotificationEvent(result.stopReason);
+  if (noticeEvent) {
+    const sessionTitle = await getCloudCodeSession(db, owner, sessionId)
+      .then((current) => current.title)
+      .catch(() => null);
+    await notifyCloudCodeTurnEvent(db, {
+      userId: owner.userId,
+      sessionId,
+      sessionTitle,
+      turnId,
+      event: noticeEvent,
+      ...(pendingApproval ? { approvalStepIndex: pendingApproval.stepIndex } : {}),
+    });
   }
 
   logger.info(

@@ -298,9 +298,10 @@ run checks that production is serving the current `main` commit.
   public Electron installer has been published yet. The Tauri
   `release-desktop.yml` and `build-windows-release.yml` paths are retained
   internal workflows and do not define the public Desktop product.
-- **CLI**: `release-cli.yml` publishes a signed GitHub Release and the
-  `@agiworkforce/cli` npm package from a git tag matching
+- **CLI**: `release-cli.yml` publishes a GitHub Release whose checksum
+  manifest is signed with the pinned release key, from a git tag matching
   `apps/cli/Cargo.toml`; not every commit to `apps/cli` has one.
+  `curl -fsSL https://agiworkforce.com/install.sh | bash` installs it.
 - **Mobile**: built with EAS. Release scripts for App Store and Play
   submission live in `apps/mobile/scripts/release/`, but no EAS build has
   been submitted to either store yet.

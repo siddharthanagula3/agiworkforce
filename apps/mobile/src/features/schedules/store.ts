@@ -8,7 +8,13 @@ import {
   deleteSchedule as apiDeleteSchedule,
   toggleSchedule as apiToggleSchedule,
   fetchScheduleRuns as apiFetchRuns,
+  resolveScheduleRunApproval as apiResolveRunApproval,
 } from './service';
+import type {
+  ManagedCloudScheduleRunApproval,
+  ManagedCloudScheduleRunPendingApproval,
+  ManagedCloudScheduleTask,
+} from '@agiworkforce/cloud-contracts';
 import { isMobileScheduleRecurrenceSupported } from './policy';
 import {
   captureCloudAccountEpoch,
@@ -36,6 +42,7 @@ export interface Schedule {
   lastRunAt: string | null;
   nextRunAt: string | null;
   lastRunStatus: 'success' | 'failed' | 'pending' | null;
+  pausedReason?: ManagedCloudScheduleTask['pausedReason'];
   createdAt: string;
   updatedAt: string;
 }
@@ -43,16 +50,17 @@ export interface Schedule {
 export interface ScheduleRun {
   id: string;
   scheduleId: string;
-  status: 'success' | 'failed' | 'running' | 'timeout' | 'cancelled';
+  status: 'success' | 'failed' | 'running' | 'timeout' | 'cancelled' | 'awaiting_approval';
   startedAt: string;
   completedAt: string | null;
   result: string | null;
   error: string | null;
+  pendingApproval?: ManagedCloudScheduleRunPendingApproval | null;
 }
 
 export type CreateScheduleInput = Omit<
   Schedule,
-  'id' | 'createdAt' | 'updatedAt' | 'lastRunAt' | 'nextRunAt' | 'lastRunStatus'
+  'id' | 'createdAt' | 'updatedAt' | 'lastRunAt' | 'nextRunAt' | 'lastRunStatus' | 'pausedReason'
 >;
 
 interface ScheduleState {
@@ -60,6 +68,7 @@ interface ScheduleState {
   runsBySchedule: Record<string, ScheduleRun[]>;
   runsLoadingBySchedule: Record<string, boolean>;
   runsErrorBySchedule: Record<string, string | null>;
+  approvalPendingByRun: Record<string, boolean>;
   loading: boolean;
   error: string | null;
 
@@ -69,6 +78,11 @@ interface ScheduleState {
   deleteSchedule: (id: string) => Promise<void>;
   toggleSchedule: (id: string) => Promise<void>;
   fetchRuns: (scheduleId: string) => Promise<void>;
+  resolveRunApproval: (
+    scheduleId: string,
+    runId: string,
+    decision: ManagedCloudScheduleRunApproval['decision'],
+  ) => Promise<void>;
   getRuns: (scheduleId: string) => ScheduleRun[];
   clearError: () => void;
   clearAccountSchedules: () => void;
@@ -81,6 +95,7 @@ export const useScheduleStore = create<ScheduleState>()(
       runsBySchedule: {},
       runsLoadingBySchedule: {},
       runsErrorBySchedule: {},
+      approvalPendingByRun: {},
       loading: false,
       error: null,
 
@@ -248,6 +263,50 @@ export const useScheduleStore = create<ScheduleState>()(
         }
       },
 
+      resolveRunApproval: async (scheduleId, runId, decision) => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
+        const pending = get().runsBySchedule[scheduleId]?.find(
+          (run) => run.id === runId,
+        )?.pendingApproval;
+        if (!pending) return;
+        set((state) => ({
+          approvalPendingByRun: { ...state.approvalPendingByRun, [runId]: true },
+          runsErrorBySchedule: { ...state.runsErrorBySchedule, [scheduleId]: null },
+        }));
+        try {
+          const resolved = await apiResolveRunApproval(scheduleId, runId, {
+            decision,
+            toolCallIds: pending.toolCalls.map((call) => call.id),
+          });
+          if (!isCloudAccountEpochCurrent(account)) return;
+          set((state) => ({
+            runsBySchedule: {
+              ...state.runsBySchedule,
+              [scheduleId]: (state.runsBySchedule[scheduleId] ?? []).map((run) =>
+                run.id === resolved.id ? resolved : run,
+              ),
+            },
+          }));
+          await get().fetchSchedules();
+        } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
+          set((state) => ({
+            runsErrorBySchedule: {
+              ...state.runsErrorBySchedule,
+              [scheduleId]:
+                error instanceof Error ? error.message : 'The approval could not be sent',
+            },
+          }));
+        } finally {
+          if (isCloudAccountEpochCurrent(account)) {
+            set((state) => ({
+              approvalPendingByRun: { ...state.approvalPendingByRun, [runId]: false },
+            }));
+          }
+        }
+      },
+
       getRuns: (scheduleId) => {
         return get().runsBySchedule[scheduleId] ?? [];
       },
@@ -262,6 +321,7 @@ export const useScheduleStore = create<ScheduleState>()(
           runsBySchedule: {},
           runsLoadingBySchedule: {},
           runsErrorBySchedule: {},
+          approvalPendingByRun: {},
           loading: false,
           error: null,
         });

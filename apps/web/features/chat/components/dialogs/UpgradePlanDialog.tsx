@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { Check } from 'lucide-react';
-import { isPlanSelectableOnSurface } from '@agiworkforce/types';
+import { getPublishedPlanPricePerMonthUsd, isPlanSelectableOnSurface } from '@agiworkforce/types';
 import {
   Dialog,
   DialogContent,
@@ -56,6 +56,7 @@ interface PlanCard {
    * whole organization's bill.
    */
   perSeat: boolean;
+  yearlyPricePerMonth: number | null;
   tagline: string;
   features: string[];
   popular?: boolean;
@@ -86,8 +87,9 @@ const PLAN_CARDS: PlanCard[] = PLAN_CARD_IDS.flatMap((id) => {
       name: display.pricing.label,
       monthlyPrice: monthlyPriceUsd,
       perSeat: display.pricing.perSeat === true,
+      yearlyPricePerMonth: getPublishedPlanPricePerMonthUsd(id, 'yearly'),
       tagline: PLAN_TAGLINES[id],
-      features: display.features,
+      features: [...display.usage, ...display.features],
       popular: id === 'pro',
     },
   ];
@@ -132,7 +134,7 @@ function PlanCardView({ plan, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) 
   // Team is a published per-seat price, not a negotiated one, rendering
   // "Custom" here contradicted both the catalog and the pricing page, which
   // sells it self-serve.
-  const displayPrice = formatPrice(plan.monthlyPrice);
+  const displayPrice = formatPrice(plan.yearlyPricePerMonth ?? plan.monthlyPrice);
 
   return (
     <div
@@ -160,6 +162,11 @@ function PlanCardView({ plan, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) 
             </span>
           )}
         </div>
+        {plan.yearlyPricePerMonth !== null && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Billed yearly, or {formatPrice(plan.monthlyPrice)} billed monthly
+          </p>
+        )}
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{plan.tagline}</p>
       </div>
 

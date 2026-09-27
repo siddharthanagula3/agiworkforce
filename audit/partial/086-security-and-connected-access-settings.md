@@ -26,39 +26,35 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `app
 
 - Done when: The user can add, see, rename and remove passkeys for their account.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | F1: the cited PasskeysPanel/usePasskeys lines add (user.createPasskey), list (user.passkeys) and remove (passkey.delete) but there is no rename control anywhere in the panel or client (no rename/update call), while the criterion lists rename. Partial with remaining: add passkey rename. |  |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/SecuritySection.tsx:103-112`, `apps/web/features/settings/components/Settings/PasskeysPanel.tsx:35-54`, `apps/web/lib/identity/client.ts:149-166`
 
 ## S86.04: Multifactor authentication.
 
 - Done when: The user can turn on a second factor that is then required when signing in, and turn it off.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Settings authenticator (user_two_factor) is never asked at sign-in: sign-in challenges only identity-provider MFA, which no screen enrolls, and the workspace require-MFA policy reads that provider flag. | handler |
-| desktop | partial | Same as web: the authenticator protects step-up actions only, not sign-in. | handler |
-| mobile | partial | Mobile shows whether the authenticator is on and sends the user to web to set it up; the factor does not protect sign-in on any surface. | ui, handler |
+| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui, handler |
 
-Code: `apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx:272-276`, `apps/web/app/api/settings/2fa/setup/route.ts:40-70`, `apps/web/lib/mfa-policy-gate.ts:50-54`, `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
+Code: `apps/mobile/src/features/settings/account-security/index.tsx:313-350`
 
 ## S86.05: Recovery codes.
 
 - Done when: The user can view, download and regenerate recovery codes that let them back into the account if the second factor is lost.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Codes are shown once, downloadable and regenerable, but they only satisfy step-up prompts; because the authenticator is not a sign-in factor they recover nothing at sign-in. | handler |
-| desktop | partial | Same as web. | handler |
-| mobile | partial | Mobile shows only how many backup codes remain; viewing or regenerating them opens the web page. | ui |
+| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | ui |
 
-Code: `apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx:301-325`, `apps/web/app/api/settings/2fa/backup-codes/route.ts:45-70`, `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
+Code: `apps/mobile/src/features/settings/account-security/index.tsx:325-336`
 
 ## S86.06: Active sessions.
 
@@ -94,16 +90,13 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/we
 
 - Done when: One action signs the account out everywhere: every browser, app and device credential.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile can end other sessions one at a time and links to the web Account page; it has no sign-out-everywhere action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:385-400`, `apps/mobile/src/features/settings/account-security/service.ts:150-160`
 
 ## S86.11: Security notifications.
 
@@ -221,18 +214,6 @@ Code: `apps/web/features/desktop-host/components/DesktopSettingsSection.tsx:47-5
 
 Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:60-90`, `apps/desktop/electron/runtime/permissionManager.ts:300-335`, `apps/desktop/electron/runtime/permissionManager.ts:112-124`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:28-40`
 
-## S86.24: Default permission mode.
-
-- Done when: The user can set the default approval posture for agent actions (ask every time, auto-approve safe, autonomous) and it is enforced.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The onboarding "Default interaction mode" choice writes approval_mode, which nothing reads; the default that is actually applied is permission_mode, set only by editing config.toml or from VS Code. Shift+Tab and --permission-mode change it per session/run. | handler |
-
-Code: `apps/cli/src/onboarding.rs:716-760`, `apps/cli/src/config.rs:103-115`, `apps/cli/src/lib.rs:4474-4478`
-
 ## S86.25: Revoke all optional grants.
 
 - Done when: One action withdraws every optional permission granted to AGI (connectors, saved approvals, device grants, folders).
@@ -253,14 +234,14 @@ Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:48-50`, 
 
 - Done when: The user can turn on a hardened mode that tightens account and agent security beyond defaults.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lockdown mode hardens the assistant (refuses every connector tool, enforced server-side), but there is no hardened account-security mode such as passkey-only sign-in or stricter recovery. | ui, handler |
-| desktop | partial | Same as web (hosted Capabilities page). | ui, handler |
-| mobile | partial | Lockdown set on web also applies to mobile cloud chats (server-side), but mobile cannot show or change it ("not exposed"). | ui |
+| web | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
+| desktop | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LockdownModePanel.tsx:64-92`, `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:170-185`, `apps/mobile/src/features/settings/account-security/index.tsx:464-470`
+Code: `apps/mobile/src/features/settings/account-security/service.ts:201-201`

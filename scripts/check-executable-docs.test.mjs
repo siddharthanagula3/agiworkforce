@@ -11,7 +11,6 @@ const GUARD = join(REPO_ROOT, 'scripts', 'check-executable-docs.mjs');
 
 const BASE_INPUTS = {
   'apps/cli/README.md': '# cli\n',
-  'apps/cli/npm/README.md': '# cli npm\n',
   'apps/cli/src/output_styles/explanatory.md': 'explanatory\n',
   'apps/cli/src/output_styles/learning.md': 'learning\n',
 };

@@ -39,6 +39,7 @@ const PROTECTED_AUTHORIZATION_PARAMS = new Set([
   'state',
   'code_challenge',
   'code_challenge_method',
+  'resource',
 ]);
 
 const httpsUrl = z
@@ -49,13 +50,13 @@ const httpsUrl = z
 const providerDescriptorSchema = z.object({
   connectorId: z.string().regex(CONNECTOR_ID_RE, 'connectorId must be lower-case and hyphenated'),
   displayName: z.string().min(1).max(120).optional(),
+  issuer: httpsUrl.optional(),
   authorizationUrl: httpsUrl,
   tokenUrl: httpsUrl,
   revocationUrl: httpsUrl.optional(),
   mcpUrl: httpsUrl,
   transport: z.enum(['streamable-http', 'sse']).optional().default('streamable-http'),
   scopes: z.array(z.string().min(1).max(256)).max(64).optional().default([]),
-  usePkce: z.boolean().optional().default(true),
   tokenAuthMethod: z
     .enum(['client_secret_post', 'client_secret_basic', 'none'])
     .optional()
@@ -68,6 +69,8 @@ const providerDescriptorSchema = z.object({
       (params) => Object.keys(params).every((key) => !PROTECTED_AUTHORIZATION_PARAMS.has(key)),
       'authorizationParams may not override a broker-owned OAuth parameter',
     ),
+  codeChallengeMethodsSupported: z.array(z.string().min(1).max(32)).max(8).optional(),
+  resourceIndicator: z.boolean().optional(),
   enabled: z.boolean().optional().default(true),
 });
 
@@ -259,9 +262,10 @@ export function buildAuthorizationUrl(params: {
   provider: ConnectorOAuthProvider;
   redirectUri: string;
   state: string;
-  codeChallenge: string | null;
+  codeChallenge: string;
+  resource: string;
 }): string {
-  const { provider, redirectUri, state, codeChallenge } = params;
+  const { provider, redirectUri, state, codeChallenge, resource } = params;
   if (!isAllowedConnectorOAuthRedirectUri(redirectUri)) {
     throw new Error('Refusing to build an authorization URL for a non-allowlisted redirect URI');
   }
@@ -274,10 +278,9 @@ export function buildAuthorizationUrl(params: {
   url.searchParams.set('redirect_uri', redirectUri);
   url.searchParams.set('state', state);
   if (provider.scopes.length > 0) url.searchParams.set('scope', provider.scopes.join(' '));
-  if (codeChallenge) {
-    url.searchParams.set('code_challenge', codeChallenge);
-    url.searchParams.set('code_challenge_method', 'S256');
-  }
+  url.searchParams.set('code_challenge', codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  if (provider.resourceIndicator !== false) url.searchParams.set('resource', resource);
   return url.toString();
 }
 

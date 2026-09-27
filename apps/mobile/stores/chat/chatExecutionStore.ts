@@ -94,6 +94,10 @@ import {
   consolidateFactsFromTurn,
   shouldConsolidateMemoryOnClient,
 } from '@/src/features/memory/services/consolidation';
+import {
+  answerMemoryCommand,
+  hasMemoryCommand,
+} from '@/src/features/memory/services/memoryCommands';
 import { recognizeText } from '@/src/features/image/services/ocr';
 import {
   executionModeForConversation,
@@ -113,10 +117,12 @@ import type {
   ChatMessage,
   MessageAttachment,
   ConversationSummary,
+  StatusStep,
   ToolCall,
   ToolSearchResult,
 } from '@/types/chat';
 import {
+  RESPONSE_STYLE_GUIDANCE,
   canUseBillingPlanCapability,
   getModelMetadataById,
   isAutoModeModelId,
@@ -385,11 +391,13 @@ const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
     'Mode: Create. Produce usable drafts, code, plans, or structured outputs with clear next steps.',
 };
 
+const CHAT_STYLE_OVERRIDE = 'Use this style in this chat over any saved response style.';
+
 const CHAT_STYLE_PROMPTS: Record<ChatStyle, string | null> = {
   normal: null,
-  concise: 'Style: Concise. Keep the answer short, direct, and easy to scan.',
-  detailed: 'Style: Detailed. Explain reasoning and tradeoffs clearly without padding.',
-  creative: 'Style: Creative. Offer more original phrasing or options while staying accurate.',
+  concise: `Style: Concise. ${RESPONSE_STYLE_GUIDANCE.concise} ${CHAT_STYLE_OVERRIDE}`,
+  explanatory: `Style: Explanatory. ${RESPONSE_STYLE_GUIDANCE.explanatory} ${CHAT_STYLE_OVERRIDE}`,
+  formal: `Style: Formal. ${RESPONSE_STYLE_GUIDANCE.formal} ${CHAT_STYLE_OVERRIDE}`,
 };
 
 function generateId(): string {
@@ -700,6 +708,29 @@ function conversationRowsInOrder(conversationId: string): ChatMessage[] {
   const owned =
     getConversationMessageStore(conversationId).getState().messages[conversationId] ?? [];
   return [...owned].sort(compareCloudMessagesByCreatedAtThenId);
+}
+
+function attachTurnStep(conversationId: string, messageId: string, step: StatusStep): void {
+  getConversationMessageStore(conversationId).setState((state) => {
+    const messages = state.messages[conversationId];
+    if (!messages?.some((message) => message.id === messageId)) return {};
+    return {
+      messages: {
+        ...state.messages,
+        [conversationId]: messages.map((message) =>
+          message.id === messageId
+            ? {
+                ...message,
+                steps: [
+                  ...(message.steps ?? []).filter((existing) => existing.id !== step.id),
+                  step,
+                ],
+              }
+            : message,
+        ),
+      },
+    };
+  });
 }
 
 /**
@@ -1133,9 +1164,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
 
         try {
+          const uploadContext = {
+            conversationId,
+            temporary:
+              useSettingsStore.getState().isTemporaryChat || conversation?.temporary === true,
+          };
           const uploadResults = await Promise.all(
             attachmentsNeedingUpload.map((a) =>
-              uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName, a.id),
+              uploadWithRetry(
+                { uri: a.uri, name: a.fileName, type: a.mimeType },
+                a.fileName,
+                a.id,
+                uploadContext,
+              ),
             ),
           );
           if (!isTurnAccountCurrent()) return false;
@@ -1366,24 +1407,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
     const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
-    const memoryContextEnabled =
-      memorySettings.memoryEnabled && memorySettings.referencePastChats && !isTemporaryChat;
+    const memoryReadsEnabled = memorySettings.memoryEnabled && !isTemporaryChat;
 
     try {
-      const [memFacts, pastChatContext] = memoryContextEnabled
-        ? await Promise.all([
-            retrieveMemoryContext(content, 5),
-            retrievePastChatContext({
-              executionMode,
-              query: content,
-              currentConversationId: conversationId,
-              enabled: true,
-            }),
-          ])
-        : [[], null];
+      const [memFacts, pastChatContext] = await Promise.all([
+        memoryReadsEnabled ? retrieveMemoryContext(content, 5) : [],
+        retrievePastChatContext({
+          executionMode,
+          query: content,
+          currentConversationId: conversationId,
+          enabled: memorySettings.referencePastChats && !isTemporaryChat,
+        }),
+      ]);
       if (!isTurnAccountCurrent()) return false;
       const blocks = buildPersonalContextBlocks({
-        personalization: memorySettings.personalization,
+        personalization: executionMode === 'cloud' ? null : memorySettings.personalization,
         memories: memFacts,
       });
       if (pastChatContext) {
@@ -1400,7 +1438,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
       executionMode,
       isTemporaryChat,
-      memoryEnabled: memorySettings.memoryEnabled && memorySettings.referencePastChats,
+      memoryEnabled: memorySettings.memoryEnabled,
       generateMemoryFromHistory: memorySettings.generateMemoryFromHistory,
     });
     let completedLocalMemoryCaptured = false;
@@ -1477,6 +1515,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
 
     options?.onAccepted?.();
+
+    if (userMessage && !isTemporaryChat && !conversationIsTemporary && hasMemoryCommand(content)) {
+      void answerMemoryCommand(
+        {
+          executionMode,
+          message: content,
+          conversationId,
+          projectId: activeProjectId,
+          memoryEnabled: memorySettings.memoryEnabled,
+        },
+        (step) => attachTurnStep(conversationId, assistantMessageId, step),
+      );
+    }
 
     if (cancelledBeforeStream.has(conversationId)) {
       cancelledBeforeStream.delete(conversationId);

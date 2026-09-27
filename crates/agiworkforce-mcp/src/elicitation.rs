@@ -29,13 +29,22 @@ pub enum ElicitationMode {
     Url,
 }
 
+impl ElicitationMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ElicitationMode::Form => "form",
+            ElicitationMode::Url => "url",
+        }
+    }
+}
+
 /// Server → client `elicitation/create` request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ElicitationRequest {
     /// Human-readable message shown to the user.
     pub message: String,
     /// JSON Schema describing the structured input the server expects.
-    #[serde(rename = "requestedSchema")]
+    #[serde(rename = "requestedSchema", default)]
     pub requested_schema: serde_json::Value,
     /// How the user should complete the request.
     #[serde(default)]
@@ -102,6 +111,10 @@ impl ElicitationResponse {
 /// Uses a `BoxFuture` return type instead of `async_trait` to stay
 /// dyn-compatible without adding the `async-trait` crate.
 pub trait ElicitationHandler: Send + Sync {
+    fn modes(&self) -> &'static [ElicitationMode] {
+        &[ElicitationMode::Form, ElicitationMode::Url]
+    }
+
     /// Handle one elicitation request from the named MCP server. The handler is
     /// allowed to take as long as it needs (including blocking on the user).
     /// the MCP connection layer will wait.
@@ -117,6 +130,10 @@ pub trait ElicitationHandler: Send + Sync {
 pub struct AutoDeclineHandler;
 
 impl ElicitationHandler for AutoDeclineHandler {
+    fn modes(&self) -> &'static [ElicitationMode] {
+        &[]
+    }
+
     fn handle<'a>(
         &'a self,
         _server_name: &'a str,

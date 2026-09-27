@@ -137,8 +137,14 @@ export async function fireEventTriggerJob(
     signal,
   });
 
-  if (run.status === 'success') {
-    await settleTriggerDelivery(db, payload.eventId, 'fired', null, { runId: run.id });
+  if (run.status === 'success' || run.status === 'awaiting_approval') {
+    await settleTriggerDelivery(
+      db,
+      payload.eventId,
+      'fired',
+      run.status === 'awaiting_approval' ? 'The run is waiting for your approval' : null,
+      { runId: run.id },
+    );
     return { runId: run.id, status: run.status };
   }
 

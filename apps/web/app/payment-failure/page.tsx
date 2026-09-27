@@ -33,16 +33,21 @@ export default function PaymentFailurePage() {
               <h1 className="agi-ds-h1">Payment didn&rsquo;t go through.</h1>
             </div>
             <Prose>
-              Your card was declined or the charge was canceled.{' '}
-              <strong>No subscription was created and you weren&rsquo;t charged.</strong>
+              If a renewal failed, your plan&rsquo;s paid features are paused until it is paid. Pay
+              the open invoice or update your payment method in Billing, and they come back as soon
+              as the payment succeeds.
             </Prose>
             <Prose size="sm">
-              The usual causes: the card was declined by the issuer, the 3D Secure verification
-              window closed before you confirmed, or Stripe could not reach your bank over the
-              network. The last two typically resolve on retry.
+              If you were starting a new plan, no subscription was created and you weren&rsquo;t
+              charged. The usual causes are a decline by the card issuer, a 3D Secure check that
+              closed before you confirmed, or a network error reaching your bank; the last two
+              usually clear on a second try.
             </Prose>
             <ButtonRow>
-              <Button href="/pricing">Try again</Button>
+              <Button href="/settings/billing">Open billing</Button>
+              <Button href="/pricing" variant="secondary">
+                See plans
+              </Button>
             </ButtonRow>
             <Prose size="sm">
               Still stuck? Email{' '}

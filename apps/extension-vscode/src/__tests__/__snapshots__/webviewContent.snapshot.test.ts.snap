@@ -2799,6 +2799,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var activeEffort = 'medium';
     var activeSupportsEffort = true;
     var runtimeBlock = null;
+    var runtimeCliMissing = false;
     var lastUsageMeterPayload = null;
     var onboardingStep = 0;
 
@@ -2884,9 +2885,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
-        onboardingWorkspaceLede.textContent =
-          'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceAction.textContent = 'Open runtime setup';
+        onboardingWorkspaceLede.textContent = runtimeCliMissing
+          ? 'This workspace is open, but the AGI CLI is not installed here yet.'
+          : 'This workspace is open, but the local AGI runtime is not ready yet.';
+        onboardingWorkspaceAction.textContent = runtimeCliMissing
+          ? 'Install AGI CLI'
+          : 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
@@ -2941,7 +2945,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -3289,7 +3295,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -3394,7 +3402,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           ? 'Open folder'
           : workspaceUntrusted
             ? 'Manage trust'
-            : 'Open setup';
+            : runtimeCliMissing
+              ? 'Install AGI CLI'
+              : 'Open setup';
         runtimeStatusEl.style.display = 'flex';
         if (headline) headline.textContent = workspaceRequired
           ? 'Open a workspace'
@@ -5428,6 +5438,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'runtimeStatus') {
         if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl || !runtimeSettingsBtn) return;
+        runtimeCliMissing = msg.payload.cliMissing === true;
         renderRuntimeAvailability(msg.payload.status, msg.payload.message);
       }
 
@@ -9203,6 +9214,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var activeEffort = 'medium';
     var activeSupportsEffort = false;
     var runtimeBlock = null;
+    var runtimeCliMissing = false;
     var lastUsageMeterPayload = null;
     var onboardingStep = 0;
 
@@ -9288,9 +9300,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
-        onboardingWorkspaceLede.textContent =
-          'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceAction.textContent = 'Open runtime setup';
+        onboardingWorkspaceLede.textContent = runtimeCliMissing
+          ? 'This workspace is open, but the AGI CLI is not installed here yet.'
+          : 'This workspace is open, but the local AGI runtime is not ready yet.';
+        onboardingWorkspaceAction.textContent = runtimeCliMissing
+          ? 'Install AGI CLI'
+          : 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
@@ -9345,7 +9360,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -9693,7 +9710,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -9798,7 +9817,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           ? 'Open folder'
           : workspaceUntrusted
             ? 'Manage trust'
-            : 'Open setup';
+            : runtimeCliMissing
+              ? 'Install AGI CLI'
+              : 'Open setup';
         runtimeStatusEl.style.display = 'flex';
         if (headline) headline.textContent = workspaceRequired
           ? 'Open a workspace'
@@ -11832,6 +11853,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'runtimeStatus') {
         if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl || !runtimeSettingsBtn) return;
+        runtimeCliMissing = msg.payload.cliMissing === true;
         renderRuntimeAvailability(msg.payload.status, msg.payload.message);
       }
 
@@ -15607,6 +15629,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var activeEffort = 'medium';
     var activeSupportsEffort = true;
     var runtimeBlock = null;
+    var runtimeCliMissing = false;
     var lastUsageMeterPayload = null;
     var onboardingStep = 0;
 
@@ -15692,9 +15715,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
-        onboardingWorkspaceLede.textContent =
-          'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceAction.textContent = 'Open runtime setup';
+        onboardingWorkspaceLede.textContent = runtimeCliMissing
+          ? 'This workspace is open, but the AGI CLI is not installed here yet.'
+          : 'This workspace is open, but the local AGI runtime is not ready yet.';
+        onboardingWorkspaceAction.textContent = runtimeCliMissing
+          ? 'Install AGI CLI'
+          : 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
@@ -15749,7 +15775,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -16097,7 +16125,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -16202,7 +16232,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           ? 'Open folder'
           : workspaceUntrusted
             ? 'Manage trust'
-            : 'Open setup';
+            : runtimeCliMissing
+              ? 'Install AGI CLI'
+              : 'Open setup';
         runtimeStatusEl.style.display = 'flex';
         if (headline) headline.textContent = workspaceRequired
           ? 'Open a workspace'
@@ -18236,6 +18268,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'runtimeStatus') {
         if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl || !runtimeSettingsBtn) return;
+        runtimeCliMissing = msg.payload.cliMissing === true;
         renderRuntimeAvailability(msg.payload.status, msg.payload.message);
       }
 

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { isIdentityRequestRejected } from '@agiworkforce/identity';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -8,15 +9,33 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { TWO_FACTOR_SCOPE } from '../lib/scope';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { verifyTOTPCode } from '@/features/settings/services/user-preferences';
+import { generateBackupCodes, verifyTOTPCode } from '@/features/settings/services/user-preferences';
 import { openTotpSecret } from '@/lib/crypto/totp-envelope';
 import { readJsonBody } from '@/lib/read-json-body';
 import { logAuthFailure } from '@/lib/security-audit';
+import { getIdentityProvider } from '@/lib/server/identity';
+import { rememberMfaEnrollment } from '@/lib/mfa-policy-gate';
 import { announceTwoFactorChange } from '@/lib/server/two-factor-security-events';
 
-interface TwoFactorRow {
-  totp_secret_enc: string;
-  enabled: boolean;
+async function registerSignInFactor(
+  userId: string,
+  totpSecret: string,
+  backupCodes: readonly string[],
+): Promise<void> {
+  try {
+    await getIdentityProvider().registerSecondFactor(userId, { totpSecret, backupCodes });
+  } catch (error) {
+    if (!isIdentityRequestRejected(error)) throw error;
+    logger.error(
+      { userId, code: error.code, message: error.message },
+      '2FA verify: the identity provider refused the authenticator',
+    );
+    throw createError
+      .serviceUnavailable(
+        'Two-factor sign-in cannot be switched on right now. Nothing changed. Try again later or contact support.',
+      )
+      .asUserSafe();
+  }
 }
 
 async function handleVerify2FA(request: NextRequest) {
@@ -34,41 +53,32 @@ async function handleVerify2FA(request: NextRequest) {
     throw createError.badRequest('code is required');
   }
 
-  const [row] = await db.query<TwoFactorRow>(
-    'select totp_secret_enc, enabled from user_two_factor where user_id = $1 limit 1',
+  const [row] = await db.query<{ totp_secret_enc: string }>(
+    `select totp_secret_enc from user_two_factor
+      where user_id = $1 and enabled = false and updated_at > now() - interval '30 minutes'
+      limit 1`,
     [userId],
   );
 
   if (!row) {
-    throw createError.badRequest(
-      '2FA setup not initiated · call POST /api/settings/2fa/setup first',
-    );
-  }
-
-  if (row.enabled) {
-    return NextResponse.json({ success: true, message: '2FA is already enabled' });
+    throw createError
+      .badRequest('Start the authenticator setup again to get a fresh setup key.')
+      .asUserSafe();
   }
 
   const secret = openTotpSecret(row.totp_secret_enc);
-  const valid = await verifyTOTPCode(secret, code);
-
-  if (!valid) {
+  if (!(await verifyTOTPCode(secret, code))) {
     logger.warn({ userId }, '2FA verify: invalid TOTP code');
     await logAuthFailure(request, 'invalid_totp_code', userId);
     throw createError.unauthorized('Invalid TOTP code');
   }
 
-  await db.query(
-    `update user_two_factor
-        set enabled          = true,
-            enabled_at       = now(),
-            last_verified_at = now(),
-            updated_at       = now()
-      where user_id = $1`,
-    [userId],
-  );
+  const backupCodes = generateBackupCodes();
+  await registerSignInFactor(userId, secret, backupCodes);
+  await db.query('delete from user_two_factor where user_id = $1', [userId]);
+  await rememberMfaEnrollment(userId, true);
 
-  logger.info({ userId }, '2FA enabled successfully');
+  logger.info({ userId }, '2FA enabled as a sign-in factor');
 
   await announceTwoFactorChange({
     userId,
@@ -78,7 +88,7 @@ async function handleVerify2FA(request: NextRequest) {
     detail: { source: 'totp_code' },
   });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, backup_codes: backupCodes });
 }
 
 export const POST = withErrorHandler(handleVerify2FA);

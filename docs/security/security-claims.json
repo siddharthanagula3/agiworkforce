@@ -1218,15 +1218,16 @@
       "id": "trifecta-ignores-pasted-content",
       "section": "1.1a Lethal-trifecta escalation and its published limits",
       "kind": "prose",
-      "sentence": "Content the user **pasted or attached is not counted**, a real injection vector the heuristic does not see.",
+      "sentence": "Text the user **pasted is not counted**, a real injection vector the heuristic does not see.",
       "implementation": [
+        "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts#hasUntrustedContext",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts#untrustedToolContentInContext"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.test.ts",
-          "name": "raises U from tool-fetched content only, so pasted or attached content is not counted"
+          "name": "raises U from fetched, attached and selected third-party content, never from pasted text"
         }
       ]
     },

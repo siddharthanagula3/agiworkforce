@@ -10,7 +10,6 @@ import {
   channelVersionCollisions,
   coreVersion,
   isPrerelease,
-  npmDistTag,
   versionForTag,
   vsceChannelArgs,
 } from './channels.mjs';
@@ -48,9 +47,6 @@ test('a tag resolves to its surface version and channel', () => {
 });
 
 test('stable is the only channel a plain install picks up', () => {
-  assert.equal(npmDistTag('stable'), 'latest');
-  assert.equal(npmDistTag('beta'), 'next');
-  assert.equal(npmDistTag('nightly'), 'next');
   assert.deepEqual(vsceChannelArgs('stable'), []);
   assert.deepEqual(vsceChannelArgs('beta'), ['--pre-release']);
   assert.deepEqual(vsceChannelArgs('nightly'), ['--pre-release']);

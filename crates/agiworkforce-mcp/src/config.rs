@@ -8,24 +8,13 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// OAuth configuration for an MCP `Http` transport.
-///
-/// All fields optional, when absent the engine runs RFC 9728 → RFC 8414
-/// discovery on the first 401. When `client_id` is also absent it attempts
-/// RFC 7591 dynamic client registration against the discovered AS.
 #[derive(Debug, Clone, Default)]
 pub struct OAuthConfig {
-    /// Override RFC 9728/8414 discovery for the authorize endpoint.
     pub authorize_url: Option<String>,
-    /// Override the discovered token endpoint.
     pub token_url: Option<String>,
-    /// Space-separated scopes requested.
     pub scope: Option<String>,
-    /// Pre-registered client id. If unset, attempt RFC 7591 dynamic registration.
     pub client_id: Option<String>,
-    /// Pre-registered client secret (confidential clients only).
     pub client_secret: Option<String>,
-    /// Override redirect URI; defaults to `http://127.0.0.1:<random>/callback`.
     pub redirect_uri: Option<String>,
 }
 
@@ -43,22 +32,10 @@ pub enum TransportConfig {
         url: String,
         headers: HashMap<String, String>,
     },
-    /// Streamable HTTP per the MCP 2025-06-18 spec, with sticky `Mcp-Session-Id`
-    /// and optional OAuth (PKCE) on first 401.
     Http {
         url: String,
         headers: HashMap<String, String>,
         oauth: Option<OAuthConfig>,
-    },
-    /// Legacy HTTP+SSE split-endpoint convention (pre-streamable-HTTP remote
-    /// servers; the desktop remote MCP config shape): outbound JSON-RPC goes
-    /// via POST to `{base_url}/message`, and an optional long-lived
-    /// `GET {base_url}/sse` stream carries server-initiated frames. The GET is
-    /// best-effort, servers without an SSE stream keep working POST-only with
-    /// inline responses.
-    SseLegacy {
-        base_url: String,
-        headers: HashMap<String, String>,
     },
 }
 
@@ -69,7 +46,6 @@ impl TransportConfig {
             TransportConfig::Stdio { .. } => "stdio",
             TransportConfig::Sse { .. } => "sse",
             TransportConfig::Http { .. } => "http",
-            TransportConfig::SseLegacy { .. } => "sse-legacy",
         }
     }
 
@@ -83,7 +59,6 @@ impl TransportConfig {
         match self {
             TransportConfig::Stdio { .. } => None,
             TransportConfig::Sse { url, .. } | TransportConfig::Http { url, .. } => Some(url),
-            TransportConfig::SseLegacy { base_url, .. } => Some(base_url),
         }
     }
 }
@@ -96,7 +71,6 @@ impl TransportConfig {
 /// built-in ceiling that applies even when a host leaves them unset.
 #[derive(Debug, Clone)]
 pub struct McpTimeouts {
-    /// Timeout for the initialize handshake (default: 30s).
     pub initialize: Duration,
     /// Timeout for listing tools (default: 10s).
     pub list_tools: Duration,
@@ -110,8 +84,7 @@ pub struct McpTimeouts {
     /// knob would otherwise buffer them until the process dies. Read it through
     /// [`McpTimeouts::frame_cap`], never as a raw `Option`.
     pub max_frame_bytes: Option<usize>,
-    /// When `true`, remote transport URLs (`Sse`, `Http`, `SseLegacy`) are
-    /// validated against SSRF at connect time via
+    /// When `true`, remote transport URLs are validated against SSRF at connect time via
     /// [`crate::security::validate_server_url`]: loopback allowed,
     /// private/link-local/mapped ranges and numeric-domain obfuscation blocked.
     /// Default `false` (CLI parity, LAN MCP servers stay reachable there).
@@ -130,11 +103,6 @@ pub struct McpTimeouts {
     /// `None` (default) leaves reqwest's default (no connect cap, CLI parity).
     /// Desktop sets 30s.
     pub connect_timeout: Option<Duration>,
-    /// Optional per-read socket timeout on the SSE/legacy client so a stalled
-    /// stream (server accepted TCP, then went silent between chunks) errors
-    /// out instead of hanging; the legacy supervisor then reconnects. Healthy
-    /// streams are unaffected, every chunk/heartbeat resets the timer. `None`
-    /// (default) is unbounded (CLI parity). Desktop sets 60s.
     pub sse_read_timeout: Option<Duration>,
 }
 
@@ -211,12 +179,13 @@ mod tests {
             Some("https://mcp.example.com/sse")
         );
         assert_eq!(
-            TransportConfig::SseLegacy {
-                base_url: "https://mcp.example.com".to_string(),
+            TransportConfig::Http {
+                url: "https://mcp.example.com/mcp".to_string(),
                 headers: HashMap::new(),
+                oauth: None,
             }
             .remote_url(),
-            Some("https://mcp.example.com")
+            Some("https://mcp.example.com/mcp")
         );
         assert_eq!(
             TransportConfig::Stdio {

@@ -223,22 +223,22 @@ function candidateSql(options: {
            ${options.semanticParam !== null ? 's.rank' : 'null'} as semantic_rank
       from retrieval_chunks c
       join retrieval_documents d on d.id = c.document_id
-      left join web_artifacts source_artifact on source_artifact.id = d.artifact_id
-      left join research_reports source_report on source_report.id = d.research_report_id
-      left join web_conversations source_conversation
-        on source_conversation.id = coalesce(
+      left join web_artifacts artifact on artifact.id = d.artifact_id
+      left join research_reports report on report.id = d.research_report_id
+      left join web_conversations origin
+        on origin.id = coalesce(
           d.conversation_id,
-          source_artifact.conversation_id,
-          source_report.conversation_id
+          artifact.conversation_id,
+          report.conversation_id
         )
-      left join media_assets source_asset on source_asset.id = d.media_asset_id
+      left join media_assets asset on asset.id = d.media_asset_id
       ${joins.join('\n      ')}
      where (${present.join(' or ')})
-       and source_artifact.deleted_at is null
-       and source_conversation.deleted_at is null
-       and coalesce(source_conversation.is_temporary, false) = false
-       and source_asset.deleted_at is null
-       and coalesce(source_asset.temporary_chat, false) = false`;
+       and artifact.deleted_at is null
+       and origin.deleted_at is null
+       and coalesce(origin.is_temporary, false) = false
+       and asset.deleted_at is null
+       and coalesce(asset.temporary_chat, false) = false`;
 }
 
 /**

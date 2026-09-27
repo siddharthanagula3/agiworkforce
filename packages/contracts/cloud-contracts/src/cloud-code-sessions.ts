@@ -1,0 +1,221 @@
+import { z } from 'zod';
+import {
+  CLOUD_CODE_AGENT_STOP_REASONS,
+  CLOUD_CODE_CHANGE_STATES,
+  CLOUD_CODE_NETWORK_ACCESS,
+  CLOUD_CODE_SESSION_STATES,
+} from '@agiworkforce/types';
+
+export const CLOUD_CODE_SESSIONS_PATH = '/api/code/sessions';
+export const CLOUD_CODE_REPOSITORIES_PATH = '/api/github/repositories';
+
+export function cloudCodeSessionPath(sessionId: string): string {
+  return `${CLOUD_CODE_SESSIONS_PATH}/${encodeURIComponent(sessionId)}`;
+}
+
+export const CloudCodeSessionSchema = z.object({
+  id: z.string().uuid(),
+  title: z.string(),
+  repositoryUrl: z.string().nullable(),
+  repositoryBranch: z.string().nullable().default(null),
+  networkAccess: z.enum(CLOUD_CODE_NETWORK_ACCESS),
+  runtimeId: z.string().nullable().default(null),
+  extraHosts: z.array(z.string()).default([]),
+  state: z.enum(CLOUD_CODE_SESSION_STATES),
+  workspacePath: z.string(),
+  workingBranch: z.string().nullable().default(null),
+  baseBranch: z.string().nullable().default(null),
+  pullRequestUrl: z.string().nullable().default(null),
+  pullRequestNumber: z.number().int().nullable().default(null),
+  archivedAt: z.string().datetime().nullable().default(null),
+  contextInputTokens: z.number().int().nonnegative().default(0),
+  contextOutputTokens: z.number().int().nonnegative().default(0),
+  lastError: z.string().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  closedAt: z.string().datetime().nullable(),
+});
+
+export const CloudCodeTerminalEntrySchema = z.object({
+  id: z.string(),
+  sessionId: z.string().uuid(),
+  command: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
+  exitCode: z.number().int(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime(),
+});
+
+export const CloudCodeRuntimeSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(['harness', 'image']),
+  summary: z.string(),
+  agentCommand: z.string().nullable(),
+  cpuCount: z.number().nonnegative(),
+  memoryMB: z.number().nonnegative(),
+  diskSizeMB: z.number().nonnegative(),
+  isPublic: z.boolean(),
+  needsUserCredential: z.boolean().optional(),
+});
+
+export const CloudCodeSessionListSchema = z.object({
+  availability: z.object({
+    deploymentEnabled: z.boolean(),
+    storageReady: z.boolean(),
+    planEntitled: z.boolean(),
+    planTier: z.string(),
+    maxSessions: z.number().int().nonnegative(),
+  }),
+  sessions: z.array(CloudCodeSessionSchema),
+  runtimes: z.array(CloudCodeRuntimeSchema).default([]),
+});
+
+export const CloudCodeRepositorySchema = z.object({
+  installationId: z.number().int().positive(),
+  owner: z.string().min(1),
+  name: z.string().min(1),
+  fullName: z.string().min(1),
+  defaultBranch: z.string().nullable(),
+  isPrivate: z.boolean(),
+});
+
+export const CloudCodeRepositoryListSchema = z.object({
+  repositories: z.array(CloudCodeRepositorySchema),
+  installationCount: z.number().int().nonnegative(),
+  truncated: z.boolean().default(false),
+  unreachable: z
+    .array(z.object({ installationId: z.number().int(), accountLogin: z.string() }))
+    .default([]),
+});
+
+export const CloudCodeAgentStepSchema = z.object({
+  index: z.number().int().nonnegative(),
+  toolName: z.string(),
+  label: z.string().nullable(),
+  output: z.string(),
+  isError: z.boolean(),
+});
+
+export const CloudCodeAgentTurnRecordSchema = z.object({
+  turnId: z.string(),
+  goal: z.string(),
+  stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS).nullable(),
+  stepsUsed: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative().default(0),
+  outputTokens: z.number().int().nonnegative().default(0),
+  cancelRequestedAt: z.string().nullable().default(null),
+  finalMessage: z.string(),
+  errorMessage: z.string().nullable(),
+  createdAt: z.string(),
+  steps: z.array(CloudCodeAgentStepSchema),
+});
+
+export const CloudCodeSessionDetailSchema = z.object({
+  session: CloudCodeSessionSchema,
+  terminalEntries: z.array(CloudCodeTerminalEntrySchema),
+  turns: z.array(CloudCodeAgentTurnRecordSchema).default([]),
+});
+
+export const CloudCodeSessionResponseSchema = z.object({ session: CloudCodeSessionSchema });
+export const CloudCodeSessionDeletedSchema = z.object({ deleted: z.literal(true) });
+
+export const CloudCodeCommandResponseSchema = z.object({
+  session: CloudCodeSessionSchema,
+  terminalEntry: CloudCodeTerminalEntrySchema,
+});
+
+export const CloudCodeCommitResultSchema = z.object({
+  session: CloudCodeSessionSchema,
+  push: z.object({
+    ok: z.boolean(),
+    output: z.string(),
+    error: z.string().optional(),
+    exitCode: z.number().int(),
+  }),
+});
+
+export const CloudCodeChangedFileSchema = z.object({
+  path: z.string(),
+  state: z.enum(CLOUD_CODE_CHANGE_STATES),
+});
+
+export const CloudCodeChangesSchema = z.object({
+  session: CloudCodeSessionSchema,
+  base: z.string().nullable(),
+  workingBranch: z.string().nullable(),
+  files: z.array(CloudCodeChangedFileSchema),
+  diff: z.string(),
+  diffTruncated: z.boolean().default(false),
+});
+
+export const CloudCodePullRequestSchema = z.object({
+  session: CloudCodeSessionSchema,
+  url: z.string(),
+  number: z.number().int().positive(),
+  alreadyOpen: z.boolean(),
+});
+
+export const CloudCodeTurnCancellationSchema = z.object({
+  turnId: z.string(),
+  requestedAt: z.string(),
+  /** Optional on the wire: the surface does not need it, an operator reading a log does. */
+  durable: z.boolean().optional(),
+});
+
+export const CloudCodePendingApprovalSchema = z.object({
+  stepIndex: z.number().int().nonnegative(),
+  toolUseId: z.string(),
+  command: z.string(),
+  reason: z.string(),
+});
+
+export const CloudCodeAgentTurnSchema = z.object({
+  turnId: z.string(),
+  stopReason: z.enum(CLOUD_CODE_AGENT_STOP_REASONS),
+  stepsUsed: z.number().int().nonnegative(),
+  finalMessage: z.string(),
+  steps: z.array(CloudCodeAgentStepSchema).default([]),
+  pendingApproval: CloudCodePendingApprovalSchema.optional(),
+  errorMessage: z.string().optional(),
+});
+
+export const CloudCodeAgentApprovalsSchema = z.object({
+  approvals: z.array(
+    z.object({
+      turnId: z.string(),
+      stepIndex: z.number().int().nonnegative(),
+      command: z.string(),
+      reason: z.string(),
+      goal: z.string(),
+      expiresAt: z.string(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+
+export type CloudCodeAgentTurn = z.infer<typeof CloudCodeAgentTurnSchema>;
+export type CloudCodeAgentApproval = z.infer<
+  typeof CloudCodeAgentApprovalsSchema
+>['approvals'][number];
+export type CloudCodeApprovalDecision = 'approve' | 'reject';
+export type CloudCodeCommitResult = z.infer<typeof CloudCodeCommitResultSchema>;
+export type CloudCodeRepository = z.infer<typeof CloudCodeRepositorySchema>;
+export type CloudCodeChanges = z.infer<typeof CloudCodeChangesSchema>;
+export type CloudCodePullRequest = z.infer<typeof CloudCodePullRequestSchema>;
+export type CloudCodeTurnCancellation = z.infer<typeof CloudCodeTurnCancellationSchema>;
+export type CloudCodeRepositoryList = z.infer<typeof CloudCodeRepositoryListSchema>;
+
+export interface StartCloudCodeAgentTurnRequest {
+  goal: string;
+  model: string;
+  /** Sent as `Idempotency-Key`; the managed-usage ledger refuses the turn without it. */
+  idempotencyKey: string;
+}
+
+export interface DecideCloudCodeApprovalRequest {
+  turnId: string;
+  stepIndex: number;
+  decision: CloudCodeApprovalDecision;
+}

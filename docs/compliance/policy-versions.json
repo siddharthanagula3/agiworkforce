@@ -393,6 +393,11 @@
           "date": "2026-09-22",
           "digest": "da7e6a030b7ddea4",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "7494248bce9647ac",
+          "note": "Attached files, project knowledge files and selected connector context now count as untrusted content in the injection check, so a turn holding them asks before anything could send data out; pasted text is still not counted."
         }
       ]
     }

@@ -83,7 +83,7 @@ describe('published usage multipliers are derived, not asserted', () => {
   it('refuses to publish a comparison the table cannot support', () => {
     expect(managedUsageComparisonLabel('pro', 'basic', 'Basic')).toBe('5x more usage than Basic');
     expect(managedUsageComparisonLabel('max_15x', 'pro', 'Pro')).toBe(
-      '20x Pro per 5 hours, 10x per week',
+      '20x more usage per session and 10x more weekly usage than Pro',
     );
     expect(managedUsageComparisonLabel('team', 'pro', 'Pro')).toBe('Same usage as Pro');
     expect(managedUsageComparisonLabel('enterprise', 'pro', 'Pro')).toBeNull();

@@ -12,10 +12,10 @@ import { logger } from '@/lib/logger';
 import {
   generateTOTPSecret,
   generateOTPAuthURL,
-  generateBackupCodes,
-  hashBackupCode,
 } from '@/features/settings/services/user-preferences';
 import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
+import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 
 async function handleSetup2FA(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
@@ -24,25 +24,26 @@ async function handleSetup2FA(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, '2fa-setup');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { db, userId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
+  const { db, userId, organizationId } = await getUserScopedDb(request, TWO_FACTOR_SCOPE);
   const { email } = await getClerkAuthUser(request, TWO_FACTOR_SCOPE);
-  const [existing] = await db.query<{ enabled: boolean }>(
-    `select enabled from user_two_factor where user_id = $1 limit 1`,
-    [userId],
-  );
-  if (existing?.enabled === true) {
+
+  if ((await readSecondFactorStatus(db, userId)).authenticator) {
     logger.warn({ userId }, '2FA setup refused: account already enrolled');
     throw createError.conflict(
-      'Two-factor authentication is already enabled. Disable it with a valid code before enrolling a new device.',
+      'Two-factor authentication is already on. Turn it off before setting up a new authenticator.',
     );
   }
 
-  const secret = generateTOTPSecret();
-  const accountName = email ?? userId;
-  const otpauthUrl = generateOTPAuthURL(secret, accountName);
-  const backupCodes = generateBackupCodes();
+  await requireStepUp({
+    userId,
+    action: 'two_factor.enable',
+    organizationId,
+    request,
+    endpoint: '/api/settings/2fa/setup',
+  });
 
-  const hashedCodes = await Promise.all(backupCodes.map((c) => hashBackupCode(c)));
+  const secret = generateTOTPSecret();
+  const otpauthUrl = generateOTPAuthURL(secret, email ?? userId);
 
   let encryptedSecret: string;
   try {
@@ -61,25 +62,20 @@ async function handleSetup2FA(request: NextRequest) {
 
   await db.query(
     `insert into user_two_factor
-       (user_id, totp_secret_enc, backup_codes_hashed, enabled, backup_codes_generated_at, updated_at)
-     values ($1, $2, $3, false, now(), now())
+       (user_id, totp_secret_enc, backup_codes_hashed, enabled, updated_at)
+     values ($1, $2, '{}', false, now())
      on conflict (user_id) do update
-       set totp_secret_enc         = excluded.totp_secret_enc,
-           backup_codes_hashed     = excluded.backup_codes_hashed,
-           enabled                 = false,
-           enabled_at              = null,
-           backup_codes_generated_at = now(),
-           updated_at              = now()`,
-    [userId, encryptedSecret, hashedCodes],
+       set totp_secret_enc     = excluded.totp_secret_enc,
+           backup_codes_hashed = '{}',
+           enabled             = false,
+           enabled_at          = null,
+           updated_at          = now()`,
+    [userId, encryptedSecret],
   );
 
   logger.info({ userId }, '2FA setup initiated (not yet verified)');
 
-  return NextResponse.json({
-    secret,
-    otpauth_url: otpauthUrl,
-    backup_codes: backupCodes,
-  });
+  return NextResponse.json({ secret, otpauth_url: otpauthUrl });
 }
 
 export const POST = withErrorHandler(handleSetup2FA);

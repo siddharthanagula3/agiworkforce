@@ -15,6 +15,11 @@ import {
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
+  LOCAL_CODE_SESSION_ACTIVITY_PATH,
+  type LocalCodeSessionActivity,
+} from '@agiworkforce/cloud-contracts';
+import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import {
   checkDesktopCloudUpdate,
   desktopCloudInstallerDownloadUrl,
   desktopUpdatePrompt,
@@ -52,14 +57,22 @@ import {
 import { cancelAllShellRuns } from './runtime/shellService';
 import {
   configureDeveloperSessions,
+  readDeveloperSession,
   stopAllDeveloperRuntimes,
 } from './runtime/developerSessionService';
 import {
   configureRemoteControl,
   relayDeveloperSessionEvent,
+  remoteControlActive,
   stopRemoteControl,
 } from './remote/remoteControlService';
-import { approveDeviceCode, onShellIdentityReported, readShellIdentity } from './shellIdentity';
+import {
+  approveDeviceCode,
+  onShellIdentityReported,
+  postAsShellAccount,
+  readShellIdentity,
+} from './shellIdentity';
+import { createCodeSessionActivity } from './runtime/codeSessionActivity';
 import {
   handBackComputerUse,
   stopComputerUseHelper,
@@ -101,10 +114,12 @@ import {
   frameIsOnScreen,
   hostShortcutKeyFor,
   isAppearance,
+  isSessionCompletionAlerts,
   pickableCaptureSources,
   type WindowFrame,
 } from './garnishCore';
 import { destroyQuickAsk, toggleQuickAsk, warmUpQuickAsk } from './quickAsk';
+import { deliverBrowserHandoff } from './browserHandoff';
 import { captureToChat } from './screenshot';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
@@ -347,6 +362,10 @@ async function startPairingBridge(): Promise<void> {
                 : 'timeout',
           };
         }
+      },
+      deliverToChat: (handoff) => {
+        showMainWindow();
+        return deliverBrowserHandoff(mainWindow, handoff);
       },
       ...(extraDirectories.length > 0 ? { extraManifestDirectories: extraDirectories } : {}),
     });
@@ -1037,6 +1056,19 @@ function createMainWindow(): void {
   createShellWindow({ primary: true });
 }
 
+async function reportCodeSessionActivity(activity: LocalCodeSessionActivity): Promise<void> {
+  try {
+    const response = await postAsShellAccount(LOCAL_CODE_SESSION_ACTIVITY_PATH, activity);
+    recordDesktopEvent(
+      response?.ok
+        ? { domain: 'cloud_request', outcome: 'ok' }
+        : { domain: 'cloud_request', outcome: 'failed', cause: 'unknown' },
+    );
+  } catch {
+    recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed', cause: 'network' });
+  }
+}
+
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createMainWindow();
@@ -1152,6 +1184,8 @@ function hostPreferencesState(): HostPreferencesState {
       launchAtLogin: preferences.launchAtLogin,
       showInMenuBar: preferences.showInMenuBar,
       cliPath: preferences.cliPath,
+      sessionCompletionAlerts: preferences.sessionCompletionAlerts,
+      sessionApprovalAlerts: preferences.sessionApprovalAlerts,
       quickAskShortcut: shortcuts.quickAskShortcut,
       screenshotShortcut: shortcuts.screenshotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,
@@ -1190,6 +1224,14 @@ function writeHostPreferences(patch: Partial<HostPreferences>): HostPreferencesS
     saveSettings({ showInMenuBar: patch.showInMenuBar });
     if (patch.showInMenuBar) createTray(garnishHandlers);
     else destroyTray();
+  }
+
+  if (isSessionCompletionAlerts(patch.sessionCompletionAlerts)) {
+    saveSettings({ sessionCompletionAlerts: patch.sessionCompletionAlerts });
+  }
+
+  if (typeof patch.sessionApprovalAlerts === 'boolean') {
+    saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
   }
 
   return hostPreferencesState();
@@ -1373,10 +1415,36 @@ if (!hasSingleInstanceLock) {
     applyGarnishShortcuts();
 
     configureRemoteControl((state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }));
+    const codeSessionActivity = createCodeSessionActivity({
+      sessionTitle: async (rootId, threadId) =>
+        (await readDeveloperSession(rootId, threadId)).session.title.slice(
+          0,
+          REMOTE_CODE_LIMITS.messageLength,
+        ) || null,
+      remoteControlActive,
+      report: reportCodeSessionActivity,
+      alertPreferences: () => {
+        const preferences = getPreferences();
+        return {
+          completion: preferences.sessionCompletionAlerts,
+          approvals: preferences.sessionApprovalAlerts,
+        };
+      },
+      inBackground: () => BrowserWindow.getFocusedWindow() === null,
+      alert: ({ title, body }) => {
+        if (!Notification.isSupported()) return;
+        const notification = new Notification({ title, body });
+        notification.on('click', showMainWindow);
+        notification.show();
+      },
+    });
     configureDeveloperSessions({
       emit: (rootId, event) => {
         sendRuntimeEvent({ kind: 'developer-session', rootId, event });
         relayDeveloperSessionEvent(rootId, event);
+        codeSessionActivity(rootId, event).catch((error: unknown) =>
+          console.warn('[code-session-activity] could not deliver activity:', error),
+        );
       },
       resolveBinary: () => getPreferences().cliPath,
       accountBridge: { readShellIdentity, approveDeviceCode },

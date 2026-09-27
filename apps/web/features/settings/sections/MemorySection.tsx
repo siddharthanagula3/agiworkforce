@@ -1,20 +1,23 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
 import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/unified-chat';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 
+import { MemoryConflicts } from '@/features/settings/components/MemoryConflicts';
 import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
 import {
   ImportMemoryDialog,
   useImportMemoryDialog,
 } from '@/features/settings/components/ImportMemoryDialog';
+import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
 import { useCapabilitiesPreferences } from '../hooks/use-capabilities-preferences';
 
 const MEMORY_EDITOR_ANCHOR_ID = 'memory-editor';
 const SAVE_FAILED_MESSAGE = 'Your memory settings were not saved, so nothing changed.';
 const SAVE_RETRY_LABEL = 'Try again';
+const CLEAR_FAILED_MESSAGE = 'Your memories were not deleted. Try again.';
 const CONTROL_HEIGHT = 30;
 const WORKSPACE_MEMORY_OFF_NOTICE =
   'Your workspace has memory turned off, so none of these settings apply until an owner or admin turns it back on in Workspace → Policy.';
@@ -73,6 +76,7 @@ export function MemorySection() {
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const importDialog = useImportMemoryDialog();
+  const [clearError, setClearError] = useState<string | null>(null);
 
   const onManageMemories = useCallback(() => {
     document.getElementById(MEMORY_EDITOR_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth' });
@@ -86,10 +90,17 @@ export function MemorySection() {
     if (memoryCount === 0) return;
     confirm({
       title: 'Delete all memory facts?',
-      description: `This cannot be undone. All ${memoryCount} ${memoryCount === 1 ? 'fact' : 'facts'} would have to be added again.`,
+      description: `This cannot be undone. All ${memoryCount} ${memoryCount === 1 ? 'fact' : 'facts'} would have to be added again. Your chats are not deleted.`,
       confirmLabel: 'Forget everything',
       destructive: true,
-      onConfirm: () => clearAllMemories(),
+      onConfirm: async () => {
+        setClearError(null);
+        try {
+          await clearAllMemories();
+        } catch (error) {
+          setClearError(error instanceof Error ? error.message : CLEAR_FAILED_MESSAGE);
+        }
+      },
     });
   }, [memoryCount, confirm, clearAllMemories]);
 
@@ -268,6 +279,14 @@ export function MemorySection() {
             </button>
           </div>
         </div>
+        {clearError ? (
+          <p
+            role="alert"
+            style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive-text)' }}
+          >
+            {clearError}
+          </p>
+        ) : null}
       </section>
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -354,8 +373,15 @@ export function MemorySection() {
           minHeight: 360,
         }}
       >
-        <MemoryEditor title={null} description="" hideClearAll />
+        <MemoryEditor
+          title={null}
+          description=""
+          hideClearAll
+          conversationHref={conversationHref}
+        />
       </section>
+
+      <MemoryConflicts />
 
       <ImportMemoryDialog
         open={importDialog.isOpen}

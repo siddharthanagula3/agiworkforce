@@ -22,6 +22,9 @@ import {
 } from '@/src/features/settings/common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
+import { ApiHttpError } from '@/services/apiErrors';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -39,6 +42,7 @@ export default function CloudAccountScreen() {
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const { user: clerkUser } = useUser();
+  const { withStepUp, modal: stepUpModal } = useStepUp();
 
   const userId = clerkUser?.id ?? null;
   const userEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
@@ -196,8 +200,9 @@ export default function CloudAccountScreen() {
             return;
           }
           setDeleting(true);
-          api
-            .delete<{ message?: string }>('/api/user/delete-account')
+          withStepUp('account.delete', null, (headers) =>
+            api.delete<{ message?: string }>('/api/user/delete-account', { headers }),
+          )
             .then(async (res) => {
               if (!isCloudAccountEpochCurrent(account)) {
                 Alert.alert(
@@ -214,6 +219,7 @@ export default function CloudAccountScreen() {
               );
             })
             .catch((err: unknown) => {
+              if (isStepUpCancelled(err)) return;
               if (!isCloudAccountEpochCurrent(account)) {
                 Alert.alert(
                   'Account changed',
@@ -226,7 +232,9 @@ export default function CloudAccountScreen() {
                 'Could not delete account',
                 is401
                   ? 'Your session expired. Please sign in again and retry.'
-                  : 'We could not delete your account. Check your connection and try again, ' +
+                  : err instanceof ApiHttpError && err.status === 409
+                    ? err.message
+                    : 'We could not delete your account. Check your connection and try again, ' +
                       'or contact support@agiworkforce.com.',
               );
             })
@@ -234,10 +242,11 @@ export default function CloudAccountScreen() {
         },
       },
     ]);
-  }, [captureVisibleAccount, signOut]);
+  }, [captureVisibleAccount, signOut, withStepUp]);
 
   return (
     <SettingsScreenShell title="Account">
+      {stepUpModal}
       {/* Avatar + name/email header, mirrors desktop/website account header */}
       <View
         style={{

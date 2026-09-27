@@ -1,6 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { CloudCodeAgentStopReason } from '@agiworkforce/types';
+import {
+  codeSessionActivityNotice,
+  type LocalCodeSessionActivity,
+} from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import type { NotificationSeverity } from '@/features/notifications/lib/notification-target';
 import { recordNotification } from './notification-service';
@@ -239,5 +244,139 @@ export async function notifyResearchReportSettled(
   } catch (error) {
     logger.warn({ error, reportId: notice.reportId }, '[notifications] research notify failed');
     return none;
+  }
+}
+
+export type CloudCodeTurnNotificationEvent = Extract<
+  AgentRunNotificationEvent,
+  'approval_required' | 'completed' | 'failed'
+>;
+
+export function cloudCodeTurnNotificationEvent(
+  stopReason: CloudCodeAgentStopReason,
+): CloudCodeTurnNotificationEvent | null {
+  switch (stopReason) {
+    case 'awaiting_approval':
+      return 'approval_required';
+    case 'done':
+      return 'completed';
+    case 'error':
+    case 'timeout':
+    case 'max_steps':
+      return 'failed';
+    case 'cancelled':
+    case 'denied':
+      return null;
+  }
+}
+
+export interface CloudCodeTurnNotice {
+  userId: string;
+  sessionId: string;
+  sessionTitle: string | null;
+  turnId: string;
+  event: CloudCodeTurnNotificationEvent;
+  approvalStepIndex?: number;
+}
+
+function describeCloudCodeTurnEvent(notice: CloudCodeTurnNotice): { title: string; body: string } {
+  const session = shortLabel(notice.sessionTitle ?? '');
+  return codeSessionActivityNotice(
+    notice.event,
+    session ? `“${session}”` : 'Your AGI Code session',
+  );
+}
+
+export async function notifyCloudCodeTurnEvent(
+  db: DatabaseAdapter,
+  notice: CloudCodeTurnNotice,
+): Promise<{ pushed: boolean }> {
+  try {
+    const { title, body } = describeCloudCodeTurnEvent(notice);
+    const occurrence =
+      notice.event === 'approval_required'
+        ? `${notice.event}:${notice.approvalStepIndex ?? 0}`
+        : notice.event;
+    await recordNotification(db, {
+      userId: notice.userId,
+      category: 'agent_run',
+      severity: FEED_SEVERITY[notice.event],
+      title,
+      message: body,
+      target: { kind: 'code-session', id: notice.sessionId },
+      dedupeKey: `code-turn:${notice.turnId}:${occurrence}`,
+    });
+
+    const toExpo = await loadAgentPushPreference(db, notice.userId);
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: MOBILE_NOTIFICATION_TYPE[notice.event],
+          priority: MOBILE_PRIORITY[notice.event],
+          codeSessionId: notice.sessionId,
+        },
+      },
+      { expo: toExpo, web: true },
+    ).catch(() => null);
+
+    return { pushed: (result?.sent ?? 0) > 0 };
+  } catch (error) {
+    logger.warn({ error, turnId: notice.turnId }, '[notifications] code turn notify failed');
+    return { pushed: false };
+  }
+}
+
+export interface LocalCodeSessionNotice {
+  userId: string;
+  deviceName: string | null;
+  activity: LocalCodeSessionActivity;
+}
+
+function describeLocalCodeSessionEvent(notice: LocalCodeSessionNotice): {
+  title: string;
+  body: string;
+} {
+  const session = shortLabel(notice.activity.sessionTitle ?? '');
+  const device = shortLabel(notice.deviceName ?? '') || 'your computer';
+  return codeSessionActivityNotice(
+    notice.activity.event,
+    session ? `“${session}” on ${device}` : `A session on ${device}`,
+  );
+}
+
+export async function notifyLocalCodeSessionEvent(
+  db: DatabaseAdapter,
+  notice: LocalCodeSessionNotice,
+): Promise<{ pushed: boolean }> {
+  try {
+    if (!(await loadAgentPushPreference(db, notice.userId))) return { pushed: false };
+    const { title, body } = describeLocalCodeSessionEvent(notice);
+    const { event, rootId, threadId, approvalId } = notice.activity;
+    const result = await sendPushToUser(
+      notice.userId,
+      {
+        title,
+        body,
+        data: {
+          type: MOBILE_NOTIFICATION_TYPE[event],
+          priority: MOBILE_PRIORITY[event],
+          rootId,
+          threadId,
+          ...(approvalId ? { approvalId } : {}),
+        },
+      },
+      { expo: true, web: false },
+    ).catch(() => null);
+
+    return { pushed: (result?.sent ?? 0) > 0 };
+  } catch (error) {
+    logger.warn(
+      { error, turnId: notice.activity.turnId },
+      '[notifications] local code session notify failed',
+    );
+    return { pushed: false };
   }
 }

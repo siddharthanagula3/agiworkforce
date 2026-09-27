@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { recordNotificationDelivery, type NotificationChannel } from '@/lib/observability/metrics';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
+import { heldByQuietHours } from './quiet-hours-service';
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -186,6 +187,9 @@ export async function sendPushToUser(
   transports: PushTransports = {},
 ): Promise<PushDeliveryResult> {
   const { expo: toExpo = true, web: toWeb = true } = transports;
+  if ((toExpo || toWeb) && (await heldByQuietHours(getNeonDb(), userId, message.data?.['type']))) {
+    return NO_DELIVERY;
+  }
   const [expo, web] = await Promise.all([
     toExpo ? settle('expo', sendExpoPushToUser(userId, message)) : NO_DELIVERY,
     toWeb ? settle('web', sendWebPushToUser(userId, message)) : NO_DELIVERY,

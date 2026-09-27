@@ -87,6 +87,7 @@ const STREAM_ERROR_REASON_BY_CAUSE: Readonly<Record<IncompleteTurnCause, string>
   contentFiltered: 'the safety system stopped this response.',
   planRestriction: 'the selected model is not part of your plan.',
   workspacePolicy: 'your workspace administrator has turned this off for your account.',
+  twoFactorRequired: 'your workspace requires two-factor authentication.',
   sessionExpired: 'your session ended before this turn finished.',
   accountLimit: 'you have reached a usage limit on your account.',
   interrupted: 'the response stopped part way through; the part that arrived is kept above.',

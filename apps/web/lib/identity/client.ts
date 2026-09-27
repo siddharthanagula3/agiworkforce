@@ -1,7 +1,14 @@
 'use client';
 
-import { useAuth, useClerk, useSignUp, useUser } from '@clerk/nextjs';
-import { useCallback, useMemo } from 'react';
+import {
+  useAuth,
+  useClerk,
+  useSession as useProviderSession,
+  useSignUp,
+  useUser,
+} from '@clerk/nextjs';
+import type { SessionVerificationResource } from '@clerk/nextjs/types';
+import { useCallback, useMemo, useRef } from 'react';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
@@ -29,6 +36,7 @@ export interface IdentityCurrentUser {
   fullName: string | null;
   username: string | null;
   imageUrl: string | null;
+  hasPassword: boolean;
   publicMetadata: Readonly<Record<string, unknown>>;
 }
 
@@ -95,6 +103,7 @@ export function useCurrentUser(): IdentityCurrentUserState {
       fullName: optional(user.fullName),
       username: optional(user.username),
       imageUrl: optional(user.imageUrl),
+      hasPassword: user.passwordEnabled === true,
       publicMetadata: (user.publicMetadata ?? {}) as Readonly<Record<string, unknown>>,
     };
   }, [user]);
@@ -143,6 +152,7 @@ export interface IdentityPasskeysState {
   isSupported: boolean;
   passkeys: readonly IdentityPasskey[];
   create: () => Promise<void>;
+  rename: (passkeyId: string, name: string) => Promise<void>;
   remove: (passkeyId: string) => Promise<void>;
 }
 
@@ -165,6 +175,16 @@ export function usePasskeys(): IdentityPasskeysState {
     await user.reload();
   }, [user]);
 
+  const rename = useCallback(
+    async (passkeyId: string, name: string) => {
+      const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
+      if (!user || !passkey) throw new Error('That passkey is no longer on this account.');
+      await passkey.update({ name });
+      await user.reload();
+    },
+    [user],
+  );
+
   const remove = useCallback(
     async (passkeyId: string) => {
       const passkey = user?.passkeys.find((candidate) => candidate.id === passkeyId);
@@ -175,5 +195,204 @@ export function usePasskeys(): IdentityPasskeysState {
     [user],
   );
 
-  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, remove };
+  return { isLoaded, isSupported: browserSupportsPasskeys(), passkeys, create, rename, remove };
+}
+
+export type IdentityVerificationLevel = 'first_factor' | 'second_factor';
+
+export type IdentitySecondFactorMethod = 'authenticator' | 'backup_code';
+
+export interface IdentityEmailCodeFactor {
+  emailAddressId: string;
+  destination: string | null;
+}
+
+export type IdentityReverificationStep =
+  | { kind: 'complete' }
+  | { kind: 'second_factor'; methods: readonly IdentitySecondFactorMethod[] }
+  | {
+      kind: 'first_factor';
+      password: boolean;
+      passkey: boolean;
+      emailCode: IdentityEmailCodeFactor | null;
+    }
+  | { kind: 'unavailable' };
+
+export interface IdentityReverification {
+  start: (level: IdentityVerificationLevel) => Promise<IdentityReverificationStep>;
+  sendEmailCode: (factor: IdentityEmailCodeFactor) => Promise<void>;
+  verifyPassword: (password: string) => Promise<IdentityReverificationStep>;
+  verifyEmailCode: (code: string) => Promise<IdentityReverificationStep>;
+  verifyPasskey: () => Promise<IdentityReverificationStep>;
+  verifySecondFactor: (
+    method: IdentitySecondFactorMethod,
+    code: string,
+  ) => Promise<IdentityReverificationStep>;
+  freshToken: () => Promise<string | null>;
+}
+
+const REVERIFICATION_SECOND_FACTORS: Readonly<Record<string, IdentitySecondFactorMethod>> = {
+  totp: 'authenticator',
+  backup_code: 'backup_code',
+};
+
+const SECOND_FACTOR_STRATEGIES: Readonly<
+  Record<IdentitySecondFactorMethod, 'totp' | 'backup_code'>
+> = {
+  authenticator: 'totp',
+  backup_code: 'backup_code',
+};
+
+function reverificationStep(verification: SessionVerificationResource): IdentityReverificationStep {
+  if (verification.status === 'complete') return { kind: 'complete' };
+
+  if (verification.status === 'needs_second_factor') {
+    const methods = [
+      ...new Set(
+        (verification.supportedSecondFactors ?? [])
+          .map((factor) => REVERIFICATION_SECOND_FACTORS[factor.strategy])
+          .filter((method): method is IdentitySecondFactorMethod => method !== undefined),
+      ),
+    ];
+    return methods.length > 0 ? { kind: 'second_factor', methods } : { kind: 'unavailable' };
+  }
+
+  const factors = verification.supportedFirstFactors ?? [];
+  const email = factors.find((factor) => factor.strategy === 'email_code');
+  const emailCode =
+    email && 'emailAddressId' in email
+      ? { emailAddressId: email.emailAddressId, destination: optional(email.safeIdentifier) }
+      : null;
+  const password = factors.some((factor) => factor.strategy === 'password');
+  const passkey =
+    factors.some((factor) => factor.strategy === 'passkey') && browserSupportsPasskeys();
+  if (!password && !passkey && !emailCode) return { kind: 'unavailable' };
+  return { kind: 'first_factor', password, passkey, emailCode };
+}
+
+export function useSessionReverification(): IdentityReverification {
+  const { session } = useProviderSession();
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+
+  const activeSession = useCallback(() => {
+    const current = sessionRef.current;
+    if (!current) throw new Error('You are signed out. Sign in again to continue.');
+    return current;
+  }, []);
+
+  const start = useCallback(
+    async (level: IdentityVerificationLevel) =>
+      reverificationStep(await activeSession().startVerification({ level })),
+    [activeSession],
+  );
+
+  const sendEmailCode = useCallback(
+    async ({ emailAddressId }: IdentityEmailCodeFactor) => {
+      await activeSession().prepareFirstFactorVerification({
+        strategy: 'email_code',
+        emailAddressId,
+      });
+    },
+    [activeSession],
+  );
+
+  const verifyPassword = useCallback(
+    async (password: string) =>
+      reverificationStep(
+        await activeSession().attemptFirstFactorVerification({ strategy: 'password', password }),
+      ),
+    [activeSession],
+  );
+
+  const verifyEmailCode = useCallback(
+    async (code: string) =>
+      reverificationStep(
+        await activeSession().attemptFirstFactorVerification({ strategy: 'email_code', code }),
+      ),
+    [activeSession],
+  );
+
+  const verifyPasskey = useCallback(
+    async () => reverificationStep(await activeSession().verifyWithPasskey()),
+    [activeSession],
+  );
+
+  const verifySecondFactor = useCallback(
+    async (method: IdentitySecondFactorMethod, code: string) =>
+      reverificationStep(
+        await activeSession().attemptSecondFactorVerification({
+          strategy: SECOND_FACTOR_STRATEGIES[method],
+          code,
+        }),
+      ),
+    [activeSession],
+  );
+
+  const freshToken = useCallback(
+    async () => (await activeSession().getToken({ skipCache: true })) ?? null,
+    [activeSession],
+  );
+
+  return useMemo(
+    () => ({
+      start,
+      sendEmailCode,
+      verifyPassword,
+      verifyEmailCode,
+      verifyPasskey,
+      verifySecondFactor,
+      freshToken,
+    }),
+    [
+      start,
+      sendEmailCode,
+      verifyPassword,
+      verifyEmailCode,
+      verifyPasskey,
+      verifySecondFactor,
+      freshToken,
+    ],
+  );
+}
+
+export interface IdentityEmailAddressVerification {
+  sendCode: (emailAddressId: string) => Promise<void>;
+  verifyCode: (emailAddressId: string, code: string) => Promise<void>;
+  refresh: () => Promise<void>;
+}
+
+export function useEmailAddressVerification(): IdentityEmailAddressVerification {
+  const { user } = useUser();
+  const userRef = useRef(user);
+  userRef.current = user;
+
+  const pendingAddress = useCallback(async (emailAddressId: string) => {
+    const current = userRef.current;
+    if (!current) throw new Error('You are signed out. Sign in again to continue.');
+    const reloaded = await current.reload();
+    const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
+    if (!address) throw new Error('That address is no longer on your account. Start again.');
+    return address;
+  }, []);
+
+  const sendCode = useCallback(
+    async (emailAddressId: string) => {
+      await (await pendingAddress(emailAddressId)).prepareVerification({ strategy: 'email_code' });
+    },
+    [pendingAddress],
+  );
+
+  const verifyCode = useCallback(
+    async (emailAddressId: string, code: string) => {
+      await (await pendingAddress(emailAddressId)).attemptVerification({ code });
+    },
+    [pendingAddress],
+  );
+
+  const refresh = useCallback(async () => {
+    await userRef.current?.reload();
+  }, []);
+
+  return useMemo(() => ({ sendCode, verifyCode, refresh }), [sendCode, verifyCode, refresh]);
 }

@@ -104,10 +104,6 @@ pub struct DefaultConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reasoning_effort: Option<String>,
 
-    /// Approval mode: suggest (default), auto-edit, full-auto.
-    #[serde(default = "default_approval_mode")]
-    pub approval_mode: String,
-
     /// Permission posture applied when no flag or client names one:
     /// `default`, `plan`, `acceptEdits` or `dontAsk`.
     ///
@@ -137,10 +133,6 @@ pub struct DefaultConfig {
     /// MCP tool call timeout in seconds (default: 120).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_call_tool_timeout: Option<u64>,
-}
-
-fn default_approval_mode() -> String {
-    "suggest".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -191,7 +183,6 @@ impl DefaultConfig {
             fallback_chain: Vec::new(),
             fast_model: None,
             reasoning_effort: None,
-            approval_mode: default_approval_mode(),
             permission_mode: None,
             sandbox_mode: None,
             review_model: None,
@@ -628,8 +619,8 @@ impl CliConfig {
         &mut self,
         managed: &crate::platform::policy::managed::ManagedConfigSection,
     ) {
-        if let Some(mode) = &managed.approval_mode {
-            self.default.approval_mode = mode.clone();
+        if let Some(mode) = &managed.permission_mode {
+            self.default.permission_mode = Some(mode.clone());
         }
         if let Some(mode) = &managed.privacy_mode {
             self.ui.privacy_mode = Some(mode.clone());
@@ -680,10 +671,6 @@ impl CliConfig {
         // If other has fast_model, use it
         if other.default.fast_model.is_some() {
             self.default.fast_model = other.default.fast_model.clone();
-        }
-        // Merge approval_mode if non-default
-        if other.default.approval_mode != default_approval_mode() {
-            self.default.approval_mode = other.default.approval_mode.clone();
         }
         // Merge reasoning_effort if set
         if other.default.reasoning_effort.is_some() {
@@ -2351,16 +2338,16 @@ model = "fixture-config-model"
         use crate::platform::policy::managed::ManagedConfigSection;
 
         let mut config = CliConfig::default();
-        config.default.approval_mode = "full-auto".to_string();
+        config.default.permission_mode = Some("acceptEdits".to_string());
         config.ui.privacy_mode = Some("byok".to_string());
 
         config.apply_managed_config(&ManagedConfigSection {
-            approval_mode: Some("ask".to_string()),
+            permission_mode: Some("default".to_string()),
             privacy_mode: Some("local".to_string()),
             allow_project_config: Some(false),
         });
 
-        assert_eq!(config.default.approval_mode, "ask");
+        assert_eq!(config.default.permission_mode.as_deref(), Some("default"));
         assert_eq!(config.ui.privacy_mode.as_deref(), Some("local"));
     }
 
@@ -2376,18 +2363,18 @@ model = "fixture-config-model"
         let user_file = home.path().join("config.toml");
         std::fs::write(
             &user_file,
-            "[default]\napproval_mode = \"full-auto\"\nreasoning_effort = \"low\"\n\n[ui]\noutput_style = \"concise\"\nedit_mode = \"vim\"\n",
+            "[default]\npermission_mode = \"acceptEdits\"\nreasoning_effort = \"low\"\n\n[ui]\noutput_style = \"concise\"\nedit_mode = \"vim\"\n",
         )
         .unwrap();
         let repository_dir = checkout.path().join(".agiworkforce");
         std::fs::create_dir_all(&repository_dir).unwrap();
         std::fs::write(
             repository_dir.join("config.toml"),
-            "[default]\napproval_mode = \"auto-edit\"\nreasoning_effort = \"high\"\n\n[ui]\nedit_mode = \"emacs\"\n",
+            "[default]\npermission_mode = \"plan\"\nreasoning_effort = \"high\"\n\n[ui]\nedit_mode = \"emacs\"\n",
         )
         .unwrap();
         let managed_file = home.path().join("managed-policy.toml");
-        std::fs::write(&managed_file, "[config]\napprovalMode = \"ask\"\n").unwrap();
+        std::fs::write(&managed_file, "[config]\npermissionMode = \"default\"\n").unwrap();
 
         let layered = |managed: &crate::platform::policy::managed::ManagedPolicyState| {
             CliConfig::from_layers(
@@ -2398,7 +2385,11 @@ model = "fixture-config-model"
         };
 
         let merged = layered(&load_managed_policy_from(&managed_file)).expect("merged");
-        assert_eq!(merged.default.approval_mode, "ask", "managed beats both");
+        assert_eq!(
+            merged.default.permission_mode.as_deref(),
+            Some("default"),
+            "managed beats both"
+        );
         assert_eq!(merged.default.reasoning_effort.as_deref(), Some("high"));
         assert_eq!(merged.ui.edit_mode.as_deref(), Some("emacs"));
         assert_eq!(merged.ui.output_style.as_deref(), Some("concise"));
@@ -2411,11 +2402,12 @@ model = "fixture-config-model"
         let without_policy =
             layered(&load_managed_policy_from(&home.path().join("absent.toml"))).expect("merged");
         assert_eq!(
-            without_policy.default.approval_mode, "auto-edit",
+            without_policy.default.permission_mode.as_deref(),
+            Some("plan"),
             "the repository beats the user when nothing is pinned above it"
         );
 
-        std::fs::write(&managed_file, "[config]\napprovalMode = [").unwrap();
+        std::fs::write(&managed_file, "[config]\npermissionMode = [").unwrap();
         assert!(
             layered(&load_managed_policy_from(&managed_file)).is_err(),
             "an unreadable managed layer must stop the load, not fall away"
@@ -2427,11 +2419,14 @@ model = "fixture-config-model"
         use crate::platform::policy::managed::ManagedConfigSection;
 
         let mut config = CliConfig::default();
-        config.default.approval_mode = "full-auto".to_string();
+        config.default.permission_mode = Some("acceptEdits".to_string());
 
         config.apply_managed_config(&ManagedConfigSection::default());
 
-        assert_eq!(config.default.approval_mode, "full-auto");
+        assert_eq!(
+            config.default.permission_mode.as_deref(),
+            Some("acceptEdits")
+        );
     }
 
     /// Every key a released CLI writes into config.toml, in the shape it

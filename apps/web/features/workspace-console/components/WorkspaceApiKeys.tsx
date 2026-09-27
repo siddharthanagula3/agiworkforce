@@ -13,6 +13,7 @@ import {
 } from '../hooks/use-admin-api-keys';
 import { PERMISSION_COPY } from './WorkspaceRoles';
 import { toUserMessage } from '@/lib/user-error-message';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 
 const cardStyle = {
   border: '1px solid var(--settings-border)',
@@ -301,7 +302,12 @@ export function WorkspaceApiKeys() {
               disabled={!canSubmit}
               onClick={() =>
                 create.mutate(
-                  { name: name.trim(), scopes, expiresInDays: expiry },
+                  {
+                    organizationId: data.organizationId,
+                    name: name.trim(),
+                    scopes,
+                    expiresInDays: expiry,
+                  },
                   {
                     onSuccess: (result) => {
                       setSecret(result.key);
@@ -316,7 +322,7 @@ export function WorkspaceApiKeys() {
               {create.isPending ? <Spinner size="sm" /> : null}
               Create key
             </button>
-            {create.isError ? (
+            {create.isError && !isStepUpCancelled(create.error) ? (
               <span
                 role="alert"
                 className="text-xs"
@@ -337,6 +343,7 @@ export function WorkspaceApiKeys() {
           </div>
         </div>
       ) : null}
+      {create.stepUpDialog}
     </section>
   );
 }

@@ -216,7 +216,7 @@ capabilities hidden or clearly unavailable, never presented as working.
 
 - Decision: no fragile India-specific recurring billing to claim worldwide
   support; until Razorpay, accountant and legal questions are resolved, Max
-  15x and Team are invoice or assisted-sales only or unavailable for
+  20x and Team are invoice or assisted-sales only or unavailable for
   self-serve recurring purchase in India; no INR top-up conversion apart from
   the global credit economics; lower plans only through confirmed-compliant
   payment mechanisms.

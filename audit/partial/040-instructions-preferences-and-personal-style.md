@@ -24,17 +24,15 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can give the assistant background about themselves that it keeps in mind.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a field for background about the user; only a role dropdown and the free-text instructions box exist. | ui |
-| desktop | partial | Add a field for background about the user; only a role dropdown and the free-text instructions box exist. | ui |
-| mobile | partial | Add a background field; only Occupation and the Custom Instructions box exist. | ui |
 | cli | partial | Set the role and instructions on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set the role and instructions on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the role and instructions on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:581-584`, `apps/web/features/settings/components/WebSettingsModal.tsx:189-189`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/mobile/src/features/settings/personalization/index.tsx:360-367`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.03: Role or profession.
 
@@ -54,32 +52,26 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can choose the response style they want, and replies follow that one choice.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Two style systems conflict: Settings > Response style is sent in the account preamble, while the composer's own Style picker adds 'Concise' + 'Brief' to every message by default, so choosing Explanatory in Settings is contradicted on each turn. | states |
-| desktop | partial | Two style systems conflict: Settings > Response style is sent in the account preamble, while the composer's own Style picker adds 'Concise' + 'Brief' to every message by default, so choosing Explanatory in Settings is contradicted on each turn. | states |
-| mobile | partial | Two style systems conflict: the Personalization style preset and the chat Style sheet (default Concise) are both sent, so a non-concise preset is contradicted by default. | states |
 | vscode | partial | Set a response style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a response style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:608-628`, `apps/web/features/settings/components/WebSettingsModal.tsx:189-189`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1274-1277`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.06: Response-length preference.
 
 - Done when: The user can set how long replies should be, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add a length setting; only the Concise preset/chat style shortens replies. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:380-384`, `apps/mobile/stores/chat/chatExecutionStore.ts:388-393`
 
 ## S40.07: Formality preference.
 
@@ -99,17 +91,14 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can pick from named tone/style presets, and one chosen preset governs replies.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Two different preset lists exist: Settings (Default, Concise, Explanatory, Formal) and the composer (Default, Concise, Detailed, Technical, Creative), and both are sent. | states |
-| desktop | partial | Two different preset lists exist: Settings (Default, Concise, Explanatory, Formal) and the composer (Default, Concise, Detailed, Technical, Creative), and both are sent. | states |
-| mobile | partial | Two preset lists (Personalization: Default/Concise/Explanatory/Formal; chat sheet: Normal/Concise/Detailed/Creative) are both sent. | states |
 | vscode | partial | Set a style preset on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a style preset on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:608-628`, `apps/web/features/settings/components/WebSettingsModal.tsx:189-189`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1274-1277`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.09: Warmth preference.
 
@@ -171,31 +160,29 @@ Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-iden
 
 - Done when: The user can set how technical replies should be, and replies follow it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Set a technical level on web; mobile has no control for it, and it applies only to Cloud-mode chats (not the default Local mode). | ui |
 | cli | partial | Set a technical level on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a technical level on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a technical level on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/mobile/services/cloudSettingsMapping.ts:111-125`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/cli/src/models/streaming.rs:226-235`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.14: Language preference.
 
 - Done when: The user can set the language replies are written in (separate from the interface language), and replies follow it.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Set a response language on web; mobile has no control for it, and it applies only to Cloud-mode chats (not the default Local mode). | ui |
 | cli | partial | Set a response language on web; the CLI has no control for it, and it applies only to CLI chats on the AGI Cloud provider. | ui |
 | vscode | partial | Set a response language on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set a response language on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/mobile/services/cloudSettingsMapping.ts:111-125`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/cli/src/models/streaming.rs:226-235`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.16: Persistent custom instructions.
 
@@ -266,33 +253,25 @@ Code: `apps/web/features/chat/components/Composer/StyleSelector.tsx:253-253`, `a
 
 - Done when: One action returns the user's style preferences to the defaults.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a one-step reset; each setting must be set back by hand, and the composer's 'Default' preset is not its default (Concise + Brief is). | ui |
-| desktop | partial | Add a one-step reset; each setting must be set back by hand, and the composer's 'Default' preset is not its default (Concise + Brief is). | ui |
-| mobile | partial | Add a reset; the preset and each slider must be moved back by hand. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:608-628`, `apps/web/features/chat/components/Composer/StyleSelector.tsx:184-191`, `apps/web/features/chat/stores/style-store.ts:11-11`, `apps/mobile/src/features/settings/personalization/index.tsx:380-404`
 
 ## S40.24: Explanatory output style.
 
 - Done when: The user can choose an explanatory style that explains reasoning and context, and replies follow it.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Two style systems conflict: Settings > Response style is sent in the account preamble, while the composer's own Style picker adds 'Concise' + 'Brief' to every message by default, so choosing Explanatory in Settings is contradicted on each turn. | states |
-| desktop | partial | Two style systems conflict: Settings > Response style is sent in the account preamble, while the composer's own Style picker adds 'Concise' + 'Brief' to every message by default, so choosing Explanatory in Settings is contradicted on each turn. | states |
-| mobile | partial | Two style systems conflict: the Personalization style preset and the chat Style sheet (default Concise) are both sent, so a non-concise preset is contradicted by default. | states |
 | vscode | partial | Set the Explanatory style on web; VS Code has no control for it, and it applies only when the local runtime uses the AGI Cloud provider. | ui |
 | chrome | partial | Set the Explanatory style on web; the side panel has no control or link for it, though side-panel chats follow the web setting. | ui |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:608-628`, `apps/web/features/settings/components/WebSettingsModal.tsx:189-189`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:1274-1277`
+Code: `apps/cli/src/models/streaming.rs:226-235`, `apps/web/lib/server/user-identity.ts:205-227`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2234-2234`
 
 ## S40.25: Learning-oriented output style.
 

@@ -4,6 +4,7 @@
 //! `~/.agiworkforce/mcp-oauth.json` map remains readable only for one-time
 //! migration and for the explicit headless keyring opt-out.
 
+use agiworkforce_mcp::ClientRegistration;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -125,19 +126,7 @@ impl McpOAuthStore {
 /// OS keyring service name for MCP OAuth tokens.
 const KEYRING_SERVICE: &str = "agiworkforce-mcp-oauth";
 
-/// Per-server token entry used by `McpServerOAuthStore`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpServerToken {
-    pub access_token: String,
-    pub refresh_token: Option<String>,
-    pub token_type: Option<String>,
-    /// Unix epoch seconds.
-    pub expires_at: Option<u64>,
-    pub scope: Option<String>,
-    pub auth_server_metadata_url: Option<String>,
-    pub token_url: Option<String>,
-    pub client_id: Option<String>,
-}
+pub type McpServerToken = agiworkforce_mcp::OAuthToken;
 
 /// Keyring-backed OAuth token store keyed by a SHA-256 digest of the canonical
 /// server URL, so tenant/path details never appear in credential metadata.
@@ -197,75 +186,71 @@ impl McpServerOAuthStore {
     }
 
     fn credential_id(server: &str) -> String {
-        let digest = Sha256::digest(server.as_bytes());
-        format!("server:{}", crate::hex::encode(&digest))
+        Self::hashed_id("server", server)
     }
 
-    fn fallback_path(&self, server: &str) -> PathBuf {
-        self.base_dir
-            .join(format!("{}.token", Self::credential_id(server)))
+    fn client_credential_id(issuer: &str) -> String {
+        Self::hashed_id("client", issuer)
+    }
+
+    fn hashed_id(kind: &str, value: &str) -> String {
+        let digest = Sha256::digest(value.as_bytes());
+        format!("{kind}:{}", crate::hex::encode(&digest))
+    }
+
+    fn fallback_path(&self, credential_id: &str) -> PathBuf {
+        self.base_dir.join(format!("{credential_id}.token"))
     }
 
     /// Save a token to the OS keyring, or to the owner-only compatibility file
     /// when keyring use was explicitly disabled.
     pub fn save(&self, server: &str, token: &McpServerToken) -> Result<()> {
-        let json = serde_json::to_string(token)?;
-        if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
-                .context("open the OS credential store for MCP OAuth")?;
-            entry
-                .set_password(&json)
-                .context("save the MCP OAuth credential in the OS keyring")?;
-            let fallback = self.fallback_path(server);
-            if fallback.exists() {
-                fs::remove_file(&fallback)
-                    .with_context(|| format!("remove migrated {}", fallback.display()))?;
-            }
-            return Ok(());
-        }
-        self.write_file(server, &json)
+        self.write_entry(&Self::credential_id(server), &serde_json::to_string(token)?)
     }
 
     pub fn load(&self, server: &str) -> Result<Option<McpServerToken>> {
-        if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
-                .context("open the OS credential store for MCP OAuth")?;
-            match entry.get_password() {
-                Ok(json) => {
-                    let token = serde_json::from_str::<McpServerToken>(&json)
-                        .context("saved MCP OAuth credential is invalid")?;
-                    return Ok(Some(token));
-                }
-                Err(keyring::Error::NoEntry) => return Ok(None),
-                Err(error) => {
-                    return Err(error).context("read the MCP OAuth credential from the OS keyring")
-                }
-            }
-        }
-        Ok(self.read_file(server))
+        self.read_entry(&Self::credential_id(server))?
+            .map(|json| {
+                serde_json::from_str::<McpServerToken>(&json)
+                    .context("saved MCP OAuth credential is invalid")
+            })
+            .transpose()
     }
 
     pub fn delete(&self, server: &str) -> Result<()> {
-        if self.use_keyring {
-            let entry = keyring::Entry::new(KEYRING_SERVICE, &Self::credential_id(server))
-                .context("open the OS credential store for MCP OAuth")?;
-            match entry.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => {}
-                Err(error) => {
-                    return Err(error)
-                        .context("delete the MCP OAuth credential from the OS keyring")
-                }
-            }
-        }
-        let path = self.fallback_path(server);
-        if path.exists() {
-            fs::remove_file(&path)?;
-        }
-        Ok(())
+        self.delete_entry(&Self::credential_id(server))
     }
 
-    fn write_file(&self, server: &str, json: &str) -> Result<()> {
-        let path = self.fallback_path(server);
+    pub fn save_client(&self, issuer: &str, registration: &ClientRegistration) -> Result<()> {
+        self.write_entry(
+            &Self::client_credential_id(issuer),
+            &serde_json::to_string(registration)?,
+        )
+    }
+
+    pub fn load_client(&self, issuer: &str) -> Result<Option<ClientRegistration>> {
+        self.read_entry(&Self::client_credential_id(issuer))?
+            .map(|json| {
+                serde_json::from_str::<ClientRegistration>(&json)
+                    .context("saved MCP OAuth client registration is invalid")
+            })
+            .transpose()
+    }
+
+    fn write_entry(&self, credential_id: &str, json: &str) -> Result<()> {
+        let path = self.fallback_path(credential_id);
+        if self.use_keyring {
+            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+                .context("open the OS credential store for MCP OAuth")?;
+            entry
+                .set_password(json)
+                .context("save the MCP OAuth credential in the OS keyring")?;
+            if path.exists() {
+                fs::remove_file(&path)
+                    .with_context(|| format!("remove migrated {}", path.display()))?;
+            }
+            return Ok(());
+        }
         fs::write(&path, json).with_context(|| format!("write {}", path.display()))?;
         #[cfg(unix)]
         {
@@ -275,10 +260,38 @@ impl McpServerOAuthStore {
         Ok(())
     }
 
-    fn read_file(&self, server: &str) -> Option<McpServerToken> {
-        let path = self.fallback_path(server);
-        let json = fs::read_to_string(&path).ok()?;
-        serde_json::from_str::<McpServerToken>(&json).ok()
+    fn read_entry(&self, credential_id: &str) -> Result<Option<String>> {
+        if self.use_keyring {
+            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+                .context("open the OS credential store for MCP OAuth")?;
+            return match entry.get_password() {
+                Ok(json) => Ok(Some(json)),
+                Err(keyring::Error::NoEntry) => Ok(None),
+                Err(error) => {
+                    Err(error).context("read the MCP OAuth credential from the OS keyring")
+                }
+            };
+        }
+        Ok(fs::read_to_string(self.fallback_path(credential_id)).ok())
+    }
+
+    fn delete_entry(&self, credential_id: &str) -> Result<()> {
+        if self.use_keyring {
+            let entry = keyring::Entry::new(KEYRING_SERVICE, credential_id)
+                .context("open the OS credential store for MCP OAuth")?;
+            match entry.delete_credential() {
+                Ok(()) | Err(keyring::Error::NoEntry) => {}
+                Err(error) => {
+                    return Err(error)
+                        .context("delete the MCP OAuth credential from the OS keyring")
+                }
+            }
+        }
+        let path = self.fallback_path(credential_id);
+        if path.exists() {
+            fs::remove_file(&path)?;
+        }
+        Ok(())
     }
 }
 
@@ -362,6 +375,8 @@ mod tests {
             auth_server_metadata_url: None,
             token_url: None,
             client_id: None,
+            issuer: None,
+            resource: None,
         }
     }
 
@@ -409,6 +424,8 @@ mod tests {
             auth_server_metadata_url: None,
             token_url: None,
             client_id: None,
+            issuer: None,
+            resource: None,
         };
         store.save("server-c", &updated).unwrap();
         let loaded = store.load("server-c").unwrap().unwrap();

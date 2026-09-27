@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY,
+  PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR,
+} from '@agiworkforce/types';
 
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
@@ -13,6 +17,7 @@ import {
   MEMBERSHIP_STATUSES_THAT_MAY_ACT,
   ownerIsActiveWorkspaceMemberSql,
 } from '@/lib/server/workspace-scope';
+import { recordNotification } from '@/lib/services/notification-service';
 
 import { mapTrigger, type TriggerRow } from './trigger-service';
 import { hashVerificationCode } from './trigger-signatures';
@@ -165,6 +170,114 @@ async function claimDebounce(db: DatabaseAdapter, trigger: EventTrigger): Promis
   return affected === 1;
 }
 
+interface EventRunCap {
+  window: 'hour' | 'day';
+  limit: number;
+}
+
+type EventRunClaim =
+  | { outcome: 'enqueued'; jobId: string }
+  | { outcome: 'debounced'; detail: string; cap: EventRunCap | null };
+
+async function reachedEventRunCap(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<EventRunCap | null> {
+  const [row] = await db.query<{ last_hour: number | string; last_day: number | string }>(
+    `select count(*) filter (where received_at > now() - interval '1 hour') as last_hour,
+            count(*) as last_day
+       from event_trigger_events
+      where user_id = $1
+        and received_at > now() - interval '1 day'
+        and (
+          outcome = any (array['enqueued', 'fired', 'dead'])
+          or (outcome = 'failed' and run_id is not null)
+        )`,
+    [userId],
+  );
+  if (Number(row?.last_day ?? 0) >= PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY) {
+    return { window: 'day', limit: PLATFORM_EVENT_TRIGGER_RUNS_PER_DAY };
+  }
+  if (Number(row?.last_hour ?? 0) >= PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR) {
+    return { window: 'hour', limit: PLATFORM_EVENT_TRIGGER_RUNS_PER_HOUR };
+  }
+  return null;
+}
+
+function eventRunCapPeriod(cap: EventRunCap): string {
+  return cap.window === 'hour' ? 'the last hour' : 'the last 24 hours';
+}
+
+async function announceEventRunCap(
+  db: DatabaseAdapter,
+  trigger: EventTrigger,
+  cap: EventRunCap,
+): Promise<void> {
+  const slot = new Date().toISOString().slice(0, cap.window === 'hour' ? 13 : 10);
+  await recordNotification(db, {
+    userId: trigger.userId,
+    category: 'schedule',
+    severity: 'warning',
+    title:
+      cap.window === 'hour'
+        ? 'Event-triggered tasks reached the hourly limit'
+        : 'Event-triggered tasks reached the daily limit',
+    message:
+      `Your event-triggered tasks started ${cap.limit} runs in ${eventRunCapPeriod(cap)}, ` +
+      'the most allowed. Events that arrive before that count drops are recorded without ' +
+      'starting a run.',
+    target: { kind: 'schedule', id: trigger.taskId },
+    dedupeKey: `event-trigger-cap:${cap.window}:${slot}`,
+  });
+}
+
+async function claimEventRun(
+  tx: DatabaseAdapter,
+  trigger: EventTrigger,
+  event: TriggerEvent,
+  eventId: string,
+): Promise<EventRunClaim> {
+  await tx.query(
+    `select pg_advisory_xact_lock(hashtextextended('agi:event-trigger-runs:' || $1, 0))`,
+    [trigger.userId],
+  );
+  const cap = await reachedEventRunCap(tx, trigger.userId);
+  if (cap) {
+    const detail =
+      `Not run: your event-triggered tasks already started ${cap.limit} runs in ` +
+      `${eventRunCapPeriod(cap)}, the most allowed`;
+    await settleTriggerDelivery(tx, eventId, 'debounced', detail);
+    return { outcome: 'debounced', detail, cap };
+  }
+
+  if (!(await claimDebounce(tx, trigger))) {
+    const detail = `Debounced: this trigger fired less than ${trigger.debounceSeconds}s ago`;
+    await settleTriggerDelivery(tx, eventId, 'debounced', detail);
+    return { outcome: 'debounced', detail, cap: null };
+  }
+
+  const job = await enqueueJob(tx, {
+    kind: 'event-triggers.fire',
+    userId: trigger.userId,
+    organizationId: trigger.organizationId,
+    idempotencyKey: `trigger-event:${eventId}`,
+    maxAttempts: trigger.maxAttempts,
+    payload: {
+      triggerId: trigger.id,
+      eventId,
+      event: {
+        source: event.source,
+        type: event.type,
+        deliveryId: event.deliveryId,
+        occurredAt: event.occurredAt,
+        data: boundedEventData(event.data),
+      },
+    },
+  });
+  await settleTriggerDelivery(tx, eventId, 'enqueued', null, { jobId: job.id });
+  return { outcome: 'enqueued', jobId: job.id };
+}
+
 async function verifySlackOwnership(
   db: DatabaseAdapter,
   trigger: EventTrigger,
@@ -219,40 +332,34 @@ export async function ingestTriggerEvent(
       continue;
     }
 
-    if (!(await claimDebounce(db, trigger))) {
-      const detail = `Debounced: this trigger fired less than ${trigger.debounceSeconds}s ago`;
-      await settleTriggerDelivery(db, eventId, 'debounced', detail);
-      outcomes.push({ triggerId: trigger.id, outcome: 'debounced', detail });
-      continue;
-    }
-
+    let claim: EventRunClaim;
     try {
-      const job = await enqueueJob(db, {
-        kind: 'event-triggers.fire',
-        userId: trigger.userId,
-        organizationId: trigger.organizationId,
-        idempotencyKey: `trigger-event:${eventId}`,
-        maxAttempts: trigger.maxAttempts,
-        payload: {
-          triggerId: trigger.id,
-          eventId,
-          event: {
-            source: event.source,
-            type: event.type,
-            deliveryId: event.deliveryId,
-            occurredAt: event.occurredAt,
-            data: boundedEventData(event.data),
-          },
-        },
-      });
-      await settleTriggerDelivery(db, eventId, 'enqueued', null, { jobId: job.id });
-      outcomes.push({ triggerId: trigger.id, outcome: 'enqueued', detail: null, jobId: job.id });
+      claim = await db.transaction((tx) => claimEventRun(tx, trigger, event, eventId));
     } catch (error) {
       const detail = `The run could not be queued: ${error instanceof Error ? error.message : String(error)}`;
       logger.error({ error, triggerId: trigger.id }, 'Event trigger could not queue its run');
       await settleTriggerDelivery(db, eventId, 'failed', detail);
       outcomes.push({ triggerId: trigger.id, outcome: 'filtered', detail });
+      continue;
     }
+
+    if (claim.outcome === 'enqueued') {
+      outcomes.push({
+        triggerId: trigger.id,
+        outcome: 'enqueued',
+        detail: null,
+        jobId: claim.jobId,
+      });
+      continue;
+    }
+    if (claim.cap) {
+      logger.warn(
+        { triggerId: trigger.id, window: claim.cap.window, limit: claim.cap.limit },
+        'Event trigger held back: its owner reached the event-triggered run limit',
+      );
+      await announceEventRunCap(db, trigger, claim.cap);
+    }
+    outcomes.push({ triggerId: trigger.id, outcome: 'debounced', detail: claim.detail });
   }
 
   return outcomes;

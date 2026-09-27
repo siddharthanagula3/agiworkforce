@@ -1,6 +1,7 @@
 import {
   BILLING_PLAN_PRICING,
   managedUsageComparisonLabel,
+  managedUsageComparisonLines,
   modelsCatalogJson,
 } from '@agiworkforce/types';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from './surface-status';
@@ -160,7 +161,7 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: BILLING_PLAN_PRICING.team.label,
       price: `$${BILLING_PLAN_PRICING.team.monthlyPriceUsd}/seat/mo`,
       billingInterval: 'Self-serve monthly; annual only where checkout offers it',
-      usageCapacity: 'Pro-level hosted capacity per licensed seat with shared team controls',
+      usageCapacity: managedUsageComparisonLines('team').join(' · '),
       bestFor: 'Collaborative teams needing shared context',
       ctaLabel: 'Get started',
       ctaHref: '/pricing#pricing-team-title',

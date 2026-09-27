@@ -9,7 +9,9 @@ use tracing::{error, info, warn};
 
 use super::auth::McpAuth;
 use super::executor::{DesktopMcpServerExecutor, McpServerExecutor};
-use super::handlers::{dispatch, JsonRpcRequest};
+use super::handlers::{serve, HttpReply, RequestHeaders};
+
+const MAX_REQUEST_BYTES: usize = 4 * 1024 * 1024;
 
 pub struct McpHttpServer {
     pub port: u16,
@@ -101,71 +103,143 @@ async fn handle_connection(
     enabled_tools: Vec<String>,
     executor: Arc<dyn McpServerExecutor>,
 ) {
-    let mut buf = vec![0u8; 65536];
-    let n = match stream.read(&mut buf).await {
-        Ok(n) if n > 0 => n,
-        _ => return,
+    let Some((head, body)) = read_request(&mut stream).await else {
+        let _ = stream.write_all(&plain_status(400, "Bad Request")).await;
+        return;
     };
 
-    let raw = String::from_utf8_lossy(&buf[..n]);
-
-    // Parse HTTP/1.1 request manually
-    let (headers_section, body) = match raw.split_once("\r\n\r\n") {
-        Some(parts) => parts,
-        None => {
-            let _ = stream
-                .write_all(b"HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n")
-                .await;
-            return;
-        }
+    let mut lines = head.lines();
+    let request_line = lines.next().unwrap_or("");
+    let headers: Vec<(String, String)> = lines
+        .filter_map(|line| line.split_once(':'))
+        .map(|(name, value)| (name.trim().to_ascii_lowercase(), value.trim().to_string()))
+        .collect();
+    let header = |name: &str| {
+        headers
+            .iter()
+            .find(|(key, _)| key == name)
+            .map(|(_, value)| value.as_str())
     };
 
-    let first_line = headers_section.lines().next().unwrap_or("");
-    let is_post = first_line.starts_with("POST");
-    if !is_post {
-        let resp = b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n";
-        let _ = stream.write_all(resp).await;
+    if header("origin").is_some_and(|origin| !is_loopback_origin(origin)) {
+        let _ = stream.write_all(&plain_status(403, "Forbidden")).await;
         return;
     }
 
-    // Extract Authorization header
-    let auth_header = headers_section
-        .lines()
-        .find(|l| l.to_lowercase().starts_with("authorization:"))
-        .and_then(|l| l.split_once(':'))
-        .map(|(_, v)| v.trim())
+    if !request_line.starts_with("POST ") {
+        let _ = stream
+            .write_all(&plain_status(405, "Method Not Allowed"))
+            .await;
+        return;
+    }
+
+    let token = header("authorization")
+        .and_then(|value| value.strip_prefix("Bearer "))
         .unwrap_or("");
-
-    let token = auth_header.strip_prefix("Bearer ").unwrap_or("");
     if !auth.verify(token) {
-        let resp = b"HTTP/1.1 401 Unauthorized\r\nContent-Length: 0\r\n\r\n";
-        let _ = stream.write_all(resp).await;
+        let _ = stream.write_all(&plain_status(401, "Unauthorized")).await;
         return;
     }
 
-    // Parse JSON-RPC
-    let request: JsonRpcRequest = match serde_json::from_str(body) {
-        Ok(r) => r,
-        Err(e) => {
-            let err_body = format!(
-                "{{\"jsonrpc\":\"2.0\",\"error\":{{\"code\":-32700,\"message\":\"Parse error: {e}\"}},\"id\":null}}"
+    let reply = serve(
+        &String::from_utf8_lossy(&body),
+        RequestHeaders {
+            protocol_version: header("mcp-protocol-version"),
+            method: header("mcp-method"),
+            name: header("mcp-name"),
+        },
+        &enabled_tools,
+        executor,
+    )
+    .await;
+
+    let response = match reply {
+        HttpReply::Accepted => plain_status(202, "Accepted"),
+        HttpReply::Json { status, body } => {
+            let body = serde_json::to_string(&body).unwrap_or_default();
+            format!(
+                "HTTP/1.1 {status} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                reason_phrase(status),
+                body.len()
+            )
+            .into_bytes()
+        }
+        HttpReply::EventStream(frames) => {
+            let mut response = String::from(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nCache-Control: no-cache\r\nX-Accel-Buffering: no\r\nConnection: close\r\n\r\n",
             );
-            let resp = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-                err_body.len(),
-                err_body
-            );
-            let _ = stream.write_all(resp.as_bytes()).await;
-            return;
+            for frame in frames {
+                response.push_str("data: ");
+                response.push_str(&serde_json::to_string(&frame).unwrap_or_default());
+                response.push_str("\n\n");
+            }
+            response.into_bytes()
         }
     };
+    let _ = stream.write_all(&response).await;
+    let _ = stream.shutdown().await;
+}
 
-    let rpc_resp = dispatch(&request, &enabled_tools, executor).await;
-    let resp_body = serde_json::to_string(&rpc_resp).unwrap_or_default();
-    let resp = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
-        resp_body.len(),
-        resp_body
-    );
-    let _ = stream.write_all(resp.as_bytes()).await;
+async fn read_request(stream: &mut tokio::net::TcpStream) -> Option<(String, Vec<u8>)> {
+    let mut buf: Vec<u8> = Vec::new();
+    let mut chunk = [0u8; 16 * 1024];
+    loop {
+        if let Some(end) = buf.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head = String::from_utf8_lossy(&buf[..end]).into_owned();
+            let length: usize = head
+                .lines()
+                .filter_map(|line| line.split_once(':'))
+                .find(|(name, _)| name.trim().eq_ignore_ascii_case("content-length"))
+                .and_then(|(_, value)| value.trim().parse().ok())
+                .unwrap_or(0);
+            if end + 4 + length > MAX_REQUEST_BYTES {
+                return None;
+            }
+            while buf.len() < end + 4 + length {
+                let n = stream.read(&mut chunk).await.ok()?;
+                if n == 0 {
+                    return None;
+                }
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            return Some((head, buf[end + 4..end + 4 + length].to_vec()));
+        }
+        if buf.len() > MAX_REQUEST_BYTES {
+            return None;
+        }
+        let n = stream.read(&mut chunk).await.ok()?;
+        if n == 0 {
+            return None;
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
+}
+
+fn is_loopback_origin(origin: &str) -> bool {
+    url::Url::parse(origin)
+        .ok()
+        .and_then(|parsed| match parsed.host()? {
+            url::Host::Domain(domain) => Some(domain.eq_ignore_ascii_case("localhost")),
+            url::Host::Ipv4(v4) => Some(v4.is_loopback()),
+            url::Host::Ipv6(v6) => Some(v6.is_loopback()),
+        })
+        .unwrap_or(false)
+}
+
+fn reason_phrase(status: u16) -> &'static str {
+    match status {
+        200 => "OK",
+        202 => "Accepted",
+        400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
+        404 => "Not Found",
+        405 => "Method Not Allowed",
+        _ => "Internal Server Error",
+    }
+}
+
+fn plain_status(status: u16, reason: &str) -> Vec<u8> {
+    format!("HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+        .into_bytes()
 }

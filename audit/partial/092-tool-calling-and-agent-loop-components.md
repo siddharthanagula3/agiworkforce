@@ -39,17 +39,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:353-353`, `apps
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3947-3959`
 
-## S92.13: Approval-policy evaluator.
-
-- Done when: A policy evaluator decides allow/ask/deny for every tool call from the account policy, saved per-tool levels and the lethal-trifecta rule, on every path that runs tools.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Live voice and scheduled runs now read the approval policy (blockers 03 and 04). Still open: uploaded documents never raise the untrusted-content leg, and provider-native code execution and Anthropic native web_fetch skip the gate (blockers 01 and 02, in progress). | handler |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:66-78`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:166-169`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2780-2792`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:108-113`
-
 ## S92.19: External-outcome reconciliation.
 
 - Done when: When an external action's outcome is unknown (timeout, crash), the runtime checks the external system and records the real outcome before retrying or reporting.
@@ -101,6 +90,6 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts:14-25`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Approvals queue and resume, but the connector input_required pause is off by default (AGI_MCP_INPUT_PAUSE must be 1) and no client calls /resume-input, so connector questions fail safe instead of waiting. | flag-off |
+| platform | partial | The connector input_required pause is on for every attended turn (tool-loop.ts:2744; AGI_MCP_INPUT_PAUSE is deleted). Still open: no client answers the pause yet; the web input form and resume call are being built in the connector lane. | flag-off |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1077-1085`, `apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql:8-12`

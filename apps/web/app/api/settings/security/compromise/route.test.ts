@@ -30,8 +30,11 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/step-up-auth', () => ({
   requireStepUp: (...args: unknown[]) => mocks.requireStepUp(...(args as [])),
 }));
-vi.mock('@/lib/server/step-up/verify-factor', () => ({
-  hasEnrolledSecondFactor: (...args: unknown[]) => mocks.hasEnrolledSecondFactor(...(args as [])),
+vi.mock('@/lib/server/step-up/second-factor', () => ({
+  readSecondFactorStatus: async (...args: unknown[]) => {
+    const enrolled = await mocks.hasEnrolledSecondFactor(...(args as []));
+    return { authenticator: enrolled, backupCodes: enrolled, anySecondFactor: enrolled };
+  },
 }));
 vi.mock('@/lib/services/identity-events', () => ({
   respondToAccountCompromise: (...args: unknown[]) => mocks.respond(...(args as [])),

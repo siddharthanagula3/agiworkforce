@@ -289,12 +289,14 @@ describe('applyFirstPartyTargets', () => {
     expect(gmail?.description).toBe('Search, draft, and send email through Gmail.');
   });
 
-  it('adds a directory-only provider as a standalone first-party record with no wired remote', () => {
+  it('wires a hosted pre-registered provider onto its catalog record', () => {
     const withStandalone = applyFirstPartyTargets(buildInternalDirectoryRecords());
     const microsoft365 = withStandalone.find((record) => record.id === 'microsoft-365');
 
     expect(microsoft365).toMatchObject({
-      remotes: [],
+      remotes: [
+        { url: 'https://mcp.svc.cloud.microsoft/enterprise', transport: 'streamable-http' },
+      ],
       badge: 'first-party',
       authMode: 'oauth',
       sourceRegistry: 'internal',
@@ -347,7 +349,7 @@ describe('applyFirstPartyTargets', () => {
     expect(notion?.authorUrl).toBe('https://developers.notion.com');
   });
 
-  it('gives the microsoft-365 standalone record a site icon source, not brand', () => {
+  it('gives the microsoft-365 record a site icon source, not brand', () => {
     const microsoft365 = applyFirstPartyTargets(buildInternalDirectoryRecords()).find(
       (record) => record.id === 'microsoft-365',
     );

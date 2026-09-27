@@ -46,7 +46,11 @@ import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from '../../../lib/sse-heartbe
 import { withStreamEnvelope } from '../../../lib/stream-envelope';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../../../lib/tool-approval-policy';
+import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
+import {
+  checkpointRequestForResume,
+  checkpointTurnAttachments,
+} from '../../../lib/approval-checkpoint-request';
 import { applySecretHandlingToTexts } from '../../../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -78,7 +82,7 @@ function buildSyntheticRequest(
     method: 'POST',
     headers,
     body: JSON.stringify({
-      ...claim.checkpoint.request,
+      ...checkpointRequestForResume(claim.checkpoint.request, false),
       messages: claim.checkpoint.messages.map(
         ({ __canonicalThinking: _private, ...message }) => message,
       ),
@@ -194,6 +198,7 @@ async function handlePausedRunResume(
   }
   const processed = processResult;
   processed.llmRequest.messages = claim.checkpoint.messages;
+  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
 
   let discovery;
   try {
@@ -247,7 +252,11 @@ async function handlePausedRunResume(
   // The checkpoint froze the client's pre-substitution tool list, so a native
   // search the first leg withdrew returns unless it is withdrawn again here.
   processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
-    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    approvalRequired: !hostedToolRunsUnasked(
+      toolApprovalPolicy,
+      WEB_SEARCH_TOOL,
+      processed.toolLockdown === true,
+    ),
     genericBackendConfigured: webSearchBackendConfigured(),
   });
 

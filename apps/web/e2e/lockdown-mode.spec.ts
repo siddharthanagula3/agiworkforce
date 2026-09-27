@@ -14,7 +14,9 @@ test('lockdown mode persists and is reflected back to the account', async ({ pag
   expect(before.ok()).toBe(true);
 
   await toggle.click();
-  await expect(page.getByText('Connector tools are unavailable in every chat')).toBeVisible({
+  await expect(
+    page.getByText('Connector tools and web tools are unavailable in every chat'),
+  ).toBeVisible({
     timeout: 15_000,
   });
   // The banner above is optimistic state; "Saved." only renders once the PUT resolves.

@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: An administrator opens an organization overview that summarises the workspace (name, plan, members/seats, security posture) from live data.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows the workspace name, slug, plan, seats used and your role, but none of the security posture or recommendations the web overview gives administrators. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:452-466`, `apps/mobile/src/features/team/service.ts:62-66`
 
 ## S87.02: Member directory.
 
@@ -33,14 +30,11 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:452-466`, `apps/mobile/src/f
 
 - Done when: An administrator can invite people by email with a role, see pending invitations, renew and revoke them, and the invitee can accept.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile cannot send, list, renew or revoke invitations: on iOS "Add" attaches an existing AGI account directly ("There is no invitation email") and on Android it opens web team settings. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:129-160`, `apps/mobile/src/features/team/service.ts:149-155`
 
 ## S87.04: Groups.
 
@@ -60,14 +54,11 @@ Code: `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:543-560
 
 - Done when: An administrator sees the workspace roles with their permissions and can change a member's role, enforced by the server.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile changes a member between the built-in roles only and shows no role permissions; it also offers "Owner", which the server always refuses (ownership moves only by transfer). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/settings/workspace.tsx:163-177`, `apps/mobile/src/features/team/service.ts:5-5`, `apps/mobile/src/features/team/service.ts:161-161`
 
 ## S87.06: Custom roles.
 
@@ -96,11 +87,10 @@ Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/src/f
 
 - Done when: The owner can hand ownership to another member after confirmation, with the server moving the owner role atomically.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 
 ## S87.09: Domain verification.

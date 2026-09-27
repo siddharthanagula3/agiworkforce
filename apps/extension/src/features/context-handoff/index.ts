@@ -4,6 +4,7 @@ import {
   buildVsCodeContextHandoffUri,
   MAX_CONTEXT_HANDOFF_SELECTION_CHARS,
   MAX_CONTEXT_HANDOFF_URL_CHARS,
+  NATIVE_SELECTED_TEXT_MESSAGE,
 } from '@agiworkforce/types';
 
 export {
@@ -76,7 +77,7 @@ export interface CreateSelectionContextHandoffInput {
 }
 
 export interface ApprovedNativeSelectionMessage {
-  type: 'selected_text_query';
+  type: typeof NATIVE_SELECTED_TEXT_MESSAGE;
   tabId: number;
   url: string;
   selectedText: string;
@@ -229,7 +230,7 @@ export function toApprovedNativeSelectionMessage(
     );
   }
   return {
-    type: 'selected_text_query',
+    type: NATIVE_SELECTED_TEXT_MESSAGE,
     tabId: pending.tabId,
     url: pending.pageUrl,
     selectedText: pending.selectedText,

@@ -20,7 +20,8 @@ import { modelSupportsResearch } from '@/features/chat/lib/research-capability-g
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from './tool-approval-policy';
+import { hostedToolRunsUnasked, loadToolApprovalPolicy } from './tool-approval-policy';
+import { isLockedDown } from './connector-tool-permissions';
 import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
@@ -80,7 +81,8 @@ import {
   hasExplicitWebSearchOptOut,
   webSearchNeedsGenericTool,
 } from '@agiworkforce/search';
-import { extractCandidateMemoryFacts } from '@agiworkforce/agent-core';
+import { extractCandidateMemoryFacts, passiveMemoryText } from '@agiworkforce/agent-core';
+import { MEMORY_COMMAND_CLIENT_SURFACES } from '@/lib/services/memory-commands';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -110,6 +112,7 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { scheduleMemoryRelevanceShadow } from '@/lib/services/semantic-decisions/consumers/memory-relevance';
 import { canonicalPrivacyMode } from '@/lib/services/semantic-decisions/eligibility';
@@ -882,6 +885,7 @@ export type ProcessedRequest = {
   sensitiveContextPresent?: boolean;
   untrustedContextPresent?: boolean;
   toolApprovalPolicy?: ToolApprovalPolicy;
+  toolLockdown?: boolean;
   toolExecutionObserved?: boolean;
   requestedModel: string;
   provider: string;
@@ -1241,6 +1245,7 @@ export async function enrichManagedMemoryContext(params: {
     organizationId: params.organizationId ?? null,
     suppressedSources,
     scope,
+    query: lastUserMessageText(params.chatRequest),
   });
   const prompt = formatManagedMemorySystemPrompt(memories);
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
@@ -2140,7 +2145,7 @@ function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse 
         code: decision.code,
       },
     },
-    { status: decision.code === MODEL_POLICY_UNAVAILABLE.code ? 503 : 403 },
+    modelPolicyRefusalInit(decision),
   );
 }
 
@@ -3125,6 +3130,10 @@ export async function processRequest(
   }
   const lastUserMsg = lastUserIndex >= 0 ? chatRequest.messages[lastUserIndex] : undefined;
   const lastUserText = lastUserMsg ? extractTextContent(lastUserMsg.content) : '';
+  const passiveUserText = passiveMemoryText(
+    lastUserText,
+    MEMORY_COMMAND_CLIENT_SURFACES.has(chatSurface),
+  );
   const autoMemoryEligibility = {
     isTemporary: conversationIsTemporary,
     surface: chatSurface,
@@ -3132,11 +3141,11 @@ export async function processRequest(
     memoryEnabled: chatRequest.memory_enabled,
   };
   let autoMemoryFacts = prepareManagedAutoMemoryFacts({
-    message: lastUserText,
+    message: passiveUserText,
     ...autoMemoryEligibility,
   });
   let autoMemorySourceText = managedAutoMemoryLearningAllowed(autoMemoryEligibility)
-    ? lastUserText
+    ? passiveUserText
     : '';
 
   const routingHistory = chatRequest.messages
@@ -3722,14 +3731,33 @@ export async function processRequest(
   // so. Mirrors `codeExecutionUnavailable`, which already discloses exactly this
   // shape of degradation.
   const researchUnavailable = chatRequest.research === true && !researchMode;
-  const toolApprovalPolicy =
+  const [toolApprovalPolicy, toolLockdown]: readonly [ToolApprovalPolicy | undefined, boolean] =
     chatRequest.web_search || chatRequest.web_fetch || chatRequest.code_execution
-      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () =>
-          loadToolApprovalPolicy((await scopedDbPromise).db, userId),
-        )
-      : undefined;
+      ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
+          const { db } = await scopedDbPromise;
+          return Promise.all([loadToolApprovalPolicy(db, userId), isLockedDown(db, userId)]);
+        })
+      : [undefined, false];
   const nativeToolPermitted = (gatedTwin: string): boolean =>
-    toolApprovalPolicy !== undefined && policyAutoApprovesTool(toolApprovalPolicy, gatedTwin);
+    toolApprovalPolicy !== undefined &&
+    hostedToolRunsUnasked(toolApprovalPolicy, gatedTwin, toolLockdown);
+
+  if (researchMode && toolLockdown) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Deep Research searches the web, and Lockdown mode keeps web tools off for this account. Turn Lockdown mode off in Settings to run it.',
+            type: 'invalid_request_error',
+            code: 'lockdown_blocks_research',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
 
   if (
     !freeTrialEnabled &&
@@ -4101,17 +4129,28 @@ export async function processRequest(
   if (unstreamedToolNeedingApproval) {
     return {
       ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: `${unstreamedToolNeedingApproval.label} needs approval under this account's tool approval setting, and only a streaming request can ask for it. Set stream: true.`,
-            type: 'invalid_request_error',
-            code: unstreamedToolNeedingApproval.code,
-            param: 'stream',
-          },
-        },
-        { status: 422 },
-      ),
+      response: toolLockdown
+        ? NextResponse.json(
+            {
+              error: {
+                message: `${unstreamedToolNeedingApproval.label} is off while Lockdown mode is on for this account.`,
+                type: 'invalid_request_error',
+                code: 'lockdown_tool_unavailable',
+              },
+            },
+            { status: 403 },
+          )
+        : NextResponse.json(
+            {
+              error: {
+                message: `${unstreamedToolNeedingApproval.label} needs approval under this account's tool approval setting, and only a streaming request can ask for it. Set stream: true.`,
+                type: 'invalid_request_error',
+                code: unstreamedToolNeedingApproval.code,
+                param: 'stream',
+              },
+            },
+            { status: 422 },
+          ),
     };
   }
 
@@ -4831,6 +4870,7 @@ export async function processRequest(
       ? { untrustedContextPresent: true }
       : {}),
     ...(toolApprovalPolicy ? { toolApprovalPolicy } : {}),
+    ...(toolLockdown ? { toolLockdown: true } : {}),
     requestedModel,
     provider,
     estimatedCostMicrousd,

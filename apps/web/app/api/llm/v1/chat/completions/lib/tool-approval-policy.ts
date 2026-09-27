@@ -16,10 +16,19 @@ import {
   resolveEffectiveToolApprovalPolicy,
   type ToolApprovalPolicy,
 } from '@shared/types/toolApprovalPolicy';
+import { policyAutoApprovesTool } from './tool-metadata';
 // Owned by tool-metadata.ts, which is not server-only, so the tool-loop
 // routing can ask the same question without importing this module's database
 // read. Re-exported here because the callers that want both live together.
-export { policyAutoApprovesTool } from './tool-metadata';
+export { policyAutoApprovesTool };
+
+export function hostedToolRunsUnasked(
+  policy: ToolApprovalPolicy,
+  gatedTwin: string,
+  lockedDown: boolean,
+): boolean {
+  return !lockedDown && policyAutoApprovesTool(policy, gatedTwin);
+}
 
 // Bound against every organization the caller belongs to, never the one the
 // caller-supplied header selected: a member must not skip approvals by

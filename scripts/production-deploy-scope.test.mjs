@@ -192,7 +192,6 @@ test('Rust builds run only for native inputs and cross-language sync parity', ()
     '.github/workflows/ci.yml',
     'package.json',
     'pnpm-lock.yaml',
-    'apps/cli/npm/bin/agi.js',
     'packages/ai/model-registry/catalog/models.curation.json',
     'packages/ai/routing/src/index.ts',
   ]) {

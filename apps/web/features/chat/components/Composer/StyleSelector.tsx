@@ -6,8 +6,7 @@ import {
   Palette,
   Minus,
   BookOpen,
-  Code2,
-  Sparkles,
+  FilePen,
   LayoutList,
   Plus,
   Pencil,
@@ -20,17 +19,17 @@ import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {
   useStyleStore,
   DEFAULT_PRESET_STYLE,
+  DEFAULT_RESPONSE_LENGTH,
   RESPONSE_LENGTH_OPTIONS,
   type PresetStyle,
   type CustomStyle,
 } from '@features/chat/stores/style-store';
 
 const STYLES: { id: PresetStyle; label: string; desc: string; icon: React.ElementType }[] = [
-  { id: 'default', label: 'Default', desc: 'Standard response style', icon: Minus },
-  { id: 'concise', label: 'Concise', desc: 'Brief and direct', icon: LayoutList },
-  { id: 'detailed', label: 'Detailed', desc: 'Thorough with examples', icon: BookOpen },
-  { id: 'technical', label: 'Technical', desc: 'Precise with code examples', icon: Code2 },
-  { id: 'creative', label: 'Creative', desc: 'Expressive and engaging', icon: Sparkles },
+  { id: 'default', label: 'Default', desc: 'Your style from Settings', icon: Minus },
+  { id: 'concise', label: 'Concise', desc: 'Short and direct', icon: LayoutList },
+  { id: 'explanatory', label: 'Explanatory', desc: 'Reasoning and context', icon: BookOpen },
+  { id: 'formal', label: 'Formal', desc: 'Formal register', icon: FilePen },
 ];
 
 interface CreateFormState {
@@ -89,7 +88,7 @@ export function StyleSelector() {
     formRef.current?.scrollIntoView({ block: 'nearest' });
   }, [showCreateForm, editingId]);
 
-  const isActive = style !== DEFAULT_PRESET_STYLE || length !== 'brief';
+  const isActive = style !== DEFAULT_PRESET_STYLE || length !== DEFAULT_RESPONSE_LENGTH;
 
   const { t } = useTranslation('chat');
   const activeLabel = React.useMemo<string>(() => {
@@ -186,9 +185,7 @@ export function StyleSelector() {
       >
         <Palette className="h-4 w-4" />
         <span className="hidden sm:inline">
-          {style === DEFAULT_PRESET_STYLE && length === 'brief'
-            ? t('composer.style', { defaultValue: 'Style' })
-            : activeLabel}
+          {!isActive ? t('composer.style', { defaultValue: 'Style' }) : activeLabel}
         </span>
       </button>
 

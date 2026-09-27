@@ -370,6 +370,8 @@ export interface UploadFileInput {
 
 export interface UploadProgressOptions extends RequestOptions {
   onProgress?: (sentBytes: number, totalBytes: number) => void;
+  conversationId?: string;
+  temporary?: boolean;
 }
 
 export interface UploadFileResult {
@@ -536,6 +538,8 @@ export const api = {
             fileName: file.name,
             mimeType,
             byteCount,
+            ...(options?.conversationId ? { conversationId: options.conversationId } : {}),
+            ...(options?.temporary ? { temporary: true } : {}),
           }),
           signal,
         },

@@ -31,7 +31,7 @@ pub struct SharedDefaultConfig {
     #[serde(default)]
     pub fast_model: Option<String>,
     #[serde(default)]
-    pub approval_mode: Option<String>,
+    pub permission_mode: Option<String>,
     #[serde(default)]
     pub sandbox_mode: Option<String>,
     #[serde(default)]

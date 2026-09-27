@@ -89,6 +89,25 @@ export const ManagedCloudScheduleConditionStateSchema = z.object({
   contentSha256: z.string().nullable().optional(),
 });
 
+export const ManagedCloudScheduleSourcesSchema = z.object({
+  project: z.boolean(),
+  memory: z.boolean(),
+  web: z.boolean(),
+});
+export type ManagedCloudScheduleSources = z.infer<typeof ManagedCloudScheduleSourcesSchema>;
+
+export const MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES: ManagedCloudScheduleSources = {
+  project: true,
+  memory: true,
+  web: true,
+};
+export const MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS = 100;
+
+export const ManagedCloudScheduleConnectorsSchema = z
+  .array(z.string().trim().min(1).max(128))
+  .max(MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS)
+  .nullable();
+
 export const ManagedCloudScheduleMutationSchema = z.object({
   name: z.string().trim().min(1).max(500),
   description: z.string().max(2_000).nullable(),
@@ -119,6 +138,8 @@ export const ManagedCloudScheduleMutationSchema = z.object({
   retryBackoffSeconds: z.number().int().min(60).max(86_400).optional(),
   missedExecutionPolicy: ManagedCloudScheduleMissedExecutionPolicySchema.optional(),
   condition: ManagedCloudScheduleConditionSchema.nullable().optional(),
+  sources: ManagedCloudScheduleSourcesSchema.optional(),
+  connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });
 export type ManagedCloudScheduleMutation = z.infer<typeof ManagedCloudScheduleMutationSchema>;
 
@@ -158,14 +179,40 @@ export const ManagedCloudScheduleTaskSchema = z.object({
   conditionState: ManagedCloudScheduleConditionStateSchema.nullable().optional(),
   creditCap: z.number().positive().nullable().optional(),
   creditsUsed: z.number().nonnegative().optional(),
-  pausedReason: z.enum(['credit_cap_reached']).nullable().optional(),
+  pausedReason: z.enum(['credit_cap_reached', 'approval_required']).nullable().optional(),
+  sources: ManagedCloudScheduleSourcesSchema.optional(),
+  connectors: ManagedCloudScheduleConnectorsSchema.optional(),
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
+
+export const MANAGED_CLOUD_SCHEDULE_APPROVAL_MAX_TOOL_CALLS = 32;
+
+export const ManagedCloudScheduleRunApprovalToolCallSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  summary: z.string(),
+  input: z.string().nullable(),
+});
+export type ManagedCloudScheduleRunApprovalToolCall = z.infer<
+  typeof ManagedCloudScheduleRunApprovalToolCallSchema
+>;
+
+export const ManagedCloudScheduleRunPendingApprovalSchema = z.object({
+  requestedAt: z.string(),
+  expiresAt: z.string(),
+  toolCalls: z
+    .array(ManagedCloudScheduleRunApprovalToolCallSchema)
+    .min(1)
+    .max(MANAGED_CLOUD_SCHEDULE_APPROVAL_MAX_TOOL_CALLS),
+});
+export type ManagedCloudScheduleRunPendingApproval = z.infer<
+  typeof ManagedCloudScheduleRunPendingApprovalSchema
+>;
 
 export const ManagedCloudScheduleRunSchema = z.object({
   id: z.string().min(1),
   taskId: z.string().min(1),
-  status: z.enum(['running', 'success', 'failed', 'timeout', 'cancelled']),
+  status: z.enum(['running', 'success', 'failed', 'timeout', 'cancelled', 'awaiting_approval']),
   triggerSource: z.enum(['schedule', 'manual', 'webhook', 'api']),
   scheduledFor: z.string().nullable(),
   startedAt: z.string(),
@@ -177,8 +224,20 @@ export const ManagedCloudScheduleRunSchema = z.object({
   leaseExpiresAt: z.string().nullable(),
   attemptCount: z.number().int().positive(),
   creditsUsed: z.number().nonnegative().nullable().optional(),
+  pendingApproval: ManagedCloudScheduleRunPendingApprovalSchema.nullable().optional(),
 });
 export type ManagedCloudScheduleRun = z.infer<typeof ManagedCloudScheduleRunSchema>;
+
+export const MANAGED_CLOUD_SCHEDULE_APPROVAL_DECISIONS = ['approved', 'rejected'] as const;
+
+export const ManagedCloudScheduleRunApprovalSchema = z.object({
+  decision: z.enum(MANAGED_CLOUD_SCHEDULE_APPROVAL_DECISIONS),
+  toolCallIds: z
+    .array(z.string().min(1).max(200))
+    .min(1)
+    .max(MANAGED_CLOUD_SCHEDULE_APPROVAL_MAX_TOOL_CALLS),
+});
+export type ManagedCloudScheduleRunApproval = z.infer<typeof ManagedCloudScheduleRunApprovalSchema>;
 
 export const ManagedCloudSchedulePaginationSchema = z.object({
   limit: z.number().int().positive(),
@@ -204,6 +263,10 @@ export const ManagedCloudScheduleRunResponseSchema = z.object({
   replay: z.boolean(),
 });
 
+export const ManagedCloudScheduleRunApprovalResponseSchema = z.object({
+  run: ManagedCloudScheduleRunSchema,
+});
+
 export const ManagedCloudScheduleDeleteResponseSchema = z.object({ success: z.literal(true) });
 
 export function managedCloudSchedulePath(scheduleId: string): string {
@@ -212,6 +275,10 @@ export function managedCloudSchedulePath(scheduleId: string): string {
 
 export function managedCloudScheduleRunsPath(scheduleId: string): string {
   return `${managedCloudSchedulePath(scheduleId)}/runs`;
+}
+
+export function managedCloudScheduleRunApprovalPath(scheduleId: string, runId: string): string {
+  return `${managedCloudScheduleRunsPath(scheduleId)}/${encodeURIComponent(runId)}/approval`;
 }
 
 export type ManagedCloudSchedulesMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -273,6 +340,12 @@ export interface ManagedCloudSchedulesClient {
     idempotencyKey: string,
     signal?: AbortSignal,
   ): Promise<{ run: ManagedCloudScheduleRun; replay: boolean }>;
+  resolveRunApproval(
+    scheduleId: string,
+    runId: string,
+    input: ManagedCloudScheduleRunApproval,
+    signal?: AbortSignal,
+  ): Promise<ManagedCloudScheduleRun>;
 }
 
 export class ManagedCloudSchedulesHttpError extends Error {
@@ -477,6 +550,20 @@ export function createManagedCloudSchedulesClient(
         { signal, idempotencyKey, label: 'manual run' },
       );
       return { run: result.run, replay: result.replay };
+    },
+    async resolveRunApproval(scheduleId, runId, input, signal) {
+      const body = parseScheduleContract(
+        ManagedCloudScheduleRunApprovalSchema,
+        input,
+        'approval request',
+      );
+      const result = await request(
+        managedCloudScheduleRunApprovalPath(scheduleId, runId),
+        'POST',
+        ManagedCloudScheduleRunApprovalResponseSchema,
+        { body, signal, label: 'approval' },
+      );
+      return result.run;
     },
   };
 }
