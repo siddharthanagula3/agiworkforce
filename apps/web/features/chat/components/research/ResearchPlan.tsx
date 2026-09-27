@@ -62,7 +62,7 @@ export interface ResearchPlanProps {
   busy?: boolean;
   onStart?: (submission: ResearchPlanSubmission) => void;
   onCancel?: () => void;
-  costEstimate?: Omit<ResearchCostEstimateProps, 'active' | 'className'>;
+  costEstimate?: Omit<ResearchCostEstimateProps, 'className'>;
   className?: string;
 }
 

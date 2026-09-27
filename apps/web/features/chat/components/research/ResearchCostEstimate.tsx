@@ -9,7 +9,6 @@ export interface ResearchCostEstimateProps {
   modelId: string | null | undefined;
   rounds: number | undefined;
   searches: number | undefined;
-  active?: boolean;
   className?: string;
 }
 
@@ -21,7 +20,6 @@ export function ResearchCostEstimate({
   modelId,
   rounds,
   searches,
-  active = false,
   className,
 }: ResearchCostEstimateProps) {
   const { usage } = useManagedUsageSummary();
@@ -37,9 +35,7 @@ export function ResearchCostEstimate({
         className={cn('text-xs text-muted-foreground', className)}
         data-testid="research-cost-estimate"
       >
-        {active
-          ? 'This run is metered as it goes, and its cost appears here when it finishes.'
-          : 'A cost estimate is not available for this model. The run is metered as it goes.'}
+        A cost estimate is not available for this model. The run is metered as it goes.
       </p>
     );
   }
@@ -50,7 +46,7 @@ export function ResearchCostEstimate({
       <p className="text-muted-foreground">
         {`Estimated cost: up to about ${credits(estimate.total)} for up to ${rounds} model rounds and ${searches} searches.`}
       </p>
-      {available !== null && !active ? (
+      {available !== null ? (
         <p className={exceeds ? 'text-warning-text' : 'text-muted-foreground'}>
           {exceeds
             ? `You have ${credits(available)} available right now, so the run may stop before it finishes.`
