@@ -39,7 +39,6 @@ type AccountCredits = NonNullable<AccountUsageSummaryResponse['credits']>;
 const MINUTE_MS = 60 * 1000;
 const HISTORY_ROW_LIMIT = 8;
 const REPORT_WINDOW = 'window';
-const FREE_PLAN_NOTE = 'Free uses free models. Upgrade for credits on premium models.';
 const LIMITS_FAILURE = 'Could not load this month’s usage.';
 
 const CARD: CSSProperties = {
@@ -409,7 +408,7 @@ function bonusRow(bonus: AccountCredits['bonus']): { value: string; detail: stri
   return {
     value: formatCreditAmount(bonus.remaining),
     detail: bonus.next_expiry_at
-      ? `${formatCreditAmount(bonus.next_expiry_credits)} expire ${formatAbsolute(bonus.next_expiry_at)}`
+      ? `Next expiry ${formatAbsolute(bonus.next_expiry_at)}`
       : 'No expiry date recorded.',
   };
 }
@@ -808,7 +807,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
             <HistoryRows
               caption="By project"
               rows={shown.byProject}
-              labelFor={(row) => row.label ?? 'Deleted project'}
+              labelFor={(row) => row.label ?? 'Project not in this workspace'}
             />
             {shown.freshness.unsettledRequests > 0 && (
               <span role="status" style={DETAIL}>
@@ -941,13 +940,6 @@ export function UsageSection() {
                 View workspace usage
               </SettingsPageLink>
             </div>
-          ) : isFreePlan ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-              <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>{FREE_PLAN_NOTE}</p>
-              <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
-                Upgrade
-              </SettingsPageLink>
-            </div>
           ) : (
             <>
               <UsageBar
@@ -997,35 +989,38 @@ export function UsageSection() {
                 )}
               />
               <RunningResponsesRow reading={limits.data?.responses ?? null} />
+              {isFreePlan && (
+                <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
+                  Upgrade
+                </SettingsPageLink>
+              )}
             </>
           )}
         </div>
 
-        {!isFreePlan && (
-          <div
-            style={{
-              ...ROW,
-              alignItems: 'center',
-              padding: 'var(--space-3) var(--space-5)',
-              borderTop: '1px solid var(--settings-border)',
+        <div
+          style={{
+            ...ROW,
+            alignItems: 'center',
+            padding: 'var(--space-3) var(--space-5)',
+            borderTop: '1px solid var(--settings-border)',
+          }}
+        >
+          <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
+          <button
+            type="button"
+            onClick={() => {
+              void refresh();
+              limits.reload();
             }}
+            disabled={loading}
+            aria-label="Refresh usage data"
+            className={QUIET_BUTTON_CLASS}
           >
-            <span style={DETAIL}>Last updated: {lastUpdatedLabel}</span>
-            <button
-              type="button"
-              onClick={() => {
-                void refresh();
-                limits.reload();
-              }}
-              disabled={loading}
-              aria-label="Refresh usage data"
-              className={QUIET_BUTTON_CLASS}
-            >
-              <RefreshCw size={12} aria-hidden="true" />
-              Refresh
-            </button>
-          </div>
-        )}
+            <RefreshCw size={12} aria-hidden="true" />
+            Refresh
+          </button>
+        </div>
       </section>
 
       {credits && !contractPriced && <CreditBalancesCard credits={credits} />}
