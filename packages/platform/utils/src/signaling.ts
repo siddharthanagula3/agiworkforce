@@ -7,6 +7,16 @@ import type {
 
 export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
 
+const PAIRING_ENDED_ERRORS: ReadonlySet<string> = new Set([
+  'device_revoked',
+  'pairing_not_found',
+  'pairing_expired',
+]);
+
+export function endsPairing(error: string): boolean {
+  return PAIRING_ENDED_ERRORS.has(error);
+}
+
 function safeJsonParse(data: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(data);
@@ -218,11 +228,15 @@ export class SignalingClient {
         this.close();
         break;
       }
+      case 'device_revoked': {
+        this.options.onEvent({ type: 'error', error: 'device_revoked' });
+        this.close();
+        break;
+      }
       case 'error': {
-        this.options.onEvent({
-          type: 'error',
-          error: typeof message['error'] === 'string' ? message['error'] : 'unknown_error',
-        });
+        const error = typeof message['error'] === 'string' ? message['error'] : 'unknown_error';
+        this.options.onEvent({ type: 'error', error });
+        if (endsPairing(error)) this.close();
         break;
       }
       case 'heartbeat_ack': {
