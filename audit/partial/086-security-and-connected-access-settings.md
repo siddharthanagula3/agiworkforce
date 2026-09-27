@@ -26,13 +26,11 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `app
 
 - Done when: The user can add, see, rename and remove passkeys for their account.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | F1: the cited PasskeysPanel/usePasskeys lines add (user.createPasskey), list (user.passkeys) and remove (passkey.delete) but there is no rename control anywhere in the panel or client (no rename/update call), while the criterion lists rename. Partial with remaining: add passkey rename. |  |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/SecuritySection.tsx:103-112`, `apps/web/features/settings/components/Settings/PasskeysPanel.tsx:35-54`, `apps/web/lib/identity/client.ts:149-166`
 
 ## S86.04: Multifactor authentication.
 
@@ -92,16 +90,13 @@ Code: `apps/web/features/settings/sections/AccountSection.tsx:529-529`, `apps/we
 
 - Done when: One action signs the account out everywhere: every browser, app and device credential.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile can end other sessions one at a time and links to the web Account page; it has no sign-out-everywhere action. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/settings/account-security/index.tsx:385-400`, `apps/mobile/src/features/settings/account-security/service.ts:150-160`
 
 ## S86.11: Security notifications.
 
@@ -239,14 +234,14 @@ Code: `apps/web/features/connectors/components/ToolPermissionsPanel.tsx:48-50`, 
 
 - Done when: The user can turn on a hardened mode that tightens account and agent security beyond defaults.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lockdown mode hardens the assistant (refuses every connector tool, enforced server-side), but there is no hardened account-security mode such as passkey-only sign-in or stricter recovery. | ui, handler |
-| desktop | partial | Same as web (hosted Capabilities page). | ui, handler |
-| mobile | partial | Lockdown set on web also applies to mobile cloud chats (server-side), but mobile cannot show or change it ("not exposed"). | ui |
+| web | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
+| desktop | partial | Lockdown hardens the assistant only; a hardened account-security mode (passkey-only sign-in, stricter recovery) is not built | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/components/LockdownModePanel.tsx:64-92`, `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:170-185`, `apps/mobile/src/features/settings/account-security/index.tsx:464-470`
+Code: `apps/mobile/src/features/settings/account-security/service.ts:201-201`
