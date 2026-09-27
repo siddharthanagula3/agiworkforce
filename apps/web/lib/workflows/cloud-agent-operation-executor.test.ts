@@ -56,7 +56,7 @@ describe('durable cloud agent operation executor', () => {
     receiptMocks.fail.mockResolvedValue({ status: 'failed' });
     budgetMocks.authorize.mockResolvedValue({
       allowed: false,
-      refusal: { code: 'run_cost_cap', message: 'This run reached its spend limit of $20.00.' },
+      refusal: { code: 'run_cost_cap', message: 'This run reached its spend limit of 4,000 credits.' },
     });
     const execute = vi.fn();
 
