@@ -198,6 +198,13 @@ const nextConfig: NextConfig = {
         has: [{ type: 'query', key: 'preview', value: 'pdf' }],
         headers: [{ key: 'X-Frame-Options', value: 'SAMEORIGIN' }],
       },
+      {
+        source: '/install.sh',
+        headers: [
+          { key: 'Content-Type', value: 'text/plain; charset=utf-8' },
+          { key: 'Cache-Control', value: 'public, max-age=300' },
+        ],
+      },
     ];
   },
 };

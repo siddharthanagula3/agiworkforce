@@ -81,7 +81,7 @@ Archived source material:
     Evidence: `docs/README.md`, `docs/development/agent-operability.md`.
 
 15. The primary CLI command is `agi`. `agiworkforce` remains a compatibility alias, not the preferred user-facing command. User docs and command examples should prefer `agi`; packages, crates, release archives, repo URLs, and existing `~/.agiworkforce` state paths keep `agiworkforce` unless a separate migration plan is approved.
-    Evidence: `docs/standards/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/cli/npm/package.json`, `scripts/install.sh`.
+    Evidence: `docs/standards/naming-conventions.md`, `apps/cli/Cargo.toml`, `apps/web/public/install.sh`.
 
 16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `docs/work/` for dated execution queues, root `TODO.md` was retired in commit `906fe5cda`, `CHANGELOG.md` for completed work, durable knowledge in the `docs/` taxonomy described by `docs/README.md`, and evidence ledgers in the live root `audit/` directory. The former `reports/`, `tasks/`, and `docs/archive/` roots were removed on 2026-06-28 (git history only).
     Evidence: `docs/standards/naming-conventions.md`, `docs/development/agent-operability.md`, `scripts/check-structure-conventions.mjs`.

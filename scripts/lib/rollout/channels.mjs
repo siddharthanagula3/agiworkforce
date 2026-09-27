@@ -71,15 +71,6 @@ export function coreVersion(version) {
 }
 
 /**
- * npm serves a channel as a dist-tag, and `latest` is what a bare install gets.
- * scripts/publish-cli.sh derives the same two tags from the version itself and
- * refuses a contradicting NPM_DIST_TAG, so these must agree.
- */
-export function npmDistTag(channel) {
-  return channel === 'stable' ? 'latest' : 'next';
-}
-
-/**
  * The Marketplace has two channels, not three: everything that is not stable is
  * published pre-release, so a beta or nightly build can never become the
  * version a plain install picks up.

@@ -74,10 +74,9 @@ export default function GetStartedPage() {
                 action={{ label: 'Try AGI Web', href: '/login?redirectTo=%2F' }}
               />
               <SurfaceStatus
-                state="live"
+                state="pending"
                 name="CLI"
-                detail="The agi CLI is released: it ships macOS, Linux, and Windows archives today, and it hosts the local and BYOK modes below."
-                action={{ label: 'Download the CLI', href: '/download' }}
+                blockedOn="The release job builds and signs agi for macOS, Linux, and Windows, but no signed release has been published yet. Once one is, the CLI page shows its install command, and the CLI hosts the local and BYOK modes below."
               />
               <SurfaceStatus
                 state="pending"
