@@ -3,10 +3,10 @@ import {
   MICROUSD_PER_CENT,
   calculateCatalogVideoCostCents,
   chargeCreditsForMicrousd,
+  customerChargeMicrousd,
   formatCreditsPerMillionTokens,
   getModelMetadataById,
   resolveEffectiveModelPricingForInputTokens,
-  resolveFeatureRate,
   type ModelMetadata,
 } from '@agiworkforce/types';
 
@@ -65,8 +65,7 @@ export function creditsPerMillionTokens(
 }
 
 export function researchSearchCredits(): number {
-  const rate = resolveFeatureRate(RESEARCH_SEARCH_FEATURE);
-  return chargeCreditsForMicrousd(rate.providerCogsMicrousd ?? rate.customerMicrousd ?? 0);
+  return chargeCreditsForMicrousd(customerChargeMicrousd(RESEARCH_SEARCH_FEATURE));
 }
 
 export interface ResearchCreditEstimate {
