@@ -191,6 +191,7 @@ describe('cloud agent run budget', () => {
             cache_write_tokens: 0,
             cache_write_1h_tokens: 0,
             reasoning_tokens: 0,
+            tool_spend_microusd: 0,
             provider_usage_receipts: [{ providerCostDollars: 25 }],
           },
         ],
@@ -209,7 +210,8 @@ describe('cloud agent run budget', () => {
 
     if (decision.allowed) throw new Error('expected a refusal');
     expect(decision.refusal.code).toBe('run_cost_cap');
-    expect(decision.refusal.message).toContain('$20.00');
+    expect(decision.refusal.message).toContain('spend limit of 4,000 credits');
+    expect(decision.refusal.message).not.toContain('$');
   });
 
   it('refuses any operation once the run has run out of wall clock', async () => {
@@ -247,6 +249,7 @@ describe('cloud agent run budget', () => {
             cache_write_tokens: 0,
             cache_write_1h_tokens: 0,
             reasoning_tokens: 0,
+            tool_spend_microusd: 0,
             provider_usage_receipts: [{ providerCostDollars: 6 }],
           },
         ],
@@ -316,6 +319,7 @@ describe('cloud agent run budget', () => {
               cache_write_tokens: 0,
               cache_write_1h_tokens: 0,
               reasoning_tokens: 0,
+              tool_spend_microusd: 0,
               provider_usage_receipts: [],
             },
           ],

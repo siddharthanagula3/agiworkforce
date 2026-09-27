@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromMicrousd, formatCredits } from '@agiworkforce/types';
 import { z } from 'zod';
 
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
@@ -118,8 +119,8 @@ function dollarsToMicrousd(dollars: number): number {
   return Math.max(0, Math.round(dollars * MICROUSD_PER_DOLLAR));
 }
 
-function formatDollars(microusd: number): string {
-  return `$${(microusd / MICROUSD_PER_DOLLAR).toFixed(2)}`;
+function formatSpendLimit(microusd: number): string {
+  return formatCredits(creditsFromMicrousd(microusd));
 }
 
 function formatMinutes(ms: number): string {
@@ -319,7 +320,7 @@ export async function authorizeCloudAgentOperation(
     const spent = await spentMicrousd(db, input);
     if (spent >= budget.maxCostMicrousd) {
       return deny(db, input, 'run_cost_cap', {
-        message: `This run reached its spend limit of ${formatDollars(budget.maxCostMicrousd)}, so AGI stopped before spending more.`,
+        message: `This run reached its spend limit of ${formatSpendLimit(budget.maxCostMicrousd)}, so AGI stopped before spending more.`,
       });
     }
   }
@@ -410,7 +411,7 @@ export async function authorizeCloudAgentSubagentDelegation(
         allowed: false,
         refusal: refusal(
           'run_cost_cap',
-          `This run reached its spend limit of ${formatDollars(parent.maxCostMicrousd)}, so it cannot pay for another subagent.`,
+          `This run reached its spend limit of ${formatSpendLimit(parent.maxCostMicrousd)}, so it cannot pay for another subagent.`,
         ),
       };
     }

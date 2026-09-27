@@ -68,6 +68,7 @@ function database(scenario: Scenario) {
           cache_write_tokens: 0,
           cache_write_1h_tokens: 0,
           reasoning_tokens: 0,
+          tool_spend_microusd: 0,
           provider_usage_receipts:
             scenario.spentDollars === undefined
               ? []
@@ -135,7 +136,7 @@ describe('the cloud Work runtime enforces the CLI safety envelope', () => {
         operationKey: 'provider:9',
         payload: { model: 'fixture-model' },
       }),
-    ).rejects.toThrow(/spend limit of \$20\.00/);
+    ).rejects.toThrow(/spend limit of 4,000 credits/);
     expect(claimMocks.fail).toHaveBeenCalledWith(
       db,
       expect.objectContaining({ error: expect.objectContaining({ code: 'run_cost_cap' }) }),
