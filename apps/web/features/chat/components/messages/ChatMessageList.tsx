@@ -29,6 +29,7 @@ import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { MessageBubble, type RegenerateModelOption } from './MessageBubble';
 import { openModelPicker } from '@features/chat/lib/model-picker-trigger';
+import { pickStandardModel } from '@features/chat/lib/eligible-model';
 import { hasCompatibleFreeErrorRecoveryModel } from '../../lib/free-error-model-recovery';
 import type { ResearchPlanDecision, ResearchPlanOptions } from '../research/ResearchActivity';
 import {
@@ -660,6 +661,17 @@ const MessageRow = memo(function MessageRow({
     () => onPaywallDismiss?.(message.id),
     [onPaywallDismiss, message.id],
   );
+  const paywallAlternative = useMemo(
+    () =>
+      paywall?.suggestStandardModel && onRegenerateWithModel && regenerateModelOptions
+        ? pickStandardModel(regenerateModelOptions, meta?.model)
+        : null,
+    [paywall?.suggestStandardModel, onRegenerateWithModel, regenerateModelOptions, meta?.model],
+  );
+  const handlePaywallSwitchModel = useCallback(
+    (modelId: string) => onRegenerateWithModel?.(message.id, modelId),
+    [onRegenerateWithModel, message.id],
+  );
   // Retry is the whole point of this variant, so it is offered only where the
   // transcript can actually resend, `handleRegenerate` resolves the user turn
   // behind this row and replays it, the same path the retry affordance uses.
@@ -716,6 +728,9 @@ const MessageRow = memo(function MessageRow({
               resetLabel={paywallResetLabel(paywall)}
               recoveryAction={paywall.recoveryAction ?? 'upgrade'}
               {...(freeCapacityRecovery ? { freeCapacity: freeCapacityRecovery } : {})}
+              {...(paywallAlternative
+                ? { alternativeModel: paywallAlternative, onSwitchModel: handlePaywallSwitchModel }
+                : {})}
               onUpgrade={handlePaywallUpgrade}
               onDismiss={handlePaywallDismiss}
             />

@@ -59,4 +59,6 @@ closes the list says so rather than showing an error.
 - "Billing ownership is not verified. Refresh your account before changing
   plans." Reload and sign in again.
 - "Resolve the current billing status in Manage billing before changing plans."
-  A payment needs attention first; the payment-failure page lists what to check.
+  A renewal payment failed. Paid features stay off until it succeeds; there is
+  no grace period. In Settings, Billing, pay the open invoice or update your
+  payment method.

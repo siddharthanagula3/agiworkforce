@@ -259,17 +259,6 @@ Code: `apps/cli/src/ecosystem.rs:1155-1159`
 
 Code: `packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts:281-285`, `scripts/check-client-inference.baseline.json:3-8`
 
-## S101.26: Shared usage/billing models.
-
-- Done when: Usage and billing figures use one shared model on server and clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The usage summary type and parser are shared by web, mobile, Chrome and VS Code; the CLI mirrors it by hand in usage_summary.rs with no parity check. | surface-only |
-
-Code: `packages/contracts/types/src/managed-usage-balance.ts:168-171`, `apps/cli/src/usage_summary.rs:3-6`
-
 ## S101.27: Shared notifications.
 
 - Done when: Notifications use one shared category and target vocabulary on server and clients.
