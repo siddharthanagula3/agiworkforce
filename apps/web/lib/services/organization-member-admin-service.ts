@@ -50,6 +50,16 @@ const MEMBER_COLUMNS =
 
 const ROLES_A_KEY_MANAGES: ReadonlySet<OrganizationRole> = new Set(['member', 'viewer']);
 
+export function memberAdministrator(caller: {
+  kind: 'member' | 'service_principal';
+  actorUserId: string;
+  permissions: ReadonlySet<OrganizationPermission>;
+}): MemberAdministrator {
+  return caller.kind === 'service_principal'
+    ? { kind: 'service_principal', actorId: caller.actorUserId, scopes: caller.permissions }
+    : { kind: 'member', userId: caller.actorUserId };
+}
+
 function toWorkspaceMember(row: WorkspaceMemberRow): WorkspaceMember {
   return {
     userId: row.user_id,

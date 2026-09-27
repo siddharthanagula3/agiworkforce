@@ -73,6 +73,10 @@ export async function resolveWorkspaceApiCaller(
   };
 }
 
+export function auditSurfaceOf(caller: WorkspaceApiCaller): string | undefined {
+  return caller.kind === 'service_principal' ? 'api' : undefined;
+}
+
 export function assertInteractiveCaller(caller: WorkspaceApiCaller, capability: string): void {
   assertInteractiveMemberActor(caller.actorUserId, capability);
 }
