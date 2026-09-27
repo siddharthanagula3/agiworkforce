@@ -30,6 +30,7 @@ export interface FakeScimDbState {
   directory_sync_connections: FakeRow[];
   sso_connections: FakeRow[];
   organization_members: FakeRow[];
+  organizations: FakeRow[];
   profiles: FakeRow[];
   subscriptions: FakeRow[];
 }
@@ -44,6 +45,7 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
     directory_sync_connections: [],
     sso_connections: [],
     organization_members: [],
+    organizations: [],
     profiles: [],
     subscriptions: [],
     ...seed,
@@ -428,6 +430,45 @@ export function createFakeScimDb(seed: Partial<FakeScimDbState> = {}) {
 
     if (q.includes('from subscriptions') && q.includes('where user_id = $1')) {
       return state.subscriptions.filter((row) => row['user_id'] === p[0]);
+    }
+
+    if (q.includes('from public.organizations o where o.owner_user_id = $1')) {
+      const owned = state.organizations
+        .filter((row) => row['owner_user_id'] === p[0])
+        .map((row) => String(row['id']))
+        .sort();
+      const seated = state.organization_members
+        .filter((row) => row['user_id'] === p[0])
+        .map((row) => String(row['organization_id']))
+        .filter((organizationId) => !owned.includes(organizationId))
+        .sort();
+      return [...owned, ...new Set(seated)].map((organizationId) => ({
+        organization_id: organizationId,
+      }));
+    }
+
+    if (q.includes('from public.organization_billing_contracts')) {
+      return [];
+    }
+
+    if (q.includes('from public.organizations o left join public.subscriptions s')) {
+      const organization = state.organizations.find((row) => row['id'] === p[0]);
+      if (!organization) return [];
+      const anchor = organization['stripe_subscription_id'] ?? null;
+      const anchored =
+        anchor === null
+          ? undefined
+          : state.subscriptions.find((row) => row['stripe_subscription_id'] === anchor);
+      const billing =
+        anchored ??
+        state.subscriptions.find((row) => row['user_id'] === organization['owner_user_id']);
+      return [
+        {
+          user_id: billing?.['user_id'] ?? null,
+          plan_tier: billing?.['plan_tier'] ?? null,
+          status: billing?.['status'] ?? null,
+        },
+      ];
     }
 
     if (q.includes('from profiles') && q.includes('lower(email) = lower($1)')) {

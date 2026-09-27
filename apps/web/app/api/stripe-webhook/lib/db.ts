@@ -201,6 +201,8 @@ export async function handleCreditTopUp(
   await grantCreditTopUp(db, {
     userId,
     creditAmountCents,
+    chargedCents,
+    chargedCurrency: session.currency,
     receiptId: session.id,
     purchaseCountry: session.customer_details?.address?.country ?? null,
   });
@@ -229,6 +231,8 @@ export async function grantCreditTopUp(
   grant: {
     userId: string;
     creditAmountCents: number;
+    chargedCents: number;
+    chargedCurrency: string;
     receiptId: string;
     purchaseCountry?: string | null;
   },
@@ -288,7 +292,11 @@ export async function grantCreditTopUp(
       creditAmountCents * MICROUSD_PER_LEDGER_CENT,
       transactionDescription,
       'purchase',
-      JSON.stringify(purchasedCreditMetadata(grant.purchaseCountry, new Date())),
+      JSON.stringify({
+        ...purchasedCreditMetadata(grant.purchaseCountry, new Date()),
+        charged_cents: grant.chargedCents,
+        charged_currency: grant.chargedCurrency.toLowerCase(),
+      }),
     ]);
 
     const newBalance = await readRemainingMicrousd();

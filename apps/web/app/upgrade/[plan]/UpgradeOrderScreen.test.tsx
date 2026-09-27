@@ -43,7 +43,7 @@ describe('UpgradeOrderScreen', () => {
     render(<UpgradeOrderScreen plan="max" billingInterval="monthly" />);
     expect(screen.getByTestId('panel')).toHaveAttribute('data-plan', 'max');
 
-    fireEvent.click(screen.getByRole('button', { name: /Max 15x/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Max 20x/i }));
 
     // The panel re-previews against the newly selected capacity, so the price
     // shown belongs to the plan the button will actually buy.

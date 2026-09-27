@@ -285,9 +285,11 @@ async function grantVerifiedMobileIapPurchase(input: {
         topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
         `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
         'purchase',
-        JSON.stringify(
-          purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
-        ),
+        JSON.stringify({
+          ...purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
+          charged_cents: intendedAmountCents(input.verified.product),
+          charged_currency: 'usd',
+        }),
       ]);
       await tx.execute(
         `update public.mobile_iap_transactions

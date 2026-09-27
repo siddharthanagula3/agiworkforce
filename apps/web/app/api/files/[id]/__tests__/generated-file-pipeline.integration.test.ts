@@ -139,6 +139,14 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { buildAdapterStreamResponse } from '../../../llm/v1/chat/completions/lib/stream-transform';
 import { GET as serveFile } from '../route';
 import type { ProcessedRequest } from '../../../llm/v1/chat/completions/lib/request-processor';

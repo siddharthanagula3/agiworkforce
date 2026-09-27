@@ -101,6 +101,10 @@ vi.mock('@/features/marketing/components/Reveal', () => ({
 vi.mock('@/features/marketing/components/WaitlistModal', () => ({
   WaitlistTrigger: ({ label }: { label: string }) => <button>{label}</button>,
 }));
+vi.mock('@features/billing/components/DowngradeReviewDialog', () => ({
+  DowngradeReviewDialog: ({ open, initialPlan }: { open: boolean; initialPlan: string | null }) =>
+    open ? <div>{`Downgrade review for ${initialPlan}`}</div> : null,
+}));
 vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
   UpgradeWaitlistDialog: ({
     request,
@@ -135,13 +139,13 @@ async function showTeamAndEnterprise() {
 }
 
 /**
- * Max 5x and Max 15x share one card behind a capacity selector, so only the
+ * Max 5x and Max 20x share one card behind a capacity selector, so only the
  * selected variant's price and CTA are mounted at a time. Anything asserting on
- * the 15x price ($200) or its CTA has to pick the variant first.
+ * the 20x price ($200) or its CTA has to pick the variant first.
  */
-async function showMax15x() {
+async function showMax20x() {
   const selector = await screen.findByRole('group', { name: 'maxVariantLabel' });
-  fireEvent.click(within(selector).getByRole('button', { name: 'Max 15x' }));
+  fireEvent.click(within(selector).getByRole('button', { name: 'Max 20x' }));
 }
 
 describe('PricingPage', () => {
@@ -175,13 +179,13 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getAllByText('Basic').length).toBeGreaterThan(0));
     expect(screen.getAllByText('Max 5x').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Max 15x').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Max 20x').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Team').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$7').length).toBeGreaterThan(0);
-    // Max 5x and Max 15x share a card, so only the selected capacity's price is
+    // Max 5x and Max 20x share a card, so only the selected capacity's price is
     // mounted: assert $100, switch, then assert $200.
     expect(screen.getAllByText('$100').length).toBeGreaterThan(0);
-    await showMax15x();
+    await showMax20x();
     expect(screen.getAllByText('$200').length).toBeGreaterThan(0);
     expect(screen.getAllByText('custom').length).toBeGreaterThan(0);
     // Team is a real per-seat plan: its $25/seat unit price renders in the Team
@@ -412,22 +416,22 @@ describe('PricingPage', () => {
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel compareFreeUsage 1 project 1 custom MCP Yes No No No No No managed access No Not by AGI. Free model providers may. compareFreeBestFor',
+      'Free free foreverLabel planCreditWindows Yes 1 project 1 custom MCP Yes No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthly compareBasicUsage 5 projects 5 custom MCP Yes No No No No No managed access No No compareBasicBestFor',
+      'Basic $7/mo monthly planCreditWindows Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo compareProInterval $16.67 compareProUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code No No compareProBestFor',
+      'Pro $20/mo compareProInterval $16.67 planCreditWindows · usageMultiplierAll Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
-      'Max 5x $100/mo monthlyOnly compareMaxUsage Unlimited Unlimited Yes Yes Yes No Yes CLI, Chrome & VS Code No No compareMaxBestFor',
+      'Max 5x $100/mo monthlyOnly planCreditWindows · usageMultiplierAll Yes Unlimited Unlimited Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
     );
-    expect(rows.getByRole('row', { name: /^Max 15x / })).toHaveAccessibleName(
-      'Max 15x $200/mo monthlyOnly 15x Pro usage Unlimited Unlimited Yes Yes Yes Yes Yes CLI, Chrome & VS Code No No Highest-capacity work and video generation',
+    expect(rows.getByRole('row', { name: /^Max 20x / })).toHaveAccessibleName(
+      'Max 20x $200/mo monthlyOnly planCreditWindows · usageMultiplierSplit Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamBilling compareTeamUsage 25 projects 25 custom MCP Yes Yes Yes No Yes CLI, Chrome & VS Code Yes No compareTeamBestFor',
+      'Team $25/seat/mo compareTeamBilling planCreditWindowsPerSeat · usageSameAs Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits
@@ -483,10 +487,10 @@ describe('PricingPage', () => {
 
     await waitFor(() => expect(screen.getAllByText('₹399').length).toBeGreaterThan(0));
     expect(screen.getAllByText('₹1,999').length).toBeGreaterThan(0);
-    // One Max capacity is mounted at a time, so the 15x rupee price is only
+    // One Max capacity is mounted at a time, so the 20x rupee price is only
     // assertable after switching the selector.
     expect(screen.getAllByText('₹9,999').length).toBeGreaterThan(0);
-    await showMax15x();
+    await showMax20x();
     expect(screen.getAllByText('₹24,999').length).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: /INR/i })).not.toBeInTheDocument();
   });
@@ -595,9 +599,13 @@ describe('PricingPage', () => {
 
       render(<PricingPage />);
 
-      const ownerAction = screen.getByRole('link', { name: actionLabel });
-      expect(ownerAction).toHaveAttribute('href', '/settings/billing');
+      const ownerActions = screen.getAllByRole('link', { name: actionLabel });
+      expect(ownerActions.length).toBeGreaterThan(0);
+      for (const ownerAction of ownerActions) {
+        expect(ownerAction).toHaveAttribute('href', '/settings/billing');
+      }
       expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'switchToPlanCta' })).toBeNull();
       expect(stripeMocks.previewUpgrade).not.toHaveBeenCalled();
     },
   );
@@ -615,17 +623,14 @@ describe('PricingPage', () => {
 
     expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled();
 
-    // Opens the Stripe portal rather than linking to /billing. The old href
-    // closed a loop with no exit, /billing redirects to /settings/billing,
-    // whose "Adjust plan" button is what sends the user to /pricing, so a
-    // subscriber could never reach a control that actually changes the plan.
-    const manageBilling = screen.getByRole('button', { name: 'Manage billing' });
-    expect(manageBilling).not.toHaveAttribute('href');
-    fireEvent.click(manageBilling);
-    await waitFor(() => expect(stripeMocks.openBillingPortal).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'switchToPlanCta' }));
+    expect(await screen.findByText('Downgrade review for basic')).toBeVisible();
+    expect(stripeMocks.upgradeToBasicPlan).not.toHaveBeenCalled();
+    expect(stripeMocks.previewUpgrade).not.toHaveBeenCalled();
+    expect(stripeMocks.openBillingPortal).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
     expect(screen.getByRole('button', { name: 'maxCta' })).toBeEnabled();
-    await showMax15x();
+    await showMax20x();
     expect(screen.getByRole('button', { name: 'max15xCta' })).toBeEnabled();
     // Team is a different product, not a rung on the individual ladder: a Pro
     // subscriber can still buy it (as a seat-carrying org plan).
@@ -651,6 +656,16 @@ describe('PricingPage', () => {
       expect(screen.getAllByRole('button', { name: 'Manage billing' }).length).toBeGreaterThan(0),
     );
     expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'switchToPlanCta' })).toBeNull();
+
+    // Opens the Stripe portal rather than linking to /billing. The old href
+    // closed a loop with no exit, /billing redirects to /settings/billing,
+    // whose "Adjust plan" button is what sends the user to /pricing, so a
+    // subscriber could never reach a control that actually changes the plan.
+    const [manageBilling] = screen.getAllByRole('button', { name: 'Manage billing' });
+    expect(manageBilling).not.toHaveAttribute('href');
+    fireEvent.click(manageBilling!);
+    await waitFor(() => expect(stripeMocks.openBillingPortal).toHaveBeenCalledTimes(1));
 
     // Not "Current plan": a growing org's actionable change is more seats.
     await showTeamAndEnterprise();

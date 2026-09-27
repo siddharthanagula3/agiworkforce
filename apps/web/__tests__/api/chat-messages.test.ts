@@ -55,7 +55,16 @@ vi.mock('@/lib/services/credit-service', () => ({
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { POST } from '@/app/api/chat/conversations/[id]/messages/route';
+import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 import { CreditService } from '@/lib/services/credit-service';
 
 describe('Chat Messages API', () => {
@@ -254,6 +263,51 @@ describe('Chat Messages API', () => {
         expect(data.message).toBeDefined();
         expect(data.message).not.toHaveProperty('cost_cents');
         expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it('counts a saved user message against the Free daily message cap', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockQuery.mockResolvedValueOnce([mockUserMessage]);
+        mockQuery.mockResolvedValueOnce([{ count: '5' }]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: 'Hello, AI!', skipLlm: true }),
+        });
+        const response = await POST(request, mockContext);
+
+        expect(response.status).toBe(200);
+        expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'user-123', requested: { message_writes: 1 } }),
+        );
+      });
+
+      it('answers 429 and saves nothing once the Free daily message cap is used up', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('message_writes'));
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: 'Hello, AI!', skipLlm: true }),
+        });
+        const response = await POST(request, mockContext);
+
+        expect(response.status).toBe(429);
+        await expect(response.json()).resolves.toMatchObject({
+          error: { message: freeDailyLimitError('message_writes').message },
+        });
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_messages'),
+          expect.anything(),
+        );
       });
 
       it('should not call LLM API (streaming is handled externally via useChatStream)', async () => {

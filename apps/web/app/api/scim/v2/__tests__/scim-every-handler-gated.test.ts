@@ -102,6 +102,7 @@ async function seed(planTier: string): Promise<{ state: FakeScimDbState; rawToke
       },
     ],
     profiles: [{ id: 'clerk_ada', email: 'ada@example.com' }],
+    organizations: [{ id: ORG, owner_user_id: ADMIN, stripe_subscription_id: null }],
     subscriptions: [
       {
         id: 'sub-1',

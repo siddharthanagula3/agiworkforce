@@ -78,6 +78,7 @@ describe('GET /api/cron/reconcile-credits', () => {
     importCogs.mockResolvedValue({
       examined: 0,
       feesRecorded: 0,
+      feesAttributed: 0,
       adjustmentsRecorded: 0,
       discountsRecorded: 0,
     });
@@ -239,7 +240,7 @@ describe('GET /api/cron/reconcile-credits · Stripe settlement reconciliation', 
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
-      feesAttributed: 4,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
@@ -360,7 +361,7 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
     importCogs.mockResolvedValue({
       examined: 12,
       feesRecorded: 9,
-      feesAttributed: 4,
+      feesAttributed: 9,
       adjustmentsRecorded: 3,
       discountsRecorded: 0,
     });
@@ -401,5 +402,15 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
 
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toMatchObject({ reason: 'cogs_import_failed' });
+  });
+
+  it('fails the run without writing the ledger when the Stripe activity cannot be read', async () => {
+    readCostActivity.mockRejectedValue(new Error('stripe unreachable'));
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ reason: 'cogs_import_failed' });
+    expect(importCogs).not.toHaveBeenCalled();
   });
 });

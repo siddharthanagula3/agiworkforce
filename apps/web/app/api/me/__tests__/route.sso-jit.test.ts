@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
@@ -16,7 +17,10 @@ const {
   mockLinkPendingScimUsers: vi.fn(async () => ({ linked: 0, failed: 0 })),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/rate-limit', () => ({
+  withRateLimit: vi.fn().mockResolvedValue(null),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/web-search/web-search-tool', () => ({
   webSearchBackendConfigured: vi.fn(() => true),
@@ -64,7 +68,7 @@ describe('GET /api/me single sign-on provisioning', () => {
         fullName: null,
         primaryEmailVerification: verification,
       });
-      const response = await GET(new Request('http://localhost:3000/api/me') as never);
+      const response = await GET(new NextRequest('http://localhost:3000/api/me'));
       expect(response.status).toBe(200);
       if (verification === 'verified') {
         expect(mockBackfill).toHaveBeenCalledWith(
@@ -83,7 +87,7 @@ describe('GET /api/me single sign-on provisioning', () => {
     const accounts = [{ connectionId: 'econ_1', emailAddress: 'ada@acme.test', active: true }];
     mockGetIdentityUser.mockResolvedValue(identityUser(accounts));
 
-    const res = await GET(new Request('http://localhost:3000/api/me') as never);
+    const res = await GET(new NextRequest('http://localhost:3000/api/me'));
 
     expect(res.status).toBe(200);
     expect(mockProvision).toHaveBeenCalledWith(
@@ -95,7 +99,7 @@ describe('GET /api/me single sign-on provisioning', () => {
   it('skips provisioning for a password or social sign-in', async () => {
     mockGetIdentityUser.mockResolvedValue(identityUser([]));
 
-    await GET(new Request('http://localhost:3000/api/me') as never);
+    await GET(new NextRequest('http://localhost:3000/api/me'));
 
     expect(mockProvision).not.toHaveBeenCalled();
     expect(mockLinkPendingScimUsers).toHaveBeenCalledWith(
@@ -111,7 +115,7 @@ describe('GET /api/me single sign-on provisioning', () => {
     );
     mockProvision.mockRejectedValueOnce(new Error('database unavailable'));
 
-    const res = await GET(new Request('http://localhost:3000/api/me') as never);
+    const res = await GET(new NextRequest('http://localhost:3000/api/me'));
 
     expect(res.status).toBe(200);
   });
@@ -120,7 +124,7 @@ describe('GET /api/me single sign-on provisioning', () => {
     mockGetIdentityUser.mockResolvedValue(identityUser([]));
     mockLinkPendingScimUsers.mockResolvedValueOnce({ linked: 0, failed: 1 });
 
-    const res = await GET(new Request('http://localhost:3000/api/me') as never);
+    const res = await GET(new NextRequest('http://localhost:3000/api/me'));
 
     expect(res.status).toBe(200);
   });

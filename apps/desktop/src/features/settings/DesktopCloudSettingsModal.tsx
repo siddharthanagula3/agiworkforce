@@ -32,13 +32,16 @@
  * which is what used to let a section land silently on `/login` while the app
  * showed the user as signed in.
  *
- * Two sections are not inline API renders, for stated reasons rather than
+ * Three sections are not inline API renders, for stated reasons rather than
  * convenience:
  *   plugins → no plugin contract exists on ANY surface (web renders a static
  *             catalogue preview with `plugins: []`), and the old bridged path
  *             `/settings/plugins` does not exist on the web app at all. The
  *             section says so and links to the public catalogue in the system
  *             browser, see `cloud/CloudPluginsSection.tsx`.
+ *   referrals → the invite link, friend progress and bonus credits are a web
+ *               account page; the section opens `/settings/referrals` in the
+ *               system browser, see `cloud/CloudReferralsSection.tsx`.
  *   security → the READ half (2FA status, recent activity) is inline; only
  *              Clerk-owned credential enrollment stays bridged, with the
  *              explicit re-auth affordance.
@@ -263,6 +266,9 @@ const LazyCloudPlugins = lazy(() =>
 );
 const LazyCloudTeam = lazy(() =>
   import('./cloud/CloudTeamSection').then((m) => ({ default: m.CloudTeamSection })),
+);
+const LazyCloudReferrals = lazy(() =>
+  import('./cloud/CloudReferralsSection').then((m) => ({ default: m.CloudReferralsSection })),
 );
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
@@ -1060,6 +1066,11 @@ export function DesktopCloudSettingsModal({
       ),
       billing: <DesktopBillingSection onOpenPlans={openPlans} />,
       usage: <DesktopUsageSection />,
+      referrals: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudReferrals />
+        </Suspense>
+      ),
       capabilities: <DesktopCapabilitiesSection />,
       cowork: (
         <Suspense fallback={<SectionSkeleton />}>

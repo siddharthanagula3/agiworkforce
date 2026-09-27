@@ -468,7 +468,7 @@ export default function RefundOperationsPage() {
                             {charge.disputed ? ' · disputed' : ''}
                             {charge.withdrawalEligible
                               ? charge.withdrawalRefundCents !== null
-                                ? ` · 14-day withdrawal share ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}`
+                                ? ` · 14-day withdrawal refund ${formatPaymentAmount(charge.withdrawalRefundCents, charge.currency)}${charge.withdrawalProrated ? ', prorated by use' : ', in full: no consent to immediate access'}`
                                 : ' · inside the 14-day withdrawal window'
                               : ''}
                             <span className="ml-2 font-mono text-xs text-muted-foreground">
@@ -540,7 +540,7 @@ export default function RefundOperationsPage() {
               Up to {formatPaymentAmount(target.charge.refundableCents, target.charge.currency)} can
               still be refunded.
               {target.statutoryCents !== null
-                ? ` An EU, EEA or UK customer withdrawing within 14 days is owed ${formatPaymentAmount(target.statutoryCents, target.charge.currency)}, the payment prorated by the credits used.`
+                ? ` An EU, EEA or UK customer withdrawing within 14 days is owed ${formatPaymentAmount(target.statutoryCents, target.charge.currency)}: prorated by the credits used when they asked for immediate access at purchase, the whole payment otherwise.`
                 : ''}
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">

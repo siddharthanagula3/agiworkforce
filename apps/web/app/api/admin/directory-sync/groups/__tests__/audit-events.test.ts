@@ -34,10 +34,9 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...(args as [])),
 }));
 
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: {
-    getSubscription: vi.fn(async () => ({ plan_tier: 'enterprise', status: 'active' })),
-  },
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
 }));
 
 const { getDb } = vi.hoisted(() => ({ getDb: { current: null as unknown } }));

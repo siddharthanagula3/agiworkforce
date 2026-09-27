@@ -33,6 +33,9 @@ function makeProps(
   };
 }
 
+const BASIC_CREDITS_LINE =
+  'Basic includes 10 credits per 5 hours · 100 credits a week · 400 credits a month.';
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -53,7 +56,7 @@ describe('InlinePaywallCard', () => {
     // call the component already made for the tier label.
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
       ['web_search', 'basic', 'Upgrade to Basic, $7/mo for web search'],
-      ['video_generation', 'max_15x', 'Upgrade to Max 15x, $200/mo for video generation'],
+      ['video_generation', 'max_15x', 'Upgrade to Max 20x, $200/mo for video generation'],
       ['opus_5', 'max', 'Upgrade to Max 5x, $100/mo for Opus 5 access'],
       ['computer_use', 'pro', 'Upgrade to Pro, $20/mo for computer use'],
       ['deep_research', 'max', 'Upgrade to Max 5x, $100/mo for deep research'],
@@ -74,6 +77,26 @@ describe('InlinePaywallCard', () => {
     );
   });
 
+  describe('plan credits', () => {
+    it('states the credit windows of the plan it sells', () => {
+      render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
+      expect(
+        screen.getByText(
+          'Max 20x includes 1,000 credits per 5 hours · 5,000 credits a week · 20,000 credits a month.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('states no plan credits when the way out is not a plan', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({ requiredTier: 'max_15x', recoveryAction: 'manage_billing' })}
+        />,
+      );
+      expect(screen.queryByText(/ includes .* credits per 5 hours/)).toBeNull();
+    });
+  });
+
   // -------------------------------------------------------------------------
   // Tier badge
   // -------------------------------------------------------------------------
@@ -89,9 +112,9 @@ describe('InlinePaywallCard', () => {
       expect(screen.getByText('Max 5x')).toBeInTheDocument();
     });
 
-    it('shows "Max 15x" badge for max_15x tier', () => {
+    it('shows "Max 20x" badge for max_15x tier', () => {
       render(<InlinePaywallCard {...makeProps({ requiredTier: 'max_15x' })} />);
-      expect(screen.getByText('Max 15x')).toBeInTheDocument();
+      expect(screen.getByText('Max 20x')).toBeInTheDocument();
     });
   });
 
@@ -143,10 +166,10 @@ describe('InlinePaywallCard', () => {
       );
 
       expect(
-        screen.getByText('Subscribe to Max 15x, $200/mo for video generation', { exact: false }),
+        screen.getByText('Subscribe to Max 20x, $200/mo for video generation', { exact: false }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('button', { name: 'Subscribe to Max 15x, $200/mo' }),
+        screen.getByRole('button', { name: 'Subscribe to Max 20x, $200/mo' }),
       ).toBeInTheDocument();
     });
 
@@ -165,7 +188,7 @@ describe('InlinePaywallCard', () => {
       );
 
       expect(screen.getByText('Update billing to continue video generation')).toBeInTheDocument();
-      expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
+      expect(screen.queryByText('Upgrade to Max 20x', { exact: false })).toBeNull();
       fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
       expect(onUpgrade).toHaveBeenCalledTimes(1);
     });
@@ -178,13 +201,13 @@ describe('InlinePaywallCard', () => {
             currentTier: 'max_15x',
             requiredTier: 'max_15x',
             recoveryAction: 'view_usage',
-            reason: 'Your Max 15x usage for this billing period is used up.',
+            reason: 'Your Max 20x usage for this billing period is used up.',
           })}
         />,
       );
 
       expect(screen.getByRole('button', { name: 'View usage' })).toBeInTheDocument();
-      expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
+      expect(screen.queryByText('Upgrade to Max 20x', { exact: false })).toBeNull();
     });
 
     // QA-037: a Max 15x subscriber whose credit account had no allocation read
@@ -293,15 +316,14 @@ describe('InlinePaywallCard', () => {
 
     it('does not render a reason paragraph when reason is omitted', () => {
       const { container } = render(<InlinePaywallCard {...makeProps()} />);
-      // No <p> with muted-foreground text should exist when reason is empty
-      const paras = container.querySelectorAll('p.text-muted-foreground');
-      expect(paras).toHaveLength(0);
+      const paras = [...container.querySelectorAll('p.text-muted-foreground')];
+      expect(paras.map((para) => para.textContent)).toEqual([BASIC_CREDITS_LINE]);
     });
 
     it('does not render a reason paragraph when reason is an empty string', () => {
       const { container } = render(<InlinePaywallCard {...makeProps({ reason: '' })} />);
-      const paras = container.querySelectorAll('p.text-muted-foreground');
-      expect(paras).toHaveLength(0);
+      const paras = [...container.querySelectorAll('p.text-muted-foreground')];
+      expect(paras.map((para) => para.textContent)).toEqual([BASIC_CREDITS_LINE]);
     });
 
     it('renders reason text when reason is a non-empty string', () => {

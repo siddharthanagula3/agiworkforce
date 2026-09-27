@@ -1,6 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useBillingUsageStore } from '../../stores/billingUsage';
+import { CREDITS_PER_USD, formatCredits } from '@agiworkforce/types';
+import { formatProviderCostCredits, useBillingUsageStore } from '../../stores/billingUsage';
 import type { ModelUsageStats } from '../../types/billing';
 import { UsageDashboard, activityCells, favouriteModel, summarizeActivity } from './UsageDashboard';
 
@@ -166,5 +167,79 @@ describe('UsageDashboard', () => {
     expect(
       screen.getByRole('img', { name: /Activity over the last 30 days/i }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('UsageDashboard in credits', () => {
+  const overview = {
+    today_total: 0.05,
+    month_total: 1.2,
+    monthly_budget: 5,
+    remaining_budget: 3.8,
+  };
+
+  beforeEach(() => {
+    useBillingUsageStore.setState({
+      loadCostOverview: vi.fn().mockResolvedValue(undefined),
+      loadCostAnalytics: vi.fn().mockResolvedValue(undefined),
+      setMonthlyBudget: vi.fn().mockResolvedValue(undefined),
+      budget: { ...useBillingUsageStore.getState().budget, enabled: false, currentUsage: 0 },
+      costOverview: overview,
+      costAnalytics: null,
+      usageStats: {
+        automations_executed: 0,
+        api_calls_made: 0,
+        storage_used_mb: 0,
+        browser_sessions: 0,
+        mcp_tool_calls: 0,
+        llm_tokens_used: 500,
+        llm_input_tokens: 0,
+        llm_output_tokens: 0,
+        model_usage: [
+          model({ model_name: 'Fixture A', total_tokens: 500, cost_usd: 0.3, request_count: 2 }),
+        ],
+      },
+    });
+  });
+
+  it('states spend, the monthly limit and per-model cost in credits, never dollars', () => {
+    const { container } = render(<UsageDashboard />);
+
+    expect(screen.getByText(formatProviderCostCredits(overview.today_total))).toBeInTheDocument();
+    expect(
+      screen.getByText(`${formatProviderCostCredits(overview.month_total)} used`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `${Math.round((overview.month_total / overview.monthly_budget) * 100)}% of ${formatProviderCostCredits(overview.monthly_budget)}`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(`${formatProviderCostCredits(overview.remaining_budget)} left this month`),
+    ).toBeInTheDocument();
+    expect(screen.getByText(`500 tok · ${formatCredits(0.3 * CREDITS_PER_USD)}`)).toBeInTheDocument();
+    expect(container.textContent).not.toContain('$');
+  });
+
+  it('takes the monthly limit in credits and removes it at zero', async () => {
+    const setMonthlyBudget = vi.fn().mockResolvedValue(undefined);
+    useBillingUsageStore.setState({ setMonthlyBudget });
+    render(<UsageDashboard />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Adjust limit' }));
+    const input = screen.getByLabelText('Monthly credit limit');
+    expect(input).toHaveAttribute(
+      'placeholder',
+      String(overview.monthly_budget * CREDITS_PER_USD),
+    );
+
+    fireEvent.change(input, { target: { value: String(2 * CREDITS_PER_USD) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set limit' }));
+    expect(setMonthlyBudget).toHaveBeenLastCalledWith(2 * CREDITS_PER_USD);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Adjust limit' }));
+    fireEvent.change(screen.getByLabelText('Monthly credit limit'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Set limit' }));
+    expect(setMonthlyBudget).toHaveBeenLastCalledWith(undefined);
   });
 });

@@ -40,7 +40,10 @@ describe('/api/schedules/[id]', () => {
     vi.mocked(updateSchedule).mockResolvedValue(schedule as never);
     vi.mocked(setScheduleEnabled).mockResolvedValue(schedule as never);
     vi.mocked(deleteSchedule).mockResolvedValue();
-    vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({ plan_tier: 'pro' } as never);
+    vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
+      plan_tier: 'pro',
+      status: 'active',
+    } as never);
   });
 
   it('loads through an owner-scoped lookup', async () => {

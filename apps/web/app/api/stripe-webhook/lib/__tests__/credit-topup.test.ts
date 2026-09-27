@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
@@ -10,21 +10,27 @@ vi.mock('@/lib/logger', () => ({
 import { handleCreditTopUp } from '../db';
 import { dispatchStripeEvent } from '../handlers';
 
+const PACK_METADATA = {
+  type: 'credit_topup',
+  conversion: 'usd_1_to_credits_50_v2',
+  amount_usd: '20',
+  price_cents: '2000',
+  discount_percent: '0',
+  credit_amount_cents: '500',
+  top_up_units: '1000',
+  auto_reload: 'false',
+};
+
 function topUpSession(overrides: Record<string, unknown> = {}): Stripe.Checkout.Session {
   return {
     id: 'cs_topup_123',
-    metadata: {
-      type: 'credit_topup',
-      user_id: 'user_123',
-      credit_amount_cents: '1000',
-      top_up_units: '500',
-    },
+    metadata: { ...PACK_METADATA, user_id: 'user_123' },
     currency: 'usd',
-    amount_subtotal: 1_000,
-    amount_total: 1_083,
+    amount_subtotal: 2_000,
+    amount_total: 2_166,
     payment_intent: 'pi_123',
     automatic_tax: { enabled: true, status: 'complete' },
-    total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: 83 },
+    total_details: { amount_discount: 0, amount_shipping: 0, amount_tax: 166 },
     ...overrides,
   } as unknown as Stripe.Checkout.Session;
 }
@@ -46,9 +52,9 @@ function database() {
       if (sql.includes('from token_credits') && sql.includes('subscription_id')) {
         return [{ id: 'credits_123' }];
       }
-      if (sql.includes('from token_credits') && sql.includes('where id')) {
+      if (sql.includes('remaining_microusd')) {
         balanceReads += 1;
-        return [{ credits_remaining_cents: balanceReads === 1 ? 2_000 : 3_000 }];
+        return [{ remaining_microusd: balanceReads === 1 ? 2_000_000 : 7_000_000 }];
       }
       return [];
     }),
@@ -63,7 +69,7 @@ function stripe() {
         id: 'pi_123',
         status: 'succeeded',
         currency: 'usd',
-        amount_received: 1_083,
+        amount_received: 2_166,
       })),
     },
   };
@@ -71,8 +77,9 @@ function stripe() {
 
 describe('credit top-up settlement', () => {
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.useRealTimers());
 
-  it('adds the purchased $10 balance once while allowing tax on top', async () => {
+  it('adds the $20 pack as 1,000 credits once while allowing tax on top', async () => {
     const db = database();
     const provider = stripe();
 
@@ -87,16 +94,39 @@ describe('credit top-up settlement', () => {
       expect.stringContaining('and period_start = $3 and period_end = $4'),
       ['user_123', 'sub_db_123', '2026-08-01', '2026-09-01'],
     );
-    expect(db.execute).toHaveBeenCalledWith('select add_credits_microusd($1, $2, $3, $4, $5)', [
+    expect(db.execute).toHaveBeenCalledWith('select add_credits_microusd($1, $2, $3, $4, $5, $6)', [
       'user_123',
       'credits_123',
-      10_000_000,
+      5_000_000,
       'Credit top-up purchase cs_topup_123',
       'purchase',
+      JSON.stringify({ charged_cents: 2_000, charged_currency: 'usd' }),
     ]);
   });
 
-  it('rejects metadata that grants more than 50 units per dollar', async () => {
+  it('records where a pack was bought so local law can set when it expires', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-09-27T12:00:00.000Z'));
+    const db = database();
+
+    await handleCreditTopUp(
+      db as unknown as DatabaseAdapter,
+      stripe() as unknown as Stripe,
+      topUpSession({ customer_details: { address: { country: 'JP' } } }),
+    );
+
+    const grant = (db.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
+      sql.includes('add_credits_microusd'),
+    );
+    expect(JSON.parse(String(grant?.[1][5]))).toEqual({
+      purchase_country: 'JP',
+      purchase_expires_at: '2027-03-27T12:00:00.000Z',
+      charged_cents: 2_000,
+      charged_currency: 'usd',
+    });
+  });
+
+  it('rejects metadata that grants more than 50 credits per dollar', async () => {
     const db = database();
     const provider = stripe();
 
@@ -105,12 +135,7 @@ describe('credit top-up settlement', () => {
         db as unknown as DatabaseAdapter,
         provider as unknown as Stripe,
         topUpSession({
-          metadata: {
-            type: 'credit_topup',
-            user_id: 'user_123',
-            credit_amount_cents: '1000',
-            top_up_units: '1000',
-          },
+          metadata: { ...PACK_METADATA, user_id: 'user_123', top_up_units: '2000' },
         }),
       ),
     ).rejects.toThrow('Invalid credit top-up metadata');
@@ -152,7 +177,7 @@ describe('credit top-up settlement', () => {
     const db = database();
     db.query.mockImplementation(async (sql: string): Promise<Array<Record<string, unknown>>> => {
       if (sql.includes('from profiles')) return [{ id: 'user_123' }];
-      if (sql.includes('sum(-amount_cents)')) return [{ revoked_cents: 0 }];
+      if (sql.includes('sum(-amount_microusd)')) return [{ revoked: 0 }];
       return [];
     });
 
@@ -166,22 +191,18 @@ describe('credit top-up settlement', () => {
           object: {
             id: 'ch_topup_123',
             customer: 'cus_123',
-            amount: 1_083,
-            amount_refunded: 1_083,
+            amount: 2_166,
+            amount_refunded: 2_166,
             refunded: true,
-            metadata: {
-              type: 'credit_topup',
-              credit_amount_cents: '1000',
-              top_up_units: '500',
-            },
+            metadata: PACK_METADATA,
           },
         },
       } as unknown as Stripe.Event,
     );
 
-    expect(db.execute).toHaveBeenCalledWith('select handle_top_up_refund($1, $2, $3)', [
+    expect(db.execute).toHaveBeenCalledWith('select handle_top_up_refund_microusd($1, $2, $3)', [
       'user_123',
-      1_000,
+      5_000_000,
       'Refund for charge ch_topup_123',
     ]);
     expect(db.execute).not.toHaveBeenCalledWith(

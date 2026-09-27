@@ -4,6 +4,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const { mockRecordEmailSend } = vi.hoisted(() => ({ mockRecordEmailSend: vi.fn() }));
+vi.mock('@/lib/services/infrastructure-cost', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/infrastructure-cost')>()),
+  recordEmailSend: mockRecordEmailSend,
+}));
+
 import { sendBulkTransactionalEmail } from '../resend-client';
 
 const fetchMock = vi.fn();
@@ -75,6 +81,10 @@ describe('sendBulkTransactionalEmail', () => {
     expect(unreached).toHaveLength(1);
     expect(unreached[0]!.to).toBe('b@example.com');
     expect(unreached[0]).toMatchObject({ delivered: false, reason: 'rejected' });
+    expect(mockRecordEmailSend.mock.calls.map(([input]) => input)).toEqual([
+      { userId: null, provider: 'resend', providerMessageId: 'msg-1' },
+      { userId: null, provider: 'resend', providerMessageId: 'msg-3' },
+    ]);
   });
 
   it('records an unmailable address instead of silently dropping it', async () => {

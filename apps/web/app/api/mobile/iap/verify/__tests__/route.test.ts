@@ -136,13 +136,14 @@ describe('POST /api/mobile/iap/verify', () => {
       unitsGranted: 500,
     });
     expect(h.execute).toHaveBeenCalledWith(
-      'select public.add_credits_microusd($1, $2, $3, $4, $5)',
+      'select public.add_credits_microusd($1, $2, $3, $4, $5, $6)',
       [
         'user-1',
         'account-1',
-        10_000_000,
-        expect.stringContaining('store-transaction-1'),
+        2_500_000,
+        'Mobile android top-up store-transaction-1',
         'purchase',
+        JSON.stringify({ charged_cents: 1_000, charged_currency: 'usd' }),
       ],
     );
   });
@@ -161,7 +162,7 @@ describe('POST /api/mobile/iap/verify', () => {
       unitsGranted: 500,
     });
     expect(h.execute).not.toHaveBeenCalledWith(
-      'select public.add_credits_microusd($1, $2, $3, $4, $5)',
+      expect.stringContaining('add_credits_microusd'),
       expect.anything(),
     );
     expect(h.execute).toHaveBeenCalledWith(

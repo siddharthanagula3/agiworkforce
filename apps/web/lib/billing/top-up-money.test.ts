@@ -41,12 +41,16 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type Stripe from 'stripe';
 import {
   CENTS_PER_USD,
-  CREDITS_PER_USD,
   MAX_TOP_UP_AMOUNT_USD,
+  MICROUSD_PER_CREDIT,
   MIN_TOP_UP_AMOUNT_USD,
+  TOP_UP_CONVERSION,
   TOP_UP_PRESET_AMOUNTS_USD,
+  TOP_UP_UNITS_PER_USD,
   isValidTopUpPurchase,
+  quoteTopUp,
   topUpUnitsForUsd,
+  type TopUpQuote,
 } from '@agiworkforce/types';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { handleCreditTopUp } from '@/app/api/stripe-webhook/lib/db';
@@ -59,6 +63,7 @@ interface Grant {
   microusd: unknown;
   description: unknown;
   transactionType: unknown;
+  metadata: unknown;
 }
 
 function ledger() {
@@ -97,6 +102,7 @@ function ledger() {
         microusd,
         description: params[3],
         transactionType: params[4],
+        metadata: params[5],
       });
       return [];
     }
@@ -110,7 +116,36 @@ function ledger() {
   };
 }
 
+function quote(amountUsd: number): TopUpQuote {
+  const quoted = quoteTopUp(amountUsd);
+  if (!quoted) throw new Error(`no quote for $${amountUsd}`);
+  return quoted;
+}
+
 function session(amountUsd: number, sessionId: string): Stripe.Checkout.Session {
+  const quoted = quote(amountUsd);
+  return {
+    id: sessionId,
+    currency: 'usd',
+    amount_subtotal: quoted.priceCents,
+    amount_total: quoted.priceCents,
+    payment_intent: 'pi_1',
+    payment_status: 'paid',
+    metadata: {
+      type: 'credit_topup',
+      user_id: USER,
+      conversion: TOP_UP_CONVERSION,
+      amount_usd: String(quoted.amountUsd),
+      price_cents: String(quoted.priceCents),
+      discount_percent: String(quoted.discountPercent),
+      credit_amount_cents: String(quoted.budgetCents),
+      top_up_units: String(quoted.credits),
+      auto_reload: 'false',
+    },
+  } as unknown as Stripe.Checkout.Session;
+}
+
+function legacySession(amountUsd: number, sessionId: string): Stripe.Checkout.Session {
   const amountCents = amountUsd * CENTS_PER_USD;
   return {
     id: sessionId,
@@ -123,20 +158,19 @@ function session(amountUsd: number, sessionId: string): Stripe.Checkout.Session 
       type: 'credit_topup',
       user_id: USER,
       credit_amount_cents: String(amountCents),
-      top_up_units: String(topUpUnitsForUsd(amountUsd)),
+      top_up_units: String(amountUsd * TOP_UP_UNITS_PER_USD),
     },
   } as unknown as Stripe.Checkout.Session;
 }
 
-function stripeFor(amountUsd: number): Stripe {
-  const amountCents = amountUsd * CENTS_PER_USD;
+function stripeReceiving(amountReceivedCents: number): Stripe {
   return {
     paymentIntents: {
       retrieve: async () => ({
         id: 'pi_1',
         status: 'succeeded',
         currency: 'usd',
-        amount_received: amountCents,
+        amount_received: amountReceivedCents,
       }),
     },
   } as unknown as Stripe;
@@ -146,48 +180,109 @@ describe('a purchased top-up grants exactly what was paid for', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it.each(TOP_UP_PRESET_AMOUNTS_USD.map((amountUsd) => [amountUsd] as const))(
-    'grants $%s at fifty credits per dollar in whole microUSD',
+    'grants the $%s pack its fifty credits per dollar in whole microUSD',
     async (amountUsd) => {
       const { db, grants, balance } = ledger();
-      await handleCreditTopUp(db, stripeFor(amountUsd), session(amountUsd, `cs_${amountUsd}`));
+      const quoted = quote(amountUsd);
+      await handleCreditTopUp(
+        db,
+        stripeReceiving(quoted.priceCents),
+        session(amountUsd, `cs_${amountUsd}`),
+      );
 
-      const amountCents = amountUsd * CENTS_PER_USD;
+      expect(quoted.credits).toBe(amountUsd * TOP_UP_UNITS_PER_USD);
+      expect(topUpUnitsForUsd(amountUsd)).toBe(quoted.credits);
       expect(grants).toHaveLength(1);
-      expect(grants[0]!.microusd).toBe(amountCents * MICROUSD_PER_LEDGER_CENT);
+      expect(grants[0]!.microusd).toBe(quoted.credits * MICROUSD_PER_CREDIT);
+      expect(grants[0]!.microusd).toBe(quoted.budgetCents * MICROUSD_PER_LEDGER_CENT);
       expect(grants[0]!.transactionType).toBe('purchase');
       expect(grants[0]!.accountId).toBe(ACCOUNT);
       expect(Number.isSafeInteger(balance())).toBe(true);
-      expect(topUpUnitsForUsd(amountUsd)).toBe(amountUsd * CREDITS_PER_USD);
     },
   );
+
+  it('grants the $20 pack 1,000 credits, which is $5 of provider cost', async () => {
+    const { db, grants } = ledger();
+    await handleCreditTopUp(db, stripeReceiving(2_000), session(20, 'cs_twenty'));
+
+    expect(quote(20)).toMatchObject({ credits: 1_000, priceCents: 2_000, budgetCents: 500 });
+    expect(grants[0]!.microusd).toBe(5_000_000);
+  });
+
+  it('charges the discounted pack price, grants the full pack and records what was paid', async () => {
+    const { db, grants } = ledger();
+    const quoted = quote(1_000);
+    await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), session(1_000, 'cs_thousand'));
+
+    expect(quoted).toMatchObject({ discountPercent: 30, priceCents: 70_000, credits: 50_000 });
+    expect(grants[0]!.microusd).toBe(50_000 * MICROUSD_PER_CREDIT);
+    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({
+      charged_cents: 70_000,
+      charged_currency: 'usd',
+    });
+  });
+
+  it('records the list price paid for a checkout sold under the first conversion', async () => {
+    const { db, grants } = ledger();
+    await handleCreditTopUp(db, stripeReceiving(2_000), legacySession(20, 'cs_legacy_price'));
+
+    expect(JSON.parse(String(grants[0]!.metadata))).toMatchObject({ charged_cents: 2_000 });
+  });
 
   it.each(TOP_UP_PRESET_AMOUNTS_USD.map((amountUsd) => [amountUsd] as const))(
     'grants $%s once however many events carry the same session',
     async (amountUsd) => {
       const { db, grants, balance } = ledger();
+      const quoted = quote(amountUsd);
       const paid = session(amountUsd, `cs_repeat_${amountUsd}`);
-      await handleCreditTopUp(db, stripeFor(amountUsd), paid);
-      await handleCreditTopUp(db, stripeFor(amountUsd), paid);
-      await handleCreditTopUp(db, stripeFor(amountUsd), { ...paid } as Stripe.Checkout.Session);
+      await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), paid);
+      await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), paid);
+      await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), {
+        ...paid,
+      } as Stripe.Checkout.Session);
 
       expect(grants).toHaveLength(1);
-      expect(balance()).toBe(amountUsd * CENTS_PER_USD * MICROUSD_PER_LEDGER_CENT);
+      expect(balance()).toBe(quoted.credits * MICROUSD_PER_CREDIT);
     },
   );
 
+  it('still settles a checkout sold under the first conversion at what it was sold for', async () => {
+    const { db, grants } = ledger();
+    await handleCreditTopUp(db, stripeReceiving(2_000), legacySession(20, 'cs_legacy'));
+
+    expect(grants).toHaveLength(1);
+    expect(grants[0]!.microusd).toBe(2_000 * MICROUSD_PER_LEDGER_CENT);
+  });
+
   it('refuses metadata that claims more units than the money bought', async () => {
     for (const amountUsd of TOP_UP_PRESET_AMOUNTS_USD) {
+      const quoted = quote(amountUsd);
       for (const claimedUnits of [
-        amountUsd * CREDITS_PER_USD + 1,
-        amountUsd * CREDITS_PER_USD * 2,
+        quoted.credits + 1,
+        quoted.credits * 2,
         Number.MAX_SAFE_INTEGER,
       ]) {
         const { db, grants } = ledger();
         const tampered = session(amountUsd, `cs_tampered_${amountUsd}_${claimedUnits}`);
         tampered.metadata!['top_up_units'] = String(claimedUnits);
-        await handleCreditTopUp(db, stripeFor(amountUsd), tampered).catch(() => undefined);
+        await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), tampered).catch(
+          () => undefined,
+        );
         expect(grants).toEqual([]);
       }
+    }
+  });
+
+  it('refuses metadata that claims a bigger balance than the pack buys', async () => {
+    for (const amountUsd of TOP_UP_PRESET_AMOUNTS_USD) {
+      const quoted = quote(amountUsd);
+      const { db, grants } = ledger();
+      const tampered = session(amountUsd, `cs_budget_${amountUsd}`);
+      tampered.metadata!['credit_amount_cents'] = String(amountUsd * CENTS_PER_USD);
+      await handleCreditTopUp(db, stripeReceiving(quoted.priceCents), tampered).catch(
+        () => undefined,
+      );
+      expect(grants).toEqual([]);
     }
   });
 
@@ -195,7 +290,11 @@ describe('a purchased top-up grants exactly what was paid for', () => {
     for (const amountUsd of TOP_UP_PRESET_AMOUNTS_USD) {
       const { db, grants } = ledger();
       const underpaid = session(amountUsd, `cs_underpaid_${amountUsd}`);
-      await handleCreditTopUp(db, stripeFor(amountUsd - 1), underpaid).catch(() => undefined);
+      await handleCreditTopUp(
+        db,
+        stripeReceiving(quote(amountUsd).priceCents - 100),
+        underpaid,
+      ).catch(() => undefined);
       expect(grants).toEqual([]);
     }
   });
@@ -205,30 +304,45 @@ describe('a purchased top-up grants exactly what was paid for', () => {
       const { db, grants } = ledger();
       const foreign = session(amountUsd, `cs_foreign_${amountUsd}`);
       (foreign as { currency: string }).currency = 'eur';
-      await handleCreditTopUp(db, stripeFor(amountUsd), foreign).catch(() => undefined);
+      await handleCreditTopUp(db, stripeReceiving(quote(amountUsd).priceCents), foreign).catch(
+        () => undefined,
+      );
       expect(grants).toEqual([]);
     }
   });
 
   it('prices every preset with whole cents and whole credits inside the sold range', () => {
     for (const amountUsd of TOP_UP_PRESET_AMOUNTS_USD) {
-      const amountCents = amountUsd * CENTS_PER_USD;
-      expect(Number.isSafeInteger(amountCents)).toBe(true);
-      expect(Number.isSafeInteger(amountCents * MICROUSD_PER_LEDGER_CENT)).toBe(true);
-      expect(Number.isSafeInteger(topUpUnitsForUsd(amountUsd))).toBe(true);
+      const quoted = quote(amountUsd);
+      expect(Number.isSafeInteger(quoted.priceCents)).toBe(true);
+      expect(Number.isSafeInteger(quoted.budgetCents)).toBe(true);
+      expect(Number.isSafeInteger(quoted.budgetCents * MICROUSD_PER_LEDGER_CENT)).toBe(true);
+      expect(Number.isSafeInteger(quoted.credits)).toBe(true);
       expect(amountUsd).toBeGreaterThanOrEqual(MIN_TOP_UP_AMOUNT_USD);
       expect(amountUsd).toBeLessThanOrEqual(MAX_TOP_UP_AMOUNT_USD);
-      expect(isValidTopUpPurchase({ amountCents, units: topUpUnitsForUsd(amountUsd) })).toBe(true);
+      expect(
+        isValidTopUpPurchase({
+          conversion: TOP_UP_CONVERSION,
+          amountCents: quoted.budgetCents,
+          units: quoted.credits,
+          priceCents: quoted.priceCents,
+          amountUsd,
+        }),
+      ).toBe(true);
     }
   });
 
   it('refuses a fractional dollar amount rather than rounding it into credits', () => {
     for (const fractional of [10.5, 19.99, 100.01, 0.5]) {
       expect(topUpUnitsForUsd(fractional)).toBeNull();
+      expect(quoteTopUp(fractional)).toBeNull();
       expect(
         isValidTopUpPurchase({
-          amountCents: Math.round(fractional * CENTS_PER_USD),
-          units: Math.round(fractional * CREDITS_PER_USD),
+          conversion: TOP_UP_CONVERSION,
+          amountCents: Math.round((fractional * TOP_UP_UNITS_PER_USD) / 2),
+          units: Math.round(fractional * TOP_UP_UNITS_PER_USD),
+          priceCents: Math.round(fractional * CENTS_PER_USD),
+          amountUsd: fractional,
         }),
       ).toBe(false);
     }
