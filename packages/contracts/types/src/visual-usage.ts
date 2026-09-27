@@ -11,7 +11,11 @@
  * @packageDocumentation
  */
 
-import { resolveFeatureRate, type RateCardFeature } from './rate-card';
+import {
+  chargeMicrousdForProviderCost,
+  resolveFeatureRate,
+  type RateCardFeature,
+} from './rate-card';
 import {
   VISUAL_SOURCE_KINDS,
   type VisualSessionStatus,
@@ -125,29 +129,28 @@ export function visualUsageLines(
 }
 
 export interface VisualUsageCharge {
-  readonly customerMicrousd: number | null;
+  readonly chargeMicrousd: number | null;
   readonly providerCogsMicrousd: number | null;
 }
 
-/**
- * Null on either side means the deployment has published no rate for that row
- * yet. An unpriced minute stays unpriced rather than being valued at zero.
- */
 export function visualUsageCharge(line: VisualUsageLine): VisualUsageCharge {
   const rate = resolveFeatureRate(line.feature);
+  if (rate.providerCogsMicrousd === null) {
+    return { chargeMicrousd: null, providerCogsMicrousd: null };
+  }
+  const providerCogsMicrousd = rate.providerCogsMicrousd * line.minutes;
   return {
-    customerMicrousd: rate.customerMicrousd === null ? null : rate.customerMicrousd * line.minutes,
-    providerCogsMicrousd:
-      rate.providerCogsMicrousd === null ? null : rate.providerCogsMicrousd * line.minutes,
+    chargeMicrousd: chargeMicrousdForProviderCost(providerCogsMicrousd),
+    providerCogsMicrousd,
   };
 }
 
-export function visualUsageTotalCustomerMicrousd(lines: readonly VisualUsageLine[]): number | null {
+export function visualUsageTotalChargeMicrousd(lines: readonly VisualUsageLine[]): number | null {
   let total = 0;
   for (const line of lines) {
     const charge = visualUsageCharge(line);
-    if (charge.customerMicrousd === null) return null;
-    total += charge.customerMicrousd;
+    if (charge.chargeMicrousd === null) return null;
+    total += charge.chargeMicrousd;
   }
   return total;
 }

@@ -36,9 +36,6 @@ export const COGS_CAPABILITIES = [
   'notification',
   'email',
   'egress',
-  'browser',
-  'work_compute',
-  'code_compute',
   'connector',
   'artifact',
   'visual',
@@ -163,6 +160,8 @@ export interface CogsSummary {
   cacheWritePremiumCents: number;
 }
 
+export const SANDBOX_COMPUTE_OPERATION = 'e2b_sandbox_compute';
+
 const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   chat: 'chat',
   image: 'image',
@@ -172,6 +171,7 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   embedding: 'embedding',
   computer_use: 'computer_use',
   sandbox: 'sandbox',
+  [SANDBOX_COMPUTE_OPERATION]: 'sandbox',
   tool: 'tool',
   storage: 'storage',
   database: 'database',
@@ -179,9 +179,6 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   notification: 'notification',
   email: 'email',
   egress: 'egress',
-  browser: 'browser',
-  work_compute: 'work_compute',
-  code_compute: 'code_compute',
   connector: 'connector',
   artifact: 'artifact',
   decision: 'decision',
@@ -203,9 +200,6 @@ const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
   notification: 'request',
   email: 'request',
   egress: 'gibibyte',
-  browser: 'minute',
-  work_compute: 'minute',
-  code_compute: 'minute',
   connector: 'request',
   artifact: 'gibibyte_month',
   visual: 'minute',
@@ -224,9 +218,6 @@ const RATE_CARD_FEATURE_BY_CAPABILITY = {
   notification: 'notification_delivery_request',
   email: 'email_message_request',
   egress: 'network_egress_gib',
-  browser: 'browser_session_minute',
-  work_compute: 'work_compute_minute',
-  code_compute: 'code_compute_minute',
   connector: 'connector_call_request',
   artifact: 'artifact_storage_gib_month',
 } as const satisfies Partial<Record<CogsCapability, RateCardFeature>>;
@@ -294,10 +285,6 @@ export function resolveCogsUnits(
       return { unitBasis, units: numeric(usage['gibibytes']) ?? 0 };
     case 'database':
       return { unitBasis, units: numeric(usage['computeSeconds']) ?? 0 };
-    case 'browser':
-    case 'work_compute':
-    case 'code_compute':
-      return { unitBasis, units: numeric(usage['computeMinutes']) ?? 0 };
     case 'visual':
       return { unitBasis, units: numeric(usage['visualMinutes']) ?? 0 };
     default: {
@@ -906,7 +893,7 @@ export async function recordVisualSessionCost(input: {
       feature: line.feature,
       sessionId: input.sessionId,
       surface: input.surface ?? null,
-      customerCanonicalMicrousd: charge.customerMicrousd,
+      customerCanonicalMicrousd: charge.chargeMicrousd,
       usage: {
         operation: VISUAL_USAGE_OPERATION,
         visualSource: line.source,
