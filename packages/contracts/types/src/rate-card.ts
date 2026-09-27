@@ -1,4 +1,9 @@
-import { MICROUSD_PER_CREDIT, MICROUSD_PER_USD, creditsFromMicrousd } from './credits';
+import {
+  MICROUSD_PER_CREDIT,
+  MICROUSD_PER_USD,
+  chargeCreditsForMicrousd,
+  creditsFromMicrousd,
+} from './credits';
 
 export { MICROUSD_PER_CREDIT, MICROUSD_PER_USD, creditsFromMicrousd };
 
@@ -13,9 +18,15 @@ export function centsFromMicrousdCeil(microusd: number): number {
   return Math.ceil(microusd / MICROUSD_PER_CENT);
 }
 
+export function chargeMicrousdForProviderCost(providerMicrousd: number): number {
+  return Math.round(chargeCreditsForMicrousd(providerMicrousd) * MICROUSD_PER_CREDIT);
+}
+
 export const RATE_CARD_FEATURES = [
   'web_search_perplexity',
   'web_search_grounding',
+  'web_search_anthropic_native',
+  'web_search_openai_native',
   'image_generation_openai_low',
   'image_generation_openai_medium',
   'image_generation_openai_high',
@@ -27,16 +38,14 @@ export const RATE_CARD_FEATURES = [
   'transcription_minute',
   'sandbox_vcpu_second',
   'sandbox_gib_second',
-  'computer_use_request',
+  'hosted_code_execution_openai_session',
+  'hosted_code_execution_anthropic_hour',
   'object_storage_gib_month',
   'database_compute_second',
   'vector_query_request',
   'notification_delivery_request',
   'email_message_request',
   'network_egress_gib',
-  'work_compute_minute',
-  'code_compute_minute',
-  'browser_session_minute',
   'connector_call_request',
   'artifact_storage_gib_month',
 ] as const;
@@ -48,6 +57,8 @@ export const RATE_CARD_UNITS = [
   'image',
   'second',
   'minute',
+  'hour',
+  'session',
   'gibibyte',
   'gibibyte_month',
 ] as const;
@@ -67,28 +78,16 @@ export type RateCardUnit = (typeof RATE_CARD_UNITS)[number];
 export const RATE_CARD_BASES = ['rate_card', 'derived_from_model', 'deployment_metered'] as const;
 export type RateCardBasis = (typeof RATE_CARD_BASES)[number];
 
-/**
- * `all_plans` is never charged to a customer on any plan.
- * `interactive_chat` is included while an interactive chat turn stays inside
- * its plan's bound, and charged at `customerMicrousd` outside it: on automated
- * and developer surfaces, in deep research, and past the per-plan call bound.
- * `no_plan` is charged on every plan.
- */
 export const RATE_CARD_INCLUSIONS = ['all_plans', 'interactive_chat', 'no_plan'] as const;
 export type RateCardInclusion = (typeof RATE_CARD_INCLUSIONS)[number];
 
 export interface RateCardEntry {
   readonly unit: RateCardUnit;
-  /** Canonical price the customer pays per unit. Null when `customerBasis` is `derived_from_model`. */
-  readonly customerMicrousd: number | null;
-  readonly customerBasis: RateCardBasis;
-  /** Published provider list rate per unit. Null when `providerCogsBasis` is `derived_from_model`. */
   readonly providerCogsMicrousd: number | null;
   readonly providerCogsBasis: RateCardBasis;
   readonly includedInPlans: RateCardInclusion;
   readonly source: string;
   readonly verifiedOn: string;
-  /** Set when the provider figure is inferred rather than published as a per-unit rate. */
   readonly estimate?: true;
 }
 
@@ -97,19 +96,9 @@ const CATALOGUE_SOURCE = 'packages/contracts/types/src/models.json';
 const DEPLOYMENT_METERED_SOURCE =
   'deployment-metered: this repository publishes no per-unit rate; the deployment supplies it through the row override env var';
 
-/**
- * An infrastructure cost the platform buys for itself rather than from a model
- * provider: bytes at rest, database compute, a vector query, a delivered
- * notification or email, egress, and the compute behind a Work or Code run.
- * None of them is charged to the customer as a line item, and none of them has
- * a rate this repository can state, so the row exists to be summed once the
- * deployment sets its override rather than to publish a number.
- */
 function infrastructureRate(unit: RateCardUnit): RateCardEntry {
   return {
     unit,
-    customerMicrousd: null,
-    customerBasis: 'deployment_metered',
     providerCogsMicrousd: null,
     providerCogsBasis: 'deployment_metered',
     includedInPlans: 'no_plan',
@@ -121,8 +110,6 @@ function infrastructureRate(unit: RateCardUnit): RateCardEntry {
 export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>> = {
   web_search_perplexity: {
     unit: 'request',
-    customerMicrousd: 10_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 5_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'interactive_chat',
@@ -131,18 +118,30 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   web_search_grounding: {
     unit: 'request',
-    customerMicrousd: 20_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 14_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'interactive_chat',
     source: 'https://ai.google.dev/gemini-api/docs/pricing',
     verifiedOn: '2026-09-08',
   },
+  web_search_anthropic_native: {
+    unit: 'request',
+    providerCogsMicrousd: 10_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'no_plan',
+    source: 'https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool',
+    verifiedOn: '2026-09-27',
+  },
+  web_search_openai_native: {
+    unit: 'request',
+    providerCogsMicrousd: 10_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'no_plan',
+    source: 'https://developers.openai.com/api/docs/pricing',
+    verifiedOn: '2026-09-27',
+  },
   image_generation_openai_low: {
     unit: 'image',
-    customerMicrousd: 50_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 10_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
@@ -152,8 +151,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   image_generation_openai_medium: {
     unit: 'image',
-    customerMicrousd: 50_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 40_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
@@ -163,8 +160,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   image_generation_openai_high: {
     unit: 'image',
-    customerMicrousd: 210_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 170_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
@@ -174,8 +169,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   image_generation_google: {
     unit: 'image',
-    customerMicrousd: 30_000,
-    customerBasis: 'rate_card',
     providerCogsMicrousd: 67_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
@@ -184,8 +177,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   video_second: {
     unit: 'second',
-    customerMicrousd: null,
-    customerBasis: 'derived_from_model',
     providerCogsMicrousd: 400_000,
     providerCogsBasis: 'derived_from_model',
     includedInPlans: 'no_plan',
@@ -194,21 +185,16 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   voice_live_minute: {
     unit: 'minute',
-    customerMicrousd: 50_000,
-    customerBasis: 'rate_card',
-    providerCogsMicrousd: 30_000,
-    providerCogsBasis: 'rate_card',
+    providerCogsMicrousd: 50_000,
+    providerCogsBasis: 'derived_from_model',
     includedInPlans: 'no_plan',
-    source: 'https://ai.google.dev/gemini-api/docs/pricing',
+    source: CATALOGUE_SOURCE,
     verifiedOn: '2026-09-10',
-    estimate: true,
   },
   visual_camera_minute: infrastructureRate('minute'),
   visual_screen_share_minute: infrastructureRate('minute'),
   transcription_minute: {
     unit: 'minute',
-    customerMicrousd: null,
-    customerBasis: 'derived_from_model',
     providerCogsMicrousd: 6_000,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
@@ -217,33 +203,35 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   },
   sandbox_vcpu_second: {
     unit: 'second',
-    customerMicrousd: null,
-    customerBasis: 'derived_from_model',
     providerCogsMicrousd: 14,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
     source: 'https://e2b.dev/pricing',
-    verifiedOn: '2026-09-10',
+    verifiedOn: '2026-09-27',
   },
   sandbox_gib_second: {
     unit: 'second',
-    customerMicrousd: null,
-    customerBasis: 'derived_from_model',
     providerCogsMicrousd: 4.5,
     providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
     source: 'https://e2b.dev/pricing',
-    verifiedOn: '2026-09-10',
+    verifiedOn: '2026-09-27',
   },
-  computer_use_request: {
-    unit: 'request',
-    customerMicrousd: null,
-    customerBasis: 'derived_from_model',
-    providerCogsMicrousd: null,
-    providerCogsBasis: 'derived_from_model',
+  hosted_code_execution_openai_session: {
+    unit: 'session',
+    providerCogsMicrousd: 30_000,
+    providerCogsBasis: 'rate_card',
     includedInPlans: 'no_plan',
-    source: CATALOGUE_SOURCE,
-    verifiedOn: '2026-09-10',
+    source: 'https://developers.openai.com/api/docs/pricing',
+    verifiedOn: '2026-09-27',
+  },
+  hosted_code_execution_anthropic_hour: {
+    unit: 'hour',
+    providerCogsMicrousd: 50_000,
+    providerCogsBasis: 'rate_card',
+    includedInPlans: 'no_plan',
+    source: 'https://platform.claude.com/docs/en/agents-and-tools/tool-use/code-execution-tool',
+    verifiedOn: '2026-09-27',
   },
   object_storage_gib_month: infrastructureRate('gibibyte_month'),
   database_compute_second: infrastructureRate('second'),
@@ -251,9 +239,6 @@ export const FEATURE_RATE_CARD: Readonly<Record<RateCardFeature, RateCardEntry>>
   notification_delivery_request: infrastructureRate('request'),
   email_message_request: infrastructureRate('request'),
   network_egress_gib: infrastructureRate('gibibyte'),
-  work_compute_minute: infrastructureRate('minute'),
-  code_compute_minute: infrastructureRate('minute'),
-  browser_session_minute: infrastructureRate('minute'),
   connector_call_request: infrastructureRate('request'),
   artifact_storage_gib_month: infrastructureRate('gibibyte_month'),
 };
@@ -267,9 +252,6 @@ export const RATE_CARD_PROVIDER_COGS_ENV = {
   notification_delivery_request: 'AGI_NOTIFICATION_MICROUSD_PER_DELIVERY',
   email_message_request: 'AGI_EMAIL_MICROUSD_PER_MESSAGE',
   network_egress_gib: 'AGI_EGRESS_MICROUSD_PER_GIB',
-  work_compute_minute: 'AGI_WORK_COMPUTE_MICROUSD_PER_MINUTE',
-  code_compute_minute: 'AGI_CODE_COMPUTE_MICROUSD_PER_MINUTE',
-  browser_session_minute: 'AGI_BROWSER_MICROUSD_PER_MINUTE',
   visual_camera_minute: 'AGI_VISUAL_CAMERA_MICROUSD_PER_MINUTE',
   visual_screen_share_minute: 'AGI_VISUAL_SCREEN_SHARE_MICROUSD_PER_MINUTE',
   connector_call_request: 'AGI_CONNECTOR_CALL_MICROUSD_PER_REQUEST',
@@ -333,11 +315,13 @@ export function resolveFeatureRate(
   };
 }
 
-/**
- * What the customer pays for one unit of `feature`. `included` is the calling
- * surface's answer to the row's `includedInPlans` policy; a row the plan does
- * not include falls through to the canonical price.
- */
+export function unpricedRateCardFeatures(env: RateCardEnv = ambientEnv()): RateCardFeature[] {
+  return RATE_CARD_FEATURES.filter((feature) => {
+    const cost = resolveFeatureRate(feature, env).providerCogsMicrousd;
+    return cost === null || !(cost > 0);
+  });
+}
+
 export function customerChargeMicrousd(
   feature: RateCardFeature,
   options: { included: boolean } = { included: false },
@@ -345,5 +329,46 @@ export function customerChargeMicrousd(
   const entry = FEATURE_RATE_CARD[feature];
   if (entry.includedInPlans === 'all_plans') return 0;
   if (entry.includedInPlans === 'interactive_chat' && options.included) return 0;
-  return entry.customerMicrousd ?? 0;
+  return chargeMicrousdForProviderCost(resolveFeatureRate(feature).providerCogsMicrousd ?? 0);
+}
+
+export const SANDBOX_COMPUTE_RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
+export const DEFAULT_SANDBOX_VCPU_COUNT = 2;
+export const DEFAULT_SANDBOX_MEMORY_GIB = 4;
+
+export interface SandboxComputeShape {
+  readonly vcpuCount?: number | null;
+  readonly memoryGib?: number | null;
+}
+
+export type SandboxComputeRate =
+  | { readonly ok: true; readonly microusdPerSecond: number; readonly overrideInvalid: boolean }
+  | { readonly ok: false; readonly overrideInvalid: boolean };
+
+function positiveOr(value: number | null | undefined, fallback: number): number {
+  return typeof value === 'number' && value > 0 ? value : fallback;
+}
+
+export function sandboxComputeRate(
+  shape?: SandboxComputeShape,
+  env: RateCardEnv = ambientEnv(),
+): SandboxComputeRate {
+  const raw = env[SANDBOX_COMPUTE_RATE_ENV]?.trim() ?? '';
+  const override = raw.length > 0 ? Number.parseFloat(raw) : Number.NaN;
+  if (Number.isFinite(override) && override > 0) {
+    return { ok: true, microusdPerSecond: override, overrideInvalid: false };
+  }
+  const overrideInvalid = raw.length > 0;
+  const vcpu = resolveFeatureRate('sandbox_vcpu_second', env).providerCogsMicrousd;
+  const gib = resolveFeatureRate('sandbox_gib_second', env).providerCogsMicrousd;
+  if (vcpu === null || gib === null || !(vcpu > 0) || !(gib > 0)) {
+    return { ok: false, overrideInvalid };
+  }
+  const vcpuCount = positiveOr(shape?.vcpuCount, DEFAULT_SANDBOX_VCPU_COUNT);
+  const memoryGib = positiveOr(shape?.memoryGib, DEFAULT_SANDBOX_MEMORY_GIB);
+  return {
+    ok: true,
+    microusdPerSecond: Math.round(vcpuCount * vcpu + memoryGib * gib),
+    overrideInvalid,
+  };
 }

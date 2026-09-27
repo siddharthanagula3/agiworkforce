@@ -24,6 +24,7 @@
 import 'server-only';
 
 import {
+  SANDBOX_COMPUTE_RATE_ENV,
   getPlanMaxSandboxes,
   getPlanSandboxTtlMs,
   isFreeBillingPlanTier,
@@ -61,7 +62,6 @@ import { providerProxyBaseUrl, providerProxyHost } from './provider-proxy';
 import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cache';
 import { mintProviderProxyToken } from './provider-proxy-token';
 import {
-  E2B_COMPUTE_RATE_ENV,
   getSandboxComputeMicrousdPerSecond,
   meterSandboxComputeInterval,
   releaseSandboxComputeReservation,
@@ -735,7 +735,7 @@ export const getE2BExecutor = tracedCodeAction(
 
     if (!sandboxComputeIsPriceable()) {
       logger.error(
-        { env: E2B_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
+        { env: SANDBOX_COMPUTE_RATE_ENV, ...(scope ? scopeLog(scope) : {}) },
         '[e2b] sandbox compute has no configured price; refusing to provision (fail-closed)',
       );
       return unavailable('not-configured');
