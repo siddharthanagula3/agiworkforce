@@ -1,7 +1,13 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+import { creditsFromCents } from '@agiworkforce/types';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import {
+  bonusCreditExpiry,
+  grantBonusCredits as grantBonusCreditLot,
+} from '@/lib/services/bonus-credit-service';
 
 export interface GrowthPoint {
   day: string;
@@ -341,21 +347,23 @@ export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPrev
   };
 }
 
-/**
- * Goodwill credit. Raised on the live account so the existing consumption path
- * spends it with no fork, and mirrored into credit_transactions as `bonus` plus
- * a running bonus_granted_cents so it never reads as revenue.
- */
+export interface GoodwillGrant {
+  granted: boolean;
+  grantId: string | null;
+  credits: number;
+  expiresAt: string | null;
+}
+
 export async function grantBonusCredits(
   userId: string,
   amountCents: number,
   actorId: string,
-  reason: string,
-): Promise<{ granted: boolean; balanceCents: number }> {
+): Promise<GoodwillGrant> {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error('Bonus credit must be a positive whole number of cents.');
   }
   const db = getNeonDb();
+  const credits = creditsFromCents(amountCents);
   const [account] = await db.query<{ id: string }>(
     `select id from public.token_credits
       where user_id = $1 and period_end > now()
@@ -363,24 +371,21 @@ export async function grantBonusCredits(
       limit 1`,
     [userId],
   );
-  if (!account) return { granted: false, balanceCents: 0 };
+  if (!account) return { granted: false, grantId: null, credits, expiresAt: null };
 
-  const [updated] = await db.query<{ credits_allocated_cents: number }>(
-    `update public.token_credits
-        set credits_allocated_cents = credits_allocated_cents + $2,
-            bonus_granted_cents = bonus_granted_cents + $2,
-            updated_at = now()
-      where id = $1
-      returning credits_allocated_cents`,
-    [account.id, amountCents],
-  );
-
-  await db.execute(
-    `insert into public.credit_transactions
-       (user_id, credit_account_id, transaction_type, amount_cents, metadata)
-     values ($1, $2, 'bonus', $3, $4)`,
-    [userId, account.id, amountCents, JSON.stringify({ reason, actor_id: actorId })],
-  );
-
-  return { granted: true, balanceCents: Number(updated?.credits_allocated_cents ?? 0) };
+  const grantedAt = new Date();
+  const grantId = await grantBonusCreditLot(db, {
+    userId,
+    source: 'promo',
+    credits,
+    referenceId: `goodwill:${randomUUID()}`,
+    createdBy: actorId,
+    grantedAt,
+  });
+  return {
+    granted: true,
+    grantId,
+    credits,
+    expiresAt: bonusCreditExpiry(grantedAt).toISOString(),
+  };
 }

@@ -6,6 +6,7 @@ import type {
   OperatorOverview,
   UserRow,
 } from '@/features/admin/services/operator-metrics';
+import { formatCredits } from '@agiworkforce/types';
 import { useConfirm } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -250,9 +251,11 @@ export function OperatorDashboardPage() {
         amountCents: Math.round(dollars * 100),
         reason: reason.trim(),
       });
+      const credits = typeof result['credits'] === 'number' ? result['credits'] : null;
+      const expiresAt = typeof result['expiresAt'] === 'string' ? result['expiresAt'] : null;
       setNotice(
-        result['granted']
-          ? `Granted ${formatCents(Math.round(dollars * 100))} to ${label}.`
+        result['granted'] && credits !== null && expiresAt
+          ? `Granted ${formatCredits(credits, { maximumFractionDigits: 0 })} to ${label}. They expire ${formatDateTime(expiresAt)}.`
           : `${label} has no active credit period, so there was nothing to credit.`,
       );
       await load('users');

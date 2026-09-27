@@ -184,7 +184,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 280) : '';
       if (!reason) throw createError.validation('reason is required so the grant is explainable.');
 
-      const result = await grantBonusCredits(targetUserId, amountCents as number, actorId, reason);
+      const result = await grantBonusCredits(targetUserId, amountCents as number, actorId);
       await logSecurityEvent({
         userId: actorId,
         eventType: 'admin_action',
@@ -196,6 +196,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           amount_cents: amountCents,
           reason,
           granted: result.granted,
+          grant_id: result.grantId,
+          credits: result.credits,
+          expires_at: result.expiresAt,
         },
       });
       return NextResponse.json(result);
