@@ -52,6 +52,7 @@ vi.mock('@/lib/services/user-skill-service', () => ({
 }));
 vi.mock('@/lib/services/user-skill-authoring', () => ({
   userSkillAuthoringEnabled: mockAuthoringEnabled,
+  requireUserSkillAuthoring: vi.fn(),
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
