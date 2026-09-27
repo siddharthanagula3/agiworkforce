@@ -6,6 +6,12 @@ import { useBillingStore } from './auth';
 import { createCostSlice } from './billing/costSlice';
 import type { CostSlice } from './billing/costSlice';
 
+export {
+  creditsFromProviderUsd,
+  formatProviderCostCredits,
+  providerUsdFromCredits,
+} from './billing/costSlice';
+
 import { createUsageSlice } from './billing/usageSlice';
 import type { UsageSlice } from './billing/usageSlice';
 

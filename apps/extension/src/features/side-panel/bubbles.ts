@@ -32,10 +32,15 @@ import {
 import { sanitizeHtml, renderMarkdown } from './markdown';
 import { el, formatTime } from './dom';
 import { shouldRenderTextBubble, type SidePanelChatMessage } from './chat-state';
-import { FREE_TRIAL_GATEWAY } from '../cloud-bridge/freeTrialClient';
+import { FREE_TRIAL_GATEWAY, type ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
 
 type ChatMessage = SidePanelChatMessage;
 export type ManagedApprovalDecision = 'approved' | 'rejected';
+
+export interface QuotaRecoveryControl {
+  label: (recovery: ManagedQuotaRecovery) => string;
+  open: (recovery: ManagedQuotaRecovery) => void;
+}
 
 export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
@@ -43,6 +48,7 @@ export interface BubbleInteractionOptions {
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   onRetry?: (messageId: string) => void;
   onSwitchModel?: () => void;
+  quotaRecovery?: QuotaRecoveryControl;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -148,6 +154,7 @@ function buildErrorFooter(
   msg: ChatMessage,
   onRetry?: (messageId: string) => void,
   onSwitchModel?: () => void,
+  quotaRecovery?: QuotaRecoveryControl,
 ): HTMLElement | null {
   if (!msg.error || !msg.errorText) return null;
 
@@ -177,6 +184,19 @@ function buildErrorFooter(
       onSwitchModel();
     });
     footer.appendChild(switchBtn);
+  }
+  const recovery = msg.errorRecovery;
+  if (recovery && quotaRecovery) {
+    const recoveryBtn = el(
+      'button',
+      { class: 'sp-bubble-retry-btn', type: 'button' },
+      quotaRecovery.label(recovery),
+    ) as HTMLButtonElement;
+    recoveryBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      quotaRecovery.open(recovery);
+    });
+    footer.appendChild(recoveryBtn);
   }
 
   return footer;
@@ -239,7 +259,12 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   wrapper.appendChild(bubble);
 
-  const errorFooter = buildErrorFooter(msg, options.onRetry, options.onSwitchModel);
+  const errorFooter = buildErrorFooter(
+    msg,
+    options.onRetry,
+    options.onSwitchModel,
+    options.quotaRecovery,
+  );
   if (errorFooter) bubble.appendChild(errorFooter);
   const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (interruptedFooter) bubble.appendChild(interruptedFooter);
@@ -703,7 +728,7 @@ export function buildBubbleWithTools(
 
   appendInteractiveCards(wrapper, msg);
 
-  const toolsErrorFooter = buildErrorFooter(msg, options.onRetry);
+  const toolsErrorFooter = buildErrorFooter(msg, options.onRetry, undefined, options.quotaRecovery);
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
   const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);

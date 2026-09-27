@@ -921,6 +921,135 @@
             "type": "integer"
           }
         }
+      },
+      "AccountUsageTotals": {
+        "type": "object",
+        "required": ["requests", "inputTokens", "outputTokens", "credits"],
+        "properties": {
+          "requests": {
+            "type": "integer"
+          },
+          "inputTokens": {
+            "type": "integer"
+          },
+          "outputTokens": {
+            "type": "integer"
+          },
+          "credits": {
+            "type": "number",
+            "description": "Credits charged, to two decimal places"
+          }
+        }
+      },
+      "AccountUsageBreakdownRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          {
+            "type": "object",
+            "required": ["key", "label"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "Workload, model id or project id"
+              },
+              "label": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        ]
+      },
+      "AccountUsageHistory": {
+        "type": "object",
+        "required": [
+          "from",
+          "to",
+          "granularity",
+          "totals",
+          "periods",
+          "byWorkload",
+          "byModel",
+          "byProject",
+          "freshness"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": ["day", "week", "month"]
+          },
+          "totals": {
+            "$ref": "#/components/schemas/AccountUsageTotals"
+          },
+          "periods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["start", "requests", "credits"],
+              "properties": {
+                "start": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "credits": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          "byWorkload": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by product area, including research"
+          },
+          "byModel": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            }
+          },
+          "byProject": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AccountUsageBreakdownRow"
+            },
+            "description": "Usage by project; turns outside a project are not included"
+          },
+          "freshness": {
+            "type": "object",
+            "required": ["asOf", "latestActivityAt", "unsettledRequests"],
+            "properties": {
+              "asOf": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "latestActivityAt": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "unsettledRequests": {
+                "type": "integer"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -1739,7 +1868,7 @@
     "/usage/history": {
       "get": {
         "summary": "Get managed-usage history",
-        "description": "What the calling account's managed usage went on across a window: request and cost totals, a daily series, and breakdowns by workload and by model, with how fresh the figures are. Defaults to the current billing period when no window is given.",
+        "description": "What the calling account's settled managed usage went on across a window, in credits: request and credit totals, a series by UTC day, week or month, and breakdowns by workload, by model and by project, with how fresh the figures are. Without a window it covers the last 30 days by day, the last 12 weeks by week, or the last 12 months by month.",
         "tags": ["Billing"],
         "security": [
           {
@@ -1770,11 +1899,79 @@
               "type": "string",
               "format": "date-time"
             }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "How to group the series: day (the default), week or month, in UTC",
+            "schema": {
+              "type": "string",
+              "enum": ["day", "week", "month"]
+            }
           }
         ],
         "responses": {
           "200": {
             "description": "Usage history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountUsageHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/limits": {
+      "get": {
+        "summary": "Get this month's metered allowances",
+        "description": "Voice minutes, video seconds and computer-use requests used this calendar month against the calling account's plan allowance, the images generated this month with their credits, the instant the monthly allowances reset, and how many managed responses are running now against the plan's concurrent limit. A null hard limit means the plan sets no monthly cap.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "responses": {
+          "200": {
+            "description": "This month's metered usage",
             "content": {
               "application/json": {
                 "schema": {
@@ -1810,6 +2007,110 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/turns/{requestId}": {
+      "get": {
+        "summary": "Get the settled cost of a request",
+        "description": "The credits a managed request settled at, looked up by the Idempotency-Key it was sent with. status is pending while the request is still running or settling, with credits null; poll until it is settled. A request that failed or was released settles at 0 credits.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "description": "The Idempotency-Key the request was sent with",
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._:-]{8,128}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request's settlement state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["requestId", "status", "credits"],
+                  "properties": {
+                    "requestId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["settled", "pending"]
+                    },
+                    "credits": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request ID is not a valid Idempotency-Key",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No managed request with that ID exists on this account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }

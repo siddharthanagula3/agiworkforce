@@ -114,6 +114,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'image_generation_jobs', column: 'user_id' },
   { table: 'managed_usage_requests', column: 'user_id' },
   { table: 'auto_reload_settings', column: 'user_id' },
+  { table: 'bonus_credit_grants', column: 'user_id' },
   { table: 'credit_transactions', column: 'user_id' },
   { table: 'token_credits', column: 'user_id' },
   { table: 'subscriptions', column: 'user_id' },
@@ -127,6 +128,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'authentication_attempts', column: 'user_id' },
   { table: 'device_installations', column: 'account_id' },
   { table: 'referrals', column: 'referrer_id', alsoColumn: 'referred_user_id' },
+  { table: 'referral_codes', column: 'user_id' },
   { table: 'profiles', column: 'id' },
 ];
 

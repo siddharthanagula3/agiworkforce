@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
+  AgiWorkforceUsageLimitError,
   chatCompletion,
+  fetchTierInfo,
   type LlmChatMessage,
 } from '../../utils/api';
 import { Config } from '../../platform/config';
 import { isSensitiveFile } from '../../utils/pathSafety';
-import { showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
+import { limitResetAt, showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
 
 const SECRETY_NAME_PATTERN =
   /(secret|credential|password|passwd|apikey|api[_-]key|token|private[_-]key)/i;
@@ -80,6 +82,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
   private debounceTimer: ReturnType<typeof setTimeout> | undefined;
   private pendingResolve: (() => void) | undefined;
   private paywallSuppressed = false;
+  private limitPausedUntilMs: number | undefined;
 
   constructor(private readonly secrets: vscode.SecretStorage) {}
 
@@ -91,6 +94,10 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
   ): Promise<vscode.InlineCompletionList | vscode.InlineCompletionItem[] | undefined> {
     if (!Config.inlineCompletionsEnabled() || this.paywallSuppressed) {
       return [];
+    }
+    if (this.limitPausedUntilMs !== undefined) {
+      if (Date.now() < this.limitPausedUntilMs) return [];
+      this.limitPausedUntilMs = undefined;
     }
 
     const fsPath = document.uri.fsPath;
@@ -192,7 +199,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
     ];
 
     try {
-      const response = await chatCompletion(this.secrets, messages, token);
+      const response = await chatCompletion(this.secrets, messages, token, undefined, 'deferred');
       if (token.isCancellationRequested) {
         return [];
       }
@@ -211,7 +218,21 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
           this.paywallSuppressed = true;
           void showCloudUtilityErrorActions(paywallError, {
             title: 'AGI Workforce: Inline completions paused',
+            secrets: this.secrets,
           });
+        }
+        return [];
+      }
+      if (error instanceof AgiWorkforceUsageLimitError) {
+        if (this.limitPausedUntilMs === undefined) {
+          this.limitPausedUntilMs = Number.POSITIVE_INFINITY;
+          void showCloudUtilityErrorActions(error, {
+            title: 'AGI Workforce: Inline completions paused',
+            secrets: this.secrets,
+          });
+          const resetAt = limitResetAt(error.code, await fetchTierInfo(this.secrets));
+          const resetMs = resetAt === null ? Number.NaN : Date.parse(resetAt);
+          if (Number.isFinite(resetMs)) this.limitPausedUntilMs = resetMs;
         }
         return [];
       }
