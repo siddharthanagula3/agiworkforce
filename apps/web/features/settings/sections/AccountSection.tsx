@@ -20,6 +20,9 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
+import { EmailAddressChange } from '../components/EmailAddressChange';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
+import { useStepUp } from '../hooks/use-step-up';
 import { RecentActivityPanel } from '@features/settings/components/RecentActivityPanel';
 import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
 import { CopyableIdField } from '../components/CopyableIdField';
@@ -30,6 +33,7 @@ import {
   useCancelAccountDeletion,
 } from '../hooks/use-settings-queries';
 import { toUserMessage } from '@/lib/user-error-message';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 function formatDateTime(value: Date | null | undefined): string {
   if (!value) return ', ';
@@ -213,6 +217,10 @@ export function AccountSection() {
 
   const userId = user?.id ?? null;
   const organizationId = useOrganizationOverview().data?.organization?.id ?? null;
+  const updateUser = useAuthStore((s) => s.updateUser);
+  const currentEmail = user?.email ?? null;
+  const [showEmailChange, setShowEmailChange] = useState(false);
+  const { withStepUp: withSessionsStepUp, dialog: sessionsStepUpDialog } = useStepUp();
 
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -272,8 +280,12 @@ export function AccountSection() {
     setLogoutError(null);
     let sessionsRevoked = false;
     try {
-      const headers = await addCsrfHeaders();
-      const response = await fetch('/api/settings/sessions', { method: 'DELETE', headers });
+      const response = await withSessionsStepUp(async (stepUpHeaders) =>
+        fetch('/api/settings/sessions', {
+          method: 'DELETE',
+          headers: { ...(await addCsrfHeaders()), ...stepUpHeaders },
+        }),
+      );
       const data: unknown = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
       sessionsRevoked = true;
@@ -284,10 +296,10 @@ export function AccountSection() {
         router.replace('/login');
         return;
       }
-      setLogoutError(toUserMessage(err, 'Sign out failed.'));
+      if (!isStepUpCancelled(err)) setLogoutError(toUserMessage(err, 'Sign out failed.'));
       setLoggingOut(false);
     }
-  }, [logout, identitySignOut, router]);
+  }, [logout, identitySignOut, router, withSessionsStepUp]);
 
   const handleRevokeSession = useCallback(
     async (session: AccountSession) => {
@@ -377,8 +389,20 @@ export function AccountSection() {
       ) : (
         <>
           <h1 style={titleStyle}>Account</h1>
+          <HelpArticleLink docId="account-security" label="Sessions, email and API keys" />
 
           <div>
+            <AccountRow label="Email" hint={currentEmail ?? 'No email address on this account.'}>
+              <button
+                type="button"
+                aria-label="Change email address"
+                onClick={() => setShowEmailChange(true)}
+                style={outlineButtonStyle}
+              >
+                Change
+              </button>
+            </AccountRow>
+
             <AccountRow
               label="Log out of all devices"
               hint="This will end all active sessions including this one."
@@ -858,7 +882,7 @@ export function AccountSection() {
                   data-testid="delete-confirm-input"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
                 />
-                {deleteAccountMutation.error && (
+                {deleteAccountMutation.error && !isStepUpCancelled(deleteAccountMutation.error) && (
                   <p className="mt-2 text-xs text-danger">
                     {toUserMessage(deleteAccountMutation.error, 'Account deletion failed.')}
                   </p>
@@ -884,6 +908,18 @@ export function AccountSection() {
           )}
         </AlertDialogContent>
       </AlertDialog>
+
+      {deleteAccountMutation.stepUpDialog}
+      {sessionsStepUpDialog}
+      {showEmailChange ? (
+        <EmailAddressChange
+          currentEmail={currentEmail}
+          onChanged={(email) => {
+            if (user) updateUser({ ...user, email });
+          }}
+          onClose={() => setShowEmailChange(false)}
+        />
+      ) : null}
 
       {/* Cancel-deletion confirmation dialog */}
       <AlertDialog

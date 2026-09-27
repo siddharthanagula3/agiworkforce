@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import type { StepUpAction } from '@/lib/server/step-up/actions';
 import { isBillingPortalAvailable, isVerificationEmailSendable } from './availability';
 import type {
   SupportActionAvailability,
@@ -21,6 +22,7 @@ export interface SupportActionDefinition<TParams = unknown> {
   resolveAvailability: () => SupportActionAvailability;
   perDayLimit: number;
   endpoint?: SupportActionEndpoint;
+  stepUp?: StepUpAction;
 }
 
 const EmptyParams = z.object({}).strict();
@@ -84,7 +86,7 @@ export const SUPPORT_ACTIONS: Readonly<{
         'Nothing in that service is deleted or changed.',
       ],
       reversibleNote:
-        'You can reconnect it any time from Settings → Connections. Reconnecting starts from “ask every time” again, not from the permissions you just cleared.',
+        'You can reconnect it any time from Settings → Connections. Reconnecting starts from your account’s default tool-approval setting, not from the permissions you just cleared.',
     }),
     resolveAvailability: (): SupportActionAvailability => ({ available: true }),
     perDayLimit: 20,
@@ -92,6 +94,7 @@ export const SUPPORT_ACTIONS: Readonly<{
 
   regenerate_api_key: Object.freeze({
     id: 'regenerate_api_key',
+    stepUp: 'api_credential.reveal',
     title: 'Regenerate an API key',
     description:
       'Revoke one of your API keys and issue a replacement with the same name and scopes.',

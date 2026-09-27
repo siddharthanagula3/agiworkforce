@@ -31,6 +31,7 @@ vi.mock('../../../api/cloudAccountSettings', async () => {
   );
   return {
     CLOUD_API_KEY_SCOPES: actual.CLOUD_API_KEY_SCOPES,
+    cloudWebActionFor: actual.cloudWebActionFor,
     listCloudSharedLinks: mocks.listCloudSharedLinks,
     revokeCloudSharedLink: mocks.revokeCloudSharedLink,
     listCloudArchivedConversations: mocks.listCloudArchivedConversations,

@@ -93,7 +93,7 @@ export function MCPServerSettings() {
       <div className="flex items-center justify-between rounded-xl border border-border bg-muted/30 p-4">
         <div className="flex items-center gap-3">
           <div
-            className={`h-2.5 w-2.5 rounded-full ${config?.running ? 'bg-emerald-400' : 'bg-muted-foreground/40'}`}
+            className={`h-2.5 w-2.5 rounded-full ${config?.running ? 'bg-success-fill' : 'bg-muted-foreground/40'}`}
           />
           <span className="text-sm">
             {config?.running ? `Running on port ${config.port}` : 'Stopped'}
@@ -175,7 +175,7 @@ export function MCPServerSettings() {
         onClick={copySnippet}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
       >
-        {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+        {copied ? <Check className="h-4 w-4 text-success-text" /> : <Copy className="h-4 w-4" />}
         {copied ? 'Copied!' : 'Copy MCP client config snippet'}
       </button>
     </div>

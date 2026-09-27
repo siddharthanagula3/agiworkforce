@@ -44,13 +44,17 @@ const FAILURE_CATEGORY_CONFIG: Record<
   FailureCategory,
   { icon: React.ElementType; color: string; label: string }
 > = {
-  ResourceUnavailable: { icon: Database, color: 'text-orange-400', label: 'Resource Unavailable' },
-  PermissionDenied: { icon: Shield, color: 'text-red-400', label: 'Permission Denied' },
-  InvalidInput: { icon: AlertCircle, color: 'text-yellow-400', label: 'Invalid Input' },
+  ResourceUnavailable: {
+    icon: Database,
+    color: 'text-warning-text',
+    label: 'Resource Unavailable',
+  },
+  PermissionDenied: { icon: Shield, color: 'text-danger-text', label: 'Permission Denied' },
+  InvalidInput: { icon: AlertCircle, color: 'text-warning-text', label: 'Invalid Input' },
   NetworkError: { icon: Network, color: 'text-blue-400', label: 'Network Error' },
   Timeout: { icon: Clock, color: 'text-purple-400', label: 'Timeout' },
   DependencyFailed: { icon: Code, color: 'text-pink-400', label: 'Dependency Failed' },
-  ToolError: { icon: Wrench, color: 'text-amber-400', label: 'Tool Error' },
+  ToolError: { icon: Wrench, color: 'text-warning-text', label: 'Tool Error' },
   StateError: { icon: RefreshCw, color: 'text-cyan-400', label: 'State Error' },
   Unknown: { icon: AlertTriangle, color: 'text-gray-400', label: 'Unknown' },
 };
@@ -59,14 +63,38 @@ const CORRECTION_TYPE_CONFIG: Record<
   CorrectionType,
   { icon: React.ElementType; color: string; label: string }
 > = {
-  RetryWithBackoff: { icon: RefreshCw, color: 'text-blue-400', label: 'Retry with Backoff' },
-  ModifyParameters: { icon: Wrench, color: 'text-purple-400', label: 'Modify Parameters' },
-  UseDifferentTool: { icon: Zap, color: 'text-amber-400', label: 'Use Different Tool' },
-  SkipStep: { icon: ChevronDown, color: 'text-gray-400', label: 'Skip Step' },
-  AddPrerequisite: { icon: Target, color: 'text-green-400', label: 'Add Prerequisite' },
-  SplitStep: { icon: Code, color: 'text-cyan-400', label: 'Split Step' },
-  RequestHumanInput: { icon: AlertCircle, color: 'text-orange-400', label: 'Request Human Input' },
-  AdjustResourceLimits: { icon: TrendingUp, color: 'text-pink-400', label: 'Adjust Resources' },
+  RetryWithBackoff: {
+    icon: RefreshCw,
+    color: 'text-blue-700 dark:text-blue-300',
+    label: 'Retry with Backoff',
+  },
+  ModifyParameters: {
+    icon: Wrench,
+    color: 'text-purple-700 dark:text-purple-300',
+    label: 'Modify Parameters',
+  },
+  UseDifferentTool: {
+    icon: Zap,
+    color: 'text-amber-700 dark:text-amber-300',
+    label: 'Use Different Tool',
+  },
+  SkipStep: { icon: ChevronDown, color: 'text-gray-700 dark:text-gray-300', label: 'Skip Step' },
+  AddPrerequisite: {
+    icon: Target,
+    color: 'text-green-700 dark:text-green-300',
+    label: 'Add Prerequisite',
+  },
+  SplitStep: { icon: Code, color: 'text-cyan-700 dark:text-cyan-300', label: 'Split Step' },
+  RequestHumanInput: {
+    icon: AlertCircle,
+    color: 'text-orange-700 dark:text-orange-300',
+    label: 'Request Human Input',
+  },
+  AdjustResourceLimits: {
+    icon: TrendingUp,
+    color: 'text-pink-700 dark:text-pink-300',
+    label: 'Adjust Resources',
+  },
 };
 
 function FailedStepCard({ step }: { step: FailedStep }) {
@@ -75,9 +103,9 @@ function FailedStepCard({ step }: { step: FailedStep }) {
   const Icon = config.icon;
 
   return (
-    <div className="bg-surface-base rounded-lg p-3 border border-red-500/20">
+    <div className="bg-surface-base rounded-lg p-3 border border-danger-fill/20">
       <div className="flex items-start gap-3">
-        <div className={`p-1.5 rounded-lg bg-red-500/10 ${config.color}`}>
+        <div className={`p-1.5 rounded-lg bg-danger-fill/10 ${config.color}`}>
           <Icon className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
@@ -86,7 +114,9 @@ function FailedStepCard({ step }: { step: FailedStep }) {
             <Badge
               variant="secondary"
               className={
-                step.recoverable ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                step.recoverable
+                  ? 'bg-success-fill/10 text-success-text'
+                  : 'bg-danger-fill/10 text-danger-text'
               }
             >
               {step.recoverable ? 'Recoverable' : 'Non-recoverable'}
@@ -95,7 +125,7 @@ function FailedStepCard({ step }: { step: FailedStep }) {
           <Badge variant="secondary" className="text-xs mb-2">
             {config.label}
           </Badge>
-          <p className="text-xs text-red-400/80 line-clamp-2">{step.error}</p>
+          <p className="text-xs text-danger-text line-clamp-2">{step.error}</p>
 
           {step.suggestedFix && (
             <button
@@ -140,10 +170,10 @@ function CorrectionCard({ correction }: { correction: Correction }) {
               <span
                 className={`font-medium ${
                   correction.confidence > 0.8
-                    ? 'text-green-400'
+                    ? 'text-success-text'
                     : correction.confidence > 0.5
-                      ? 'text-yellow-400'
-                      : 'text-red-400'
+                      ? 'text-warning-text'
+                      : 'text-danger-text'
                 }`}
               >
                 {(correction.confidence * 100).toFixed(0)}%
@@ -189,7 +219,7 @@ function SubGoalCard({ subGoal }: { subGoal: SubGoal }) {
               <ul className="mt-1 space-y-1">
                 {subGoal.successCriteria.map((criteria, idx) => (
                   <li key={idx} className="text-xs text-foreground flex items-start gap-1">
-                    <CheckCircle className="w-3 h-3 text-green-400 mt-0.5 shrink-0" />
+                    <CheckCircle className="w-3 h-3 text-success-text mt-0.5 shrink-0" />
                     {criteria}
                   </li>
                 ))}
@@ -256,8 +286,10 @@ export function ReflectionInsightCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${goalAchievable ? 'bg-blue-500/10' : 'bg-red-500/10'}`}>
-            <Brain className={`w-5 h-5 ${goalAchievable ? 'text-blue-400' : 'text-red-400'}`} />
+          <div
+            className={`p-2 rounded-lg ${goalAchievable ? 'bg-blue-500/10' : 'bg-danger-fill/10'}`}
+          >
+            <Brain className={`w-5 h-5 ${goalAchievable ? 'text-blue-400' : 'text-danger-text'}`} />
           </div>
           <div>
             <h3 className="font-semibold text-foreground flex items-center gap-2">
@@ -265,7 +297,9 @@ export function ReflectionInsightCard({
               <Badge
                 variant="secondary"
                 className={
-                  goalAchievable ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                  goalAchievable
+                    ? 'bg-success-fill/10 text-success-text'
+                    : 'bg-danger-fill/10 text-danger-text'
                 }
               >
                 {goalAchievable ? 'Achievable' : 'Blocked'}
@@ -301,10 +335,10 @@ export function ReflectionInsightCard({
           <div
             className={`text-lg font-bold ${
               assessment.successRate > 0.8
-                ? 'text-green-400'
+                ? 'text-success-text'
                 : assessment.successRate > 0.5
-                  ? 'text-yellow-400'
-                  : 'text-red-400'
+                  ? 'text-warning-text'
+                  : 'text-danger-text'
             }`}
           >
             {(assessment.successRate * 100).toFixed(0)}%
@@ -325,10 +359,10 @@ export function ReflectionInsightCard({
 
       {/* New Strategy */}
       {newStrategy && (
-        <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+        <div className="mb-4 p-3 rounded-lg bg-warning-fill/10 border border-warning-fill/20">
           <div className="flex items-center gap-2 mb-2">
-            <Lightbulb className="w-4 h-4 text-amber-400" />
-            <span className="font-medium text-amber-400 text-sm">Strategy Update</span>
+            <Lightbulb className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+            <span className="font-medium text-warning-text text-sm">Strategy Update</span>
           </div>
           <p className="text-sm text-foreground">{newStrategy}</p>
         </div>
@@ -343,7 +377,7 @@ export function ReflectionInsightCard({
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >
             <div className="flex items-center gap-2">
-              <XCircle className="w-4 h-4 text-red-400" />
+              <XCircle className="w-4 h-4 text-danger-text" />
               <span className="font-medium text-foreground text-sm">
                 Failed Steps ({assessment.failedSteps.length})
               </span>
@@ -456,7 +490,7 @@ export function ReflectionInsightCard({
             className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-surface-base transition"
           >
             <div className="flex items-center gap-2">
-              <Lightbulb className="w-4 h-4 text-green-400" />
+              <Lightbulb className="w-4 h-4 text-green-700 dark:text-green-400" />
               <span className="font-medium text-foreground text-sm">
                 Learnings ({learnings.length})
               </span>
@@ -474,7 +508,7 @@ export function ReflectionInsightCard({
                   key={idx}
                   className="text-sm text-muted-foreground flex items-start gap-2 p-2 bg-surface-base rounded-lg"
                 >
-                  <CheckCircle className="w-4 h-4 text-green-400 mt-0.5 shrink-0" />
+                  <CheckCircle className="w-4 h-4 text-success-text mt-0.5 shrink-0" />
                   {learning}
                 </li>
               ))}
@@ -493,13 +527,13 @@ export function ReflectionInsightCard({
             </>
           ) : (
             <>
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              <span className="text-sm text-green-400">Goal achieved or terminated</span>
+              <CheckCircle className="w-4 h-4 text-success-text" />
+              <span className="text-sm text-success-text">Goal achieved or terminated</span>
             </>
           )}
         </div>
         {assessment.bottlenecks.length > 0 && (
-          <div className="flex items-center gap-1 text-xs text-orange-400">
+          <div className="flex items-center gap-1 text-xs text-warning-text">
             <AlertTriangle className="w-3 h-3" />
             {assessment.bottlenecks.length} bottleneck(s)
           </div>

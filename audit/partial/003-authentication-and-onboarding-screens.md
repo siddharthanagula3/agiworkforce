@@ -107,30 +107,17 @@ Code: `apps/web/features/auth/identityAuthAdapter.tsx:267-269`, `apps/desktop/el
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 
-## S3.13: Multifactor authentication setup.
-
-- Done when: A user can enroll an authenticator (QR + setup key, confirm code, backup codes) and from then on sign-in asks for that second factor.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Make the authenticator enrolled in Settings a sign-in factor: it is stored in user_two_factor and checked only for step-up actions, while sign-in asks only for identity-provider MFA that no screen can enroll, so "Two-factor authentication is on" does not protect sign-in. | handler |
-| desktop | partial | Same as web (hosted page): the Settings authenticator guards step-up only, never sign-in. | handler |
-
-Code: `apps/web/features/settings/components/Settings/TwoFactorEnrollment.tsx:272-276`, `apps/web/app/api/settings/2fa/setup/route.ts:40-70`, `apps/web/features/auth/identityAuthAdapter.tsx:375-386`, `apps/web/lib/mfa-policy-gate.ts:50-54`
-
 ## S3.14: Multifactor challenge.
 
 - Done when: At sign-in an account with MFA is challenged for its second factor (with alternatives such as backup codes) before a session is issued.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Challenge the factor users actually enroll: sign-in asks only for identity-provider MFA (TOTP/SMS/backup code), which no product screen enrolls, and the authenticator from Settings is asked only in the step-up dialog for sensitive actions. | handler |
-| desktop | partial | Same as web (hosted page): the Settings authenticator is never asked at sign-in. | handler |
-| mobile | partial | Mobile sign-in (Clerk AuthView) can only challenge identity-provider MFA; the authenticator users enroll on web is never asked on mobile. | handler |
+| mobile | partial | Web and desktop now challenge the factor enrolled in Settings. On mobile, Clerk's sign-in view challenges it once the owner turns on Authenticator application and Backup codes in the Clerk Dashboard; not verified against a live instance. | handler |
 
-Code: `apps/web/features/auth/AuthFlow.tsx:232-247`, `apps/web/features/auth/identityAuthAdapter.tsx:375-386`, `apps/web/features/auth/StepUpDialog.tsx:40-50`, `apps/mobile/app/(auth)/login.tsx:207-209`
+Code: `apps/mobile/app/(auth)/login.tsx:207-209`, `apps/mobile/src/features/settings/account-security/service.ts:70-80`
 
 ## S3.16: Account-recovery flow.
 

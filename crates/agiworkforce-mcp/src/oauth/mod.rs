@@ -1,10 +1,7 @@
-//! OAuth 2.0 for MCP HTTP transports.
-//!
-//! [`flow`] implements the discovery + grant machinery (RFC 9728 / 8414 / 7591
-//! / 6749 / 7636); [`pkce`] holds the S256 primitives. The token *record* and
-//! *store* live in [`crate::hooks`] because persistence is host-owned.
-
 pub(crate) mod flow;
 mod pkce;
 
-pub use flow::{parse_insufficient_scope, parse_resource_metadata_url};
+pub use flow::{
+    CLIENT_METADATA_DOCUMENT_PATH, client_metadata_document_url, parse_insufficient_scope,
+    parse_resource_metadata_url,
+};

@@ -43,17 +43,17 @@ function getColors(urgency: 'critical' | 'warning' | 'info') {
   switch (urgency) {
     case 'critical':
       return {
-        bg: 'bg-red-950/40',
-        border: 'border-red-500/50',
-        icon: 'text-red-400',
-        text: 'text-red-200',
+        bg: 'bg-danger-fill/10',
+        border: 'border-danger-fill/50',
+        icon: 'text-danger-text',
+        text: 'text-danger-text',
       };
     case 'warning':
       return {
-        bg: 'bg-yellow-950/40',
-        border: 'border-yellow-500/50',
-        icon: 'text-yellow-400',
-        text: 'text-yellow-200',
+        bg: 'bg-warning-fill/10',
+        border: 'border-warning-fill/50',
+        icon: 'text-warning-text',
+        text: 'text-warning-text',
       };
     default:
       return {

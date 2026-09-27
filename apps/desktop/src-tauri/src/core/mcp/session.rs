@@ -1,20 +1,18 @@
+use super::logs::append_server_log;
 use super::protocol::{
-    ClientCapabilities, Implementation, InitializeParams, InitializeResult, McpToolDefinition,
-    ResourceDefinition, ResourceReadParams, ResourceReadResult, ResourcesListParams,
-    ResourcesListResult, ToolCallParams, ToolCallResult, ToolsListResult,
+    Implementation, InitializeResult, McpToolDefinition, ResourceDefinition, ResourceReadParams,
+    ResourceReadResult, ResourcesListParams, ResourcesListResult, ToolCallParams, ToolCallResult,
+    ToolsListResult,
 };
 use super::transport::{McpTransport, Transport};
 use crate::core::mcp::{McpError, McpResult, McpServerConfig};
+use agiworkforce_mcp::McpNotification;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::oneshot;
-
-/// Default timeout for session initialization (10 seconds).
-const INITIALIZATION_TIMEOUT_SECS: u64 = 10;
+use tokio::sync::{mpsc, oneshot};
 
 /// Default timeout for elicitation requests (60 seconds).
 ///
@@ -71,53 +69,17 @@ pub struct McpSession {
 
     transport: Arc<Transport>,
 
-    /// Server info, protected by RwLock for thread-safe access.
-    server_info: Arc<RwLock<Option<Implementation>>>,
+    negotiated: InitializeResult,
 
-    /// Server capabilities, protected by RwLock for thread-safe access.
-    capabilities: Arc<RwLock<Option<super::protocol::ServerCapabilities>>>,
-    /// Server-authored usage guidance from `initialize`, stored ALREADY
-    /// sanitised and capped, see `McpSession::instructions`.
-    instructions: Arc<RwLock<Option<String>>>,
-    /// Protocol revision the server selected. Recorded so later code can branch
-    /// on the negotiated level rather than assume one.
-    negotiated_version: Arc<RwLock<Option<String>>>,
+    instructions: Option<String>,
 
     tools: Arc<RwLock<Vec<McpToolDefinition>>>,
 
-    /// Guard to ensure initialize() is only called once.
-    initialized: AtomicBool,
-
-    /// Pending elicitation requests keyed by elicitation ID.
-    ///
-    /// Each entry holds a one-shot sender that delivers the user's
-    /// [`ElicitationResponse`] to the task waiting in [`McpSession::request_elicitation`].
     pending_elicitations: Arc<parking_lot::Mutex<HashMap<String, PendingElicitation>>>,
 }
 
-/// Protocol revisions this client actually implements, preferred first.
-///
-/// Deliberately does NOT list 2026-07-28: that revision moves to a stateless
-/// core with per-request capability negotiation and a `server/discover`
-/// response, and this session still speaks the stateful `initialize` handshake.
-/// Advertising a revision we do not implement would make servers select it and
-/// then talk past us.
-pub(crate) const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-11-25"];
-
-/// Cap for server-authored `instructions`.
-///
-/// Deliberately larger than the 1024-byte tool-description cap, instructions
-/// are meant to carry real usage guidance, but bounded all the same. Without a
-/// limit a server can flood the model's context and crowd out the user's own
-/// message, which needs no injection markers to do damage.
 const MCP_INSTRUCTIONS_MAX_LEN: usize = 4096;
 
-/// Strip, cap and de-inject server-authored instructions.
-///
-/// Mirrors the tool-description guard: control characters removed, truncated on
-/// a char boundary (a byte slice would panic mid-codepoint on CJK or emoji),
-/// injection markers replaced, and the result wrapped in provenance delimiters
-/// so the model can tell server text from ours.
 fn sanitize_server_instructions(raw: &str, server_name: &str) -> String {
     let stripped: String = raw
         .chars()
@@ -149,212 +111,115 @@ fn sanitize_server_instructions(raw: &str, server_name: &str) -> String {
     )
 }
 
+fn negotiated_snapshot(negotiated: &agiworkforce_mcp::NegotiatedServer) -> InitializeResult {
+    InitializeResult {
+        protocol_version: negotiated.protocol_version.clone(),
+        capabilities: serde_json::from_value(negotiated.capabilities.clone()).unwrap_or_default(),
+        server_info: negotiated
+            .server_info
+            .as_ref()
+            .map(|info| Implementation {
+                name: info.name.clone(),
+                version: info.version.clone(),
+            })
+            .unwrap_or_else(|| Implementation {
+                name: String::new(),
+                version: String::new(),
+            }),
+        instructions: negotiated.instructions.clone(),
+    }
+}
+
+fn watch_notifications(
+    name: String,
+    transport: Weak<Transport>,
+    tools: Arc<RwLock<Vec<McpToolDefinition>>>,
+    mut notifications: mpsc::Receiver<McpNotification>,
+) {
+    tokio::spawn(async move {
+        while let Some(notification) = notifications.recv().await {
+            append_server_log(&name, format!("[notification] {}", notification.method));
+            if notification.method != "notifications/tools/list_changed" {
+                continue;
+            }
+            let Some(transport) = transport.upgrade() else {
+                break;
+            };
+            let listed = transport
+                .send_request("tools/list".to_string(), None)
+                .await
+                .and_then(|response| {
+                    serde_json::from_value::<ToolsListResult>(response.result)
+                        .map_err(McpError::from)
+                });
+            match listed {
+                Ok(listed) => *tools.write() = listed.tools,
+                Err(error) => tracing::warn!(
+                    "[MCP Session] Could not refresh tools for '{}' after a list change: {}",
+                    name,
+                    error
+                ),
+            }
+        }
+    });
+}
+
 impl McpSession {
-    /// Connect to an MCP server using the appropriate transport
-    ///
-    /// Automatically selects the transport based on configuration:
-    /// - STDIO: For local process-based servers (default)
-    /// - HTTP/SSE: For remote servers accessed via HTTP
-    pub async fn connect(name: String, config: McpServerConfig) -> McpResult<Self> {
+    pub async fn connect(
+        name: String,
+        config: McpServerConfig,
+        interactive: bool,
+    ) -> McpResult<Self> {
         tracing::info!("[MCP Session] Connecting to server '{}'", name);
 
-        let transport = Transport::from_config(name.clone(), &config).await?;
+        let transport = Transport::from_config(name.clone(), &config, interactive).await?;
+        let negotiated = negotiated_snapshot(transport.negotiated());
+        let instructions = negotiated
+            .instructions
+            .as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(|text| sanitize_server_instructions(text, &name));
 
-        // For HTTP/SSE transport, optionally start the SSE listener
-        if let Transport::HttpSse(ref http_transport) = transport {
-            // Start SSE listener for server-initiated messages
-            // This is optional - some servers may not support SSE
-            if let Err(e) = http_transport.start_sse_listener(None).await {
-                tracing::warn!(
-                    "[MCP Session] Failed to start SSE listener for '{}': {}. \
-                     Server notifications will not be received.",
-                    name,
-                    e
-                );
-            }
-        }
-
-        let session = Self {
-            name,
-            transport: Arc::new(transport),
-            server_info: Arc::new(RwLock::new(None)),
-            capabilities: Arc::new(RwLock::new(None)),
-            instructions: Arc::new(RwLock::new(None)),
-            negotiated_version: Arc::new(RwLock::new(None)),
-            tools: Arc::new(RwLock::new(Vec::new())),
-            initialized: AtomicBool::new(false),
-            pending_elicitations: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-        };
-
-        Ok(session)
-    }
-
-    /// Connect to an MCP server with explicit transport type.
-    ///
-    /// Use this when you want to explicitly specify the transport type
-    /// rather than relying on configuration.
-    pub async fn connect_with_transport(name: String, transport: Transport) -> McpResult<Self> {
         tracing::info!(
-            "[MCP Session] Connecting to server '{}' with explicit transport",
-            name
+            "[MCP Session] Server '{}' speaks MCP {} ({} {})",
+            name,
+            negotiated.protocol_version,
+            negotiated.server_info.name,
+            negotiated.server_info.version
         );
 
-        // For HTTP/SSE transport, start the SSE listener
-        if let Transport::HttpSse(ref http_transport) = transport {
-            if let Err(e) = http_transport.start_sse_listener(None).await {
-                tracing::warn!(
-                    "[MCP Session] Failed to start SSE listener for '{}': {}",
-                    name,
-                    e
-                );
-            }
+        let transport = Arc::new(transport);
+        let tools = Arc::new(RwLock::new(Vec::new()));
+        if let Some(notifications) = transport.take_notifications() {
+            watch_notifications(
+                name.clone(),
+                Arc::downgrade(&transport),
+                Arc::clone(&tools),
+                notifications,
+            );
         }
 
-        let session = Self {
+        Ok(Self {
             name,
-            transport: Arc::new(transport),
-            server_info: Arc::new(RwLock::new(None)),
-            capabilities: Arc::new(RwLock::new(None)),
-            instructions: Arc::new(RwLock::new(None)),
-            negotiated_version: Arc::new(RwLock::new(None)),
-            tools: Arc::new(RwLock::new(Vec::new())),
-            initialized: AtomicBool::new(false),
+            transport,
+            negotiated,
+            instructions,
+            tools,
             pending_elicitations: Arc::new(parking_lot::Mutex::new(HashMap::new())),
-        };
-
-        Ok(session)
+        })
     }
 
-    /// Protocol revision the server selected during `initialize`.
-    pub fn negotiated_protocol_version(&self) -> Option<String> {
-        self.negotiated_version.read().clone()
+    pub fn negotiated_protocol_version(&self) -> &str {
+        &self.negotiated.protocol_version
     }
 
-    /// Server-authored usage guidance, already sanitised and capped.
-    ///
-    /// There is deliberately no raw accessor: the only copy kept in memory is
-    /// the safe one, so a future caller cannot reach the unfiltered string.
     pub fn instructions(&self) -> Option<String> {
-        self.instructions.read().clone()
+        self.instructions.clone()
     }
 
-    pub async fn initialize(&self) -> McpResult<InitializeResult> {
-        // Guard to ensure initialize is only called once
-        if self
-            .initialized
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_err()
-        {
-            return Err(McpError::InvalidConfig(
-                "Session already initialized".to_string(),
-            ));
-        }
-
-        tracing::info!("[MCP Session] Initializing session for '{}'", self.name);
-
-        let params = InitializeParams {
-            protocol_version: SUPPORTED_PROTOCOL_VERSIONS[0].to_string(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "AGI Workforce".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-            },
-        };
-
-        // Wrap initialization in a timeout
-        let init_future = async {
-            let response = self
-                .transport
-                .send_request(
-                    "initialize".to_string(),
-                    Some(serde_json::to_value(params)?),
-                )
-                .await?;
-
-            let result: InitializeResult = serde_json::from_value(response.result)?;
-            Ok::<InitializeResult, McpError>(result)
-        };
-
-        let result = match tokio::time::timeout(
-            Duration::from_secs(INITIALIZATION_TIMEOUT_SECS),
-            init_future,
-        )
-        .await
-        {
-            Ok(Ok(result)) => result,
-            Ok(Err(e)) => {
-                // Reset initialized flag on failure
-                self.initialized.store(false, Ordering::SeqCst);
-                return Err(e);
-            }
-            Err(_) => {
-                // Reset initialized flag on timeout
-                self.initialized.store(false, Ordering::SeqCst);
-                return Err(McpError::InitializationTimeout(format!(
-                    "Session '{}' initialization timed out after {} seconds",
-                    self.name, INITIALIZATION_TIMEOUT_SECS
-                )));
-            }
-        };
-
-        // The server answers with the revision it will actually speak, which
-        // need not be the one we asked for. This was ignored entirely, so a
-        // server selecting a revision we do not implement was met with
-        // 2025-11-25 semantics and the mismatch surfaced later as malformed
-        // payloads rather than a clear failure here.
-        if !SUPPORTED_PROTOCOL_VERSIONS.contains(&result.protocol_version.as_str()) {
-            self.initialized.store(false, Ordering::SeqCst);
-            return Err(McpError::UnsupportedProtocolVersion(format!(
-                "Server '{}' selected MCP protocol revision '{}', which this client does not \
-                 implement (supported: {}).",
-                self.name,
-                result.protocol_version,
-                SUPPORTED_PROTOCOL_VERSIONS.join(", ")
-            )));
-        }
-        {
-            let mut negotiated = self.negotiated_version.write();
-            *negotiated = Some(result.protocol_version.clone());
-        }
-
-        // Update server info and capabilities with RwLock protection
-        {
-            let mut server_info = self.server_info.write();
-            *server_info = Some(result.server_info.clone());
-        }
-        {
-            let mut capabilities = self.capabilities.write();
-            *capabilities = Some(result.capabilities.clone());
-        }
-        {
-            // Sanitise ONCE, at the boundary, so no consumer can forget. This
-            // string is written by a third-party server and is destined for the
-            // model's context, which makes it the same class of input as a tool
-            // description, and the same injection vector.
-            let mut instructions = self.instructions.write();
-            *instructions = result
-                .instructions
-                .as_deref()
-                .map(str::trim)
-                .filter(|text| !text.is_empty())
-                .map(|text| sanitize_server_instructions(text, &self.name));
-        }
-
-        tracing::info!(
-            "[MCP Session] Initialized server '{}' ({})",
-            result.server_info.name,
-            result.server_info.version
-        );
-
-        // Send notification and log any errors (don't fail the initialization)
-        self.transport
-            .send_notification("notifications/initialized".to_string(), None);
-        tracing::debug!(
-            "[MCP Session] Sent initialized notification for '{}'",
-            self.name
-        );
-
-        Ok(result)
+    pub fn negotiated(&self) -> &InitializeResult {
+        &self.negotiated
     }
 
     pub async fn list_tools(&self) -> McpResult<Vec<McpToolDefinition>> {
@@ -459,17 +324,12 @@ impl McpSession {
         Ok(result)
     }
 
-    pub fn get_server_info(&self) -> Option<Implementation> {
-        self.server_info.read().clone()
+    pub fn get_server_info(&self) -> Implementation {
+        self.negotiated.server_info.clone()
     }
 
-    pub fn get_capabilities(&self) -> Option<super::protocol::ServerCapabilities> {
-        self.capabilities.read().clone()
-    }
-
-    /// Check if the session has been initialized
-    pub fn is_initialized(&self) -> bool {
-        self.initialized.load(Ordering::SeqCst)
+    pub fn get_capabilities(&self) -> super::protocol::ServerCapabilities {
+        self.negotiated.capabilities.clone()
     }
 
     pub fn get_cached_tools(&self) -> Vec<McpToolDefinition> {
@@ -615,25 +475,26 @@ impl McpSession {
 
 #[cfg(test)]
 mod tests {
-    /// We must not advertise a revision we do not implement: a server would
-    /// select it and then speak past us.
+    /// Sessions negotiate through the shared engine, which prefers the
+    /// stateless revision and keeps 2025-11-25 as the fallback for servers
+    /// without server/discover.
     #[test]
-    fn test_supported_versions_exclude_the_stateless_revision() {
-        assert!(
-            !super::SUPPORTED_PROTOCOL_VERSIONS.contains(&"2026-07-28"),
-            "2026-07-28 moves to a stateless core with server/discover; this session \
-             still speaks the stateful initialize handshake"
+    fn test_supported_versions_prefer_the_stateless_revision() {
+        let supported = agiworkforce_mcp::protocol::supported_versions();
+        assert_eq!(supported[0], "2026-07-28");
+        assert_eq!(
+            agiworkforce_mcp::protocol::LEGACY_PROTOCOL_VERSIONS[0],
+            "2025-11-25"
         );
-        assert_eq!(super::SUPPORTED_PROTOCOL_VERSIONS[0], "2025-11-25");
     }
 
     /// The server answers with the revision it will actually speak, which need
     /// not be the one we asked for.
     #[test]
     fn test_unsupported_server_revision_is_rejected() {
-        let unsupported = "2026-07-28";
+        let unsupported = "1900-01-01";
         assert!(
-            !super::SUPPORTED_PROTOCOL_VERSIONS.contains(&unsupported),
+            !agiworkforce_mcp::protocol::supported_versions().contains(&unsupported),
             "precondition: the revision under test must be one we do not implement"
         );
 
@@ -651,9 +512,10 @@ mod tests {
     /// A matching revision must be accepted and recorded, not merely tolerated.
     #[test]
     fn test_supported_server_revision_is_accepted() {
-        for version in super::SUPPORTED_PROTOCOL_VERSIONS {
+        let supported = agiworkforce_mcp::protocol::supported_versions();
+        for version in agiworkforce_mcp::protocol::LEGACY_PROTOCOL_VERSIONS {
             assert!(
-                super::SUPPORTED_PROTOCOL_VERSIONS.contains(version),
+                supported.contains(version),
                 "every advertised revision must pass the same gate the server response hits"
             );
         }
@@ -730,32 +592,6 @@ mod tests {
 
     use super::super::transport::TransportConfig;
     use super::*;
-
-    #[test]
-    fn test_client_capabilities() {
-        let caps = ClientCapabilities::default();
-        let json = serde_json::to_string(&caps).unwrap();
-        assert!(json.contains("{}") || json.contains("null"));
-    }
-
-    #[test]
-    fn test_initialize_params_protocol_version() {
-        let params = InitializeParams {
-            protocol_version: "2025-11-25".to_string(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "Test".to_string(),
-                version: "1.0.0".to_string(),
-            },
-        };
-        let json = serde_json::to_string(&params).unwrap();
-        assert!(json.contains("protocolVersion"));
-        assert!(json.contains("clientInfo"));
-        assert!(
-            json.contains("2025-11-25"),
-            "Protocol version must match spec 2025-11-25"
-        );
-    }
 
     #[test]
     fn test_transport_config_default() {

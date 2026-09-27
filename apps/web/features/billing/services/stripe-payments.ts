@@ -10,6 +10,7 @@ import {
   apiErrorCode as extractErrorCode,
   apiErrorMessage as extractErrorMessage,
 } from '../lib/api-error';
+import { rememberPendingCheckout } from '../lib/pending-checkout';
 
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
@@ -214,9 +215,10 @@ async function upgradeToPlan(data: {
     );
   }
 
-  const { url } = await response.json();
+  const { url, sessionId } = (await response.json()) as { url?: string; sessionId?: unknown };
 
   if (url) {
+    if (typeof sessionId === 'string') rememberPendingCheckout(sessionId, data.plan);
     window.location.href = url;
   } else {
     throw new Error('No checkout URL received from server');

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-05
+Last updated: 2026-09-27
 
 What a deployment must hold before each connector in the directory can be
 connected from the browser, with the exact environment variable names. Values
@@ -19,7 +19,7 @@ connector is connectable.
 | `connectable` mode | What the browser does                                                                                                           | What the deployment needs                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `connect`, open    | `POST /api/connectors` lists the server's tools and saves a custom connector row                                                | Nothing                                                                      |
-| `connect`, OAuth   | `POST /api/connectors` answers 409 with `oauthStartPath`; the start route runs discovery and dynamic client registration        | `CONNECTOR_OAUTH_REDIRECT_BASE_URL`, `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` |
+| `connect`, OAuth   | `POST /api/connectors` answers 409 with `oauthStartPath`; the start route runs discovery and the authorization steps below      | `CONNECTOR_OAUTH_REDIRECT_BASE_URL`, `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY` |
 | `api-key-form`     | `GET /api/connectors/<id>/credentials` says which header the key travels in; `POST` tests the MCP tools list call before saving | `CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY`                                      |
 | `needs-setup`      | Nothing; the entry names the missing variables                                                                                  | See the checklist below                                                      |
 | `desktop-and-cli`  | Nothing on the web                                                                                                              | Not applicable                                                               |
@@ -43,21 +43,62 @@ stay valid for every model provider.
 `google-calendar` reads `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`. A
 descriptor whose pair is missing is treated as absent, never advertised.
 
-Two URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL` and must be registered
-verbatim at every vendor console:
+Four URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
 
 - Redirect URI: `<origin>/api/connectors/oauth/callback`
   (`CONNECTOR_OAUTH_CALLBACK_PATH` in `packages/contracts/cloud-contracts`).
-- Client metadata document, used by servers that accept a client id by URL:
-  `<origin>/.well-known/oauth-client-metadata`. This one needs HTTPS, so a
-  localhost build registers dynamically instead.
+  Register it verbatim at every vendor console.
+- Web client metadata document, the hosted app's client id at servers that
+  accept one by URL: `<origin>/.well-known/oauth-client-metadata`. It lists only
+  the redirect URI above and declares `application_type` `web`.
+- Native client metadata documents, one per app so each consent screen names
+  it: `<origin>/.well-known/oauth-client-metadata/cli` ("AGI Workforce CLI")
+  and `<origin>/.well-known/oauth-client-metadata/desktop` ("AGI Workforce
+  Desktop"). Each lists the loopback redirects `http://127.0.0.1/callback` and
+  `http://localhost/callback`, which a server must accept on any port, and
+  declares `application_type` `native`. Keeping loopback redirects out of the
+  web document means no local process can present itself as the hosted app.
+
+These documents need HTTPS, so a localhost build registers dynamically instead.
 
 The GitHub App uses its own callback: `<origin>/api/github/oauth/callback`.
 
+## How a connection is authorized
+
+This follows the MCP 2026-07-28 authorization specification:
+
+1. A pre-registered app (a descriptor below with its client pair) is used when
+   one exists for the connector.
+2. Otherwise the server's protected resource metadata names its authorization
+   server. When that server advertises `client_id_metadata_document_supported`,
+   the web client metadata document is the client id.
+3. Otherwise the deployment registers dynamically, sending `application_type`
+   `web` (`native` for a localhost build). Registrations are stored per issuer in
+   `mcp_oauth_clients`, never reused with another authorization server, and made
+   again when a server moves to a different one.
+4. PKCE with `S256` is always used. A discovered server whose authorization
+   server metadata omits `S256` from `code_challenge_methods_supported`, or
+   publishes no metadata at all, is refused; so is a pre-registered app whose
+   server publishes metadata without it.
+5. The `resource` parameter names the MCP server in the authorization, token and
+   refresh requests.
+6. The callback compares any `iss` it receives with the issuer recorded when the
+   flow started, and rejects the response, error responses included, when they
+   differ or when the server promises `iss` and omits it.
+7. A token refresh is single-flight per grant across instances: the refreshing
+   caller holds a row lock on the grant, and every other caller waits for it and
+   uses the rotated token instead of presenting the refresh token again.
+
 Descriptor fields, validated by `apps/web/lib/connectors/oauth-registry.ts`:
-`connectorId`, `displayName`, `authorizationUrl`, `tokenUrl`, `revocationUrl`,
-`mcpUrl`, `transport`, `scopes`, `usePkce`, `tokenAuthMethod`,
-`authorizationParams`, `enabled`. Scopes above the ceiling in
+`connectorId`, `displayName`, `issuer`, `authorizationUrl`, `tokenUrl`,
+`revocationUrl`, `mcpUrl`, `transport`, `scopes`, `tokenAuthMethod`,
+`authorizationParams`, `enabled`. `issuer` names the authorization server the
+app was registered with: when the server's protected resource metadata no longer
+lists it the connector is refused rather than sending the pair to a different
+server, and the callback checks `iss` against it. Without `issuer` the issuer is
+taken from the server's metadata when that metadata's token endpoint is
+`tokenUrl`. `authorizationParams` may not override `resource` or any other
+parameter the broker sets. Scopes above the ceiling in
 `apps/web/lib/connectors/oauth-scope-allowlist.ts` are dropped at load time and
 `pnpm check:connector-scopes` guards the ceiling itself.
 

@@ -275,7 +275,7 @@ function SkillDetails({ skill }: { skill: MarketplaceSkill }) {
             {skill.requiresBins.map((bin) => (
               <span
                 key={bin}
-                className="rounded-md bg-amber-50 px-2 py-0.5 font-mono text-amber-700 dark:bg-amber-900/20 dark:text-amber-300"
+                className="rounded-md bg-warning-fill/10 px-2 py-0.5 font-mono text-warning-text"
               >
                 {bin}
               </span>

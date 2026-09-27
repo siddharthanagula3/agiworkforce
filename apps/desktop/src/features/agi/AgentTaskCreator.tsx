@@ -17,12 +17,7 @@ import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 type ExecutionMode = 'auto' | 'sequential' | 'parallel' | 'swarm';
 type TaskAutomationState =
-  | 'checking'
-  | 'ready'
-  | 'blocked'
-  | 'restart-required'
-  | 'error'
-  | 'unsupported';
+  'checking' | 'ready' | 'blocked' | 'restart-required' | 'error' | 'unsupported';
 
 /**
  * Whether this build can run a task at all, asked before the screen claims it
@@ -333,7 +328,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
       {accessibilityState !== 'ready' && (
         <div
           role="status"
-          className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100"
+          className="rounded-lg border border-warning-fill/30 bg-warning-fill/10 p-3 text-sm text-warning-text"
         >
           <p className="font-medium">
             {accessibilityState === 'checking'
@@ -346,7 +341,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
                     ? 'Restart AGI to finish enabling Tasks'
                     : 'Enable Accessibility to launch Tasks'}
           </p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+          <p className="mt-1 text-xs leading-relaxed text-warning-text">
             {accessibilityState === 'unsupported'
               ? 'Tasks control approved apps through a local automation service that this build cannot reach, so a Task launched here would fail. Chat, voice and everything else on this screen are unaffected.'
               : accessibilityState === 'restart-required'
@@ -359,7 +354,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
                 type="button"
                 onClick={() => void requestAccessibility()}
                 disabled={requestingAccessibility}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-black disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-warning-fill px-3 py-1.5 text-xs font-semibold text-warning-on-fill disabled:opacity-60"
               >
                 {requestingAccessibility ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -373,7 +368,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
               <button
                 type="button"
                 onClick={() => void refreshAccessibility()}
-                className="rounded-lg border border-amber-200/20 px-3 py-1.5 text-xs font-medium hover:bg-amber-200/10"
+                className="rounded-lg border border-warning-fill/20 px-3 py-1.5 text-xs font-medium hover:bg-warning-fill/10"
               >
                 Refresh status
               </button>
@@ -382,7 +377,7 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
               <button
                 type="button"
                 onClick={() => void relaunchApp()}
-                className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-black"
+                className="rounded-lg bg-warning-fill px-3 py-1.5 text-xs font-semibold text-warning-on-fill"
               >
                 Restart AGI
               </button>
@@ -395,10 +390,10 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
         <div
           role="status"
           data-testid="agent-task-model-gate"
-          className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-100"
+          className="rounded-lg border border-warning-fill/30 bg-warning-fill/10 p-3 text-sm text-warning-text"
         >
           <p className="font-medium">This model is available for chat, not Tasks</p>
-          <p className="mt-1 text-xs leading-relaxed text-amber-100/70">
+          <p className="mt-1 text-xs leading-relaxed text-warning-text">
             {modelEligibility.reason}
           </p>
         </div>

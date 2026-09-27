@@ -269,9 +269,7 @@ export function DocumentWorkspace({ className }: DocumentWorkspaceProps) {
                                 {result.line && <span>Line {result.line}</span>}
                               </div>
                               <p className="text-sm">
-                                <span className="bg-yellow-200 dark:bg-yellow-800">
-                                  {result.match_text}
-                                </span>
+                                <span className="bg-warning-fill/10">{result.match_text}</span>
                               </p>
                               <p className="mt-1 text-xs text-muted-foreground">{result.context}</p>
                             </CardContent>

@@ -3,10 +3,12 @@ import {
   type IdentityClaims,
   type IdentityCookie,
   type IdentityCspOrigins,
+  type IdentityEmailAddress,
   type IdentityMembership,
   type IdentityMiddlewareSupport,
   type IdentityProvider,
   type IdentityRequestAuth,
+  type IdentitySecondFactorRegistration,
   type IdentitySession,
   type IdentitySessionPage,
   type IdentitySessionMiddleware,
@@ -47,13 +49,22 @@ export interface FakeIdentityCalls {
   revokedSessions: string[];
   verifiedTokens: string[];
   authorizedParties: string[][];
+  secondFactorRegistrations: Array<{
+    userId: string;
+    registration: IdentitySecondFactorRegistration;
+  }>;
+  removedSecondFactors: string[];
+  passwordsSet: string[];
+  removedEmailAddresses: string[];
 }
 
 function buildUser(input: FakeIdentityUserInput): IdentityUser {
   return {
     primaryEmail: null,
     primaryEmailVerification: 'unknown',
+    primaryEmailAddressId: null,
     emails: [],
+    emailAddresses: [],
     firstName: null,
     lastName: null,
     fullName: null,
@@ -63,7 +74,10 @@ function buildUser(input: FakeIdentityUserInput): IdentityUser {
     privateMetadata: {},
     banned: false,
     locked: false,
+    passwordEnabled: false,
     twoFactorEnabled: false,
+    totpEnabled: false,
+    backupCodesEnabled: false,
     createdAt: null,
     lastSignInAt: null,
     enterpriseAccounts: [],
@@ -94,6 +108,10 @@ export class FakeIdentityProvider<
     revokedSessions: [],
     verifiedTokens: [],
     authorizedParties: [],
+    secondFactorRegistrations: [],
+    removedSecondFactors: [],
+    passwordsSet: [],
+    removedEmailAddresses: [],
   };
 
   private requestAuth: IdentityRequestAuth = SIGNED_OUT;
@@ -101,6 +119,8 @@ export class FakeIdentityProvider<
   private readonly sessions = new Map<string, IdentitySession>();
   private readonly memberships = new Map<string, IdentityMembership[]>();
   private readonly tokens = new Map<string, IdentityClaims>();
+  private readonly passwords = new Map<string, string>();
+  private emailAddressSequence = 0;
   private matchedRoutes: readonly string[] = [];
   private parties: readonly string[] = [FAKE_AUTHORIZED_PARTY];
 
@@ -189,6 +209,12 @@ export class FakeIdentityProvider<
     this.calls.revokedSessions.length = 0;
     this.calls.verifiedTokens.length = 0;
     this.calls.authorizedParties.length = 0;
+    this.calls.secondFactorRegistrations.length = 0;
+    this.calls.removedSecondFactors.length = 0;
+    this.calls.passwordsSet.length = 0;
+    this.calls.removedEmailAddresses.length = 0;
+    this.passwords.clear();
+    this.emailAddressSequence = 0;
     return this;
   }
 
@@ -249,6 +275,102 @@ export class FakeIdentityProvider<
 
   async listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]> {
     return this.memberships.get(userId) ?? [];
+  }
+
+  private updateUser(userId: string, change: Partial<IdentityUser>): void {
+    const user = this.users.get(userId);
+    if (user) this.users.set(userId, { ...user, ...change });
+  }
+
+  async registerSecondFactor(
+    userId: string,
+    registration: IdentitySecondFactorRegistration,
+  ): Promise<void> {
+    this.calls.secondFactorRegistrations.push({ userId, registration });
+    const user = this.users.get(userId);
+    const totpEnabled = Boolean(registration.totpSecret) || user?.totpEnabled === true;
+    const backupCodesEnabled =
+      (registration.backupCodes?.length ?? 0) > 0 || user?.backupCodesEnabled === true;
+    this.updateUser(userId, {
+      totpEnabled,
+      backupCodesEnabled,
+      twoFactorEnabled: totpEnabled || backupCodesEnabled,
+    });
+  }
+
+  async removeSecondFactor(userId: string): Promise<void> {
+    this.calls.removedSecondFactors.push(userId);
+    this.updateUser(userId, {
+      totpEnabled: false,
+      backupCodesEnabled: false,
+      twoFactorEnabled: false,
+    });
+  }
+
+  async verifyPassword(userId: string, password: string): Promise<boolean> {
+    return this.passwords.get(userId) === password;
+  }
+
+  async setPassword(userId: string, password: string): Promise<void> {
+    this.calls.passwordsSet.push(userId);
+    this.passwords.set(userId, password);
+    this.updateUser(userId, { passwordEnabled: true });
+  }
+
+  async addEmailAddress(userId: string, emailAddress: string): Promise<IdentityEmailAddress> {
+    this.emailAddressSequence += 1;
+    const address: IdentityEmailAddress = {
+      id: `email_${this.emailAddressSequence}`,
+      emailAddress,
+      verified: false,
+    };
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, {
+        ...user,
+        emails: [...user.emails, emailAddress],
+        emailAddresses: [...user.emailAddresses, address],
+      });
+    }
+    return address;
+  }
+
+  verifyEmailAddress(userId: string, emailAddressId: string): this {
+    const user = this.users.get(userId);
+    if (user) {
+      this.users.set(userId, {
+        ...user,
+        emailAddresses: user.emailAddresses.map((address) =>
+          address.id === emailAddressId ? { ...address, verified: true } : address,
+        ),
+      });
+    }
+    return this;
+  }
+
+  async setPrimaryEmailAddress(userId: string, emailAddressId: string): Promise<void> {
+    const user = this.users.get(userId);
+    const address = user?.emailAddresses.find((candidate) => candidate.id === emailAddressId);
+    if (!user || !address) return;
+    this.users.set(userId, {
+      ...user,
+      primaryEmail: address.emailAddress,
+      primaryEmailAddressId: address.id,
+      primaryEmailVerification: address.verified ? 'verified' : 'unverified',
+    });
+  }
+
+  async removeEmailAddress(emailAddressId: string): Promise<void> {
+    this.calls.removedEmailAddresses.push(emailAddressId);
+    for (const [userId, user] of this.users) {
+      const removed = user.emailAddresses.find((address) => address.id === emailAddressId);
+      if (!removed) continue;
+      this.users.set(userId, {
+        ...user,
+        emails: user.emails.filter((email) => email !== removed.emailAddress),
+        emailAddresses: user.emailAddresses.filter((address) => address.id !== emailAddressId),
+      });
+    }
   }
 
   readonly middleware: IdentityMiddlewareSupport<Request> = {

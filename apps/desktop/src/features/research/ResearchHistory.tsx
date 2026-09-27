@@ -23,11 +23,11 @@ import { cn } from '@/lib/utils';
 import { useResearchStore, selectHistory, type ResearchHistoryEntry } from '@/stores/researchStore';
 
 const CONFIDENCE_COLORS: Record<string, string> = {
-  very_low: 'bg-red-500/10 text-red-500',
-  low: 'bg-orange-500/10 text-orange-500',
-  medium: 'bg-yellow-500/10 text-yellow-500',
-  high: 'bg-green-500/10 text-green-500',
-  very_high: 'bg-emerald-500/10 text-emerald-500',
+  very_low: 'bg-danger-fill/10 text-danger-text',
+  low: 'bg-warning-fill/10 text-warning-text',
+  medium: 'bg-warning-fill/10 text-warning-text',
+  high: 'bg-success-fill/10 text-success-text',
+  very_high: 'bg-success-fill/10 text-success-text',
 };
 
 const MODE_LABELS: Record<string, string> = {

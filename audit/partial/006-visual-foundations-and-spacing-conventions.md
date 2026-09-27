@@ -267,15 +267,3 @@ Code: `apps/cli/src/tui/tui_app.rs:316-322`, `apps/cli/src/tui/markdown_renderer
 | chrome | partial | Hover, focus-visible and disabled states exist; no pressed (:active) state in the side panel CSS. | states |
 
 Code: `packages/ui/ui/src/primitives/Button.tsx:9-9`, `apps/web/app/globals.css:1387-1387`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:946-952`, `apps/extension/src/side_panel.ts:1056-1060`
-
-## S6.35: Brand assets and application icons.
-
-- Done when: The surface ships its brand mark and application icons at the sizes the platform needs.
-- Wave: 3
-- Already works on: web, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Only the tray template icon ships; electron-builder points buildResources at electron/build, which holds no app icon, so installers fall back to the default Electron icon. | ui |
-
-Code: `apps/desktop/electron-builder.yml:18-18`

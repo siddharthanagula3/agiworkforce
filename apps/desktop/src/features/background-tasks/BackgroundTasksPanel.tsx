@@ -19,13 +19,13 @@ function TaskStatusIcon({ status }: { status: BackgroundTaskStatus }) {
     case 'running':
       return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
     case 'queued':
-      return <Clock className="h-4 w-4 text-yellow-500" />;
+      return <Clock className="h-4 w-4 text-warning-text" />;
     case 'paused':
-      return <Pause className="h-4 w-4 text-orange-500" />;
+      return <Pause className="h-4 w-4 text-warning-text" />;
     case 'completed':
-      return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      return <CheckCircle2 className="h-4 w-4 text-success-text" />;
     case 'failed':
-      return <AlertCircle className="h-4 w-4 text-red-500" />;
+      return <AlertCircle className="h-4 w-4 text-danger-text" />;
     case 'cancelled':
       return <XCircle className="h-4 w-4 text-gray-500" />;
     default:
@@ -117,7 +117,7 @@ function TaskItem({ task, onCancel, isCancelling }: TaskItemProps) {
               size="xs"
               onClick={() => onCancel(task.id)}
               disabled={isCancelling}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-red-500"
+              className="h-6 w-6 p-0 text-gray-400 hover:text-danger-text"
               aria-label="Cancel task"
             >
               <X className="h-3.5 w-3.5" />
@@ -146,8 +146,8 @@ function TaskItem({ task, onCancel, isCancelling }: TaskItemProps) {
 
       {/* Error message for failed tasks */}
       {task.status === 'failed' && task.error && (
-        <div className="mt-2 p-2 rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-          <p className="text-xs text-red-700 dark:text-red-300 break-words">{task.error}</p>
+        <div className="mt-2 p-2 rounded bg-danger-fill/10 border border-danger-fill/30">
+          <p className="text-xs text-danger-text break-words">{task.error}</p>
         </div>
       )}
     </div>

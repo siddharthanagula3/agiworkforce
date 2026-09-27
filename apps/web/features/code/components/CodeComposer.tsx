@@ -39,10 +39,11 @@ import {
   PopoverTrigger,
   Spinner,
 } from '@agiworkforce/ui';
-import type {
-  CloudCodeNetworkAccess,
-  CloudCodeRepositoryReference,
-  CloudCodeRuntime,
+import {
+  cloudCodeRepositoryLabel,
+  type CloudCodeNetworkAccess,
+  type CloudCodeRepositoryReference,
+  type CloudCodeRuntime,
 } from '@agiworkforce/types';
 import Link from 'next/link';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
@@ -76,7 +77,6 @@ import {
   contextWindowLabel,
   environmentChipLabel,
   formatResetIn,
-  repositoryLabel,
   type CodeEnvironment,
 } from '../code-surface';
 import {
@@ -88,7 +88,7 @@ import {
 import { LocalModelChip } from './LocalModelChip';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
-import type { CloudCodeApi, CloudCodeRepository } from '../services/cloud-code-api';
+import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import styles from '../CloudCodePage.module.css';
 
 const CHIP_GLYPH_SIZE = 14;
@@ -143,7 +143,9 @@ export interface CodeLocalState {
 }
 
 export function draftRepositoryLabel(draft: CodeDraft): string {
-  return draft.repository ? draft.repository.fullName : repositoryLabel(draft.repositoryUrl);
+  return draft.repository
+    ? draft.repository.fullName
+    : cloudCodeRepositoryLabel(draft.repositoryUrl);
 }
 
 export function draftHasRepository(draft: CodeDraft): boolean {

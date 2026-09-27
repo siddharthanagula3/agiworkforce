@@ -1,7 +1,2 @@
 export { CloudCodePage, type CloudCodePageProps } from './CloudCodePage';
-export {
-  cloudCodeApi,
-  createCloudCodeApi,
-  CloudCodeApiError,
-  type CloudCodeApi,
-} from './services/cloud-code-api';
+export { cloudCodeApi, createCloudCodeApi } from './services/cloud-code-api';

@@ -978,15 +978,53 @@ pub(crate) async fn request_approval(
 ) -> Option<ApprovalDecision> {
     let hooks_config = crate::hooks::load_hooks_or_default();
     if let Some(reasons) = permission_request_hook_denial(&hooks_config, &request).await {
+        let reason = reasons.join("; ");
         eprintln!(
             "{} {}",
             crate::terminal_style::warning("Denied by PermissionRequest hook:"),
-            crate::terminal_text::sanitize_terminal_text(&reasons.join("; "))
+            crate::terminal_text::sanitize_terminal_text(&reason)
+        );
+        let (tool_name, arguments) = approval_subject(&request);
+        crate::approval_audit::record_approval(
+            tool_name,
+            arguments.to_string(),
+            crate::approval_audit::ApprovalDecision::BlockedByRule,
+            None,
+            Some(&reason),
         );
         return Some(ApprovalDecision::Deny);
     }
     let callback = approval_callback?;
-    Some(callback(request).await)
+    let (tool_name, arguments) = approval_subject(&request);
+    let decision = callback(request).await;
+    let (recorded, reason) = match decision {
+        ApprovalDecision::AllowOnce => (crate::approval_audit::ApprovalDecision::Approved, None),
+        ApprovalDecision::AllowSession => (
+            crate::approval_audit::ApprovalDecision::Approved,
+            Some("allowed for this session"),
+        ),
+        ApprovalDecision::AlwaysAllow => (
+            crate::approval_audit::ApprovalDecision::Approved,
+            Some("always allowed"),
+        ),
+        ApprovalDecision::Deny => (crate::approval_audit::ApprovalDecision::Denied, None),
+        ApprovalDecision::Cancel => (
+            crate::approval_audit::ApprovalDecision::Denied,
+            Some("cancelled"),
+        ),
+        ApprovalDecision::Timeout => (
+            crate::approval_audit::ApprovalDecision::Denied,
+            Some("timed out"),
+        ),
+    };
+    crate::approval_audit::record_approval(
+        tool_name,
+        arguments.to_string(),
+        recorded,
+        None,
+        reason,
+    );
+    Some(decision)
 }
 
 fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_json::Value) {
@@ -1058,10 +1096,7 @@ fn approval_request_tool(kind: &ApprovalRequestKind) -> (&'static str, serde_jso
     }
 }
 
-pub(crate) async fn permission_request_hook_denial(
-    hooks_config: &crate::hooks::HooksConfig,
-    request: &ApprovalRequest,
-) -> Option<Vec<String>> {
+fn approval_subject(request: &ApprovalRequest) -> (String, serde_json::Value) {
     let (fallback_name, tool_args) = approval_request_tool(&request.kind);
     let tool_name = match &request.kind {
         ApprovalRequestKind::WorkspacePolicy { tool_name, .. } => tool_name.clone(),
@@ -1071,6 +1106,14 @@ pub(crate) async fn permission_request_hook_denial(
         ApprovalRequestKind::Git { tool_name, .. } => tool_name.clone(),
         _ => fallback_name.to_string(),
     };
+    (tool_name, tool_args)
+}
+
+pub(crate) async fn permission_request_hook_denial(
+    hooks_config: &crate::hooks::HooksConfig,
+    request: &ApprovalRequest,
+) -> Option<Vec<String>> {
+    let (tool_name, tool_args) = approval_subject(request);
     let results = crate::hooks::run_hooks(
         hooks_config,
         crate::hooks::HookEvent::PermissionRequest,

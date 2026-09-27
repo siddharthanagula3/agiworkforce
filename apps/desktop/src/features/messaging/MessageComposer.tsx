@@ -74,7 +74,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({ connections, o
 
   if (connections.length === 0) {
     return (
-      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded text-yellow-700">
+      <div className="p-4 bg-warning-fill/10 border border-warning-fill/30 rounded text-warning-text">
         Please connect to a messaging platform first
       </div>
     );
@@ -85,13 +85,13 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({ connections, o
       <h2 className="text-xl font-semibold mb-4">Send Message</h2>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+        <div className="mb-4 p-3 bg-danger-fill/10 border border-danger-fill/30 rounded text-danger-text text-sm">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+        <div className="mb-4 p-3 bg-success-fill/10 border border-success-fill/30 rounded text-success-text text-sm">
           {success}
         </div>
       )}

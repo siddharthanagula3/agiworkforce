@@ -52,12 +52,19 @@ async function handlePull(request: NextRequest, url: URL) {
   try {
     const memories = await db.query<MemoryDelta>(
       `
-        select id, content, category, source, pinned,
-               not (${activeMemoryPredicate()}) as is_deleted,
-               created_at, updated_at, server_version
-        from user_memories
-        where user_id = $1 and server_version > $2 and ${workspaceMemoryPredicate(3)}
-        order by server_version asc
+        select m.id, m.content, m.category, m.source, m.pinned,
+               not (${activeMemoryPredicate('m.')}) as is_deleted,
+               m.created_at, m.updated_at, m.server_version,
+               origin.id::text as source_conversation_id,
+               origin.title as source_conversation_title
+        from user_memories m
+        left join web_conversations origin
+          on origin.id::text = to_jsonb(m)->>'source_conversation_id'
+         and origin.user_id = m.user_id
+         and origin.deleted_at is null
+         and coalesce(origin.is_temporary, false) = false
+        where m.user_id = $1 and m.server_version > $2 and ${workspaceMemoryPredicate(3, 'm.')}
+        order by m.server_version asc
         limit ${MAX_MEMORIES_PULL}
       `,
       [userId, since, organizationId ?? null],

@@ -10,6 +10,7 @@ import { LanguageSelector } from '@/features/settings/components/LanguageSelecto
 import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
+import { useStyleStore } from '@/features/chat/stores/style-store';
 import { useModelStore } from '@shared/stores/model-store';
 import { useThinkingStore, type EffortLevel } from '@shared/stores/thinking-store';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
@@ -84,6 +85,16 @@ const PREFERRED_FORMATTINGS = [
 
 type PreferredFormatting = (typeof PREFERRED_FORMATTINGS)[number]['value'];
 
+const PREFERRED_LENGTHS = [
+  { value: 'default', label: 'Default' },
+  { value: 'shorter', label: 'Shorter' },
+  { value: 'longer', label: 'Longer' },
+] as const;
+
+type PreferredLength = (typeof PREFERRED_LENGTHS)[number]['value'];
+
+const MAX_ABOUT_YOU_CHARS = 1500;
+
 // Separate from the display language on purpose: that picker says in its own
 // help text that conversations are unaffected, and someone reading the
 // interface in one language often writes in another.
@@ -117,6 +128,7 @@ interface PersonalizationSettings {
   style: ResponseStyle;
   technicalLevel: TechnicalLevel;
   preferredFormatting: PreferredFormatting;
+  preferredLength: PreferredLength;
   responseLanguage: string;
   warmth: number;
   enthusiasm: number;
@@ -128,6 +140,7 @@ const DEFAULT_PERSONALIZATION: PersonalizationSettings = {
   style: 'default',
   technicalLevel: 'unspecified',
   preferredFormatting: 'unspecified',
+  preferredLength: 'default',
   responseLanguage: RESPONSE_LANGUAGE_AUTO,
   warmth: 50,
   enthusiasm: 50,
@@ -154,6 +167,7 @@ const AVATAR_ACCEPT = IMAGE_ATTACHMENT_MIME_TYPES.join(',');
 interface GeneralSettings {
   preferredName: string;
   workDescription: WorkDescription;
+  aboutYou: string;
   instructions: string;
   instructionsEnabled: boolean;
 }
@@ -179,6 +193,7 @@ export function GeneralSection() {
   const [displayName, setDisplayName] = useState('');
   const [preferredName, setPreferredName] = useState('');
   const [workDescription, setWorkDescription] = useState<WorkDescription>('');
+  const [aboutYou, setAboutYou] = useState('');
   const [instructions, setInstructions] = useState<string>('');
   const [instructionsEnabled, setInstructionsEnabled] = useState(true);
   const [personalization, setPersonalization] =
@@ -242,6 +257,7 @@ export function GeneralSection() {
           (serverProfile?.work_description as WorkDescription | null) ??
           '',
       );
+      setAboutYou(typeof stored.aboutYou === 'string' ? stored.aboutYou : '');
       setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
       setInstructionsEnabled(stored.instructionsEnabled !== false);
 
@@ -257,6 +273,7 @@ export function GeneralSection() {
           PREFERRED_FORMATTINGS,
           'unspecified',
         ),
+        preferredLength: storedChoice(storedStyle.preferredLength, PREFERRED_LENGTHS, 'default'),
         responseLanguage:
           typeof storedStyle.responseLanguage === 'string' && storedStyle.responseLanguage
             ? storedStyle.responseLanguage
@@ -285,6 +302,7 @@ export function GeneralSection() {
   const latestFormValuesRef = useRef({
     preferredName,
     workDescription,
+    aboutYou,
     instructions,
     instructionsEnabled,
     personalization,
@@ -292,6 +310,7 @@ export function GeneralSection() {
   latestFormValuesRef.current = {
     preferredName,
     workDescription,
+    aboutYou,
     instructions,
     instructionsEnabled,
     personalization,
@@ -317,6 +336,7 @@ export function GeneralSection() {
               {
                 preferredName: values.preferredName.trim(),
                 workDescription: values.workDescription,
+                aboutYou: values.aboutYou.trim(),
                 instructions: values.instructions,
                 instructionsEnabled: values.instructionsEnabled,
               },
@@ -364,6 +384,7 @@ export function GeneralSection() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [
+    aboutYou,
     flushPendingSave,
     instructions,
     instructionsEnabled,
@@ -437,6 +458,13 @@ export function GeneralSection() {
     } finally {
       setAvatarBusy(false);
     }
+  }
+
+  function handleResetStyle() {
+    markDirty();
+    setPersonalization(DEFAULT_PERSONALIZATION);
+    useStyleStore.getState().resetToDefault();
+    toast.success('Response style is back to the defaults.');
   }
 
   async function handleSave() {
@@ -599,6 +627,36 @@ export function GeneralSection() {
             </select>
           </FieldRow>
 
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="general-about-you" className="text-[13px] font-medium text-foreground">
+              More about you
+            </label>
+            <p
+              id="general-about-you-hint"
+              className="text-xs leading-relaxed text-muted-foreground"
+            >
+              Interests, values or background AGI should keep in mind when it answers.
+            </p>
+            <textarea
+              id="general-about-you"
+              aria-describedby="general-about-you-hint"
+              value={aboutYou}
+              onChange={(e) => {
+                markDirty();
+                setAboutYou(e.target.value.slice(0, MAX_ABOUT_YOU_CHARS));
+              }}
+              maxLength={MAX_ABOUT_YOU_CHARS}
+              rows={3}
+              disabled={!profilePreferencesReady || saving}
+              placeholder="e.g. I run a small bakery and I am learning to code in the evenings"
+              className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
+              style={{ fontFamily: 'inherit' }}
+            />
+            <span className="text-right text-caption text-muted-foreground">
+              {aboutYou.length} / {MAX_ABOUT_YOU_CHARS}
+            </span>
+          </div>
+
           {/*
             Response style. Mobile has shipped these for a while; web had
             nothing, and until 2026-08-21 neither surface's values reached the
@@ -620,6 +678,28 @@ export function GeneralSection() {
               className={SELECT_CLASS}
             >
               {RESPONSE_STYLES.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+
+          <FieldRow label="Response length" htmlFor="general-preferred-length">
+            <select
+              id="general-preferred-length"
+              value={personalization.preferredLength}
+              onChange={(e) => {
+                markDirty();
+                setPersonalization((current) => ({
+                  ...current,
+                  preferredLength: e.target.value as PreferredLength,
+                }));
+              }}
+              disabled={!profilePreferencesReady || saving}
+              className={SELECT_CLASS}
+            >
+              {PREFERRED_LENGTHS.map((entry) => (
                 <option key={entry.value} value={entry.value}>
                   {entry.label}
                 </option>
@@ -718,6 +798,21 @@ export function GeneralSection() {
             </FieldRow>
           ))}
 
+          <div className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={handleResetStyle}
+              disabled={!profilePreferencesReady || saving}
+              className="self-start rounded-md border border-border px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reset response style
+            </button>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Puts style, length, technical level, formatting, language, tone and the composer style
+              back to their defaults. Your name, background and instructions stay.
+            </p>
+          </div>
+
           {/* Instructions for AGI, full-width textarea (matches reference) */}
           <div className="flex flex-col gap-1.5 pt-1">
             <div className="flex items-center justify-between gap-3">
@@ -783,7 +878,7 @@ export function GeneralSection() {
               type="button"
               onClick={handleSave}
               disabled={!profilePreferencesReady || displayName.trim().length === 0 || saving}
-              className="rounded-md bg-amber-700 px-4 py-2 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
+              className="rounded-md bg-warning-fill px-4 py-2 text-[13px] font-semibold text-warning-on-fill transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
             >
               {saving ? 'Saving...' : 'Save profile'}
             </button>
@@ -829,7 +924,7 @@ export function GeneralSection() {
                     key={opt.value}
                     type="button"
                     onClick={() => setNextTheme(opt.value)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-amber-700 bg-amber-700 text-white' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
+                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-warning-fill bg-warning-fill text-warning-on-fill' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
                     title={opt.label}
                     aria-label={`${opt.label} theme`}
                     aria-pressed={isActive}

@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-09-21
+updated: 2026-09-27
 scope: public
 ---
 
@@ -29,9 +29,30 @@ authenticator code or one of your backup codes.
 
 ## Password
 
-The same page changes your password. A password that fails the common-password
-check is refused with "That password is too common." A forgotten password is
-reset from the sign-in screen with **Forgot password?**.
+The same page changes your password. Changing it requires your current password,
+and a code from your authenticator app as well when two-factor authentication is
+on. An account that signs in without a password can add one after confirming it
+is you. Every other device signed in to the account is signed out when the
+password changes. A password that fails the common-password check is refused
+with "That password is too common." A forgotten password is reset from the
+sign-in screen with **Forgot password?**.
+
+## Email address
+
+Settings, Account changes the email address on the account. The new address gets
+a code to prove you own it, then you confirm it is you and it becomes the
+address on the account. The previous address is removed unless a sign-in method
+still uses it. Password resets and security notices go to the new address.
+
+## Confirming it is you
+
+Deleting the account, logging out of all devices, creating an API key, turning
+two-factor authentication on or off, replacing backup codes and changing the
+email address each requires you to confirm it is you, even when you are already
+signed in. With two-factor authentication on, you confirm with your
+authenticator app or a backup code; without it, you confirm with your password,
+a passkey or a code sent to your email. A confirmation stays valid for up to 5
+minutes, so a second change right after the first does not ask again.
 
 ## If you cannot sign in
 

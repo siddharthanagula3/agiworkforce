@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 41,
-  "chunkCount": 225,
+  "chunkCount": 227,
   "documents": [
     {
       "id": "account-security",
@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-21",
+      "updated": "2026-09-27",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -47,32 +47,46 @@
           "ordinal": 2,
           "heading": "Password",
           "headingPath": "Passkeys, two-factor and active sessions › Password",
-          "text": "The same page changes your password. A password that fails the common-password\ncheck is refused with \"That password is too common.\" A forgotten password is\nreset from the sign-in screen with **Forgot password?**."
+          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A password that fails the common-password check is refused\nwith \"That password is too common.\" A forgotten password is reset from the\nsign-in screen with **Forgot password?**."
         },
         {
           "id": "account-security#3",
           "ordinal": 3,
+          "heading": "Email address",
+          "headingPath": "Passkeys, two-factor and active sessions › Email address",
+          "text": "Settings, Account changes the email address on the account. The new address gets\na code to prove you own it, then you confirm it is you and it becomes the\naddress on the account. The previous address is removed unless a sign-in method\nstill uses it. Password resets and security notices go to the new address."
+        },
+        {
+          "id": "account-security#4",
+          "ordinal": 4,
+          "heading": "Confirming it is you",
+          "headingPath": "Passkeys, two-factor and active sessions › Confirming it is you",
+          "text": "Deleting the account, logging out of all devices, creating an API key, turning\ntwo-factor authentication on or off, replacing backup codes and changing the\nemail address each requires you to confirm it is you, even when you are already\nsigned in. With two-factor authentication on, you confirm with your\nauthenticator app or a backup code; without it, you confirm with your password,\na passkey or a code sent to your email. A confirmation stays valid for up to 5\nminutes, so a second change right after the first does not ask again."
+        },
+        {
+          "id": "account-security#5",
+          "ordinal": 5,
           "heading": "If you cannot sign in",
           "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
           "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen, then set the authenticator up again in Settings,\n  Security. Each backup code works once.\n- **Running low on backup codes.** Settings, Security generates a new set after\n  you confirm your second factor again, and the new set replaces the old one, so\n  codes you printed earlier stop working.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
         },
         {
-          "id": "account-security#4",
-          "ordinal": 4,
+          "id": "account-security#6",
+          "ordinal": 6,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
           "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
-          "id": "account-security#5",
-          "ordinal": 5,
+          "id": "account-security#7",
+          "ordinal": 7,
           "heading": "Your identifiers",
           "headingPath": "Passkeys, two-factor and active sessions › Your identifiers",
           "text": "Settings, Account shows your **User ID**, and an **Organization ID** when the\naccount belongs to a workspace. Support asks for these when investigating an\nissue; they identify the account, they are not secrets that grant access."
         },
         {
-          "id": "account-security#6",
-          "ordinal": 6,
+          "id": "account-security#8",
+          "ordinal": 8,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
           "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
@@ -286,7 +300,7 @@
           "ordinal": 1,
           "heading": "Upgrading",
           "headingPath": "Plans, upgrading, and cancelling › Upgrading",
-          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
+          "text": "**Upgrade plan** lists the plans available to you. Paid upgrades are opening in\nstages, so on the Free plan choosing one opens the upgrade waitlist rather than\ncheckout: join the waitlist, or enter an access code to continue to checkout.\nCheckout is refused to an account that has neither. On a plan you already pay\nfor the access step does not apply, and an upgrade shows what it will cost and\nwaits for you to confirm before anything is charged.\n\nAn upgrade takes effect straight away and starts a new billing period that day:\nyou pay the new plan's price, minus a credit for the unused time on your current\nplan, and your renewal date moves to the day you upgrade. Adding seats to a Team\nplan keeps the renewal date and charges only for the rest of the current period.\n\nLocal mode and BYOK are free and need no plan at all. Managed cloud plans differ\nin usage capacity and in which features they include: projects, custom MCP\nconnections, concurrent responses, sandboxes, connector tools and scheduled\ntasks all scale with the plan. The pricing page carries the current prices,\nregional prices and per-plan limits."
         },
         {
           "id": "billing-and-plans#2",
@@ -1083,6 +1097,7 @@
       "tags": [
         "cli",
         "install cli",
+        "install.sh",
         "agi command",
         "terminal",
         "agi login",
@@ -1092,10 +1107,9 @@
         "resume",
         "fork",
         "sandbox",
-        "homebrew",
-        "npm",
-        "cargo",
-        "checksum"
+        "update",
+        "checksum",
+        "signature"
       ],
       "platforms": [
         "cli",
@@ -1103,7 +1117,7 @@
         "macos",
         "windows"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-27",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1111,7 +1125,7 @@
           "ordinal": 0,
           "heading": "Getting the binary",
           "headingPath": "Install and set up the CLI › Getting the binary",
-          "text": "The download page carries the current release assets for the `agi` command, one\nper architecture, with checksums that carry a Sigstore signature. The CLI page\ncarries the current install route for your platform.\n\nAn npm wrapper is published as `@agiworkforce/cli`. It runs only the matching\n`@agiworkforce/cli-<platform>` package, a bundled binary, or the path you set in\n`AGI_CLI_BINARY_PATH`; it never falls back to some other `agi` that happens to\nbe on your PATH. A shell installer and a Homebrew tap are planned and not\npublished yet, so no command is listed for them.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
+          "text": "```\ncurl -fsSL https://agiworkforce.com/install.sh | bash\n```\n\nThe installer downloads the release archive for your platform, checks the\nrelease's signed checksum manifest with `openssl`, checks the archive's SHA-256\nagainst it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot\nverify, and says so when no signed release is published yet. On Windows, run\nit in Git Bash or WSL. There is no npm package or Homebrew tap.\n\n`agi update` compares your build with the newest release, and\n`agi update --install` installs that release after verifying its signature with\nthe key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`\nfor local coding sessions, and the VS Code extension offers **Install AGI CLI**\nwhen it cannot find one.\n\n`agi` is the primary command. `agiworkforce` remains available as a\nbackward-compatible alias."
         },
         {
           "id": "install-the-cli#1",

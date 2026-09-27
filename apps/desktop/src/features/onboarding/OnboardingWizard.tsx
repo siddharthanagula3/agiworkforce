@@ -187,11 +187,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             {/* Local card */}
             <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                <HardDrive className="w-5 h-5 text-amber-400" />
+                <HardDrive className="w-5 h-5 text-amber-700 dark:text-amber-300" />
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">Local Mode</p>
-                <p className="text-xs text-amber-300 font-medium">Stored on this device</p>
+                <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
+                  Stored on this device
+                </p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   Use local models such as Ollama or LM Studio. Chats, files, and settings stay on
                   your Mac unless you explicitly export or hand off.
@@ -200,7 +202,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               {ollama.checked && (
                 <div className="w-full">
                   {ollama.available ? (
-                    <div className="flex items-center gap-1.5 text-xs text-green-400">
+                    <div className="flex items-center gap-1.5 text-xs text-success-text">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Ollama running, {ollama.modelCount} model
                       {ollama.modelCount !== 1 ? 's' : ''}
@@ -215,7 +217,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 onClick={handleLocal}
                 className={cn(
                   'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                  'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20',
+                  'bg-amber-500/10 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20',
                 )}
               >
                 Start Local Mode
@@ -226,11 +228,13 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
             {/* BYOK card */}
             <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                <Key className="w-5 h-5 text-emerald-400" />
+                <Key className="w-5 h-5 text-emerald-700 dark:text-emerald-300" />
               </div>
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">BYOK</p>
-                <p className="text-xs text-emerald-300 font-medium">Your provider key</p>
+                <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+                  Your provider key
+                </p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                   Keep AGI storage local while sending selected requests directly to your OpenAI,
                   Anthropic, Google, or compatible provider account.
@@ -241,7 +245,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
                 onClick={handleByokSetup}
                 className={cn(
                   'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                  'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20',
+                  'bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 hover:bg-emerald-500/20',
                 )}
               >
                 {detected ? `Save ${detected.name} key` : 'Configure BYOK'}
@@ -326,7 +330,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               />
               {detected && (
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-xs text-green-400">
+                  <span className="flex items-center gap-1 text-xs text-success-text">
                     <CheckCircle2 className="w-3.5 h-3.5" />
                     {detected.name}
                   </span>
@@ -342,7 +346,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
               )}
             </div>
             {secretError && (
-              <p className="text-xs text-red-400 mt-1.5 text-center" role="alert">
+              <p className="text-xs text-danger-text mt-1.5 text-center" role="alert">
                 {secretError}
               </p>
             )}

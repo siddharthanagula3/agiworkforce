@@ -107,7 +107,6 @@ Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-str
 ## Package And Module Names
 
 - npm packages: `@agiworkforce/<domain>` for first-party packages.
-- platform-specific CLI npm packages: `@agiworkforce/cli-<os>-<arch>`.
 - Rust crates: `agiworkforce-<domain>` for shared crates and `agiworkforce-cli` for the CLI Cargo package.
 - TypeScript import aliases should point to packages or same-app domains, not another app's source tree.
 - Public API names should describe the domain, not implementation history. Avoid names that mention reference projects unless they are explicit compatibility adapters.

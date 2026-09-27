@@ -1,8 +1,8 @@
-/// Roundtrip smoke through the NEW desktop → `agiworkforce-mcp` engine path
-/// (Wave 5 stage d2): `McpSession::connect` (stdio engine transport) →
-/// host-driven `initialize` (protocolVersion 2025-11-25) →
-/// `notifications/initialized` → `tools/list` → `tools/call` against a real
-/// child-process MCP server scripted in python3. Skips when python3 is absent.
+/// Roundtrip smoke through the desktop → `agiworkforce-mcp` engine path on
+/// stdio against a python3 server that speaks only MCP 2026-07-28: the session
+/// negotiates through `server/discover`, every request carries the protocol
+/// metadata in `_meta`, and tools list and call round-trip. Skips when python3
+/// is absent.
 #[cfg(test)]
 mod stdio_engine_smoke {
     use crate::core::mcp::{config::McpServerConfig, session::McpSession};
@@ -23,38 +23,34 @@ def write_frame(frame):
 
 while True:
     frame = read_frame()
-    method = frame.get("method", "")
     rid = frame.get("id")
-    if method == "initialize":
-        pv = frame["params"]["protocolVersion"]
-        client_name = frame["params"]["clientInfo"]["name"]
-        write_frame({
-            "jsonrpc": "2.0", "id": rid,
-            "result": {
-                "protocolVersion": pv,
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "py-smoke:" + client_name, "version": "0.0.1"},
-            },
-        })
-    elif method == "notifications/initialized":
-        assert "id" not in frame, "notification must not carry an id"
+    if rid is None:
+        continue
+    method = frame.get("method", "")
+    meta = frame.get("params", {}).get("_meta", {})
+    assert meta.get("io.modelcontextprotocol/protocolVersion") == "2026-07-28"
+    assert "io.modelcontextprotocol/clientCapabilities" in meta
+    client_name = meta.get("io.modelcontextprotocol/clientInfo", {}).get("name", "")
+    envelope = {
+        "resultType": "complete",
+        "_meta": {"io.modelcontextprotocol/serverInfo": {"name": "py-smoke:" + client_name, "version": "0.0.1"}},
+    }
+    if method == "server/discover":
+        result = {"supportedVersions": ["2026-07-28"], "capabilities": {"tools": {}}, "ttlMs": 0, "cacheScope": "public"}
     elif method == "tools/list":
-        write_frame({
-            "jsonrpc": "2.0", "id": rid,
-            "result": {"tools": [{
-                "name": "echo",
-                "description": "Echo the input back.",
-                "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
-            }]},
-        })
+        result = {"tools": [{
+            "name": "echo",
+            "description": "Echo the input back.",
+            "inputSchema": {"type": "object", "properties": {"text": {"type": "string"}}},
+        }], "ttlMs": 0, "cacheScope": "public"}
     elif method == "tools/call":
         text = frame["params"]["arguments"].get("text", "")
-        write_frame({
-            "jsonrpc": "2.0", "id": rid,
-            "result": {"content": [{"type": "text", "text": text}], "isError": False},
-        })
-    elif method == "notifications/cancelled":
-        sys.exit(0)
+        result = {"content": [{"type": "text", "text": text}], "isError": False}
+    else:
+        write_frame({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "Method not found"}})
+        continue
+    result.update(envelope)
+    write_frame({"jsonrpc": "2.0", "id": rid, "result": result})
 "#;
 
     /// Removes the temp server script even if the test panics.
@@ -99,18 +95,14 @@ while True:
             transport: None,
         };
 
-        let session = McpSession::connect("py-smoke".to_string(), config)
+        let session = McpSession::connect("py-smoke".to_string(), config, false)
             .await
             .expect("connect via engine stdio transport");
         assert_eq!(session.transport_type(), "stdio");
 
-        // Host-driven handshake: the session sends its own initialize with
-        // protocolVersion 2025-11-25; the scripted server echoes it back and
-        // reports the clientInfo name it received, proving the handshake bytes
-        // came from McpSession (not the engine's built-in handshake).
-        let init = session.initialize().await.expect("initialize");
-        assert_eq!(init.protocol_version, "2025-11-25");
-        assert_eq!(init.server_info.name, "py-smoke:AGI Workforce");
+        let negotiated = session.negotiated();
+        assert_eq!(negotiated.protocol_version, "2026-07-28");
+        assert_eq!(negotiated.server_info.name, "py-smoke:AGI Workforce");
 
         let tools = session.list_tools().await.expect("tools/list");
         assert_eq!(tools.len(), 1);
@@ -136,13 +128,11 @@ while True:
     }
 }
 
-/// Roundtrip smoke through the NEW desktop HTTP/SSE → `agiworkforce-mcp`
-/// engine path (Wave 5 stage d2): `McpSession::connect` with
-/// `TransportConfig::Http` (legacy split-endpoint convention, POST
-/// `{url}/message`) against a real loopback MCP server scripted in python3's
-/// stdlib http.server. Host-driven initialize (2025-11-25) →
-/// `notifications/initialized` → `tools/list` → `tools/call`. Skips when
-/// python3 is absent.
+/// Roundtrip smoke through the desktop Streamable HTTP → `agiworkforce-mcp`
+/// engine path against a python3 server that predates 2026-07-28: the
+/// `server/discover` probe draws a 404 with -32601, the engine falls back to
+/// the 2025-11-25 `initialize` handshake, and tools list and call round-trip.
+/// Skips when python3 is absent.
 #[cfg(test)]
 mod http_engine_smoke {
     use crate::core::mcp::{config::McpServerConfig, session::McpSession};
@@ -159,7 +149,7 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_POST(self):
-        if self.path != "/message":
+        if self.path != "/":
             self.send_response(404)
             self.end_headers()
             return
@@ -167,6 +157,14 @@ class Handler(BaseHTTPRequestHandler):
         frame = json.loads(self.rfile.read(length))
         method = frame.get("method", "")
         rid = frame.get("id")
+        if method == "server/discover":
+            body = json.dumps({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601, "message": "Method not found"}}).encode()
+            self.send_response(404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if method.startswith("notifications/"):
             assert "id" not in frame, "notification must not carry an id"
             self.send_response(202)
@@ -259,14 +257,14 @@ server.serve_forever()
             })),
         };
 
-        let session = McpSession::connect("py-http-smoke".to_string(), config)
+        let session = McpSession::connect("py-http-smoke".to_string(), config, false)
             .await
             .expect("connect via engine http transport");
         assert_eq!(session.transport_type(), "http-sse");
 
-        let init = session.initialize().await.expect("initialize");
-        assert_eq!(init.protocol_version, "2025-11-25");
-        assert_eq!(init.server_info.name, "py-http-smoke:AGI Workforce");
+        let negotiated = session.negotiated();
+        assert_eq!(negotiated.protocol_version, "2025-11-25");
+        assert_eq!(negotiated.server_info.name, "py-http-smoke:AGI Workforce");
 
         let tools = session.list_tools().await.expect("tools/list");
         assert_eq!(tools.len(), 1);
@@ -343,22 +341,6 @@ mod unit_tests {
             }
             _ => panic!("Expected Error"),
         }
-    }
-
-    #[test]
-    fn test_initialize_params() {
-        let params = InitializeParams {
-            protocol_version: "2024-11-05".to_string(),
-            capabilities: ClientCapabilities::default(),
-            client_info: Implementation {
-                name: "Test Client".to_string(),
-                version: "1.0.0".to_string(),
-            },
-        };
-
-        let json = serde_json::to_string(&params).unwrap();
-        assert!(json.contains("protocolVersion"));
-        assert!(json.contains("clientInfo"));
     }
 
     #[test]
@@ -527,16 +509,13 @@ mod unit_tests {
             transport: None,
         };
 
-        let session = McpSession::connect("filesystem".to_string(), config)
+        let session = McpSession::connect("filesystem".to_string(), config, false)
             .await
             .unwrap();
 
-        let init_result = session.initialize().await.unwrap();
-        assert!(!init_result.server_info.name.is_empty());
-        // The negotiated version tracks whatever @modelcontextprotocol/server-filesystem
-        // npx fetches (current releases echo the client's 2025-11-25); only
-        // assert a version came back, not a pinned value.
-        assert!(!init_result.protocol_version.is_empty());
+        let negotiated = session.negotiated();
+        assert!(!negotiated.server_info.name.is_empty());
+        assert!(!negotiated.protocol_version.is_empty());
 
         let tools = session.list_tools().await.unwrap();
         assert!(!tools.is_empty());

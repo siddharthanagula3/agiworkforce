@@ -60,6 +60,7 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 vi.mock('@/lib/connectors/oauth-client', () => ({
   ConnectorOAuthTokenError: mocks.ConnectorOAuthTokenError,
   exchangeAuthorizationCode: (...a: unknown[]) => mocks.exchange(...a),
+  TOKEN_REQUEST_TIMEOUT_MS: 10_000,
 }));
 
 import { GET } from './route';

@@ -499,7 +499,7 @@ function FormContent({
   if (submitted) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 p-2 text-xs text-muted-foreground">
-        <FormInput className="h-5 w-5 text-emerald-500" />
+        <FormInput className="h-5 w-5 text-success-text" />
         <span className="font-medium text-foreground">Submitted</span>
       </div>
     );

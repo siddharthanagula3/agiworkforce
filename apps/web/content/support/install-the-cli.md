@@ -3,23 +3,29 @@ id: install-the-cli
 title: Install and set up the CLI
 path: /cli
 category: surfaces
-tags: cli, install cli, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, homebrew, npm, cargo, checksum
+tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-09-17
+updated: 2026-09-27
 scope: public
 ---
 
 ## Getting the binary
 
-The download page carries the current release assets for the `agi` command, one
-per architecture, with checksums that carry a Sigstore signature. The CLI page
-carries the current install route for your platform.
+```
+curl -fsSL https://agiworkforce.com/install.sh | bash
+```
 
-An npm wrapper is published as `@agiworkforce/cli`. It runs only the matching
-`@agiworkforce/cli-<platform>` package, a bundled binary, or the path you set in
-`AGI_CLI_BINARY_PATH`; it never falls back to some other `agi` that happens to
-be on your PATH. A shell installer and a Homebrew tap are planned and not
-published yet, so no command is listed for them.
+The installer downloads the release archive for your platform, checks the
+release's signed checksum manifest with `openssl`, checks the archive's SHA-256
+against it, and installs `agi` to `~/.agi/bin`. It refuses anything it cannot
+verify, and says so when no signed release is published yet. On Windows, run
+it in Git Bash or WSL. There is no npm package or Homebrew tap.
+
+`agi update` compares your build with the newest release, and
+`agi update --install` installs that release after verifying its signature with
+the key built into your `agi`. AGI Cloud for desktop ships its own copy of `agi`
+for local coding sessions, and the VS Code extension offers **Install AGI CLI**
+when it cannot find one.
 
 `agi` is the primary command. `agiworkforce` remains available as a
 backward-compatible alias.

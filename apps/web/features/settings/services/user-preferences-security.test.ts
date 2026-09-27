@@ -20,38 +20,18 @@ describe('settingsService 2FA security', () => {
     vi.mocked(getCsrfToken).mockResolvedValue('csrf-token');
   });
 
-  it('returns server error when /api/settings/2fa/setup returns 503', async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 503,
-      json: async () => ({ error: 'Service unavailable' }),
-    });
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.setup2FA();
-
-    expect(result.error).toBeTruthy();
-    expect(result.data).toBeUndefined();
-  });
-
-  it('propagates otpauth_url and backup_codes on success', async () => {
+  it('returns the backup codes the confirmation issued', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({
-        secret: 'JBSWY3DPEHPK3PXP',
-        otpauth_url: 'otpauth://totp/AGI%20Platform:test%40example.com?secret=JBSWY3DPEHPK3PXP',
-        backup_codes: ['ABCD-EFGH', 'IJKL-MNOP'],
-      }),
+      json: async () => ({ success: true, backup_codes: ['abcd2345', 'efgh6789'] }),
     });
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.setup2FA();
+    const result = await settingsService.verify2FA('123456');
 
     expect(result.error).toBeUndefined();
-    expect(result.data?.secret).toBe('JBSWY3DPEHPK3PXP');
-    expect(result.data?.otpauthUrl).toContain('otpauth://totp/');
-    expect(result.data?.backupCodes).toHaveLength(2);
+    expect(result.backupCodes).toEqual(['abcd2345', 'efgh6789']);
   });
 
   it('returns error when auth token is missing', async () => {
@@ -59,7 +39,7 @@ describe('settingsService 2FA security', () => {
     vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.setup2FA();
+    const result = await settingsService.verify2FA('123456');
 
     expect(result.error).toContain('not authenticated');
     expect(fetchMock).not.toHaveBeenCalled();
@@ -70,7 +50,6 @@ describe('settingsService 2FA security', () => {
 
     const { settingsService } = await import('./user-preferences');
     await settingsService.verify2FA('123456');
-    await settingsService.disable2FA('123456');
 
     for (const call of fetchMock.mock.calls) {
       expect(call[1].headers['x-csrf-token']).toBe('csrf-token');
@@ -90,7 +69,7 @@ describe('settingsService 2FA security', () => {
     const { settingsService } = await import('./user-preferences');
     const result = await settingsService.verify2FA('000000');
 
-    expect(result.success).toBe(false);
+    expect(result.backupCodes).toBeUndefined();
     expect(result.error).toBe('Authentication required');
     expect(result.status).toBe(401);
   });
@@ -106,13 +85,13 @@ describe('settingsService 2FA security', () => {
     });
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.disable2FA('123456');
+    const result = await settingsService.verify2FA('123456');
 
     expect(result.error).toBe('Invalid or missing CSRF token');
     expect(result.status).toBe(403);
   });
 
-  it('surfaces the rate-limit status from the backup-code regeneration route', async () => {
+  it('surfaces the rate-limit status from the confirmation route', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
       status: 429,
@@ -120,7 +99,7 @@ describe('settingsService 2FA security', () => {
     });
 
     const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.regenerateBackupCodes('123456');
+    const result = await settingsService.verify2FA('123456');
 
     expect(result.backupCodes).toBeUndefined();
     expect(result.status).toBe(429);

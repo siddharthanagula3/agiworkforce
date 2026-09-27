@@ -63,7 +63,7 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <AlertTriangle className="h-5 w-5 text-amber-500" />
+          <AlertTriangle className="h-5 w-5 text-warning-text" />
           <h3 className="text-lg font-semibold">Merge Conflicts</h3>
           <Badge variant="destructive">
             {fileConflicts.length} conflict{fileConflicts.length !== 1 ? 's' : ''}
@@ -80,20 +80,20 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
             return (
               <div
                 key={index}
-                className="border border-amber-500/30 rounded-lg overflow-hidden bg-amber-500/5"
+                className="border border-warning-fill/30 rounded-lg overflow-hidden bg-warning-fill/5"
               >
                 {/* Conflict Header */}
                 <div
-                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-amber-500/10 transition-colors"
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-warning-fill/10 transition-colors"
                   onClick={() => toggleConflict(index)}
                 >
                   <div className="flex items-center gap-2">
                     {isExpanded ? (
-                      <ChevronDown className="h-4 w-4 text-amber-500" />
+                      <ChevronDown className="h-4 w-4 text-warning-text" />
                     ) : (
-                      <ChevronRight className="h-4 w-4 text-amber-500" />
+                      <ChevronRight className="h-4 w-4 text-warning-text" />
                     )}
-                    <GitMerge className="h-4 w-4 text-amber-500" />
+                    <GitMerge className="h-4 w-4 text-warning-text" />
                     <span className="text-sm font-medium">Conflict {index + 1}</span>
                     <span className="text-xs text-muted-foreground">
                       Lines {conflict.startLine + 1} - {conflict.endLine + 1}
@@ -110,9 +110,9 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
 
                 {/* Conflict Content */}
                 {isExpanded && (
-                  <div className="border-t border-amber-500/30">
+                  <div className="border-t border-warning-fill/30">
                     {/* Our Changes */}
-                    <div className="p-3 border-b border-amber-500/20 bg-blue-500/5">
+                    <div className="p-3 border-b border-warning-fill/20 bg-blue-500/5">
                       <div className="flex items-center gap-2 mb-2">
                         <Users className="h-4 w-4 text-blue-500" />
                         <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
@@ -138,10 +138,10 @@ export function ConflictResolver({ filePath, className }: ConflictResolverProps)
                     </div>
 
                     {/* Their Changes */}
-                    <div className="p-3 border-b border-amber-500/20 bg-green-500/5">
+                    <div className="p-3 border-b border-warning-fill/20 bg-green-500/5">
                       <div className="flex items-center gap-2 mb-2">
                         <Code className="h-4 w-4 text-green-500" />
-                        <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                        <span className="text-sm font-medium text-green-700 dark:text-green-400">
                           Their Changes
                         </span>
                       </div>

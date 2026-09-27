@@ -69,19 +69,19 @@ function formatTimestamp(ts: number): string {
 
 function getStatusColor(status: number | null): string {
   if (status === null) return 'text-muted-foreground';
-  if (status >= 200 && status < 300) return 'text-green-400';
+  if (status >= 200 && status < 300) return 'text-success-text';
   if (status >= 300 && status < 400) return 'text-blue-400';
-  if (status >= 400 && status < 500) return 'text-amber-400';
-  if (status >= 500) return 'text-red-400';
+  if (status >= 400 && status < 500) return 'text-warning-text';
+  if (status >= 500) return 'text-danger-text';
   return 'text-muted-foreground';
 }
 
 function getConsoleLevelConfig(level: ConsoleMessage['level']) {
   switch (level) {
     case 'error':
-      return { icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' };
+      return { icon: XCircle, color: 'text-danger-text', bg: 'bg-danger-fill/10' };
     case 'warn':
-      return { icon: AlertTriangle, color: 'text-amber-400', bg: 'bg-amber-400/10' };
+      return { icon: AlertTriangle, color: 'text-warning-text', bg: 'bg-warning-fill/10' };
     case 'info':
       return { icon: Info, color: 'text-blue-400', bg: 'bg-blue-400/10' };
     case 'debug':
@@ -140,7 +140,7 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
   if (failedActions.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
-        <CheckCircle2 className="h-8 w-8 text-green-400/40" />
+        <CheckCircle2 className="h-8 w-8 text-success-text" />
         <p className="text-sm text-muted-foreground">No failed actions – all steps succeeded</p>
       </div>
     );
@@ -152,16 +152,16 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
         const isOpen = expanded === action.id;
         const fix = suggestFix(action);
         return (
-          <div key={action.id} className="rounded-lg border border-red-500/20 bg-red-500/5">
+          <div key={action.id} className="rounded-lg border border-danger-fill/20 bg-danger-fill/5">
             <button
               type="button"
               onClick={() => setExpanded(isOpen ? null : action.id)}
               className="flex w-full items-start gap-2.5 p-3 text-left"
             >
-              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-400" />
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-danger-text" />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-danger-text uppercase tracking-wider">
                     {action.type}
                   </span>
                   <span className="text-xs text-muted-foreground">
@@ -184,7 +184,7 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
             </button>
 
             {isOpen && (
-              <div className="border-t border-red-500/15 px-3 pb-3 pt-2 space-y-3">
+              <div className="border-t border-danger-fill/15 px-3 pb-3 pt-2 space-y-3">
                 {/* Expected vs actual */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded bg-white/5 p-2">
@@ -206,21 +206,21 @@ function ErrorAnalysis({ failedActions }: ErrorAnalysisProps) {
                       ) && `Perform ${action.type}`}
                     </p>
                   </div>
-                  <div className="rounded bg-red-900/20 p-2">
-                    <p className="text-[10px] font-semibold text-red-400/80 uppercase tracking-wider mb-1">
+                  <div className="rounded bg-danger-fill/10 p-2">
+                    <p className="text-[10px] font-semibold text-danger-text uppercase tracking-wider mb-1">
                       What happened
                     </p>
-                    <p className="text-xs text-red-300/90">
+                    <p className="text-xs text-danger-text">
                       {action.details.error ?? 'Action failed without an error message'}
                     </p>
                   </div>
                 </div>
 
                 {/* Suggested fix */}
-                <div className="flex items-start gap-2 rounded bg-amber-500/10 p-2">
-                  <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-400" />
+                <div className="flex items-start gap-2 rounded bg-warning-fill/10 p-2">
+                  <Lightbulb className="h-3.5 w-3.5 mt-0.5 shrink-0 text-warning-text" />
                   <div>
-                    <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-0.5">
+                    <p className="text-[10px] font-semibold text-warning-text uppercase tracking-wider mb-0.5">
                       Suggested fix
                     </p>
                     <p className="text-xs text-foreground/80">{fix}</p>
@@ -307,7 +307,7 @@ function DOMSnapshotTab({ failedActions }: DOMSnapshotTabProps) {
           {failedSelectors.map((sel, i) => (
             <code
               key={i}
-              className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] font-mono text-red-400"
+              className="rounded bg-danger-fill/10 px-1.5 py-0.5 text-[10px] font-mono text-danger-text"
             >
               {sel}
             </code>
@@ -384,7 +384,7 @@ function NetworkLogTab({ requests }: NetworkLogTabProps) {
               <span
                 className={cn(
                   'w-12 shrink-0 text-xs font-mono font-semibold',
-                  req.failed ? 'text-red-400' : getStatusColor(req.status),
+                  req.failed ? 'text-danger-text' : getStatusColor(req.status),
                 )}
               >
                 {req.failed ? 'ERR' : (req.status ?? ', ')}
@@ -430,7 +430,7 @@ function NetworkLogTab({ requests }: NetworkLogTabProps) {
                   <span className="text-foreground/80">{formatTimestamp(req.timestamp)}</span>
                 </div>
                 {req.errorMessage && (
-                  <div className="flex items-start gap-1.5 rounded bg-red-900/20 px-2 py-1.5 text-xs text-red-400">
+                  <div className="flex items-start gap-1.5 rounded bg-danger-fill/10 px-2 py-1.5 text-xs text-danger-text">
                     <XCircle className="mt-0.5 h-3 w-3 shrink-0" />
                     {req.errorMessage}
                   </div>
@@ -513,7 +513,7 @@ function TabBar({
       id: 'errors',
       label: 'Errors',
       badge: failedCount,
-      badgeColor: failedCount > 0 ? 'bg-red-500/20 text-red-400' : undefined,
+      badgeColor: failedCount > 0 ? 'bg-danger-fill/10 text-danger-text' : undefined,
     },
     {
       id: 'dom',
@@ -531,7 +531,7 @@ function TabBar({
       id: 'console',
       label: 'Console',
       badge: consoleErrorCount > 0 ? consoleErrorCount : undefined,
-      badgeColor: consoleErrorCount > 0 ? 'bg-amber-500/20 text-amber-400' : undefined,
+      badgeColor: consoleErrorCount > 0 ? 'bg-warning-fill/10 text-warning-text' : undefined,
     },
   ];
 

@@ -29,17 +29,17 @@ const DAY_MS = 86_400_000;
 const ACTIVITY_SPAN_DAYS = 30;
 
 function barColorClass(pct: number): string {
-  if (pct > 95) return 'bg-red-500';
-  if (pct >= 80) return 'bg-amber-500';
+  if (pct > 95) return 'bg-danger-fill';
+  if (pct >= 80) return 'bg-warning-fill';
   if (pct >= 50) return 'bg-blue-500';
-  return 'bg-green-500';
+  return 'bg-success-fill';
 }
 
 function textColorClass(pct: number): string {
-  if (pct > 95) return 'text-red-500';
-  if (pct >= 80) return 'text-amber-500';
+  if (pct > 95) return 'text-danger-text';
+  if (pct >= 80) return 'text-warning-text';
   if (pct >= 50) return 'text-blue-500';
-  return 'text-green-500';
+  return 'text-success-text';
 }
 
 function formatDate(ts: number): string {
@@ -245,9 +245,9 @@ function EmptyUsageState() {
 function heatClass(cost: number, max: number): string {
   if (cost <= 0) return 'bg-muted';
   const ratio = max > 0 ? cost / max : 0;
-  if (ratio > 0.66) return 'bg-green-500';
-  if (ratio > 0.33) return 'bg-green-500/70';
-  return 'bg-green-500/40';
+  if (ratio > 0.66) return 'bg-success-fill';
+  if (ratio > 0.33) return 'bg-success-fill/10';
+  return 'bg-success-fill/10';
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {

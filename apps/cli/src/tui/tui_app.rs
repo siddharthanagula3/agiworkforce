@@ -33,7 +33,6 @@ use super::{clip_cols, display_width, pad_to_cols, truncate_cols};
 // Constants
 // ---------------------------------------------------------------------------
 
-const TICK_RATE_MS: u64 = 50;
 /// Duration the mode-cycle banner is shown after Shift+Tab.
 const MODE_BANNER_TTL: Duration = Duration::from_secs(2);
 
@@ -76,6 +75,42 @@ impl InteractionMode {
             Self::BypassPermissions => Self::FullAuto,
             Self::FullAuto => Self::Chat,
         }
+    }
+
+    fn for_session(session: &crate::agent::AgentSession) -> Self {
+        if session.skips_approval() {
+            return Self::BypassPermissions;
+        }
+        match session.governed_permission_mode() {
+            crate::cli_options::PermissionMode::Plan => Self::Plan,
+            crate::cli_options::PermissionMode::AcceptEdits => Self::AcceptEdits,
+            crate::cli_options::PermissionMode::BypassPermissions => Self::BypassPermissions,
+            crate::cli_options::PermissionMode::Default
+            | crate::cli_options::PermissionMode::DontAsk => Self::Chat,
+        }
+    }
+
+    fn permission_mode(self) -> crate::cli_options::PermissionMode {
+        match self {
+            Self::Chat => crate::cli_options::PermissionMode::Default,
+            Self::Plan => crate::cli_options::PermissionMode::Plan,
+            Self::AcceptEdits => crate::cli_options::PermissionMode::AcceptEdits,
+            Self::BypassPermissions | Self::FullAuto => {
+                crate::cli_options::PermissionMode::BypassPermissions
+            }
+        }
+    }
+
+    fn allowed_under(self, pinned: Option<crate::cli_options::PermissionMode>) -> bool {
+        self.permission_mode().within(pinned) == self.permission_mode()
+    }
+
+    fn next_allowed(self, pinned: Option<crate::cli_options::PermissionMode>) -> Self {
+        let mut next = self.next();
+        while next != self && !next.allowed_under(pinned) {
+            next = next.next();
+        }
+        next
     }
 
     fn label(self) -> &'static str {
@@ -319,7 +354,7 @@ impl TuiApp {
             .as_deref()
             .and_then(super::widgets::theme_picker::ThemeChoice::from_arg)
             .unwrap_or(super::widgets::theme_picker::ThemeChoice::Dark);
-        crate::tui::terminal_palette::set_active_theme(theme_choice as u8);
+        crate::tui::terminal_palette::set_active_theme(theme_choice.applied() as u8);
 
         let model_name = session.model.clone();
         let provider_name = crate::design_system::provider_label(&session.provider);
@@ -372,6 +407,7 @@ impl TuiApp {
         } else {
             Some(crate::sandbox::SandboxType::detect())
         };
+        let mode = InteractionMode::for_session(&session);
 
         let mut command_registry =
             registry_from_builtins_skills_and_prompts(&crate::skills::discover_skills(), &[]);
@@ -426,7 +462,7 @@ impl TuiApp {
             status_notice: None,
             model_name,
             provider_name,
-            mode: InteractionMode::Chat,
+            mode,
             sandbox_type,
             agent_picker: super::widgets::agent_picker::AgentPickerState::default(),
             model_picker: super::widgets::model_picker::ModelPickerState::default(),
@@ -735,6 +771,8 @@ impl TuiApp {
                 let _ = crate::skills::save_disabled_skills(&set);
             }
             OverlayResult::Memory(settings) => {
+                self.session.memory_enabled =
+                    settings.auto_memory && crate::cli_options::memory_enabled();
                 // Persist; the memory pipeline (extract/prune/consolidate) reads it.
                 if let Ok(home) = crate::config::CliConfig::config_dir() {
                     let _ = crate::memory_pipeline::save_memory_settings(
@@ -921,7 +959,7 @@ fn run_tui_approval_modal(
             overlay.render_into(frame, chat_area);
         })?;
 
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             match event::read()? {
                 Event::Key(key) => match overlay.handle_key(crossterm_to_keyaction(key)) {
                     ViewAction::Submit(_) | ViewAction::Close => {
@@ -989,7 +1027,7 @@ fn run_idle_mcp_elicitation_modal(
             let chat_area = draw_app_frame(frame, app);
             render_overlay(frame, chat_area, &overlay, 0);
         })?;
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
                 terminal.draw(|frame| {
                     draw_app_frame(frame, app);
@@ -1014,7 +1052,7 @@ fn run_turn_mcp_elicitation_modal(
             let chat_area = draw_turn_chrome(frame, ctx);
             render_overlay(frame, chat_area, &overlay, 0);
         })?;
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             if let Some(response) = handle_mcp_elicitation_event(&mut overlay, event::read()?) {
                 terminal.draw(|frame| {
                     draw_turn_chrome(frame, ctx);
@@ -1127,6 +1165,7 @@ fn setup_terminal() -> Result<Terminal<CrosstermBackend<Stdout>>> {
     install_panic_restore_hook();
     install_signal_restore_hook();
     enable_raw_mode()?;
+    super::terminal_palette::requery_default_colors();
     let mut stdout = io::stdout();
     stdout.execute(EnterAlternateScreen)?;
     stdout.execute(EnableBracketedPaste)?;
@@ -1266,6 +1305,9 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
 /// send future holds `&mut app.session`).
 fn spinner_frame(tick: u8) -> &'static str {
     const FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+    if super::motion::reduced() {
+        return super::motion::STILL_SPINNER;
+    }
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
@@ -2298,7 +2340,9 @@ fn render_overlay(
     let visible_lines = overlay_area.height as usize;
     let max_scroll = lines.len().saturating_sub(visible_lines) as u16;
     let scroll = scroll_offset.min(max_scroll);
-    let para = Paragraph::new(lines).scroll((scroll, 0));
+    let para = Paragraph::new(lines)
+        .style(Style::default().bg(super::terminal_palette::ui_surface_elevated()))
+        .scroll((scroll, 0));
     frame.render_widget(para, overlay_area);
 }
 
@@ -3058,7 +3102,7 @@ fn handle_theme_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.theme_choice = choice;
             // Apply the theme: re-routes every `ui_*` semantic token so the whole
             // TUI recolors on the next frame.
-            crate::tui::terminal_palette::set_active_theme(choice as u8);
+            crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
             // Persist so the choice survives a restart.
             let _ = app.config.persist_theme_project(choice.slug());
             app.input.clear();
@@ -3170,8 +3214,12 @@ fn mode_is_permission_escalating(mode: InteractionMode) -> bool {
 }
 
 /// Apply a mode change to the app and session.
-fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
+fn apply_mode(app: &mut TuiApp, mode: InteractionMode) -> bool {
+    if !mode.allowed_under(app.session.pinned_permission_mode) {
+        return false;
+    }
     app.mode = mode;
+    app.session.permission_mode = mode.permission_mode();
     app.session.plan_mode = mode == InteractionMode::Plan;
     app.session.skip_permissions =
         mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
@@ -3182,6 +3230,14 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     if mode == InteractionMode::FullAuto {
         app.session.quiet = false;
     }
+    true
+}
+
+fn pinned_mode_notice(app: &TuiApp) -> String {
+    format!(
+        "Your organization's policy holds tool approval at {}, so a looser mode is not available.",
+        app.session.governed_permission_mode().name()
+    )
 }
 
 fn mode_description(mode: InteractionMode) -> &'static str {
@@ -3191,7 +3247,7 @@ fn mode_description(mode: InteractionMode) -> &'static str {
             "Plan mode, read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
-            "Safe, read-only operations run automatically; writes and commands still require approval."
+            "File edits and read-only operations run automatically; commands still require approval."
         }
         InteractionMode::BypassPermissions => {
             "Bypass, all tool prompts skipped. Use with caution!"
@@ -3317,7 +3373,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             } else {
                 InteractionMode::Plan
             };
-            apply_mode(app, new_mode);
+            if !apply_mode(app, new_mode) {
+                return SlashResult::SystemMessage(pinned_mode_notice(app));
+            }
             SlashResult::SystemMessage(format!("{}, {}", app.mode.label(), mode_description(app.mode)))
         }
 
@@ -3832,7 +3890,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match ThemeChoice::from_arg(arg) {
                     Some(choice) => {
                         app.theme_choice = choice;
-                        crate::tui::terminal_palette::set_active_theme(choice as u8);
+                        crate::tui::terminal_palette::set_active_theme(choice.applied() as u8);
                         let _ = app.config.persist_theme_project(choice.slug());
                         SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
                     }
@@ -4398,7 +4456,11 @@ pub async fn run(
                 .map(|mut g| *g = models);
         });
     }
+    super::motion::set_reduced(
+        crate::output::plain_output() || app.config.ui.reduced_motion == Some(true),
+    );
     let mut terminal = setup_terminal()?;
+    crate::tui::terminal_palette::set_active_theme(app.theme_choice.applied() as u8);
 
     let result = run_event_loop(&mut terminal, &mut app, &mut mcp_attach_join).await;
 
@@ -4514,7 +4576,7 @@ async fn run_event_loop(
             render(terminal, app)?;
         }
 
-        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+        if event::poll(super::motion::FRAME_INTERVAL)? {
             let action = match event::read()? {
                 Event::Key(key) => handle_key_event(app, key),
                 Event::Paste(text) => {
@@ -4546,51 +4608,37 @@ async fn run_event_loop(
                 }
 
                 InputAction::CycleMode => {
-                    let new_mode = app.mode.next();
-                    apply_mode(app, new_mode);
-                    // Stamp the banner so it shows for MODE_BANNER_TTL seconds.
-                    app.mode_banner_shown_at = Some(Instant::now());
-                    let mut msg = format!("{}, {}", app.mode.label(), mode_description(app.mode));
-                    if new_mode == InteractionMode::BypassPermissions {
-                        msg.push_str("\n\n  WARNING: All tool confirmations are bypassed!");
-                        msg.push_str(
-                            "\n  This means commands will execute without asking you first.",
-                        );
-                        msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
-                    }
-                    if new_mode == InteractionMode::FullAuto {
-                        msg.push_str(
-                            "\n\n  WARNING: Full-auto mode, no prompts, no confirmations.",
-                        );
-                        msg.push_str("\n  Use with extreme caution in trusted environments only.");
-                    }
-                    app.chat_messages.push(ChatMessage {
-                        role: ChatRole::System,
-                        text: msg,
-                    });
-                    let hcfg = app.session.hooks_config().clone();
-                    crate::hooks::run_hooks(
-                        &hcfg,
-                        crate::hooks::HookEvent::PlanModeChanged,
-                        &crate::hooks::HookInput {
-                            event: "PlanModeChanged".to_string(),
-                            session_id: None,
-                            model: Some(app.session.model.clone()),
-                            tool_name: None,
-                            tool_args: None,
-                            tool_output: None,
-                            message: Some(new_mode.label().to_string()),
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
-                }
-
-                InputAction::SendMessage(text) => {
-                    // Detect natural language mode switches.
-                    let mut handled_as_mode_command = false;
-                    if let Some(new_mode) = detect_mode_intent(&text) {
+                    let new_mode = app.mode.next_allowed(app.session.pinned_permission_mode);
+                    if new_mode == app.mode {
+                        app.chat_messages.push(ChatMessage {
+                            role: ChatRole::System,
+                            text: pinned_mode_notice(app),
+                        });
+                    } else {
                         apply_mode(app, new_mode);
+                        // Stamp the banner so it shows for MODE_BANNER_TTL seconds.
+                        app.mode_banner_shown_at = Some(Instant::now());
+                        let mut msg =
+                            format!("{}, {}", app.mode.label(), mode_description(app.mode));
+                        if new_mode == InteractionMode::BypassPermissions {
+                            msg.push_str("\n\n  WARNING: All tool confirmations are bypassed!");
+                            msg.push_str(
+                                "\n  This means commands will execute without asking you first.",
+                            );
+                            msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
+                        }
+                        if new_mode == InteractionMode::FullAuto {
+                            msg.push_str(
+                                "\n\n  WARNING: Full-auto mode, no prompts, no confirmations.",
+                            );
+                            msg.push_str(
+                                "\n  Use with extreme caution in trusted environments only.",
+                            );
+                        }
+                        app.chat_messages.push(ChatMessage {
+                            role: ChatRole::System,
+                            text: msg,
+                        });
                         let hcfg = app.session.hooks_config().clone();
                         crate::hooks::run_hooks(
                             &hcfg,
@@ -4607,10 +4655,44 @@ async fn run_event_loop(
                             },
                         )
                         .await;
-                        app.chat_messages.push(ChatMessage {
-                            role: ChatRole::System,
-                            text: format!("{}, {}", app.mode.label(), mode_description(app.mode)),
-                        });
+                    }
+                }
+
+                InputAction::SendMessage(text) => {
+                    // Detect natural language mode switches.
+                    let mut handled_as_mode_command = false;
+                    if let Some(new_mode) = detect_mode_intent(&text) {
+                        if apply_mode(app, new_mode) {
+                            let hcfg = app.session.hooks_config().clone();
+                            crate::hooks::run_hooks(
+                                &hcfg,
+                                crate::hooks::HookEvent::PlanModeChanged,
+                                &crate::hooks::HookInput {
+                                    event: "PlanModeChanged".to_string(),
+                                    session_id: None,
+                                    model: Some(app.session.model.clone()),
+                                    tool_name: None,
+                                    tool_args: None,
+                                    tool_output: None,
+                                    message: Some(new_mode.label().to_string()),
+                                    tool_execution: None,
+                                },
+                            )
+                            .await;
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: format!(
+                                    "{}, {}",
+                                    app.mode.label(),
+                                    mode_description(app.mode)
+                                ),
+                            });
+                        } else {
+                            app.chat_messages.push(ChatMessage {
+                                role: ChatRole::System,
+                                text: pinned_mode_notice(app),
+                            });
+                        }
                         // A pure utterance that escalates into a permission-weakening
                         // mode is a command, not a chat turn: do NOT also forward it
                         // to the model (avoids an unintended extra turn + the mode
@@ -5545,7 +5627,7 @@ mod tests {
     fn accept_edits_description_matches_safe_tool_approval_behavior() {
         assert_eq!(
             mode_description(InteractionMode::AcceptEdits),
-            "Safe, read-only operations run automatically; writes and commands still require approval."
+            "File edits and read-only operations run automatically; commands still require approval."
         );
     }
 

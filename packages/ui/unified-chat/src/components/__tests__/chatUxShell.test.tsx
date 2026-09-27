@@ -181,7 +181,7 @@ describe('BriefStatus', () => {
       isError: true,
     };
     const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toContain('text-rose-400');
+    expect(html).toContain('text-danger-text');
   });
 
   it('applies success styles when isComplete is true', () => {
@@ -191,7 +191,7 @@ describe('BriefStatus', () => {
       isError: false,
     };
     const html = renderToStaticMarkup(<BriefStatus status={status} />);
-    expect(html).toContain('text-emerald-400');
+    expect(html).toContain('text-success-text');
   });
 });
 
@@ -268,14 +268,14 @@ describe('ChatNotificationBadge', () => {
     const html = renderToStaticMarkup(
       <ChatNotificationBadge count={3} type={'alert' as BadgeNotificationType} />,
     );
-    expect(html).toContain('bg-red-500');
+    expect(html).toContain('bg-danger-fill');
   });
 
   it('uses success color class for success type', () => {
     const html = renderToStaticMarkup(
       <ChatNotificationBadge count={2} type={'success' as BadgeNotificationType} />,
     );
-    expect(html).toContain('bg-green-500');
+    expect(html).toContain('bg-success-fill');
   });
 });
 

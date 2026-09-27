@@ -341,6 +341,7 @@ describe('error detail disclosure', () => {
 
     expect(rule).toBeTruthy();
     expect(rule![0]).toContain('width: 100%');
-    expect(Number(/min-height:\s*(\d+)px/u.exec(rule![0])?.[1])).toBeGreaterThanOrEqual(28);
+    expect(rule![0]).toContain('min-height: var(--control-md)');
+    expect(Number(/--control-md:\s*(\d+)px/u.exec(css)?.[1])).toBeGreaterThanOrEqual(28);
   });
 });

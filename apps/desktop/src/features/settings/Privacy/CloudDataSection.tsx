@@ -105,13 +105,13 @@ export function CloudDataSection() {
               )}
             </Button>
             {exportSuccess ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-emerald-500">
+              <p className="mt-3 flex items-center gap-2 text-sm text-success-text">
                 <Check className="h-4 w-4" />
                 Cloud data exported successfully.
               </p>
             ) : null}
             {exportError ? (
-              <p className="mt-3 flex items-center gap-2 text-sm text-red-500">
+              <p className="mt-3 flex items-center gap-2 text-sm text-danger-text">
                 <X className="h-4 w-4" />
                 {exportError}
               </p>
@@ -120,13 +120,13 @@ export function CloudDataSection() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6">
+      <div className="rounded-lg border border-danger-fill/30 bg-danger-fill/5 p-6">
         <div className="flex items-start gap-4">
-          <div className="rounded-md bg-red-500/10 p-3">
-            <ShieldAlert className="h-5 w-5 text-red-500" />
+          <div className="rounded-md bg-danger-fill/10 p-3">
+            <ShieldAlert className="h-5 w-5 text-danger-text" />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-semibold text-red-500 dark:text-red-400">Account and deletion</h4>
+            <h4 className="font-semibold text-danger-text">Account and deletion</h4>
             <p className="mt-1 text-sm text-muted-foreground">
               Review the canonical Cloud account controls before changing or deleting hosted data.
               Desktop will not report success from a device-only deletion marker.
