@@ -92,17 +92,13 @@ Code: `apps/mobile/app/(app)/settings/memory-summary.tsx:36-60`, `apps/mobile/sr
 
 - Done when: The user can read a summary of the ongoing work or projects the assistant knows they are pursuing.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Summarise the ongoing work itself; Reflect only reports the leading topic, activity counts and how many chats spanned more than a day. | ui |
-| desktop | partial | Summarise the ongoing work itself; Reflect only reports the leading topic, activity counts and how many chats spanned more than a day. | ui |
-| mobile | partial | Summarise the ongoing work itself; the mobile Reflect screen shows the same topic and activity recap. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/ReflectSection.tsx:180-196`, `apps/web/features/settings/components/WebSettingsModal.tsx:209-209`, `apps/web/lib/services/reflect-service.ts:205-215`, `apps/web/app/api/reflect/route.ts:28-34`
 
 ## S39.10: Add Memory manually.
 
@@ -124,8 +120,8 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1902`, `apps/extensio
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Wire /api/memory/commands (explicit remember/forget with a reply) into chat; nothing calls it. 'Remember that ...' is only caught by the passive extractor, needs Generate-from-past-chats on, says nothing back, and writes through pending migration 0285. | mount |
+| web | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
+| desktop | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
 | mobile | partial | Add an explicit remember action; in the default Local mode 'remember that ...' is only caught by the passive on-device extractor, with no confirmation. | ui |
 | vscode | partial | Add a 'remember this' action from a chat or selection; only the separate 'Add a memory fact' command exists. | ui |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
@@ -232,17 +228,16 @@ Code: `apps/mobile/src/features/memory/services/consolidation.ts:146-147`, `apps
 
 - Done when: When two memories disagree, a stated rule decides which one the assistant uses, and the user can see or settle the conflict.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Migration 0285 is now applied in production (2026-09-27). Still open: A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui |
-| desktop | partial | Migration 0285 is now applied in production (2026-09-27). Still open: A ranking rule (pinned > typed > learned, newest wins) settles same-topic conflicts silently inside the server writer, which needs pending migration 0285; nothing shows the user a conflict or lets them choose. | ui |
 | mobile | partial | Migration 0285 is now applied in production (2026-09-27). Still open: On-device memory has no conflict rule (only exact duplicates are skipped); Cloud mode relies on the server writer that needs pending migration 0285, and no screen shows a conflict. | ui, handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Side-panel learning goes through the server ranking rule that needs pending migration 0285; the drawer never shows a conflict. | ui |
 
-Code: `apps/web/lib/services/managed-memory-context-service.ts:603-606`, `apps/web/lib/services/managed-memory-context-service.ts:750-757`, `apps/web/lib/services/managed-memory-context-service.ts:327-329`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`
+Code: `apps/mobile/src/features/memory/services/consolidation.ts:146-147`, `apps/web/lib/services/managed-memory-context-service.ts:603-606`, `apps/web/lib/services/managed-memory-context-service.ts:720-724`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`
 
 ## S39.21: Memory import.
 
