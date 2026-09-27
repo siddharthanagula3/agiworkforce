@@ -15,7 +15,7 @@ electronLanguages:
 
 directories:
   output: release
-  buildResources: electron/build
+  buildResources: electron/resources
 
 files:
   - dist/**
