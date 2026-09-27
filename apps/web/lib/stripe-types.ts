@@ -7,6 +7,8 @@
  */
 import type Stripe from 'stripe';
 
+export type { default as Stripe } from 'stripe';
+
 export interface StripeSubscriptionWithPeriod extends Stripe.Subscription {
   current_period_start?: number;
   current_period_end?: number;

@@ -82,6 +82,7 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     match: /api\/cron\//,
     reason: 'cron sweeps run over every workspace by design',
   },
+
   {
     match: /lib\/services\/cloud-agent-budget\.ts$/,
     reason:
