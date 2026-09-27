@@ -277,9 +277,11 @@ describe('a purchased top-up grants exactly what was paid for', () => {
     for (const amountUsd of TOP_UP_PRESET_AMOUNTS_USD) {
       const { db, grants } = ledger();
       const underpaid = session(amountUsd, `cs_underpaid_${amountUsd}`);
-      await handleCreditTopUp(db, stripeReceiving(quote(amountUsd).priceCents - 100), underpaid).catch(
-        () => undefined,
-      );
+      await handleCreditTopUp(
+        db,
+        stripeReceiving(quote(amountUsd).priceCents - 100),
+        underpaid,
+      ).catch(() => undefined);
       expect(grants).toEqual([]);
     }
   });
