@@ -8,7 +8,6 @@ import {
   extractPageTitle,
   hasStructuredPageData,
 } from '@/lib/url-fetch/url-fetch-tool';
-import { recordPerplexitySearchCost } from '@/lib/web-search/perplexity-search-cost';
 import {
   configuredWebSearchProviders,
   registerWebSearchProvider,
@@ -107,6 +106,7 @@ export type WebSearchOutcome =
       providerId: string;
       retrievedAt: string;
       queryTruncated?: boolean;
+      billableCalls: number;
     }
   | {
       ok: false;
@@ -114,7 +114,13 @@ export type WebSearchOutcome =
       error: string;
       status?: number;
       retryable?: boolean;
+      billableCalls: number;
     };
+
+export interface WebSearchSpend {
+  billableCalls: number;
+  answered: boolean;
+}
 
 export interface WebSearchOverrides {
   fetchImpl?: typeof fetch;
@@ -122,19 +128,6 @@ export interface WebSearchOverrides {
   timeoutMs?: number;
   maxResults?: number;
   signal?: AbortSignal;
-  /**
-   * Present only when the caller can attribute this call to a user and turn.
-   * When set, a successful call is billed through `recordPerplexitySearchCost`;
-   * omitting it (as today's only caller does) simply skips billing rather
-   * than throwing, so wiring identity through is additive, not required.
-   */
-  userId?: string;
-  organizationId?: string | null;
-  turnRef?: string;
-  /** The client surface the turn came from, recorded on the COGS row. */
-  surface?: string | null;
-  /** What the customer is charged for this call, when the caller's plan does not include it. */
-  customerChargeCents?: number | null;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -148,7 +141,7 @@ const SERVER_ERROR_FLOOR = 500;
 function err(
   errorCode: WebSearchErrorCode,
   error: string,
-  extra: { status?: number; retryable?: boolean } = {},
+  extra: { status?: number; retryable?: boolean; billableCalls?: number } = {},
 ): Extract<WebSearchOutcome, { ok: false }> {
   return {
     ok: false,
@@ -156,6 +149,7 @@ function err(
     error,
     ...(extra.status !== undefined ? { status: extra.status } : {}),
     ...(extra.retryable ? { retryable: true } : {}),
+    billableCalls: extra.billableCalls ?? 0,
   };
 }
 
@@ -231,7 +225,7 @@ interface PerplexitySearchResponseWire {
 function providerErr(
   errorCode: Exclude<WebSearchErrorCode, 'invalid_tool_input'>,
   error: string,
-  extra: { status?: number; retryable?: boolean } = {},
+  extra: { status?: number; retryable?: boolean; billableCalls?: number } = {},
 ): Extract<WebSearchProviderOutcome, { ok: false }> {
   return {
     ok: false,
@@ -239,6 +233,7 @@ function providerErr(
     error,
     ...(extra.status !== undefined ? { status: extra.status } : {}),
     ...(extra.retryable ? { retryable: true } : {}),
+    billableCalls: extra.billableCalls ?? 0,
   };
 }
 
@@ -332,7 +327,9 @@ async function perplexitySearch(
       parsed = (await response.json()) as PerplexitySearchResponseWire;
     } catch (parseErr) {
       const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-      return providerErr('upstream_error', `Failed to parse the search response: ${msg}`);
+      return providerErr('upstream_error', `Failed to parse the search response: ${msg}`, {
+        billableCalls: 1,
+      });
     }
 
     const rawResults = Array.isArray(parsed.results)
@@ -354,7 +351,7 @@ async function perplexitySearch(
         indexedAt: typeof r.last_updated === 'string' ? r.last_updated : null,
       });
     }
-    return { ok: true, items };
+    return { ok: true, items, billableCalls: 1 };
   } finally {
     clearTimeout(deadline);
     callerSignal?.removeEventListener('abort', cancel);
@@ -368,7 +365,6 @@ if (perplexityDescriptor) {
     isConfigured: (overrides) =>
       Boolean(overrides?.apiKey ?? process.env[perplexityDescriptor.apiKeyEnv]),
     search: perplexitySearch,
-    recordCost: recordPerplexitySearchCost,
   };
   registerWebSearchProvider(provider);
 }
@@ -408,6 +404,7 @@ export async function executeWebSearch(
   );
 
   let lastFailure: Extract<WebSearchOutcome, { ok: false }> | null = null;
+  let billableCalls = 0;
   for (const provider of providers) {
     const outcome = await provider.search({
       query,
@@ -417,25 +414,16 @@ export async function executeWebSearch(
       ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
       ...(overrides.signal ? { signal: overrides.signal } : {}),
     });
+    billableCalls += outcome.billableCalls;
 
     if (!outcome.ok) {
       lastFailure = err(outcome.errorCode, outcome.error, {
         ...(outcome.status !== undefined ? { status: outcome.status } : {}),
         ...(outcome.retryable ? { retryable: true } : {}),
+        billableCalls,
       });
       if (outcome.errorCode === 'cancelled') return lastFailure;
       continue;
-    }
-
-    if (overrides.userId && provider.recordCost) {
-      await provider.recordCost({
-        userId: overrides.userId,
-        organizationId: overrides.organizationId ?? null,
-        turnRef: overrides.turnRef ?? query,
-        calls: 1,
-        surface: overrides.surface ?? null,
-        customerChargeCents: overrides.customerChargeCents ?? null,
-      });
     }
 
     return {
@@ -450,6 +438,7 @@ export async function executeWebSearch(
         ...(item.publishedAt ? { date: item.publishedAt } : {}),
       })),
       ...(queryTruncated ? { queryTruncated: true } : {}),
+      billableCalls,
     };
   }
 

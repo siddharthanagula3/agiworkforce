@@ -447,13 +447,4 @@ export const MODEL_COST_RATES: Record<string, { input: number; output: number }>
 
 export const CHARS_PER_TOKEN = 4;
 
-export const MODEL_COST_BLENDED: Record<string, number> = Object.fromEntries(
-  Object.entries(MODEL_COST_RATES).map(([model, rates]) => [
-    model,
-    (rates.input + rates.output) / 2,
-  ]),
-);
-
-export const DEFAULT_BLENDED_RATE = 5.0;
-
 export { DEFAULT_CONTEXT_LIMIT };

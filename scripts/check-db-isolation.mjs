@@ -82,6 +82,7 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     match: /api\/cron\//,
     reason: 'cron sweeps run over every workspace by design',
   },
+
   {
     match: /lib\/services\/cloud-agent-budget\.ts$/,
     reason:
@@ -595,6 +596,36 @@ const ALLOWLIST = [
       'reached only from api/mobile/iap/verify with userId from requireCurrentUserId (session), ' +
       'never client input; the one unscoped read, findExistingReceipt, is a global receipt-' +
       'uniqueness probe whose result is checked against that same userId before use',
+  },
+  {
+    match: /lib\/services\/referral-service\.ts$/,
+    tables: ['referrals', 'referral_codes', 'profiles'],
+    functions: ['attributeReferralSignup'],
+    reason:
+      'sign-up attribution resolves a shared referral code to the account that owns it, which is ' +
+      'the feature: the visitor holds only the code, so the owner is what the lookup finds rather ' +
+      'than a filter it can apply. The row it inserts names both accounts and is keyed by the ' +
+      'signing-up account, which the unique referred_user_id index lets exist once.',
+  },
+  {
+    match: /lib\/services\/referral-service\.ts$/,
+    tables: ['referrals'],
+    functions: ['grantDueReferralRewards', 'settleDueReferral'],
+    reason:
+      'the daily referral reward sweep, reached only from api/cron/grant-referral-rewards: it ' +
+      'selects converted referrals whose hold has passed by status and date alone, then settles ' +
+      'each by the id it selected under a row lock that re-states the status it must still be ' +
+      'in. There is no request subject; the two accounts it acts for are read from the row.',
+  },
+  {
+    match: /lib\/services\/bonus-credit-service\.ts$/,
+    tables: ['bonus_credit_grants'],
+    functions: ['expireDueBonusCredits'],
+    reason:
+      'the daily bonus credit expiry sweep, reached only from api/cron/expire-bonus-credits: it ' +
+      'lists the accounts holding grants past their expiry by date alone, then reconciles each ' +
+      'account by its own id. It would otherwise pass on the user_id it groups by, which names ' +
+      'the accounts it found rather than scoping the read to one of them.',
   },
   {
     match: /lib\/server\/copyright-notices\.ts$/,

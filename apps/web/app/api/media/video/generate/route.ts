@@ -29,8 +29,10 @@ import {
   getRoutingSlotModel,
   isExecutableVideoModel,
   isModelLive,
+  BILLING_PLAN_CAPABILITY_TIERS,
   canUseBillingPlanCapability,
   calculateCatalogVideoCostCents,
+  getBillingPlanPricing,
   resolveVideoGenerationOutputSize,
   type ModelMetadata,
 } from '@agiworkforce/types';
@@ -100,12 +102,14 @@ import {
  * Proxies video generation requests to a live catalog-backed provider.
  * Video generation is async - this endpoint creates a task and returns a task_id
  * for polling via GET /api/media/video/status?task_id=xxx.
- *
- * Requires Max 15x or an Enterprise subscription.
  */
 
 export const maxDuration = 300;
 export const runtime = 'nodejs';
+
+const VIDEO_PLAN_LABELS = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(
+  BILLING_PLAN_CAPABILITY_TIERS.video_generation.map((plan) => getBillingPlanPricing(plan).label),
+);
 
 type VideoProvider = ManagedMediaVideoProvider;
 type VideoResolution = ManagedMediaVideoResolution;
@@ -802,12 +806,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     return NextResponse.json(
       {
         error: {
-          message:
-            'Video generation is available on Max 15x and Enterprise plans. Upgrade your plan and I can create that video for you.',
+          message: `Video generation is available on ${VIDEO_PLAN_LABELS} plans. Upgrade your plan and I can create that video for you.`,
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
           current_plan: userTier,
-          required_plans: ['max_15x', 'enterprise'],
+          required_plans: [...BILLING_PLAN_CAPABILITY_TIERS.video_generation],
         },
       },
       {

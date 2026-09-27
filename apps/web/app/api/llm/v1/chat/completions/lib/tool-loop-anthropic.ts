@@ -12,8 +12,10 @@ import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
 import {
   accumulateObservedProviderUsage,
   type ObservedProviderUsage,
+  type ProviderUsagePricingContext,
 } from '@/lib/services/managed-usage-accounting-service';
 import { normalizeProviderId } from '@/lib/services/llm-cost-calculator';
+import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { startProviderStream } from './adapter-factory';
 import { ADAPTER_PROVIDERS } from './adapter-providers';
 import type { ProcessedRequest } from './request-processor';
@@ -97,6 +99,7 @@ export async function buildToolLoopStream(
     provider,
     model: stepRequest.model,
     routeId,
+    dynamicFilteringWebTool: offersDynamicFilteringWebTool(stepRequest.tools),
   });
 }
 
@@ -130,7 +133,7 @@ export function chunksToOpenAiSse(
   model: string,
   wireMode: 'legacy-web' | 'openai-passthrough',
   sink?: ToolLoopStepSink,
-  pricing?: { provider: string; model: string; routeId?: string | null },
+  pricing?: ProviderUsagePricingContext & { dynamicFilteringWebTool?: boolean },
 ): ReadableStream<Uint8Array> {
   const assembler = new OpenAIWireAssembler({ model, wireMode });
   const encoder = new TextEncoder();
@@ -155,7 +158,12 @@ export function chunksToOpenAiSse(
     cacheWriteTokens: 0,
     cacheWrite1hTokens: 0,
     reasoningTokens: 0,
+    webSearchRequests: 0,
+    webFetchRequests: 0,
+    codeExecutionRequests: 0,
   };
+  const codeExecutionContainerIds = new Set<string>();
+  let startedAt = Date.now();
 
   const commitUsage = () => {
     if (usageCommitted || !sawUsage || !sink?.usage) return;
@@ -166,6 +174,9 @@ export function chunksToOpenAiSse(
         ...streamUsage,
         ...(upstreamProvider ? { upstreamProvider } : {}),
         ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
+        codeExecutionContainerIds: [...codeExecutionContainerIds],
+        elapsedMs: Date.now() - startedAt,
+        dynamicFilteringWebTool: pricing?.dynamicFilteringWebTool === true,
       },
       pricing,
     );
@@ -173,6 +184,7 @@ export function chunksToOpenAiSse(
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
+      startedAt = Date.now();
       try {
         for await (const chunk of chunks) {
           providerTrace.chunks += 1;
@@ -219,6 +231,21 @@ export function chunksToOpenAiSse(
               streamUsage.reasoningTokens,
               chunk.reasoningTokens ?? 0,
             );
+            streamUsage.webSearchRequests = Math.max(
+              streamUsage.webSearchRequests,
+              chunk.webSearchRequests ?? 0,
+            );
+            streamUsage.webFetchRequests = Math.max(
+              streamUsage.webFetchRequests,
+              chunk.webFetchRequests ?? 0,
+            );
+            streamUsage.codeExecutionRequests = Math.max(
+              streamUsage.codeExecutionRequests,
+              chunk.codeExecutionRequests ?? 0,
+            );
+            for (const containerId of chunk.codeExecutionContainerIds ?? []) {
+              codeExecutionContainerIds.add(containerId);
+            }
             const reportedCost = chunk.providerReportedCostUsd ?? chunk.costUsd;
             if (reportedCost !== undefined) {
               providerReportedCostUsd = reportedCost;

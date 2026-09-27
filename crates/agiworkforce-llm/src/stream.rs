@@ -794,6 +794,17 @@ async fn stream_openai_compat(
         return Err(error_from_response(provider_label(spec), req.model, resp).await);
     }
 
+    if let Some(warning) = resp
+        .headers()
+        .get(QUOTA_WARNING_HEADER)
+        .and_then(|value| value.to_str().ok())
+    {
+        on_event(StreamEvent::Vendor {
+            event: QUOTA_WARNING_EVENT.to_string(),
+            data: serde_json::json!({ "value": warning }),
+        });
+    }
+
     run_openai_compat_stream(
         llm_byte_stream(resp),
         req.idle_timeout,
@@ -802,6 +813,9 @@ async fn stream_openai_compat(
     )
     .await
 }
+
+const QUOTA_WARNING_HEADER: &str = "x-quota-warning";
+const QUOTA_WARNING_EVENT: &str = "quota_warning";
 
 /// Decode an OpenAI-compatible Chat Completions SSE byte stream.
 pub async fn run_openai_compat_stream<S>(

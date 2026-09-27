@@ -17,6 +17,7 @@ import {
   LIVE_SESSION_MESSAGE,
   LiveVoiceSession,
   LiveVoiceSessionError,
+  readLiveSessionError,
   type LiveSessionClosed,
   type LiveTranscriptTurn,
   type LiveVoiceToolActivity,
@@ -29,6 +30,19 @@ const MESSAGE = {
 
 const CSRF_HEADER = 'x-csrf-token';
 const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connection_lost']);
+const EXTEND_LEAD_MS = 60_000;
+const EXTEND_RETRY_MS = 10_000;
+const FIRST_EXTENSION_BLOCK = 2;
+
+interface SessionBudget {
+  session: LiveVoiceSession;
+  startedAtMs: number;
+  ceilingSeconds: number;
+  nextBlock: number;
+}
+
+type BlockExtension =
+  { ok: true; ceilingSeconds: number } | { ok: false; retry: boolean; notice: string };
 
 export type { LiveTranscriptTurn as VoiceTranscriptTurn };
 
@@ -87,6 +101,8 @@ const controller = {
   attempt: 0,
   reconnectTimer: null as number | null,
   stableTimer: null as number | null,
+  budget: null as SessionBudget | null,
+  budgetTimer: null as number | null,
 };
 
 /**
@@ -185,6 +201,91 @@ function settleSession(session: LiveVoiceSession, closed: LiveSessionClosed): Pr
     .catch(() => undefined);
 }
 
+function clearSessionBudget(): void {
+  if (controller.budgetTimer !== null) window.clearTimeout(controller.budgetTimer);
+  controller.budgetTimer = null;
+  controller.budget = null;
+}
+
+function msUntilCeiling(budget: SessionBudget): number {
+  return budget.startedAtMs + budget.ceilingSeconds * 1_000 - Date.now();
+}
+
+function scheduleBudget(budget: SessionBudget, delayMs: number, run: () => void): void {
+  if (controller.budgetTimer !== null) window.clearTimeout(controller.budgetTimer);
+  controller.budgetTimer = window.setTimeout(
+    () => {
+      controller.budgetTimer = null;
+      if (controller.budget === budget && controller.session === budget.session) run();
+    },
+    Math.max(0, delayMs),
+  );
+}
+
+function requestBlockExtension(session: LiveVoiceSession, block: number): Promise<BlockExtension> {
+  return getCsrfToken()
+    .then((token) =>
+      fetch(`${LIVE_SESSION_ENDPOINT}/${encodeURIComponent(session.sessionId)}/extend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: token },
+        body: JSON.stringify({ block, settlement: session.settlement }),
+      }),
+    )
+    .then(async (response): Promise<BlockExtension> => {
+      if (!response.ok) {
+        const error = await readLiveSessionError(response);
+        return { ok: false, retry: response.status >= 500, notice: error.message };
+      }
+      const body = (await response.json()) as { ceilingSeconds?: unknown };
+      return typeof body.ceilingSeconds === 'number'
+        ? { ok: true, ceilingSeconds: body.ceilingSeconds }
+        : { ok: false, retry: true, notice: LIVE_SESSION_MESSAGE.sessionEnded };
+    })
+    .catch((): BlockExtension => ({
+      ok: false,
+      retry: true,
+      notice: LIVE_SESSION_MESSAGE.connectionDropped,
+    }));
+}
+
+function endSessionAtLimit(notice: string): void {
+  endLiveVoiceSession('usage_limit');
+  useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.fail, message: notice });
+}
+
+async function extendSessionBudget(budget: SessionBudget): Promise<void> {
+  const result = await requestBlockExtension(budget.session, budget.nextBlock);
+  if (controller.budget !== budget || controller.session !== budget.session) return;
+  if (result.ok) {
+    budget.ceilingSeconds = Math.max(budget.ceilingSeconds, result.ceilingSeconds);
+    budget.nextBlock += 1;
+    scheduleBudget(budget, msUntilCeiling(budget) - EXTEND_LEAD_MS, () => {
+      void extendSessionBudget(budget);
+    });
+    return;
+  }
+  if (result.retry && msUntilCeiling(budget) > EXTEND_RETRY_MS) {
+    scheduleBudget(budget, EXTEND_RETRY_MS, () => {
+      void extendSessionBudget(budget);
+    });
+    return;
+  }
+  scheduleBudget(budget, msUntilCeiling(budget), () => endSessionAtLimit(result.notice));
+}
+
+function trackSessionBudget(session: LiveVoiceSession): void {
+  const budget: SessionBudget = {
+    session,
+    startedAtMs: Date.now(),
+    ceilingSeconds: session.settlement.ceilingSeconds,
+    nextBlock: FIRST_EXTENSION_BLOCK,
+  };
+  controller.budget = budget;
+  scheduleBudget(budget, msUntilCeiling(budget) - EXTEND_LEAD_MS, () => {
+    void extendSessionBudget(budget);
+  });
+}
+
 function ensureConversation(): Promise<string | null> {
   controller.conversation ??= (controller.sink?.onEnsureConversation() ?? Promise.resolve(null))
     .catch(() => null)
@@ -200,6 +301,7 @@ function deliverTranscript(turn: LiveTranscriptTurn): void {
 
 export function endLiveVoiceSession(reason: string): void {
   const { session, starting } = controller;
+  clearSessionBudget();
   controller.session = null;
   liveVoiceOutputRef.current = null;
   controller.starting = null;
@@ -274,6 +376,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           onUsage: () => undefined,
           onClosed: (closed) => {
             const session = controller.session;
+            clearSessionBudget();
             controller.session = null;
             liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
@@ -288,6 +391,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
             }
           },
           onError: (message) => {
+            clearSessionBudget();
             controller.session = null;
             liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
@@ -296,6 +400,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
           },
           onConnectionLost: (message) => {
             const dropped = controller.session;
+            clearSessionBudget();
             controller.session = null;
             liveVoiceOutputRef.current = null;
             store.setBackendBusy(false);
@@ -321,6 +426,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
         controller.session = session;
         liveVoiceOutputRef.current = session.outputElement;
         markVoiceReconnected();
+        trackSessionBudget(session);
         return session;
       },
       (error: unknown) => {

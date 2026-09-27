@@ -222,4 +222,5 @@ pub struct CompletionResult {
     /// / chain-of-thought). 0 for non-reasoning models or when the provider does
     /// not report this field.
     pub reasoning_output_tokens: u32,
+    pub managed_request_id: Option<String>,
 }

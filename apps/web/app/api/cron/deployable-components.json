@@ -15,7 +15,7 @@
     },
     "billing": {
       "role": "billing",
-      "note": "Credit reset, reconciliation, reservation recovery, provider-cost reconciliation, enterprise metering and collection enforcement."
+      "note": "Credit reset, reconciliation, reservation recovery, auto-reload, provider-cost reconciliation, enterprise metering and collection enforcement."
     },
     "ingestion": {
       "role": "search-index",
@@ -260,6 +260,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "expire-code-trials",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; a trial past its end is moved to Free under a row lock, so an interrupted run leaves the rest for the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: ends code-granted trials whose period is over and moves the account to Free."
         }
       ]
     },
@@ -674,6 +692,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "run-auto-reloads",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A per-account reload lease while a PaymentIntent settles. An interrupted run leaves the lease to expire, and the next tick reconciles that charge with Stripe before it starts another.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: buys each account's auto-reload pack off-session once its purchased and bonus credits fall below the threshold, and settles reloads whose webhook never arrived."
         }
       ]
     },

@@ -107,6 +107,25 @@ export function buildCheckoutTaxParams(options: {
   return params;
 }
 
+export function buildPaymentIntentTaxCalculationParams(options: {
+  customerId: string;
+  currency: string;
+  amountMinor: number;
+  reference: string;
+}): Stripe.Tax.CalculationCreateParams {
+  return {
+    currency: options.currency,
+    customer: options.customerId,
+    line_items: [
+      {
+        amount: options.amountMinor,
+        reference: options.reference,
+        tax_behavior: CHECKOUT_TAX_POLICY.priceMode,
+      },
+    ],
+  };
+}
+
 export interface SessionTaxOutcome {
   status: 'complete' | 'failed' | 'requires_location_inputs' | 'not_requested';
   calculated: boolean;
