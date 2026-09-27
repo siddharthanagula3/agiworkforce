@@ -1,13 +1,8 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import {
-  canUseBillingPlanCapability,
-  effectivePlanTier,
-  normalizeBillingPlanTier,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
+import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
 
 export interface SSOAdminAccess {
   plan: BillingPlanTier;
@@ -18,10 +13,7 @@ export async function getSSOAdminAccess(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<SSOAdminAccess> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const plan = normalizeBillingPlanTier(
-    effectivePlanTier(subscription?.plan_tier, subscription?.status),
-  );
+  const plan = await resolveUserPersonalPlanTier(db, userId);
 
   return {
     plan,
