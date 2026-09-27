@@ -5749,6 +5749,7 @@ export async function* runToolLoop(
     );
     yield* flushTerminal('error', 'partial');
   } finally {
+    await recordGroundingSpend(false);
     if (e2bExecutor) {
       if (e2bSessionScope) {
         if (e2bExecutor.pause) {
