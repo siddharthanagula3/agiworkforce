@@ -55,8 +55,8 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub privacy_mode: Option<String>,
 
-    /// Terminal theme slug: dark | light | ansi | solarized-dark | solarized-light
-    /// | colorblind. Read at startup so a theme chosen in the picker or via
+    /// Terminal theme slug: dark | light | ansi | high-contrast-dark |
+    /// high-contrast-light | colorblind. Read at startup so a theme chosen in the picker or via
     /// `/theme` survives a restart.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
