@@ -56,10 +56,16 @@ import {
   getMcpEndpoint,
   isSelfServiceConnector,
 } from '@/lib/connectors/mcp-endpoints';
-import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
+import {
+  resolveConnectorAccessToken,
+  type ReadyConnectorAccess,
+} from '@/lib/connectors/oauth-access';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
-import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
+import {
+  getMcpStatelessRuntime,
+  mcpAuthorizationContext,
+} from '@/lib/connectors/mcp-runtime-cache';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   buildConnectorAuthorizationRequiredPayload,
@@ -729,6 +735,7 @@ async function executeRemoteConnectorTool(
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: entry.connectorId,
       config: entryToMcpConfig(entry),
+      ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(entry.url, `operator:${entry.connectorId}`)),
     });
     const result = await callConnectorTool(handle, toolName, args, options);
@@ -1056,6 +1063,7 @@ async function executeCustomConnectorTool(
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: customServerId(row.short_id),
       config: customRowToMcpConfig(row),
+      ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(row.url, `user:${userId}:custom:${row.id}`)),
     });
     const result = await callConnectorTool(handle, toolName, args, options);
@@ -1277,8 +1285,7 @@ function getUsableOAuthConnectorIds(): string[] {
 async function buildOAuthConnectorCatalog(
   userId: string,
   target: ConnectorMcpTarget,
-  accessToken: string,
-  tokenType: string,
+  access: ReadyConnectorAccess,
 ): Promise<McpToolCatalog | null> {
   const now = Date.now();
   const cacheKey = oauthConnectorCacheKey(userId, target.connectorId);
@@ -1302,12 +1309,19 @@ async function buildOAuthConnectorCatalog(
   try {
     const { catalog, handles } = await buildMcpToolCatalog(
       {
-        [target.serverId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
+        [target.serverId]: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
       },
       MCP_EGRESS_POLICY,
       {
         resolveRuntime: () =>
-          getMcpStatelessRuntime(target.mcpUrl, `user:${userId}:oauth:${target.connectorId}`),
+          getMcpStatelessRuntime(
+            target.mcpUrl,
+            mcpAuthorizationContext.userOauthConnector(
+              userId,
+              target.connectorId,
+              access.accountKey,
+            ),
+          ),
       },
     );
     await Promise.all(handles.map((handle) => closeMcpHandle(handle)));
@@ -1332,8 +1346,7 @@ async function buildOAuthConnectorCatalog(
 async function callOAuthConnectorTool(
   _userId: string,
   target: ConnectorMcpTarget,
-  accessToken: string,
-  tokenType: string,
+  access: ReadyConnectorAccess,
   toolName: string,
   args: Record<string, unknown>,
   options?: ConnectorExecOptions,
@@ -1344,10 +1357,11 @@ async function callOAuthConnectorTool(
     handle = await connectMcpServer({
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: target.serverId,
-      config: oauthConnectorMcpConfig(target, accessToken, tokenType),
+      config: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
+      ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(
         target.mcpUrl,
-        `user:${_userId}:oauth:${target.connectorId}`,
+        mcpAuthorizationContext.userOauthConnector(_userId, target.connectorId, access.accountKey),
       )),
     });
     const result = await callConnectorTool(handle, toolName, args, options);
@@ -1412,15 +1426,7 @@ async function executeOAuthConnectorTool(
   }
 
   try {
-    return await callOAuthConnectorTool(
-      userId,
-      target,
-      access.accessToken,
-      access.tokenType,
-      toolName,
-      args,
-      options,
-    );
+    return await callOAuthConnectorTool(userId, target, access, toolName, args, options);
   } catch (err) {
     if (err instanceof EgressPolicyError) {
       logger.warn(
@@ -1461,15 +1467,7 @@ async function executeOAuthConnectorTool(
     }
 
     try {
-      return await callOAuthConnectorTool(
-        userId,
-        target,
-        refreshed.accessToken,
-        refreshed.tokenType,
-        toolName,
-        args,
-        options,
-      );
+      return await callOAuthConnectorTool(userId, target, refreshed, toolName, args, options);
     } catch (retryErr) {
       if (detectConnectorAuthChallenge(retryErr)) {
         await evictConnectorOAuthCaches(userId, connectorId);
@@ -1717,6 +1715,7 @@ async function executeOrgSharedConnectorTool(
       egressPolicy: MCP_EGRESS_POLICY,
       serverName: orgSharedServerId(row.org_short_id),
       config: customRowToMcpConfig(row),
+      ...(options?.allowInputRequired ? { interactive: true } : {}),
       ...(await getMcpStatelessRuntime(
         row.url,
         `organization:${row.organization_id}:shared:${row.id}`,
@@ -1988,12 +1987,7 @@ export async function loadUserConnectorCapabilityCatalog(
         const target = resolveConnectorMcpTarget(connectorRef);
         const access = await resolveConnectorAccessToken(userId, connectorRef);
         if (target && access.status === 'ready') {
-          const catalog = await buildOAuthConnectorCatalog(
-            userId,
-            target,
-            access.accessToken,
-            access.tokenType,
-          );
+          const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           if (catalog) {
             result = {
               connectorId: connectorRef,
@@ -2049,12 +2043,7 @@ async function loadDirectoryCapabilityCatalog(
     discovered: true,
   });
   if (access.status !== 'ready') return null;
-  const catalog = await buildOAuthConnectorCatalog(
-    userId,
-    target,
-    access.accessToken,
-    access.tokenType,
-  );
+  const catalog = await buildOAuthConnectorCatalog(userId, target, access);
   return catalog
     ? {
         connectorId: target.serverId,
@@ -2147,7 +2136,11 @@ export async function withUserConnectorMcpHandle<T>(
           connectorId: connectorRef,
           connectorLabel: target.displayName ?? connectorRef,
           url: target.mcpUrl,
-          authorizationContext: `user:${userId}:oauth:${connectorRef}`,
+          authorizationContext: mcpAuthorizationContext.userOauthConnector(
+            userId,
+            connectorRef,
+            access.accountKey,
+          ),
           config: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
           isCustom: false,
         };
@@ -2176,7 +2169,11 @@ export async function withUserConnectorMcpHandle<T>(
             connectorId: target.serverId,
             connectorLabel: target.displayName ?? target.serverId,
             url: target.mcpUrl,
-            authorizationContext: `user:${userId}:oauth:${target.connectorId}`,
+            authorizationContext: mcpAuthorizationContext.userOauthConnector(
+              userId,
+              target.connectorId,
+              access.accountKey,
+            ),
             config: oauthConnectorMcpConfig(target, access.accessToken, access.tokenType),
             isCustom: true,
           };
@@ -2275,12 +2272,7 @@ export async function loadUserConnectorToolCatalog(
           if (!target) return [];
           const access = await resolveConnectorAccessToken(userId, connectorId);
           if (access.status !== 'ready') return [];
-          const catalog = await buildOAuthConnectorCatalog(
-            userId,
-            target,
-            access.accessToken,
-            access.tokenType,
-          );
+          const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           return catalog
             ? catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId)
             : [];
@@ -2300,12 +2292,7 @@ export async function loadUserConnectorToolCatalog(
             discovered: true,
           });
           if (access.status !== 'ready') return [];
-          const catalog = await buildOAuthConnectorCatalog(
-            userId,
-            target,
-            access.accessToken,
-            access.tokenType,
-          );
+          const catalog = await buildOAuthConnectorCatalog(userId, target, access);
           return catalog ? catalogToConnectorToolDefs(catalog, target.displayName) : [];
         },
       });

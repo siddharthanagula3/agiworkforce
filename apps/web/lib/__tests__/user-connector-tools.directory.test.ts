@@ -62,10 +62,16 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   revokeConnectorOAuthGrant: vi.fn(),
   listRevocableConnectorTokens: vi.fn(async () => []),
   updateConnectorOAuthGrantTokens: vi.fn(),
+  ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
+  withLockedConnectorOAuthGrant: vi.fn(),
 }));
 
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
   getMcpStatelessRuntime: vi.fn(async () => ({})),
+  mcpAuthorizationContext: {
+    userOauthConnector: (userId: string, connectorId: string) =>
+      `user:${userId}:oauth:${connectorId}`,
+  },
   NeonMcpResponseCacheStore: class {
     async get() {
       return undefined;

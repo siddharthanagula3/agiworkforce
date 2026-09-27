@@ -29,6 +29,7 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 vi.mock('@/lib/connectors/oauth-client', () => ({
   ConnectorOAuthTokenError: class extends Error {},
   exchangeAuthorizationCode: vi.fn(),
+  TOKEN_REQUEST_TIMEOUT_MS: 10_000,
 }));
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   completeMcpAuthorization: (...a: unknown[]) => mocks.complete(...a),

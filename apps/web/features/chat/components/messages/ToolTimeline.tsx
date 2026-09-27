@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo, type ReactNode } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   Ban,
@@ -160,7 +160,14 @@ export function humanizeToolName(
 export interface ToolEntry {
   id?: string;
   name: string;
-  status: 'running' | 'completed' | 'failed' | 'pending' | 'awaiting_approval' | 'awaiting_device';
+  status:
+    | 'running'
+    | 'completed'
+    | 'failed'
+    | 'pending'
+    | 'awaiting_approval'
+    | 'awaiting_device'
+    | 'awaiting_input';
   durationMs?: number;
   toolCallId?: string;
   /** Host-authored one line naming what a device step runs and where. */
@@ -176,6 +183,8 @@ export interface ToolEntry {
   error?: string;
   result?: string;
   statusPhrase?: string;
+  connectorId?: string;
+  inputRequests?: Record<string, unknown>;
   /**
    * The picture a screen step returned, as a data URL. Written by the machine
    * that captured it and never persisted, so it is present for the run that
@@ -195,6 +204,7 @@ interface ToolTimelineProps {
   expired?: boolean;
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
+  renderInputRequest?: (tool: ToolEntry) => ReactNode;
 }
 
 function findConnectRequest(tool: ToolEntry): ConnectorConnectRequest | null {
@@ -391,6 +401,7 @@ function TimelineStepRow({
   expired,
   onResend,
   onRetryTurn,
+  renderInputRequest,
 }: {
   tool: ToolEntry;
   toolCall: ToolCall;
@@ -401,6 +412,7 @@ function TimelineStepRow({
   expired?: boolean;
   onResend?: (toolCallId: string) => void;
   onRetryTurn?: () => void;
+  renderInputRequest?: (tool: ToolEntry) => ReactNode;
 }) {
   const mcpTool = parseQualifiedMcpToolName(tool.name);
   const filename = mcpTool ? null : getFileName(tool.args);
@@ -474,6 +486,9 @@ function TimelineStepRow({
           {searchSources!.length} {searchSources!.length === 1 ? 'source' : 'sources'}
         </div>
       )}
+      {tool.status === 'awaiting_input' && renderInputRequest ? (
+        <div className="pl-7 mt-1.5">{renderInputRequest(tool)}</div>
+      ) : null}
       {showPermissionPicker && mcpTool && (
         <div className="pl-7 mt-1">
           <ToolPermissionQuickPicker
@@ -555,6 +570,11 @@ function buildToolAnnouncement(tools: ToolEntry[]): string {
     return `Approval needed: ${humanizeToolName(awaiting.name, awaiting.args, awaiting.parameters, awaiting.statusPhrase)}`;
   }
 
+  const needsInput = tools.find((t) => t.status === 'awaiting_input');
+  if (needsInput) {
+    return `Input needed: ${humanizeToolName(needsInput.name, needsInput.args, needsInput.parameters, needsInput.statusPhrase)}`;
+  }
+
   const connectTool = tools.map(findConnectRequest).find((r) => r !== null);
   if (connectTool) return `Connection required: ${connectTool.connectorName}`;
 
@@ -583,13 +603,17 @@ function ToolTimeline({
   expired,
   onResend,
   onRetryTurn,
+  renderInputRequest,
 }: ToolTimelineProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   const [compactExpanded, setCompactExpanded] = useState(false);
 
   const hasRunning = useMemo(() => tools.some((t) => t.status === 'running'), [tools]);
-  const hasAwaiting = useMemo(() => tools.some((t) => t.status === 'awaiting_approval'), [tools]);
+  const hasAwaiting = useMemo(
+    () => tools.some((t) => t.status === 'awaiting_approval' || t.status === 'awaiting_input'),
+    [tools],
+  );
   const errorCount = useMemo(
     () => tools.filter((t) => t.status === 'failed' && !isDeniedToolEntry(t)).length,
     [tools],
@@ -778,6 +802,7 @@ function ToolTimeline({
                                 expired={expired}
                                 onResend={onResend}
                                 onRetryTurn={onRetryTurn}
+                                renderInputRequest={renderInputRequest}
                               />
                             );
                           })}
@@ -827,6 +852,7 @@ function ToolTimeline({
                           expired={expired}
                           onResend={onResend}
                           onRetryTurn={onRetryTurn}
+                          renderInputRequest={renderInputRequest}
                         />
                       );
                     });
@@ -859,6 +885,7 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
   if (prev.onApprove !== next.onApprove || prev.onReject !== next.onReject) return false;
   if (prev.expired !== next.expired || prev.onResend !== next.onResend) return false;
   if (prev.onRetryTurn !== next.onRetryTurn) return false;
+  if (prev.renderInputRequest !== next.renderInputRequest) return false;
   if (prev.tools.length !== next.tools.length) return false;
 
   for (let i = 0; i < prev.tools.length; i++) {
@@ -876,7 +903,8 @@ const MemoizedToolTimeline = memo(ToolTimeline, (prev, next) => {
       p.result !== n.result ||
       p.requiresApproval !== n.requiresApproval ||
       p.approved !== n.approved ||
-      p.toolCallId !== n.toolCallId
+      p.toolCallId !== n.toolCallId ||
+      p.inputRequests !== n.inputRequests
     ) {
       return false;
     }

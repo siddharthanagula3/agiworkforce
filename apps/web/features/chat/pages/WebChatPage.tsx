@@ -13,7 +13,11 @@ import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
-import { ToolApprovalProvider, InteractiveCardResumeProvider } from '@/lib/hooks/useChatStream';
+import {
+  ToolApprovalProvider,
+  ToolInputProvider,
+  InteractiveCardResumeProvider,
+} from '@/lib/hooks/useChatStream';
 import { interactiveCardNeedsResume } from '@/app/api/interactive-cards/response-contract';
 import { useChatStreamRuntime } from '../components/ChatStreamRuntimeProvider';
 import { useConversations } from '@/lib/hooks/useConversations';
@@ -1328,6 +1332,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     continueGeneration,
     resumeInteractiveCardTurn,
     resolveToolApproval,
+    resolveToolInput,
   } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
@@ -5760,47 +5765,49 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   {/* Provide the manual tool-approval resolver to per-message
                     approval cards (MessageBubble consumes it via context). */}
                   <ToolApprovalProvider value={resolveToolApproval}>
-                    <MessageInlineEditProvider value={messageInlineEdit}>
-                      <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
-                        <ChatMessageList
-                          messages={chatMessages}
-                          transcriptPatch={chatMessageProjection.patch}
-                          currentTier={currentTier}
-                          conversationId={displayedConversationId}
-                          isLoading={isLoading && !isStreaming}
-                          isUserTyping={isUserTyping}
-                          onRegenerate={handleRegenerateMessage}
-                          onRetryResearch={handleRetryResearch}
-                          onResearchPlanDecision={handleResearchPlanDecision}
-                          retryingResearchMessageId={retryingResearchMessageId}
-                          onContinue={handleContinueMessage}
-                          onEdit={handleEditMessage}
-                          onDelete={handleDeleteMessage}
-                          onDeleteVariant={handleDeleteVariant}
-                          countVariantFollowers={countVariantFollowers}
-                          onReact={handleReactMessage}
-                          onPin={handlePinMessage}
-                          branchGroupsByMessageId={branchGroupsByMessageId}
-                          branchingMessageId={branchingMessageId}
-                          onBranch={createBranch}
-                          onSwitchBranch={switchBranch}
-                          variantInfoByMessageId={variantInfoByMessageId}
-                          onSelectVariant={handleSelectVariant}
-                          activeLeafId={activeLeafId}
-                          variantAnchorMessageId={variantAnchorMessageId}
-                          isConversationStreaming={isStreaming}
-                          onRegenerateImage={handleRegenerateImageInPlace}
-                          onResumeVideo={handleResumeVideo}
-                          onRetryVideo={handleRetryVideo}
-                          onSendMessage={setComposerPrefill}
-                          onPaywallUpgrade={handlePaywallRecovery}
-                          onPaywallDismiss={handlePaywallDismiss}
-                          onRegenerateWithModel={handleRegenerateWithModel}
-                          regenerateModelOptions={regenerateModelOptions}
-                          turnErrorActive={turnErrorNotice !== null}
-                        />
-                      </InteractiveCardResumeProvider>
-                    </MessageInlineEditProvider>
+                    <ToolInputProvider value={resolveToolInput}>
+                      <MessageInlineEditProvider value={messageInlineEdit}>
+                        <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
+                          <ChatMessageList
+                            messages={chatMessages}
+                            transcriptPatch={chatMessageProjection.patch}
+                            currentTier={currentTier}
+                            conversationId={displayedConversationId}
+                            isLoading={isLoading && !isStreaming}
+                            isUserTyping={isUserTyping}
+                            onRegenerate={handleRegenerateMessage}
+                            onRetryResearch={handleRetryResearch}
+                            onResearchPlanDecision={handleResearchPlanDecision}
+                            retryingResearchMessageId={retryingResearchMessageId}
+                            onContinue={handleContinueMessage}
+                            onEdit={handleEditMessage}
+                            onDelete={handleDeleteMessage}
+                            onDeleteVariant={handleDeleteVariant}
+                            countVariantFollowers={countVariantFollowers}
+                            onReact={handleReactMessage}
+                            onPin={handlePinMessage}
+                            branchGroupsByMessageId={branchGroupsByMessageId}
+                            branchingMessageId={branchingMessageId}
+                            onBranch={createBranch}
+                            onSwitchBranch={switchBranch}
+                            variantInfoByMessageId={variantInfoByMessageId}
+                            onSelectVariant={handleSelectVariant}
+                            activeLeafId={activeLeafId}
+                            variantAnchorMessageId={variantAnchorMessageId}
+                            isConversationStreaming={isStreaming}
+                            onRegenerateImage={handleRegenerateImageInPlace}
+                            onResumeVideo={handleResumeVideo}
+                            onRetryVideo={handleRetryVideo}
+                            onSendMessage={setComposerPrefill}
+                            onPaywallUpgrade={handlePaywallRecovery}
+                            onPaywallDismiss={handlePaywallDismiss}
+                            onRegenerateWithModel={handleRegenerateWithModel}
+                            regenerateModelOptions={regenerateModelOptions}
+                            turnErrorActive={turnErrorNotice !== null}
+                          />
+                        </InteractiveCardResumeProvider>
+                      </MessageInlineEditProvider>
+                    </ToolInputProvider>
                   </ToolApprovalProvider>
                 </div>
 
