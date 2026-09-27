@@ -3,20 +3,21 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Switch, useConfirmAction } from '@agiworkforce/ui';
 import {
+  AUTO_RELOAD_CONSENT_VERSION,
+  AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS,
   AUTO_RELOAD_EXTRA_DISCOUNT_PERCENT,
   AUTO_RELOAD_MAX_THRESHOLD_CREDITS,
   AUTO_RELOAD_MIN_THRESHOLD_CREDITS,
-  DAILY_TOP_UP_LIMIT_USD,
   TOP_UP_PRESET_AMOUNTS_USD,
+  autoReloadConsentText,
   formatCredits,
   isAutoReloadThresholdCredits,
   quoteTopUp,
-  type AutoReloadSettings,
-  type AutoReloadSettingsUpdate,
   type TopUpQuote,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
-import { formatBillingDate, formatBillingMoney, formatUsdAmount } from '../lib/billing-format';
+import type { AutoReloadSettings, AutoReloadUpdate } from '../lib/billing-account-types';
+import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
 import {
   PaymentMethodRequiredError,
   fetchAutoReload,
@@ -54,14 +55,6 @@ function reloadPrice(quote: TopUpQuote): string {
 function describeCard(card: AutoReloadSettings['paymentMethod']): string | null {
   if (!card) return null;
   return `${card.brand.charAt(0).toUpperCase()}${card.brand.slice(1)} ending in ${card.last4}`;
-}
-
-function consentStatement(
-  quote: TopUpQuote,
-  thresholdCredits: number,
-  card: string | null,
-): string {
-  return `By turning on auto-reload, you authorize AGI Workforce to charge ${card ?? 'your saved card'} ${reloadPrice(quote)} plus tax for ${formatCredits(quote.credits)} each time your credit balance falls below ${formatCredits(thresholdCredits)}, up to ${formatUsdAmount(DAILY_TOP_UP_LIMIT_USD)} a day, until you turn auto-reload off here. If your balance is already below that, the first charge happens within minutes. Charges are made without asking again.`;
 }
 
 export function AutoReloadPanel({
@@ -147,8 +140,9 @@ export function AutoReloadPanel({
   const canSave = dirty && !saving && (!draft.enabled || (quote !== null && thresholdValid));
   const card = describeCard(saved.paymentMethod);
   const lastFailureOn = formatBillingDate(saved.lastFailure?.at);
+  const consentedOn = saved.enabled ? formatBillingDate(saved.consent?.acceptedAt) : null;
 
-  async function persist(update: AutoReloadSettingsUpdate) {
+  async function persist(update: AutoReloadUpdate) {
     setSaving(true);
     setError(null);
     setNeedsCard(false);
@@ -164,6 +158,19 @@ export function AutoReloadPanel({
     }
   }
 
+  function toggle(enabled: boolean) {
+    if (!draft) return;
+    if (!enabled && saved.enabled) {
+      void persist({
+        enabled: false,
+        thresholdCredits: saved.thresholdCredits,
+        amountUsd: saved.amountUsd,
+      });
+      return;
+    }
+    setDraft({ ...draft, enabled });
+  }
+
   function save() {
     if (!canSave || !draft) return;
     if (!draft.enabled || !quote) {
@@ -174,15 +181,28 @@ export function AutoReloadPanel({
       });
       return;
     }
-    const update: AutoReloadSettingsUpdate = {
+    const consentText = saved.paymentMethod
+      ? autoReloadConsentText({
+          amountUsd: quote.amountUsd,
+          thresholdCredits: threshold,
+          card: saved.paymentMethod,
+        })
+      : null;
+    if (!consentText) {
+      setNeedsCard(true);
+      setError('Add a card before turning on auto-reload.');
+      return;
+    }
+    const update: AutoReloadUpdate = {
       enabled: true,
       thresholdCredits: threshold,
       amountUsd: quote.amountUsd,
+      consentVersion: AUTO_RELOAD_CONSENT_VERSION,
     };
     confirm({
       title: saved.enabled ? 'Change auto-reload?' : 'Turn on auto-reload?',
-      description: `${consentStatement(quote, threshold, card)} A charge can't be undone once it is made.`,
-      confirmLabel: saved.enabled ? 'Save auto-reload' : 'Turn on auto-reload',
+      description: consentText,
+      confirmLabel: saved.enabled ? 'Agree and save' : 'Agree and turn on',
       destructive: false,
       onConfirm: () => persist(update),
     });
@@ -194,48 +214,50 @@ export function AutoReloadPanel({
         <div className="min-w-0">
           {heading}
           <p className="mt-1 text-[13px] text-muted-foreground">
-            Buy credits automatically when your balance falls below a threshold you set. Auto-reload
-            takes an extra {AUTO_RELOAD_EXTRA_DISCOUNT_PERCENT}% off the pack price.
+            Buy credits automatically when your balance runs low. Auto-reload takes an extra{' '}
+            {AUTO_RELOAD_EXTRA_DISCOUNT_PERCENT}% off the pack price.
           </p>
         </div>
         <Switch
           aria-labelledby={titleId}
           checked={draft.enabled}
           disabled={saving}
-          onCheckedChange={(enabled) => setDraft({ ...draft, enabled })}
+          onCheckedChange={toggle}
         />
       </div>
 
+      {consentedOn ? (
+        <p className="text-[13px] text-muted-foreground">
+          You agreed to the auto-reload terms on {consentedOn}.
+        </p>
+      ) : null}
+
       {draft.enabled ? (
         <div className="flex flex-col gap-3 text-[13px]">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <label htmlFor={thresholdId}>When my balance falls below</label>
-              <input
-                id={thresholdId}
-                type="number"
-                inputMode="numeric"
-                min={AUTO_RELOAD_MIN_THRESHOLD_CREDITS}
-                max={AUTO_RELOAD_MAX_THRESHOLD_CREDITS}
-                step={1}
-                value={draft.threshold}
-                aria-invalid={!thresholdValid}
-                aria-describedby={thresholdHintId}
-                onChange={(event) => setDraft({ ...draft, threshold: event.target.value })}
-                className="h-9 w-28 rounded-md border border-border bg-background px-2 tabular-nums pointer-coarse:h-11"
-              />
-              <span>credits</span>
-            </div>
-            <p
-              id={thresholdHintId}
-              className={
-                thresholdValid ? 'text-xs text-muted-foreground' : 'text-xs text-destructive-text'
-              }
-            >
-              Choose a whole number from {formatCredits(AUTO_RELOAD_MIN_THRESHOLD_CREDITS)} to{' '}
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={thresholdId}>When my balance falls below</label>
+            <input
+              id={thresholdId}
+              type="number"
+              inputMode="numeric"
+              min={AUTO_RELOAD_MIN_THRESHOLD_CREDITS}
+              max={AUTO_RELOAD_MAX_THRESHOLD_CREDITS}
+              step={1}
+              placeholder={String(AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS)}
+              value={draft.threshold}
+              aria-invalid={!thresholdValid}
+              aria-describedby={thresholdValid ? undefined : thresholdHintId}
+              onChange={(event) => setDraft({ ...draft, threshold: event.target.value })}
+              className="h-9 w-28 rounded-md border border-border bg-background px-2 tabular-nums pointer-coarse:h-11"
+            />
+            <span>credits</span>
+          </div>
+          {thresholdValid ? null : (
+            <p id={thresholdHintId} className="text-destructive-text">
+              Choose a balance from {formatCredits(AUTO_RELOAD_MIN_THRESHOLD_CREDITS)} to{' '}
               {formatCredits(AUTO_RELOAD_MAX_THRESHOLD_CREDITS)}.
             </p>
-          </div>
+          )}
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor={packId}>Reload with</label>
             <select
@@ -289,11 +311,6 @@ export function AutoReloadPanel({
               </span>
             )}
           </p>
-          {quote && thresholdValid && dirty ? (
-            <p className="rounded-md border border-border bg-muted/40 p-3 text-[13px]">
-              {consentStatement(quote, threshold, card)}
-            </p>
-          ) : null}
         </div>
       ) : null}
 
@@ -307,10 +324,7 @@ export function AutoReloadPanel({
 
       {(draft.enabled && !saved.paymentMethod) || needsCard ? (
         <div className="flex flex-wrap items-center gap-3 text-[13px]">
-          <span className="text-muted-foreground">
-            Auto-reload charges your saved card. Add one in the billing portal, then turn
-            auto-reload on.
-          </span>
+          <span className="text-muted-foreground">Auto-reload charges a saved card.</span>
           <Button
             size="sm"
             variant="outline"
@@ -319,7 +333,7 @@ export function AutoReloadPanel({
             disabled={portalPending}
             isLoading={portalPending}
           >
-            Add a card
+            Add a payment method
           </Button>
         </div>
       ) : null}
@@ -339,7 +353,7 @@ export function AutoReloadPanel({
             disabled={!canSave}
             isLoading={saving}
           >
-            {draft.enabled && !saved.enabled ? 'Turn on auto-reload' : 'Save auto-reload'}
+            Save auto-reload
           </Button>
           <Button
             size="sm"

@@ -115,14 +115,7 @@ export async function handleCreditTopUp(
     throw new Error('Credit top-up session amount or currency does not match its purchase');
   }
 
-  const transactionDescription = `Credit top-up purchase ${session.id}`;
-  const existingPurchase = await db.query<{ id: string }>(
-    `select id from credit_transactions
-     where user_id = $1 and transaction_type = 'purchase' and description = $2
-     limit 1`,
-    [userId, transactionDescription],
-  );
-  if (existingPurchase.length > 0) {
+  if (await isCreditTopUpApplied(db, userId, session.id)) {
     logger.info({ sessionId: session.id, userId }, 'Credit top-up was already applied');
     return;
   }
@@ -203,6 +196,34 @@ export async function handleCreditTopUp(
       'TAX NOT COLLECTED: Stripe did not calculate tax for a completed credit top-up',
     );
   }
+
+  await grantCreditTopUp(db, { userId, creditAmountCents, receiptId: session.id });
+}
+
+function creditTopUpDescription(receiptId: string): string {
+  return `Credit top-up purchase ${receiptId}`;
+}
+
+export async function isCreditTopUpApplied(
+  db: DatabaseAdapter,
+  userId: string,
+  receiptId: string,
+): Promise<boolean> {
+  const existingPurchase = await db.query<{ id: string }>(
+    `select id from credit_transactions
+     where user_id = $1 and transaction_type = 'purchase' and description = $2
+     limit 1`,
+    [userId, creditTopUpDescription(receiptId)],
+  );
+  return existingPurchase.length > 0;
+}
+
+export async function grantCreditTopUp(
+  db: DatabaseAdapter,
+  grant: { userId: string; creditAmountCents: number; receiptId: string },
+): Promise<void> {
+  const { userId, creditAmountCents } = grant;
+  const transactionDescription = creditTopUpDescription(grant.receiptId);
 
   try {
     const subscriptions = await db.query<{

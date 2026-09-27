@@ -1,4 +1,25 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 297,
+      "reason": "Reads the account's auto_reload_settings row for its own export section. Before 0297 is applied that query fails and the export ledger marks only that section unavailable, as it does for any absent table, so the rest of the export is unaffected."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 297,
+      "reason": "Deletes the account's auto_reload_settings row. Before 0297 is applied the delete sees an absent table and is recorded as skipped by isSchemaAbsent, so erasure of every other table proceeds unchanged."
+    },
+    {
+      "file": "apps/web/lib/services/auto-reload-service.ts",
+      "migration": 297,
+      "reason": "Owns auto_reload_settings and ships with 0297: the deploy applies 0297 before this release reaches production. Until then every read fails and is logged, and no auto-reload charge can start, because each one begins by reading and leasing that row."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 297,
+      "reason": "Names auto_reload_settings only as a string in its retention classification and issues no query, so it runs unchanged before and after 0297."
+    }
+  ]
 }
