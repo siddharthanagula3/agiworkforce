@@ -1,4 +1,4 @@
-import { SignalingClient, type SignalingEvent } from '@agiworkforce/utils';
+import { SignalingClient, endsPairing, type SignalingEvent } from '@agiworkforce/utils';
 import { isRelayPairingCode } from '@agiworkforce/types';
 import {
   IDLE_REMOTE_CONTROL_STATE,
@@ -204,12 +204,30 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
         stop();
         return;
       case 'error':
+        if (event.error === 'device_revoked') {
+          end(
+            'Remote Control was turned off for this computer in your account settings. Pair again to reconnect your phone.',
+          );
+          return;
+        }
+        if (endsPairing(event.error)) {
+          end('This pairing has ended. Pair again to reconnect your phone.');
+          return;
+        }
         if (state.status !== 'connected')
           publish({ status: 'error', error: 'The relay connection failed.' });
+        return;
+      case 'close':
+        end('The connection to the relay closed. Pair again to reconnect your phone.');
         return;
       default:
         return;
     }
+  }
+
+  function end(error: string): void {
+    stop();
+    publish({ status: 'error', error });
   }
 
   function start(args: Record<string, unknown>): RemoteControlState {
