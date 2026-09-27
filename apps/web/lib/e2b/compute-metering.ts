@@ -443,6 +443,7 @@ export async function meterSandboxComputeInterval(
     // Metering runs from sandbox teardown and from the reclaim sweep, neither of
     // which carries a request connection, so the scope comes from the interval's
     // own owner.
+    await markSandboxComputeStarted({ userId: interval.userId, reservation });
     await finalizeManagedUsageRequest({
       db: sandboxScopedDb(interval.userId),
       userId: interval.userId,
