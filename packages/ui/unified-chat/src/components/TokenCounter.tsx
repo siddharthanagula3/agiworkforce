@@ -200,7 +200,9 @@ export const TokenCounter = ({
                   <span className="w-2 h-2 rounded-full bg-blue-500" />
                   <span>Input tokens</span>
                 </div>
-                <div className="text-sm font-medium text-info-text">{formatTokens(inputTokens)}</div>
+                <div className="text-sm font-medium text-info-text">
+                  {formatTokens(inputTokens)}
+                </div>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
