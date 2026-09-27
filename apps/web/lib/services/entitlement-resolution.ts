@@ -19,6 +19,7 @@ import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscrip
 import { CreditService } from '@/lib/services/credit-service';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
 import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
+import { resolveSubscriberPlan } from '@/lib/services/plan-catalog-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
 
 export function isSeatBearingBillingPlan(planTier: string | null | undefined): boolean {
@@ -244,10 +245,16 @@ function buildBundle(
     };
   }
 
+  const held = entitled
+    ? resolveSubscriberPlan({
+        tier: subscription.plan_tier,
+        soldUnderCatalogVersion: subscription.plan_catalog_version ?? null,
+      })
+    : null;
   return {
     userId,
-    plan: normalizeBillingPlanTier(entitled ? subscription.plan_tier : 'free'),
-    catalogVersion: entitled ? (subscription.plan_catalog_version ?? null) : null,
+    plan: held?.effective ?? normalizeBillingPlanTier('free'),
+    catalogVersion: held?.soldUnderCatalogVersion ?? null,
     status: subscription.status,
     entitled,
     source,
