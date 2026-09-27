@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 41,
-  "chunkCount": 225,
+  "chunkCount": 227,
   "documents": [
     {
       "id": "account-security",
@@ -25,7 +25,7 @@
         "revoke session",
         "api keys"
       ],
-      "updated": "2026-09-21",
+      "updated": "2026-09-27",
       "source": "content/support/account-security.md",
       "chunks": [
         {
@@ -47,32 +47,46 @@
           "ordinal": 2,
           "heading": "Password",
           "headingPath": "Passkeys, two-factor and active sessions › Password",
-          "text": "The same page changes your password. A password that fails the common-password\ncheck is refused with \"That password is too common.\" A forgotten password is\nreset from the sign-in screen with **Forgot password?**."
+          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A password that fails the common-password check is refused\nwith \"That password is too common.\" A forgotten password is reset from the\nsign-in screen with **Forgot password?**."
         },
         {
           "id": "account-security#3",
           "ordinal": 3,
+          "heading": "Email address",
+          "headingPath": "Passkeys, two-factor and active sessions › Email address",
+          "text": "Settings, Account changes the email address on the account. The new address gets\na code to prove you own it, then you confirm it is you and it becomes the\naddress on the account. The previous address is removed unless a sign-in method\nstill uses it. Password resets and security notices go to the new address."
+        },
+        {
+          "id": "account-security#4",
+          "ordinal": 4,
+          "heading": "Confirming it is you",
+          "headingPath": "Passkeys, two-factor and active sessions › Confirming it is you",
+          "text": "Deleting the account, logging out of all devices, creating an API key, turning\ntwo-factor authentication on or off, replacing backup codes and changing the\nemail address each requires you to confirm it is you, even when you are already\nsigned in. With two-factor authentication on, you confirm with your\nauthenticator app or a backup code; without it, you confirm with your password,\na passkey or a code sent to your email. A confirmation stays valid for up to 5\nminutes, so a second change right after the first does not ask again."
+        },
+        {
+          "id": "account-security#5",
+          "ordinal": 5,
           "heading": "If you cannot sign in",
           "headingPath": "Passkeys, two-factor and active sessions › If you cannot sign in",
           "text": "- **Forgotten password.** Reset it from the sign-in screen with **Forgot\n  password?**.\n- **Lost the phone with your authenticator.** Enter one of your backup codes at\n  the second-factor screen, then set the authenticator up again in Settings,\n  Security. Each backup code works once.\n- **Running low on backup codes.** Settings, Security generates a new set after\n  you confirm your second factor again, and the new set replaces the old one, so\n  codes you printed earlier stop working.\n- **Lost the authenticator and every backup code.** There is no self-serve way\n  back in, and there is no screen from which support can remove a second factor.\n  Email contact@agiworkforce.com from the address on the account, with your\n  **User ID** if you have it."
         },
         {
-          "id": "account-security#4",
-          "ordinal": 4,
+          "id": "account-security#6",
+          "ordinal": 6,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
           "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
-          "id": "account-security#5",
-          "ordinal": 5,
+          "id": "account-security#7",
+          "ordinal": 7,
           "heading": "Your identifiers",
           "headingPath": "Passkeys, two-factor and active sessions › Your identifiers",
           "text": "Settings, Account shows your **User ID**, and an **Organization ID** when the\naccount belongs to a workspace. Support asks for these when investigating an\nissue; they identify the account, they are not secrets that grant access."
         },
         {
-          "id": "account-security#6",
-          "ordinal": 6,
+          "id": "account-security#8",
+          "ordinal": 8,
           "heading": "API keys",
           "headingPath": "Passkeys, two-factor and active sessions › API keys",
           "text": "API keys are managed from Settings, Account under **API keys**. Regenerating a\nkey invalidates the previous one immediately, so update anything using it."
@@ -1990,7 +2004,7 @@
         "end temporary chat",
         "ephemeral"
       ],
-      "updated": "2026-09-20",
+      "updated": "2026-09-27",
       "source": "content/support/temporary-chats.md",
       "chunks": [
         {
@@ -1998,7 +2012,7 @@
           "ordinal": 0,
           "heading": "What a temporary chat does",
           "headingPath": "Temporary chats › What a temporary chat does",
-          "text": "A temporary chat stays out of your history, your memory and your Library. It is\nnever written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
+          "text": "A temporary chat stays out of your history, your search results, your memory\nand your Library. It is never written to your conversation history, nothing said in it is remembered\nacross conversations, files you attach do not land in your Library, and a\nconnector asks before every call even where you saved \"Always allow\".\n\nA connector call still reaches that service, and that service keeps its own\nrecord. Temporary is about what AGI keeps, not about what the outside world\nforgets.\n\nWhat AGI does keep is narrow and bounded. No message of a temporary chat is\nwritten to your conversation history. The conversation record itself, including\nany research report and the log that lets an interrupted reply resume, and any\nfile you attach, are held for up to 30 days and then removed, which is what\nkeeps an in-flight chat working and an attachment readable while you are still\nin it. A legal hold placed on your workspace keeps that material past the 30\ndays until the hold is released."
         },
         {
           "id": "temporary-chats#1",
