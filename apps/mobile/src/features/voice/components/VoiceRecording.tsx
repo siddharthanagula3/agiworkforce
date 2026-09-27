@@ -100,7 +100,7 @@ export function VoiceRecording({
         {/* Core orb */}
         <View style={[styles.orb, { backgroundColor: colors.terraCotta }]}>
           <Waveform
-            color={colors.white}
+            color={colors.accentText}
             active
             audioLevel={audioLevel}
             barCount={5}
@@ -130,7 +130,7 @@ export function VoiceRecording({
           accessibilityLabel="Stop and send recording"
           accessibilityRole="button"
         >
-          <Send size={22} color={colors.white} />
+          <Send size={22} color={colors.accentText} />
         </Pressable>
       </View>
     </Animated.View>
