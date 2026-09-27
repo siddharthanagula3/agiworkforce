@@ -437,6 +437,7 @@ export const ChatCompletionRequestSchema = z
     web_fetch: z.boolean().optional(),
     /** Per-chat Memory override. False skips memory injection and memory writes for this turn. */
     memory_enabled: z.boolean().optional(),
+    personalization: z.boolean().optional(),
     memory_command: z
       .object({
         kind: z.enum(MEMORY_COMMAND_KINDS),
@@ -2482,6 +2483,7 @@ export async function processRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
   const callerToolFields: Pick<ChatCompletionRequest, 'tools' | 'tool_choice'> = {
     ...(chatRequest.tools !== undefined ? { tools: chatRequest.tools } : {}),
     ...(chatRequest.tool_choice !== undefined ? { tool_choice: chatRequest.tool_choice } : {}),
@@ -2559,7 +2561,7 @@ export async function processRequest(
     };
   }
   const customInstructionsPromise =
-    chatSurface === 'api'
+    chatSurface === 'api' || chatRequest.personalization === false
       ? null
       : scopedDbPromise
           .then((scoped) => buildCustomInstructionsPreamble(scoped.db, userId))

@@ -434,6 +434,10 @@
           "memory_enabled": {
             "type": "boolean",
             "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
+          },
+          "personalization": {
+            "type": "boolean",
+            "description": "`false` answers without your account's personalization: no custom instructions, profile or response style, and no memory is read or saved for this request. Omitted or `true` keeps the default."
           }
         }
       },
