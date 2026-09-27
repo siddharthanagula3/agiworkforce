@@ -2062,12 +2062,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? useChatStore.getState().conversations.find((c) => c.id === existingConvId)
               ?.isTemporary === true
           : temporaryIntent;
-        if (!conversationIsTemporary && localModelSelection === null) {
-          runExplicitMemoryCommand(content, {
-            conversationId: existingConvId || null,
-            projectId: sendProjectId ?? null,
-          });
-        }
+        const memoryCommandReport =
+          !conversationIsTemporary && localModelSelection === null
+            ? runExplicitMemoryCommand(content, {
+                conversationId: existingConvId || null,
+                projectId: sendProjectId ?? null,
+              })
+            : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
           // two lines below make `bareChatSessionId` (hence a racing second
@@ -2118,6 +2119,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             })
           : undefined;
         attachmentsUploaded = Boolean(options.attachments?.length);
+        const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
         if (options.attachmentUploadAttemptId) {
           setAttachmentUploadAttempts((current) =>
             current.filter((attempt) => attempt.id !== options.attachmentUploadAttemptId),
@@ -2160,6 +2162,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             disabledConnectorIds: options.meta?.disabledConnectorIds,
             connectorToolsEnabled: options.meta?.connectorToolsEnabled,
             memoryEnabled: options.meta?.memoryEnabled,
+            ...(memoryCommand ? { memoryCommand } : {}),
           });
 
         const announceDesktopCompletion = () => {
