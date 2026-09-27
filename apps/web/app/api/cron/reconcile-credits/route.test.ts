@@ -396,7 +396,7 @@ describe('GET /api/cron/reconcile-credits · COGS ledger import', () => {
   });
 
   it('fails the run when the ledger import could not complete', async () => {
-    readCostActivity.mockRejectedValue(new Error('stripe unreachable'));
+    importCogs.mockRejectedValue(new Error('stripe unreachable'));
 
     const response = await GET(cronRequest('cron-secret') as never);
 
