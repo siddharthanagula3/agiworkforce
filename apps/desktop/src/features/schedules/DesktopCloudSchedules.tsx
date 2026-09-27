@@ -20,6 +20,7 @@ import { ApprovalCard } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
+  describeScheduleRunTiming,
   type ManagedCloudScheduleTemplate,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRecurrence,
@@ -1214,71 +1215,87 @@ function AuthenticatedDesktopCloudSchedules({
                         </p>
                       ) : (
                         <div className="space-y-2">
-                          {historyState.runs.map((run) => (
-                            <div
-                              key={run.id}
-                              className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-3"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                                <span
-                                  className={
-                                    run.status === 'success'
-                                      ? 'font-medium text-[var(--chat-success-text)]'
-                                      : run.status === 'running'
-                                        ? 'font-medium text-[var(--chat-info-text)]'
-                                        : run.status === 'awaiting_approval'
-                                          ? 'font-medium text-[var(--warning-text)]'
-                                          : 'font-medium text-[var(--chat-destructive-text)]'
-                                  }
-                                >
-                                  {run.status === 'awaiting_approval'
-                                    ? 'needs approval'
-                                    : run.status}
-                                </span>
-                                <span className="text-[var(--chat-text-muted)]">
-                                  {dateTimeLabel(run.startedAt)} · {durationLabel(run.durationMs)}
-                                </span>
+                          {historyState.runs.map((run) => {
+                            const timing = describeScheduleRunTiming(run, (value) =>
+                              dateTimeLabel(value, schedule.timezone),
+                            );
+                            return (
+                              <div
+                                key={run.id}
+                                className="rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-base)] p-3"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                                  <span
+                                    className={
+                                      timing?.skipped
+                                        ? 'font-medium text-[var(--chat-text-secondary)]'
+                                        : run.status === 'success'
+                                          ? 'font-medium text-[var(--chat-success-text)]'
+                                          : run.status === 'running'
+                                            ? 'font-medium text-[var(--chat-info-text)]'
+                                            : run.status === 'awaiting_approval'
+                                              ? 'font-medium text-[var(--warning-text)]'
+                                              : 'font-medium text-[var(--chat-destructive-text)]'
+                                    }
+                                  >
+                                    {timing?.skipped
+                                      ? 'skipped'
+                                      : run.status === 'awaiting_approval'
+                                        ? 'needs approval'
+                                        : run.status}
+                                  </span>
+                                  <span className="text-[var(--chat-text-muted)]">
+                                    {dateTimeLabel(run.startedAt)} · {durationLabel(run.durationMs)}
+                                  </span>
+                                </div>
+                                {runResultText(run) ? (
+                                  <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--chat-text-secondary)]">
+                                    {runResultText(run)}
+                                  </p>
+                                ) : null}
+                                {run.status === 'awaiting_approval' && run.pendingApproval ? (
+                                  <ApprovalCard
+                                    className="mt-2"
+                                    title="Waiting for your approval"
+                                    requests={run.pendingApproval.toolCalls.map((call) => ({
+                                      id: call.id,
+                                      name: call.summary,
+                                      detail: call.name,
+                                    }))}
+                                    approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+                                    denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+                                    onApprove={() =>
+                                      void resolveApproval(schedule, run, 'approved')
+                                    }
+                                    onDeny={() => void resolveApproval(schedule, run, 'rejected')}
+                                    pending={Boolean(busy)}
+                                    meta={`Expires ${dateTimeLabel(run.pendingApproval.expiresAt)}`}
+                                  >
+                                    {run.pendingApproval.toolCalls.map((call) =>
+                                      call.input ? (
+                                        <pre
+                                          key={call.id}
+                                          className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--chat-surface-base)] p-2 font-mono text-xs text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]"
+                                        >
+                                          {call.input}
+                                        </pre>
+                                      ) : null,
+                                    )}
+                                  </ApprovalCard>
+                                ) : null}
+                                {timing ? (
+                                  <p className="mt-2 rounded-md bg-[var(--chat-surface-hover)] px-2 py-1.5 text-xs text-[var(--chat-text-secondary)]">
+                                    {timing.note}
+                                  </p>
+                                ) : null}
+                                {run.error && !timing?.skipped ? (
+                                  <p className="mt-2 text-xs text-[var(--chat-destructive)]">
+                                    {run.error}
+                                  </p>
+                                ) : null}
                               </div>
-                              {runResultText(run) ? (
-                                <p className="mt-2 line-clamp-3 text-xs leading-5 text-[var(--chat-text-secondary)]">
-                                  {runResultText(run)}
-                                </p>
-                              ) : null}
-                              {run.status === 'awaiting_approval' && run.pendingApproval ? (
-                                <ApprovalCard
-                                  className="mt-2"
-                                  title="Waiting for your approval"
-                                  requests={run.pendingApproval.toolCalls.map((call) => ({
-                                    id: call.id,
-                                    name: call.summary,
-                                    detail: call.name,
-                                  }))}
-                                  approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
-                                  denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
-                                  onApprove={() => void resolveApproval(schedule, run, 'approved')}
-                                  onDeny={() => void resolveApproval(schedule, run, 'rejected')}
-                                  pending={Boolean(busy)}
-                                  meta={`Expires ${dateTimeLabel(run.pendingApproval.expiresAt)}`}
-                                >
-                                  {run.pendingApproval.toolCalls.map((call) =>
-                                    call.input ? (
-                                      <pre
-                                        key={call.id}
-                                        className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-[var(--chat-surface-base)] p-2 font-mono text-xs text-[var(--chat-text-secondary)] [overflow-wrap:anywhere]"
-                                      >
-                                        {call.input}
-                                      </pre>
-                                    ) : null,
-                                  )}
-                                </ApprovalCard>
-                              ) : null}
-                              {run.error ? (
-                                <p className="mt-2 text-xs text-[var(--chat-destructive)]">
-                                  {run.error}
-                                </p>
-                              ) : null}
-                            </div>
-                          ))}
+                            );
+                          })}
                           {historyState.hasMore ? (
                             <button
                               type="button"

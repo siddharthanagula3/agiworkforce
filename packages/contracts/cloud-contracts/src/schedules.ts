@@ -567,3 +567,48 @@ export function createManagedCloudSchedulesClient(
     },
   };
 }
+
+export interface ManagedCloudScheduleRunTiming {
+  skipped: boolean;
+  note: string;
+}
+
+function formatScheduleLateness(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+export function describeScheduleRunTiming(
+  run: Pick<ManagedCloudScheduleRun, 'result'>,
+  formatWhen: (iso: string) => string,
+): ManagedCloudScheduleRunTiming | null {
+  const result = run.result ?? {};
+  const skipped = result['skipped'] === true;
+  const missed = recordOf(result['missedExecution']);
+  const scheduledFor = typeof missed?.['scheduledFor'] === 'string' ? missed['scheduledFor'] : null;
+  const lateByMs = typeof missed?.['lateByMs'] === 'number' ? missed['lateByMs'] : null;
+  if (scheduledFor && lateByMs !== null) {
+    const when = formatWhen(scheduledFor);
+    const late = formatScheduleLateness(lateByMs);
+    return skipped
+      ? {
+          skipped,
+          note: `Skipped the run scheduled for ${when}: it was missed by ${late}, and this schedule skips missed runs.`,
+        }
+      : { skipped, note: `Ran late: scheduled for ${when}, started ${late} later.` };
+  }
+  const detail = recordOf(result['conditionWatch'])?.['detail'];
+  if (skipped && typeof detail === 'string' && detail.trim()) {
+    return { skipped, note: `Skipped: the condition was not met. ${detail}` };
+  }
+  return null;
+}
