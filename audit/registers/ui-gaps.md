@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 090ba860dff11b575a5531ba9d189d18a5bda968654f7877047934e429bdcbc5 -->
+<!-- ui-gaps-csv-sha256: a7b8b5cc5115fc8082f58cb44a645097652614d53c0ceecbbfb4fce1e96aaa65 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
