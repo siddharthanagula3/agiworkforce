@@ -24,6 +24,7 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use executor::ToolCall;
+pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
