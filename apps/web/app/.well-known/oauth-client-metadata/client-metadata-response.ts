@@ -17,9 +17,8 @@ export function clientMetadataResponse(document: McpClientMetadataDocument | nul
   return NextResponse.json(document, {
     status: 200,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'public, max-age=300, must-revalidate',
-      'Access-Control-Allow-Origin': '*',
+      'Content-Type': 'application/json',
+      'Cache-Control': 'public, max-age=300',
     },
   });
 }

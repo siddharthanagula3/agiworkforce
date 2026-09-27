@@ -7,5 +7,5 @@ import { clientMetadataResponse } from '../client-metadata-response';
 export const dynamic = 'force-dynamic';
 
 export function GET(): NextResponse {
-  return clientMetadataResponse(buildMcpNativeClientMetadataDocument());
+  return clientMetadataResponse(buildMcpNativeClientMetadataDocument('desktop'));
 }

@@ -43,7 +43,7 @@ stay valid for every model provider.
 `google-calendar` reads `CONNECTOR_OAUTH_GOOGLE_CALENDAR_CLIENT_ID`. A
 descriptor whose pair is missing is treated as absent, never advertised.
 
-Three URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
+Four URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
 
 - Redirect URI: `<origin>/api/connectors/oauth/callback`
   (`CONNECTOR_OAUTH_CALLBACK_PATH` in `packages/contracts/cloud-contracts`).
@@ -51,14 +51,15 @@ Three URLs derive from `CONNECTOR_OAUTH_REDIRECT_BASE_URL`:
 - Web client metadata document, the hosted app's client id at servers that
   accept one by URL: `<origin>/.well-known/oauth-client-metadata`. It lists only
   the redirect URI above and declares `application_type` `web`.
-- Native client metadata document, the client id the desktop app and the CLI
-  present: `<origin>/.well-known/oauth-client-metadata/native`. It lists the
-  loopback redirects `http://127.0.0.1/callback`, `http://[::1]/callback` and
+- Native client metadata documents, one per app so each consent screen names
+  it: `<origin>/.well-known/oauth-client-metadata/cli` ("AGI Workforce CLI")
+  and `<origin>/.well-known/oauth-client-metadata/desktop` ("AGI Workforce
+  Desktop"). Each lists the loopback redirects `http://127.0.0.1/callback` and
   `http://localhost/callback`, which a server must accept on any port, and
   declares `application_type` `native`. Keeping loopback redirects out of the
   web document means no local process can present itself as the hosted app.
 
-Both documents need HTTPS, so a localhost build registers dynamically instead.
+These documents need HTTPS, so a localhost build registers dynamically instead.
 
 The GitHub App uses its own callback: `<origin>/api/github/oauth/callback`.
 
