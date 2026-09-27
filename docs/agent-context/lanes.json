@@ -343,7 +343,6 @@
       "ownedWritePaths": [
         ".github/**",
         "scripts/release.sh",
-        "scripts/publish-cli.sh",
         "scripts/launch-*.sh",
         "apps/desktop/src-tauri/tauri.conf.json"
       ],

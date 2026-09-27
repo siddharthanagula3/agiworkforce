@@ -174,7 +174,7 @@ impl InstallPlan {
     }
 }
 
-/// Stated wherever `--install` is described: `scripts/install.sh` checks the
+/// Stated wherever `--install` is described: `apps/web/public/install.sh` checks the
 /// release's signed checksum manifest before it installs anything.
 pub const INSTALL_SIGNING_NOTE: &str = "The installer verifies the release's signed checksum \
 manifest and refuses to install anything it cannot verify.";
