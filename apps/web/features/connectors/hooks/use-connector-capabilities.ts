@@ -36,6 +36,7 @@ const ConnectorCapabilityCatalogSchema = z.object({
     CatalogItemSchema.extend({
       visibility: z.enum(['model', 'app', 'both']),
       hasApp: z.boolean(),
+      readOnly: z.boolean().default(false),
     }),
   ),
   resources: z.array(
