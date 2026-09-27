@@ -101,14 +101,12 @@ describe('public billing truth', () => {
     expect(mapping).toContain('STRIPE_PRICE_TEAM_MONTHLY_INR');
   });
 
-  it('does not prepend a second currency symbol to localized annual prices', () => {
+  it('does not prepend a second currency symbol to localized billing copy', () => {
     for (const locale of ['en', 'es']) {
       const pricing = JSON.parse(read(`../../packages/ui/i18n/locales/${locale}/pricing.json`)) as {
-        compareProInterval: string;
         compareTeamBilling: string;
       };
 
-      expect(pricing.compareProInterval).not.toContain('${{yearly}}');
       expect(pricing.compareTeamBilling).not.toMatch(/\{\{|\$|€/);
     }
   });

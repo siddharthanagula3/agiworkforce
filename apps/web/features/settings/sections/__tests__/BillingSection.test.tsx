@@ -196,6 +196,73 @@ describe('BillingSection', () => {
     expect(screen.getByText('$25/mo per seat')).toBeTruthy();
   });
 
+  const YEARLY_PRO_PRICE = { amountCents: 20_000, currency: 'usd', interval: 'yearly' };
+  const MONTHLY_PRO_PRICE = { amountCents: 2_000, currency: 'usd', interval: 'monthly' };
+  const YEARLY_PRO_STATE = {
+    plan: 'pro',
+    status: 'active',
+    price: YEARLY_PRO_PRICE,
+    periodEnd: '2027-01-15T00:00:00.000Z',
+    trialStart: null,
+    trialEnd: null,
+    cancelAt: null,
+    scheduledChange: null,
+    downgradeTargets: [],
+    downgradeBlock: null,
+    cadenceSwitch: { plan: 'pro', price: MONTHLY_PRO_PRICE },
+  };
+
+  function planStateFetch(onPost: () => unknown = () => YEARLY_PRO_STATE) {
+    return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes('/api/billing/downgrade-preview')
+        ? ({
+            ok: true,
+            json: async () => (init?.method === 'POST' ? onPost() : YEARLY_PRO_STATE),
+          } as Response)
+        : ({ ok: true, json: async () => ({}) } as Response),
+    );
+  }
+
+  it('keeps a yearly Pro subscriber on what they bought and says nothing changes', async () => {
+    global.fetch = planStateFetch();
+
+    render(<BillingSection />);
+
+    expect(await screen.findByText('$200/year')).toBeTruthy();
+    expect(screen.queryByText('$20/mo')).toBeNull();
+    expect(
+      screen.getByText(
+        'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('switches a yearly Pro subscriber to monthly billing at renewal after confirming', async () => {
+    const fetchMock = planStateFetch(() => ({
+      ...YEARLY_PRO_STATE,
+      scheduledChange: {
+        plan: 'pro',
+        effectiveAt: '2027-01-15T00:00:00.000Z',
+        price: MONTHLY_PRO_PRICE,
+      },
+    }));
+    global.fetch = fetchMock;
+
+    render(<BillingSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Switch to monthly billing' }));
+    const confirmation = await screen.findByRole('alertdialog');
+    expect(confirmation).toHaveTextContent(/yearly billing is no longer available for Pro/);
+    fireEvent.click(within(confirmation).getByRole('button', { name: 'Switch to monthly' }));
+
+    expect(await screen.findByText(/Your Pro plan switches to monthly billing on/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Keep yearly billing' })).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).includes('downgrade-preview') && init?.method === 'POST',
+    );
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ plan: 'pro' });
+  });
+
   it('labels an operator-provisioned plan without inventing Stripe controls', () => {
     mockSubscription.subscription_source = 'manual';
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);

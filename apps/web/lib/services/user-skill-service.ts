@@ -4,10 +4,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { hashSkillContent, type Skill } from '@agiworkforce/skills';
 import { validateSkillDraft, type SkillDraft } from '@agiworkforce/skills/validation';
 import { createError } from '@/lib/errors';
-import { userSkillAuthoringEnabled } from './user-skill-authoring';
+import { requireUserSkillAuthoring, userSkillAuthoringEnabled } from './user-skill-authoring';
 
 const PG_UNIQUE_VIOLATION = '23505';
-const USER_SKILL_AUTHORING_DISABLED_MESSAGE = 'Skill authoring is not available.';
 
 export interface UserSkillRecord {
   id: string;
@@ -63,12 +62,6 @@ function isUniqueViolation(error: unknown): boolean {
 function requireValidDraft(draft: SkillDraft): void {
   const result = validateSkillDraft(draft);
   if (!result.ok) throw createError.validation(result.errors.join(' '));
-}
-
-function requireUserSkillAuthoringEnabled(): void {
-  if (!userSkillAuthoringEnabled()) {
-    throw createError.notFound(USER_SKILL_AUTHORING_DISABLED_MESSAGE);
-  }
 }
 
 const USER_SKILL_SOURCE = 'personal' satisfies Skill['source'];
@@ -155,7 +148,7 @@ export async function createUserSkill(
   userId: string,
   draft: SkillDraft,
 ): Promise<UserSkillRecord> {
-  requireUserSkillAuthoringEnabled();
+  requireUserSkillAuthoring();
   requireValidDraft(draft);
   const name = draft.name.trim();
   try {
@@ -180,7 +173,7 @@ export async function updateUserSkill(
   currentName: string,
   draft: SkillDraft,
 ): Promise<UserSkillRecord | null> {
-  requireUserSkillAuthoringEnabled();
+  requireUserSkillAuthoring();
   requireValidDraft(draft);
   const name = draft.name.trim();
   try {
@@ -205,7 +198,7 @@ export async function deleteUserSkill(
   userId: string,
   name: string,
 ): Promise<boolean> {
-  requireUserSkillAuthoringEnabled();
+  requireUserSkillAuthoring();
   const affected = await db.execute(`delete from user_skills where user_id = $1 and name = $2`, [
     userId,
     name,

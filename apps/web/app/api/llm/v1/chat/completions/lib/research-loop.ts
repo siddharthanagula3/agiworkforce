@@ -64,7 +64,23 @@ import {
   toolResultEvent,
   trimToolResultHistory,
   applyToolResultSecretPolicy,
+  hasPrivateContext,
+  hasUntrustedContext,
 } from './tool-loop';
+import {
+  batchIntroducesUntrustedContent,
+  resolveToolCallGate,
+  type ToolCallGate,
+} from './tool-call-gate';
+import { classifyToolLoopInputs } from './tool-loop-routing';
+import {
+  EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  type ConnectorToolPermissions,
+} from './connector-tool-permissions';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  type ToolApprovalPolicy,
+} from '@shared/types/toolApprovalPolicy';
 import { armProviderDeadlines } from './provider-deadlines';
 import {
   PROVIDER_FIRST_TOKEN_DEADLINE_MS,
@@ -281,6 +297,8 @@ export interface ResearchLoopOptions {
    * unproductive round ends the gathering phase) as well as the report's shape.
    */
   deliverable?: ResearchDeliverableSpec;
+  toolApprovalPolicy?: ToolApprovalPolicy;
+  connectorPermissions?: ConnectorToolPermissions;
 }
 
 // ─── SSE helpers ──────────────────────────────────────────────────────────────
@@ -1143,6 +1161,10 @@ function queryTokens(value: string): Set<string> {
   );
 }
 
+function normalizedQuery(value: unknown): string {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').toLowerCase() : '';
+}
+
 function queryOverlap(a: string, b: string): number {
   const left = queryTokens(a);
   const right = queryTokens(b);
@@ -1572,6 +1594,51 @@ export async function* runResearchLoop(
     }
   }
 
+  const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
+  const connectorPermissions = options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS;
+  const approvalMode = classifyToolLoopInputs([], researchTools, toolApprovalPolicy).approvalMode;
+  const sensitiveSourceAvailable =
+    hasPrivateContext(processed, messages) || (options.fileSources?.length ?? 0) > 0;
+  let untrustedContentInContext = hasUntrustedContext(processed, messages);
+  const approvedQueries = new Set(approvedPlan.map((step) => normalizedQuery(step.description)));
+
+  function gateResearchCall(
+    call: ResearchToolCall,
+    batch: readonly ResearchToolCall[],
+  ): ToolCallGate {
+    return resolveToolCallGate(
+      {
+        qualifiedName: call.name,
+        savedLevel: connectorPermissions.levelFor(call.name),
+        batchIntroducesUntrustedContent: batchIntroducesUntrustedContent(
+          call.id,
+          batch.map((other) => ({ id: other.id, qualifiedName: other.name })),
+        ),
+      },
+      {
+        approvalMode,
+        toolApprovalPolicy,
+        unattended: false,
+        deviceHostPresent: false,
+        untrustedContentInContext,
+        sensitiveSourceAvailable,
+      },
+    );
+  }
+
+  function researchCallRefusal(call: ResearchToolCall, gate: ToolCallGate): string | null {
+    if (gate.verdict === 'allow') return null;
+    if (gate.verdict === 'deny') {
+      return `Tool "${call.name}" is blocked by this account's permissions and was not run. Do not retry it; continue with the material already gathered.`;
+    }
+    if (isWebSearchTool(call.name) && approvedQueries.has(normalizedQuery(call.args['query']))) {
+      return null;
+    }
+    return gate.reason === 'lethal_trifecta'
+      ? `Tool "${call.name}" was not run: untrusted content is in this research and the call could send data out of it, which a person has to approve, and a research run cannot stop partway through to ask. Do not retry it; continue with the material already gathered.`
+      : `Tool "${call.name}" was not run: this account asks before actions like this one, and a research run cannot stop partway through to ask. Only the searches approved on the research plan run, exactly as written. Continue with the material already gathered.`;
+  }
+
   const status = (phase: ResearchPhase, label: string): Uint8Array =>
     encoder.encode(
       researchStatusEvent(
@@ -1686,6 +1753,7 @@ export async function* runResearchLoop(
               },
             );
           }
+          if (next.value.searchEvents > 0) untrustedContentInContext = true;
           return {
             ...next.value,
             // Same fallback shape as the usage reconciliation above: prefer the
@@ -1744,12 +1812,28 @@ export async function* runResearchLoop(
     }
     turnMessages.push(assistantMessage);
 
+    const refusals = new Map(
+      calls
+        .filter(
+          (call) =>
+            (runtimeSearchAvailable && isWebSearchTool(call.name)) || isUrlFetchTool(call.name),
+        )
+        .map(
+          (call) => [call.id, researchCallRefusal(call, gateResearchCall(call, calls))] as const,
+        ),
+    );
+
     for (const call of calls) {
       if (yield* flushCancellationIfRequested()) return true;
       let content: string;
       let isError: boolean;
+      const refusal = refusals.get(call.id);
 
-      if (runtimeSearchAvailable && isWebSearchTool(call.name)) {
+      if (refusal) {
+        content = await applyToolResultSecretPolicy(_billing.userId, call.name, refusal);
+        isError = true;
+        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+      } else if (runtimeSearchAvailable && isWebSearchTool(call.name)) {
         const runBudgetReached = totalSearches + roundCounts.searches >= maxSearches;
         const searchBudgetReached =
           runBudgetReached || roundCounts.searches >= WEB_SEARCH_MAX_CALLS_PER_TURN;
@@ -1842,6 +1926,7 @@ export async function* runResearchLoop(
               { queryText: outcome.query },
             );
             for (const { originalIndex } of ranked) sources.add(fetched[originalIndex]!);
+            untrustedContentInContext = true;
           }
           isError = !outcome.ok;
           content = await applyToolResultSecretPolicy(
@@ -1902,6 +1987,7 @@ export async function* runResearchLoop(
           });
           content = fenceFetchedPage(outcome.url, outcome.title, outcome.content);
           isError = false;
+          untrustedContentInContext = true;
         } else {
           content = `Fetch failed (${outcome.errorCode}): ${outcome.error}`;
           isError = true;

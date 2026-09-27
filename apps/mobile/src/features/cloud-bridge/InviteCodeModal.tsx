@@ -100,7 +100,7 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
             justifyContent: 'center',
           }}
         >
-          <Check size={24} color={colors.white} strokeWidth={2.5} />
+          <Check size={24} color={colors.accentText} strokeWidth={2.5} />
         </View>
         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
           {cloudChatAvailable ? 'AGI Cloud unlocked' : 'Invitation saved'}
@@ -273,7 +273,7 @@ function WaitlistTab({ onWaitlisted, onClose, confirmedBody }: WaitlistTabProps)
             justifyContent: 'center',
           }}
         >
-          <Check size={32} color={colors.white} strokeWidth={2.5} />
+          <Check size={32} color={colors.accentText} strokeWidth={2.5} />
         </View>
         <Text style={{ fontSize: 22, fontWeight: '700', color: colors.textPrimary }}>
           You're confirmed.

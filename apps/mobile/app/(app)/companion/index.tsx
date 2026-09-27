@@ -134,8 +134,8 @@ export default function CompanionScreen() {
 
   const handleDisconnect = useCallback(() => {
     Alert.alert(
-      'Disconnect',
-      `Are you sure you want to disconnect from ${desktopName ?? 'Desktop'}?`,
+      `Disconnect from ${desktopName ?? 'Desktop'}?`,
+      'This ends the pairing. To connect again, scan a new QR code on the computer.',
       [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Disconnect', style: 'destructive', onPress: disconnect },

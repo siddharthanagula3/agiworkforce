@@ -35,7 +35,7 @@ Code: `packages/contracts/types/src/capabilities.ts:57-57`, `apps/web/features/c
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The installed app launches start_url '/', which crashes for signed-in users (LQA-03 identity provider missing on the rewrite); fix that crash or point start_url at /chat. No install prompt or install help in the product. | states |
+| web | partial | The installed app no longer crashes at its start URL for signed-in users (the identity provider now mounts for the rewritten route). Still open: the product offers no install prompt or install help. | states |
 
 Code: `apps/web/app/manifest.ts:3-11`, `apps/web/proxy.ts:106-108`, `apps/web/lib/identity/browser-provider-routes.ts:18-24`
 

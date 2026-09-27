@@ -1,13 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const pricing = vi.hoisted(() => ({
+  getPriceSelectionForCurrency: vi.fn(),
+  resolvePlanTier: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/localized-pricing-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/localized-pricing-service')>()),
+  getPriceSelectionForCurrency: pricing.getPriceSelectionForCurrency,
+}));
+vi.mock('@/lib/price-tier-mapping', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/price-tier-mapping')>()),
+  resolvePlanTier: pricing.resolvePlanTier,
+}));
 
+import type Stripe from 'stripe';
+import type { ManagedStripeSubscription } from '../stripe-upgrade-subscription';
 import {
-  assertSameCheckoutBillingInterval,
+  assertUpgradeBillingInterval,
   checkoutBillingIntervalFromStripePrice,
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
+  readPlanChangeState,
+  scheduleDowngrade,
 } from '../stripe-plan-change';
 
 describe('Stripe billing cadence', () => {
@@ -26,11 +43,192 @@ describe('Stripe billing cadence', () => {
 
   it('refuses a monthly-to-yearly switch on the prorated upgrade path', () => {
     expect(() =>
-      assertSameCheckoutBillingInterval(
+      assertUpgradeBillingInterval(
         { interval: 'month', interval_count: 1 } as never,
         'yearly',
+        'team',
       ),
     ).toThrow(/charged only the prorated difference/i);
+    expect(() =>
+      assertUpgradeBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'team',
+      ),
+    ).toThrow(/charged only the prorated difference/i);
+  });
+
+  it('moves a yearly subscriber onto the monthly price of a plan sold monthly only', () => {
+    expect(() =>
+      assertUpgradeBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'max',
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertUpgradeBillingInterval(
+        { interval: 'year', interval_count: 1 } as never,
+        'monthly',
+        'max_15x',
+      ),
+    ).not.toThrow();
+  });
+});
+
+const YEARLY_PRO = {
+  id: 'price_pro_yearly',
+  unit_amount: 20_000,
+  currency: 'usd',
+  recurring: { interval: 'year', interval_count: 1 },
+};
+const MONTHLY_PRO = {
+  id: 'price_pro_monthly',
+  unit_amount: 2_000,
+  currency: 'usd',
+  recurring: { interval: 'month', interval_count: 1 },
+};
+const MONTHLY_AMOUNTS: Record<string, number> = { basic: 700, pro: 2_000, max: 10_000 };
+
+function managedOn(
+  price: typeof YEARLY_PRO,
+  schedule: string | null = null,
+): ManagedStripeSubscription {
+  return {
+    row: { plan_tier: 'pro' },
+    customerId: 'cus_yearly',
+    subscriptionId: 'sub_yearly',
+    subscription: {
+      id: 'sub_yearly',
+      status: 'active',
+      metadata: {},
+      schedule,
+      cancel_at: null,
+      cancel_at_period_end: false,
+      trial_start: null,
+      trial_end: null,
+      items: { data: [{ price, quantity: 1, current_period_end: 1_800_000_000 }] },
+    },
+  } as unknown as ManagedStripeSubscription;
+}
+
+describe('a yearly Pro subscription after individual plans became monthly only', () => {
+  beforeEach(() => {
+    pricing.resolvePlanTier.mockReset().mockReturnValue('pro');
+    pricing.getPriceSelectionForCurrency
+      .mockReset()
+      .mockImplementation(async (plan: string, interval: string) =>
+        interval === 'monthly'
+          ? {
+              priceId: `price_${plan}_monthly`,
+              currency: 'usd',
+              amountMinor: MONTHLY_AMOUNTS[plan],
+            }
+          : null,
+      );
+  });
+
+  it('keeps renewing yearly and offers only monthly prices to move to', async () => {
+    const state = await readPlanChangeState({} as Stripe, managedOn(YEARLY_PRO));
+
+    expect(state.price).toEqual({ amountCents: 20_000, currency: 'usd', interval: 'yearly' });
+    expect(state.scheduledChange).toBeNull();
+    expect(state.downgradeTargets).toEqual([
+      { plan: 'basic', price: { amountCents: 700, currency: 'usd', interval: 'monthly' } },
+    ]);
+    expect(state.cadenceSwitch).toEqual({
+      plan: 'pro',
+      price: { amountCents: 2_000, currency: 'usd', interval: 'monthly' },
+    });
+    expect(pricing.getPriceSelectionForCurrency).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'yearly',
+      expect.anything(),
+    );
+  });
+
+  it('offers no cadence switch to a subscription already billed monthly', async () => {
+    const state = await readPlanChangeState({} as Stripe, managedOn(MONTHLY_PRO));
+
+    expect(state.cadenceSwitch).toBeNull();
+  });
+
+  it('schedules the switch to monthly Pro for the end of the yearly term', async () => {
+    const phase = {
+      start_date: 1_760_000_000,
+      end_date: 1_800_000_000,
+      items: [{ price: 'price_pro_yearly', quantity: 1 }],
+      discounts: [],
+      trial_end: null,
+    };
+    const stripe = {
+      subscriptionSchedules: {
+        create: vi.fn(async () => ({
+          id: 'sub_sched_1',
+          current_phase: { start_date: phase.start_date, end_date: phase.end_date },
+          phases: [phase],
+        })),
+        update: vi.fn(async () => ({})),
+      },
+    };
+
+    await scheduleDowngrade(stripe as unknown as Stripe, managedOn(YEARLY_PRO), 'pro', 'key-1');
+
+    expect(stripe.subscriptionSchedules.update).toHaveBeenCalledWith(
+      'sub_sched_1',
+      expect.objectContaining({
+        end_behavior: 'release',
+        phases: [
+          expect.objectContaining({ end_date: phase.end_date }),
+          expect.objectContaining({
+            items: [{ price: 'price_pro_monthly', quantity: 1 }],
+            duration: { interval: 'month', interval_count: 1 },
+            metadata: { plan_tier: 'pro' },
+          }),
+        ],
+      }),
+      { idempotencyKey: 'key-1:phases' },
+    );
+  });
+
+  it('refuses the same switch for a subscription already billed monthly', async () => {
+    await expect(
+      scheduleDowngrade({} as Stripe, managedOn(MONTHLY_PRO), 'pro', 'key-2'),
+    ).rejects.toThrow(/not a smaller plan/i);
+  });
+
+  it('reads a scheduled switch to monthly on the same plan as a plan change', async () => {
+    const stripe = {
+      subscriptionSchedules: {
+        retrieve: vi.fn(async () => ({
+          status: 'active',
+          current_phase: { start_date: 1_760_000_000, end_date: 1_800_000_000 },
+          phases: [
+            {
+              start_date: 1_760_000_000,
+              items: [{ price: YEARLY_PRO, quantity: 1 }],
+              metadata: {},
+            },
+            {
+              start_date: 1_800_000_000,
+              items: [{ price: MONTHLY_PRO, quantity: 1 }],
+              metadata: { plan_tier: 'pro' },
+            },
+          ],
+        })),
+      },
+    };
+
+    const state = await readPlanChangeState(
+      stripe as unknown as Stripe,
+      managedOn(YEARLY_PRO, 'sub_sched_1'),
+    );
+
+    expect(state.scheduledChange).toEqual({
+      plan: 'pro',
+      effectiveAt: new Date(1_800_000_000 * 1000).toISOString(),
+      price: { amountCents: 2_000, currency: 'usd', interval: 'monthly' },
+    });
   });
 });
 

@@ -52,9 +52,6 @@ vi.mock('next/navigation', () => ({ useRouter: () => routerMocks }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, unknown>) => {
-      if (key === 'compareProInterval' && values?.['yearly']) {
-        return `${key} ${String(values['yearly'])}`;
-      }
       if (key === 'seatCadenceMonthly') {
         return `${String(values?.['count'])} seats · billed monthly`;
       }
@@ -331,8 +328,8 @@ describe('PricingPage', () => {
 
     render(<PricingPage />);
 
-    // The Team card exposes its own monthly/yearly cadence, separate from the
-    // individual-plan annual toggle.
+    // Team is the only plan sold yearly, so its card carries the only cadence
+    // toggle on the page.
     await showTeamAndEnterprise();
     const teamCadence = await screen.findByRole('group', { name: 'Team billing cadence' });
     fireEvent.click(within(teamCadence).getByRole('button', { name: /annual/i }));
@@ -419,10 +416,10 @@ describe('PricingPage', () => {
       'Free free foreverLabel planCreditWindows Yes 1 project 1 custom MCP Yes No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthly planCreditWindows Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
+      'Basic $7/mo monthlyOnly planCreditWindows Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo compareProInterval $16.67 planCreditWindows · usageMultiplierAll Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
+      'Pro $20/mo monthlyOnly planCreditWindows · usageMultiplierAll Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
       'Max 5x $100/mo monthlyOnly planCreditWindows · usageMultiplierAll Yes Unlimited Unlimited Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
@@ -515,7 +512,7 @@ describe('PricingPage', () => {
     expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();
   });
 
-  it('carries the yearly choice to the order screen so it does not price monthly', async () => {
+  it('sells individual plans monthly only, with no annual toggle beside them', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'basic', status: 'active' };
     testState.account.subscription = {
@@ -525,12 +522,10 @@ describe('PricingPage', () => {
     };
 
     render(<PricingPage />);
-    fireEvent.click(screen.getByRole('button', { name: /annual/i }));
+    expect(screen.queryByRole('button', { name: /annual/i })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'proCta' }));
 
-    await waitFor(() =>
-      expect(routerMocks.push).toHaveBeenCalledWith('/upgrade/pro?interval=yearly'),
-    );
+    await waitFor(() => expect(routerMocks.push).toHaveBeenCalledWith('/upgrade/pro'));
   });
 
   it('keeps refetching after confirm until the webhook has actually moved the plan', async () => {
@@ -704,12 +699,6 @@ describe('PricingPage', () => {
               localized: false,
               checkoutReady: true,
             },
-            yearly: {
-              amountMinor: 20_000,
-              currency: 'usd',
-              localized: false,
-              checkoutReady: true,
-            },
           },
           max: {
             monthly: {
@@ -766,7 +755,7 @@ describe('PricingPage', () => {
     expect(screen.getByRole('button', { name: 'basicCta' })).toBeDisabled();
   });
 
-  it('uses localized annual Pro pricing while keeping Team custom', async () => {
+  it('uses localized monthly Pro pricing while keeping Team per seat', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -776,13 +765,7 @@ describe('PricingPage', () => {
           basic: {},
           pro: {
             monthly: {
-              amountMinor: 1_800,
-              currency: 'gbp',
-              localized: true,
-              checkoutReady: true,
-            },
-            yearly: {
-              amountMinor: 18_000,
+              amountMinor: 1_700,
               currency: 'gbp',
               localized: true,
               checkoutReady: true,
@@ -803,12 +786,9 @@ describe('PricingPage', () => {
     } as Response);
 
     render(<PricingPage />);
-    fireEvent.click(screen.getByRole('button', { name: /annual/i }));
 
-    await waitFor(() => expect(screen.getAllByText('£15').length).toBeGreaterThan(0));
-    expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£15');
-    // Team is per seat and monthly-only: the annual toggle must not divide its
-    // per-seat price by twelve the way it does Pro's yearly price.
+    await waitFor(() => expect(screen.getAllByText('£17').length).toBeGreaterThan(0));
+    expect(screen.getByRole('row', { name: /^Pro / })).toHaveTextContent('£17/mo');
     expect(screen.getByRole('row', { name: /^Team / })).toHaveTextContent('£18/seat/mo');
     expect(screen.getAllByText('£18/seat/mo').length).toBeGreaterThan(0);
   });
