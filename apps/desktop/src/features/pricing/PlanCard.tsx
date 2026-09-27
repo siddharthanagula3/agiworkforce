@@ -5,6 +5,7 @@ import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
   creditAmount,
+  getPublishedPlanPricePerMonthUsd,
   getPublishedPlanPriceUsd,
   isFreePlan,
   isSelfServePaidPlanTier,
@@ -14,6 +15,7 @@ import {
 
 interface TierContent {
   price: string;
+  priceNote?: string;
   bullets: string[];
   ctaLabel: string;
   ctaVariant: 'primary' | 'current';
@@ -54,7 +56,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   basic: {
-    price: `$${getPublishedPlanPriceUsd('basic', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('basic')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -65,25 +67,36 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('pro')} / mo`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('max')} / mo`,
     bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPublishedPlanPriceUsd('max_15x', 'monthly')} / mo`,
+    price: `$${getPublishedPlanPriceUsd('max_15x')} / mo`,
     bullets: [
       'Highest individual usage limits',
       'Every flagship model included',
       'Video generation access',
     ],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max_15x}`,
+    ctaVariant: 'primary',
+  },
+  team: {
+    price: `$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`,
+    priceNote: `Billed yearly, or $${getPublishedPlanPriceUsd('team')} per seat billed monthly`,
+    bullets: [
+      'Shared workspaces and organization administration',
+      'Owner and admin roles with member management',
+      'One organization invoice, billed per seat',
+    ],
+    ctaLabel: 'Choose seats',
     ctaVariant: 'primary',
   },
 };
@@ -153,7 +166,12 @@ export function PlanCard({
         </div>
       </div>
 
-      <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
+      <div>
+        <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
+        {content.priceNote ? (
+          <p className="mt-0.5 text-[10px] text-muted-foreground">{content.priceNote}</p>
+        ) : null}
+      </div>
 
       <ul className="flex-1 space-y-1.5">
         {bullets.map((bullet) => (
