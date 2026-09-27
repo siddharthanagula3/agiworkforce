@@ -589,6 +589,74 @@ describe('cloud agent execution service', () => {
     );
   });
 
+  it('keeps native tool fees and the Free tool spend a durable turn recorded', async () => {
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        provider_calls: '2',
+        input_tokens: '130',
+        output_tokens: '34',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        cache_write_1h_tokens: '0',
+        reasoning_tokens: '0',
+        tool_spend_microusd: '5000',
+        provider_usage_receipts: [
+          {
+            inputTokens: 100,
+            outputTokens: 20,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            cacheWrite1hTokens: 0,
+            reasoningTokens: 0,
+            webSearchRequests: 2,
+            hostedCodeExecution: {
+              provider: 'openai',
+              requests: 1,
+              containerIds: ['cntr_1'],
+              elapsedMs: 30_000,
+            },
+          },
+          {
+            inputTokens: 30,
+            outputTokens: 14,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+            cacheWrite1hTokens: 0,
+            reasoningTokens: 0,
+            webSearchRequests: 1,
+            webFetchRequests: 2,
+            toolSpendMicrousd: 1_500,
+          },
+        ],
+      },
+    ]);
+
+    const usage = await getCloudAgentExecutionUsage(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+    });
+
+    expect(usage).toMatchObject({
+      providerCalls: 2,
+      inputTokens: 130,
+      outputTokens: 34,
+      webSearchRequests: 3,
+      webFetchRequests: 2,
+      hostedCodeExecution: {
+        provider: 'openai',
+        requests: 1,
+        containerIds: ['cntr_1'],
+        elapsedMs: 30_000,
+      },
+      toolSpendMicrousd: 6_500,
+    });
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringMatching(/operation_kind = 'tool'[\s\S]*toolSpendMicrousd/),
+      [RUN_ID, 'user-1', 'agi.chat.web.request-1'],
+    );
+  });
+
   it('rebuilds two subthreshold call observations from durable provider receipts', async () => {
     const observation = (costDollars: number) => ({
       inputTokens: 75,
