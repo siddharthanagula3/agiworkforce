@@ -55,7 +55,7 @@ export function SendButton({
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
           disabled
             ? 'bg-muted text-muted-foreground cursor-not-allowed'
-            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80',
+            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80',
           className,
         )}
         title={t(
@@ -80,7 +80,7 @@ export function SendButton({
         'flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,color,box-shadow,opacity] duration-quick',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]',
         canSend
-          ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-md hover:opacity-80'
+          ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80'
           : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)] cursor-not-allowed',
         className,
       )}

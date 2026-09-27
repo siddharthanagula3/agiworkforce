@@ -1258,7 +1258,7 @@ export function ChatInput({
                       className={cn(
                         'flex h-7 items-center rounded-full px-3 transition-colors',
                         workMode === mode
-                          ? 'bg-[var(--chat-surface-elevated)] text-[var(--chat-text-primary)] shadow-sm'
+                          ? 'bg-[var(--chat-surface-elevated)] text-[var(--chat-text-primary)] shadow-e1'
                           : 'text-[var(--chat-text-secondary)] hover:text-[var(--chat-text-primary)]',
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
@@ -1452,7 +1452,7 @@ export function ChatInput({
               ref={scopePanelRef}
               role="listbox"
               aria-label={t('composer.projectOrFolder', 'Project or folder')}
-              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl"
+              className="absolute bottom-full left-0 z-[var(--z-dropdown)] mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-e4"
             >
               {!canUseAgiWork && (
                 <p

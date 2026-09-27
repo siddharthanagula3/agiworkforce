@@ -160,7 +160,7 @@ export function MemoryEditor({
       {confirmDialog}
       {title ? (
         <div className="flex flex-col gap-1">
-          <h3 className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</h3>
+          <h3 className="text-h4 text-[var(--chat-text-primary)]">{title}</h3>
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
