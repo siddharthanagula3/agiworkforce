@@ -6,6 +6,7 @@ import {
   describeDelegationTools,
   resolveLiveVoiceDelegationTools,
 } from '@/lib/voice/live-voice-tools';
+import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 
 const LIVE_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live'))!;
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
@@ -218,7 +219,8 @@ describe('POST /api/voice/live/sessions', () => {
     // inside the provider, so a tool shape written out here would drift from the
     // one the chat path sends and take the whole session down with it.
     expect(sent.session.delegation.responses.tools).toEqual(
-      resolveLiveVoiceDelegationTools(BACKEND_MODEL),
+      resolveLiveVoiceDelegationTools(BACKEND_MODEL, WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY)
+        .tools,
     );
     expect(sent.session.delegation.responses.tools.length).toBeGreaterThan(0);
     expect(sent.transport).toEqual({ type: 'webrtc', sdp: OFFER });
@@ -288,7 +290,10 @@ describe('POST /api/voice/live/sessions', () => {
     );
     // The tools the delegation was offered are what a later audit reads back,
     // so the record carries the resolver's answer rather than an empty list.
-    const offeredTools = describeDelegationTools(resolveLiveVoiceDelegationTools(BACKEND_MODEL));
+    const offeredTools = describeDelegationTools(
+      resolveLiveVoiceDelegationTools(BACKEND_MODEL, WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY)
+        .tools,
+    );
     expect(offeredTools.length).toBeGreaterThan(0);
     expect(JSON.parse(String(insert?.[1]?.[10]))).toEqual(offeredTools);
   });
@@ -603,8 +608,12 @@ describe('POST /api/voice/live/sessions replayed', () => {
   });
 
   it('holds one live session once when the same offer is sent twice', async () => {
-    const first = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
-    const second = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const first = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
+    const second = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(409);
@@ -625,8 +634,12 @@ describe('POST /api/voice/live/sessions replayed', () => {
   });
 
   it('opens a second hold for a session the user deliberately starts', async () => {
-    const first = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
-    const second = await POST(request({ sdp: SECOND_OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const first = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
+    const second = await POST(
+      request({ sdp: SECOND_OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
 
     expect(first.status).toBe(201);
     expect(second.status).toBe(201);
@@ -638,12 +651,16 @@ describe('POST /api/voice/live/sessions replayed', () => {
     mocks.fetch.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: { code: 'server_error' } }), { status: 500 }),
     );
-    const failed = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const failed = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
 
     expect(failed.status).not.toBe(201);
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
 
-    const retry = await POST(request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }));
+    const retry = await POST(
+      request({ sdp: OFFER, voice: 'quartz', conversationId: CONVERSATION_ID }),
+    );
 
     expect(retry.status).toBe(409);
     expect(await errorCode(retry)).toBe('idempotency_replay');
