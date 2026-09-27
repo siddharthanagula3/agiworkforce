@@ -1530,6 +1530,102 @@
             "description": "Pass as `page`, with the same `from` and `to`, to read the next day buckets."
           }
         }
+      },
+      "ScheduleRun": {
+        "type": "object",
+        "required": ["id", "taskId", "status", "triggerSource", "startedAt", "idempotencyKey"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "success", "failed", "timeout", "cancelled", "awaiting_approval"]
+          },
+          "triggerSource": {
+            "type": "string",
+            "enum": ["schedule", "manual", "webhook", "api"]
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "The run's output, with `text` for the answer and `usage` for what it cost"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "attemptCount": {
+            "type": "integer"
+          },
+          "pendingApproval": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Present while the run waits for the owner's approval: when it was requested, when it expires, and each step it is waiting on"
+          }
+        }
+      },
+      "ScheduleRunList": {
+        "type": "object",
+        "required": ["runs"],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun"
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ScheduleRunStarted": {
+        "type": "object",
+        "required": ["run", "replay"],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ScheduleRun"
+          },
+          "replay": {
+            "type": "boolean",
+            "description": "True when this Idempotency-Key had already started the run"
+          }
+        }
       }
     },
     "headers": {
@@ -4000,6 +4096,208 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedules/{id}/runs": {
+      "get": {
+        "summary": "List a scheduled task's runs",
+        "description": "Returns the task's runs, newest first. A run waiting for the owner's approval carries `pendingApproval` with the steps it is waiting on.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "How many runs to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "How many runs to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task's runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a scheduled task run",
+        "description": "Starts one run of the task now, the same as Run now in the app, and answers when the run finishes, pauses for approval, or reaches the request's time limit. The `Idempotency-Key` header is required: repeating a request with the same key returns the run it started instead of starting another, and answers 409 while that run is still in progress.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "A unique key for this start request, reused on a retry"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A repeated request: the run this key already started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The run this request started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The Idempotency-Key header is missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request failed the CSRF check for a browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run this key started is still in progress, or the task cannot run now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
                 }
               }
             }

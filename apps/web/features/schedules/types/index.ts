@@ -205,6 +205,50 @@ export function scheduleConditionUrl(task: ScheduleTask): string {
   return task.condition?.url ?? '';
 }
 
+function formatLateness(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return `${days} days`;
+}
+
+export interface ScheduleRunTiming {
+  skipped: boolean;
+  note: string;
+}
+
+export function scheduleRunTiming(run: ScheduleRun, timezone: string): ScheduleRunTiming | null {
+  const result = run.result ?? {};
+  const skipped = result['skipped'] === true;
+  const missed = result['missedExecution'];
+  const missedRecord =
+    missed !== null && typeof missed === 'object' ? (missed as Record<string, unknown>) : null;
+  const scheduledFor =
+    typeof missedRecord?.['scheduledFor'] === 'string' ? missedRecord['scheduledFor'] : null;
+  const lateByMs = typeof missedRecord?.['lateByMs'] === 'number' ? missedRecord['lateByMs'] : null;
+  if (scheduledFor && lateByMs !== null) {
+    const when = formatDateTime(scheduledFor, timezone);
+    const late = formatLateness(lateByMs);
+    return skipped
+      ? {
+          skipped,
+          note: `Skipped the run scheduled for ${when}: it was missed by ${late}, and this schedule skips missed runs.`,
+        }
+      : { skipped, note: `Ran late: scheduled for ${when}, started ${late} later.` };
+  }
+  const watch = result['conditionWatch'];
+  const detail =
+    watch !== null && typeof watch === 'object'
+      ? (watch as Record<string, unknown>)['detail']
+      : undefined;
+  if (skipped && typeof detail === 'string' && detail.trim()) {
+    return { skipped, note: `Skipped: the condition was not met. ${detail}` };
+  }
+  return null;
+}
+
 export function scheduleResultText(run: ScheduleRun): string | null {
   const value = run.result?.['text'];
   return typeof value === 'string' && value.trim() ? value : null;

@@ -13,11 +13,12 @@ import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/to
 import {
   applyToolResultSecretPolicy,
   canonicalToolSummary,
+  executeOfferedToolCall,
   recordToolCallAudit,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
 import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { bindMcpTask } from '@/lib/connectors/mcp-state-store';
-import { capOutput } from '@/lib/e2b/execution-tools';
+import { capOutput, EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
 import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
@@ -67,6 +68,8 @@ function parseArguments(raw: string): Record<string, unknown> | null {
 
 function toolCategory(name: string): AgentEventToolCategory {
   if (name === URL_FETCH_TOOL) return 'web-fetch';
+  if (name === EXECUTE_CODE_TOOL) return 'code-execution';
+  if (isExecutionTool(name)) return 'filesystem';
   if (isManagedOfficeFileTool(name)) return 'artifact';
   return parseQualifiedToolName(name) ? 'connector' : 'other';
 }
@@ -199,6 +202,32 @@ async function runTool(
   }
 }
 
+async function runSandboxTool(
+  input: LiveVoiceToolCallInput,
+  args: Record<string, unknown>,
+): Promise<ToolRunResult> {
+  const result = await executeOfferedToolCall({
+    call: { id: input.call.callId, qualifiedName: input.call.name, args },
+    offeredTools: new Set(input.offeredTools),
+    userId: input.userId,
+    organizationId: input.organizationId,
+    conversationId: input.conversationId,
+    model: input.modelId,
+    requestId: `voice:${input.conversationId}`,
+    planTier: null,
+    surface: VOICE_TOOL_SURFACE,
+    ...(input.signal ? { signal: input.signal } : {}),
+  });
+  const saved = (result.generatedFiles ?? []).map((file) => file.file_name);
+  return {
+    content:
+      saved.length > 0
+        ? `${result.content}\n\nSaved to the Library: ${saved.join(', ')}`
+        : result.content,
+    isError: result.isError,
+  };
+}
+
 async function auditCall(
   input: LiveVoiceToolCallInput,
   status: 'completed' | 'failed' | 'blocked',
@@ -274,6 +303,11 @@ export async function handleLiveVoiceToolCall(
   if (gate.verdict === 'ask' && call.decision === 'rejected') {
     await auditCall(input, 'blocked');
     return { status: 'declined', output: MESSAGE.declined };
+  }
+
+  if (isExecutionTool(call.name)) {
+    const result = await runSandboxTool(input, args);
+    return { status: 'completed', output: boundedOutput(result.content), isError: result.isError };
   }
 
   const startedAt = Date.now();
