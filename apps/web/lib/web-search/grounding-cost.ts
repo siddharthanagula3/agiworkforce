@@ -47,6 +47,7 @@ export interface GoogleGroundingSettlement {
   providerId: string;
   model: string;
   turnRef: string;
+  settlementRef: number;
   billableCalls: number;
   delivered: boolean;
   surface?: string | null;
@@ -68,7 +69,7 @@ export function settleGoogleGroundingSpend(input: GoogleGroundingSettlement): Pr
     providerCostMicrousd: billableCalls * googleGroundingMicrousdPerCall(input.model),
     charged: true,
     delivered: input.delivered,
-    costRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}`,
+    costRef: `${GROUNDING_COST_SOURCE_PREFIX}:${input.turnRef}:${input.settlementRef}`,
     taskRef: input.turnRef,
     surface: input.surface ?? null,
     db: input.db,

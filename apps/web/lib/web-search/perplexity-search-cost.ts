@@ -35,6 +35,7 @@ export interface PerplexitySearchSettlement {
   userId: string;
   organizationId?: string | null;
   admission: SearchAdmission;
+  billableCalls: number;
   answered: boolean;
   turnRef: string;
   callOrdinal: number;
@@ -43,7 +44,8 @@ export interface PerplexitySearchSettlement {
 }
 
 export function settlePerplexitySearchCall(input: PerplexitySearchSettlement): Promise<void> {
-  const calls = input.answered ? 1 : 0;
+  const calls =
+    Number.isFinite(input.billableCalls) && input.billableCalls > 0 ? input.billableCalls : 0;
   return settleSearchCall({
     userId: input.userId,
     organizationId: input.organizationId ?? null,

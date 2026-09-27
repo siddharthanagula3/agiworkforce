@@ -77,13 +77,14 @@ export interface WebSearchProviderItem {
 }
 
 export type WebSearchProviderOutcome =
-  | { ok: true; items: WebSearchProviderItem[] }
+  | { ok: true; items: WebSearchProviderItem[]; billableCalls: number }
   | {
       ok: false;
       errorCode: WebSearchProviderErrorCode;
       error: string;
       status?: number;
       retryable?: boolean;
+      billableCalls: number;
     };
 
 export interface WebSearchProviderRequest {
