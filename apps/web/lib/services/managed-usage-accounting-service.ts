@@ -1,7 +1,15 @@
 import 'server-only';
 
+import { chargeMicrousdForProviderCost } from '@agiworkforce/types';
+
+import { priceHostedCodeExecution } from '@/lib/e2b/hosted-code-execution';
 import { logger } from '@/lib/logger';
-import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
+import {
+  LLMCostCalculator,
+  normalizeProviderId,
+  type TokenUsage,
+} from '@/lib/services/llm-cost-calculator';
+import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
   estimateMicrousdOf,
@@ -9,6 +17,13 @@ import {
   type ManagedUsageFinalization,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
+
+export interface HostedCodeExecutionEvidence {
+  provider: string;
+  requests: number;
+  containerIds: string[];
+  elapsedMs: number;
+}
 
 export interface ObservedProviderUsage {
   providerCalls: number;
@@ -18,6 +33,10 @@ export interface ObservedProviderUsage {
   cacheWriteTokens: number;
   cacheWrite1hTokens: number;
   reasoningTokens: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  hostedCodeExecution?: HostedCodeExecutionEvidence;
+  toolSpendMicrousd?: number;
   providerCostDollars?: number;
   providerCallObservations?: ProviderUsageObservation[];
 }
@@ -52,9 +71,19 @@ export interface ProviderUsageObservation {
   providerReportedCostUsd?: number;
 }
 
+export interface ServerToolUsageInput {
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: readonly string[];
+  elapsedMs?: number;
+  dynamicFilteringWebTool?: boolean;
+}
+
 type ProviderUsageObservationInput = Partial<
   Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars' | 'costSource' | 'routeId'>
->;
+> &
+  ServerToolUsageInput;
 
 export interface ProviderUsagePricingContext {
   provider: string;
@@ -64,6 +93,83 @@ export interface ProviderUsagePricingContext {
 
 function nonNegative(value: number | undefined): number {
   return Number.isFinite(value) ? Math.max(0, value ?? 0) : 0;
+}
+
+export function hostedCodeExecutionEvidence(
+  provider: string,
+  usage: ServerToolUsageInput,
+): HostedCodeExecutionEvidence | undefined {
+  const requests = nonNegative(usage.codeExecutionRequests);
+  const containerIds = [...new Set(usage.codeExecutionContainerIds ?? [])];
+  if (requests === 0 && containerIds.length === 0) return undefined;
+  return { provider, requests, containerIds, elapsedMs: nonNegative(usage.elapsedMs) };
+}
+
+function hostedCodeExecutionMicrousd(
+  evidence: HostedCodeExecutionEvidence,
+  dynamicFilteringWebTool: boolean,
+): number {
+  const provider = normalizeProviderId(evidence.provider);
+  if (provider !== 'anthropic' && provider !== 'openai') return 0;
+  return priceHostedCodeExecution({
+    provider,
+    usage: { server_tool_use: { code_execution_requests: evidence.requests } },
+    container: evidence.containerIds,
+    requestHadWebSearchOrFetch: dynamicFilteringWebTool,
+    elapsedMs: evidence.elapsedMs,
+  }).microusd;
+}
+
+function mergeHostedCodeExecution(
+  current: HostedCodeExecutionEvidence | undefined,
+  next: HostedCodeExecutionEvidence,
+): HostedCodeExecutionEvidence {
+  if (!current) return { ...next, containerIds: [...next.containerIds] };
+  return {
+    provider: next.provider,
+    requests: current.requests + next.requests,
+    containerIds: [...new Set([...current.containerIds, ...next.containerIds])],
+    elapsedMs: current.elapsedMs + next.elapsedMs,
+  };
+}
+
+export interface ServerToolCharge {
+  providerMicrousd: number;
+  chargeMicrousd: number;
+}
+
+export function priceServerToolUsage(input: {
+  provider: string;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  hostedCodeExecution?: HostedCodeExecutionEvidence;
+  dynamicFilteringWebTool?: boolean;
+}): ServerToolCharge {
+  const providerId = normalizeProviderId(input.provider) ?? '';
+  const providerMicrousd =
+    nonNegative(input.webSearchRequests) *
+      nativeServerToolMicrousdPerRequest(providerId, 'web_search') +
+    nonNegative(input.webFetchRequests) *
+      nativeServerToolMicrousdPerRequest(providerId, 'web_fetch') +
+    (input.hostedCodeExecution
+      ? hostedCodeExecutionMicrousd(
+          input.hostedCodeExecution,
+          input.dynamicFilteringWebTool === true,
+        )
+      : 0);
+  return { providerMicrousd, chargeMicrousd: chargeMicrousdForProviderCost(providerMicrousd) };
+}
+
+function addServerToolCounts(
+  target: ObservedProviderUsage,
+  source: Pick<ObservedProviderUsage, 'webSearchRequests' | 'webFetchRequests'>,
+): void {
+  const webSearchRequests =
+    nonNegative(target.webSearchRequests) + nonNegative(source.webSearchRequests);
+  if (webSearchRequests > 0) target.webSearchRequests = webSearchRequests;
+  const webFetchRequests =
+    nonNegative(target.webFetchRequests) + nonNegative(source.webFetchRequests);
+  if (webFetchRequests > 0) target.webFetchRequests = webFetchRequests;
 }
 
 function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
@@ -156,6 +262,14 @@ export function accumulateObservedProviderUsage(
   if (priced.costDollars !== undefined) {
     target.providerCostDollars = nonNegative(target.providerCostDollars) + priced.costDollars;
   }
+  addServerToolCounts(target, observation);
+  const evidence = pricing ? hostedCodeExecutionEvidence(pricing.provider, observation) : undefined;
+  if (
+    evidence &&
+    hostedCodeExecutionMicrousd(evidence, observation.dynamicFilteringWebTool === true) > 0
+  ) {
+    target.hostedCodeExecution = mergeHostedCodeExecution(target.hostedCodeExecution, evidence);
+  }
 }
 
 export function mergeObservedProviderUsage(
@@ -179,6 +293,19 @@ export function mergeObservedProviderUsage(
     target.providerCostDollars =
       nonNegative(target.providerCostDollars) + nonNegative(source.providerCostDollars);
   }
+  addServerToolCounts(target, source);
+  if (source.hostedCodeExecution) {
+    target.hostedCodeExecution = mergeHostedCodeExecution(
+      target.hostedCodeExecution,
+      source.hostedCodeExecution,
+    );
+  }
+  addToolSpend(target, source.toolSpendMicrousd);
+}
+
+export function addToolSpend(target: ObservedProviderUsage, microusd: number | undefined): void {
+  const toolSpendMicrousd = nonNegative(target.toolSpendMicrousd) + nonNegative(microusd);
+  if (toolSpendMicrousd > 0) target.toolSpendMicrousd = toolSpendMicrousd;
 }
 
 export function calculateObservedProviderUsageCostDollars(
@@ -305,6 +432,22 @@ export function observedProviderUsageLedgerMicrousd(
   return toLedgerMicrousd(calculateObservedProviderUsageCostDollars(usage, fallbackPricing));
 }
 
+export function observedTurnCost(
+  usage: ObservedProviderUsage,
+  pricing: ProviderUsagePricingContext,
+): { tokenMicrousd: number; toolMicrousd: number } {
+  return {
+    tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, pricing),
+    toolMicrousd:
+      priceServerToolUsage({
+        provider: pricing.provider,
+        webSearchRequests: usage.webSearchRequests,
+        webFetchRequests: usage.webFetchRequests,
+        hostedCodeExecution: usage.hostedCodeExecution,
+      }).providerMicrousd + nonNegative(usage.toolSpendMicrousd),
+  };
+}
+
 export function observedListLedgerCents(
   usage: ObservedProviderUsage,
   fallbackPricing: ProviderUsagePricingContext,
@@ -371,8 +514,16 @@ export function finalizeObservedManagedUsage(
     provider: input.provider,
     model: input.model,
   };
-  const actualCostMicrousd = observedListLedgerMicrousd(input.usage, pricing);
-  const providerCostMicrousd = observedProviderUsageLedgerMicrousd(input.usage, pricing);
+  const serverTools = priceServerToolUsage({
+    provider: input.provider,
+    webSearchRequests: input.usage.webSearchRequests,
+    webFetchRequests: input.usage.webFetchRequests,
+    hostedCodeExecution: input.usage.hostedCodeExecution,
+  });
+  const actualCostMicrousd =
+    observedListLedgerMicrousd(input.usage, pricing) + serverTools.chargeMicrousd;
+  const providerCostMicrousd =
+    observedProviderUsageLedgerMicrousd(input.usage, pricing) + serverTools.providerMicrousd;
 
   return finalizeManagedUsageRequest({
     ...input.reservation,

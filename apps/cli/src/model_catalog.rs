@@ -798,6 +798,13 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
     }
 }
 
+pub fn standard_model_for_tier(tier: &crate::tier_cache::UserTier) -> Option<String> {
+    ["pro_additions", "economy"]
+        .into_iter()
+        .flat_map(tier_allowed_models)
+        .find(|model_id| can_access_model_for_tier(model_id, tier))
+}
+
 /// True when `tier` can actually route the managed-cloud model `model_id`.
 ///
 /// CLI composition of `canAccessModelForSubscriptionTier` and the
@@ -810,7 +817,7 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 /// - Free / Basic / BYOK → no managed-cloud model (BYOK reaches providers with
 ///   the user's own key, which is the picker's separate BYOK section)
 /// - Pro / Team → `economy` + `pro_additions`
-/// - Max / Max 15x / Enterprise → all three slots
+/// - Max / Max 20x / Enterprise → all three slots
 ///
 /// Applies to the picker's **Cloud** section only. Local and BYOK models are
 /// user-provided access and are never gated by subscription tier.

@@ -1368,6 +1368,12 @@ export default function PricingPage() {
           <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-5)' }}>
             {usageExplainer}
           </p>
+          <p className="agi-fl-section-lede" style={{ marginTop: 'var(--space-2)' }}>
+            {t('pricingFootnote')}{' '}
+            <Link href="/refund-policy" className="agi-ds-link">
+              {t('refundPolicyLink')}
+            </Link>
+          </p>
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-compare-title">

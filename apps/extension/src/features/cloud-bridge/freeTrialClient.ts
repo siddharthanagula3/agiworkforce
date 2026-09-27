@@ -15,6 +15,7 @@ import {
   type ToolApprovalResumeRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
+  classifyManagedQuotaErrorCode,
   effectivePlanTier,
   getDefaultModelFor,
   INTERACTIVE_CARD_REQUEST_KEY,
@@ -23,6 +24,8 @@ import {
   parseManagedUsageSummaryResponse,
   type Effort,
   type InteractiveCard,
+  type ManagedQuotaBlockPresentation,
+  type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
@@ -56,6 +59,7 @@ export const FREE_TRIAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/chat/comple
 export const MANAGED_APPROVAL_ENDPOINT = `${FREE_TRIAL_GATEWAY}${TOOL_APPROVAL_RESUME_PATH}`;
 export const MANAGED_MODELS_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/llm/v1/models`;
 export const MANAGED_USAGE_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage`;
+export const MANAGED_USAGE_HISTORY_ENDPOINT = `${FREE_TRIAL_GATEWAY}/api/usage/history`;
 
 const SESSION_TOKEN_KEY = 'agi_clerk_session_token';
 const DEV_TOKEN_KEY = 'agi_dev_bearer_token';
@@ -64,11 +68,52 @@ export interface ManagedModelAccess {
   subscriptionTier: string;
   accountPlanTier?: string;
   subscriptionStatus?: string;
-  usagePercentage?: number;
-  usageResetAt?: string | null;
-  hasUsageRemaining?: boolean;
+  usage: ManagedUsageSummaryResponse;
   modelIds: string[];
   allowedAutoModes: string[];
+}
+
+export type ManagedQuotaRecoveryAction = 'top_up' | 'upgrade' | 'view_usage' | 'contact_support';
+
+export interface ManagedQuotaRecovery {
+  action: ManagedQuotaRecoveryAction;
+  href: string;
+}
+
+export interface ManagedQuotaBlock {
+  code: string;
+  recovery?: ManagedQuotaRecovery;
+}
+
+export type ManagedQuotaWarningScope = 'billing_period' | 'rolling_five_hour' | 'rolling_weekly';
+
+export interface ManagedQuotaWarningSignal {
+  scope: ManagedQuotaWarningScope;
+  usedPercent: number;
+}
+
+const QUOTA_WARNING_SCOPES: ReadonlySet<string> = new Set<ManagedQuotaWarningScope>([
+  'billing_period',
+  'rolling_five_hour',
+  'rolling_weekly',
+]);
+
+export function parseQuotaWarningHeader(value: string | null): ManagedQuotaWarningSignal | null {
+  if (!value) return null;
+  const fields = new Map<string, string>();
+  for (const part of value.split(';')) {
+    const separator = part.indexOf('=');
+    if (separator > 0) {
+      fields.set(part.slice(0, separator).trim(), part.slice(separator + 1).trim());
+    }
+  }
+  const scope = fields.get('scope');
+  const usedPercent = Number(fields.get('used_percent'));
+  if (!scope || !QUOTA_WARNING_SCOPES.has(scope) || !Number.isFinite(usedPercent)) return null;
+  return {
+    scope: scope as ManagedQuotaWarningScope,
+    usedPercent: Math.min(100, Math.max(0, usedPercent)),
+  };
 }
 
 export interface ManagedCloudAuthContext {
@@ -178,12 +223,64 @@ export async function getManagedModelAccess(
     subscriptionTier: effectivePlanTier(usageSummary.plan_tier, usageSummary.subscription_status),
     accountPlanTier: usageSummary.plan_tier,
     subscriptionStatus: usageSummary.subscription_status,
-    usagePercentage: usageSummary.usage_percentage,
-    usageResetAt: usageSummary.usage_reset_at,
-    hasUsageRemaining: usageSummary.has_usage_remaining,
+    usage: usageSummary,
     modelIds,
     allowedAutoModes,
   };
+}
+
+export interface ManagedModelUsage {
+  modelId: string;
+  requests: number;
+  credits: number;
+}
+
+export interface ManagedUsageHistory {
+  from: string;
+  to: string;
+  byModel: ManagedModelUsage[];
+}
+
+function readModelUsageRow(value: unknown): ManagedModelUsage | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const modelId = normalizeAccessString(record['key'], 200);
+  const requests = record['requests'];
+  const credits = record['credits'];
+  if (!modelId || typeof requests !== 'number' || typeof credits !== 'number') return null;
+  if (!Number.isFinite(requests) || !Number.isFinite(credits)) return null;
+  return { modelId, requests, credits: Math.max(0, credits) };
+}
+
+export async function getManagedUsageHistory(
+  token: string,
+  signal?: AbortSignal,
+): Promise<ManagedUsageHistory> {
+  if (!token.trim()) throw new Error('Authentication is required');
+  const response = await fetch(MANAGED_USAGE_HISTORY_ENDPOINT, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'X-Requested-With': 'XMLHttpRequest',
+      ...platformRequestHeaders(),
+    },
+    signal,
+  });
+  if (!response.ok) throw new Error(`Usage history is unavailable (${response.status})`);
+  const body: unknown = await response.json();
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new Error('Invalid usage history response');
+  }
+  const record = body as Record<string, unknown>;
+  const from = record['from'];
+  const to = record['to'];
+  const byModel = record['byModel'];
+  if (typeof from !== 'string' || typeof to !== 'string' || !Array.isArray(byModel)) {
+    throw new Error('Invalid usage history response');
+  }
+  const rows = byModel.map(readModelUsageRow);
+  if (rows.some((row) => row === null)) throw new Error('Invalid usage history response');
+  return { from, to, byModel: rows as ManagedModelUsage[] };
 }
 
 export async function getAuthToken(forceRefresh = false): Promise<string | null> {
@@ -432,6 +529,7 @@ export type FreeTrialChunk =
   | { type: 'generated-files'; files: GeneratedFileWire[] }
   | { type: 'interactive-card'; card: InteractiveCard }
   | { type: 'run'; run: ManagedCloudAgentRunReference }
+  | { type: 'quota-warning'; warning: ManagedQuotaWarningSignal }
   | { type: 'done' }
   | {
       type: 'error';
@@ -456,6 +554,7 @@ export type FreeTrialChunk =
        * reporting it hands over the one string that finds the turn.
        */
       requestId?: string;
+      quota?: ManagedQuotaBlock;
     };
 
 export interface ManagedChatStreamOptions {
@@ -534,15 +633,80 @@ function gatewayFailure(
   const providerCode = typeof record?.['code'] === 'string' ? (record['code'] as string) : '';
   const retryAfterSeconds = statableRetryAfterSeconds(record?.['retryAfterSeconds']);
   const requestId = record?.['requestId'];
+  const block = accountLimitBlock(providerCode);
   return {
     type: 'error',
     message,
-    code:
-      providerCode.includes('limit_reached') || providerCode.includes('free_trial')
+    code: block
+      ? accountLimitFailureCode(block)
+      : providerCode.includes('limit_reached') || providerCode.includes('free_trial')
         ? 'quota_exceeded'
         : 'server_error',
     ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
     ...(typeof requestId === 'string' && requestId ? { requestId } : {}),
+    ...(block ? { quota: quotaBlock(providerCode, record?.['recovery']) } : {}),
+  };
+}
+
+const QUOTA_RECOVERY_ACTIONS: ReadonlySet<string> = new Set<ManagedQuotaRecoveryAction>([
+  'top_up',
+  'upgrade',
+  'view_usage',
+  'contact_support',
+]);
+
+function accountLimitBlock(code: string | undefined): ManagedQuotaBlockPresentation | null {
+  const block = classifyManagedQuotaErrorCode(code);
+  return block && block.kind !== 'rate_limit' ? block : null;
+}
+
+function accountLimitFailureCode(
+  block: ManagedQuotaBlockPresentation,
+): 'plan_required' | 'quota_exceeded' {
+  return block.feature === 'model_access' || block.feature === 'paid_capability'
+    ? 'plan_required'
+    : 'quota_exceeded';
+}
+
+function readQuotaRecovery(value: unknown): ManagedQuotaRecovery | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const record = value as Record<string, unknown>;
+  const action = record['action'];
+  const href = normalizeAccessString(record['href'], 200);
+  if (typeof action !== 'string' || !QUOTA_RECOVERY_ACTIONS.has(action)) return undefined;
+  if (!href || !href.startsWith('/') || href.startsWith('//')) return undefined;
+  return { action: action as ManagedQuotaRecoveryAction, href };
+}
+
+function quotaBlock(code: string, recovery: unknown): ManagedQuotaBlock {
+  const link = readQuotaRecovery(recovery);
+  return { code: code.trim().toLowerCase(), ...(link ? { recovery: link } : {}) };
+}
+
+interface GatewayErrorBody {
+  code?: string;
+  message?: string;
+  recovery?: unknown;
+}
+
+function readGatewayErrorBody(body: string): GatewayErrorBody {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return {};
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const error = (parsed as Record<string, unknown>)['error'];
+  if (typeof error === 'string') return { code: error };
+  if (!error || typeof error !== 'object' || Array.isArray(error)) return {};
+  const record = error as Record<string, unknown>;
+  const code = normalizeAccessString(record['code'], 100);
+  const message = normalizeAccessString(record['message'], 500);
+  return {
+    ...(code ? { code } : {}),
+    ...(message ? { message } : {}),
+    recovery: record['recovery'],
   };
 }
 
@@ -700,6 +864,46 @@ function bodyIndicatesFreeQuota(body: string): boolean {
     normalized.includes('insufficient_quota') ||
     normalized.includes('quota_exceeded')
   );
+}
+
+const ACCOUNT_REFUSAL_STATUSES: ReadonlySet<number> = new Set([401, 402, 403, 429]);
+
+function accountRefusal(status: number, body: string): Extract<FreeTrialChunk, { type: 'error' }> {
+  const gatewayError = readGatewayErrorBody(body);
+  const block = accountLimitBlock(gatewayError.code);
+  if (block && gatewayError.code) {
+    const code = accountLimitFailureCode(block);
+    return {
+      type: 'error',
+      code,
+      message:
+        gatewayError.message ??
+        (code === 'quota_exceeded' ? QUOTA_EXHAUSTED_MESSAGE : block.reason),
+      quota: quotaBlock(gatewayError.code, gatewayError.recovery),
+    };
+  }
+  if (status === 402 || bodyIndicatesFreeQuota(body)) {
+    return {
+      type: 'error',
+      message: gatewayError.message ?? QUOTA_EXHAUSTED_MESSAGE,
+      code: 'quota_exceeded',
+    };
+  }
+  if (status === 401) {
+    return { type: 'error', message: 'Sign in to use AGI Cloud chat.', code: 'auth_required' };
+  }
+  if (status === 429) {
+    return {
+      type: 'error',
+      message: 'AGI Cloud is receiving too many requests. Try again shortly.',
+      code: 'rate_limited',
+    };
+  }
+  return {
+    type: 'error',
+    message: 'This AGI Cloud capability is not available for the current account.',
+    code: 'plan_required',
+  };
 }
 
 async function readBoundedErrorBody(response: Response): Promise<string> {
@@ -864,38 +1068,9 @@ export async function* streamFreeChat(
       return;
     }
 
-    if (response.status === 401 || response.status === 403 || response.status === 429) {
+    if (ACCOUNT_REFUSAL_STATUSES.has(response.status)) {
       const body = await readBoundedErrorBody(response);
-      const isQuotaExceeded = bodyIndicatesFreeQuota(body);
-
-      if (isQuotaExceeded) {
-        yield { type: 'error', message: QUOTA_EXHAUSTED_MESSAGE, code: 'quota_exceeded' };
-        return;
-      }
-
-      if (response.status === 401) {
-        yield {
-          type: 'error',
-          message: 'Sign in to use AGI Cloud chat.',
-          code: 'auth_required',
-        };
-        return;
-      }
-
-      if (response.status === 429) {
-        yield {
-          type: 'error',
-          message: 'AGI Cloud is receiving too many requests. Try again shortly.',
-          code: 'rate_limited',
-        };
-        return;
-      }
-
-      yield {
-        type: 'error',
-        message: 'This AGI Cloud capability is not available for the current account.',
-        code: 'plan_required',
-      };
+      yield accountRefusal(response.status, body);
       return;
     }
 
@@ -959,6 +1134,9 @@ export async function* streamFreeChat(
       };
       return;
     }
+
+    const quotaWarning = parseQuotaWarningHeader(response.headers.get('x-quota-warning'));
+    if (quotaWarning) yield { type: 'quota-warning', warning: quotaWarning };
 
     const reader = response.body?.getReader();
     if (!reader) {

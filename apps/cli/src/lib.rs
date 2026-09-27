@@ -52,6 +52,7 @@ pub mod output;
 pub mod output_styles;
 pub mod path_security;
 pub mod permissions;
+pub mod plans;
 pub(crate) mod process_tree;
 // plan_mode lives at features::plan::plan_mode; re-exported here so all
 // internal callers using `crate::plan_mode::*` continue to resolve unchanged.
@@ -915,6 +916,8 @@ enum Command {
     Onboarding,
     /// Show the account's managed allowance from the shared usage ledger.
     Usage,
+    /// Show what each plan includes and its credits per window.
+    Plans,
     /// Print your referral link. Friends who join with it get a Pro trial, and you both earn bonus credits.
     Invite {
         /// Emit the link as JSON.
@@ -4056,6 +4059,10 @@ pub async fn run_main() -> Result<()> {
                 println!("{}", usage_summary::account_lines().await.join("\n"));
                 Ok(())
             }
+            Command::Plans => {
+                println!("{}", plans::plans_lines().join("\n"));
+                Ok(())
+            }
 
             Command::Invite { json } => {
                 let invite = cloud::referrals::invite()
@@ -5145,7 +5152,11 @@ pub async fn run_oneshot(
                     sdk_io::StatusUpdateEvent {
                         session_id: budget_session_id.clone(),
                         reason: sdk_io::StatusUpdateReason::BudgetExhausted,
-                        detail: Some(format!("${spent:.4} >= ${limit:.4}")),
+                        detail: Some(format!(
+                            "{} used of {}",
+                            cost_ledger::format_usd_as_credits(spent),
+                            cost_ledger::format_usd_as_credits(limit)
+                        )),
                     },
                 ));
             })));
@@ -5355,6 +5366,7 @@ pub async fn run_oneshot(
                         crate::design_system::AccessMode::for_provider(&session.provider),
                     );
                 }
+                output::print_billed_turn(&turn.managed_request_ids).await;
             }
             Err(e) => {
                 output::print_error(&errors::terminal_text(&e));

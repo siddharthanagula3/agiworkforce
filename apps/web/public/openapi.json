@@ -160,6 +160,15 @@
               "code": {
                 "type": "string",
                 "nullable": true
+              },
+              "resets_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "On a plan-limit refusal, when the refusing window resets: the oldest usage leaving a rolling 5-hour or weekly window, the end of the billing period, or the start of the next month for a monthly allowance."
+              },
+              "alternative_model": {
+                "type": "string",
+                "description": "On a plan-limit refusal, a model the caller's plan can use now: a standard model when a flagship limit refused, or a free-pool model when a usage window or the billing period refused. Absent when none is eligible."
               }
             }
           }
@@ -1051,6 +1060,15 @@
           }
         }
       }
+    },
+    "headers": {
+      "XQuotaWarning": {
+        "description": "Sent when this request is projected to take the account to 80% or more of a usage window. Semicolon-separated fields: level (warning from 80%, critical from 95%), scope (billing_period, rolling_five_hour or rolling_weekly, whichever is fullest), used_percent after this request, and threshold_percent. Absent below 80% and on plans without usage limits.",
+        "schema": {
+          "type": "string",
+          "example": "level=warning; scope=rolling_weekly; used_percent=84; threshold_percent=80"
+        }
+      }
     }
   },
   "security": [
@@ -1155,6 +1173,11 @@
                 "schema": {
                   "type": "string"
                 }
+              }
+            },
+            "headers": {
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
               }
             }
           },
@@ -1918,6 +1941,138 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccountUsageHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `usage:read` scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/usage/estimate": {
+      "post": {
+        "summary": "Estimate the credits a chat completion will cost",
+        "description": "Takes the body you would send to chat completions and returns an estimated credit range, counted on the model's list price with no provider call and no charge. The minimum is the input alone and the maximum adds max_tokens of output, or the model's default output ceiling. Input tokens are estimated from the text of the messages and tools you send, so server-added instructions and images are not counted. It follows Anthropic's token counting endpoint (https://platform.claude.com/docs/en/build-with-claude/token-counting): same body as the request it estimates, an estimate rather than a bill, free and rate limited separately from completions.",
+        "tags": ["Billing"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "usage:read",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "messages"],
+                "properties": {
+                  "model": {
+                    "type": "string",
+                    "description": "The model id the completion would use"
+                  },
+                  "messages": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  },
+                  "max_tokens": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The estimated credit range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["object", "model", "input_tokens", "max_output_tokens", "credits"],
+                  "properties": {
+                    "object": {
+                      "type": "string",
+                      "enum": ["usage.estimate"]
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "input_tokens": {
+                      "type": "integer"
+                    },
+                    "max_output_tokens": {
+                      "type": "integer"
+                    },
+                    "credits": {
+                      "type": "object",
+                      "required": ["min", "max"],
+                      "properties": {
+                        "min": {
+                          "type": "number"
+                        },
+                        "max": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a chat completions body, or the model is unknown or has no published per-token price",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }

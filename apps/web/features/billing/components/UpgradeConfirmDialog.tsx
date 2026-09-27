@@ -199,6 +199,14 @@ export function UpgradeConfirmDialog({
                   {formatMoney(amountDue.charge.subtotalCents, amountDue.currency)}
                 </dd>
               </div>
+              {amountDue.charge.discountCents !== 0 ? (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-[color:var(--text-2)]">Discount</dt>
+                  <dd className="tabular-nums">
+                    {formatMoney(-amountDue.charge.discountCents, amountDue.currency)}
+                  </dd>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4">
                 <dt className="text-[color:var(--text-2)]">Tax</dt>
                 <dd className="tabular-nums">
