@@ -118,7 +118,7 @@ export async function reserveBackgroundUsage(input: {
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'completed',
-        actualCostCents: LLMCostCalculator.calculateCost(
+        actualCostMicrousd: LLMCostCalculator.calculateCostMicrousd(
           provider,
           model,
           usage,
