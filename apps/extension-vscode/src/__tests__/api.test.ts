@@ -14,6 +14,7 @@ import {
   AgiWorkforceApiError,
   streamChatCompletion,
   AgiWorkforcePaywallError,
+  AgiWorkforceUsageLimitError,
   buildCloudUtilityChatCompletionRequest,
   getAccountAuthState,
   getAccountToken,
@@ -30,7 +31,7 @@ import {
   clearApiKey,
   AgiWorkforceClientUpdateRequiredError,
 } from '../utils/api';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, classifyManagedQuotaErrorCode } from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
 
@@ -325,6 +326,72 @@ describe('cloud completion error envelopes', () => {
     expect(error).toBeInstanceOf(AgiWorkforceApiError);
     expect(error).toMatchObject({ statusCode: 429, code: 'RATE_LIMITED' });
     expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
+  });
+
+  it('turns a plan limit refusal into a usage limit carrying the server recovery', () => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({
+        error: {
+          message: 'You have used your rolling 5-hour capacity.',
+          type: 'insufficient_quota',
+          code: 'rolling_five_hour_limit_reached',
+          resets_at: '2026-08-15T15:30:00.000Z',
+          alternative_model: 'fixture-standard-model',
+          recovery: { action: 'top_up', href: '/settings/billing?intent=credits' },
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error).toMatchObject({
+      statusCode: 429,
+      code: 'rolling_five_hour_limit_reached',
+      message: 'You have used your rolling 5-hour capacity.',
+      recovery: { action: 'top_up', href: '/settings/billing?intent=credits' },
+      block: { kind: 'rolling_window', showResetTime: true, clearedByCredits: true },
+    });
+  });
+
+  it('explains a billing period refusal with the shared reason when the body has none', () => {
+    const error = parseCloudCompletionError(
+      402,
+      JSON.stringify({ error: { code: 'monthly_credit_limit_reached' } }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error.message).toBe(classifyManagedQuotaErrorCode('monthly_credit_limit_reached')?.reason);
+    expect((error as AgiWorkforceUsageLimitError).recovery).toBeUndefined();
+  });
+
+  it.each([
+    ['points at another origin', { action: 'upgrade', href: 'https://attacker.example/pricing' }],
+    ['is protocol-relative', { action: 'upgrade', href: '//attacker.example/pricing' }],
+    ['names an action the editor cannot take', { action: 'open_anything', href: '/pricing' }],
+  ])('drops a recovery link that %s', (_case, recovery) => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({
+        error: {
+          code: 'flagship_weekly_limit_reached',
+          message: 'Flagship capacity is used up.',
+          recovery,
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect((error as AgiWorkforceUsageLimitError).recovery).toBeUndefined();
+  });
+
+  it('keeps a request-rate refusal retryable rather than a plan limit', () => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({ error: { code: 'rate_limit_exceeded', message: 'Slow down.' } }),
+    );
+
+    expect(error).not.toBeInstanceOf(AgiWorkforceUsageLimitError);
+    expect(error).toMatchObject({ statusCode: 429, code: 'rate_limit_exceeded' });
   });
 });
 

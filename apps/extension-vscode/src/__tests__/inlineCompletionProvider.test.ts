@@ -1,16 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { AgiWorkforcePaywallError, chatCompletion } from '../utils/api';
+import { classifyManagedQuotaErrorCode } from '@agiworkforce/types';
+import {
+  AgiWorkforcePaywallError,
+  AgiWorkforceUsageLimitError,
+  chatCompletion,
+  fetchTierInfo,
+} from '../utils/api';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 import { AgiInlineCompletionProvider } from '../features/inline-completions/inlineCompletionProvider';
 
-vi.mock('../core/cloudUtilityErrorActions', () => ({
+vi.mock('../core/cloudUtilityErrorActions', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../core/cloudUtilityErrorActions')>()),
   showCloudUtilityErrorActions: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../utils/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../utils/api')>()),
   chatCompletion: vi.fn(),
+  fetchTierInfo: vi.fn(),
 }));
 
 const SETTINGS: Record<string, unknown> = {};
@@ -271,9 +279,11 @@ describe('inline completions, real completion cache', () => {
   });
 });
 
+const SECRETS = {} as vscode.SecretStorage;
+
 describe('inline completions, real paywall suppression', () => {
   function provider(): AgiInlineCompletionProvider {
-    return new AgiInlineCompletionProvider({} as vscode.SecretStorage);
+    return new AgiInlineCompletionProvider(SECRETS);
   }
 
   async function ask(instance: AgiInlineCompletionProvider): Promise<unknown[]> {
@@ -297,6 +307,7 @@ describe('inline completions, real paywall suppression', () => {
     expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
       title: 'AGI Workforce: Inline completions paused',
+      secrets: SECRETS,
     });
 
     expect(await ask(instance)).toEqual([]);
@@ -338,5 +349,90 @@ describe('inline completions, real paywall suppression', () => {
 
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[0]).toBe(paywall);
     expect(vi.mocked(vscode.window.showWarningMessage)).not.toHaveBeenCalled();
+  });
+});
+
+describe('inline completions, plan usage limits', () => {
+  const NOW = Date.parse('2026-08-15T12:00:00.000Z');
+  const SESSION_RESET_AT = '2026-08-15T15:30:00.000Z';
+
+  function usageLimit(code: string): AgiWorkforceUsageLimitError {
+    const block = classifyManagedQuotaErrorCode(code);
+    if (block === null) throw new Error(`${code} is not a managed plan limit`);
+    return new AgiWorkforceUsageLimitError(block.reason, 429, code, block, undefined);
+  }
+
+  async function ask(instance: AgiInlineCompletionProvider): Promise<unknown[]> {
+    const items = await instance.provideInlineCompletionItems(
+      documentAt('const value = '),
+      new vscode.Position(0, 'const value = '.length),
+      {} as vscode.InlineCompletionContext,
+      token,
+    );
+    return items as unknown[];
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW);
+    vi.mocked(fetchTierInfo).mockResolvedValue({
+      tier: 'pro',
+      usageBuckets: [
+        { bucket: 'session', percentRemaining: 0, resetAt: SESSION_RESET_AT },
+        { bucket: 'period', percentRemaining: 70, resetAt: '2026-09-01T00:00:00.000Z' },
+      ],
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('pauses until the refusing window resets, warns once, then completes again', async () => {
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(usageLimit('rolling_five_hour_limit_reached'));
+
+    expect(await ask(instance)).toEqual([]);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
+      title: 'AGI Workforce: Inline completions paused',
+      secrets: SECRETS,
+    });
+
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    vi.setSystemTime(Date.parse(SESSION_RESET_AT) - 60_000);
+    expect(await ask(instance)).toEqual([]);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(Date.parse(SESSION_RESET_AT));
+    const items = await ask(instance);
+    expect(items).toHaveLength(1);
+    expect((items[0] as vscode.InlineCompletionItem).insertText).toBe('const x = 1;');
+    expect(chatCompletion).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the pause when the refusing window states no reset it can read', async () => {
+    vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
+    const instance = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(usageLimit('rolling_weekly_limit_reached'));
+
+    expect(await ask(instance)).toEqual([]);
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    vi.setSystemTime(NOW + 7 * 24 * 60 * 60 * 1000);
+
+    expect(await ask(instance)).toEqual([]);
+    expect(chatCompletion).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
+  });
+
+  it('pauses only the editor provider that hit the limit', async () => {
+    const limited = new AgiInlineCompletionProvider(SECRETS);
+    vi.mocked(chatCompletion).mockRejectedValueOnce(usageLimit('rolling_five_hour_limit_reached'));
+    await ask(limited);
+
+    vi.mocked(chatCompletion).mockResolvedValue('const x = 1;');
+    expect(await ask(limited)).toEqual([]);
+    expect(await ask(new AgiInlineCompletionProvider(SECRETS))).toHaveLength(1);
   });
 });
