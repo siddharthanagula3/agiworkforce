@@ -12,6 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 import {
   createAdminApiKey,
   grantableKeyScopes,
@@ -121,6 +122,15 @@ async function handlePost(request: NextRequest): Promise<NextResponse | Response
       )
       .asUserSafe();
   }
+
+  await requireStepUp({
+    userId,
+    action: 'api_credential.reveal',
+    resourceId: membership.organizationId,
+    organizationId: membership.organizationId,
+    request,
+    endpoint: '/api/settings/organization/admin-api-keys',
+  });
 
   const db = getNeonDb();
   const mint = async () => {

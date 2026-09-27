@@ -59,6 +59,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+process.env['CSRF_SECRET'] = 'sessions-revoke-all-step-up-secret-long-enough';
+
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE, GET } from './route';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -96,16 +100,30 @@ function providerError(status: number, retryAfter?: number): Error {
   });
 }
 
+function revokeAllProof(): Record<string, string> {
+  const { token } = createStepUpGrant({
+    userId: 'user-1',
+    action: 'session.revoke_all',
+    resourceId: null,
+    method: 'first_factor',
+  });
+  return { [STEP_UP_TOKEN_HEADER]: token };
+}
+
 function revokeAllRequest() {
   return new Request('http://localhost:3000/api/settings/sessions', {
     method: 'DELETE',
+    headers: revokeAllProof(),
   }) as never;
 }
 
 function bearerRequest(method: 'GET' | 'DELETE', token: string) {
   return new Request('http://localhost:3000/api/settings/sessions', {
     method,
-    headers: { authorization: `Bearer ${token}` },
+    headers: {
+      authorization: `Bearer ${token}`,
+      ...(method === 'DELETE' ? revokeAllProof() : {}),
+    },
   }) as never;
 }
 
@@ -344,10 +362,7 @@ describe('/api/settings/sessions', () => {
       }
     });
 
-    // Signing other devices out is protective, and the control that calls this
-    // sends no step-up header. Gating it would lock out the person who most
-    // needs it: one who suspects a takeover and holds no second factor.
-    it('ends every other session without asking for a second factor', async () => {
+    it('ends every other session once the account holder has re-verified', async () => {
       mockGetSessionList.mockResolvedValue({
         data: [session('sess_current'), session('sess_other')],
         totalCount: 2,

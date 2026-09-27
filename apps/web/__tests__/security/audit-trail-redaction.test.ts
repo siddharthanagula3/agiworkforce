@@ -45,8 +45,12 @@ vi.mock('@/lib/services/api-key-service', () => ({
   },
 }));
 
+process.env['CSRF_SECRET'] = 'audit-redaction-step-up-secret-long-enough';
+
 import { NextRequest } from 'next/server';
 import { recordAuditEvent, sanitizeAuditDetail, type AuditEventDetail } from '@/lib/security-audit';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
 
 const SECRETS = {
@@ -221,7 +225,15 @@ describe('POST /api/settings/api-keys, the generated key never lands in the audi
     const response = await createApiKey(
       new NextRequest('https://app.example.com/api/settings/api-keys', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          [STEP_UP_TOKEN_HEADER]: createStepUpGrant({
+            userId: 'user_actor',
+            action: 'api_credential.reveal',
+            resourceId: null,
+            method: 'first_factor',
+          }).token,
+        },
         body: JSON.stringify({ name: 'CI deploy key', scopes: ['models:read'] }),
       }),
     );

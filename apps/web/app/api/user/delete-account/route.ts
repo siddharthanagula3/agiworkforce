@@ -26,6 +26,8 @@ import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subsc
 import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
 import { isFreeBillingPlanTier } from '@agiworkforce/types';
 import { getIdentityProvider } from '@/lib/server/identity';
+import { handleError } from '@/lib/error-handler';
+import { isStepUpRequiredError, requireStepUp } from '@/lib/server/step-up-auth';
 
 /**
  * What the account holder is told. The audit row keeps the full reason; a count
@@ -285,6 +287,25 @@ async function handleDelete(request: NextRequest) {
       },
       { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
     );
+  }
+
+  try {
+    await requireStepUp({
+      userId,
+      action: 'account.delete',
+      request,
+      endpoint: '/api/user/delete-account',
+    });
+  } catch (error) {
+    if (!isStepUpRequiredError(error)) throw error;
+    const refusal = handleError(error);
+    for (const [name, value] of Object.entries({
+      ...getCorsHeaders(request),
+      ...SECURITY_HEADERS,
+    })) {
+      refusal.headers.set(name, value);
+    }
+    return refusal;
   }
 
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);

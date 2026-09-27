@@ -160,6 +160,7 @@ export function SupportPanel({
       ) : null}
 
       <SupportComposer disabled={session.pending} onAsk={session.ask} />
+      {session.stepUpDialog}
 
       {!showHandoff && !session.handoff ? (
         <div className={styles['section']}>
