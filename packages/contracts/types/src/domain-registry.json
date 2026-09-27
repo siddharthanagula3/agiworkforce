@@ -169,6 +169,7 @@
       "concepts": ["usage-reservation"],
       "tables": [
         "free_daily_usage_reservations",
+        "infrastructure_vendor_bills",
         "managed_usage_request_extensions",
         "managed_usage_requests",
         "organization_usage_ledger",

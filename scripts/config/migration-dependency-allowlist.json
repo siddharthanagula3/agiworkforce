@@ -1,4 +1,10 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/lib/services/cogs-ledger-service.ts",
+      "migration": 304,
+      "reason": "Writes the attribution_kind and attribution_ref columns when it imports Stripe fees. The deploy applies 0304 before this release reaches production. Until then the daily import in reconcile-credits fails, logs cogs_stripe_import_failed and leaves every other reconciliation step running, and its three-day lookback re-imports the missed fees once 0304 is applied."
+    }
+  ]
 }
