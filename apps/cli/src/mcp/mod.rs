@@ -1531,7 +1531,7 @@ impl McpManager {
         result
     }
 
-    async fn refresh_changed_servers(&mut self) {
+    pub(crate) async fn refresh_changed_servers(&mut self) {
         let mut refreshed_tools = Vec::new();
         let mut refreshed_prompts = Vec::new();
         for (name, conn) in self.connections.iter_mut() {
