@@ -12,7 +12,17 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Brain, FileText, Search, Trash2, X, Plus, Upload } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Brain,
+  FileText,
+  GitCompareArrows,
+  Search,
+  Trash2,
+  X,
+  Plus,
+  Upload,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
@@ -196,6 +206,10 @@ export default function MemoryScreen() {
 
   const handleSummaryPress = useCallback(() => {
     router.push('/(app)/settings/memory-summary' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleConflictsPress = useCallback(() => {
+    router.push('/(app)/settings/memory-conflicts' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const handleResetPress = useCallback(() => {
@@ -394,6 +408,11 @@ export default function MemoryScreen() {
             icon={FileText}
             {...(memoryFreshness ? { value: memoryFreshness } : {})}
             onPress={handleSummaryPress}
+          />
+          <SettingsRow
+            label="Replaced memories"
+            icon={GitCompareArrows}
+            onPress={handleConflictsPress}
           />
           <SettingsRow
             label="Reset memory"

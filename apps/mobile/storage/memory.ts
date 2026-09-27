@@ -1,5 +1,5 @@
 import { getDb } from './db';
-import type { MemoryFact, MemoryFactSource } from './types';
+import type { MemoryFact, MemoryFactSource, ReplacedMemoryFact } from './types';
 
 const MEMORY_FACT_SOURCES: ReadonlySet<string> = new Set<MemoryFactSource>([
   'typed',
@@ -19,7 +19,16 @@ function row2fact(r: Record<string, unknown>): MemoryFact {
       typeof r.source === 'string' && MEMORY_FACT_SOURCES.has(r.source)
         ? (r.source as MemoryFactSource)
         : null,
+    superseded_by: typeof r.superseded_by === 'string' ? r.superseded_by : null,
   };
+}
+
+function prefixedRow(row: Record<string, unknown>, prefix: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (key.startsWith(prefix)) out[key.slice(prefix.length)] = value;
+  }
+  return out;
 }
 
 export async function insertMemoryFact(
@@ -29,8 +38,8 @@ export async function insertMemoryFact(
   const db = await getDb();
   await db.withTransactionAsync(async () => {
     await db.runAsync(
-      `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at, updated_at, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?);`,
+      `INSERT INTO memory_facts (id, fact, source_conversation_id, pinned, created_at, updated_at, source, superseded_by, superseded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
       [
         fact.id,
         fact.fact,
@@ -39,6 +48,8 @@ export async function insertMemoryFact(
         fact.created_at,
         fact.updated_at ?? fact.created_at,
         fact.source ?? null,
+        fact.superseded_by ?? null,
+        fact.superseded_by ? fact.created_at : null,
       ],
     );
     if (embedding) {
@@ -57,21 +68,83 @@ export async function insertMemoryFact(
 export async function listMemoryFacts(opts?: {
   pinned?: boolean;
   limit?: number;
+  includeReplaced?: boolean;
 }): Promise<MemoryFact[]> {
   const db = await getDb();
   const limit = opts?.limit ?? 100;
+  const active = opts?.includeReplaced ? '' : 'superseded_by IS NULL';
   if (opts?.pinned !== undefined) {
     const rows = await db.getAllAsync<Record<string, unknown>>(
-      'SELECT * FROM memory_facts WHERE pinned = ? ORDER BY created_at DESC LIMIT ?;',
+      `SELECT * FROM memory_facts WHERE pinned = ?${active ? ` AND ${active}` : ''} ORDER BY created_at DESC LIMIT ?;`,
       [opts.pinned ? 1 : 0, limit],
     );
     return rows.map(row2fact);
   }
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM memory_facts ORDER BY pinned DESC, created_at DESC LIMIT ?;',
+    `SELECT * FROM memory_facts${active ? ` WHERE ${active}` : ''} ORDER BY pinned DESC, created_at DESC LIMIT ?;`,
     [limit],
   );
   return rows.map(row2fact);
+}
+
+export async function supersedeMemoryFacts(ids: readonly string[], keptId: string): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const now = Date.now();
+  await db.withTransactionAsync(async () => {
+    for (const id of ids) {
+      await db.runAsync(
+        'UPDATE memory_facts SET superseded_by = ?, superseded_at = ? WHERE id = ? AND superseded_by IS NULL;',
+        [keptId, now, id],
+      );
+    }
+  });
+}
+
+export async function listReplacedMemoryFacts(limit = 50): Promise<ReplacedMemoryFact[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT replaced.id AS r_id, replaced.fact AS r_fact, replaced.source_conversation_id AS r_source_conversation_id,
+            replaced.pinned AS r_pinned, replaced.created_at AS r_created_at, replaced.updated_at AS r_updated_at,
+            replaced.source AS r_source, replaced.superseded_by AS r_superseded_by,
+            kept.id AS k_id, kept.fact AS k_fact, kept.source_conversation_id AS k_source_conversation_id,
+            kept.pinned AS k_pinned, kept.created_at AS k_created_at, kept.updated_at AS k_updated_at,
+            kept.source AS k_source, kept.superseded_by AS k_superseded_by
+       FROM memory_facts replaced
+       JOIN memory_facts kept ON kept.id = replaced.superseded_by
+      WHERE kept.superseded_by IS NULL
+      ORDER BY replaced.superseded_at DESC
+      LIMIT ?;`,
+    [limit],
+  );
+  return rows.map((row) => ({
+    replaced: row2fact(prefixedRow(row, 'r_')),
+    kept: row2fact(prefixedRow(row, 'k_')),
+  }));
+}
+
+export async function restoreReplacedMemoryFact(replacedId: string): Promise<boolean> {
+  const db = await getDb();
+  let restored = false;
+  await db.withTransactionAsync(async () => {
+    const row = await db.getFirstAsync<{ superseded_by: string | null }>(
+      'SELECT superseded_by FROM memory_facts WHERE id = ?;',
+      [replacedId],
+    );
+    const keptId = row?.superseded_by;
+    if (!keptId) return;
+    const now = Date.now();
+    await db.runAsync(
+      'UPDATE memory_facts SET superseded_by = NULL, superseded_at = NULL, updated_at = ? WHERE id = ?;',
+      [now, replacedId],
+    );
+    await db.runAsync(
+      'UPDATE memory_facts SET superseded_by = ?, superseded_at = ?, updated_at = ? WHERE id = ?;',
+      [replacedId, now, now, keptId],
+    );
+    restored = true;
+  });
+  return restored;
 }
 
 export async function getMemoryFact(id: string): Promise<MemoryFact | null> {
@@ -142,7 +215,7 @@ export async function searchMemoryByText(query: string, k = 10): Promise<MemoryF
   const escaped = query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
   const q = `%${escaped}%`;
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    "SELECT * FROM memory_facts WHERE lower(fact) LIKE ? ESCAPE '\\' ORDER BY pinned DESC, created_at DESC LIMIT ?;",
+    "SELECT * FROM memory_facts WHERE lower(fact) LIKE ? ESCAPE '\\' AND superseded_by IS NULL ORDER BY pinned DESC, created_at DESC LIMIT ?;",
     [q, k],
   );
   return rows.map(row2fact);

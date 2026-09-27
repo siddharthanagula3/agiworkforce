@@ -44,6 +44,12 @@ export interface MemoryFact {
   source?: MemoryFactSource | null;
   category?: string | null;
   source_conversation_title?: string | null;
+  superseded_by?: string | null;
+}
+
+export interface ReplacedMemoryFact {
+  replaced: MemoryFact;
+  kept: MemoryFact;
 }
 
 export interface InstalledModel {

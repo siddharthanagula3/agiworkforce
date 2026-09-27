@@ -1,12 +1,15 @@
-import * as Crypto from 'expo-crypto';
 import {
   classifyMemoryCategory,
   extractPassiveMemoryFacts,
   normalizeMemoryKey,
 } from '@agiworkforce/agent-core';
 import { isMemoryCategory, MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
-import { insertMemoryFact, listMemoryFacts } from '@/storage/memory';
-import type { MemoryFact, MemoryFactSource } from '@/storage/types';
+import { listMemoryFacts } from '@/storage/memory';
+import type { MemoryFact } from '@/storage/types';
+import { writeLocalMemoryFact } from './localMemoryWriter';
+import { memoryFactChangedAt, memoryFactOrigin } from './memoryOrigin';
+
+export { memoryFactOrigin } from './memoryOrigin';
 
 const MEMORY_TOPIC_TITLES = {
   preference: 'Preferences',
@@ -21,11 +24,6 @@ export interface MemoryTopicGroup {
   key: MemoryCategory;
   title: string;
   data: MemoryFact[];
-}
-
-export function memoryFactOrigin(entry: MemoryFact): MemoryFactSource {
-  if (entry.source) return entry.source;
-  return entry.source_conversation_id ? 'learned' : 'typed';
 }
 
 export function memoryFactTopic(entry: MemoryFact): MemoryCategory {
@@ -44,12 +42,6 @@ export function groupMemoryFactsByTopic(entries: MemoryFact[]): MemoryTopicGroup
     title: MEMORY_TOPIC_TITLES[key],
     data: groups.get(key) ?? [],
   }));
-}
-
-function lastChangedAt(entry: MemoryFact): number {
-  return typeof entry.updated_at === 'number' && Number.isFinite(entry.updated_at)
-    ? Math.max(entry.updated_at, entry.created_at)
-    : entry.created_at;
 }
 
 export function dedupeAgainstExisting(candidates: string[], existing: MemoryFact[]): string[] {
@@ -168,7 +160,7 @@ export function describeMemoryFreshness(
   let newestAt: number | null = null;
   for (const entry of entries) {
     if (typeof entry.created_at !== 'number' || !Number.isFinite(entry.created_at)) continue;
-    const changedAt = lastChangedAt(entry);
+    const changedAt = memoryFactChangedAt(entry);
     newestAt = newestAt === null ? changedAt : Math.max(newestAt, changedAt);
   }
   if (newestAt === null) return null;
@@ -196,17 +188,21 @@ export async function consolidateFactsFromTurn(params: {
     const existing = await listMemoryFacts({ limit: 500 });
     const fresh = dedupeAgainstExisting(candidates, existing).slice(0, MAX_PER_TURN);
 
+    let known = existing;
     let inserted = 0;
     for (const fact of fresh) {
       try {
-        await insertMemoryFact({
-          id: Crypto.randomUUID(),
+        const result = await writeLocalMemoryFact({
           fact,
-          source_conversation_id: conversationId,
-          pinned: false,
-          created_at: Date.now(),
           source: 'learned',
+          conversationId,
+          known,
         });
+        if (!result.fact) continue;
+        known = [
+          ...known.filter((entry) => !result.replacedIds.includes(entry.id)),
+          ...(result.outcome === 'inserted' ? [result.fact] : []),
+        ];
         inserted += 1;
       } catch {
         // Skip a single failed insert; keep going.
