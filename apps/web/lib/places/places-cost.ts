@@ -1,12 +1,11 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { PLACES_SEARCH_TOOL_NAME } from '@agiworkforce/types';
+import { chargeMicrousdForProviderCost, PLACES_SEARCH_TOOL_NAME } from '@agiworkforce/types';
 
 import { PLACES_SEARCH_FEATURE, placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   reserveSearchCharge,
-  searchChargeMicrousd,
   settleSearchCall,
   type SearchAdmission,
   type SearchChargeReservationOutcome,
@@ -36,7 +35,7 @@ export function reservePlacesSearchCharge(
     callRef: call.toolCallId,
     feature: PLACES_SEARCH_FEATURE,
     provider: call.providerId,
-    chargeMicrousd: searchChargeMicrousd(placesSearchMicrousdPerCall()),
+    chargeMicrousd: chargeMicrousdForProviderCost(placesSearchMicrousdPerCall()),
     scope: 'places',
     db: billing.db,
   });

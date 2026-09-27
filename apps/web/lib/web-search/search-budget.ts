@@ -1,12 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import {
-  chargeCreditsForMicrousd,
-  microusdFromCredits,
-  normalizeBillingPlanTier,
-  type RateCardFeature,
-} from '@agiworkforce/types';
+import { normalizeBillingPlanTier, type RateCardFeature } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import type { SearchAllowance } from './search-allowance';
@@ -66,10 +61,6 @@ export function resolveSearchCallerKind(input: {
     return 'automated';
   }
   return AUTOMATED_SURFACES.has((input.surface ?? '').toLowerCase()) ? 'automated' : 'interactive';
-}
-
-export function searchChargeMicrousd(providerCostMicrousd: number): number {
-  return Math.round(microusdFromCredits(chargeCreditsForMicrousd(providerCostMicrousd)));
 }
 
 export function includedMonthlySearchCalls(planTier: string | null | undefined): number {

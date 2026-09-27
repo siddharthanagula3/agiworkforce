@@ -1,14 +1,14 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MICROUSD_PER_USD, resolveFeatureRate } from '@agiworkforce/types';
+import {
+  chargeMicrousdForProviderCost,
+  MICROUSD_PER_USD,
+  resolveFeatureRate,
+} from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
-import {
-  searchChargeMicrousd,
-  settleSearchCall,
-  type SearchAdmission,
-} from '@/lib/web-search/search-budget';
+import { settleSearchCall, type SearchAdmission } from '@/lib/web-search/search-budget';
 import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
 
 export const GOOGLE_GROUNDING_FEATURE = 'web_search_grounding';
@@ -37,7 +37,7 @@ export function googleGroundingMicrousdPerCall(model: string): number {
 
 export function googleGroundingChargeMicrousd(model: string, groundedUses: number): number {
   if (!Number.isFinite(groundedUses) || groundedUses <= 0) return 0;
-  return searchChargeMicrousd(groundedUses * googleGroundingMicrousdPerCall(model));
+  return chargeMicrousdForProviderCost(groundedUses * googleGroundingMicrousdPerCall(model));
 }
 
 export interface GoogleGroundingSettlement {
