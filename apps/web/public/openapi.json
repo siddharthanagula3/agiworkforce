@@ -35,7 +35,7 @@
       "WorkspaceApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "Workspace API key (`agiadm_\u2026`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401. Writes made with a key need no CSRF token."
+        "description": "Workspace API key (`agiadm_\u2026`) issued in the workspace console under Audit > Workspace API keys. It acts for the workspace rather than for a person, keeps working after the member who issued it leaves, and needs an active Team or Enterprise plan. The issuer picks its scopes, only from permissions they hold, and an optional expiry; neither can change after issue, and the key can be revoked at any time. An operation names the scope it needs in `x-agi-workspace-scope` and answers 403 without it, listing the scopes the key carries. A revoked, expired or unknown key answers 401, and a call from outside the workspace's IP allow list answers 403 `IP_NOT_ALLOWED`. Writes made with a key need no CSRF token."
       }
     },
     "schemas": {
@@ -929,25 +929,36 @@
       },
       "WorkspaceApiError": {
         "type": "object",
-        "description": "Error envelope of the workspace administration endpoints. `error.code` is stable and `error.message` is safe to show.",
+        "description": "Error envelope of the workspace administration endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
         "required": ["error"],
         "properties": {
           "error": {
-            "type": "object",
-            "required": ["code", "message"],
-            "properties": {
-              "code": {
-                "type": "string",
-                "description": "For example `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `SUBSCRIPTION_REQUIRED`, `NOT_FOUND`, `CONFLICT`, `TIMEOUT` or `SERVICE_UNAVAILABLE`."
+            "oneOf": [
+              {
+                "type": "object",
+                "required": ["code", "message"],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "For example `VALIDATION_ERROR`, `UNAUTHORIZED`, `FORBIDDEN`, `IP_NOT_ALLOWED`, `SUBSCRIPTION_REQUIRED`, `NOT_FOUND`, `CONFLICT`, `TIMEOUT` or `SERVICE_UNAVAILABLE`."
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "details": {
+                    "description": "The fields a 400 rejected, when the request failed validation.",
+                    "nullable": true
+                  }
+                }
               },
-              "message": {
+              {
                 "type": "string"
-              },
-              "details": {
-                "description": "The fields a 400 rejected, when the request failed validation.",
-                "nullable": true
               }
-            }
+            ]
+          },
+          "code": {
+            "type": "string",
+            "description": "`CSRF_VALIDATION_FAILED` when a browser session sent no valid `x-csrf-token`."
           },
           "requestId": {
             "type": "string"
@@ -2572,7 +2583,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
             "content": {
               "application/json": {
                 "schema": {
@@ -2652,7 +2663,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
             "content": {
               "application/json": {
                 "schema": {
@@ -2685,7 +2696,7 @@
       },
       "patch": {
         "summary": "Change a member's role",
-        "description": "Sets the member's role to `admin`, `member` or `viewer` and records `member_role_changed` in the audit trail. Ownership moves only through the transfer flow, so `owner` answers 409, and the owner's own role cannot be changed here. A role cannot carry permissions the caller does not hold. A workspace API key assigns only `member` and `viewer`, and cannot change an owner, an admin, or a member whose roles grant admin permissions; make those changes in the workspace console. A browser session sends `x-csrf-token`.",
+        "description": "Sets the member's role to `admin`, `member` or `viewer` and records `member_role_changed` in the audit trail. Ownership moves only through the transfer flow, so `owner` answers 409, and the owner's own role cannot be changed here. Only a caller who holds every permission of the admin role can grant it. A workspace API key assigns only `member` and `viewer`, and cannot change an owner, an admin, or a member whose roles grant admin permissions; make those changes in the workspace console. A browser session sends `x-csrf-token`.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -2750,7 +2761,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, the role carries permissions the caller does not hold, only an owner may change an owner, or a workspace API key tried to assign `admin` or to change an owner, an admin, or a member whose roles grant admin permissions",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, the caller lacks a permission of the admin role it tried to grant, only an owner may change an owner, or a workspace API key tried to assign `admin` or to change an owner, an admin, or a member whose roles grant admin permissions. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
             "content": {
               "application/json": {
                 "schema": {
@@ -2848,7 +2859,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, only an owner may remove an owner, or a workspace API key tried to remove an owner, an admin, or a member whose roles grant admin permissions",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, only an owner may remove an owner, or a workspace API key tried to remove an owner, an admin, or a member whose roles grant admin permissions. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
             "content": {
               "application/json": {
                 "schema": {
@@ -2960,7 +2971,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.view` scope",
             "content": {
               "application/json": {
                 "schema": {
@@ -2983,7 +2994,7 @@
       },
       "post": {
         "summary": "Invite someone to the workspace",
-        "description": "Creates an invitation, emails the link when email delivery is configured, and records `member_invited` in the audit trail. `invitation.expiresAt` says when the link stops working, and only the invited address can accept it. The role cannot carry permissions the caller does not hold, and a workspace API key invites only as `member` or `viewer`. A browser session sends `x-csrf-token`.",
+        "description": "Creates an invitation, emails the link when email delivery is configured, and records `member_invited` in the audit trail. `invitation.expiresAt` says when the link stops working, and only the invited address can accept it. Only a caller who holds every permission of the admin role can invite an admin, and a workspace API key invites only as `member` or `viewer`. A browser session sends `x-csrf-token`.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -3036,7 +3047,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the caller lacks the permission or the `admin.members.manage` scope, the role carries permissions the caller does not hold, or a workspace API key tried to invite an admin",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the caller lacks the permission or the `admin.members.manage` scope, the caller lacks a permission of the admin role it tried to grant, or a workspace API key tried to invite an admin. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
             "content": {
               "application/json": {
                 "schema": {
@@ -3125,7 +3136,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the member's role lacks the permission, or the workspace API key lacks the `admin.members.manage` scope",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.members.manage` scope. A browser session without a valid `x-csrf-token` also gets 403, as does a write with no credential at all",
             "content": {
               "application/json": {
                 "schema": {
@@ -3170,7 +3181,7 @@
     "/settings/organization/usage-report": {
       "get": {
         "summary": "Get the per-member daily usage report",
-        "description": "Settled managed usage of the caller's workspace in UTC day buckets, with one row per member per day: requests, input and output tokens, and the credits consumed. `from` and `to` snap to UTC day boundaries and may span up to 366 days; `to` defaults to now and never reaches past today. Each page holds up to `limit` buckets: while `hasMore` is true, repeat the request with `page` set to `nextPage`. A turn still in flight appears once it settles. The first page records a data access event in the audit trail.",
+        "description": "Settled managed usage of the caller's workspace in UTC day buckets, with one row per member per day: requests, input and output tokens, and the credits consumed. `from` and `to` snap to UTC day boundaries and may span up to 366 days; `to` defaults to now and never reaches past today. Each page holds up to `limit` buckets: while `hasMore` is true, repeat the request with `page` set to `nextPage`. A turn still in flight appears once it settles. Every page records a data access event in the audit trail.",
         "tags": ["Workspace administration"],
         "security": [
           {
@@ -3195,7 +3206,7 @@
             "name": "to",
             "in": "query",
             "required": false,
-            "description": "End of the report, ISO 8601 date or date-time",
+            "description": "End of the report, exclusive, as an ISO 8601 date or date-time. One day is `from=2026-09-01&to=2026-09-02`.",
             "schema": {
               "type": "string"
             }
@@ -3255,7 +3266,7 @@
             }
           },
           "403": {
-            "description": "The workspace is not on a Team or Enterprise plan, the member's role lacks the permission, or the workspace API key lacks the `admin.billing.view` scope",
+            "description": "The workspace is not on a Team or Enterprise plan, the request came from outside the workspace's IP allow list, the member's role lacks the permission, or the workspace API key lacks the `admin.billing.view` scope",
             "content": {
               "application/json": {
                 "schema": {

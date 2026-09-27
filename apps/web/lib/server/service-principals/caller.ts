@@ -15,7 +15,7 @@ import { workspaceRouteAccess } from './route-access';
 export type WorkspaceApiCaller = ComplianceCaller;
 
 function bearerToken(request: Request): string | null {
-  const match = /^Bearer[ ]+(\S+)$/u.exec(request.headers.get('authorization')?.trim() ?? '');
+  const match = /^Bearer[ ]+(\S+)$/iu.exec(request.headers.get('authorization')?.trim() ?? '');
   return match?.[1] ?? null;
 }
 
@@ -75,6 +75,10 @@ export async function resolveWorkspaceApiCaller(
 
 export function auditSurfaceOf(caller: WorkspaceApiCaller): string | undefined {
   return caller.kind === 'service_principal' ? 'api' : undefined;
+}
+
+export function auditSourceOf(caller: WorkspaceApiCaller): string | undefined {
+  return caller.keyId === null ? undefined : `admin_api_key:${caller.keyId}`;
 }
 
 export function assertInteractiveCaller(caller: WorkspaceApiCaller, capability: string): void {
