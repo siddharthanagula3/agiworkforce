@@ -30,7 +30,7 @@ const WHEN: readonly LedgerRow[] = [
   {
     label: 'Plan upgrades',
     value:
-      'Immediate upgrades preserve the renewal date and charge the exact prorated price difference Stripe previews for the time remaining in the current period. This is an invoice adjustment, not a reset or refund of already-consumed usage.',
+      "An upgrade starts a new billing period today: you pay the new plan's price, minus a credit for the unused time on your current plan. Your renewal date moves to the day you upgrade, and the credits you already used this period count against the new plan's allowance. Adding seats to a Team plan keeps the renewal date and charges only for the rest of the current period. Neither is a refund.",
   },
   {
     label: 'Credit top-ups',
@@ -92,13 +92,16 @@ export default function RefundPolicyPage() {
               Statutory withdrawal rights.
             </h2>
             <Prose>
-              <strong>EU and EEA, UK and Turkey:</strong> if you live there, you may withdraw from a
-              subscription payment or a credit purchase within 14 days of paying, without giving a
-              reason. Choose the 14-day withdrawal reason below. We refund the whole payment to the
-              card you paid with as soon as you confirm, and in any case within 14 days of your
-              request; the plan ends and the credits from that payment leave your balance. A
-              statutory right that applies where you live applies alongside this page, and nothing
-              here reduces it.
+              <strong>EU, EEA and UK:</strong> if you live there, you may withdraw from a plan
+              payment or a credit purchase within 14 days of paying, without giving a reason, by
+              requesting a refund below. The refund is prorated by the credits you have used: for a
+              plan payment you get back the share of the period&rsquo;s plan credits you have not
+              used, and for a credit purchase the share of those credits you have not spent. It goes
+              to the card you paid with as soon as you confirm, and in any case within 14 days of
+              your request. A withdrawn plan ends that day, and the unused credits from a withdrawn
+              payment leave your balance. We go by the country of the payment&rsquo;s billing
+              address, or of your billing details when the payment has none. A statutory right that
+              applies where you live applies alongside this page, and nothing here reduces it.
             </Prose>
           </Stack>
         </Section>
@@ -109,10 +112,10 @@ export default function RefundPolicyPage() {
               How to request.
             </h2>
             <Prose>
-              Signed in, choose the payment and the reason below. A 14-day withdrawal, and an unused
-              payment inside the 7-day window on an account&rsquo;s first such refund, are refunded
-              as soon as you confirm. Anything else waits for a person, who answers within the
-              support response target for your plan, published at{' '}
+              Signed in, choose the payment and the reason below. A 14-day withdrawal, prorated by
+              use, and an unused payment inside the 7-day window on an account&rsquo;s first such
+              refund, are refunded as soon as you confirm. Anything else waits for a person, who
+              answers within the support response target for your plan, published at{' '}
               <Link href="/sla" className="agi-ds-link">
                 /sla
               </Link>
