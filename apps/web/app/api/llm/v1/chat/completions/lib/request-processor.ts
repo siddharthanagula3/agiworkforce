@@ -110,6 +110,7 @@ import {
 } from '@/lib/services/provider-adapter-service';
 import { admittedHarnessIds } from '@/lib/services/gateway-routing';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { scheduleMemoryRelevanceShadow } from '@/lib/services/semantic-decisions/consumers/memory-relevance';
 import { canonicalPrivacyMode } from '@/lib/services/semantic-decisions/eligibility';
@@ -2140,7 +2141,7 @@ function modelPolicyDenialResponse(decision: ModelAccessDecision): NextResponse 
         code: decision.code,
       },
     },
-    { status: decision.code === MODEL_POLICY_UNAVAILABLE.code ? 503 : 403 },
+    modelPolicyRefusalInit(decision),
   );
 }
 
