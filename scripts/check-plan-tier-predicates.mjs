@@ -150,12 +150,7 @@ const RAW_SUBSCRIPTION_READ_PATTERNS = Object.freeze([
   /\b(?:from|join)\s+(?:public\.)?subscriptions\b/gi,
 ]);
 
-export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([
-  {
-    path: 'apps/web/app/api/voice/live/sessions/route.ts',
-    why: 'voice minutes and reservation tier',
-  },
-]);
+export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([]);
 
 export const BILLING_PLAN_TIERS = Object.freeze([
   'local-only',
