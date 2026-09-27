@@ -32,6 +32,7 @@ function readApiError(body: unknown, fallback: string): string {
 }
 
 export const CLOUD_ACCOUNT_SETTINGS_PATH = '/settings/account';
+export const CLOUD_SECURITY_SETTINGS_PATH = '/settings/security';
 
 export class CloudStepUpRequiredError extends Error {
   constructor() {
@@ -42,10 +43,41 @@ export class CloudStepUpRequiredError extends Error {
   }
 }
 
-function isStepUpRefusal(response: Response, body: unknown): boolean {
-  if (response.status !== 403 || !isRecord(body)) return false;
+export class CloudMfaRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CloudMfaRequiredError';
+  }
+}
+
+export interface CloudWebAction {
+  message: string;
+  path: string;
+  label: string;
+}
+
+export function cloudWebActionFor(error: unknown): CloudWebAction | null {
+  if (error instanceof CloudStepUpRequiredError) {
+    return {
+      message: error.message,
+      path: CLOUD_ACCOUNT_SETTINGS_PATH,
+      label: 'Open account settings',
+    };
+  }
+  if (error instanceof CloudMfaRequiredError) {
+    return {
+      message: error.message,
+      path: CLOUD_SECURITY_SETTINGS_PATH,
+      label: 'Turn on two-factor',
+    };
+  }
+  return null;
+}
+
+function refusalCode(response: Response, body: unknown): string | null {
+  if (response.status !== 403 || !isRecord(body)) return null;
   const error = body['error'];
-  return isRecord(error) && error['code'] === 'STEP_UP_REQUIRED';
+  return isRecord(error) && typeof error['code'] === 'string' ? error['code'] : null;
 }
 
 async function failure(
@@ -55,7 +87,13 @@ async function failure(
 ): Promise<Error> {
   const body: unknown = await response.json().catch(() => null);
   request.assertBoundary();
-  if (isStepUpRefusal(response, body)) return new CloudStepUpRequiredError();
+  const code = refusalCode(response, body);
+  if (code === 'STEP_UP_REQUIRED') return new CloudStepUpRequiredError();
+  if (code === 'MFA_REQUIRED') {
+    return new CloudMfaRequiredError(
+      readApiError(body, 'Your workspace requires two-factor authentication.'),
+    );
+  }
   return new Error(readApiError(body, `${fallback} (HTTP ${response.status})`));
 }
 
