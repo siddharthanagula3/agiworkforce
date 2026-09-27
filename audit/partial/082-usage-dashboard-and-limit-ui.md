@@ -73,15 +73,13 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/m
 
 - Done when: Users can see how much of their usage went to research (Deep Research).
 - Wave: 3
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The research branch of resolveChatWorkload is unreachable from the chat route (work_mode enum excludes 'research'; quotaFeature is chat/image/video/computer_use), so Deep Research spend lands under Chat. Only a unit test calls the branch directly. |  |
-| desktop | partial | Hosted-web mirror of web: research turns are attributed to Chat. |  |
 | mobile | partial | Add the research share of usage to the mobile Usage screen; the server already returns it (/api/usage/history accepts the mobile session token) but mobile only renders the window meters. | ui |
-| api | partial | The API's byWorkload has no research rows for the same attribution reason. |  |
 
-Code: `apps/web/features/settings/sections/UsageSection.tsx:370-391`, `apps/web/features/settings/sections/UsageSection.tsx:216-230`, `apps/web/lib/services/account-usage-history-service.ts:85-114`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:418-423`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.10: Coding/work usage.
 
