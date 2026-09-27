@@ -9,7 +9,7 @@ const OPEN_CHAT = 'Open chat';
 
 function activityEvent(message: ExtToWebviewMessage): LocalCodeSessionActivityEvent | null {
   if (message.type === 'approvalRequested') return 'approval_required';
-  if (message.type === 'done') return 'completed';
+  if (message.type === 'done') return message.payload?.stopped ? null : 'completed';
   if (message.type === 'error') return 'failed';
   return null;
 }
