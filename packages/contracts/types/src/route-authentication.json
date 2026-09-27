@@ -34,6 +34,7 @@
     "apps/web/app/api/cron/enforce-workspace-retention/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/evaluate-model-rollout/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/evaluate-slo-burn/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
+    "apps/web/app/api/cron/expire-code-trials/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/expire-memories/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/expire-organization-invitations/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
     "apps/web/app/api/cron/expire-support-handoffs/route.ts": "the platform scheduler authenticates with the cron secret and no tenant is on the request",
