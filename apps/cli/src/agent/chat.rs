@@ -3109,6 +3109,40 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_turn_keeps_every_managed_request_it_is_billed_for() {
+        let mut session = make_local_session();
+        let config = CliConfig::default();
+        let mut adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 1_024,
+            first_on_chunk: None,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
+            incomplete: None,
+        };
+        let completion = |request_id: Option<&str>| models::CompletionResult {
+            managed_request_id: request_id.map(str::to_string),
+            ..live_completion("step", Vec::new())
+        };
+
+        adapter.accept_completion(completion(Some("agi.cli.chat.first")));
+        adapter.accept_completion(completion(None));
+        adapter.accept_completion(completion(Some("agi.cli.chat.second")));
+
+        assert_eq!(
+            adapter.managed_request_ids,
+            ["agi.cli.chat.first", "agi.cli.chat.second"],
+            "a completion that did not go through Managed Cloud has no bill to read"
+        );
+    }
+
     // -----------------------------------------------------------------------
     // Privacy-boundary invariant tests (no-silent-egress)
     //

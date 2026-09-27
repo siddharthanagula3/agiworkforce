@@ -1030,6 +1030,41 @@ mod tests {
     }
 
     #[test]
+    fn a_model_the_plan_excludes_is_answered_with_one_the_plan_runs() {
+        use crate::tier_cache::UserTier;
+
+        let pro = AccountRoute::with(true, Some(UserTier::Pro));
+        let suggested = pro
+            .eligible_model()
+            .expect("a Pro plan runs a catalog model");
+        assert!(pro.runs_managed(&suggested));
+        assert!(crate::model_catalog::can_access_model_for_tier(
+            &suggested,
+            &UserTier::Pro
+        ));
+
+        let listed = crate::model_catalog::tier_allowed_models("economy")
+            .into_iter()
+            .next()
+            .expect("the catalog names an economy model");
+        let hosted =
+            AccountRoute::with(true, Some(UserTier::Pro)).with_plan_models(&[listed.as_str()]);
+        assert_eq!(hosted.eligible_model(), Some(listed));
+
+        assert_eq!(
+            AccountRoute::with(true, Some(UserTier::Pro))
+                .with_plan_models(&[])
+                .eligible_model(),
+            None,
+            "a plan the hosted list says runs nothing has nothing to suggest"
+        );
+        assert_eq!(
+            AccountRoute::with(false, Some(UserTier::Max)).eligible_model(),
+            None
+        );
+    }
+
+    #[test]
     fn an_explicit_provider_wins_over_the_plan() {
         let model = plan_model();
         let account = AccountRoute::with(true, Some(crate::tier_cache::UserTier::Max));
