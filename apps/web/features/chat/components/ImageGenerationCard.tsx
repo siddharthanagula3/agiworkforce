@@ -845,12 +845,21 @@ interface ResultCardProps {
   imageUrl: string;
   prompt: string;
   modelId?: string;
+  aspectRatio?: ImageAspectRatio;
   onEdit: () => void;
   onShare: () => void;
   onKeep?: () => void;
 }
 
-function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: ResultCardProps) {
+function ResultCard({
+  imageUrl,
+  prompt,
+  modelId,
+  aspectRatio,
+  onEdit,
+  onShare,
+  onKeep,
+}: ResultCardProps) {
   const modelLabel = getImageModelLabel(modelId);
   const [imgError, setImgError] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -1036,6 +1045,7 @@ function ResultCard({ imageUrl, prompt, modelId, onEdit, onShare, onKeep }: Resu
         {modelLabel && (
           <span className="ml-auto truncate pr-1 text-caption text-muted-foreground">
             Generated with {modelLabel}
+            {aspectRatio && aspectRatio !== 'auto' ? ` · ${aspectRatio}` : ''}
           </span>
         )}
       </div>
@@ -1178,6 +1188,7 @@ export function ImageGenerationCard({
         imageUrl={liveUrl ?? imageUrl}
         prompt={livePrompt}
         modelId={modelId}
+        aspectRatio={liveAspect}
         onEdit={() => setShowEdit(true)}
         onShare={() => setShowShare(true)}
         {...(keepableAssetId
