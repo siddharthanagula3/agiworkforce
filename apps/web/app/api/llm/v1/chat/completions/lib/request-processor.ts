@@ -4671,6 +4671,9 @@ export async function processRequest(
         planTier: subscription.plan_tier,
       }),
       freePoolRoute: freeLanePlan !== null,
+      leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
+      provider,
+      model: chatRequest.model,
     });
     if (!trialReservationResult.ok) {
       return freeTrialBudgetReachedResponse(subscription, {

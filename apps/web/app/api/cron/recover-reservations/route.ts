@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { CreditService } from '@/lib/services/credit-service';
+import { releaseExpiredFreeTrialReservations } from '@/lib/services/free-trial-service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -44,10 +45,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const summary = await CreditService.processPendingSettlements(
-      RECOVERY_DRAIN_BATCH,
-      getNeonDb(),
-    );
+    const db = getNeonDb();
+    const summary = await CreditService.processPendingSettlements(RECOVERY_DRAIN_BATCH, db);
+    const free = await releaseExpiredFreeTrialReservations(db, RECOVERY_DRAIN_BATCH);
+    if (free.released > 0) {
+      logger.info(
+        { event: 'free_usage_reservation_recovery', ...free },
+        'Released expired Free usage reservations',
+      );
+    }
+    if (free.released >= RECOVERY_DRAIN_BATCH) {
+      logger.warn(
+        { event: 'free_usage_reservation_recovery_saturated', ...free },
+        'Free reservation recovery filled its batch; a backlog remains for the next sweep',
+      );
+    }
     if (summary.processed > 0) {
       logger.info(
         { event: 'managed_usage_reservation_recovery', ...summary },
@@ -60,7 +72,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         'Reservation recovery filled its batch; a backlog remains for the next sweep',
       );
     }
-    return NextResponse.json(summary);
+    return NextResponse.json({ ...summary, free });
   } catch (error) {
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },

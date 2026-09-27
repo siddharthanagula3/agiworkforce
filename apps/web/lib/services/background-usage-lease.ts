@@ -57,6 +57,9 @@ export async function reserveBackgroundUsage(input: {
         undefined,
         input.routeId,
       ),
+      leaseSeconds: input.leaseSeconds,
+      provider: input.provider,
+      model: input.model,
     });
     if (!begun.ok) {
       throw new ManagedUsageRequestError(
