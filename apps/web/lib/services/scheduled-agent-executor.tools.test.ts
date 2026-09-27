@@ -332,6 +332,7 @@ describe('scheduled agent tool access', () => {
       stream: vi.fn(() => ({}) as never),
     } as never);
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: TOOL_INCAPABLE_MODEL.id,
       content: 'Plain answer',
       promptTokens: 10,

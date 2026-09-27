@@ -163,6 +163,7 @@ describe('scheduled managed agent executor', () => {
       stream: vi.fn(() => ({}) as never),
     } as never);
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Completed result',
       promptTokens: 100,

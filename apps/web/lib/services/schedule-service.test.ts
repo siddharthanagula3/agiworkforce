@@ -60,10 +60,12 @@ function updateSchedule(
 
 const CREDITS_USED_READ = 'and scheduled_task_id = $2';
 
+type QueryFn = (sql: string, params?: unknown[]) => unknown;
+
 function database(
-  query: ReturnType<typeof vi.fn>,
+  query: QueryFn,
   execute: ReturnType<typeof vi.fn> = vi.fn(),
-  creditsUsed: ReturnType<typeof vi.fn> = vi.fn(async () => [{ used: 0 }]),
+  creditsUsed: QueryFn = vi.fn(async () => [{ used: 0 }]),
 ): DatabaseAdapter {
   return {
     query: (sql: string, params?: unknown[]) =>

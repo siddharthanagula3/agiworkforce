@@ -289,6 +289,7 @@ describe('formatWebSearchResultForModel', () => {
   it('formats a successful outcome as a numbered list with snippets', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'test query',
@@ -308,6 +309,7 @@ describe('formatWebSearchResultForModel', () => {
   it('falls back to the url for the model-facing line when title is empty', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'q',
@@ -320,6 +322,7 @@ describe('formatWebSearchResultForModel', () => {
   it('numbers results by the position they hold in the turn, not by their place in the call', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'second search',
@@ -341,6 +344,7 @@ describe('formatWebSearchResultForModel', () => {
   it('drops a result the turn cannot number rather than showing it with a number nobody has', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'q',
@@ -354,6 +358,7 @@ describe('formatWebSearchResultForModel', () => {
   it('keeps the numbered results and says how many the source limit left out', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'q',
@@ -373,6 +378,7 @@ describe('formatWebSearchResultForModel', () => {
   it('formats a no-results outcome honestly', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'nothing here',
@@ -385,6 +391,7 @@ describe('formatWebSearchResultForModel', () => {
     expect(
       formatWebSearchResultForModel({
         ok: false,
+        billableCalls: 0,
         errorCode: 'not_configured',
         error: 'missing key',
       }),
@@ -392,6 +399,7 @@ describe('formatWebSearchResultForModel', () => {
 
     const rateLimited = formatWebSearchResultForModel({
       ok: false,
+      billableCalls: 0,
       errorCode: 'rate_limited',
       error: 'the search backend answered HTTP 429',
       status: 429,
@@ -402,6 +410,7 @@ describe('formatWebSearchResultForModel', () => {
 
     const upstream = formatWebSearchResultForModel({
       ok: false,
+      billableCalls: 0,
       errorCode: 'upstream_error',
       error: 'the search backend answered HTTP 502',
       status: 502,
@@ -416,6 +425,7 @@ describe('webSearchResultsToFetchedSources', () => {
   it('maps results to {url,title,snippet}, snippet carried through for the encrypted_content mapping tool-loop.ts applies', () => {
     const outcome: WebSearchOutcome = {
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'q',
@@ -431,7 +441,12 @@ describe('webSearchResultsToFetchedSources', () => {
   });
 
   it('returns an empty array for a failed outcome', () => {
-    const outcome: WebSearchOutcome = { ok: false, errorCode: 'timeout', error: 'x' };
+    const outcome: WebSearchOutcome = {
+      ok: false,
+      errorCode: 'timeout',
+      error: 'x',
+      billableCalls: 0,
+    };
     expect(webSearchResultsToFetchedSources(outcome)).toEqual([]);
   });
 });
@@ -527,6 +542,7 @@ describe('hardening: untrusted-payload bounds and injection defenses', () => {
   it('wraps results in untrusted delimiters with a treat-as-data preamble', () => {
     const out = formatWebSearchResultForModel({
       ok: true,
+      billableCalls: 1,
       providerId: PROVIDER_ID,
       retrievedAt: RETRIEVED_AT,
       query: 'q',
@@ -883,7 +899,7 @@ describe('the web search provider seam', () => {
   });
 
   it('falls through to the next provider when the first one fails', async () => {
-    const search = vi.fn(async () => ({ ok: true as const, items: [] }));
+    const search = vi.fn(async () => ({ ok: true as const, items: [], billableCalls: 1 }));
     register({
       id: 'test-fallback',
       delivery: 'indexed',
@@ -910,6 +926,7 @@ describe('the web search provider seam', () => {
         ok: false as const,
         errorCode: 'upstream_error' as const,
         error: 'second backend refused',
+        billableCalls: 0,
       }),
     });
     const failing = fetchReturning(
@@ -923,7 +940,7 @@ describe('the web search provider seam', () => {
   });
 
   it('stops at once when the caller cancelled, rather than trying every provider', async () => {
-    const search = vi.fn(async () => ({ ok: true as const, items: [] }));
+    const search = vi.fn(async () => ({ ok: true as const, items: [], billableCalls: 1 }));
     register({ id: 'test-never-tried', delivery: 'indexed', isConfigured: () => true, search });
     const cancelling = vi.fn(async () => {
       throw new DOMException('aborted', 'AbortError');
@@ -968,9 +985,14 @@ describe('the web search provider seam', () => {
   });
 
   it('yields no sources for a failed search', () => {
-    expect(webSearchSourcesFromOutcome({ ok: false, errorCode: 'timeout', error: 'slow' })).toEqual(
-      [],
-    );
+    expect(
+      webSearchSourcesFromOutcome({
+        ok: false,
+        errorCode: 'timeout',
+        error: 'slow',
+        billableCalls: 0,
+      }),
+    ).toEqual([]);
   });
 });
 

@@ -56,7 +56,6 @@ function latestCapabilityWidening(): string {
   throw new Error('No migration defines provider_cost_events_capability_check');
 }
 
-/** The newest migration that rewrites the unit basis constraint is what the schema enforces. */
 function latestUnitBasisWidening(): string {
   const directory = import.meta.dirname;
   const files = fs

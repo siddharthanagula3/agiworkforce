@@ -16,7 +16,7 @@ function fakeProvider(overrides: Partial<WebSearchProvider> & { id: string }): W
   return {
     delivery: 'indexed',
     isConfigured: () => true,
-    search: async () => ({ ok: true, items: [] }),
+    search: async () => ({ ok: true, items: [], billableCalls: 1 }),
     ...overrides,
   };
 }
