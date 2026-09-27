@@ -16,9 +16,11 @@ import {
   cloudCodeRepositoryLabel,
   cloudCodeStopReasonIsFailure,
   encodeCloudTaskHandoffQuery,
+  REMOTE_CODE_LIMITS,
   type CloudCodeAgentTurnRecord,
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
+  type CloudTaskHandoff,
 } from '@agiworkforce/types';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
@@ -73,7 +75,10 @@ export function cloudCodeSessionSummary(session: CloudCodeSession): string {
     .join(' · ');
 }
 
-type CloudCodeSessionAction = 'approve' | 'reject' | 'stop' | 'bring-branch-in' | 'open-web';
+type CloudCodeSessionAction =
+  'approve' | 'reject' | 'stop' | 'continue-here' | 'bring-branch-in' | 'open-web';
+
+export const CONTINUE_CLOUD_CODE_SESSION_HERE = 'Continue here';
 
 export interface CloudCodeSessionItem extends vscode.QuickPickItem {
   action?: CloudCodeSessionAction;
@@ -88,6 +93,41 @@ interface CloudCodeSessionDetail {
 
 function firstLine(text: string): string {
   return text.split('\n')[0]?.trim() ?? '';
+}
+
+function clip(text: string): string {
+  const trimmed = text.trim();
+  return trimmed.length > REMOTE_CODE_LIMITS.messageLength
+    ? `${trimmed.slice(0, REMOTE_CODE_LIMITS.messageLength)}…`
+    : trimmed;
+}
+
+export function buildCloudCodeContinuationDraft(detail: CloudCodeSessionDetail): string {
+  const { session, turns } = detail;
+  const lines = [`Continuing AGI Code session “${session.title}” here.`];
+  if (session.repositoryUrl) {
+    lines.push('', `Repository: ${cloudCodeRepositoryLabel(session.repositoryUrl)}`);
+  }
+  if (session.workingBranch !== null) lines.push('', `Cloud branch: ${session.workingBranch}`);
+  const recent = turns.slice(-REMOTE_CODE_LIMITS.transcriptMessages);
+  if (recent.length > 0) {
+    lines.push('', 'Conversation so far:');
+    for (const turn of recent) {
+      lines.push('', `You: ${clip(turn.goal)}`);
+      const reply = clip(turn.finalMessage) || clip(turn.errorMessage ?? '');
+      if (reply !== '') lines.push(`Agent: ${reply}`);
+    }
+  }
+  return `${lines.join('\n')}\n\n`;
+}
+
+function cloudCodeHandoff(session: CloudCodeSession): CloudTaskHandoff {
+  return {
+    runId: session.id,
+    goal: session.title,
+    plan: [],
+    branch: session.workingBranch,
+  };
 }
 
 function transcriptItems(transcript: readonly CodeTranscriptItem[]): CloudCodeSessionItem[] {
@@ -171,6 +211,11 @@ export function buildCloudCodeSessionItems(
   if (latest !== undefined && latest.stopReason === null) {
     items.push({ label: `$(debug-stop) ${CLOUD_CODE_SESSION_COPY.stopTurn}`, action: 'stop' });
   }
+  items.push({
+    label: `$(arrow-right) ${CONTINUE_CLOUD_CODE_SESSION_HERE}`,
+    detail: 'Start a chat in this window from this session’s conversation',
+    action: 'continue-here',
+  });
   if (detail.session.workingBranch !== null) {
     items.push({
       label: `$(git-branch) ${BRING_CLOUD_BRANCH_IN}`,
@@ -186,6 +231,7 @@ export function buildCloudCodeSessionItems(
 export interface CloudCodeSessionHost {
   webOrigin: string;
   bringBranchIn: (handoffQuery: string) => Promise<void>;
+  continueHere: (draft: string, handoff: CloudTaskHandoff) => Promise<void>;
 }
 
 async function decide(
@@ -248,15 +294,18 @@ export async function showCloudCodeSession(
     return;
   }
 
+  if (picked.action === 'continue-here') {
+    await host.continueHere(
+      buildCloudCodeContinuationDraft(detail),
+      cloudCodeHandoff(detail.session),
+    );
+    return;
+  }
+
   if (picked.action === 'bring-branch-in') {
     let query: string;
     try {
-      query = encodeCloudTaskHandoffQuery({
-        runId: detail.session.id,
-        goal: detail.session.title,
-        plan: [],
-        branch: detail.session.workingBranch,
-      });
+      query = encodeCloudTaskHandoffQuery(cloudCodeHandoff(detail.session));
     } catch (error) {
       void vscode.window.showErrorMessage(
         `AGI Workforce: this session's branch cannot be brought in, ${describeCloudRunFailure(error)}`,
