@@ -6,6 +6,12 @@ import {
   registerContextHandoffUriHandler,
   resolveGitCheckoutHost,
 } from './features/context-handoff';
+import {
+  OPEN_CLOUD_CODE_SESSION_COMMAND,
+  resolveCloudCodeApi,
+  showCloudCodeSession,
+} from './features/cloud-tasks';
+import { getCloudWebOrigin } from './utils/api';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
 import { startVscodeHeartbeat } from './features/device-registry';
@@ -94,6 +100,7 @@ export function activate(context: vscode.ExtensionContext): void {
     (cwd) =>
       new LocalRuntimeClient({
         cliPath: () => resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
+        memoryEnabled: () => Config.memoryEnabled(),
         cwd,
         clientVersion: getExtensionVersion(),
         ...(remoteEnvironment.kind === 'local'
@@ -148,6 +155,30 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         await pullCloudResultIntoCheckout(handoff, await resolveGitCheckoutHost());
       }),
+      vscode.commands.registerCommand(
+        OPEN_CLOUD_CODE_SESSION_COMMAND,
+        async (argument: unknown) => {
+          if (typeof argument !== 'string' || argument === '') {
+            void vscode.window.showWarningMessage(
+              'AGI Workforce: pick an AGI Code session from Sessions, this command needs the session to open.',
+            );
+            return;
+          }
+          const code = await resolveCloudCodeApi(context.secrets);
+          if (code.status === 'signed-out') {
+            void vscode.window.showWarningMessage(
+              'AGI Workforce: sign in to AGI Cloud to open AGI Code sessions.',
+            );
+            return;
+          }
+          await showCloudCodeSession(code.api, argument, {
+            webOrigin: getCloudWebOrigin(),
+            bringBranchIn: async (query) => {
+              await vscode.commands.executeCommand(PULL_CLOUD_TASK_COMMAND, query);
+            },
+          });
+        },
+      ),
     );
   });
 
@@ -250,13 +281,18 @@ export function activate(context: vscode.ExtensionContext): void {
           });
       }
 
-      if (e.affectsConfiguration('agiWorkforce.cliPath')) {
+      const runtimeSetting = e.affectsConfiguration('agiWorkforce.cliPath')
+        ? 'the CLI path'
+        : e.affectsConfiguration('agiWorkforce.memory.enabled')
+          ? 'the memory setting'
+          : undefined;
+      if (runtimeSetting !== undefined) {
         void localRuntimes
           .restartAll()
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(
-              `AGI Workforce: Could not restart the local runtime after the CLI path changed, ${message}`,
+              `AGI Workforce: Could not restart the local runtime after ${runtimeSetting} changed, ${message}`,
             );
           })
           .finally(refreshRuntimeSurfaces);

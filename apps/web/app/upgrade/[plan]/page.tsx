@@ -14,7 +14,7 @@ export default async function UpgradePlanPage({ params }: { params: Promise<{ pl
   // Team is self-serve but priced per seat, and the seat count and interval are
   // chosen on /pricing. Accepting it here would render an order screen that
   // silently bills one seat, monthly.
-  if (isPerSeatBillingPlan(plan)) redirect('/pricing');
+  if (isPerSeatBillingPlan(plan)) redirect('/pricing#pricing-team-title');
   if (!(SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).includes(plan)) notFound();
 
   const { subject: userId } = await getRequestIdentity();

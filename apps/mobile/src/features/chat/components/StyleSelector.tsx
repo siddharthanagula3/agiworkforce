@@ -13,10 +13,10 @@ const STYLE_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  { id: 'normal', label: 'Normal', description: 'Balanced, standard' },
+  { id: 'normal', label: 'Normal', description: 'Your style from Personalization' },
   { id: 'concise', label: 'Concise', description: 'Short, direct answers' },
-  { id: 'detailed', label: 'Detailed', description: 'Thorough explanations' },
-  { id: 'creative', label: 'Creative', description: 'Imaginative, expressive' },
+  { id: 'explanatory', label: 'Explanatory', description: 'Reasoning and context' },
+  { id: 'formal', label: 'Formal', description: 'Formal register' },
 ];
 
 interface StyleSelectorProps {

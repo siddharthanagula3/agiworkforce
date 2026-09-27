@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  readSecondFactorStatus: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,26 +25,48 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/features/settings/services/user-preferences', () => ({
   generateTOTPSecret: vi.fn(() => 'SECRET'),
   generateOTPAuthURL: vi.fn(() => 'otpauth://totp/AGI:user@example.com?secret=SECRET'),
-  generateBackupCodes: vi.fn(() => ['aaaa-1111', 'bbbb-2222']),
-  hashBackupCode: vi.fn(async (code: string) => `hash:${code}`),
+}));
+vi.mock('@/lib/server/step-up/second-factor', () => ({
+  readSecondFactorStatus: (...args: unknown[]) => mocks.readSecondFactorStatus(...args),
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
   sealTotpSecret: vi.fn(() => 'encrypted-secret'),
+  openTotpSecret: vi.fn(),
 }));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: vi.fn(async () => undefined),
+  logAuthFailure: vi.fn(),
+  BLOCK_APPEAL_PATH: '/support',
+  logRateLimitExceeded: vi.fn(),
+}));
+
+process.env['CSRF_SECRET'] = 'two-factor-setup-step-up-secret-long-enough';
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { sealTotpSecret } from '@/lib/crypto/totp-envelope';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { POST } from './route';
 
 function request() {
+  const { token } = createStepUpGrant({
+    userId: 'user-1',
+    action: 'two_factor.enable',
+    resourceId: null,
+    method: 'first_factor',
+  });
   return new NextRequest('http://localhost/api/settings/2fa/setup', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', [STEP_UP_TOKEN_HEADER]: token },
   });
 }
 
-function existingRow(enabled: boolean | null) {
-  return enabled === null ? [] : [{ enabled }];
+function enrolled(authenticator: boolean) {
+  mocks.readSecondFactorStatus.mockResolvedValueOnce({
+    authenticator,
+    backupCodes: authenticator,
+    anySecondFactor: authenticator,
+  });
 }
 
 beforeEach(() => {
@@ -52,69 +75,56 @@ beforeEach(() => {
 });
 
 describe('POST /api/settings/2fa/setup', () => {
-  it('refuses to re-enroll an account that already has 2FA enabled', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(true));
+  it('refuses to re-enroll an account whose sign-in already asks for an authenticator', async () => {
+    enrolled(true);
 
     const response = await POST(request());
 
     expect(response.status).toBe(409);
-    expect(mocks.query).toHaveBeenCalledTimes(1);
-    const [sql] = mocks.query.mock.calls[0] as [string];
-    expect(sql).toMatch(/select\s+enabled\s+from\s+user_two_factor/i);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 
-  it('never writes enabled=false for an enrolled account', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(true));
+  it('allows a first-time enrollment and returns only the setup key', async () => {
+    enrolled(false);
+    mocks.query.mockResolvedValueOnce([]);
+
+    const response = await POST(request());
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(body['secret']).toBe('SECRET');
+    expect(String(body['otpauth_url'])).toContain('otpauth://');
+    expect(body).not.toHaveProperty('backup_codes');
+  });
+
+  it('stores the pending secret sealed and switched off until a code confirms it', async () => {
+    enrolled(false);
+    mocks.query.mockResolvedValueOnce([]);
 
     await POST(request());
 
-    const insertCalls = mocks.query.mock.calls.filter(([sql]) =>
-      /insert\s+into\s+user_two_factor/i.test(String(sql)),
-    );
-    expect(insertCalls).toHaveLength(0);
-  });
-
-  it('allows a first-time enrollment and returns the secret and backup codes once', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(null)).mockResolvedValueOnce([]);
-
-    const response = await POST(request());
-    const body = (await response.json()) as {
-      secret: string;
-      otpauth_url: string;
-      backup_codes: string[];
-    };
-
-    expect(response.status).toBe(200);
-    expect(body.secret).toBe('SECRET');
-    expect(body.otpauth_url).toContain('otpauth://');
-    expect(body.backup_codes).toEqual(['aaaa-1111', 'bbbb-2222']);
-  });
-
-  it('allows re-running a stale, never-verified setup', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(false)).mockResolvedValueOnce([]);
-
-    const response = await POST(request());
-
-    expect(response.status).toBe(200);
     const insertCalls = mocks.query.mock.calls.filter(([sql]) =>
       /insert\s+into\s+user_two_factor/i.test(String(sql)),
     );
     expect(insertCalls).toHaveLength(1);
+    expect(String(insertCalls[0]?.[0])).toMatch(/enabled\s+=\s+false/);
+    expect(insertCalls[0]?.[1]).toEqual(['user-1', 'encrypted-secret']);
   });
 
-  it('exempts an organization owner from the mfa gate so enrollment stays reachable', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(null)).mockResolvedValueOnce([]);
+  it('stays reachable for a member whose workspace requires two-factor', async () => {
+    enrolled(false);
+    mocks.query.mockResolvedValueOnce([]);
 
     await POST(request());
 
     expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
-      mfaGateExemptForOwner: true,
+      mfaEnrollment: true,
       resolveOrganization: false,
     });
   });
 
   it('returns safe availability guidance when secret encryption is misconfigured', async () => {
-    mocks.query.mockResolvedValueOnce(existingRow(null));
+    enrolled(false);
     vi.mocked(sealTotpSecret).mockImplementationOnce(() => {
       throw new Error('TOTP_ENCRYPTION_KEY too short: internal configuration detail');
     });
@@ -127,6 +137,6 @@ describe('POST /api/settings/2fa/setup', () => {
       'Authenticator setup is temporarily unavailable. Try again later or contact support.',
     );
     expect(body.error.message).not.toContain('TOTP_ENCRYPTION_KEY');
-    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.query).not.toHaveBeenCalled();
   });
 });

@@ -52,8 +52,8 @@ export type SupportModelResult =
 
 export function isSupportAgentEnabled(): boolean {
   const raw = getOptionalEnv('SUPPORT_AGENT_ENABLED');
-  if (raw === undefined) return false;
-  return ['1', 'true', 'on', 'yes'].includes(raw.trim().toLowerCase());
+  if (raw === undefined) return true;
+  return !['0', 'false', 'off', 'no'].includes(raw.trim().toLowerCase());
 }
 
 export interface SupportModelCallInput {

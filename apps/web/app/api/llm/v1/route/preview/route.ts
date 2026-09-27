@@ -8,6 +8,7 @@ import {
   type IntrinsicCapabilityName,
 } from '@agiworkforce/model-registry';
 import {
+  MODEL_POLICY_UNAVAILABLE,
   previewAutoRoute,
   type AutoRoutePreview,
   type AutoRoutingRequest,
@@ -24,6 +25,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readModelPolicy } from '@/lib/services/model-policy-service';
+import { modelPolicyRefusalInit } from '@/lib/services/model-policy-gate';
 import { resolveZeroDataRetentionPolicy } from '@/lib/services/organization-policy-gate';
 import { resolveZeroDataRetentionProviderOverrides } from '@/lib/services/zero-data-retention-provider-overrides';
 import { listAvailableManagedProviderIds } from '@/lib/services/provider-adapter-service';
@@ -57,20 +59,23 @@ function jsonError(message: string, status: number, code: string): NextResponse 
   );
 }
 
+type WorkspacePolicyRead =
+  { readable: true; policy: Awaited<ReturnType<typeof readModelPolicy>> } | { readable: false };
+
 async function readWorkspacePolicyForPreview(
   db: Parameters<typeof readModelPolicy>[0],
   organizationId: string | null,
   userId: string,
-): Promise<Awaited<ReturnType<typeof readModelPolicy>>> {
-  if (!organizationId) return null;
+): Promise<WorkspacePolicyRead> {
+  if (!organizationId) return { readable: true, policy: null };
   try {
-    return await readModelPolicy(db, organizationId);
+    return { readable: true, policy: await readModelPolicy(db, organizationId) };
   } catch (error) {
     logger.error(
       { error, userId, organizationId },
-      '[route-preview] workspace policy read failed; previewing ungoverned',
+      '[route-preview] workspace policy read failed; preview refused',
     );
-    return null;
+    return { readable: false };
   }
 }
 
@@ -150,11 +155,26 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
       ).length > 0
     : false;
 
-  const [workspacePolicy, zeroDataRetentionPolicy, routeAffinity] = await Promise.all([
+  const [workspacePolicyRead, zeroDataRetentionPolicy, routeAffinity] = await Promise.all([
     readWorkspacePolicyForPreview(db, organizationId, userId),
     resolveZeroDataRetentionPolicy(db, userId),
     ownsConversation ? getServedRouteAffinity(conversationId!) : Promise.resolve(null),
   ]);
+  if (!workspacePolicyRead.readable) {
+    return NextResponse.json(
+      {
+        error: {
+          message: MODEL_POLICY_UNAVAILABLE.reason,
+          type: 'invalid_request_error',
+          code: MODEL_POLICY_UNAVAILABLE.code,
+        },
+      },
+      modelPolicyRefusalInit(MODEL_POLICY_UNAVAILABLE, {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      }),
+    );
+  }
 
   const routingRequest = buildWebCloudAutoRoutingRequest(
     selection ?? DEFAULT_SELECTION,
@@ -169,7 +189,7 @@ async function handleRoutePreview(request: NextRequest): Promise<Response> {
     listAvailableManagedProviderIds(),
     zeroDataRetentionPolicy.required,
     resolveZeroDataRetentionProviderOverrides(),
-    workspacePolicy,
+    workspacePolicyRead.policy,
   );
 
   const preview = await previewWithObservedCapabilities(

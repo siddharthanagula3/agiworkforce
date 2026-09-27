@@ -6,6 +6,7 @@ import {
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
 } from '@agiworkforce/types';
+import { CLI_INSTALL_COMMAND } from '../integrations/cliInstaller';
 import { cliAcquisitionHint } from '../integrations/localRuntimeClient';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
@@ -137,41 +138,31 @@ describe('developer-session contract with the shipped AGI CLI', () => {
   });
 });
 
-// The npm package is scaffolded but unpublished. An error that prints an
-// install command which 404s teaches users to distrust every other message the
-// extension shows them, so the command stays behind CLI_IS_PUBLISHED.
-describe('missing-CLI copy never promises a distribution that does not exist', () => {
-  const npmPackageIsPublished = /const CLI_IS_PUBLISHED: boolean = (true|false);/u.exec(
-    readRepoFile('apps/extension-vscode/src/integrations/localRuntimeClient.ts'),
-  )?.[1];
-
-  it('keeps the install command behind a single named flag', () => {
-    expect(
-      npmPackageIsPublished,
-      'CLI_IS_PUBLISHED must stay a single boolean constant, it is the one-line switch that surfaces the install command once npm publishing lands.',
-    ).toBeDefined();
+// The CLI installs only through the signed install script. An error that
+// names a route that does not exist teaches users to distrust every other
+// message the extension shows them.
+describe('missing-CLI copy names only the distribution that exists', () => {
+  it('installs through the signed install script', () => {
+    expect(CLI_INSTALL_COMMAND).toBe('curl -fsSL https://agiworkforce.com/install.sh | bash');
   });
 
-  it('prints no install command while that flag is false', () => {
-    if (npmPackageIsPublished !== 'false') return;
+  it('points at the install command instead of a package manager', () => {
     const hint = cliAcquisitionHint();
 
+    expect(hint).toContain('AGI Workforce: Install AGI CLI');
     expect(hint).not.toMatch(/npm (install|i) -g/u);
     expect(hint).not.toContain('@agiworkforce/cli');
     expect(hint).not.toMatch(/brew install/u);
-    expect(hint).not.toMatch(/install\.sh/u);
-    expect(hint).not.toMatch(/curl/u);
   });
 
-  it('still tells the user the one thing that does work today', () => {
+  it('still tells the user how to use a CLI they already have', () => {
     const hint = cliAcquisitionHint();
 
     expect(hint).toContain('agiWorkforce.cliPath');
     expect(hint).toContain(extensionMinimumCliVersion());
   });
 
-  it('ships no install command anywhere else in the extension source or readme', () => {
-    if (npmPackageIsPublished !== 'false') return;
+  it('ships no other install route anywhere in the extension source or readme', () => {
     for (const file of [
       'apps/extension-vscode/README.md',
       'apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts',
@@ -181,7 +172,6 @@ describe('missing-CLI copy never promises a distribution that does not exist', (
       const source = readRepoFile(file);
       expect(source, file).not.toMatch(/npm (install|i) -g @agiworkforce/u);
       expect(source, file).not.toMatch(/brew install .*agi/u);
-      expect(source, file).not.toMatch(/install\.sh/u);
     }
   });
 });

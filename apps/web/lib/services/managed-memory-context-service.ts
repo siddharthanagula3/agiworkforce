@@ -57,6 +57,8 @@ export const DISABLED_MANAGED_MEMORY_POLICY: ManagedMemoryPolicy = {
 };
 
 const MAX_MEMORIES = 30;
+const MAX_MEMORY_CANDIDATES = 500;
+const MIN_RELEVANCE_TERM_CHARS = 3;
 const MAX_MEMORY_CHARS = 1_000;
 const MAX_TOTAL_MEMORY_CHARS = 8_000;
 const MAX_AUTO_MEMORIES_PER_TURN = 5;
@@ -828,6 +830,43 @@ function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {
   return `and (project_id is null or project_id = $${projectParamIndex}::uuid)`;
 }
 
+function relevanceTerms(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).filter(
+      (term) => term.length >= MIN_RELEVANCE_TERM_CHARS,
+    ),
+  );
+}
+
+export function rankMemoriesByRelevance<T extends { content: string; pinned: boolean }>(
+  memories: readonly T[],
+  query: string,
+): T[] {
+  const queryTerms = [...relevanceTerms(query)];
+  if (queryTerms.length === 0) return [...memories];
+  const memoryTerms = memories.map((memory) => relevanceTerms(memory.content));
+  const weight = new Map(
+    queryTerms.map((term) => {
+      const frequency = memoryTerms.filter((terms) => terms.has(term)).length;
+      return [term, Math.log((memories.length + 1) / (frequency + 0.5))];
+    }),
+  );
+  return memories
+    .map((memory, index) => ({
+      memory,
+      index,
+      score: queryTerms.reduce(
+        (sum, term) => (memoryTerms[index]?.has(term) ? sum + (weight.get(term) ?? 0) : sum),
+        0,
+      ),
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.memory.pinned) - Number(a.memory.pinned) || b.score - a.score || a.index - b.index,
+    )
+    .map(({ memory }) => memory);
+}
+
 export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
   params: {
@@ -836,6 +875,7 @@ export async function loadManagedMemoryContext(
     suppressedSources?: readonly MemorySource[];
     scope?: MemoryScope;
     policy?: ManagedMemoryPolicy;
+    query?: string;
   },
 ): Promise<ManagedMemoryContextSource[]> {
   return withSpan(
@@ -879,19 +919,24 @@ export async function loadManagedMemoryContext(
       where user_id = $1 and ${activeMemoryPredicate()} ${sourceFilter} ${projectFilter}
         and ${workspaceFilter}
       order by pinned desc, updated_at desc
-      limit ${MAX_MEMORIES}`,
+      limit ${MAX_MEMORY_CANDIDATES}`,
         values,
       );
+      const selected = (
+        params.query?.trim() ? rankMemoriesByRelevance(rows, params.query) : rows
+      ).slice(0, MAX_MEMORIES);
 
       span.setAttributes({
-        'retrieval.result_count': rows.length,
+        'retrieval.result_count': selected.length,
+        'retrieval.candidate_count': rows.length,
+        'retrieval.ranked_by': params.query?.trim() ? 'relevance' : 'recency',
         'retrieval.scope': scope.projectId
           ? scope.usesGlobalMemory
             ? 'project+global'
             : 'project-only'
           : 'global',
       });
-      return rows.map((row) => ({
+      return selected.map((row) => ({
         content: row.content,
         category: row.category,
         pinned: row.pinned,
@@ -926,6 +971,7 @@ export function managedMemoryContextLoader(
     suppressedSources?: readonly MemorySource[];
     scope?: MemoryScope;
     policy?: ManagedMemoryPolicy;
+    query?: string;
   },
 ): ManagedMemoryContextLoader {
   const items = new Map<string, ManagedMemoryContextItem>();

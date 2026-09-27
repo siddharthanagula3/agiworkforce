@@ -1,21 +1,46 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { View, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
+import {
+  Alert,
+  View,
+  TextInput,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  SectionList,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { ArrowLeft, Brain, FileText, Search, X, Plus, Upload } from 'lucide-react-native';
+import {
+  ArrowLeft,
+  Brain,
+  FileText,
+  GitCompareArrows,
+  Search,
+  Trash2,
+  X,
+  Plus,
+  Upload,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { SettingsGroup, SettingsRow } from '@/src/features/settings/common';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
-import { describeMemoryFreshness } from '@/src/features/memory/services/consolidation';
+import {
+  describeMemoryFreshness,
+  groupMemoryFactsByTopic,
+  type MemoryTopicGroup,
+} from '@/src/features/memory/services/consolidation';
+import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
+import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
+import { fetchWorkspaceOverview } from '@/src/features/team/service';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   accountScopedUiStateKey,
@@ -25,6 +50,15 @@ import {
 } from '@/src/features/auth/services/accountScopedUiState';
 
 const FILTER_CATEGORIES = ['All', 'Pinned'] as const;
+
+function describeMemoryScope(isCloud: boolean, workspaceName: string | null | undefined): string {
+  if (!isCloud) return 'Stored on this device only, outside any account or workspace.';
+  if (workspaceName === undefined) return 'Saved to your AGI Cloud account.';
+  if (workspaceName === null) {
+    return 'Your personal memories. Memories saved in a workspace stay in that workspace.';
+  }
+  return `Memories for the ${workspaceName} workspace. They are never read in your personal chats.`;
+}
 
 function formatCount(n: number): string {
   if (n === 1) return '1 memory';
@@ -63,13 +97,6 @@ export default function MemoryScreen() {
     ? setCloudGenerateMemory
     : setLocalGenerateMemory;
 
-  const handleMemoryEnabledChange = useCallback(
-    (enabled: boolean) => {
-      setMemoryEnabled(enabled);
-      setReferencePastChats(enabled);
-    },
-    [setMemoryEnabled, setReferencePastChats],
-  );
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [editingMemory, setEditingMemory] = useState<MemoryEntry | null>(null);
@@ -85,6 +112,7 @@ export default function MemoryScreen() {
     addMemory,
     updateMemory,
     deleteMemory,
+    resetMemories,
     togglePin,
     setSearchQuery,
     clearError,
@@ -133,6 +161,34 @@ export default function MemoryScreen() {
 
   const memoryFreshness = useMemo(() => describeMemoryFreshness(entries), [entries]);
 
+  const [workspaceName, setWorkspaceName] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    setWorkspaceName(undefined);
+    if (!currentIsCloud || screenScopeKey === 'unavailable') return;
+    const controller = new AbortController();
+    fetchWorkspaceOverview(controller.signal)
+      .then((overview) => {
+        if (controller.signal.aborted) return;
+        if (!overview.activeWorkspaceId) {
+          setWorkspaceName(null);
+          return;
+        }
+        const active = overview.workspaces.find(
+          (workspace) => workspace.id === overview.activeWorkspaceId,
+        );
+        setWorkspaceName(active?.name ?? overview.workspace?.name ?? 'active');
+      })
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [currentIsCloud, screenScopeKey]);
+
+  const localConversations = useChatMessageStore((state) => state.conversations);
+  const cloudConversations = useChatCloudMessageStore((state) => state.conversations);
+  const conversationTitles = useMemo(() => {
+    const conversations = currentIsCloud ? cloudConversations : localConversations;
+    return new Map(conversations.map((conversation) => [conversation.id, conversation.title]));
+  }, [cloudConversations, currentIsCloud, localConversations]);
+
   const displayedEntries = useMemo(() => {
     const source = searchQuery.trim() ? filteredEntries : entries;
 
@@ -140,6 +196,12 @@ export default function MemoryScreen() {
 
     return source.filter((e) => e.pinned);
   }, [entries, filteredEntries, searchQuery, activeFilter]);
+
+  const topicGroups = useMemo<MemoryTopicGroup[] | null>(() => {
+    if (activeFilter !== 'All' || searchQuery.trim()) return null;
+    const groups = groupMemoryFactsByTopic(displayedEntries);
+    return groups.length > 1 ? groups : null;
+  }, [activeFilter, displayedEntries, searchQuery]);
 
   const handleSearchChange = useCallback(
     (text: string) => {
@@ -177,6 +239,38 @@ export default function MemoryScreen() {
     router.push('/(app)/settings/memory-summary' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleConflictsPress = useCallback(() => {
+    router.push('/(app)/settings/memory-conflicts' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleResetPress = useCallback(() => {
+    const actionScope = activeScopeRef.current;
+    if (!isScopeCurrent(actionScope)) return;
+    Alert.alert(
+      'Reset memory?',
+      currentIsCloud
+        ? `This permanently deletes every memory ${
+            workspaceName
+              ? `for the ${workspaceName} workspace`
+              : workspaceName === null
+                ? 'in your personal AGI Cloud memory'
+                : 'in this AGI Cloud memory'
+          }, on every device. Your chats are not deleted. This cannot be undone.`
+        : 'This permanently deletes every memory saved on this device. Your chats are not deleted. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset memory',
+          style: 'destructive',
+          onPress: () => {
+            if (!isScopeCurrent(actionScope)) return;
+            void resetMemories();
+          },
+        },
+      ],
+    );
+  }, [currentIsCloud, isScopeCurrent, resetMemories, workspaceName]);
+
   const handleAddPress = useCallback(() => {
     const actionScope = activeScopeRef.current;
     if (!isScopeCurrent(actionScope)) return;
@@ -211,6 +305,38 @@ export default function MemoryScreen() {
     [deleteMemory, isScopeCurrent],
   );
 
+  const handleSwipeDelete = useCallback(
+    (id: string) => {
+      const actionScope = activeScopeRef.current;
+      if (!isScopeCurrent(actionScope)) return;
+      Alert.alert(
+        'Delete memory?',
+        currentIsCloud
+          ? 'This removes the memory from your account and every synced device.'
+          : 'This removes the memory from this device.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (!isScopeCurrent(actionScope)) return;
+              void deleteMemory(id);
+            },
+          },
+        ],
+      );
+    },
+    [currentIsCloud, deleteMemory, isScopeCurrent],
+  );
+
+  const handleOpenConversation = useCallback(
+    (conversationId: string) => {
+      router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
+    },
+    [router],
+  );
+
   const handleSave = useCallback(
     (content: string, _category?: string) => {
       if (!isScopeCurrent(editorScopeRef.current)) return;
@@ -231,12 +357,40 @@ export default function MemoryScreen() {
     ({ item }: { item: MemoryEntry }) => (
       <MemoryItem
         memory={item}
+        conversationTitle={
+          (item.source_conversation_id
+            ? conversationTitles.get(item.source_conversation_id)
+            : null) ??
+          item.source_conversation_title ??
+          null
+        }
         onEdit={handleEdit}
-        onDelete={handleDelete}
+        onDelete={handleSwipeDelete}
         onTogglePin={handleTogglePin}
+        onOpenConversation={handleOpenConversation}
       />
     ),
-    [handleEdit, handleDelete, handleTogglePin],
+    [conversationTitles, handleEdit, handleOpenConversation, handleSwipeDelete, handleTogglePin],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: MemoryTopicGroup }) => (
+      <Text
+        accessibilityRole="header"
+        style={{
+          color: colors.textMuted,
+          fontSize: 12,
+          fontWeight: '700',
+          textTransform: 'uppercase',
+          paddingTop: 8,
+          paddingBottom: 6,
+          backgroundColor: colors.surfaceBase,
+        }}
+      >
+        {section.title}
+      </Text>
+    ),
+    [colors.surfaceBase, colors.textMuted],
   );
 
   const keyExtractor = useCallback((item: MemoryEntry) => item.id, []);
@@ -279,7 +433,7 @@ export default function MemoryScreen() {
         memoryEnabled={memoryEnabled}
         referencePastChats={referencePastChats}
         generateMemoryFromHistory={generateMemoryFromHistory}
-        onMemoryEnabledChange={handleMemoryEnabledChange}
+        onMemoryEnabledChange={setMemoryEnabled}
         onReferencePastChatsChange={setReferencePastChats}
         onGenerateMemoryFromHistoryChange={setGenerateMemoryFromHistory}
       />
@@ -291,15 +445,29 @@ export default function MemoryScreen() {
             icon={FileText}
             {...(memoryFreshness ? { value: memoryFreshness } : {})}
             onPress={handleSummaryPress}
+          />
+          <SettingsRow
+            label="Replaced memories"
+            icon={GitCompareArrows}
+            onPress={handleConflictsPress}
+          />
+          <SettingsRow
+            label="Reset memory"
+            icon={Trash2}
+            onPress={handleResetPress}
+            destructive
             isLast
           />
         </SettingsGroup>
       </View>
 
       {/* Count subtitle */}
-      <View className="px-4 mb-2">
+      <View className="px-4 mb-2 gap-0.5">
         <Text style={{ color: colors.textMuted, fontSize: 11 }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+          {describeMemoryScope(currentIsCloud, workspaceName)}
         </Text>
       </View>
 
@@ -411,6 +579,23 @@ export default function MemoryScreen() {
             hasSearch={searchText.length > 0}
             isPinnedFilter={activeFilter === 'Pinned'}
             colors={colors}
+          />
+        ) : topicGroups ? (
+          <SectionList
+            sections={topicGroups}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            keyExtractor={keyExtractor}
+            stickySectionHeadersEnabled={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={loading && entries.length > 0}
+                onRefresh={handleRefresh}
+                tintColor={colors.teal}
+              />
+            }
           />
         ) : (
           <FlatList

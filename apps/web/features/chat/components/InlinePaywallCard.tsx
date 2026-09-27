@@ -56,7 +56,7 @@ import {
 
 export { normalizePaywallFeature };
 import { cn } from '@shared/lib/utils';
-import { formatCatalogPrice, formatPlanCreditWindows } from '@features/billing/lib/plan-display';
+import { formatCatalogPrice, planUsageComparisonLabel } from '@features/billing/lib/plan-display';
 import {
   formatFreeCapacityCountdown,
   freeCapacityRetryRemainingMs,
@@ -402,7 +402,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
     showUpgradeCta &&
     !freeCapacity &&
     (effectiveAction === 'upgrade' || effectiveAction === 'subscribe');
-  const requiredPlanCredits = sellsPlan ? formatPlanCreditWindows(requiredTier) : null;
+  const requiredPlanUsage = sellsPlan ? planUsageComparisonLabel(requiredTier) : null;
 
   return (
     <Card
@@ -435,10 +435,8 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       <CardContent className="pb-0">
         {/* rendering-conditional-render: ternary, not && */}
         {reason !== EMPTY_REASON ? <p className="text-sm text-muted-foreground">{reason}</p> : null}
-        {requiredPlanCredits ? (
-          <p className="mt-2 text-sm text-muted-foreground">
-            {getBillingPlanPricing(requiredTier).label} includes {requiredPlanCredits}.
-          </p>
+        {requiredPlanUsage ? (
+          <p className="mt-2 text-sm text-muted-foreground">{`${requiredPlanUsage}.`}</p>
         ) : null}
         {/* GOV-20: the two other ways out, shown only when they actually apply. */}
         {suggestStandardModel && alternativeModel && onSwitchModel ? (

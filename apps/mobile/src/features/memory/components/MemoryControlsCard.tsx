@@ -54,13 +54,12 @@ export function MemoryControlsCard({
           label="Search and reference chats"
           description={
             isCloud
-              ? 'Use relevant Cloud chats and saved account memories when answering.'
-              : 'Use relevant chats and saved memories on this device when answering.'
+              ? 'Let AGI search your other Cloud chats for relevant details when answering.'
+              : 'Let AGI search your other chats on this device for relevant details when answering.'
           }
           icon={MessageSquareText}
-          value={memoryEnabled && referencePastChats}
+          value={referencePastChats}
           onValueChange={onReferencePastChatsChange}
-          disabled={!memoryEnabled}
         />
         <SettingsSwitchRow
           label="Generate memory from chat history"
@@ -68,7 +67,7 @@ export function MemoryControlsCard({
           icon={Sparkles}
           value={memoryEnabled && generateMemoryFromHistory}
           onValueChange={onGenerateMemoryFromHistoryChange}
-          disabled={!memoryEnabled || !referencePastChats}
+          disabled={!memoryEnabled}
           isLast
         />
       </SettingsGroup>

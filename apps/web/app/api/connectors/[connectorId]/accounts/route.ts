@@ -17,6 +17,10 @@ import { sortConnectorAccounts } from '@/lib/connectors/accounts';
 import { listConnectorAccounts, setDefaultConnectorAccount } from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import { evictConnectorOAuthCaches } from '@/lib/user-connector-tools';
+import {
+  mcpAuthorizationContext,
+  purgeMcpResponseCachePartitions,
+} from '@/lib/connectors/mcp-runtime-cache';
 
 export const runtime = 'nodejs';
 
@@ -101,6 +105,9 @@ async function handleDelete(request: NextRequest, context: Params): Promise<Next
     );
   }
   await evictConnectorOAuthCaches(userId, connectorId);
+  await purgeMcpResponseCachePartitions([
+    mcpAuthorizationContext.userOauthConnector(userId, connectorId, accountKey),
+  ]);
   await recordAuditEvent({
     userId,
     eventType: 'connector_removed',

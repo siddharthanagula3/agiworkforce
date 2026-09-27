@@ -162,6 +162,8 @@ pub struct AgentSession {
     pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
+    pub(crate) pinned_permission_mode: Option<crate::cli_options::PermissionMode>,
+    pub(crate) memory_enabled: bool,
     pub plan_approved: bool,
     pub current_plan: Option<crate::plan_mode::Plan>,
     pub current_plan_path: Option<std::path::PathBuf>,
@@ -555,8 +557,13 @@ impl AgentSession {
             crate::shell_snapshot::ShellSnapshot::cleanup_stale(&home);
         }
 
+        let memory_enabled = crate::cli_options::memory_enabled()
+            && crate::config::CliConfig::config_dir()
+                .map(|home| crate::memory_pipeline::load_memory_settings(&home).0)
+                .unwrap_or(true);
         let persistent_memory = crate::config::CliConfig::config_dir()
             .ok()
+            .filter(|_| memory_enabled)
             .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
             .unwrap_or_default();
 
@@ -578,6 +585,7 @@ impl AgentSession {
 
         let account_memory = crate::config::CliConfig::config_dir()
             .ok()
+            .filter(|_| memory_enabled)
             .map(|home| crate::cloud::account_memory_context(privacy_mode, &home))
             .unwrap_or_default();
 
@@ -625,6 +633,8 @@ impl AgentSession {
             on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
             permission_mode: crate::cli_options::PermissionMode::Default,
+            pinned_permission_mode: crate::permissions::managed_permission_mode(),
+            memory_enabled,
             plan_approved: false,
             current_plan: None,
             current_plan_path: None,
@@ -698,8 +708,8 @@ impl AgentSession {
             config.clone(),
             self.model.clone(),
             sys_context.clone(),
-            self.skip_permissions,
-            self.permission_mode,
+            self.skips_approval(),
+            self.governed_permission_mode(),
             self.allowed_tools.clone(),
             self.disallowed_tools.clone(),
             self.subagent_depth,
@@ -1371,7 +1381,7 @@ impl AgentSession {
             .unwrap_or_else(|| "<unwritten>".to_string());
 
         let message = if matches!(
-            self.permission_mode,
+            self.governed_permission_mode(),
             crate::cli_options::PermissionMode::Plan
         ) && !self.plan_approved
         {
@@ -1539,6 +1549,14 @@ impl AgentSession {
         }
     }
 
+    pub(crate) fn governed_permission_mode(&self) -> crate::cli_options::PermissionMode {
+        self.permission_mode.within(self.pinned_permission_mode)
+    }
+
+    pub(crate) fn skips_approval(&self) -> bool {
+        self.skip_permissions && self.pinned_permission_mode.is_none()
+    }
+
     /// The approval callback a tool call receives: the surface's own, with
     /// every decision recorded on this session.
     pub(crate) fn recorded_approval_callback(&self) -> Option<crate::tools::ApprovalCallback> {
@@ -1659,16 +1677,10 @@ impl AgentSession {
     /// Persist the session-end memory summary using the active model/provider
     /// boundary. Local sessions always take the deterministic on-device path.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
-        if !self.messages.iter().any(|message| message.role != "system") {
+        if !self.memory_enabled || !self.messages.iter().any(|message| message.role != "system") {
             return Ok(());
         }
         let home = CliConfig::config_dir()?;
-        // Honor the user's /memories "auto memory" toggle (default on, so this is
-        // a no-op until they turn it off).
-        let (auto_memory, _, _) = crate::memory_pipeline::load_memory_settings(&home);
-        if !auto_memory {
-            return Ok(());
-        }
         crate::memory_pipeline::MemoryPipeline::extract_session_summary(
             &home,
             &self.runtime_session_id,

@@ -138,6 +138,43 @@ pub struct Schedule {
     pub last_error: Option<String>,
     #[serde(default)]
     pub execution_count: i64,
+    #[serde(default)]
+    pub paused_reason: Option<String>,
+}
+
+pub const AWAITING_APPROVAL: &str = "awaiting_approval";
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalToolCall {
+    pub id: String,
+    pub name: String,
+    pub summary: String,
+    #[serde(default)]
+    pub input: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingApproval {
+    pub requested_at: String,
+    pub expires_at: String,
+    pub tool_calls: Vec<ApprovalToolCall>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ApprovalDecision {
+    Approve,
+    Deny,
+}
+
+impl ApprovalDecision {
+    fn wire(self) -> &'static str {
+        match self {
+            ApprovalDecision::Approve => "approved",
+            ApprovalDecision::Deny => "rejected",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -155,6 +192,8 @@ pub struct ScheduleRun {
     pub error: Option<String>,
     #[serde(default)]
     pub attempt_count: i64,
+    #[serde(default)]
+    pub pending_approval: Option<PendingApproval>,
 }
 
 #[derive(Deserialize)]
@@ -170,6 +209,11 @@ struct ScheduleBody {
 #[derive(Deserialize)]
 struct RunListBody {
     runs: Vec<ScheduleRun>,
+}
+
+#[derive(Deserialize)]
+struct RunBody {
+    run: ScheduleRun,
 }
 
 pub struct SchedulesClient {
@@ -264,6 +308,55 @@ impl SchedulesClient {
         Ok(body.runs)
     }
 
+    pub async fn awaiting_run(
+        &self,
+        schedule_id: &str,
+        run_id: Option<&str>,
+    ) -> Result<ScheduleRun, ScheduleError> {
+        let runs = self.runs(schedule_id, DEFAULT_RUN_LIMIT, 0).await?;
+        runs.into_iter()
+            .find(|run| {
+                run.status == AWAITING_APPROVAL
+                    && run.pending_approval.is_some()
+                    && run_id.is_none_or(|wanted| run.id == wanted)
+            })
+            .ok_or_else(|| ScheduleError::Api {
+                status: 404,
+                message: match run_id {
+                    Some(wanted) => format!("Run {wanted} is not waiting for approval"),
+                    None => "No run of this schedule is waiting for approval".to_string(),
+                },
+            })
+    }
+
+    pub async fn resolve_approval(
+        &self,
+        schedule_id: &str,
+        run: &ScheduleRun,
+        decision: ApprovalDecision,
+    ) -> Result<ScheduleRun, ScheduleError> {
+        let tool_call_ids: Vec<&str> = run
+            .pending_approval
+            .as_ref()
+            .map(|pending| {
+                pending
+                    .tool_calls
+                    .iter()
+                    .map(|call| call.id.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let body: RunBody = Self::send(
+            self.request(reqwest::Method::POST, &approval_path(schedule_id, &run.id))
+                .json(&serde_json::json!({
+                    "decision": decision.wire(),
+                    "toolCallIds": tool_call_ids,
+                })),
+        )
+        .await?;
+        Ok(body.run)
+    }
+
     pub async fn resolve_id(&self, id_or_name: &str) -> Result<String, ScheduleError> {
         let schedules = self.list(DEFAULT_SCHEDULE_LIMIT, 0).await?;
         if let Some(found) = schedules.iter().find(|schedule| schedule.id == id_or_name) {
@@ -286,6 +379,14 @@ fn schedule_path(schedule_id: &str) -> String {
 
 fn runs_path(schedule_id: &str) -> String {
     format!("{}/runs", schedule_path(schedule_id))
+}
+
+fn approval_path(schedule_id: &str, run_id: &str) -> String {
+    format!(
+        "{}/{}/approval",
+        runs_path(schedule_id),
+        urlencoding::encode(run_id)
+    )
 }
 
 pub fn api_error_message(body: &str) -> String {
@@ -346,6 +447,12 @@ pub fn render_schedules(schedules: &[Schedule]) -> String {
                 .unwrap_or("not scheduled"),
             schedule.last_executed_at.as_deref().unwrap_or("never"),
         ));
+        if schedule.paused_reason.as_deref() == Some("approval_required") {
+            lines.push(format!(
+                "  paused: a run needed your approval, see `agi schedules runs {}`",
+                schedule.id
+            ));
+        }
         if let Some(error) = schedule.last_error.as_deref() {
             lines.push(format!("  last error: {error}"));
         }
@@ -353,7 +460,26 @@ pub fn render_schedules(schedules: &[Schedule]) -> String {
     lines.join("\n")
 }
 
-pub fn render_runs(runs: &[ScheduleRun]) -> String {
+pub fn render_pending_approval(schedule_id: &str, pending: &PendingApproval) -> String {
+    let mut lines = vec![format!(
+        "  waiting for your approval until {}:",
+        pending.expires_at
+    )];
+    for call in &pending.tool_calls {
+        lines.push(format!("    {} ({})", call.summary, call.name));
+        if let Some(input) = call.input.as_deref() {
+            for line in input.lines() {
+                lines.push(format!("      {line}"));
+            }
+        }
+    }
+    lines.push(format!(
+        "  approve with `agi schedules approve {schedule_id}` or deny with `agi schedules deny {schedule_id}`"
+    ));
+    lines.join("\n")
+}
+
+pub fn render_runs(schedule_id: &str, runs: &[ScheduleRun]) -> String {
     if runs.is_empty() {
         return "This schedule has not run yet.".to_string();
     }
@@ -367,6 +493,10 @@ pub fn render_runs(runs: &[ScheduleRun]) -> String {
                 "{}  {}  {}  started {}  {}",
                 run.id, run.status, run.trigger_source, run.started_at, duration
             );
+            if let Some(pending) = run.pending_approval.as_ref() {
+                line.push('\n');
+                line.push_str(&render_pending_approval(schedule_id, pending));
+            }
             if let Some(error) = run.error.as_deref() {
                 line.push_str(&format!("\n  error: {error}"));
             }
@@ -519,6 +649,7 @@ mod tests {
             next_execution_at: Some("2026-09-14T09:00:00.000Z".to_string()),
             last_error: None,
             execution_count: 0,
+            paused_reason: None,
         }
     }
 
@@ -557,7 +688,7 @@ mod tests {
     #[test]
     fn an_empty_listing_says_so_rather_than_printing_nothing() {
         assert!(render_schedules(&[]).contains("No schedules"));
-        assert!(render_runs(&[]).contains("has not run yet"));
+        assert!(render_runs("sched-1", &[]).contains("has not run yet"));
     }
 
     #[test]

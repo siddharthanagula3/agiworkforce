@@ -33,8 +33,10 @@ import type {
   McpCatalogTool,
   McpClientCacheConfig,
   McpDiscoveryConfig,
+  McpRejectedTool,
   McpServerCatalog,
   McpServerConfig,
+  McpServerTransport,
   McpTaskOperations,
   McpToolCatalog,
   McpToolVisibility,
@@ -46,6 +48,7 @@ const DEFAULT_CONNECTION_TIMEOUT_MS = 30_000;
 const CATALOG_VERSION = 2;
 
 const VERSION_NEGOTIATION = { mode: 'auto' } as const;
+const INTERACTIVE_ELICITATION_CAPABILITY = { form: {}, url: {} };
 
 const MCP_TOOL_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const MCP_TOOL_NAME_MAX_LENGTH = 128;
@@ -376,6 +379,11 @@ function fenceThrownMcpError(
   return new Error(fenced);
 }
 
+function serverTransport(config: McpServerConfig): McpServerTransport {
+  if (config.command) return 'stdio';
+  return config.transport === 'sse' ? 'sse' : 'streamable-http';
+}
+
 function toSafeServerName(name: string): string {
   return name
     .toLowerCase()
@@ -431,6 +439,7 @@ export interface ConnectMcpServerParams {
   >;
   /** Registers SDK request handlers (elicitation, sampling, roots) before connect. */
   configureClient?: (client: Client) => void | Promise<void>;
+  interactive?: boolean;
 }
 
 export type McpConnectionRuntimeOptions = Omit<
@@ -514,6 +523,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
       ...params.clientOptions,
       capabilities: {
         ...params.clientOptions?.capabilities,
+        ...(params.interactive ? { elicitation: INTERACTIVE_ELICITATION_CAPABILITY } : {}),
         extensions: {
           ...params.clientOptions?.capabilities?.extensions,
           [MCP_TASKS_EXTENSION_ID]: {},
@@ -528,6 +538,9 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     },
   );
 
+  if (params.interactive) {
+    client.setRequestHandler('elicitation/create', () => ({ action: 'cancel' }));
+  }
   await params.configureClient?.(client);
 
   const timeoutMs = config.connectionTimeoutMs ?? DEFAULT_CONNECTION_TIMEOUT_MS;
@@ -570,6 +583,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     throw fenceThrownMcpError(err, serverName, 'list_tools');
   }
   const tools: McpCatalogTool[] = [];
+  const rejectedTools: McpRejectedTool[] = [];
   const listedTools = listed.tools ?? [];
   if (listedTools.length > CATALOG_ITEM_LIMITS.tools) {
     discoveryErrors.push({
@@ -578,10 +592,15 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     });
   }
   for (const t of listedTools.slice(0, CATALOG_ITEM_LIMITS.tools)) {
+    const rejectedName = sanitizeCatalogText(t.name, MCP_TITLE_MAX_BYTES);
     if (!isAcceptableMcpToolName(t.name)) {
       console.warn('[mcp] rejecting tool with non-canonical name', {
         serverName,
         toolName: t.name,
+      });
+      rejectedTools.push({
+        ...(rejectedName ? { toolName: rejectedName } : {}),
+        reason: 'non-canonical-name',
       });
       continue;
     }
@@ -595,6 +614,11 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
         serverName,
         toolName: t.name,
         reason: schemaResult.reason,
+      });
+      rejectedTools.push({
+        ...(rejectedName ? { toolName: rejectedName } : {}),
+        reason: 'invalid-input-schema',
+        ...(schemaResult.reason ? { detail: schemaResult.reason } : {}),
       });
       continue;
     }
@@ -749,10 +773,12 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
     protocolEra,
     ...(protocolVersion ? { protocolVersion } : {}),
     ...(serverVersion ? { serverInfo: serverVersion } : {}),
+    transport: serverTransport(config),
     capabilities,
     tasksSupported,
     ...(discover ? { discover } : {}),
     tools,
+    rejectedTools,
     resources,
     resourceTemplates,
     prompts,
@@ -838,7 +864,7 @@ export async function connectMcpServer(params: ConnectMcpServerParams): Promise<
         };
       }
 
-      const task = await parseCreateTaskResult(res);
+      const task = parseCreateTaskResult(res);
       if (task) return { ...(app ? { app } : {}), task, content: [] };
 
       const isError = typeof res.isError === 'boolean' ? res.isError : undefined;
@@ -917,6 +943,7 @@ export async function buildMcpToolCatalog(
         serverName,
         safeServerName: toSafeServerName(serverName),
         protocolEra: 'legacy',
+        transport: serverTransport(config),
         capabilities: {},
         tasksSupported: false,
         tools: [],

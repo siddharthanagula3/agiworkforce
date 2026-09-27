@@ -1,20 +1,22 @@
 import { create } from 'zustand';
-import * as Crypto from 'expo-crypto';
 import { memoryRelevanceScore, normalizeMemoryKey } from '@agiworkforce/agent-core';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
-  insertMemoryFact,
   listMemoryFacts,
+  deleteAllMemoryFacts,
   deleteMemoryFact,
   updateMemoryFact,
   togglePinMemoryFact,
   searchMemoryByText,
   searchMemoryByEmbedding,
 } from '@/storage/memory';
-import type { MemoryFact } from '@/storage/types';
+import type { MemoryFact, MemoryFactSource } from '@/storage/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
-import { markMemoryForSync } from '@/services/cloudSyncEngine';
+import { useCloudMemoryStore, type CloudMemoryEntry } from '@/stores/memory/cloudMemoryStore';
+import { writeLocalMemoryFact } from '@/src/features/memory/services/localMemoryWriter';
+import { useMemorySyncStateStore } from '@/stores/memory/memorySyncStateStore';
+import { api } from '@/services/api';
+import { markMemoryForSync, syncNow } from '@/services/cloudSyncEngine';
 import {
   captureAccountScopedUiState,
   isAccountScopedUiStateCurrent,
@@ -38,13 +40,55 @@ interface MemoryState {
   addMemory: (fact: string, _category?: string) => Promise<void>;
   updateMemory: (id: string, fact: string) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
+  resetMemories: () => Promise<boolean>;
   togglePin: (id: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   searchMemories: (query: string, embedding?: Float32Array) => Promise<void>;
-  bulkInsert: (facts: string[]) => Promise<{ inserted: number; skipped: number }>;
+  bulkInsert: (
+    facts: string[],
+    sourceName?: string,
+  ) => Promise<{ inserted: number; skipped: number }>;
   syncMemories: () => Promise<void>;
   clearError: () => void;
   resetVisibleState: () => void;
+}
+
+const RESET_FAILED_MESSAGE = 'Could not reset memory, so nothing was deleted. Try again.';
+const MIN_IMPORTED_FACT_CHARS = 3;
+const ALREADY_SAVED_MESSAGE = 'That memory is already saved.';
+
+function keptExistingMessage(keeper: string | undefined): string {
+  return keeper
+    ? `Kept “${keeper}” instead, because it outranks the new fact. Unpin or edit it to change what is remembered.`
+    : 'Kept an existing memory instead, because it outranks the new fact.';
+}
+const MAX_IMPORT_BATCH = 500;
+
+interface CloudImportResult {
+  insertedCount: number;
+  skippedDuplicateCount: number;
+  blockedCount: number;
+  excludedCount: number;
+}
+
+function cloudMemoryOrigin(entry: CloudMemoryEntry): MemoryFactSource {
+  const raw = entry.origin ?? entry.source;
+  if (raw === 'auto') return 'learned';
+  return raw.startsWith('imported') ? 'imported' : 'typed';
+}
+
+function cloudMemoryFact(entry: CloudMemoryEntry): MemoryFact {
+  return {
+    id: entry.id,
+    fact: entry.content,
+    source_conversation_id: entry.sourceConversationId ?? null,
+    source_conversation_title: entry.sourceConversationTitle ?? null,
+    pinned: entry.pinned,
+    created_at: new Date(entry.createdAt).getTime(),
+    updated_at: new Date(entry.updatedAt).getTime(),
+    source: cloudMemoryOrigin(entry),
+    category: entry.category,
+  };
 }
 
 function captureMemoryOperationScope(): AccountScopedUiState | null {
@@ -86,15 +130,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         const cloudEntries = useCloudMemoryStore
           .getState()
           .entries.filter((e) => !e.isDeleted)
-          .map(
-            (e): MemoryFact => ({
-              id: e.id,
-              fact: e.content,
-              source_conversation_id: null,
-              pinned: e.pinned,
-              created_at: new Date(e.createdAt).getTime(),
-            }),
-          )
+          .map(cloudMemoryFact)
           .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
@@ -150,6 +186,7 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
             source_conversation_id: null,
             pinned: false,
             created_at: Date.now(),
+            source: 'typed',
           };
           const q = state.searchQuery.trim().toLowerCase();
           const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
@@ -161,25 +198,29 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           };
         });
       } else {
-        const id = Crypto.randomUUID();
-        const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
-          id,
-          fact: fact.trim(),
-          source_conversation_id: null,
-          pinned: false,
-          created_at: Date.now(),
-        };
-        await insertMemoryFact(newFact);
+        const result = await writeLocalMemoryFact({ fact: fact.trim(), source: 'typed' });
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
+        if (result.outcome === 'already_known' || !result.fact) {
+          set({ error: ALREADY_SAVED_MESSAGE });
+          return;
+        }
+        if (result.outcome === 'kept_existing') {
+          const keeper = get().entries.find((entry) => entry.id === result.fact?.superseded_by);
+          set({ error: keptExistingMessage(keeper?.fact) });
+          return;
+        }
+        const entry = result.fact;
+        const replaced = new Set(result.replacedIds);
         set((state) => {
-          const entry = { ...newFact, pinned: false };
           const q = state.searchQuery.trim().toLowerCase();
           const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
+          const remaining = state.entries.filter((existing) => !replaced.has(existing.id));
+          const remainingFiltered = state.filteredEntries.filter(
+            (existing) => !replaced.has(existing.id),
+          );
           return {
-            entries: [entry, ...state.entries],
-            filteredEntries: matchesSearch
-              ? [entry, ...state.filteredEntries]
-              : state.filteredEntries,
+            entries: [entry, ...remaining],
+            filteredEntries: matchesSearch ? [entry, ...remainingFiltered] : remainingFiltered,
           };
         });
       }
@@ -206,9 +247,12 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       }
     }
 
+    const editedAt = Date.now();
     set((state) => ({
-      entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
-      filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
+      entries: state.entries.map((e) => (e.id === id ? { ...e, fact, updated_at: editedAt } : e)),
+      filteredEntries: state.filteredEntries.map((e) =>
+        e.id === id ? { ...e, fact, updated_at: editedAt } : e,
+      ),
     }));
 
     try {
@@ -269,6 +313,40 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         filteredEntries: prevFiltered,
         error: err instanceof Error ? err.message : 'Failed to delete memory',
       });
+    }
+  },
+
+  resetMemories: async () => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) {
+      set({ error: 'Sign in to manage Cloud memories' });
+      return false;
+    }
+    set({ error: null });
+    try {
+      if (operationScope.scope === 'cloud') {
+        await api.delete('/api/memory');
+        const dirtyIds = new Set(useMemorySyncStateStore.getState().dirtyMemoryIds);
+        const cloudMemory = useCloudMemoryStore.getState();
+        const now = new Date().toISOString();
+        for (const entry of cloudMemory.entries) {
+          if (dirtyIds.has(entry.id)) {
+            cloudMemory.upsertCloudMemory({ ...entry, isDeleted: true, updatedAt: now });
+          } else {
+            cloudMemory.hardDeleteCloudMemory(entry.id);
+          }
+        }
+        void syncNow().catch(() => undefined);
+      } else {
+        await deleteAllMemoryFacts();
+      }
+      if (isMemoryOperationScopeCurrent(operationScope)) {
+        set({ entries: [], filteredEntries: [] });
+      }
+      return true;
+    } catch {
+      if (isMemoryOperationScopeCurrent(operationScope)) set({ error: RESET_FAILED_MESSAGE });
+      return false;
     }
   },
 
@@ -348,24 +426,43 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }
   },
 
-  bulkInsert: async (facts) => {
+  bulkInsert: async (facts, sourceName = 'other') => {
+    const operationScope = captureMemoryOperationScope();
+    if (!operationScope) throw new Error('Sign in to manage Cloud memories');
+    const candidates = facts
+      .map((fact) => fact.trim())
+      .filter((fact) => fact.length >= MIN_IMPORTED_FACT_CHARS);
     let inserted = 0;
-    let skipped = 0;
-    for (const fact of facts) {
-      const trimmed = fact.trim();
-      if (trimmed.length < 3) {
-        skipped++;
-        continue;
-      }
-      try {
-        const id = Crypto.randomUUID();
-        await insertMemoryFact({
-          id,
-          fact: trimmed,
-          source_conversation_id: null,
-          pinned: false,
-          created_at: Date.now(),
+    let skipped = facts.length - candidates.length;
+
+    if (operationScope.scope === 'cloud') {
+      for (let start = 0; start < candidates.length; start += MAX_IMPORT_BATCH) {
+        const result = await api.post<CloudImportResult>('/api/memory/import', {
+          mode: 'commit',
+          items: candidates.slice(start, start + MAX_IMPORT_BATCH),
+          sourceName,
         });
+        inserted += result.insertedCount;
+        skipped += result.skippedDuplicateCount + result.blockedCount + result.excludedCount;
+      }
+      await syncNow().catch(() => undefined);
+      if (isMemoryOperationScopeCurrent(operationScope)) await get().fetchMemories();
+      return { inserted, skipped };
+    }
+
+    let known = await listMemoryFacts({ limit: 5_000 });
+    for (const trimmed of candidates) {
+      try {
+        const result = await writeLocalMemoryFact({ fact: trimmed, source: 'imported', known });
+        if (!result.fact) {
+          skipped++;
+          continue;
+        }
+        const written = result.fact;
+        known = [
+          ...known.filter((entry) => !result.replacedIds.includes(entry.id)),
+          ...(result.outcome === 'inserted' ? [written] : []),
+        ];
         inserted++;
       } catch {
         skipped++;

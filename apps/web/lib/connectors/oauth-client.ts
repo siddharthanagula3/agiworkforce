@@ -161,12 +161,14 @@ export async function exchangeAuthorizationCode(params: {
   codeVerifier: string | null;
   redirectUri: string;
   requestedScopes: string[];
+  resource: string;
 }): Promise<OAuthTokenResult> {
   const form = new URLSearchParams({
     grant_type: 'authorization_code',
     code: params.code,
     redirect_uri: params.redirectUri,
   });
+  if (params.provider.resourceIndicator !== false) form.set('resource', params.resource);
   if (params.codeVerifier) form.set('code_verifier', params.codeVerifier);
   return postToTokenEndpoint(
     params.provider,
@@ -181,6 +183,7 @@ export async function refreshAccessToken(params: {
   refreshToken: string;
   tokenEndpoint: string;
   grantedScopes: string[];
+  resource: string;
 }): Promise<OAuthTokenResult> {
   if (params.tokenEndpoint !== params.provider.tokenUrl) {
     throw new ConnectorOAuthTokenError(
@@ -193,6 +196,7 @@ export async function refreshAccessToken(params: {
     grant_type: 'refresh_token',
     refresh_token: params.refreshToken,
   });
+  if (params.provider.resourceIndicator !== false) form.set('resource', params.resource);
   return postToTokenEndpoint(params.provider, params.tokenEndpoint, form, params.grantedScopes);
 }
 

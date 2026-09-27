@@ -1,6 +1,6 @@
 //! Model Context Protocol (MCP) integration layer.
 //!
-//! Supports stdio, SSE, and streamable HTTP transports. [`client`] manages connections
+//! Supports stdio and Streamable HTTP transports. [`client`] manages connections
 //! to external MCP servers. [`server`] exposes AGI Workforce capabilities as an MCP server.
 //! [`registry`] provides O(1) tool ID resolution. [`extensions`] manages third-party integrations.
 
@@ -38,9 +38,6 @@ pub use extensions::{
 };
 pub use health::{HealthStatus, McpHealthMonitor, ServerHealth};
 pub use manager::{ManagedServer, McpServerManager, ServerStatus};
-pub use oauth::{
-    McpAuthMethod, McpOAuthConfig, McpOAuthManager, McpOAuthToken, OAuthClientMetadata,
-};
 pub use protocol::{McpToolDefinition, ServerCapabilitiesV2, ToolCallResult, ToolContent};
 pub use registry::McpToolRegistry;
 pub use session::{ElicitationRequest, ElicitationResponse, McpSession};

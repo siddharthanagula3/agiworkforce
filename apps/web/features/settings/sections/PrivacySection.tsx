@@ -85,6 +85,48 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+const PROCESSING_LOCATIONS: ReadonlyArray<{ feature: string; where: string }> = [
+  {
+    feature: 'Chat',
+    where: 'AGI Cloud, then the AI provider that serves the model you chose.',
+  },
+  {
+    feature: 'Files you attach',
+    where: 'Stored by AGI Cloud in Cloudflare R2 and sent with your message to the model provider.',
+  },
+  {
+    feature: 'Memory and past-chat search',
+    where: 'Stored in AGI Cloud and added to your message before it reaches the model provider.',
+  },
+  {
+    feature: 'Web search and Deep Research',
+    where: 'Your search queries go from AGI Cloud to Perplexity’s search service.',
+  },
+  {
+    feature: 'Image and video generation',
+    where:
+      'AGI Cloud sends your prompt to Google, OpenAI or Stability for images, and to Runway, Google or OpenRouter for video.',
+  },
+  {
+    feature: 'Dictation',
+    where: 'Your recording goes from AGI Cloud to OpenAI for transcription.',
+  },
+  {
+    feature: 'Voice mode',
+    where:
+      'AGI Cloud sets up the call, then your audio streams directly between your device and OpenAI.',
+  },
+  {
+    feature: 'Read aloud',
+    where: 'Uses the voices built into your browser.',
+  },
+  {
+    feature: 'Connectors',
+    where:
+      'AGI Cloud calls the connected service for you, and what it returns goes to the model provider with your message.',
+  },
+];
+
 function ExpandableSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -320,7 +362,7 @@ export function PrivacySection() {
         : `All ${chatCount} chat${chatCount === 1 ? '' : 's'} in the current workspace, active and archived, will be removed from your history`;
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted. Memories learned from these chats stay until you delete them in Settings > Memory.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
@@ -440,6 +482,28 @@ export function PrivacySection() {
             no training opt-in, because that data path does not exist. Managed Cloud requests are
             routed to the hosted provider serving the model you selected, and provider-side handling
             is governed by that provider&rsquo;s terms, the current list is at{' '}
+            <SettingsPageLink
+              href="/subprocessors"
+              style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+            >
+              /subprocessors
+            </SettingsPageLink>
+            .
+          </p>
+        </ExpandableSection>
+
+        <ExpandableSection title="Where each feature processes your data">
+          <dl style={{ margin: 0, display: 'grid', gap: 'var(--space-2)' }}>
+            {PROCESSING_LOCATIONS.map((entry) => (
+              <div key={entry.feature}>
+                <dt style={{ fontWeight: 500, color: 'var(--text-1)' }}>{entry.feature}</dt>
+                <dd style={{ margin: 0 }}>{entry.where}</dd>
+              </div>
+            ))}
+          </dl>
+          <p style={{ margin: 'var(--space-2) 0 0' }}>
+            AGI Cloud runs in the United States. The providers named here, and what each one
+            receives, are listed at{' '}
             <SettingsPageLink
               href="/subprocessors"
               style={{ color: 'var(--text-1)', textDecoration: 'underline' }}

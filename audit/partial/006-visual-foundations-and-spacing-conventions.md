@@ -253,18 +253,6 @@ Code: `apps/cli/src/output.rs:30-35`, `apps/cli/src/tui/shimmer.rs:21-21`, `apps
 
 Code: `apps/cli/src/tui/tui_app.rs:316-322`, `apps/cli/src/tui/markdown_renderer.rs:28-28`, `apps/extension/src/tokens.ts:11-15`
 
-## S6.33: High-contrast treatment.
-
-- Done when: A high-contrast treatment exists (OS setting and/or in-app) that strengthens text, borders and focus.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | TUI code highlighting now honours NO_COLOR, but there is no high-contrast theme: the Colorblind palette re-hues status colours and keeps the mid-grey muted text. | ui |
-
-Code: `apps/cli/src/tui/terminal_palette.rs:172-177`
-
 ## S6.34: Selected, focused, hovered, pressed, and disabled states.
 
 - Done when: Interactive controls show distinct selected, focused, hovered, pressed and disabled states.
@@ -279,15 +267,3 @@ Code: `apps/cli/src/tui/terminal_palette.rs:172-177`
 | chrome | partial | Hover, focus-visible and disabled states exist; no pressed (:active) state in the side panel CSS. | states |
 
 Code: `packages/ui/ui/src/primitives/Button.tsx:9-9`, `apps/web/app/globals.css:1387-1387`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:946-952`, `apps/extension/src/side_panel.ts:1056-1060`
-
-## S6.35: Brand assets and application icons.
-
-- Done when: The surface ships its brand mark and application icons at the sizes the platform needs.
-- Wave: 3
-- Already works on: web, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | Only the tray template icon ships; electron-builder points buildResources at electron/build, which holds no app icon, so installers fall back to the default Electron icon. | ui |
-
-Code: `apps/desktop/electron-builder.yml:18-18`

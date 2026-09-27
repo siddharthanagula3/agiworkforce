@@ -47,11 +47,14 @@ import {
   loadConnectorToolPermissions,
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
-import { loadToolApprovalPolicy, policyAutoApprovesTool } from '../lib/tool-approval-policy';
+import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-approval-policy';
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
-import { checkpointRequestForResume } from '../lib/approval-checkpoint-request';
+import {
+  checkpointRequestForResume,
+  checkpointTurnAttachments,
+} from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_GUIDANCE_MESSAGE =
   'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
@@ -210,6 +213,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
   const processed: ProcessedRequest = processResult;
 
   processed.llmRequest.messages = claim.checkpoint.messages;
+  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
@@ -311,7 +315,11 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
   // The checkpoint froze the client's pre-substitution tool list, so a native
   // search the first leg withdrew returns unless it is withdrawn again here.
   processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
-    approvalRequired: !policyAutoApprovesTool(toolApprovalPolicy, WEB_SEARCH_TOOL),
+    approvalRequired: !hostedToolRunsUnasked(
+      toolApprovalPolicy,
+      WEB_SEARCH_TOOL,
+      processed.toolLockdown === true,
+    ),
     genericBackendConfigured: webSearchBackendConfigured(),
   });
 

@@ -4,14 +4,12 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
 import {
   ArrowLeft,
   AlertCircle,
   Building2,
   Check,
   Users,
-  UserPlus,
   UserRound,
   Trash2,
 } from 'lucide-react-native';
@@ -26,17 +24,21 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import {
   WORKSPACE_ROLES,
-  addWorkspaceMember,
   fetchWorkspaceMembers,
   fetchWorkspaceOverview,
   removeWorkspaceMember,
   setActiveWorkspace,
+  transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
   type WorkspaceMember,
   type WorkspaceOverview,
   type WorkspaceRole,
 } from '@/src/features/team';
+import { RolePickerModal } from '@/src/features/team/RolePickerModal';
+import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
 import { useChatStore } from '@/stores/chatStore';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';
 
@@ -65,6 +67,8 @@ export default function WorkspaceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
+  const [roleTarget, setRoleTarget] = useState<WorkspaceMember | null>(null);
+  const { withStepUp, modal: stepUpModal } = useStepUp();
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -126,71 +130,68 @@ export default function WorkspaceScreen() {
     [load],
   );
 
-  const handleAddMember = useCallback(() => {
-    if (state.kind !== 'ready' || !state.overview.workspace) return;
-    const workspaceId = state.overview.workspace.id;
-
-    if (Platform.OS !== 'ios') {
-      void openExternalUrl(WEB_TEAM_URL);
-      return;
-    }
-
-    Alert.prompt(
-      'Add a member',
-      'Enter the email of an existing AGI account. There is no invitation email, the account must already exist.',
-      (email: string) => {
-        const trimmed = email.trim();
-        if (!trimmed.includes('@')) {
-          Alert.alert('Enter a valid email', 'That does not look like an email address.');
-          return;
+  const applyRole = useCallback(
+    (member: WorkspaceMember, role: WorkspaceRole) => {
+      void (async () => {
+        setBusyMemberId(member.id);
+        try {
+          await updateWorkspaceMemberRole(member.id, role);
+          await load();
+        } catch (error) {
+          Alert.alert(
+            'Could not change role',
+            error instanceof Error ? error.message : 'Please try again.',
+          );
+        } finally {
+          setBusyMemberId(null);
         }
-        void (async () => {
-          try {
-            await addWorkspaceMember(workspaceId, trimmed, 'member');
-            await load();
-          } catch (error) {
-            Alert.alert(
-              'Could not add member',
-              error instanceof Error ? error.message : 'Please try again.',
-            );
-          }
-        })();
-      },
-      'plain-text',
-    );
-  }, [load, state]);
-
-  const handleChangeRole = useCallback(
-    (member: WorkspaceMember) => {
-      Alert.alert(
-        member.name,
-        'Choose a role for this member.',
-        [
-          ...WORKSPACE_ROLES.map((role) => ({
-            text: `${member.role === role ? '✓ ' : ''}${titleCase(role)}`,
-            onPress: () => {
-              if (role === member.role) return;
-              void (async () => {
-                setBusyMemberId(member.id);
-                try {
-                  await updateWorkspaceMemberRole(member.id, role);
-                  await load();
-                } catch (error) {
-                  Alert.alert(
-                    'Could not change role',
-                    error instanceof Error ? error.message : 'Please try again.',
-                  );
-                } finally {
-                  setBusyMemberId(null);
-                }
-              })();
-            },
-          })),
-          { text: 'Cancel', style: 'cancel' as const },
-        ].filter(Boolean),
-      );
+      })();
     },
     [load],
+  );
+
+  const transferOwnership = useCallback(
+    (member: WorkspaceMember) => {
+      if (state.kind !== 'ready' || !state.overview.workspace) return;
+      const workspace = state.overview.workspace;
+      void (async () => {
+        setBusyMemberId(member.id);
+        try {
+          await withStepUp('organization.transfer_ownership', workspace.id, (headers) =>
+            transferWorkspaceOwnership(workspace.id, member.userId, headers),
+          );
+          await load();
+        } catch (error) {
+          if (isStepUpCancelled(error)) return;
+          Alert.alert(
+            'Could not transfer ownership',
+            error instanceof Error ? error.message : 'Please try again.',
+          );
+        } finally {
+          setBusyMemberId(null);
+        }
+      })();
+    },
+    [load, state, withStepUp],
+  );
+
+  const isWorkspaceOwner =
+    state.kind === 'ready' && state.overview.workspace?.currentUserRole === 'owner';
+  const assignableRoles = WORKSPACE_ROLES.filter((role) => role !== 'owner' || isWorkspaceOwner);
+  const ownershipConsequence =
+    roleTarget && state.kind === 'ready' && state.overview.workspace
+      ? `${roleTarget.name} becomes the owner of ${state.overview.workspace.name}, with billing, workspace deletion and every administrative control. You become an Admin and lose those controls immediately. Only ${roleTarget.name} can transfer ownership back.`
+      : null;
+
+  const handleChangeRole = useCallback((member: WorkspaceMember) => setRoleTarget(member), []);
+
+  const chooseRole = useCallback(
+    (member: WorkspaceMember, role: WorkspaceRole) => {
+      setRoleTarget(null);
+      if (role === 'owner') transferOwnership(member);
+      else applyRole(member, role);
+    },
+    [applyRole, transferOwnership],
   );
 
   const handleRemoveMember = useCallback(
@@ -269,6 +270,14 @@ export default function WorkspaceScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
+      {stepUpModal}
+      <RolePickerModal
+        member={roleTarget}
+        roles={assignableRoles}
+        ownershipConsequence={ownershipConsequence}
+        onCancel={() => setRoleTarget(null)}
+        onChoose={chooseRole}
+      />
       <StatusBar style={statusBarStyle} />
       {header}
 
@@ -477,17 +486,6 @@ export default function WorkspaceScreen() {
               }}
             >
               <Text style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary }}>Members</Text>
-              {canManage && (
-                <Pressable
-                  onPress={handleAddMember}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a member"
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
-                >
-                  <UserPlus size={14} color={c.teal} />
-                  <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>Add</Text>
-                </Pressable>
-              )}
             </View>
 
             {state.members.map((member) => (
@@ -540,6 +538,12 @@ export default function WorkspaceScreen() {
                 </View>
               </Card>
             ))}
+
+            {canManage && workspace ? (
+              <View style={{ marginTop: 18 }}>
+                <WorkspaceAdministration organizationId={workspace.id} />
+              </View>
+            ) : null}
 
             <Pressable
               onPress={() => void openExternalUrl(WEB_TEAM_URL)}

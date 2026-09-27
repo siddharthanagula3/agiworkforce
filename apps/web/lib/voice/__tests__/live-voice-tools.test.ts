@@ -76,10 +76,8 @@ describe('live voice delegation tools', () => {
   it('names every tool it cannot run and why', () => {
     expect(Object.keys(LIVE_VOICE_EXCLUDED_TOOLS).sort()).toEqual([
       'agi_work',
-      'connectors',
       'read_file',
       'run_code',
-      'url_fetch',
       'web_search_fallback',
       'write_file',
     ]);
@@ -116,10 +114,9 @@ describe('live voice delegation tools', () => {
     }
   });
 
-  it('refuses every write-risk tool, so no voice turn reaches one without approval', () => {
+  it('puts every write-risk tool behind approval, so no voice turn reaches one unasked', () => {
     for (const tool of LIVE_VOICE_TOOL_REGISTRY) {
       if (tool.risk !== 'write') continue;
-      expect(tool.reachable).toBe(false);
       expect(tool.requiresApproval).toBe(true);
     }
   });

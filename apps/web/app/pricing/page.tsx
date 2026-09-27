@@ -13,11 +13,12 @@ import {
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
+  compareManagedUsage,
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   getModelMetadataById,
-  getPlanCreditAllowance,
+  getPlanContextWindowTokens,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
@@ -27,7 +28,6 @@ import {
   isMaxPlanTier,
   isMax15xPlanTier,
   isSelfServeIndividualPlanTier,
-  managedUsageMultipliers,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   PROVIDERS_IN_ORDER,
@@ -56,6 +56,7 @@ import {
 } from '@features/billing/components/UpgradeConfirmDialog';
 import { UpgradeWaitlistDialog } from '@features/billing/components/UpgradeWaitlistDialog';
 import { DowngradeReviewDialog } from '@features/billing/components/DowngradeReviewDialog';
+import { fetchPlanChangeState } from '@features/billing/services/billing-account';
 import type { UpgradeWaitlistRequest } from '@features/billing/services/upgrade-waitlist';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { formatBillingDate } from '@features/billing/lib/billing-format';
@@ -136,6 +137,7 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['price', 'Price'],
   ['billingInterval', 'Billing'],
   ['usageCapacity', 'Managed usage'],
+  ['contextWindow', 'Context window'],
   ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
   ['projects', 'Projects'],
   ['customMcp', 'Custom MCP'],
@@ -185,6 +187,7 @@ interface CompareRow {
   price: string;
   billingInterval: string;
   usageCapacity: string;
+  contextWindow: string;
   managedChat: string;
   projects: string;
   customMcp: string;
@@ -218,9 +221,22 @@ function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability
   return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
 }
 
+const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 2,
+});
+
+function contextWindowCell(plan: BillingPlanTier): string {
+  const tokens = getPlanContextWindowTokens(plan);
+  return tokens === null
+    ? 'Model-dependent'
+    : `Up to ${CONTEXT_WINDOW_FORMAT.format(tokens)} tokens`;
+}
+
 function managedPlanCapabilities(plan: BillingPlanTier) {
   const limits = getBillingPlanProductLimits(plan);
   return {
+    contextWindow: contextWindowCell(plan),
     managedChat: capabilityCell(plan, 'managed_chat'),
     projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
     customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
@@ -360,9 +376,8 @@ export default function PricingPage() {
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
-  // Team is the only plan sold yearly. Its cadence defaults to monthly and only
-  // becomes yearly when the yearly Team Price is configured and checkout-ready.
-  const [teamAnnual, setTeamAnnual] = useState(false);
+  const [teamAnnualChoice, setTeamAnnualChoice] = useState<boolean | null>(null);
+  const [subscribedInterval, setSubscribedInterval] = useState<BillingInterval | null>(null);
 
   // Team CTAs across marketing, billing, chat upgrades, and Team settings all
   // link to this anchor. The Team card lives behind the business audience tab,
@@ -444,17 +459,39 @@ export default function PricingPage() {
     1,
     teamSeats,
   );
+  const hasActivePaidPlan =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['active', 'trialing'].includes(billing.status ?? '');
+  const stripeSubscriber =
+    hasActivePaidPlan && accountSubscription?.subscription_source === 'stripe';
+  const paymentOverdue =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['past_due', 'unpaid'].includes(billing.status ?? '');
+
+  useEffect(() => {
+    if (!stripeSubscriber) return;
+    let cancelled = false;
+    fetchPlanChangeState()
+      .then((state) => {
+        if (!cancelled) setSubscribedInterval(state.price?.interval ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [stripeSubscriber]);
+
   // Yearly Team is offered ONLY when the yearly Price is configured and its
   // amount matches the catalog (checkoutReady). Absent env → not offered, and
   // the cadence stays monthly (fail-closed at the display layer; the checkout
   // route refuses a yearly Team price it cannot resolve regardless).
   const teamYearlyAvailable = localizedPlans?.team.yearly?.checkoutReady === true;
+  const teamAnnual =
+    teamAnnualChoice ?? (hasActivePaidPlan ? subscribedInterval === 'yearly' : true);
   const teamInterval: BillingInterval = teamAnnual && teamYearlyAvailable ? 'yearly' : 'monthly';
   const teamSavingsPct = annualSavingsPct(team);
-  // The annual seat price normalised to a month, so the cadence toggle compares
-  // like with like ($25/seat/mo against $20/seat/mo) instead of asking the
-  // reader to divide $240 by twelve. What is charged is still the yearly amount,
-  // which the cadence line above states.
   const teamYearlySeatPricePerMonth = formatLocalizedAmount(
     localizedPlans?.team.yearly,
     team.yearlyPriceUsd,
@@ -466,10 +503,6 @@ export default function PricingPage() {
     1,
     teamSeats,
   );
-  const hasActivePaidPlan =
-    billing != null &&
-    !isFreeBillingPlanTier(billing.plan) &&
-    ['active', 'trialing'].includes(billing.status ?? '');
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
     !authInitialized ||
@@ -492,7 +525,7 @@ export default function PricingPage() {
   }
 
   const unavailableCheckoutPlans: CheckoutPlan[] =
-    user && !hasActivePaidPlan && pricingStatus === 'ready'
+    user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'ready'
       ? SELF_SERVE_PAID_PLAN_TIERS.filter((plan) => !isPlanCheckoutReady(plan))
       : [];
 
@@ -546,6 +579,13 @@ export default function PricingPage() {
         <button type="button" className="agi-tier-cta" disabled>
           Checking account…
         </button>
+      );
+    }
+    if (paymentOverdue) {
+      return (
+        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
+          Update payment
+        </Link>
       );
     }
     const relationship = planRelationship(plan);
@@ -698,62 +738,52 @@ export default function PricingPage() {
 
   const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
-  function creditWindowsCopy(plan: BillingPlanTier): string | null {
-    const allowance = getPlanCreditAllowance(plan);
-    if (allowance.unlimited || allowance.monthly <= 0) return null;
-    return t(isPerSeatBillingPlan(plan) ? 'planCreditWindowsPerSeat' : 'planCreditWindows', {
-      fiveHour: allowance.fiveHour,
-      weekly: allowance.weekly,
-      monthly: allowance.monthly,
-    });
-  }
-
-  function usageComparisonCopy(plan: BillingPlanTier, baseline: BillingPlanTier): string | null {
-    const multipliers = managedUsageMultipliers(plan, baseline);
-    if (!multipliers) return null;
-    const { fiveHour, weekly, monthly } = multipliers;
-    const baselineLabel = BILLING_PLAN_PRICING[baseline].label;
-    if (fiveHour === weekly && weekly === monthly) {
-      return fiveHour === 1
-        ? t('usageSameAs', { baseline: baselineLabel })
-        : t('usageMultiplierAll', { factor: fiveHour, baseline: baselineLabel });
+  function usageComparisonCopy(plan: BillingPlanTier): string[] {
+    const comparison = compareManagedUsage(plan);
+    if (!comparison) return [];
+    const baseline = BILLING_PLAN_PRICING[comparison.baseline].label;
+    if (comparison.factor === 1) {
+      return [t(comparison.perSeat ? 'usageSameAsPerSeat' : 'usageSameAs', { baseline })];
     }
-    return weekly === monthly
-      ? t('usageMultiplierSplit', { fiveHour, weekly, baseline: baselineLabel })
-      : t('usageMultiplierSplitMonthly', { fiveHour, weekly, monthly, baseline: baselineLabel });
+    if (comparison.factor !== null) {
+      return [
+        t(comparison.perSeat ? 'usageMultiplierAllPerSeat' : 'usageMultiplierAll', {
+          factor: comparison.factor,
+          baseline,
+        }),
+      ];
+    }
+    return presentCopy([
+      comparison.session === null
+        ? null
+        : t('usageMultiplierSession', { factor: comparison.session, baseline }),
+      comparison.weekly === null
+        ? null
+        : t('usageMultiplierWeekly', { factor: comparison.weekly, baseline }),
+    ]);
   }
 
   function presentCopy(parts: Array<string | null>): string[] {
     return parts.filter((part): part is string => Boolean(part));
   }
 
-  function usageCapacityCopy(plan: BillingPlanTier, baseline?: BillingPlanTier): string {
-    return presentCopy([
-      creditWindowsCopy(plan),
-      baseline ? usageComparisonCopy(plan, baseline) : null,
-    ]).join(' · ');
+  function usageCapacityCopy(plan: BillingPlanTier): string {
+    return usageComparisonCopy(plan).join(' · ');
   }
 
-  const proAllowance = getPlanCreditAllowance('pro');
-  const usageExplainer = `${t('usageExplainer', {
-    baseline: pro.label,
-    fiveHour: proAllowance.fiveHour,
-    weekly: proAllowance.weekly,
-    monthly: proAllowance.monthly,
-  })} ${t('flagshipShare', {
+  const usageExplainer = `${t('usageWindowsExplainer')} ${t('flagshipShare', {
     baseline: pro.label,
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
   })}`;
 
   const freeFeatures = presentCopy([
-    creditWindowsCopy('free'),
     t('freeFeature1'),
     t('freeFeature2'),
     t('freeFeature3'),
     t('freeLocalByok'),
   ]);
   const basicFeatures = presentCopy([
-    creditWindowsCopy('basic'),
+    ...usageComparisonCopy('basic'),
     t('basicFeature2'),
     t('basicFeature3'),
     t('basicFeature4'),
@@ -761,8 +791,7 @@ export default function PricingPage() {
     t('basicFeature6'),
   ]);
   const proFeatures = presentCopy([
-    creditWindowsCopy('pro'),
-    usageComparisonCopy('pro', 'basic'),
+    ...usageComparisonCopy('pro'),
     t('proFeature2'),
     t('proFeature3'),
     t('proFeature4'),
@@ -770,7 +799,7 @@ export default function PricingPage() {
     t('proFeature6'),
   ]);
   const teamFeatures = presentCopy([
-    creditWindowsCopy('team'),
+    ...usageComparisonCopy('team'),
     t('teamFeature2'),
     t('teamFeature3'),
     t('teamFeature4'),
@@ -779,16 +808,14 @@ export default function PricingPage() {
   const maxTierFeatures =
     maxVariant === 'max'
       ? presentCopy([
-          creditWindowsCopy('max'),
-          usageComparisonCopy('max', 'pro'),
+          ...usageComparisonCopy('max'),
           `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
           t('maxFeature4'),
           t('maxFeature5'),
           t('maxFeature6'),
         ])
       : presentCopy([
-          creditWindowsCopy('max_15x'),
-          usageComparisonCopy('max_15x', 'pro'),
+          ...usageComparisonCopy('max_15x'),
           t('max15xFeature2'),
           t('max15xFeature3'),
           t('max15xFeature4'),
@@ -803,6 +830,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareLocalUsage'),
+      contextWindow: 'Model-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited local',
@@ -823,6 +851,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareByokUsage'),
+      contextWindow: 'Provider-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited custom',
@@ -842,7 +871,7 @@ export default function PricingPage() {
       label: BILLING_PLAN_PRICING.free.label,
       price: t('free'),
       billingInterval: t('foreverLabel'),
-      usageCapacity: usageCapacityCopy('free'),
+      usageCapacity: t('compareFreeUsage'),
       ...managedPlanCapabilities('free'),
       bestFor: t('compareFreeBestFor'),
     },
@@ -860,7 +889,7 @@ export default function PricingPage() {
       label: pro.label,
       price: `${proPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('pro', 'basic'),
+      usageCapacity: usageCapacityCopy('pro'),
       ...managedPlanCapabilities('pro'),
       bestFor: t('compareProBestFor'),
     },
@@ -869,7 +898,7 @@ export default function PricingPage() {
       label: max.label,
       price: `${maxPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max', 'pro'),
+      usageCapacity: usageCapacityCopy('max'),
       ...managedPlanCapabilities('max'),
       bestFor: t('compareMaxBestFor'),
     },
@@ -878,16 +907,23 @@ export default function PricingPage() {
       label: max15x.label,
       price: `${max15xPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max_15x', 'pro'),
+      usageCapacity: usageCapacityCopy('max_15x'),
       ...managedPlanCapabilities('max_15x'),
       bestFor: 'Highest-capacity work and video generation',
     },
     {
       planId: 'team',
       label: team.label,
-      price: t('perSeatPrice', { price: teamSeatPrice }),
-      billingInterval: t('compareTeamBilling'),
-      usageCapacity: usageCapacityCopy('team', 'pro'),
+      price: teamYearlyAvailable
+        ? t('compareTeamPriceYearly', {
+            yearly: teamYearlySeatPricePerMonth,
+            monthly: teamSeatPrice,
+          })
+        : t('perSeatPrice', { price: teamSeatPrice }),
+      billingInterval: teamYearlyAvailable
+        ? t('compareTeamBillingYearly')
+        : t('compareTeamBilling'),
+      usageCapacity: usageCapacityCopy('team'),
       ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
       highlighted: true,
@@ -979,7 +1015,6 @@ export default function PricingPage() {
               {t('audienceBusiness')}
             </button>
           </div>
-
         </div>
 
         <section
@@ -1008,7 +1043,7 @@ export default function PricingPage() {
                   <button
                     type="button"
                     aria-pressed={!teamAnnual}
-                    onClick={() => setTeamAnnual(false)}
+                    onClick={() => setTeamAnnualChoice(false)}
                     className={
                       teamAnnual
                         ? 'agi-tier-toggle-btn'
@@ -1020,7 +1055,7 @@ export default function PricingPage() {
                   <button
                     type="button"
                     aria-pressed={teamAnnual}
-                    onClick={() => setTeamAnnual(true)}
+                    onClick={() => setTeamAnnualChoice(true)}
                     className={
                       teamAnnual
                         ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
@@ -1038,26 +1073,12 @@ export default function PricingPage() {
               ) : null}
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">
-                  {teamInterval === 'yearly' ? teamYearlyTotalPrice : teamTotalPrice}
-                </span>
+                  {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
+                </span>{' '}
+                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>{' '}
                 <span className="agi-tier-price-sub">
-                  {teamInterval === 'yearly'
-                    ? t('seatCadenceAnnual', { count: teamSeats })
-                    : t('seatCadenceMonthly', { count: teamSeats })}
+                  {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
                 </span>
-              </p>
-              <p
-                className="agi-tier-seats-total"
-                style={{
-                  marginTop: 'calc(var(--space-2) * -1)',
-                  marginBottom: 'var(--space-4)',
-                  fontSize: 13,
-                  color: 'var(--agi-ink-quiet)',
-                }}
-              >
-                {teamInterval === 'yearly'
-                  ? t('perSeatPriceAnnual', { price: teamYearlySeatPricePerMonth })
-                  : t('perSeatPrice', { price: teamSeatPrice })}
               </p>
               <p className="agi-tier-body">{t('teamTierBody')}</p>
               <ul className="agi-tier-features">
@@ -1111,6 +1132,14 @@ export default function PricingPage() {
                   }}
                 />
               </div>
+              <p
+                className="agi-tier-seats-total"
+                style={{ margin: 0, fontSize: 13, color: 'var(--agi-ink-quiet)' }}
+              >
+                {teamInterval === 'yearly'
+                  ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
+                  : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
+              </p>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(
                   'team',
@@ -1167,7 +1196,17 @@ export default function PricingPage() {
         >
           <h2 className="sr-only">{t('audienceIndividual')}</h2>
 
-          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+          {paymentOverdue ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
+              Your last payment didn&rsquo;t go through. Pay the open invoice or update your payment
+              method in{' '}
+              <Link href="/settings/billing" className="agi-ds-link">
+                Billing
+              </Link>{' '}
+              before you change plans.
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'loading' ? (
             <p
               role="status"
               className="agi-fl-section-lede"
@@ -1176,7 +1215,7 @@ export default function PricingPage() {
               Loading checkout availability…
             </p>
           ) : null}
-          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'error' ? (
             <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
               Checkout availability could not be verified. Refresh this page to try again.
             </p>
@@ -1427,6 +1466,7 @@ export default function PricingPage() {
                         {row.usageCapacity}
                       </td>
                       {[
+                        row.contextWindow,
                         row.managedChat,
                         row.projects,
                         row.customMcp,

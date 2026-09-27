@@ -2,7 +2,7 @@ import { Metadata } from 'next';
 
 const TITLE = 'Get started: from zero to a working chat';
 const DESCRIPTION =
-  'AGI Web works today in the browser, the CLI ships signed archives for macOS, Linux, and Windows, and the Desktop app for macOS is signed and notarized but not yet published. Mobile, Chrome, and VS Code are not shipped yet.';
+  'AGI Web works today in the browser. The CLI and the macOS Desktop app are built and signed but not yet published, and Mobile, Chrome, and VS Code are not shipped yet.';
 
 export const metadata: Metadata = {
   title: TITLE,

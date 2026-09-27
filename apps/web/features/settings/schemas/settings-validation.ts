@@ -19,6 +19,7 @@ export const passwordSchema = z
 
 export const changePasswordSchema = z
   .object({
+    currentPassword: z.string().max(256, 'Password is too long').optional(),
     newPassword: passwordSchema,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })

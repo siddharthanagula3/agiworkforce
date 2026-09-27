@@ -15,6 +15,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useThemeColors } from '@/src/ui/theme';
 import type { MemoryEntry } from '@/src/features/memory/store';
+import { memoryFactOrigin } from '@/src/features/memory/services/consolidation';
+
+const EDIT_GRACE_MS = 60_000;
 
 function formatRelativeTime(ts: number): string {
   const diffMs = Date.now() - ts;
@@ -41,14 +44,37 @@ function formatRelativeTime(ts: number): string {
   return `${Math.floor(months / 12)}y ago`;
 }
 
+function describeMemoryTime(memory: MemoryEntry): string {
+  const updatedAt = memory.updated_at ?? memory.created_at;
+  return updatedAt - memory.created_at > EDIT_GRACE_MS
+    ? `Edited ${formatRelativeTime(updatedAt)}`
+    : `Added ${formatRelativeTime(memory.created_at)}`;
+}
+
+function describeMemoryOrigin(memory: MemoryEntry, conversationTitle: string | null): string {
+  const origin = memoryFactOrigin(memory);
+  if (origin === 'imported') return 'Imported';
+  if (origin === 'typed') return 'Added by you';
+  return conversationTitle ? `Learned from “${conversationTitle}”` : 'Learned from a chat';
+}
+
 interface MemoryItemProps {
   memory: MemoryEntry;
+  conversationTitle?: string | null;
   onEdit: (memory: MemoryEntry) => void;
   onDelete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onOpenConversation?: (conversationId: string) => void;
 }
 
-export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItemProps) {
+export function MemoryItem({
+  memory,
+  conversationTitle = null,
+  onEdit,
+  onDelete,
+  onTogglePin,
+  onOpenConversation,
+}: MemoryItemProps) {
   const colors = useThemeColors();
   const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
@@ -64,6 +90,12 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
   const expandStyle = useAnimatedStyle(() => ({
     opacity: animOpacity.value,
   }));
+
+  const originLabel = describeMemoryOrigin(memory, conversationTitle);
+  const linkedConversationId =
+    memoryFactOrigin(memory) === 'learned' && conversationTitle
+      ? memory.source_conversation_id
+      : null;
 
   const renderRightActions = useCallback(
     () => (
@@ -141,12 +173,37 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
 
           {expanded && <Animated.View style={expandStyle} className="mt-1" />}
 
-          {/* Bottom row: badges + timestamp */}
           <View className="flex-row items-center mt-2.5 gap-2">
             {memory.pinned && <Badge label="Pinned" color="teal" />}
-            <View className="flex-1" />
-            <Text style={{ color: colors.textMuted, fontSize: 10 }}>
-              {formatRelativeTime(memory.created_at)}
+            {linkedConversationId && onOpenConversation ? (
+              <Pressable
+                onPress={() => onOpenConversation(linkedConversationId)}
+                className="flex-1"
+                accessibilityRole="link"
+                accessibilityLabel={`${originLabel}. Open the chat`}
+              >
+                <Text
+                  numberOfLines={1}
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: 11,
+                    textDecorationLine: 'underline',
+                  }}
+                >
+                  {originLabel}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text
+                numberOfLines={1}
+                className="flex-1"
+                style={{ color: colors.textMuted, fontSize: 11 }}
+              >
+                {originLabel}
+              </Text>
+            )}
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>
+              {describeMemoryTime(memory)}
             </Text>
           </View>
         </Card>

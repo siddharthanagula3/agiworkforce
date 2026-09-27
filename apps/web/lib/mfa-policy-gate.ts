@@ -15,8 +15,7 @@ const MFA_ENROLLMENT_CACHE_UNENROLLED = 'unenrolled';
 const MFA_REQUIRED_ERROR_REASON = 'mfa_required';
 
 type CachedMfaEnrollment =
-  | typeof MFA_ENROLLMENT_CACHE_ENROLLED
-  | typeof MFA_ENROLLMENT_CACHE_UNENROLLED;
+  typeof MFA_ENROLLMENT_CACHE_ENROLLED | typeof MFA_ENROLLMENT_CACHE_UNENROLLED;
 
 export class MfaRequiredError extends AppError {
   constructor(message: string) {
@@ -33,9 +32,27 @@ export function isMfaRequiredError(error: unknown): error is MfaRequiredError {
   );
 }
 
+function enrollmentCacheKey(userId: string): string {
+  return `${MFA_ENROLLMENT_CACHE_PREFIX}${userId}`;
+}
+
+export async function rememberMfaEnrollment(userId: string, enrolled: boolean): Promise<void> {
+  const store = getKeyValueStore();
+  if (!store) return;
+  await store
+    .set(
+      enrollmentCacheKey(userId),
+      enrolled ? MFA_ENROLLMENT_CACHE_ENROLLED : MFA_ENROLLMENT_CACHE_UNENROLLED,
+      { ttlSeconds: MFA_ENROLLMENT_CACHE_TTL_SECONDS },
+    )
+    .catch((error) => {
+      logger.warn({ error, userId }, '[mfa-policy] enrollment cache write failed');
+    });
+}
+
 export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
   const store = getKeyValueStore();
-  const cacheKey = `${MFA_ENROLLMENT_CACHE_PREFIX}${userId}`;
+  const cacheKey = enrollmentCacheKey(userId);
 
   if (store) {
     try {
@@ -59,31 +76,35 @@ export async function resolveMfaEnrolled(userId: string): Promise<boolean> {
     return false;
   }
 
-  if (store) {
-    await store
-      .set(cacheKey, enrolled ? MFA_ENROLLMENT_CACHE_ENROLLED : MFA_ENROLLMENT_CACHE_UNENROLLED, {
-        ttlSeconds: MFA_ENROLLMENT_CACHE_TTL_SECONDS,
-      })
-      .catch((error) => {
-        logger.warn({ error, userId }, '[mfa-policy] enrollment cache write failed');
-      });
-  }
+  await rememberMfaEnrollment(userId, enrolled);
 
   return enrolled;
 }
 
-export async function assertMfaPolicy(userId: string): Promise<void> {
+async function mfaPolicyRefusal(
+  userId: string,
+): Promise<{ organizationId: string; code: string; reason: string } | null> {
   const { policy, organizationId } = await resolveMfaPolicy(getNeonDb(), userId);
-  if (!policy || !policy.requireMfa || !organizationId) return;
+  if (!policy || !policy.requireMfa || !organizationId) return null;
 
   const mfaEnrolled = await resolveMfaEnrolled(userId);
   const decision = evaluateOrganizationPolicy(policy, { resource: 'mfa', mfaEnrolled });
-  if (decision.allowed) return;
+  if (decision.allowed) return null;
+  return { organizationId, code: decision.code, reason: decision.reason };
+}
+
+export async function isBlockedByMfaPolicy(userId: string): Promise<boolean> {
+  return (await mfaPolicyRefusal(userId)) !== null;
+}
+
+export async function assertMfaPolicy(userId: string): Promise<void> {
+  const refusal = await mfaPolicyRefusal(userId);
+  if (!refusal) return;
 
   logger.warn(
-    { userId, organizationId, code: decision.code },
+    { userId, organizationId: refusal.organizationId, code: refusal.code },
     '[mfa-policy] request refused by workspace mfa policy',
   );
 
-  throw new MfaRequiredError(decision.reason);
+  throw new MfaRequiredError(refusal.reason);
 }

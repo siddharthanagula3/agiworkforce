@@ -39,7 +39,10 @@ import {
   type ConnectorHealth,
 } from '@/lib/connectors/catalog';
 import { readConnectorsNotResponding } from '@/lib/services/connector-call-log-service';
-import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
+import {
+  getUserConnectorOAuthGrantSummaries,
+  listConnectorAccounts,
+} from '@/lib/connectors/oauth-store';
 import { disconnectConnectorOAuthGrant } from '@/lib/connectors/oauth-access';
 import {
   mcpAuthorizationContext,
@@ -61,9 +64,11 @@ import {
   assertConnectorToolCapacity,
   assertCustomConnectorCapacity,
   clearConnectorToolPermissions,
+  CONNECTOR_BLOCKED_CODE,
   CONNECTOR_UNREACHABLE_CODE,
   customConnectorId,
   deleteCustomConnectorRows,
+  edgeBlockedMessage,
   insertCustomConnector,
   isUndefinedTableError,
   McpProbeError,
@@ -119,8 +124,15 @@ interface ConnectorSetupEntry {
   message: string;
 }
 
-function unreachableResponse(serverName: string, detail: string): NextResponse {
-  const message = `${serverName} could not be reached: ${detail}`;
+function unreachableResponse(serverName: string, error: McpProbeError): NextResponse {
+  if (error.edgeBlocked) {
+    const message = edgeBlockedMessage(serverName);
+    return NextResponse.json(
+      { error: { code: CONNECTOR_BLOCKED_CODE, message }, message },
+      { status: 502 },
+    );
+  }
+  const message = `${serverName} could not be reached: ${error.message}`;
   return NextResponse.json(
     { error: { code: CONNECTOR_UNREACHABLE_CODE, message }, message },
     { status: 502 },
@@ -407,7 +419,7 @@ async function connectDirectoryTarget(
       authorizationContext: mcpAuthorizationContext.userCustomUrl(userId, url),
     });
   } catch (error) {
-    if (error instanceof McpProbeError) return unreachableResponse(target.name, error.message);
+    if (error instanceof McpProbeError) return unreachableResponse(target.name, error);
     throw error;
   }
 
@@ -628,6 +640,17 @@ async function handleCreateConnector(request: NextRequest) {
   );
 }
 
+async function oauthCacheContexts(userId: string, connectorId: string): Promise<string[]> {
+  const accounts = await listConnectorAccounts(userId, connectorId);
+  return [
+    mcpAuthorizationContext.userOauthConnector(userId, connectorId),
+    ...accounts.map((account) =>
+      mcpAuthorizationContext.userOauthConnector(userId, connectorId, account.accountKey),
+    ),
+    mcpAuthorizationContext.operatorConnector(connectorId),
+  ];
+}
+
 async function disconnectDirectoryTarget(
   request: NextRequest,
   db: ScopedDb,
@@ -659,12 +682,10 @@ async function disconnectDirectoryTarget(
     }
   }
 
+  const cacheContexts = await oauthCacheContexts(userId, target.connectorId);
   if (await disconnectConnectorOAuthGrant(userId, target.connectorId)) {
     await evictConnectorOAuthCaches(userId, target.connectorId);
-    await purgeMcpResponseCachePartitions([
-      mcpAuthorizationContext.userOauthConnector(userId, target.connectorId),
-      mcpAuthorizationContext.operatorConnector(target.connectorId),
-    ]);
+    await purgeMcpResponseCachePartitions(cacheContexts);
     await clearConnectorToolPermissions(db, userId, target.serverId);
     await recordAuditEvent({
       userId,
@@ -703,13 +724,11 @@ async function handleDeleteConnector(request: NextRequest) {
     return disconnectDirectoryTarget(request, db, userId, target);
   }
 
+  const cacheContexts = await oauthCacheContexts(userId, connectorId);
   const oauthRevoked = await disconnectConnectorOAuthGrant(userId, connectorId);
   if (oauthRevoked) {
     await evictConnectorOAuthCaches(userId, connectorId);
-    await purgeMcpResponseCachePartitions([
-      mcpAuthorizationContext.userOauthConnector(userId, connectorId),
-      mcpAuthorizationContext.operatorConnector(connectorId),
-    ]);
+    await purgeMcpResponseCachePartitions(cacheContexts);
     await clearConnectorToolPermissions(db, userId, connectorId);
     await recordAuditEvent({
       userId,

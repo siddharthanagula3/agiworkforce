@@ -71,11 +71,13 @@ import {
   CliCapabilityAdapter,
   commandForSurface,
   mergeSessionRows,
+  type SessionListSource,
   type SessionRow,
   type SessionRowInput,
   type SessionSource,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
+import { OPEN_CLOUD_CODE_SESSION_COMMAND, resolveCloudCodeApi } from '../cloud-tasks';
 import { resolveAccountPresence } from '../surfaces/accountAccess';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
@@ -175,6 +177,7 @@ export type WebviewToExtMessage =
   | { type: 'openWorkspace' }
   | { type: 'manageWorkspaceTrust' }
   | { type: 'retryRuntime' }
+  | { type: 'installCli' }
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
@@ -232,7 +235,7 @@ export type WebviewToExtMessage =
   | { type: 'removePendingAttachment'; payload: { id: string } }
   | { type: 'clearActiveProject' }
   | { type: 'openSurface'; payload: { surfaceId: string } }
-  | { type: 'requestSessions'; payload: { source: SessionSource } }
+  | { type: 'requestSessions'; payload: { source: SessionListSource } }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
   | { type: 'runSlashCommand'; payload: { name: string } };
@@ -253,6 +256,7 @@ export type ExtToWebviewMessage =
       payload: {
         status: 'ready' | 'probing' | 'unavailable' | 'workspace-required' | 'workspace-untrusted';
         message?: string;
+        cliMissing?: boolean;
       };
     }
   | {
@@ -407,7 +411,7 @@ export type ExtToWebviewMessage =
   | {
       type: 'sessionsList';
       payload: {
-        source: SessionSource;
+        source: SessionListSource;
         rows: SessionRow[];
         unavailable?: string;
       };
@@ -765,6 +769,11 @@ export class ChatStateManager {
         break;
       }
 
+      case 'installCli': {
+        await vscode.commands.executeCommand('agi-workforce.installCli');
+        break;
+      }
+
       case 'retryRuntime': {
         this._post({ type: 'runtimeStatus', payload: { status: 'probing' } });
         await this._discoverLocalModels();
@@ -958,6 +967,10 @@ export class ChatStateManager {
       case 'openSessionRow': {
         if (msg.payload.source === 'local') {
           await vscode.commands.executeCommand('agi-workforce.openConversation', msg.payload.id);
+          break;
+        }
+        if (msg.payload.source === 'cloud-code') {
+          await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, msg.payload.id);
           break;
         }
         await vscode.env.openExternal(
@@ -1472,7 +1485,7 @@ export class ChatStateManager {
     });
   }
 
-  private async _pushSessions(source: SessionSource): Promise<void> {
+  private async _pushSessions(source: SessionListSource): Promise<void> {
     if (source === 'local') {
       const threads = (await this._conversationTreeProvider?.getThreads()) ?? [];
       const inputs: SessionRowInput[] = threads.map((thread) => ({
@@ -1487,22 +1500,41 @@ export class ChatStateManager {
       return;
     }
 
-    const resolution = await resolveProjectsWorkspace(this._secrets);
+    const [resolution, code] = await Promise.all([
+      resolveProjectsWorkspace(this._secrets),
+      resolveCloudCodeApi(this._secrets),
+    ]);
     if (resolution.status === 'signed-out') {
       this._post({
         type: 'sessionsList',
-        payload: { source, rows: [], unavailable: 'Sign in to AGI Cloud to see cloud chats.' },
+        payload: {
+          source,
+          rows: [],
+          unavailable: 'Sign in to AGI Cloud to see cloud chats and AGI Code sessions.',
+        },
       });
       return;
     }
     try {
-      const page = await resolution.workspace.chat.listConversations({ limit: 50 });
-      const inputs: SessionRowInput[] = page.conversations.map((conversation) => ({
-        id: conversation.id,
-        title: conversation.title,
-        updatedAt: conversation.updatedAt,
-        source: 'cloud',
-      }));
+      const [page, codeSessions] = await Promise.all([
+        resolution.workspace.chat.listConversations({ limit: 50 }),
+        code.status === 'ready' ? code.api.list('open') : null,
+      ]);
+      const inputs: SessionRowInput[] = [
+        ...page.conversations.map((conversation) => ({
+          id: conversation.id,
+          title: conversation.title,
+          updatedAt: conversation.updatedAt,
+          source: 'cloud' as const,
+        })),
+        ...(codeSessions?.sessions ?? []).map((session) => ({
+          id: session.id,
+          title: session.title,
+          updatedAt: session.updatedAt,
+          source: 'cloud-code' as const,
+          ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
+        })),
+      ];
       this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
     } catch (error) {
       this._post({
@@ -2144,6 +2176,9 @@ export class ChatStateManager {
         payload: {
           status: 'unavailable',
           message: this._describeLocalRuntimeSetupError(error),
+          ...(error instanceof Error && error.message.startsWith(`${CLI_NOT_FOUND_MARKER}: `)
+            ? { cliMissing: true }
+            : {}),
         },
       });
       return [];

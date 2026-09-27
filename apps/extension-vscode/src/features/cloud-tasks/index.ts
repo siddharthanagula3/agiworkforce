@@ -22,3 +22,8 @@ export {
   type CloudRunApprovalDecision,
 } from './cloudRunApproval';
 export { resolveCloudAgentRunClient } from './cloudRunClient';
+export {
+  OPEN_CLOUD_CODE_SESSION_COMMAND,
+  resolveCloudCodeApi,
+  showCloudCodeSession,
+} from './cloudCodeSessions';

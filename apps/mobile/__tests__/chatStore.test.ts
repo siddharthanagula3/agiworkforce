@@ -315,7 +315,7 @@ describe('chatStore, streaming state', () => {
     it('sends selected chat mode and style context to the remote stream', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useChatStore.setState({ chatMode: 'create', chatStyle: 'detailed' });
+      useChatStore.setState({ chatMode: 'create', chatStyle: 'explanatory' });
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -345,7 +345,7 @@ describe('chatStore, streaming state', () => {
         expect.arrayContaining([
           expect.objectContaining({
             role: 'system',
-            content: expect.stringContaining('Style: Detailed'),
+            content: expect.stringContaining('Style: Explanatory'),
           }),
         ]),
       );
@@ -1158,7 +1158,7 @@ describe('chatStore, streaming state', () => {
       expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
     });
 
-    it('suppresses memory injection in the send path when the master switch is off', async () => {
+    it('stops memory injection but keeps past-chat search when only Memory is off', async () => {
       useCloudSettingsStore.setState({ memoryEnabled: false, referencePastChats: true });
       seedCloudConversation();
       const turn = captureCloudTurn();
@@ -1168,10 +1168,12 @@ describe('chatStore, streaming state', () => {
       });
 
       expect(mockRetrieveMemoryContext).not.toHaveBeenCalled();
-      expect(mockRetrievePastChatContext).not.toHaveBeenCalled();
+      expect(mockRetrievePastChatContext).toHaveBeenCalledWith(
+        expect.objectContaining({ enabled: true }),
+      );
       const systemContents = systemContentsOf(turn.read());
       expect(systemContents.some((content) => content.includes(STORED_FACT))).toBe(false);
-      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(false);
+      expect(systemContents.some((content) => content.includes(PAST_CHAT_EXCERPT))).toBe(true);
     });
 
     it('stops writing new Local memories when the master switch is off', async () => {

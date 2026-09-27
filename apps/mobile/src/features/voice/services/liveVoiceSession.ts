@@ -4,6 +4,15 @@ import {
   RTCSessionDescription,
   mediaDevices,
 } from 'react-native-webrtc';
+import {
+  LiveVoiceToolBridge,
+  LiveVoiceToolCallResponseSchema,
+  liveVoiceToolCallPath,
+  type LiveVoicePendingApproval,
+  type LiveVoiceToolCallRequest,
+  type LiveVoiceToolCallResponse,
+  type LiveVoiceToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { apiFetch } from '@/services/api';
 import { LIVE_VOICE_MESSAGE, liveVoiceUnavailableReason } from './liveVoiceAvailability';
@@ -43,6 +52,7 @@ export interface LiveVoiceSessionCallbacks {
   onStarted: () => void;
   onAssistantSpeaking: (active: boolean) => void;
   onBackendBusy: (active: boolean) => void;
+  onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onInterrupted: () => void;
   onUsage: (seconds: number) => void;
@@ -154,6 +164,7 @@ export class LiveVoiceSession {
   private userTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private assistantTurn: { id: string; text: string; lastDeltaAt: number } | null = null;
   private readonly pendingDelegations = new Set<string>();
+  private readonly toolBridge: LiveVoiceToolBridge;
   private closeResolve: (() => void) | null = null;
   private usageSeconds: number | null = null;
   private pendingMuted: boolean | null = null;
@@ -171,6 +182,14 @@ export class LiveVoiceSession {
     this.sessionId = created.sessionId;
     this.settlement = created.settlement;
     this.callbacks = callbacks;
+    this.toolBridge = new LiveVoiceToolBridge({
+      callTool: (request) => this.callTool(request),
+      send: (event) => this.send(event),
+      onApprovalsChanged: (approvals) => {
+        this.callbacks.onToolApprovals?.(approvals);
+        this.publishBackendBusy();
+      },
+    });
   }
 
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
@@ -237,6 +256,23 @@ export class LiveVoiceSession {
     return this.usageSeconds;
   }
 
+  decideToolApproval(callId: string, decision: LiveVoiceToolDecision): Promise<void> {
+    return this.toolBridge.decide(callId, decision);
+  }
+
+  private async callTool(request: LiveVoiceToolCallRequest): Promise<LiveVoiceToolCallResponse> {
+    const response = await apiFetch(liveVoiceToolCallPath(this.sessionId), {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    if (!response.ok) throw await readErrorMessage(response);
+    return LiveVoiceToolCallResponseSchema.parse(await response.json());
+  }
+
+  private publishBackendBusy(): void {
+    this.callbacks.onBackendBusy(this.pendingDelegations.size > 0 || this.toolBridge.busy);
+  }
+
   setMuted(muted: boolean): void {
     this.microphone.getAudioTracks().forEach((track) => {
       track.enabled = !muted;
@@ -278,6 +314,7 @@ export class LiveVoiceSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.toolBridge.dispose();
     this.stopTimers();
     this.microphone.getTracks().forEach((track) => track.stop());
     this.channel.close();
@@ -345,16 +382,23 @@ export class LiveVoiceSession {
       case 'session.delegation.created': {
         const delegation = parsed['delegation'] as { id?: string } | undefined;
         if (delegation?.id) this.pendingDelegations.add(delegation.id);
-        this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+        this.publishBackendBusy();
         return;
       }
       case 'response.event': {
         const nested = parsed['event'] as { type?: string } | undefined;
         const delegationId = parsed['delegation_id'];
+        this.toolBridge.observe(nested);
         if (nested?.type && DELEGATION_TERMINAL_EVENTS.has(nested.type)) {
+          const succeeded = nested.type === 'response.completed';
+          if (succeeded && this.toolBridge.busy) {
+            this.publishBackendBusy();
+            return;
+          }
+          if (!succeeded) this.toolBridge.cancel();
           if (typeof delegationId === 'string') this.pendingDelegations.delete(delegationId);
           else this.pendingDelegations.clear();
-          this.callbacks.onBackendBusy(this.pendingDelegations.size > 0);
+          this.publishBackendBusy();
         }
         return;
       }

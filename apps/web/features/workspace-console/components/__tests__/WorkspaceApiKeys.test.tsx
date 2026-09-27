@@ -69,7 +69,12 @@ describe('WorkspaceApiKeys', () => {
     await user.click(screen.getByRole('button', { name: 'Create key' }));
 
     expect(mocks.createMutate).toHaveBeenCalledWith(
-      { name: 'SIEM export', scopes: ['admin.audit.view'], expiresInDays: 90 },
+      {
+        organizationId: 'org',
+        name: 'SIEM export',
+        scopes: ['admin.audit.view'],
+        expiresInDays: 90,
+      },
       expect.anything(),
     );
     const notice = screen.getByRole('region', { name: 'New workspace API key' });

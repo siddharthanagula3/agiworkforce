@@ -57,8 +57,6 @@ const UNRAISED: Readonly<Record<string, string>> = {
   new_sign_in: 'the sign-in path records a login audit row and raises no notice',
   new_device: 'device_registrations is written by the device registration route without a notice',
   new_location: 'nothing compares the request location against previous sessions',
-  password_changed: 'the identity provider owns the password change; no server route sees it',
-  email_changed: 'the identity provider owns the email change; no server route sees it',
   passkey_added: 'passkeys are created by the provider SDK in the browser, with no server call',
   passkey_removed: 'passkeys are deleted by the provider SDK in the browser, with no server call',
   api_key_created: 'app/api/settings/api-keys/route.ts mints the key and raises no notice',

@@ -3,6 +3,7 @@ import 'server-only';
 import type {
   ChatRequest,
   ContentBlock,
+  ProjectInstruction,
   ProviderAdapter,
   ProviderMessage,
   StreamChunk,
@@ -143,6 +144,7 @@ export interface RunCloudCodeAgentTurnInput {
   signal: AbortSignal;
   repositoryUrl?: string | null;
   workspacePath?: string;
+  projectInstructions?: ProjectInstruction[];
   priorMessages?: ProviderMessage[];
   preApproved?: { toolUseId: string; command: string; approved: boolean };
   /**
@@ -167,6 +169,9 @@ function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
   const lines = [resolvePromptText(CLOUD_CODE_AGENT_PROMPT_ID)];
   if (input.repositoryUrl) lines.push('', `Repository: ${input.repositoryUrl}`);
   if (input.workspacePath) lines.push(`Workspace: ${input.workspacePath}`);
+  for (const instruction of input.projectInstructions ?? []) {
+    lines.push('', `Project instructions from ${instruction.fileName}:`, instruction.content);
+  }
   return lines.join('\n');
 }
 

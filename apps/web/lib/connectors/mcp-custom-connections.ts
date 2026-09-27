@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import { getMcpStatelessRuntime } from '@/lib/connectors/mcp-runtime-cache';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
+import { isEdgeBlockedError } from '@/lib/connectors/edge-block';
 import {
   getCustomRemoteMcpLimit,
   getCustomRemoteMcpLimitErrorMessage,
@@ -38,6 +39,7 @@ export const SHORT_ID_ALLOCATION_FAILED_MESSAGE =
   'Could not allocate a connector identifier. Try again.';
 export const DUPLICATE_URL_MESSAGE = 'You already have a custom connector for this URL.';
 export const CONNECTOR_UNREACHABLE_CODE = 'CONNECTOR_UNREACHABLE';
+export const CONNECTOR_BLOCKED_CODE = 'CONNECTOR_BLOCKED';
 
 export function customConnectorId(shortId: string): string {
   return `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
@@ -135,10 +137,15 @@ export class McpProbeError extends Error {
   constructor(
     message: string,
     readonly authChallenge: boolean,
+    readonly edgeBlocked: boolean = false,
   ) {
     super(message);
     this.name = 'McpProbeError';
   }
+}
+
+export function edgeBlockedMessage(serverName: string): string {
+  return `${serverName} refused this service at its network edge. Its firewall blocks requests from cloud servers, so this is a block on the provider's side, not an outage, and it cannot be connected from here until the provider allows it.`;
 }
 
 export async function probeMcpServer(input: McpProbeInput): Promise<McpProbeResult> {
@@ -181,7 +188,11 @@ export async function probeMcpServer(input: McpProbeInput): Promise<McpProbeResu
       { serverName: input.serverName, message },
       '[mcp-custom-connections] connect-and-list failed',
     );
-    throw new McpProbeError(message, detectConnectorAuthChallenge(error) !== null);
+    throw new McpProbeError(
+      message,
+      detectConnectorAuthChallenge(error) !== null,
+      isEdgeBlockedError(error),
+    );
   } finally {
     if (handle) await Promise.resolve(handle.close()).catch(() => undefined);
   }

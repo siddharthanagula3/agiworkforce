@@ -2765,6 +2765,7 @@ export function getWebviewContent(
     var activeEffort = '${initialEffort}';
     var activeSupportsEffort = ${supportsEffort ? 'true' : 'false'};
     var runtimeBlock = null;
+    var runtimeCliMissing = false;
     var lastUsageMeterPayload = null;
     var onboardingStep = 0;
 
@@ -2850,9 +2851,12 @@ export function getWebviewContent(
         onboardingWorkspaceAction.hidden = false;
       } else if (status === 'unavailable') {
         heading.textContent = 'Connect the developer runtime.';
-        onboardingWorkspaceLede.textContent =
-          'This workspace is open, but the local AGI runtime is not ready yet.';
-        onboardingWorkspaceAction.textContent = 'Open runtime setup';
+        onboardingWorkspaceLede.textContent = runtimeCliMissing
+          ? 'This workspace is open, but the AGI CLI is not installed here yet.'
+          : 'This workspace is open, but the local AGI runtime is not ready yet.';
+        onboardingWorkspaceAction.textContent = runtimeCliMissing
+          ? 'Install AGI CLI'
+          : 'Open runtime setup';
         onboardingWorkspaceAction.hidden = false;
       } else {
         heading.textContent = 'Build with AGI in this repository.';
@@ -2907,7 +2911,9 @@ export function getWebviewContent(
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -3255,7 +3261,9 @@ export function getWebviewContent(
             ? 'openWorkspace'
             : runtimeBlock === 'workspace-untrusted'
               ? 'manageWorkspaceTrust'
-              : 'openSettings'
+              : runtimeCliMissing
+                ? 'installCli'
+                : 'openSettings'
         });
       });
     }
@@ -3360,7 +3368,9 @@ export function getWebviewContent(
           ? 'Open folder'
           : workspaceUntrusted
             ? 'Manage trust'
-            : 'Open setup';
+            : runtimeCliMissing
+              ? 'Install AGI CLI'
+              : 'Open setup';
         runtimeStatusEl.style.display = 'flex';
         if (headline) headline.textContent = workspaceRequired
           ? 'Open a workspace'
@@ -4321,7 +4331,7 @@ export function getWebviewContent(
         loading.setAttribute('role', 'status');
         loading.textContent = sessionsSource === 'local'
           ? 'Loading developer sessions…'
-          : 'Loading cloud chats…';
+          : 'Loading cloud sessions…';
         sessionsSheetList.appendChild(loading);
         return;
       }
@@ -4345,7 +4355,7 @@ export function getWebviewContent(
         empty.className = 'sessions-sheet-empty';
         empty.textContent = sessionsSource === 'local'
           ? 'No developer sessions in this workspace yet'
-          : 'No cloud chats yet';
+          : 'No cloud chats or AGI Code sessions yet';
         sessionsSheetList.appendChild(empty);
         return;
       }
@@ -5394,6 +5404,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'runtimeStatus') {
         if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl || !runtimeSettingsBtn) return;
+        runtimeCliMissing = msg.payload.cliMissing === true;
         renderRuntimeAvailability(msg.payload.status, msg.payload.message);
       }
 

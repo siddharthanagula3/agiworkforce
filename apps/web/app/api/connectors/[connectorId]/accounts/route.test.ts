@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   disconnectConnectorOAuthGrant: vi.fn(),
   recordAuditEvent: vi.fn(),
   evictConnectorOAuthCaches: vi.fn(),
+  purgeMcpResponseCachePartitions: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -29,6 +30,15 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/lib/user-connector-tools', () => ({
   evictConnectorOAuthCaches: (...args: unknown[]) => mocks.evictConnectorOAuthCaches(...args),
 }));
+vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
+  getMcpStatelessRuntime: vi.fn(),
+  mcpAuthorizationContext: {
+    userOauthConnector: (userId: string, connectorId: string, accountKey: string) =>
+      `user:${userId}:oauth:${connectorId}:account:${accountKey}`,
+  },
+  purgeMcpResponseCachePartitions: (...args: unknown[]) =>
+    mocks.purgeMcpResponseCachePartitions(...args),
+}));
 vi.mock('@/lib/connectors/oauth-store', () => ({
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...args: unknown[]) => mocks.listConnectorAccounts(...args),
@@ -38,6 +48,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   getConnectorOAuthGrant: vi.fn(async () => null),
   updateConnectorOAuthGrantTokens: vi.fn(),
   ConnectorGrantDecryptionError: class extends Error {},
+  ConnectorGrantLockTimeoutError: class extends Error {},
+  withLockedConnectorOAuthGrant: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-access', () => ({
   disconnectConnectorOAuthGrant: (...args: unknown[]) =>
@@ -126,6 +138,9 @@ describe('DELETE /api/connectors/[connectorId]/accounts', () => {
     expect(mocks.disconnectConnectorOAuthGrant).toHaveBeenCalledWith(USER, 'gmail', 'work');
     expect(mocks.revokeConnectorOAuthGrant).not.toHaveBeenCalled();
     expect(mocks.evictConnectorOAuthCaches).toHaveBeenCalledWith(USER, 'gmail');
+    expect(mocks.purgeMcpResponseCachePartitions).toHaveBeenCalledWith([
+      `user:${USER}:oauth:gmail:account:work`,
+    ]);
   });
 
   it('answers 404 when the account is not one of the caller own', async () => {

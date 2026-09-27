@@ -35,6 +35,7 @@ export const NOTIFICATION_TARGET_KINDS = [
   'research',
   'schedule',
   'browser-task',
+  'code-session',
 ] as const;
 
 export type NotificationTargetKind = (typeof NOTIFICATION_TARGET_KINDS)[number];
