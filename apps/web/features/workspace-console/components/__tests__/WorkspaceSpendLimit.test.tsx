@@ -19,18 +19,19 @@ function response(payload: unknown, status = 200): Response {
   } as Response;
 }
 
-function spendLimit() {
+function spendLimit(state: Record<string, unknown> = {}) {
   return {
     canManageLimit: true,
     state: {
       configured: false,
-      monthlyCapCents: null,
+      monthlyCapCredits: null,
       enforcement: 'notify',
       alertThresholdPct: 80,
-      spentCents: 0,
+      spentCredits: 0,
       usedPct: null,
       overCap: false,
       overThreshold: false,
+      ...state,
     },
   };
 }
@@ -71,13 +72,37 @@ describe('WorkspaceSpendLimit', () => {
     );
     renderPanel();
 
-    fireEvent.change(await screen.findByLabelText('Cap (USD)'), { target: { value: '25' } });
+    fireEvent.change(await screen.findByLabelText('Cap (credits)'), { target: { value: '25' } });
     fireEvent.click(screen.getByRole('button', { name: 'Set limit' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({
+      monthlyCapCredits: 25,
+      enforcement: 'notify',
+      alertThresholdPct: 80,
+    });
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('The spend limit could not be saved');
     expect(alert).not.toHaveTextContent(/HTTP|429/i);
+  });
+
+  it('states the cap and this month use in credits, never dollars', async () => {
+    fetchMock.mockResolvedValue(
+      response(
+        spendLimit({
+          configured: true,
+          monthlyCapCredits: 2_000,
+          spentCredits: 500,
+          usedPct: 25,
+        }),
+      ),
+    );
+    const view = renderPanel();
+
+    expect(await screen.findByText(/500 credits of 2,000 credits used/)).toBeVisible();
+    expect(screen.getByLabelText('Cap (credits)')).toHaveValue(2_000);
+    expect(view.container).not.toHaveTextContent('$');
   });
 
   it('renders nothing for a caller who cannot administer the limit', async () => {
