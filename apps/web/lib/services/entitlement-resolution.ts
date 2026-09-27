@@ -2,7 +2,6 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
-  effectivePlanTier,
   isContractPricedPlan,
   isEntitledSubscriptionStatus,
   isEntitledSubscriptionStatusForTier,
@@ -19,6 +18,7 @@ import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
 import { CreditService } from '@/lib/services/credit-service';
 import { readOrganizationCollectionState } from '@/lib/services/enterprise-collection-state';
+import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterprise-funding-organization';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
 
 export function isSeatBearingBillingPlan(planTier: string | null | undefined): boolean {
@@ -203,8 +203,9 @@ function bundleFrom(
   userId: string,
   subscription: SubscriptionInfo | null,
   source: EntitlementSource,
+  entitled: boolean,
 ): EntitlementBundle {
-  const bundle = buildBundle(userId, subscription, source);
+  const bundle = buildBundle(userId, subscription, source, entitled);
   if (bundle.denialReason) {
     recordCapabilityDenial({
       layer: 'entitlement',
@@ -219,6 +220,7 @@ function buildBundle(
   userId: string,
   subscription: SubscriptionInfo | null,
   source: EntitlementSource,
+  entitled: boolean,
 ): EntitlementBundle {
   if (!subscription) {
     return {
@@ -233,13 +235,9 @@ function buildBundle(
     };
   }
 
-  const entitled = isEntitledSubscriptionStatus(subscription.status);
-  const plan = normalizeBillingPlanTier(
-    effectivePlanTier(subscription.plan_tier, subscription.status),
-  );
   return {
     userId,
-    plan,
+    plan: normalizeBillingPlanTier(entitled ? subscription.plan_tier : 'free'),
     status: subscription.status,
     entitled,
     source,
@@ -247,6 +245,34 @@ function buildBundle(
     subscription,
     denialReason: entitled ? null : 'payment_required',
   };
+}
+
+async function isEnterpriseCollectionReadOnly(userId: string): Promise<boolean> {
+  try {
+    const db = getNeonDb();
+    const organizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
+    if (!organizationId) return false;
+    return (await readOrganizationCollectionState(db, organizationId)).readOnly;
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      'Enterprise collection state read failed; entitlement decided without it',
+    );
+    return false;
+  }
+}
+
+async function isOwnSubscriptionEntitled(
+  userId: string,
+  subscription: SubscriptionInfo,
+): Promise<boolean> {
+  const tier = normalizeBillingPlanTier(subscription.plan_tier);
+  if (!isContractPricedPlan(tier)) return isEntitledSubscriptionStatus(subscription.status);
+  return isEntitledSubscriptionStatusForTier(
+    tier,
+    subscription.status,
+    await isEnterpriseCollectionReadOnly(userId),
+  );
 }
 
 /**
@@ -261,20 +287,22 @@ export async function resolveEntitlementBundle(
   options: EntitlementResolutionOptions = {},
 ): Promise<EntitlementBundle> {
   const own = await SubscriptionService.getSubscription(db, userId);
-  if (own) return bundleFrom(userId, own, 'subscription');
-  if (options.includeSeats === false) return bundleFrom(userId, null, 'none');
+  if (own) {
+    return bundleFrom(userId, own, 'subscription', await isOwnSubscriptionEntitled(userId, own));
+  }
+  if (options.includeSeats === false) return bundleFrom(userId, null, 'none', false);
 
   let seat: SubscriptionInfo | null = null;
   try {
     seat = await resolveSeatSubscription(userId);
   } catch (error) {
     logger.error({ error, userId }, 'Seat entitlement lookup failed; falling back to no seat');
-    return bundleFrom(userId, null, 'none');
+    return bundleFrom(userId, null, 'none', false);
   }
 
-  if (!seat) return bundleFrom(userId, null, 'none');
+  if (!seat) return bundleFrom(userId, null, 'none', false);
   await ensureSeatMemberCreditAccount(db, seat);
-  return bundleFrom(userId, seat, 'seat');
+  return bundleFrom(userId, seat, 'seat', true);
 }
 
 /**
