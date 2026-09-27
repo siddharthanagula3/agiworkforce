@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -114,6 +114,9 @@ describe('Remote Control in the desktop shell', () => {
       await screen.findByText('Connected to Pixel · 2 sessions open on the phone'),
     ).toBeVisible();
     await userEvent.click(screen.getByRole('button', { name: 'Disconnect phone' }));
+    expect(stopRemoteControl).not.toHaveBeenCalled();
+    const confirmation = await screen.findByRole('alertdialog');
+    await userEvent.click(within(confirmation).getByRole('button', { name: 'Disconnect phone' }));
     await waitFor(() => expect(stopRemoteControl).toHaveBeenCalled());
     expect(await screen.findByRole('button', { name: 'Pair a phone' })).toBeVisible();
   });
