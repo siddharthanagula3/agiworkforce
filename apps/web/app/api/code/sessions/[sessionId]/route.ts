@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -21,7 +20,7 @@ import {
   renameCloudCodeSession,
   setCloudCodeSessionArchived,
 } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 
 export const runtime = 'nodejs';
 
@@ -126,8 +125,7 @@ async function handleDelete(request: NextRequest, context: RouteContext) {
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = await resolveEntitledPlanTier(db, userId);
   try {
     await deleteCloudCodeSession(db, { userId, organizationId }, sessionId, planTier);
     await recordAuditEvent({

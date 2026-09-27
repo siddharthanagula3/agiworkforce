@@ -1,10 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { effectivePlanTier } from '@/lib/entitlement';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   getOperatorMappedConnectorIds,
   getUserCustomConnectorSummaries,
@@ -175,26 +175,28 @@ export async function resolveSupportAccountContext(
     throw new Error('resolveSupportAccountContext requires an authenticated user id');
   }
 
-  const [subscription, usage, connectors, apiKeyCount, email] = await Promise.all([
-    SubscriptionService.getSubscription(db, userId),
+  const [entitlement, usage, connectors, apiKeyCount, email] = await Promise.all([
+    resolveEntitlementBundle(db, userId),
     resolveUsage(db, userId),
     resolveConnectors(db, userId),
     resolveApiKeyCount(db, userId),
     resolveEmail(userId),
   ]);
 
+  const subscription = entitlement.subscription;
   const tier = subscription?.plan_tier || 'free';
   const status = subscription?.status || 'none';
-  const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
   return {
     plan: {
       tier,
-      effectiveTier,
-      displayName: tier.charAt(0).toUpperCase() + tier.slice(1),
+      effectiveTier: entitlement.plan,
+      displayName: getBillingPlanPricing(tier).label,
       status,
       currentPeriodEnd: toIso(subscription?.current_period_end),
-      subscriptionSource: resolveSubscriptionSource(subscription ?? null),
+      subscriptionSource: entitlement.seatSource
+        ? 'manual'
+        : resolveSubscriptionSource(subscription),
     },
     usage,
     connectors,

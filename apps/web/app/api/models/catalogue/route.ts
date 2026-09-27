@@ -7,12 +7,11 @@ import { logger } from '@/lib/logger';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
   PLAN_LABEL,
-  effectivePlanTier,
   modelsCatalogJson as modelsData,
   normalizeUIPlanTier,
 } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   ANONYMOUS_PLAN_TIER,
   buildCatalogueEntries,
@@ -49,8 +48,7 @@ function toWireEntry(entry: CatalogueEntry): ModelCatalogueEntry {
 async function resolvePlanTier(request: NextRequest): Promise<string> {
   try {
     const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
-    const subscription = await SubscriptionService.getSubscription(db, userId);
-    return effectivePlanTier(subscription?.plan_tier, subscription?.status);
+    return await resolveEntitledPlanTier(db, userId);
   } catch {
     return ANONYMOUS_PLAN_TIER;
   }

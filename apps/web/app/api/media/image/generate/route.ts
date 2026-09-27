@@ -17,7 +17,7 @@ import {
 } from '@/lib/observability/media-telemetry';
 import { annotateActiveSpan } from '@/lib/observability/span';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { evaluateManagedComputeSubscriptionAccess } from '@/lib/services/managed-compute-access';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -174,7 +174,8 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const spendGateResponse = await buildSpendLimitGateResponse(userId);
   if (spendGateResponse) return spendGateResponse;
 
-  const subscription = await SubscriptionService.getSubscription((await callerScope()).db, userId);
+  const entitlement = await resolveEntitlementBundle((await callerScope()).db, userId);
+  const subscription = entitlement.subscription;
 
   if (!subscription) {
     return NextResponse.json(
@@ -219,7 +220,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   }
 
-  const userTier = subscription.plan_tier?.toLowerCase() || 'free';
+  const userTier = entitlement.plan;
   if (!canUseBillingPlanCapability(userTier, 'image_generation')) {
     return NextResponse.json(
       {
@@ -777,7 +778,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       provider,
       model: catalogModel.id,
       estimatedCostMicrousd,
-      planTier: subscription.plan_tier,
+      planTier: entitlement.plan,
       isFlagship: false,
       leaseSeconds: IMAGE_JOB_LEASE_SECONDS,
     });

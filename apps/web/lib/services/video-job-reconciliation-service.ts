@@ -102,6 +102,9 @@ export function publicVideoJobStatus(job: VideoGenerationJob): PublicVideoJobSta
   };
 }
 
+const VIDEO_CANCELLED_UNDELIVERED =
+  'Video generation was cancelled, so the result was not delivered or charged.';
+
 class VideoAssetCompensationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -469,6 +472,16 @@ async function reconcileVideoGenerationJobCore(
     }
   }
 
+  if (claimed.cancelRequestedAt && claimed.provider !== 'runway') {
+    return finishFailed(
+      db,
+      claimed,
+      claimToken,
+      VIDEO_CANCELLED_UNDELIVERED,
+      claimed.estimatedCostCents,
+    );
+  }
+
   let persistedAsset: PersistedVideoAsset | undefined;
   let completedProviderCostCents: number | undefined;
   try {
@@ -515,21 +528,17 @@ async function reconcileVideoGenerationJobCore(
       );
     }
     completedProviderCostCents = provider.actualCostCents ?? claimed.estimatedCostCents;
-    if (claimed.provider === 'runway' && claimed.cancelRequestedAt) {
+    if (claimed.cancelRequestedAt) {
       return finishFailed(
         db,
         claimed,
         claimToken,
-        'Runway completed after cancellation was requested. AGI did not deliver the result.',
+        VIDEO_CANCELLED_UNDELIVERED,
         completedProviderCostCents,
       );
     }
     const beforePersistence = await getVideoGenerationJobForSystem(db, claimed.id);
-    if (
-      beforePersistence?.provider === 'runway' &&
-      beforePersistence.cancelRequestedAt &&
-      !claimed.cancelRequestedAt
-    ) {
+    if (beforePersistence?.cancelRequestedAt && !claimed.cancelRequestedAt) {
       return deferVideoGenerationJob({
         db,
         jobId: claimed.id,

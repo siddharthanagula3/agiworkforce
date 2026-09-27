@@ -21,7 +21,7 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
@@ -50,8 +50,9 @@ import {
 import {
   describeLiveSessionFailure,
   LIVE_SESSION_BLOCK_MINUTES,
+  LIVE_SESSION_CEILING_SECONDS,
   LIVE_VOICE_FEATURE,
-  liveSessionCostCents,
+  liveSessionChargeMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import {
   buildLiveVoiceBackendInstructions,
@@ -204,6 +205,33 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
+  const conversationId = body.conversationId;
+  if (!conversationId) {
+    return jsonError(
+      request,
+      400,
+      'voice_conversation_required',
+      'Live voice needs a conversation to record the session in.',
+    );
+  }
+  let storeReady = false;
+  try {
+    storeReady = await isVoiceSessionStoreReady(scoped.db);
+  } catch (error) {
+    logger.error(
+      { event: 'voice_session_store_unreadable', error, userId },
+      'Voice session store readiness could not be determined',
+    );
+  }
+  if (!storeReady) {
+    return jsonError(
+      request,
+      503,
+      'voice_session_not_recorded',
+      'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
+    );
+  }
+
   const voice = isLiveVoice(body.voice) ? body.voice : LIVE_DEFAULT_VOICE;
   const language = body.language?.trim() ? body.language.trim() : null;
   const pace = clampVoicePace(body.pace ?? VOICE_PACE_DEFAULT);
@@ -216,7 +244,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   const sessionIdentity = {
     operation: 'voice_live_session',
     model: liveModel.id,
-    conversationId: body.conversationId ?? null,
+    conversationId,
     voice,
     language,
     pace,
@@ -224,21 +252,28 @@ async function handleCreateLiveSession(request: NextRequest) {
     offer: body.sdp,
   };
 
-  const ceilingSeconds = LIVE_SESSION_BLOCK_MINUTES * 60;
-  const estimatedCostCents = liveSessionCostCents(ceilingSeconds);
+  const ceilingSeconds = LIVE_SESSION_CEILING_SECONDS;
+  const estimatedCostMicrousd = liveSessionChargeMicrousd(ceilingSeconds, liveModel.id);
+  if (estimatedCostMicrousd === null) {
+    logger.error(
+      { event: 'live_voice_unpriced', model: liveModel.id },
+      'The live voice model declares no session rate, so its minutes cannot be charged',
+    );
+    return jsonError(request, 503, 'live_voice_unpriced', 'Live voice is unavailable right now.');
+  }
   let reservation: ManagedUsageRequestReservation;
   try {
-    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
       scoped.db,
       userId,
-      subscription,
+      entitlement.subscription,
     );
     if (!subscriptionAccess.allowed) {
       const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, gateHeaders);
       if (gateResponse) return gateResponse;
     }
-    const planTier = subscription?.plan_tier ?? 'free';
+    const planTier = entitlement.plan;
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,
@@ -257,7 +292,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       requestHash: fingerprintManagedUsageRequest(sessionIdentity),
       provider,
       model: liveModel.id,
-      estimatedCostCents,
+      estimatedCostMicrousd,
       leaseSeconds: LIVE_SESSION_LEASE_SECONDS,
       planTier,
       isFlagship: false,
@@ -286,7 +321,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       await finalizeManagedUsageRequest({
         ...reservation,
         outcome: 'failed',
-        actualCostCents: 0,
+        actualCostMicrousd: 0,
         usage: { operation: 'voice_live_session', provider, model: liveModel.id, reason },
       });
     } catch (settlementError) {
@@ -306,7 +341,7 @@ async function handleCreateLiveSession(request: NextRequest) {
   try {
     context = await loadLiveVoiceContext(scoped.db, {
       userId,
-      conversationId: body.conversationId ?? null,
+      conversationId,
       organizationId: scoped.organizationId,
       onSourceFailure: (source, error) => {
         logger.warn(
@@ -317,7 +352,7 @@ async function handleCreateLiveSession(request: NextRequest) {
     });
   } catch (error) {
     logger.error(
-      { event: 'live_voice_context_failed', error, userId, conversationId: body.conversationId },
+      { event: 'live_voice_context_failed', error, userId, conversationId },
       'Live voice context load failed; starting the session without prior context',
     );
   }
@@ -399,71 +434,49 @@ async function handleCreateLiveSession(request: NextRequest) {
     );
   }
 
-  // The canonical record, written after the provider accepted so a row never
-  // names a session that does not exist. A conversation is required for it,
-  // which is why the client settles one before it offers.
-  let voiceSessionId: string | null = null;
-  if (body.conversationId) {
-    let storeReady = false;
-    try {
-      storeReady = await isVoiceSessionStoreReady(scoped.db);
-    } catch (error) {
-      logger.error(
-        { event: 'voice_session_store_unreadable', error, userId, sessionId },
-        'Voice session store readiness could not be determined',
-      );
-    }
-    // The record is what a session is resumed and audited from, and a
-    // conversation with no row means it never had one. A session that runs
-    // without its row makes that false, so it is refused and not charged.
-    if (storeReady) {
-      // Every session this account left open past the block it could be billed
-      // for is over, whichever conversation it belonged to.
-      await closeExpiredVoiceSessions({
-        db: scoped.db,
-        userId,
-        maxOpenSeconds: ceilingSeconds,
-      }).catch((error: unknown) => {
-        logger.warn(
-          { event: 'voice_session_expiry_failed', error, userId },
-          'Expired voice sessions could not be closed',
-        );
-        return 0;
-      });
-      let record: Awaited<ReturnType<typeof createVoiceSession>> = null;
-      try {
-        record = await createVoiceSession({
-          db: scoped.db,
-          userId,
-          organizationId: scoped.organizationId,
-          conversationId: body.conversationId,
-          provider,
-          providerSessionId: sessionId,
-          modelId: liveModel.id,
-          surface,
-          voice,
-          language,
-          pace,
-          activeTools: offeredToolIds,
-        });
-      } catch (error) {
-        logger.error(
-          { event: 'voice_session_not_persisted', error, userId, sessionId },
-          'Live voice session could not be recorded',
-        );
-      }
-      if (!record) {
-        await releaseReservation('voice_session_not_recorded');
-        return jsonError(
-          request,
-          503,
-          'voice_session_not_recorded',
-          'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
-        );
-      }
-      voiceSessionId = record.id;
-    }
+  await closeExpiredVoiceSessions({
+    db: scoped.db,
+    userId,
+    maxOpenSeconds: ceilingSeconds,
+  }).catch((error: unknown) => {
+    logger.warn(
+      { event: 'voice_session_expiry_failed', error, userId },
+      'Expired voice sessions could not be closed',
+    );
+    return 0;
+  });
+  let record: Awaited<ReturnType<typeof createVoiceSession>> = null;
+  try {
+    record = await createVoiceSession({
+      db: scoped.db,
+      userId,
+      organizationId: scoped.organizationId,
+      conversationId,
+      provider,
+      providerSessionId: sessionId,
+      modelId: liveModel.id,
+      surface,
+      voice,
+      language,
+      pace,
+      activeTools: offeredToolIds,
+    });
+  } catch (error) {
+    logger.error(
+      { event: 'voice_session_not_persisted', error, userId, sessionId },
+      'Live voice session could not be recorded',
+    );
   }
+  if (!record) {
+    await releaseReservation('voice_session_not_recorded');
+    return jsonError(
+      request,
+      503,
+      'voice_session_not_recorded',
+      'The voice session could not be saved, so it was not started and nothing was charged. Try again.',
+    );
+  }
+  const voiceSessionId = record.id;
 
   logger.info(
     {
@@ -472,7 +485,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       model: liveModel.id,
       sessionId,
       voiceSessionId,
-      estimatedCostCents,
+      estimatedCostMicrousd,
       contextTurns: context.turns.length,
       contextProject: context.projectPrompt !== null,
       contextMemory: context.memoryPrompt !== null,
@@ -490,7 +503,6 @@ async function handleCreateLiveSession(request: NextRequest) {
         idempotencyKey: reservation.idempotencyKey,
         leaseToken: reservation.leaseToken,
         requestHash: reservation.requestHash,
-        estimatedCostCents,
         ceilingSeconds,
       },
     },

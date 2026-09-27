@@ -9,7 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { microusdFromLedgerCents } from '@/lib/services/credit-service';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -18,10 +18,11 @@ import {
   markManagedUsageClientDelivered,
 } from '@/lib/services/managed-usage-request-service';
 import {
+  LIVE_SESSION_CEILING_SECONDS,
   LIVE_SESSION_PROVIDER_COST_SOURCE,
   LIVE_VOICE_FEATURE,
-  liveSessionCostCents,
-  liveSessionProviderCostCents,
+  liveSessionChargeMicrousd,
+  liveSessionProviderCostMicrousd,
 } from '@/lib/voice/live-voice-billing';
 import { recordLiveVoiceBackendCost } from '@/lib/voice/live-voice-backend-cost';
 import {
@@ -59,8 +60,6 @@ const CloseLiveSessionSchema = z.object({
     idempotencyKey: z.string().min(1).max(256),
     leaseToken: z.string().min(1).max(256),
     requestHash: z.string().min(1).max(256),
-    estimatedCostCents: z.number().int().min(0),
-    ceilingSeconds: z.number().int().min(0),
   }),
 });
 
@@ -120,53 +119,50 @@ async function handleCloseLiveSession(
   const meteredSeconds = record
     ? meteredVoiceSessionSeconds(record, reportedSeconds, Date.now())
     : reportedSeconds;
-  const billedSeconds = Math.min(meteredSeconds, body.settlement.ceilingSeconds);
-  const actualCostCents = Math.min(
-    liveSessionCostCents(billedSeconds),
-    body.settlement.estimatedCostCents,
+  const billedSeconds = Math.min(meteredSeconds, LIVE_SESSION_CEILING_SECONDS);
+  const model = record?.modelId ?? liveModel?.id;
+  const estimatedCostMicrousd = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, model) ?? 0;
+  const actualCostMicrousd = Math.min(
+    liveSessionChargeMicrousd(billedSeconds, model) ?? 0,
+    estimatedCostMicrousd,
   );
+  const providerCostMicrousd = liveSessionProviderCostMicrousd(billedSeconds, model);
+  if (providerCostMicrousd === null && billedSeconds > 0) {
+    logger.error(
+      { userId, sessionId, model, billedSeconds },
+      'Live voice model declares no published session rate; these minutes settle unpriced',
+    );
+  }
   const reservation = {
     db: scoped.db,
     userId,
     idempotencyKey: body.settlement.idempotencyKey,
     leaseToken: body.settlement.leaseToken,
     requestHash: body.settlement.requestHash,
-    estimatedCostMicrousd: microusdFromLedgerCents(body.settlement.estimatedCostCents),
-    estimatedCostCents: body.settlement.estimatedCostCents,
+    estimatedCostMicrousd,
+    estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
     quotaFeature: LIVE_VOICE_FEATURE,
-    provider: liveModel ? String(liveModel.provider) : undefined,
-    model: liveModel?.id,
+    provider: record?.provider ?? (liveModel ? String(liveModel.provider) : undefined),
+    model,
   };
-  const providerCostCents = liveSessionProviderCostCents(billedSeconds, reservation.model);
-  if (providerCostCents === null && billedSeconds > 0) {
-    logger.error(
-      { userId, sessionId, model: reservation.model, billedSeconds },
-      'Live voice model declares no published session rate; provider cost falls back to the customer charge',
-    );
-  }
   await finalizeManagedUsageRequest({
     ...reservation,
     outcome: 'completed',
-    // The live-voice rate is published per minute in whole cents, so the exact
-    // charge is a whole number of cents; the microUSD field carries it without
-    // a second rounding.
-    actualCostMicrousd: microusdFromLedgerCents(actualCostCents),
-    ...(providerCostCents === null
-      ? {}
-      : { providerCostMicrousd: microusdFromLedgerCents(providerCostCents) }),
+    actualCostMicrousd,
+    ...(providerCostMicrousd === null ? {} : { providerCostMicrousd }),
     usage: {
       operation: 'voice_live_session',
       provider: reservation.provider,
       model: reservation.model,
-      providerSku: liveModel?.apiModelId ?? reservation.model,
+      providerSku: getModelMetadataById(model)?.apiModelId ?? model,
       sessionId,
       sessionSeconds: body.seconds,
       reportedSeconds,
       billedSeconds,
       reason: body.reason ?? 'close_requested',
-      ...(providerCostCents === null
+      ...(providerCostMicrousd === null
         ? {}
-        : { providerCostCents, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
+        : { providerCostMicrousd, costSource: LIVE_SESSION_PROVIDER_COST_SOURCE }),
     },
   });
   if (body.backend) {
@@ -174,7 +170,7 @@ async function handleCloseLiveSession(
       userId,
       provider: reservation.provider ?? 'unknown',
       sessionId,
-      surface: 'web',
+      surface: record?.surface ?? null,
       backendModel: getRoutingSlotModel('voice_live_backend'),
       reported: body.backend,
     });
@@ -204,10 +200,10 @@ async function handleCloseLiveSession(
   }
 
   logger.info(
-    { userId, sessionId, billedSeconds, actualCostCents, reason: body.reason },
+    { userId, sessionId, billedSeconds, actualCostMicrousd, reason: body.reason },
     'Live voice session settled',
   );
-  return NextResponse.json({ billedSeconds, actualCostCents }, { headers });
+  return NextResponse.json({ billedSeconds }, { headers });
 }
 
 export const POST = withErrorHandler(handleCloseLiveSession);

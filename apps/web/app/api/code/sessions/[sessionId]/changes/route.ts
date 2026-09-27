@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { effectivePlanTier } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
@@ -15,7 +14,7 @@ import {
   isCloudCodeSchemaUnavailable,
   readCloudCodeSessionChanges,
 } from '@/lib/services/cloud-code-session-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import {
   buildManagedComputeAccessGateResponse,
@@ -58,18 +57,24 @@ async function handleChanges(request: NextRequest, context: RouteContext) {
   }
 
   const { sessionId } = await context.params;
-  const subscription = await SubscriptionService.getSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
 
   // Reading a session's changes claims the session and provisions the sandbox,
   // so it buys managed compute and answers to the same gate the write paths do.
   const accessGateResponse = buildManagedComputeAccessGateResponse(
-    await evaluateManagedComputeAccess(db, userId, subscription, resolveCloudChatSurface(request), {
-      request,
-    }),
+    await evaluateManagedComputeAccess(
+      db,
+      userId,
+      entitlement.subscription,
+      resolveCloudChatSurface(request),
+      {
+        request,
+      },
+    ),
   );
   if (accessGateResponse) return accessGateResponse;
 
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
   try {
     return NextResponse.json(
       await readCloudCodeSessionChanges(db, { userId, organizationId }, sessionId, planTier),

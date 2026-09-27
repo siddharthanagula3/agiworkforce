@@ -3,7 +3,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
   getKnowledgeStorageLimitBytes,
   getKnowledgeStorageLimitErrorMessage,
@@ -224,8 +224,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   // degrade to "no meter" rather than propagating.
   let limitBytes: number | null = null;
   try {
-    const subscription = await SubscriptionService.getSubscription(db, userId);
-    limitBytes = getKnowledgeStorageLimitBytes(subscription?.plan_tier);
+    limitBytes = getKnowledgeStorageLimitBytes(await resolveEntitledPlanTier(db, userId));
   } catch (error) {
     logger.warn({ error, userId }, 'Knowledge storage meter: plan read failed');
   }
@@ -378,8 +377,8 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
 
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const storageLimitBytes = getKnowledgeStorageLimitBytes(subscription?.plan_tier);
+  const planTier = await resolveEntitledPlanTier(db, userId);
+  const storageLimitBytes = getKnowledgeStorageLimitBytes(planTier);
   if (storageLimitBytes !== null) {
     let usedBytes = 0;
     try {
@@ -400,7 +399,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     }
     if (usedBytes + body.byteCount > storageLimitBytes) {
       throw createError.validation(
-        getKnowledgeStorageLimitErrorMessage(subscription?.plan_tier, storageLimitBytes),
+        getKnowledgeStorageLimitErrorMessage(planTier, storageLimitBytes),
       );
     }
   }
@@ -438,7 +437,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
         db,
         userId,
         organizationId,
-        planTier: subscription?.plan_tier ?? '',
+        planTier,
         documentId: `${projectId}:${body.checksumSha256.trim()}`,
       },
     });
