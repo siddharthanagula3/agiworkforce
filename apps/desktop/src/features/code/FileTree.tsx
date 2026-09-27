@@ -630,7 +630,7 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
             </button>
             <button
               type="button"
-              className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted text-red-600"
+              className="flex w-full items-center gap-2 rounded-xs px-2 py-1.5 text-left text-sm hover:bg-muted text-danger-text"
               onClick={() => {
                 handleDelete(contextMenu.path, contextMenu.isDirectory);
                 setContextMenu(null);

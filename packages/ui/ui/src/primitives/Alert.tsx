@@ -29,9 +29,9 @@ function Alert({
         variant === 'destructive' &&
           'border-destructive/50 text-danger dark:border-destructive [&>svg]:text-danger',
         variant === 'success' &&
-          'border-green-500/50 text-green-700 dark:text-green-400 dark:border-green-500 [&>svg]:text-green-600',
+          'border-success-fill/50 text-success-text [&>svg]:text-success-text',
         variant === 'warning' &&
-          'border-yellow-500/50 text-yellow-700 dark:text-yellow-400 dark:border-yellow-500 [&>svg]:text-yellow-600',
+          'border-warning-fill/50 text-warning-text [&>svg]:text-warning-text',
         className,
       )}
       {...props}

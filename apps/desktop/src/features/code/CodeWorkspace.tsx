@@ -558,7 +558,7 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
                       className={cn(
                         'text-sm font-mono',
                         isActive && 'font-medium',
-                        file.isDirty && 'text-amber-500',
+                        file.isDirty && 'text-warning-text',
                       )}
                     >
                       {fileName}

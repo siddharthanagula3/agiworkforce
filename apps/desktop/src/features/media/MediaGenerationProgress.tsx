@@ -47,9 +47,9 @@ export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = (
     return () => clearInterval(interval);
   }, []);
 
-  const accentColor = isImage ? 'text-amber-400' : 'text-purple-400';
-  const borderColor = isImage ? 'border-amber-400/20' : 'border-purple-400/20';
-  const bgColor = isImage ? 'bg-amber-500/5' : 'bg-purple-500/5';
+  const accentColor = isImage ? 'text-warning-text' : 'text-purple-400';
+  const borderColor = isImage ? 'border-warning-fill/20' : 'border-purple-400/20';
+  const bgColor = isImage ? 'bg-warning-fill/5' : 'bg-purple-500/5';
   const Icon = isImage ? ImageIcon : Clapperboard;
 
   return (

@@ -40,10 +40,10 @@ const STATUS_ICON_MAP: Record<ActionLogEntry['status'], ElementType> = {
 
 const STATUS_CLASS_MAP: Record<ActionLogEntry['status'], string> = {
   pending: 'text-muted-foreground border-border/60 bg-card/40',
-  running: 'text-amber-300 border-amber-500/30 bg-amber-500/5',
-  success: 'text-emerald-700 dark:text-emerald-300 border-emerald-500/30 bg-emerald-500/5',
-  failed: 'text-red-300 border-red-500/30 bg-red-500/5',
-  blocked: 'text-yellow-300 border-yellow-500/30 bg-yellow-500/5',
+  running: 'text-warning-text border-warning-fill/30 bg-warning-fill/5',
+  success: 'text-success-text border-success-fill/30 bg-success-fill/5',
+  failed: 'text-danger-text border-danger-fill/30 bg-danger-fill/5',
+  blocked: 'text-warning-text border-warning-fill/30 bg-warning-fill/5',
 };
 
 function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
@@ -82,10 +82,10 @@ function ActionLogItem({ entry }: { entry: ActionLogEntry }) {
           </div>
           {entry.description && <p className="mt-1 text-caption opacity-85">{entry.description}</p>}
           {entry.result && (
-            <p className="mt-1 text-caption text-emerald-200/90 line-clamp-3">{entry.result}</p>
+            <p className="mt-1 text-caption text-success-text line-clamp-3">{entry.result}</p>
           )}
           {entry.error && (
-            <p className="mt-1 text-caption text-red-200/90 line-clamp-3">{entry.error}</p>
+            <p className="mt-1 text-caption text-danger-text line-clamp-3">{entry.error}</p>
           )}
           {details && (
             <div className="mt-1.5">

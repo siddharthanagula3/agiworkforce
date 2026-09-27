@@ -82,7 +82,7 @@ function ApiKeySubmitButton({ control, isCreatePending }: ApiKeySubmitButtonProp
     <Button
       type="submit"
       disabled={isCreatePending || !isValid}
-      className="bg-green-700 text-white hover:bg-green-800"
+      className="bg-success-fill text-success-on-fill hover:brightness-95"
     >
       {isCreatePending ? (
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -121,7 +121,7 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
           </div>
           <Button
             onClick={() => onSetShowAPIKeyDialog(true)}
-            className="bg-green-700 text-white hover:bg-green-800"
+            className="bg-success-fill text-success-on-fill hover:brightness-95"
             size="sm"
             disabled={Boolean(loadError)}
           >
@@ -331,7 +331,10 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
           <AlertDialogCancel className="border-border bg-secondary text-foreground hover:bg-secondary/80">
             Cancel
           </AlertDialogCancel>
-          <AlertDialogAction onClick={onDeleteAPIKey} className="bg-red-600 hover:bg-red-700">
+          <AlertDialogAction
+            onClick={onDeleteAPIKey}
+            className="bg-danger-fill hover:brightness-95"
+          >
             Delete Key
           </AlertDialogAction>
         </AlertDialogFooter>

@@ -147,7 +147,7 @@ export function ArtifactVersionHistory({
                     className={cn(
                       'absolute -left-[0.875rem] top-1.5 h-3 w-3 rounded-full border-2',
                       isCurrent
-                        ? 'border-green-500 bg-green-500'
+                        ? 'border-success-fill bg-success-fill'
                         : isSelected
                           ? 'border-blue-500 bg-blue-500'
                           : 'border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-900',
@@ -158,7 +158,7 @@ export function ArtifactVersionHistory({
                     onClick={() => setSelected(isCurrent ? null : v.version)}
                     className={cn(
                       'text-left rounded-lg px-2 py-1.5 transition-colors w-full',
-                      isCurrent && 'bg-green-50 dark:bg-green-900/20',
+                      isCurrent && 'bg-success-fill/10',
                       isSelected && !isCurrent && 'bg-blue-50 dark:bg-blue-900/20',
                       !isCurrent && !isSelected && 'hover:bg-zinc-100 dark:hover:bg-zinc-800/50',
                     )}
@@ -167,7 +167,7 @@ export function ArtifactVersionHistory({
                       <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
                         v{v.version}
                       </span>
-                      {isCurrent && <Check className="h-3 w-3 text-green-500" />}
+                      {isCurrent && <Check className="h-3 w-3 text-success-text" />}
                       {isSelected && !isCurrent && (
                         <ChevronRight className="h-3 w-3 text-blue-500" />
                       )}
@@ -255,10 +255,10 @@ function DiffPanel({ diff }: { diff: VersionDiff }) {
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden text-xs font-mono">
           <div className="grid grid-cols-2 divide-x divide-zinc-200 dark:divide-zinc-700">
-            <div className="px-2 py-1 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-sans">
+            <div className="px-2 py-1 bg-danger-fill/10 text-danger-text text-[10px] font-sans">
               v{diff.from_version}, before
             </div>
-            <div className="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-[10px] font-sans">
+            <div className="px-2 py-1 bg-success-fill/10 text-success-text text-[10px] font-sans">
               v{diff.to_version}, after
             </div>
           </div>
@@ -276,7 +276,7 @@ function DiffPanel({ diff }: { diff: VersionDiff }) {
                     className={cn(
                       'px-2 py-0.5 leading-5 whitespace-pre-wrap break-all',
                       changed && from !== undefined
-                        ? 'bg-red-50/60 dark:bg-red-900/10 text-red-700 dark:text-red-300'
+                        ? 'bg-danger-fill/10 text-danger-text'
                         : 'text-zinc-600 dark:text-zinc-400',
                       from === undefined && 'bg-zinc-50 dark:bg-zinc-900/50',
                     )}
@@ -287,7 +287,7 @@ function DiffPanel({ diff }: { diff: VersionDiff }) {
                     className={cn(
                       'px-2 py-0.5 leading-5 whitespace-pre-wrap break-all',
                       changed && to !== undefined
-                        ? 'bg-green-50/60 dark:bg-green-900/10 text-green-700 dark:text-green-300'
+                        ? 'bg-success-fill/10 text-success-text'
                         : 'text-zinc-600 dark:text-zinc-400',
                       to === undefined && 'bg-zinc-50 dark:bg-zinc-900/50',
                     )}

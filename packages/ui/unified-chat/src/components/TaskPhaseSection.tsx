@@ -27,20 +27,20 @@ function borderAccent(status: TaskPhase['status']): string {
     case 'running':
       return 'border-l-2 border-teal-500';
     case 'completed':
-      return 'border-l-2 border-emerald-500';
+      return 'border-l-2 border-success-fill';
     case 'failed':
-      return 'border-l-2 border-red-500';
+      return 'border-l-2 border-danger-fill';
   }
 }
 
 function statusIconColor(status: TaskPhase['status']): string {
   switch (status) {
     case 'running':
-      return 'text-teal-400';
+      return 'text-teal-700 dark:text-teal-400';
     case 'completed':
-      return 'text-emerald-400';
+      return 'text-success-text';
     case 'failed':
-      return 'text-red-400';
+      return 'text-danger-text';
   }
 }
 
@@ -59,11 +59,11 @@ function StatusIcon({ status }: { status: TaskPhase['status'] }) {
 function toolStatusDot(status: ToolLabelEntry['status']): string {
   switch (status) {
     case 'running':
-      return 'bg-amber-400';
+      return 'bg-warning-fill';
     case 'completed':
-      return 'bg-emerald-400';
+      return 'bg-success-fill';
     case 'error':
-      return 'bg-red-400';
+      return 'bg-danger-fill';
     default:
       return 'bg-muted-foreground';
   }

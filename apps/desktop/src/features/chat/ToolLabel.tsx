@@ -132,8 +132,8 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
                   key={i}
                   className={cn(
                     'px-1',
-                    isAdded && 'bg-green-900/20 text-green-300',
-                    isRemoved && 'bg-red-900/20 text-red-300',
+                    isAdded && 'bg-success-fill/10 text-success-text',
+                    isRemoved && 'bg-danger-fill/10 text-danger-text',
                     !isAdded && !isRemoved && 'text-muted-foreground',
                   )}
                 >
@@ -181,7 +181,7 @@ function TerminalOutputView({ output }: { output: string }) {
   return (
     <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden">
       <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
-        <pre className="font-mono text-[11px] leading-relaxed p-2 text-emerald-300/90 bg-black/60 select-text whitespace-pre-wrap break-words">
+        <pre className="font-mono text-[11px] leading-relaxed p-2 text-emerald-300 bg-neutral-950 select-text whitespace-pre-wrap break-words">
           {trimmed}
         </pre>
       </div>
@@ -196,9 +196,9 @@ function FilePreviewView({ content }: { content: string }) {
   return (
     <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden">
       <div className="overflow-x-auto max-h-[200px] overflow-y-auto">
-        <pre className="font-mono text-[11px] leading-relaxed p-2 text-slate-300/80 bg-black/40 select-text whitespace-pre-wrap break-words">
+        <pre className="font-mono text-[11px] leading-relaxed p-2 text-slate-300 bg-neutral-950 select-text whitespace-pre-wrap break-words">
           {preview}
-          {truncated && <span className="text-muted-foreground/50">{'\n'}…</span>}
+          {truncated && <span className="text-slate-400">{'\n'}…</span>}
         </pre>
       </div>
     </div>
@@ -266,7 +266,7 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
       animate={{ opacity: 1, x: 0 }}
       className={cn(
         'flex flex-col min-w-0 py-0.5 text-xs font-mono',
-        isError ? 'text-red-400' : 'text-muted-foreground',
+        isError ? 'text-danger-text' : 'text-muted-foreground',
       )}
     >
       <div className="flex items-center gap-2">
@@ -274,9 +274,9 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
         {isRunning ? (
           <Loader2 className="w-3 h-3 animate-spin text-violet-400 shrink-0" />
         ) : isError ? (
-          <X className="w-3 h-3 text-red-400 shrink-0" />
+          <X className="w-3 h-3 text-danger-text shrink-0" />
         ) : (
-          <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+          <Check className="w-3 h-3 text-success-text shrink-0" />
         )}
 
         {/* Tool icon */}
@@ -292,7 +292,7 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
         </span>
 
         {isError && entry.error && (
-          <span className="truncate max-w-[240px] text-red-400/80" title={entry.error}>
+          <span className="truncate max-w-[240px] text-danger-text" title={entry.error}>
             {entry.error}
           </span>
         )}

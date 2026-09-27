@@ -159,7 +159,7 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
         {suggestedCommand && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <Code className="h-4 w-4 text-green-500" />
+              <Code className="h-4 w-4 text-green-700 dark:text-green-500" />
               <span className="text-sm font-medium">Suggested Command:</span>
             </div>
             <div className="relative">
@@ -197,15 +197,11 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
         )}
 
         {improvements && (
-          <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-md">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5" />
+          <div className="flex items-start gap-2 p-3 bg-warning-fill/10 border border-warning-fill/20 rounded-md">
+            <AlertTriangle className="h-4 w-4 text-warning-text mt-0.5" />
             <div className="flex-1 text-sm">
-              <p className="font-medium text-yellow-900 dark:text-yellow-100 mb-1">
-                Improvement Suggestions:
-              </p>
-              <div className="text-yellow-800 dark:text-yellow-200 whitespace-pre-wrap">
-                {improvements}
-              </div>
+              <p className="font-medium text-warning-text mb-1">Improvement Suggestions:</p>
+              <div className="text-warning-text whitespace-pre-wrap">{improvements}</div>
             </div>
           </div>
         )}

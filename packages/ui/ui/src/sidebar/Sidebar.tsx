@@ -447,9 +447,7 @@ export function Sidebar(props: SidebarProps) {
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
         <span className="flex-1 text-left">{item.label}</span>
-        {item.badge != null && (
-          <span className="text-xs text-muted-foreground">{item.badge}</span>
-        )}
+        {item.badge != null && <span className="text-xs text-muted-foreground">{item.badge}</span>}
       </button>
     );
   }, []);
@@ -932,7 +930,7 @@ export function Sidebar(props: SidebarProps) {
 
               {showLoadFailure && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
-                  <MessageSquare className="mb-2 h-7 w-7 text-red-400/60" />
+                  <MessageSquare className="mb-2 h-7 w-7 text-danger-text" />
                   <p className="text-sm text-muted-foreground">
                     {t('sidebar.loadFailed', "Couldn't load conversations")}
                   </p>
@@ -1009,9 +1007,9 @@ export function Sidebar(props: SidebarProps) {
                   className={cn(
                     'h-full rounded-full transition-all duration-moved',
                     budgetPercent >= 95
-                      ? 'bg-red-500'
+                      ? 'bg-danger-fill'
                       : budgetPercent >= 80
-                        ? 'bg-amber-500'
+                        ? 'bg-warning-fill'
                         : 'bg-blue-500',
                   )}
                   style={{ width: `${Math.min(Math.max(budgetPercent, 0), 100)}%` }}
@@ -1081,9 +1079,7 @@ function RailButton({
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent hover:text-foreground',
             FOCUS_RING,
-            isActive
-              ? 'bg-accent text-foreground'
-              : 'text-muted-foreground',
+            isActive ? 'bg-accent text-foreground' : 'text-muted-foreground',
           )}
         >
           <Icon className="h-5 w-5" />
@@ -1111,10 +1107,7 @@ function ProjectRowIcon({ project, isExpanded }: { project: SidebarProject; isEx
     );
   }
   return isExpanded ? (
-    <FolderOpen
-      className="h-4 w-4 shrink-0 text-muted-foreground"
-      aria-hidden="true"
-    />
+    <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   ) : (
     <Folder className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
   );
@@ -1210,10 +1203,7 @@ function ProjectRow({
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span
-                  ref={titleTruncation.ref}
-                  className="flex-1 truncate text-sm text-foreground"
-                >
+                <span ref={titleTruncation.ref} className="flex-1 truncate text-sm text-foreground">
                   {project.name}
                 </span>
               </TooltipTrigger>

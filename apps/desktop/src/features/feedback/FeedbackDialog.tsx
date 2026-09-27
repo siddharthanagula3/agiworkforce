@@ -2,13 +2,7 @@ import { FileText, Loader2, Send } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/ui/Button';
 import { Checkbox } from '@/ui/Checkbox';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { Input } from '@/ui/Input';
 import { Textarea } from '@/ui/Textarea';
 import { feedback } from '@agiworkforce/desktop-command-client';
@@ -126,7 +120,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
         {success ? (
           <div className="flex flex-col items-center justify-center py-8 space-y-4 text-center animate-in fade-in zoom-in duration-300">
-            <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+            <div className="w-12 h-12 rounded-full bg-success-fill/10 flex items-center justify-center text-success-text">
               <Send size={20} />
             </div>
             <p className="font-medium">Thank you for your feedback!</p>
@@ -194,7 +188,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
               )}
             </div>
 
-            {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
+            {error && <p className="text-sm text-danger-text">{error}</p>}
 
             <DialogFooter className="pt-4">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -1,4 +1,3 @@
-
 import { Check, Code2, Copy, Download, Eye, FileText, Globe, Play, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -27,13 +26,13 @@ type ActiveTab = 'code' | 'preview';
 function TypeIcon({ type }: { type: CanvasArtifactType }) {
   switch (type) {
     case 'html':
-      return <Globe className="h-3.5 w-3.5 text-orange-400" />;
+      return <Globe className="h-3.5 w-3.5 text-orange-700 dark:text-orange-400" />;
     case 'markdown':
-      return <FileText className="h-3.5 w-3.5 text-blue-400" />;
+      return <FileText className="h-3.5 w-3.5 text-blue-700 dark:text-blue-400" />;
     case 'document':
-      return <FileText className="h-3.5 w-3.5 text-purple-400" />;
+      return <FileText className="h-3.5 w-3.5 text-purple-700 dark:text-purple-400" />;
     default:
-      return <Code2 className="h-3.5 w-3.5 text-green-400" />;
+      return <Code2 className="h-3.5 w-3.5 text-green-700 dark:text-green-400" />;
   }
 }
 
@@ -217,10 +216,10 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
             <Eye className="h-3.5 w-3.5" />
             Preview
             {artifact.executionState === 'error' && (
-              <span className="ml-1 h-2 w-2 rounded-full bg-red-500" />
+              <span className="ml-1 h-2 w-2 rounded-full bg-danger-fill" />
             )}
             {artifact.executionState === 'success' && (
-              <span className="ml-1 h-2 w-2 rounded-full bg-green-500" />
+              <span className="ml-1 h-2 w-2 rounded-full bg-success-fill" />
             )}
           </button>
         )}
@@ -253,8 +252,8 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
             className={cn(
               'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
               isRunning
-                ? 'bg-green-500/10 text-green-500 cursor-not-allowed'
-                : 'bg-green-500/20 text-green-400 hover:bg-green-500/30',
+                ? 'bg-success-fill/10 text-success-text cursor-not-allowed'
+                : 'bg-success-fill/5 text-success-text hover:bg-success-fill/10',
             )}
           >
             <Play className={cn('h-3.5 w-3.5', isRunning && 'animate-pulse')} />
@@ -272,7 +271,7 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
           title="Copy code"
         >
           {copied ? (
-            <Check className="h-3.5 w-3.5 text-green-400" />
+            <Check className="h-3.5 w-3.5 text-success-text" />
           ) : (
             <Copy className="h-3.5 w-3.5" />
           )}
@@ -294,7 +293,7 @@ export function CanvasPanel({ artifact, onClose, onFixBug }: CanvasPanelProps) {
         <button
           type="button"
           onClick={handleDelete}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs text-danger-text hover:bg-danger-fill/10 transition-colors"
           title="Delete artifact"
         >
           <Trash2 className="h-3.5 w-3.5" />

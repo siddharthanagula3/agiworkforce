@@ -262,7 +262,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
 
                 {item.pros.length > 0 && (
                   <div className="mb-3">
-                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-success-text">
                       <ThumbsUp className="h-3 w-3" aria-hidden="true" />
                       Pros
                     </div>
@@ -270,7 +270,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                       {item.pros.map((pro, pi) => (
                         <li key={`pro-${idx}-${pi}`} className="flex items-start gap-2 text-sm">
                           <span
-                            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
+                            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-success-fill"
                             aria-hidden="true"
                           />
                           <span>{pro}</span>
@@ -282,7 +282,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
 
                 {item.cons.length > 0 && (
                   <div>
-                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-rose-700 dark:text-rose-400">
+                    <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-danger-text">
                       <ThumbsDown className="h-3 w-3" aria-hidden="true" />
                       Cons
                     </div>
@@ -290,7 +290,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                       {item.cons.map((con, ci) => (
                         <li key={`con-${idx}-${ci}`} className="flex items-start gap-2 text-sm">
                           <span
-                            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500"
+                            className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-danger-fill"
                             aria-hidden="true"
                           />
                           <span>{con}</span>
@@ -317,7 +317,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                     {items[0].name}
                     {winner === items[0].name && (
                       <Trophy
-                        className="ml-1.5 inline h-3 w-3 text-amber-500"
+                        className="ml-1.5 inline h-3 w-3 text-warning-text"
                         aria-label="Winner"
                       />
                     )}
@@ -326,7 +326,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
                     {items[1].name}
                     {winner === items[1].name && (
                       <Trophy
-                        className="ml-1.5 inline h-3 w-3 text-amber-500"
+                        className="ml-1.5 inline h-3 w-3 text-warning-text"
                         aria-label="Winner"
                       />
                     )}
@@ -355,10 +355,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
         {/* Winner callout */}
         {winner && winnerReason && (
           <div className="flex items-start gap-3 rounded-lg border border-[var(--chat-warning-border)] bg-[var(--chat-warning-bg)] p-3">
-            <Trophy
-              className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400"
-              aria-hidden="true"
-            />
+            <Trophy className="mt-0.5 h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />
             <div className="text-sm">
               <span className="font-semibold">{winner}</span>{' '}
               <span className="text-muted-foreground">{winnerReason}</span>

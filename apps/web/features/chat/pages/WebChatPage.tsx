@@ -5602,9 +5602,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div
                 role="alert"
                 aria-live="polite"
-                className="flex shrink-0 items-start justify-between gap-3 border-b border-red-300 bg-red-50 px-4 py-2 text-sm dark:border-red-500/25 dark:bg-red-500/10"
+                className="flex shrink-0 items-start justify-between gap-3 border-b border-danger-fill/30 bg-danger-fill/10 px-4 py-2 text-sm"
               >
-                <span className="min-w-0 flex-1 break-words font-medium text-red-800 dark:text-red-100">
+                <span className="min-w-0 flex-1 break-words font-medium text-danger-text">
                   {turnFailureNotice.message}
                 </span>
                 {(retryableTurnId || retryableCardResumeMessageId) && (
@@ -5645,9 +5645,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
             {/* Notification permission banner · shown during long generations */}
             {showNotifBanner && (
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-warning-fill/10 px-4 py-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                  <Bell className="h-4 w-4 shrink-0 text-warning-text" aria-hidden="true" />
                   <span className="text-[var(--chat-text-secondary)]">
                     Get notified when the response is ready.
                   </span>
@@ -5656,7 +5656,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   <button
                     type="button"
                     onClick={() => void handleRequestNotifPermission()}
-                    className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    className="rounded-md bg-warning-fill px-3 py-1 text-xs font-medium text-warning-on-fill transition-opacity hover:opacity-90"
                   >
                     Enable
                   </button>
