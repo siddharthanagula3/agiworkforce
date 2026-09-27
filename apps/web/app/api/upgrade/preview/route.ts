@@ -2,14 +2,19 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import type { SubscriptionRow } from '@/lib/server/neon-types';
+import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError, isAppError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { UpgradePreviewRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
+import {
+  UpgradePreviewRequestSchema,
+  resolveCheckoutQuantity,
+  type UpgradePreviewRequest,
+} from '@/lib/validations/checkout';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
@@ -17,9 +22,14 @@ import {
   getLocalizedPricingCatalog,
   getPriceSelectionForCurrency,
 } from '@/lib/server/localized-pricing-service';
-import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
-import { resolveStripeSubscriptionForUpgrade } from '@/lib/server/stripe-upgrade-subscription';
+import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
+import {
+  resolveStripeSubscriptionForUpgrade,
+  type ResolvedUpgradeSubscription,
+} from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
+import { resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
+import { referralTrialDays } from '@/lib/services/referral-service';
 import {
   promotionDiscountCents,
   resolveUpgradePromotion,
@@ -35,7 +45,7 @@ import {
   planChangeProration,
   type PlanChangeAnchor,
 } from '@/lib/server/stripe-plan-change';
-import { isPerSeatBillingPlan } from '@agiworkforce/types';
+import { getPlanTrialDays, isPerSeatBillingPlan } from '@agiworkforce/types';
 import {
   getSubscriptionBillingOwnerPolicy,
   stripeBillingOwnershipMessage,
@@ -145,6 +155,130 @@ function immediateProrationBreakdown(
   };
 }
 
+const DAY_MS = 86_400_000;
+
+type SubRow = Pick<
+  SubscriptionRow,
+  | 'status'
+  | 'plan_tier'
+  | 'stripe_customer_id'
+  | 'stripe_subscription_id'
+  | 'apple_original_transaction_id'
+  | 'google_purchase_token'
+  | 'current_period_end'
+>;
+
+interface CheckoutTrialPreview {
+  days: number;
+  convertsAt: string;
+}
+
+async function customerHasSubscriptionHistory(
+  stripe: Stripe,
+  customerId: string,
+  userId: string,
+): Promise<boolean | null> {
+  try {
+    const page = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
+    return page.data.length > 0;
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return false;
+    logger.warn(
+      { error, userId, customerId },
+      'Trial eligibility could not be verified; previewing checkout without a trial',
+    );
+    return null;
+  }
+}
+
+async function previewCheckoutTrial(input: {
+  db: DatabaseAdapter;
+  stripe: Stripe;
+  userId: string;
+  plan: string;
+  sub: SubRow | null;
+}): Promise<CheckoutTrialPreview | null> {
+  const { db, stripe, userId, plan, sub } = input;
+  let offeredDays: number | null = null;
+  let profileCustomerId: string | null = null;
+  try {
+    offeredDays = getPlanTrialDays(plan) ?? (await referralTrialDays(db, userId, plan));
+    if (offeredDays !== null) {
+      const [profile] = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+        'select stripe_customer_id from profiles where id = $1 limit 1',
+        [userId],
+      );
+      profileCustomerId = profile?.stripe_customer_id ?? null;
+    }
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to check trial eligibility for upgrade preview');
+    throw createError
+      .serviceUnavailable('Trial eligibility could not be verified. Please retry.')
+      .asUserSafe();
+  }
+  if (offeredDays === null) return null;
+
+  const customerId = isStripeCustomerId(profileCustomerId)
+    ? profileCustomerId
+    : isStripeCustomerId(sub?.stripe_customer_id)
+      ? sub.stripe_customer_id
+      : null;
+  const days = resolveCheckoutTrialDays({
+    trialDays: offeredDays,
+    priorStoreOrStripeSubscription: Boolean(
+      sub?.stripe_subscription_id ||
+      sub?.apple_original_transaction_id ||
+      sub?.google_purchase_token,
+    ),
+    customerHasSubscriptionHistory: customerId
+      ? await customerHasSubscriptionHistory(stripe, customerId, userId)
+      : false,
+  });
+  return days === null
+    ? null
+    : { days, convertsAt: new Date(Date.now() + days * DAY_MS).toISOString() };
+}
+
+async function checkoutRequiredResponse(input: {
+  request: NextRequest;
+  db: DatabaseAdapter;
+  stripe: Stripe;
+  userId: string;
+  sub: SubRow | null;
+  plan: UpgradePreviewRequest['plan'];
+  billingInterval: UpgradePreviewRequest['billingInterval'];
+  seats: number;
+  message: string;
+}): Promise<NextResponse> {
+  const country = input.request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
+  const catalog = await getLocalizedPricingCatalog(country);
+  const checkoutPrice = catalog.plans[input.plan]?.[input.billingInterval];
+  if (!checkoutPrice?.checkoutReady) {
+    throw createError.validation(
+      `Checkout pricing is not configured for ${input.plan} ${input.billingInterval} in your region.`,
+    );
+  }
+  const trial = await previewCheckoutTrial(input);
+  const recurringAmountCents = checkoutPrice.amountMinor * input.seats;
+  return NextResponse.json(
+    {
+      error: {
+        message: input.message,
+        type: 'invalid_request_error',
+        code: 'checkout_required',
+      },
+      checkout: {
+        amountDueNowCents: trial ? 0 : recurringAmountCents,
+        currency: checkoutPrice.currency,
+        recurringAmountCents,
+        seats: input.seats,
+        trial,
+      },
+    },
+    { status: 409 },
+  );
+}
+
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
 
@@ -171,16 +305,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
 
   const stripe = getStripeClient();
 
-  type SubRow = Pick<
-    SubscriptionRow,
-    | 'status'
-    | 'plan_tier'
-    | 'stripe_customer_id'
-    | 'stripe_subscription_id'
-    | 'apple_original_transaction_id'
-    | 'google_purchase_token'
-    | 'current_period_end'
-  >;
   let subRows: SubRow[];
   try {
     subRows = await db.query<SubRow>(
@@ -209,30 +333,17 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
 
   if (!sub || ownerPolicy.terminal) {
-    const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
-    const catalog = await getLocalizedPricingCatalog(country);
-    const checkoutPrice = catalog.plans[targetPlan]?.[billingInterval];
-    if (!checkoutPrice?.checkoutReady) {
-      throw createError.validation(
-        `Checkout pricing is not configured for ${targetPlan} ${billingInterval} in your region.`,
-      );
-    }
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Starting this paid plan requires Stripe Checkout.',
-          type: 'invalid_request_error',
-          code: 'checkout_required',
-        },
-        checkout: {
-          amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
-          currency: checkoutPrice.currency,
-          recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
-          seats: requestedSeats,
-        },
-      },
-      { status: 409 },
-    );
+    return checkoutRequiredResponse({
+      request,
+      db,
+      stripe,
+      userId,
+      sub,
+      plan: targetPlan,
+      billingInterval,
+      seats: requestedSeats,
+      message: 'Starting this paid plan requires Stripe Checkout.',
+    });
   }
 
   const currentTier = sub.plan_tier ?? 'free';
@@ -262,84 +373,67 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     stripeCustomerId = profileRows[0]?.stripe_customer_id ?? null;
   }
 
-  let stripeSubId = sub.stripe_subscription_id;
-  let stripeItemId: string | null = null;
-  let customerId: string | null = null;
-  let subscriptionCurrency = 'usd';
-  let cancelAtPeriodEnd = false;
-  let subscriptionEndsAt: number | null = null;
-  let currentSeats = 1;
-  let currentPriceRecurring: Stripe.Price.Recurring | null = null;
-  let subscriptionForDiscounts: Stripe.Subscription | null = null;
-  let scheduleId: string | null = null;
+  let resolved: ResolvedUpgradeSubscription | null = null;
   try {
-    const resolved = await resolveStripeSubscriptionForUpgrade(
+    resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
       {
         planTier: currentTier,
         stripeCustomerId,
-        stripeSubscriptionId: stripeSubId,
+        stripeSubscriptionId: sub.stripe_subscription_id,
       },
       userId,
     );
-    if (!resolved) {
-      const country = request.headers.get('x-vercel-ip-country')?.trim().toUpperCase() || 'US';
-      const catalog = await getLocalizedPricingCatalog(country);
-      const checkoutPrice = catalog.plans[targetPlan]?.[billingInterval];
-      if (!checkoutPrice?.checkoutReady) {
-        throw createError.validation(
-          `Checkout pricing is not configured for ${targetPlan} ${billingInterval} in your region.`,
-        );
-      }
-      return NextResponse.json(
-        {
-          error: {
-            message:
-              'Your current plan has no paid Stripe subscription to credit. Starting a paid plan requires full-price checkout.',
-            type: 'invalid_request_error',
-            code: 'checkout_required',
-          },
-          checkout: {
-            amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
-            currency: checkoutPrice.currency,
-            recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
-            seats: requestedSeats,
-          },
-        },
-        { status: 409 },
-      );
-    }
-    const stripeSub = resolved.subscription;
-    stripeSubId = stripeSub.id;
-    if (resolved.recovered) {
-      const recoveredCustomerId =
-        typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
-      const recoveredPriceId = stripeSub.items.data[0]?.price.id ?? null;
+    if (resolved?.recovered) {
+      const recovered = resolved.subscription;
       await db.execute(
         `update subscriptions
          set stripe_subscription_id = $1, stripe_customer_id = $2, stripe_price_id = $3
          where user_id = $4`,
-        [stripeSub.id, recoveredCustomerId, recoveredPriceId, userId],
+        [
+          recovered.id,
+          typeof recovered.customer === 'string' ? recovered.customer : recovered.customer.id,
+          recovered.items.data[0]?.price.id ?? null,
+          userId,
+        ],
       );
     }
-    stripeItemId = stripeSub.items.data[0]?.id ?? null;
-    currentSeats = currentSeatsFromStripeItem(stripeSub.items.data[0]?.quantity);
-    currentPriceRecurring = stripeSub.items.data[0]?.price.recurring ?? null;
-    customerId =
-      typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
-    subscriptionCurrency = stripeSub.currency;
-    cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
-    subscriptionEndsAt = stripeSub.cancel_at ?? stripeSub.items.data[0]?.current_period_end ?? null;
-    subscriptionForDiscounts = stripeSub;
-    scheduleId =
-      typeof stripeSub.schedule === 'string'
-        ? stripeSub.schedule
-        : (stripeSub.schedule?.id ?? null);
   } catch (err) {
-    logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for preview');
+    logger.error(
+      { err, stripeSubId: sub.stripe_subscription_id },
+      'Failed to resolve Stripe subscription for preview',
+    );
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
-  if (!stripeItemId || !customerId || !subscriptionForDiscounts) {
+  if (!resolved) {
+    return checkoutRequiredResponse({
+      request,
+      db,
+      stripe,
+      userId,
+      sub,
+      plan: targetPlan,
+      billingInterval,
+      seats: requestedSeats,
+      message:
+        'Your current plan has no paid Stripe subscription to credit. Starting a paid plan requires full-price checkout.',
+    });
+  }
+
+  const stripeSub = resolved.subscription;
+  const stripeSubId = stripeSub.id;
+  const stripeItem = stripeSub.items.data[0];
+  const stripeItemId = stripeItem?.id ?? null;
+  const currentSeats = currentSeatsFromStripeItem(stripeItem?.quantity);
+  const currentPriceRecurring = stripeItem?.price.recurring ?? null;
+  const customerId =
+    typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
+  const subscriptionCurrency = stripeSub.currency;
+  const cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
+  const subscriptionEndsAt = stripeSub.cancel_at ?? stripeItem?.current_period_end ?? null;
+  const scheduleId =
+    typeof stripeSub.schedule === 'string' ? stripeSub.schedule : (stripeSub.schedule?.id ?? null);
+  if (!stripeItemId || !customerId) {
     throw createError.internal('Subscription has no items');
   }
 
@@ -416,7 +510,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       },
       ...(promotion
         ? {
-            discounts: upgradeDiscounts(subscriptionForDiscounts, promotion),
+            discounts: upgradeDiscounts(stripeSub, promotion),
             expand: ['lines.data.discount_amounts.discount'],
           }
         : {}),
