@@ -14,6 +14,8 @@ use crate::tier_cache::{self, UserTier};
 const USAGE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 const USAGE_PATH: &str = "/api/usage";
 const USAGE_HISTORY_PATH: &str = "/api/usage/history";
+const USAGE_TURNS_PATH: &str = "/api/usage/turns/";
+const TURN_SETTLEMENT_POLL_DELAYS_MS: [u64; 4] = [0, 500, 1_000, 2_000];
 const BILLING_PATH: &str = "/settings/billing";
 const PRICING_PATH: &str = "/pricing";
 const USAGE_SETTINGS_PATH: &str = "/settings/usage";
@@ -124,6 +126,29 @@ pub struct UsageHistory {
 
 pub fn parse_usage_history(body: &str) -> Result<UsageHistory, serde_json::Error> {
     serde_json::from_str(body)
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnSettlement {
+    pub request_id: String,
+    pub status: String,
+    #[serde(default)]
+    pub credits: Option<f64>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct BilledTurn {
+    pub credits: f64,
+    pub settled: usize,
+    pub pending: usize,
+    pub unavailable: usize,
+}
+
+enum TurnSettlementOutcome {
+    Settled(f64),
+    Pending,
+    Unavailable,
 }
 
 fn web_link(path: &str) -> String {
@@ -292,6 +317,74 @@ pub async fn fetch_account_usage(jwt: &str) -> Result<AccountUsage, UsageFetchEr
         parse_account_usage(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))?;
     tier_cache::adopt_server_plan(&usage.plan_tier);
     Ok(usage)
+}
+
+pub async fn fetch_turn_settlement(
+    jwt: &str,
+    request_id: &str,
+) -> Result<TurnSettlement, UsageFetchError> {
+    let path = format!("{USAGE_TURNS_PATH}{}", urlencoding::encode(request_id));
+    let body = fetch_account_body(jwt, &path).await?;
+    serde_json::from_str(&body).map_err(|e| UsageFetchError::Other(anyhow::anyhow!(e)))
+}
+
+async fn settle_turn_request(jwt: &str, request_id: &str) -> TurnSettlementOutcome {
+    for delay_ms in TURN_SETTLEMENT_POLL_DELAYS_MS {
+        if delay_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        }
+        match fetch_turn_settlement(jwt, request_id).await {
+            Ok(settlement) if settlement.status == "settled" => {
+                return TurnSettlementOutcome::Settled(settlement.credits.unwrap_or(0.0));
+            }
+            Ok(_) => continue,
+            Err(_) => return TurnSettlementOutcome::Unavailable,
+        }
+    }
+    TurnSettlementOutcome::Pending
+}
+
+pub async fn billed_turn(request_ids: &[String]) -> Option<BilledTurn> {
+    if request_ids.is_empty() {
+        return None;
+    }
+    let UsageMode::Managed(jwt) = usage_mode() else {
+        return None;
+    };
+    let outcomes = futures_util::future::join_all(
+        request_ids
+            .iter()
+            .map(|request_id| settle_turn_request(&jwt, request_id)),
+    )
+    .await;
+    let mut billed = BilledTurn::default();
+    for outcome in outcomes {
+        match outcome {
+            TurnSettlementOutcome::Settled(credits) => {
+                billed.credits += credits;
+                billed.settled += 1;
+            }
+            TurnSettlementOutcome::Pending => billed.pending += 1,
+            TurnSettlementOutcome::Unavailable => billed.unavailable += 1,
+        }
+    }
+    Some(billed)
+}
+
+pub fn render_billed_turn(billed: &BilledTurn) -> String {
+    if billed.settled == 0 {
+        return "billed credits are not available yet, run `agi usage` later".to_string();
+    }
+    let open = billed.pending + billed.unavailable;
+    if open == 0 {
+        format!("{} billed", format_credits(billed.credits))
+    } else {
+        format!(
+            "{} billed so far, {} not settled yet",
+            format_credits(billed.credits),
+            request_count(open as u64)
+        )
+    }
 }
 
 pub async fn fetch_usage_history(jwt: &str) -> Result<UsageHistory, UsageFetchError> {

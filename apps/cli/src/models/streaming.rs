@@ -251,7 +251,15 @@ fn completion_result_from(outcome: ChatOutcome) -> CompletionResult {
         stop_reason: outcome.stop_reason,
         stop: outcome.stop,
         reasoning_output_tokens: outcome.usage.reasoning_output_tokens,
+        managed_request_id: None,
     }
+}
+
+fn managed_request_id(spec: &ProviderSpec) -> Option<String> {
+    spec.extra_headers
+        .iter()
+        .find(|(name, _)| name.eq_ignore_ascii_case("Idempotency-Key"))
+        .map(|(_, value)| value.clone())
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +521,7 @@ pub async fn stream_completion(
     match provider {
         Provider::ManagedCloud => {
             let spec = managed_cloud_spec(key)?;
+            let request_id = managed_request_id(&spec);
             match run_spec(
                 &client,
                 &spec,
@@ -527,8 +536,11 @@ pub async fn stream_completion(
             )
             .await
             {
+                Ok(mut completed) => {
+                    completed.managed_request_id = request_id;
+                    Ok(completed)
+                }
                 Err(error) => Err(with_usage_limit_context(error, key).await),
-                completed => completed,
             }
         }
         Provider::Anthropic => {
