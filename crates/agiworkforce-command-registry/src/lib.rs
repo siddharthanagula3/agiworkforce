@@ -361,6 +361,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             false,
             vec!["ctx"],
         ),
+        RegistryCommand::builtin_slash(
+            "tasks",
+            "List subagent tasks (/tasks show <id>, /tasks stop <id>)",
+            true,
+            true,
+            vec!["task"],
+        ),
         RegistryCommand::builtin_slash("config", "Show current configuration", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "models",
