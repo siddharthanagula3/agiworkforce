@@ -108,8 +108,8 @@ Code: `apps/web/app/api/connectors/permissions/route.ts:151-152`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No mode limits the agent to reading: "Ask before every action" still lets writes run once approved, and Lockdown refuses connector tools only (web search, page fetch and sandbox code stay available). | handler |
-| desktop | partial | No mode limits the agent to reading: "Ask before every action" still lets writes run once approved, and Lockdown refuses connector tools only (web search, page fetch and sandbox code stay available). | handler |
+| web | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
+| desktop | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
 | mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
 | chrome | partial | The browser agent can ask before acting, but has no mode that allows reading pages while refusing clicks and typing. | handler |
 
@@ -285,14 +285,13 @@ Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `ap
 
 - Done when: Sensitive or irreversible actions get a stronger confirmation than routine ones (warning, no permanent allow, re-ask).
 - Wave: 3
-- Already works on: desktop, cli, vscode, chrome
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The gate re-asks when untrusted content, private data and an egress call coincide (even over Always allow), but the approval UI looks the same as any other. | ui |
-| mobile | partial | Mobile shows a risk badge on companion approvals only; cloud approvals look the same whatever the risk. | ui |
+| mobile | partial | Web now flags a trifecta re-ask as high risk on the approval card; mobile cloud approvals still look the same whatever the risk, and mobile shows a risk badge only on companion approvals. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:80-84`, `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
+Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
 
 ## S59.29: User takeover.
 
