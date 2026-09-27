@@ -450,6 +450,10 @@ impl McpOAuthProvider {
         }
     }
 
+    pub fn accepts_public_client(&self) -> bool {
+        matches!(self, McpOAuthProvider::Microsoft)
+    }
+
     /// Build the RFC 8252 §7.3 loopback redirect URI for this provider at `port`.
     pub fn redirect_uri(&self, port: u16) -> String {
         // AUDIT-FIX: H-3, loopback HTTP listener replaces hijackable custom scheme.
@@ -819,7 +823,7 @@ fn delete_tokens(provider: McpOAuthProvider) -> Result<(), String> {
 // ============================================================================
 
 /// Get client credentials from environment or stored settings
-fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, String), String> {
+fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, Option<String>), String> {
     // Try environment variables first
     let client_id = std::env::var(provider.client_id_env())
         .or_else(|_| get_stored_credential(provider, "client_id"))
@@ -833,13 +837,15 @@ fn get_client_credentials(provider: McpOAuthProvider) -> Result<(String, String)
 
     let client_secret = std::env::var(provider.client_secret_env())
         .or_else(|_| get_stored_credential(provider, "client_secret"))
-        .map_err(|_| {
-            format!(
-                "Missing {} for {}. Set it as an environment variable or store it in settings.",
-                provider.client_secret_env(),
-                provider.as_str()
-            )
-        })?;
+        .ok()
+        .filter(|secret| !secret.trim().is_empty());
+    if client_secret.is_none() && !provider.accepts_public_client() {
+        return Err(format!(
+            "Missing {} for {}. Set it as an environment variable or store it in settings.",
+            provider.client_secret_env(),
+            provider.as_str()
+        ));
+    }
 
     Ok((client_id, client_secret))
 }
@@ -1100,7 +1106,9 @@ async fn complete_oauth_exchange(
     params.insert("code", &code);
     params.insert("redirect_uri", &redirect_uri);
     params.insert("client_id", &client_id);
-    params.insert("client_secret", &client_secret);
+    if let Some(client_secret) = client_secret.as_deref() {
+        params.insert("client_secret", client_secret);
+    }
     params.insert("code_verifier", &pending_flow.code_verifier);
 
     let response = http_client
@@ -1619,7 +1627,9 @@ pub async fn mcp_oauth_refresh(
     params.insert("grant_type", "refresh_token");
     params.insert("refresh_token", &refresh_token);
     params.insert("client_id", &client_id);
-    params.insert("client_secret", &client_secret);
+    if let Some(client_secret) = client_secret.as_deref() {
+        params.insert("client_secret", client_secret);
+    }
 
     let response = state
         .http_client
@@ -1727,11 +1737,25 @@ pub async fn mcp_oauth_set_credentials(
     upsert_settings_v2_value(&conn, &id_key, &encrypted_id, "security", true)
         .map_err(|e| format!("Failed to store client_id: {}", e))?;
 
-    // Encrypt and store client_secret (FIX-001, uses master-password key when configured)
-    let encrypted_secret = encrypt_credential(helper, &client_secret)?;
     let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
-    upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
-        .map_err(|e| format!("Failed to store client_secret: {}", e))?;
+    if client_secret.trim().is_empty() {
+        if !oauth_provider.accepts_public_client() {
+            return Err(format!(
+                "{} needs a client secret as well as a client ID.",
+                oauth_provider.as_str()
+            ));
+        }
+        conn.execute(
+            "DELETE FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![secret_key],
+        )
+        .map_err(|e| format!("Failed to clear client_secret: {}", e))?;
+    } else {
+        // Encrypt and store client_secret (FIX-001, uses master-password key when configured)
+        let encrypted_secret = encrypt_credential(helper, &client_secret)?;
+        upsert_settings_v2_value(&conn, &secret_key, &encrypted_secret, "security", true)
+            .map_err(|e| format!("Failed to store client_secret: {}", e))?;
+    }
 
     tracing::info!(
         "OAuth credentials stored for provider: {}",
@@ -1745,8 +1769,8 @@ pub async fn mcp_oauth_set_credentials(
 /// stored for a given provider.  Does NOT decrypt, uses a COUNT(*) presence
 /// check on settings_v2 rows so the vault lock state is irrelevant.
 ///
-/// Returns `{ configured: true }` when BOTH client_id and client_secret rows
-/// exist for the resolved provider, `{ configured: false }` otherwise.
+/// Returns `{ configured: true }` when the client_id row exists and, unless the
+/// provider accepts a public client, the client_secret row too.
 ///
 /// The provider string is resolved via `McpOAuthProvider::from_str` exactly as
 /// `get_client_credentials` and `mcp_oauth_set_credentials` do, so badge state
@@ -1777,7 +1801,7 @@ pub async fn mcp_oauth_credentials_status(provider: String) -> Result<serde_json
         )
         .unwrap_or(0);
 
-    let configured = id_count > 0 && secret_count > 0;
+    let configured = id_count > 0 && (secret_count > 0 || oauth_provider.accepts_public_client());
     Ok(serde_json::json!({ "configured": configured }))
 }
 
