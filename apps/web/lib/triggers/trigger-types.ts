@@ -25,7 +25,7 @@ export const GITHUB_TRIGGER_EVENT_TYPES = [
   'workflow_run.completed',
 ] as const;
 
-export const GMAIL_TRIGGER_EVENT_TYPES = ['mailbox.changed'] as const;
+export const GMAIL_TRIGGER_EVENT_TYPES = ['message.received'] as const;
 
 export const GOOGLE_CALENDAR_TRIGGER_EVENT_TYPES = ['events.changed', 'events.deleted'] as const;
 
@@ -80,6 +80,8 @@ export interface EventTrigger {
   isEnabled: boolean;
   verificationStatus: 'pending' | 'verified';
   verifiedAt: string | null;
+  watchExpiresAt: string | null;
+  watchError: string | null;
   lastFiredAt: string | null;
   createdAt: string;
   updatedAt: string;
