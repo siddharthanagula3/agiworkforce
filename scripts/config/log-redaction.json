@@ -38,12 +38,6 @@
       "fix": "replace with emailPseudonym: pseudonymizeEmail(customerEmail)"
     },
     {
-      "file": "apps/web/app/api/stripe-webhook/lib/handlers.ts",
-      "field": "email",
-      "reason": "the dispute handler logs the account address beside the dispute id",
-      "fix": "drop the field; profile.id is on the same line and resolves to the account"
-    },
-    {
       "file": "apps/web/lib/connectors/oauth-registry.ts",
       "field": "describedButUncredentialed",
       "reason": "the name contains \"credential\" so the count of connectors described without credentials is redacted at startup, which is the one number that line exists to report",

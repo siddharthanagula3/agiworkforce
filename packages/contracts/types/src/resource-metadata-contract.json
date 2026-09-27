@@ -511,6 +511,33 @@
       "cost": "usage",
       "completedAt": "completed_at"
     },
+    "billing_refund_requests": {
+      "operationId": "id",
+      "startedAt": "created_at",
+      "progress": {
+        "none": "a request is decided in one step, so nothing sits between filed and decided for a reader to watch"
+      },
+      "stage": "status",
+      "cancellation": {
+        "none": "a filed request is refunded or declined; nothing withdraws it part way"
+      },
+      "retry": {
+        "none": "a declined request is final and a fresh request is a new row"
+      },
+      "result": {
+        "none": "the outcome is the row's own refund amount and Stripe refund id rather than a separate result document"
+      },
+      "error": {
+        "none": "a declined request carries the operator's decision note, not an error"
+      },
+      "requestId": {
+        "none": "the primary key is the reference a caller quotes"
+      },
+      "cost": {
+        "none": "it spends nothing a bill is built from; a refund returns money rather than charging it"
+      },
+      "completedAt": "decided_at"
+    },
     "cloud_agent_execution_operations": {
       "operationId": "id",
       "startedAt": "created_at",
