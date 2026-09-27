@@ -10,7 +10,7 @@
 //!   `free` | `basic` | `pro` | `max` | `max_15x` | `team` | `enterprise`
 //! The CLI also tracks `byok` for Local/BYOK sessions (not a server-side tier).
 //! Customer-facing tier identity stays exact here. Model routing may group
-//! Team with Pro and Max 15x with Max, but account/status UI must not relabel
+//! Team with Pro and Max 20x with Max, but account/status UI must not relabel
 //! what the customer purchased.
 //!
 //! ## Flow
@@ -112,7 +112,7 @@ impl UserTier {
             UserTier::Basic => "Basic",
             UserTier::Pro => "Pro",
             UserTier::Max => "Max 5x",
-            UserTier::Max15x => "Max 15x",
+            UserTier::Max15x => "Max 20x",
             UserTier::Team => "Team",
             UserTier::Enterprise => "Enterprise",
             UserTier::Byok => "BYOK",
@@ -122,7 +122,7 @@ impl UserTier {
     /// Canonical bucket used by the shared managed-cloud Auto router.
     ///
     /// This deliberately does not change the customer-facing tier identity:
-    /// Team receives the Pro model roster, Max 15x receives the Max roster,
+    /// Team receives the Pro model roster, Max 20x receives the Max roster,
     /// and tiers without managed developer-surface access fail closed.
     pub fn managed_auto_routing_tier(&self) -> &'static str {
         match self {
@@ -437,7 +437,7 @@ fn is_loopback_host(host: &str) -> bool {
 
 /// Numeric rank for reconcile logic: higher rank = higher privilege.
 /// Byok is orthogonal (not a managed tier), ranked 0.
-/// Team shares Pro's model-access rank. Max 15x has Max model access but keeps
+/// Team shares Pro's model-access rank. Max 20x has Max model access but keeps
 /// its higher customer-facing usage tier.
 fn tier_rank(t: &UserTier) -> u8 {
     match t {
@@ -643,7 +643,7 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse, Fetc
 /// Map a server-returned tier string to `UserTier`.
 ///
 /// Keeps every canonical billing tier distinct for customer-facing status.
-/// Model-routing call sites explicitly collapse Team→Pro and Max 15x→Max.
+/// Model-routing call sites explicitly collapse Team→Pro and Max 20x→Max.
 ///
 /// FAIL-CLOSED: an unrecognized server string returns `None` so it is never
 /// silently promoted to a higher tier.  Callers default unresolved strings to
@@ -773,7 +773,7 @@ mod tests {
         assert_eq!(UserTier::Basic.label(), "Basic");
         assert_eq!(UserTier::Team.label(), "Team");
         assert_eq!(UserTier::Max.label(), "Max 5x");
-        assert_eq!(UserTier::Max15x.label(), "Max 15x");
+        assert_eq!(UserTier::Max15x.label(), "Max 20x");
         assert_eq!(tier_to_str(&UserTier::Max15x), "max_15x");
     }
 
@@ -851,7 +851,7 @@ mod tests {
         let cached = CachedTier {
             tier: UserTier::Max15x,
         };
-        assert_eq!(cached.status_label(), "Max 15x");
+        assert_eq!(cached.status_label(), "Max 20x");
 
         let cached = CachedTier {
             tier: UserTier::Basic,

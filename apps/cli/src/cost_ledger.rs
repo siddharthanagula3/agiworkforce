@@ -4,6 +4,66 @@ use std::collections::HashMap;
 
 use crate::model_catalog;
 
+pub const MICROUSD_PER_CREDIT: f64 = 5_000.0;
+const MICROUSD_PER_USD: f64 = 1_000_000.0;
+const CENTS_PER_USD: f64 = 100.0;
+
+pub fn credits_for_usd(usd: f64) -> f64 {
+    if usd.is_finite() && usd > 0.0 {
+        usd * MICROUSD_PER_USD / MICROUSD_PER_CREDIT
+    } else {
+        0.0
+    }
+}
+
+pub fn credits_for_cents(cents: f64) -> f64 {
+    credits_for_usd(cents / CENTS_PER_USD)
+}
+
+pub fn credit_amount(credits: f64) -> String {
+    let value = if credits.is_finite() {
+        credits.max(0.0)
+    } else {
+        0.0
+    };
+    let fixed = format!("{value:.2}");
+    let (whole, fraction) = fixed.split_once('.').unwrap_or((fixed.as_str(), ""));
+    let mut grouped = String::with_capacity(whole.len() + whole.len() / 3);
+    for (index, digit) in whole.chars().enumerate() {
+        if index > 0 && (whole.len() - index).is_multiple_of(3) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    let fraction = fraction.trim_end_matches('0');
+    if fraction.is_empty() {
+        grouped
+    } else {
+        format!("{grouped}.{fraction}")
+    }
+}
+
+pub fn format_credits(credits: f64) -> String {
+    let amount = credit_amount(credits);
+    if amount == "1" {
+        "1 credit".to_string()
+    } else {
+        format!("{amount} credits")
+    }
+}
+
+pub fn format_usd_as_credits(usd: f64) -> String {
+    format_credits(credits_for_usd(usd))
+}
+
+pub fn format_credits_per_million_tokens(input_usd: f64, output_usd: f64) -> String {
+    format!(
+        "{} / {} credits per 1M tokens",
+        credit_amount(credits_for_usd(input_usd)),
+        credit_amount(credits_for_usd(output_usd))
+    )
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct PricingRates {
     /// $ per 1M input tokens
@@ -213,6 +273,21 @@ impl CostLedger {
         self.total_usd += delta;
         self.turns += 1;
         delta
+    }
+
+    pub fn model_breakdown(&self) -> Vec<(String, f64)> {
+        let mut rows: Vec<(String, f64)> = self
+            .by_model
+            .iter()
+            .map(|(model, usd)| (model.clone(), *usd))
+            .collect();
+        rows.sort_by(|left, right| {
+            right
+                .1
+                .total_cmp(&left.1)
+                .then_with(|| left.0.cmp(&right.0))
+        });
+        rows
     }
 
     /// Attribute a finished subagent's turn to this session. It is not one of

@@ -2668,8 +2668,9 @@ impl TurnHost for TurnHostAdapter<'_> {
                 narrate!(
                     "\n{}",
                     ts::warning(format!(
-                        "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
-                        cumulative_usd, cap_usd
+                        "  Budget cap reached: {} used of {}. Stopping agent loop.",
+                        crate::cost_ledger::format_usd_as_credits(*cumulative_usd),
+                        crate::cost_ledger::format_usd_as_credits(*cap_usd)
                     ))
                 );
                 // Emit the machine-readable event via the injected callback.

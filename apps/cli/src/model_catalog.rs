@@ -810,7 +810,7 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 /// - Free / Basic / BYOK → no managed-cloud model (BYOK reaches providers with
 ///   the user's own key, which is the picker's separate BYOK section)
 /// - Pro / Team → `economy` + `pro_additions`
-/// - Max / Max 15x / Enterprise → all three slots
+/// - Max / Max 20x / Enterprise → all three slots
 ///
 /// Applies to the picker's **Cloud** section only. Local and BYOK models are
 /// user-provided access and are never gated by subscription tier.
