@@ -46,18 +46,6 @@ Code: `apps/web/app/pricing/page.tsx:917-941`, `apps/web/features/chat/component
 
 Code: `apps/web/app/pricing/page.tsx:657-668`, `apps/web/features/billing/components/UpgradeWaitlistDialog.tsx:59-74`, `apps/web/app/api/checkout/route.ts:208-221`, `apps/web/lib/server/billing-waitlist-access.ts:23-34`
 
-## S83.04: Downgrade review.
-
-- Done when: Before a downgrade the user reviews what changes (price, features, limits, when it applies) and confirms.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Build an in-app downgrade review: every downgrade is handed to the Stripe Customer Portal, whose configuration (not in this repo) decides timing and proration, and no app screen shows what the lower plan removes. | ui, handler |
-| desktop | partial | Same as web (hosted web app); the portal opens in the system browser. | ui, handler |
-
-Code: `apps/web/app/pricing/page.tsx:565-587`, `apps/web/lib/server/stripe-plan-change.ts:126-133`
-
 ## S83.05: Proration explanation.
 
 - Done when: Upgrades explain proration: credit for unused time, the charge today and when the next renewal happens.
@@ -178,15 +166,13 @@ Code: `apps/web/app/billing/UpgradeWelcome.tsx:34-59`, `apps/web/app/billing/pag
 
 - Done when: When a payment fails, the user is told clearly (checkout or renewal) and shown how to fix it.
 - Wave: 3
-- Already works on: mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Point past-due renewals at an accurate page: Billing's alert links to /payment-failure, which says no subscription was created and nothing was charged (true only for a failed first checkout). | states |
-| desktop | partial | Same as web (hosted web app). | states |
 | cli | partial | CLI only says 'plan payment required' with a pricing link; it never names a failed payment or links to billing. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/web/app/payment-failure/page.tsx:35-38`, `apps/web/app/api/stripe-webhook/lib/handlers.ts:112-120`, `apps/cli/src/usage_summary.rs:107-113`
+Code: `apps/cli/src/usage_summary.rs:107-113`
 
 ## S83.15: Retry payment.
 
@@ -201,30 +187,6 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/we
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:734-754`, `apps/web/app/payment-failure/page.tsx:44-46`, `apps/web/app/api/checkout/route.ts:332-346`, `apps/web/features/settings/sections/BillingSection.tsx:1350-1366`
 
-## S83.18: Receipt download.
-
-- Done when: Users can download a receipt for every payment, including one-off credit purchases.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Give one-off credit top-ups a receipt: they use payment-mode Checkout without invoice creation, so only subscription invoices have a hosted receipt in the app. | handler |
-| desktop | partial | Same as web (hosted web app). | handler |
-
-Code: `apps/web/app/billing/invoices/InvoiceList.tsx:137-157`, `apps/web/app/api/billing/top-up/route.ts:156-180`
-
-## S83.20: Refund status.
-
-- Done when: Users can see the status of a refund (requested, processing, refunded).
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Add a refund status view: top-up refunds only appear afterwards as 'Refund' credit rows, subscription refunds show only on the Stripe-hosted invoice, and nothing shows a refund in progress. | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
-
-Code: `apps/web/features/settings/sections/BillingSection.tsx:69-75`, `apps/web/app/api/stripe-webhook/lib/handlers.ts:297-309`
-
 ## S83.21: Cancel subscription.
 
 - Done when: Users can cancel their subscription themselves.
@@ -236,18 +198,6 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:69-75`, `apps/web/
 | mobile | partial | Mobile sends cancellation to the store (store-billed) or to web billing (Stripe-billed); no cancel in the app. | surface-only |
 
 Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:165-182`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:367-380`
-
-## S83.22: Resume subscription.
-
-- Done when: A user who scheduled a cancellation can resume the subscription before it ends.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Add an in-app 'resume' for a scheduled cancellation; today it can only be undone in the Stripe Customer Portal, if its configuration offers renewal (not pinned in this repo). | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
-
-Code: `apps/web/features/settings/sections/BillingSection.tsx:757-770`, `apps/web/features/billing/services/stripe-payments.ts:112-136`
 
 ## S83.23: Scheduled cancellation.
 
@@ -265,14 +215,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2104-2109`
 
 - Done when: After cancelling, the user is told what they keep until the end of the term and what happens after.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Explain end-of-term access: Billing shows only 'Cancels on <date>' (and /upgrade 'Access ends <date>'), never that paid features continue until then or that the account then returns to Free with data kept. | ui |
-| desktop | partial | Same as web (hosted web app). | ui |
 | mobile | partial | Mobile shows only 'Cancels <date>'. | ui |
 
-Code: `apps/web/features/settings/sections/BillingSection.tsx:757-770`, `apps/web/app/upgrade/UpgradeChooser.tsx:38-44`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-321`
+Code: `apps/mobile/src/features/settings/cloud-billing/index.tsx:318-321`
 
 ## S83.25: Mobile purchase restoration.
 
