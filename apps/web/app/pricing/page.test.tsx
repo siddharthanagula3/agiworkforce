@@ -59,6 +59,18 @@ vi.mock('react-i18next', () => ({
         return `${String(values?.['count'])} seats · ${String(values?.['total'])}/yr`;
       }
       if (key === 'perSeatPrice') return `${String(values?.['price'])}/seat/mo`;
+      if (key === 'usageMultiplierAll') {
+        return `${String(values?.['factor'])}x more usage than ${String(values?.['baseline'])}`;
+      }
+      if (key === 'usageMultiplierSession') {
+        return `${String(values?.['factor'])}x more usage per session than ${String(values?.['baseline'])}`;
+      }
+      if (key === 'usageMultiplierWeekly') {
+        return `${String(values?.['factor'])}x more weekly usage than ${String(values?.['baseline'])}`;
+      }
+      if (key === 'usageSameAsPerSeat') {
+        return `Same usage as ${String(values?.['baseline'])} for every seat`;
+      }
       if (key === 'compareTeamPriceYearly') {
         return `${String(values?.['yearly'])}/seat/mo billed yearly, ${String(values?.['monthly'])} billed monthly`;
       }
@@ -510,28 +522,46 @@ describe('PricingPage', () => {
     const comparison = screen.getByRole('table', { name: 'Plan capabilities' });
     const rows = within(comparison);
     expect(rows.getByRole('row', { name: /^Free / })).toHaveAccessibleName(
-      'Free free foreverLabel planCreditWindows Yes 1 project 1 custom MCP Yes No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
+      'Free free foreverLabel compareFreeUsage Yes 1 project 1 custom MCP Yes No No No No No No No Not by AGI. Free model providers may. compareFreeBestFor',
     );
     expect(rows.getByRole('row', { name: /^Basic / })).toHaveAccessibleName(
-      'Basic $7/mo monthlyOnly planCreditWindows Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
+      'Basic $7/mo monthlyOnly 5x more usage per session than Free Yes 5 projects 5 custom MCP Yes No No No No No No No No compareBasicBestFor',
     );
     expect(rows.getByRole('row', { name: /^Pro / })).toHaveAccessibleName(
-      'Pro $20/mo monthlyOnly planCreditWindows · usageMultiplierAll Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
+      'Pro $20/mo monthlyOnly 5x more usage than Basic Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes No No No compareProBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 5x / })).toHaveAccessibleName(
-      'Max 5x $100/mo monthlyOnly planCreditWindows · usageMultiplierAll Yes Unlimited Unlimited Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
+      'Max 5x $100/mo monthlyOnly 5x more usage than Pro Yes Unlimited Unlimited Yes Yes Yes No Yes Yes No No No compareMaxBestFor',
     );
     expect(rows.getByRole('row', { name: /^Max 20x / })).toHaveAccessibleName(
-      'Max 20x $200/mo monthlyOnly planCreditWindows · usageMultiplierSplit Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
+      'Max 20x $200/mo monthlyOnly 20x more usage per session than Pro · 10x more weekly usage than Pro Yes Unlimited Unlimited Yes Yes Yes Yes Yes Yes No No No Highest-capacity work and video generation',
     );
     expect(rows.getByRole('row', { name: /^Team / })).toHaveAccessibleName(
-      'Team $25/seat/mo compareTeamBilling planCreditWindowsPerSeat · usageSameAs Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
+      'Team $25/seat/mo compareTeamBilling Same usage as Pro for every seat Yes 25 projects 25 custom MCP Yes Yes Yes No Yes Yes Yes No No compareTeamBestFor',
     );
     // Explicit timeout: this assertion computes the accessible name of every row
     // in the full comparison table, which is genuinely slow in jsdom and sits
     // close to the 5s default even before machine load. Raising it here keeps
     // the failure mode "assertion failed", not "flaky timeout".
   }, 30_000);
+
+  it('states each plan card’s usage relative to the plan below it, never as credit counts', async () => {
+    render(<PricingPage />);
+
+    const cardOf = (name: string) =>
+      within(screen.getByRole('heading', { name }).closest('article')!);
+    expect(cardOf('Basic').getByText('5x more usage per session than Free')).toBeVisible();
+    expect(cardOf('Pro').getByText('5x more usage than Basic')).toBeVisible();
+    expect(screen.getAllByText('5x more usage than Pro').length).toBeGreaterThan(0);
+    await showMax20x();
+    expect(screen.getAllByText('20x more usage per session than Pro').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('10x more weekly usage than Pro').length).toBeGreaterThan(0);
+    expect(screen.getByText('usageWindowsExplainer flagshipShare')).toBeVisible();
+    await showTeamAndEnterprise();
+    expect(cardOf('Team').getByText('Same usage as Pro for every seat')).toBeVisible();
+
+    expect(screen.queryByText(/credits per 5 hours|planCreditWindows/)).toBeNull();
+  });
 
   it('renders trusted regional prices without exposing India pricing to other regions', async () => {
     vi.mocked(global.fetch).mockResolvedValueOnce({
