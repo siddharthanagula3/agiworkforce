@@ -3,6 +3,7 @@ import {
   getSurfaceCapabilityAvailability,
   type DiscoverableSurfaceCapability,
 } from '@agiworkforce/types';
+import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { SettingsPanelState, SettingsSection } from './settingsProtocol';
 
 function serializeForInlineScript(value: unknown): string {
@@ -70,9 +71,39 @@ export function getSettingsWebviewContent(
       :root {
         color-scheme: light dark;
         font-family: var(--vscode-font-family, system-ui, sans-serif);
-        font-size: var(--vscode-font-size, 13px);
+        font-size: var(--type-body-size);
         color: var(--vscode-foreground);
         background: var(--vscode-editor-background);
+        --pressed: var(--vscode-toolbar-activeBackground, color-mix(in srgb, var(--vscode-foreground) 14%, transparent));
+        ${cssVarsToString(agiCornerCssVars)}
+        ${cssVarsToString(agiMotionCssVars)}
+        --z-content: 1;
+        --z-sticky: 2;
+        --control-sm: 24px;
+        --control-md: 28px;
+        --control-lg: 32px;
+        --field-inset: 18px;
+        --field-block: 16px;
+        --field-label-gap: 4px;
+        --field-control-gap: 8px;
+        --field-row-gap: 24px;
+        --type-display-size: clamp(24px, 4vw, 32px);
+        --type-display-height: 1.15;
+        --type-h2-size: calc(var(--vscode-font-size, 13px) + 5px);
+        --type-h2-height: 1.3;
+        --type-title-size: calc(var(--vscode-font-size, 13px) + 1px);
+        --type-title-height: 1.35;
+        --type-body-size: var(--vscode-font-size, 13px);
+        --type-body-height: 1.5;
+        --type-body-small-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+        --type-body-small-height: 1.5;
+        --type-label-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+        --type-label-height: 1.3;
+        --type-caption-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+        --type-caption-height: 1.4;
+        --type-code-family: var(--vscode-editor-font-family, 'SF Mono', Menlo, Consolas, monospace);
+        --type-code-size: max(12px, calc(var(--vscode-font-size, 13px) - 1px));
+        --type-code-height: 1.5;
       }
 
       * {
@@ -112,6 +143,10 @@ export function getSettingsWebviewContent(
         outline-offset: 2px;
       }
 
+      button:not(:disabled):active {
+        background-image: linear-gradient(var(--pressed), var(--pressed));
+      }
+
       .settings-shell {
         display: grid;
         grid-template-columns: minmax(190px, 232px) minmax(0, 1fr);
@@ -142,7 +177,7 @@ export function getSettingsWebviewContent(
         width: 30px;
         height: 30px;
         border: 1px solid var(--vscode-activityBarBadge-background);
-        border-radius: 9px;
+        border-radius: var(--corner-field);
         color: var(--vscode-activityBarBadge-foreground);
         background: var(--vscode-activityBarBadge-background);
         font-weight: 700;
@@ -155,7 +190,8 @@ export function getSettingsWebviewContent(
 
       .brand-title {
         display: block;
-        font-size: 14px;
+        font-size: var(--type-title-size);
+        line-height: var(--type-title-height);
         font-weight: 650;
       }
 
@@ -163,13 +199,15 @@ export function getSettingsWebviewContent(
         display: block;
         margin-top: 1px;
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
       }
 
       .nav-label {
         margin: 6px 10px 8px;
         color: var(--vscode-descriptionForeground);
-        font-size: 10px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -196,7 +234,8 @@ export function getSettingsWebviewContent(
       .nav-group-label {
         margin: 0 10px 3px;
         color: var(--vscode-descriptionForeground);
-        font-size: 10px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
@@ -206,7 +245,7 @@ export function getSettingsWebviewContent(
         width: 100%;
         padding: 8px 10px;
         border: 0;
-        border-radius: 6px;
+        border-radius: var(--corner-control);
         color: var(--vscode-sideBar-foreground);
         background: transparent;
         text-align: left;
@@ -233,7 +272,7 @@ export function getSettingsWebviewContent(
         width: 100%;
         padding: 7px 10px;
         border: 1px solid var(--vscode-button-border, var(--vscode-panel-border));
-        border-radius: 5px;
+        border-radius: var(--corner-control);
         color: var(--vscode-button-secondaryForeground);
         background: var(--vscode-button-secondaryBackground);
         cursor: pointer;
@@ -259,7 +298,8 @@ export function getSettingsWebviewContent(
       .page-kicker {
         margin: 0 0 7px;
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         font-weight: 700;
         letter-spacing: 0.08em;
         text-transform: uppercase;
@@ -267,7 +307,8 @@ export function getSettingsWebviewContent(
 
       .page-title {
         margin: 0;
-        font-size: clamp(24px, 4vw, 32px);
+        font-size: var(--type-display-size);
+        line-height: var(--type-display-height);
         font-weight: 650;
         letter-spacing: -0.025em;
       }
@@ -276,7 +317,7 @@ export function getSettingsWebviewContent(
         max-width: 650px;
         margin: 9px 0 0;
         color: var(--vscode-descriptionForeground);
-        line-height: 1.55;
+        line-height: var(--type-body-height);
       }
 
       .scope-stack {
@@ -289,10 +330,11 @@ export function getSettingsWebviewContent(
       .pill {
         padding: 4px 8px;
         border: 1px solid var(--vscode-panel-border);
-        border-radius: 999px;
+        border-radius: var(--corner-pill);
         color: var(--vscode-descriptionForeground);
         background: var(--vscode-editorWidget-background);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         white-space: nowrap;
       }
 
@@ -306,7 +348,8 @@ export function getSettingsWebviewContent(
         min-height: 20px;
         margin: -12px 0 12px;
         color: var(--vscode-descriptionForeground);
-        font-size: 12px;
+        font-size: var(--type-body-small-size);
+        line-height: var(--type-body-small-height);
       }
 
       .status[data-kind='error'] {
@@ -324,7 +367,7 @@ export function getSettingsWebviewContent(
         width: min(220px, 100%);
         height: 8px;
         overflow: hidden;
-        border-radius: 999px;
+        border-radius: var(--corner-pill);
         background: var(--vscode-progressBar-background, color-mix(in srgb, var(--vscode-foreground) 16%, transparent));
       }
 
@@ -334,7 +377,7 @@ export function getSettingsWebviewContent(
         height: 100%;
         border-radius: inherit;
         background: var(--vscode-button-background);
-        transition: width 160ms ease;
+        transition: width var(--duration-quick) var(--curve-standard);
       }
 
       .usage-progress.is-warning > span {
@@ -349,7 +392,8 @@ export function getSettingsWebviewContent(
       .usage-history-caption {
         margin: 0;
         padding: 12px 18px 4px;
-        font-size: 12px;
+        font-size: var(--type-label-size);
+        line-height: var(--type-label-height);
         font-weight: 600;
       }
 
@@ -364,7 +408,8 @@ export function getSettingsWebviewContent(
         justify-content: space-between;
         gap: 12px;
         padding: 6px 0;
-        font-size: 12px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
       }
 
       .usage-history-row + .usage-history-row {
@@ -387,10 +432,10 @@ export function getSettingsWebviewContent(
         margin-bottom: 18px;
         padding: 12px 14px;
         border: 1px solid var(--vscode-inputValidation-infoBorder);
-        border-radius: 7px;
+        border-radius: var(--corner-control);
         background: var(--vscode-inputValidation-infoBackground);
         color: var(--vscode-inputValidation-infoForeground);
-        line-height: 1.45;
+        line-height: var(--type-body-small-height);
       }
 
       .section[hidden] {
@@ -403,40 +448,42 @@ export function getSettingsWebviewContent(
 
       .section-heading h2 {
         margin: 0;
-        font-size: 18px;
+        font-size: var(--type-h2-size);
+        line-height: var(--type-h2-height);
         font-weight: 650;
       }
 
       .section-heading p {
         margin: 6px 0 0;
         color: var(--vscode-descriptionForeground);
-        line-height: 1.5;
+        line-height: var(--type-body-height);
       }
 
       .card {
         margin-bottom: 14px;
         border: 1px solid var(--vscode-panel-border);
-        border-radius: 9px;
+        border-radius: var(--corner-field);
         background: var(--vscode-editorWidget-background);
         overflow: hidden;
       }
 
       .card-heading {
-        padding: 15px 18px 10px;
+        padding: var(--field-block) var(--field-inset) 10px;
         border-bottom: 1px solid var(--vscode-panel-border);
       }
 
       .card-heading h3 {
         margin: 0;
-        font-size: 13px;
+        font-size: var(--type-body-size);
+        line-height: var(--type-body-height);
         font-weight: 650;
       }
 
       .card-heading p {
         margin: 5px 0 0;
         color: var(--vscode-descriptionForeground);
-        font-size: 12px;
-        line-height: 1.45;
+        font-size: var(--type-body-small-size);
+        line-height: var(--type-body-small-height);
       }
 
       .diagnostic-card > summary {
@@ -455,7 +502,8 @@ export function getSettingsWebviewContent(
       .diagnostic-card > summary::after {
         content: 'Show';
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         font-weight: 400;
       }
       .diagnostic-card[open] > summary::after { content: 'Hide'; }
@@ -478,8 +526,8 @@ export function getSettingsWebviewContent(
          * opts back out.
          */
         justify-items: end;
-        gap: 22px;
-        padding: 15px 18px;
+        gap: var(--field-row-gap);
+        padding: var(--field-block) var(--field-inset);
       }
 
       /* The label column is text and must stay left-aligned and full-width. */
@@ -498,10 +546,10 @@ export function getSettingsWebviewContent(
 
       .setting-description {
         display: block;
-        margin-top: 4px;
+        margin-top: var(--field-label-gap);
         color: var(--vscode-descriptionForeground);
-        font-size: 12px;
-        line-height: 1.45;
+        font-size: var(--type-body-small-size);
+        line-height: var(--type-body-small-height);
       }
 
       .setting-description.danger {
@@ -523,7 +571,7 @@ export function getSettingsWebviewContent(
         display: flex;
         align-items: center;
         justify-content: flex-end;
-        gap: 8px;
+        gap: var(--field-control-gap);
         min-width: 0;
         width: 100%;
       }
@@ -551,10 +599,10 @@ export function getSettingsWebviewContent(
       .number-input,
       .select-input {
         width: 100%;
-        min-height: 30px;
+        min-height: var(--control-md);
         padding: 5px 8px;
         border: 1px solid var(--vscode-input-border, transparent);
-        border-radius: 4px;
+        border-radius: var(--corner-compact);
         color: var(--vscode-input-foreground);
         background: var(--vscode-input-background);
       }
@@ -569,18 +617,19 @@ export function getSettingsWebviewContent(
 
       .config-path {
         display: inline-block;
-        margin-top: 8px;
+        margin-top: var(--field-control-gap);
         padding: 3px 6px;
-        border-radius: 4px;
+        border-radius: var(--corner-compact);
         color: var(--vscode-textPreformat-foreground);
         background: var(--vscode-textPreformat-background);
-        font-family: var(--vscode-editor-font-family, monospace);
-        font-size: 11px;
+        font-family: var(--type-code-family);
+        font-size: var(--type-code-size);
+        line-height: var(--type-code-height);
         word-break: break-all;
       }
 
       .instruction-editor {
-        padding: 16px 18px;
+        padding: var(--field-block) var(--field-inset);
       }
 
       .instruction-editor + .instruction-editor {
@@ -590,14 +639,14 @@ export function getSettingsWebviewContent(
       .instruction-textarea {
         width: 100%;
         min-height: 132px;
-        margin-top: 9px;
+        margin-top: var(--field-control-gap);
         padding: 9px 10px;
         resize: vertical;
         border: 1px solid var(--vscode-input-border, transparent);
-        border-radius: 5px;
+        border-radius: var(--corner-control);
         color: var(--vscode-input-foreground);
         background: var(--vscode-input-background);
-        line-height: 1.45;
+        line-height: var(--type-body-small-height);
       }
 
       .instruction-footer {
@@ -606,12 +655,13 @@ export function getSettingsWebviewContent(
         align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-top: 9px;
+        margin-top: var(--field-control-gap);
       }
 
       .character-count {
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
       }
 
       .instruction-preview {
@@ -620,12 +670,12 @@ export function getSettingsWebviewContent(
         padding: 12px;
         overflow: auto;
         border: 1px solid var(--vscode-panel-border);
-        border-radius: 6px;
+        border-radius: var(--corner-control);
         color: var(--vscode-editor-foreground);
         background: var(--vscode-textCodeBlock-background);
-        font-family: var(--vscode-editor-font-family, monospace);
-        font-size: 11px;
-        line-height: 1.5;
+        font-family: var(--type-code-family);
+        font-size: var(--type-code-size);
+        line-height: var(--type-code-height);
         white-space: pre-wrap;
         word-break: break-word;
       }
@@ -649,12 +699,13 @@ export function getSettingsWebviewContent(
         gap: 14px;
         padding: 8px 10px;
         border: 1px solid var(--vscode-panel-border);
-        border-radius: 5px;
+        border-radius: var(--corner-control);
       }
 
       .instruction-source span {
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         /*
          * Left-aligned, not right. These are discovered FILE PATHS, which have no
          * spaces: right-aligning them made a long path wrap ragged-left and break
@@ -669,9 +720,9 @@ export function getSettingsWebviewContent(
 
       .secondary-button,
       .primary-button {
-        min-height: 30px;
+        min-height: var(--control-md);
         padding: 5px 11px;
-        border-radius: 4px;
+        border-radius: var(--corner-compact);
         white-space: nowrap;
         cursor: pointer;
       }
@@ -716,11 +767,10 @@ export function getSettingsWebviewContent(
         width: 38px;
         height: 22px;
         border: 1px solid var(--vscode-checkbox-border, var(--vscode-panel-border));
-        border-radius: 999px;
+        border-radius: var(--corner-pill);
         background: var(--vscode-checkbox-background);
-        transition:
-          background 120ms ease,
-          border-color 120ms ease;
+        transition: background var(--duration-instant) var(--curve-standard),
+          border-color var(--duration-instant) var(--curve-standard);
       }
 
       .toggle-track::after {
@@ -732,7 +782,7 @@ export function getSettingsWebviewContent(
         height: 14px;
         border-radius: 50%;
         background: var(--vscode-checkbox-foreground);
-        transition: transform 120ms ease;
+        transition: transform var(--duration-instant) var(--curve-standard);
       }
 
       .toggle input:checked + .toggle-track {
@@ -782,14 +832,15 @@ export function getSettingsWebviewContent(
 
       .empty-capability h3 {
         margin: 0;
-        font-size: 14px;
+        font-size: var(--type-title-size);
+        line-height: var(--type-title-height);
       }
 
       .empty-capability p {
         max-width: 680px;
         margin: 7px 0 14px;
         color: var(--vscode-descriptionForeground);
-        line-height: 1.5;
+        line-height: var(--type-body-height);
       }
 
       .setting-row + .empty-capability {
@@ -806,7 +857,7 @@ export function getSettingsWebviewContent(
         align-items: center;
         gap: 18px;
         min-height: 72px;
-        padding: 14px 18px;
+        padding: var(--field-block) var(--field-inset);
       }
 
       .capability-availability-row + .capability-availability-row {
@@ -826,7 +877,7 @@ export function getSettingsWebviewContent(
         flex-wrap: wrap;
         align-items: baseline;
         gap: 7px;
-        margin-bottom: 4px;
+        margin-bottom: var(--field-label-gap);
       }
 
       .capability-availability-name {
@@ -835,19 +886,21 @@ export function getSettingsWebviewContent(
 
       .capability-availability-status {
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
       }
 
       .surface-availability {
         color: var(--vscode-descriptionForeground);
-        font-size: 11px;
+        font-size: var(--type-caption-size);
+        line-height: var(--type-caption-height);
         text-align: right;
       }
 
       .action-row {
         display: flex;
         flex-wrap: wrap;
-        gap: 8px;
+        gap: var(--field-control-gap);
       }
 
       .plan-actions {
@@ -874,7 +927,7 @@ export function getSettingsWebviewContent(
 
         .sidebar {
           position: sticky;
-          z-index: 2;
+          z-index: var(--z-sticky);
           height: auto;
           padding: 12px 14px 10px;
           border-right: 0;
@@ -902,15 +955,15 @@ export function getSettingsWebviewContent(
 
         .nav-overflow-button {
           position: absolute;
-          z-index: 1;
+          z-index: var(--z-content);
           top: 0;
           bottom: 2px;
           display: grid;
           place-items: center;
-          width: 28px;
+          width: var(--control-md);
           padding: 0;
           border: 1px solid var(--vscode-panel-border);
-          border-radius: 6px;
+          border-radius: var(--corner-control);
           color: var(--vscode-sideBar-foreground);
           background: var(--vscode-sideBar-background);
           box-shadow: 0 0 10px 6px var(--vscode-sideBar-background);
