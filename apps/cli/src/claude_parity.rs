@@ -1201,7 +1201,7 @@ pub fn pr_comments_prompt(arg: &str) -> String {
         arg.trim()
     };
     format!(
-        "Inspect actionable review comments for {scope}. Summarize unresolved comments, identify required code changes, then implement the fixes if repository access is available."
+        "Fetch the review comments on {scope} with the GitHub CLI: `gh pr view <pr> --json number,url,headRepository,reviewDecision` names it, `gh api repos/{{owner}}/{{repo}}/pulls/<number>/comments` returns the line comments and `gh api repos/{{owner}}/{{repo}}/issues/<number>/comments` the conversation. Show each unresolved comment with its file, line and author, identify the code changes it asks for, then implement them if repository access is available. If gh is missing or not signed in, say so and stop."
     )
 }
 
