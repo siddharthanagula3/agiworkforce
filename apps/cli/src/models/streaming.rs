@@ -29,6 +29,7 @@ use agiworkforce_llm::{
 use crate::config::CliConfig;
 use crate::errors::CliError;
 
+use super::managed_approvals::{self, ManagedApprovalPause};
 use super::{
     provider_dispatch::{resolve_key, try_subscription_auth},
     CompletionResult, Message, OllamaMode, Provider, StreamCallback, ToolDefinition,
@@ -425,6 +426,36 @@ async fn run_spec(
     thinking_budget: Option<u32>,
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
+    run_spec_observing(
+        client,
+        spec,
+        model,
+        messages,
+        max_tokens,
+        temperature,
+        tools,
+        on_chunk,
+        thinking_budget,
+        effort,
+        None,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_spec_observing(
+    client: &Client,
+    spec: &ProviderSpec,
+    model: &str,
+    messages: &[Message],
+    max_tokens: u32,
+    temperature: Option<f32>,
+    tools: Option<&[ToolDefinition]>,
+    on_chunk: &mut StreamCallback,
+    thinking_budget: Option<u32>,
+    effort: Option<crate::design_system::Effort>,
+    pause: Option<&mut ManagedApprovalPause>,
+) -> Result<CompletionResult> {
     // Resolve the (possibly dotted display) model id to the provider wire id
     // (`apiModelId`) ONLY here, at the request boundary. This lets a canonical
     // catalog selection work even when its provider wire ID differs;
@@ -458,17 +489,102 @@ async fn run_spec(
         ollama_think: None,
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
-    let mut on_event = |event: StreamEvent| match event {
-        StreamEvent::TextDelta { text } => on_chunk(&text),
-        StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
-            notify_quota_warning(&data)
-        }
-        _ => {}
-    };
+    let mut on_event = stream_event_handler(on_chunk, pause);
     match stream_chat(client, spec, &req, &mut on_event).await {
         Ok(outcome) => Ok(completion_result_from(outcome)),
         Err(err) => Err(map_llm_error(err)),
     }
+}
+
+fn stream_event_handler<'a>(
+    on_chunk: &'a mut StreamCallback,
+    mut pause: Option<&'a mut ManagedApprovalPause>,
+) -> impl FnMut(StreamEvent) + Send + 'a {
+    move |event| match event {
+        StreamEvent::TextDelta { text } => on_chunk(&text),
+        StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
+            notify_quota_warning(&data)
+        }
+        StreamEvent::Vendor { event, data } => {
+            if let Some(pause) = pause.as_deref_mut() {
+                pause.observe(&event, &data);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn managed_approval_resume_spec(jwt: &str) -> Result<ProviderSpec> {
+    let mut spec = managed_cloud_spec(jwt)?;
+    spec.base_url.push_str("/approve");
+    for (name, value) in &mut spec.extra_headers {
+        if name.eq_ignore_ascii_case("Idempotency-Key") {
+            *value = format!("agi.cli.tool-resume.{}", uuid::Uuid::new_v4());
+        }
+    }
+    Ok(spec)
+}
+
+fn absorb_continuation(completed: &mut CompletionResult, next: CompletionResult) {
+    completed.text.push_str(&next.text);
+    completed.tool_calls.extend(next.tool_calls);
+    completed.input_tokens += next.input_tokens;
+    completed.output_tokens += next.output_tokens;
+    completed.cache_read_input_tokens += next.cache_read_input_tokens;
+    completed.cache_creation_input_tokens += next.cache_creation_input_tokens;
+    completed.reasoning_output_tokens += next.reasoning_output_tokens;
+    completed.stop_reason = next.stop_reason;
+    completed.stop = next.stop;
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_managed_cloud(
+    client: &Client,
+    jwt: &str,
+    model: &str,
+    messages: &[Message],
+    max_tokens: u32,
+    temperature: Option<f32>,
+    tools: Option<&[ToolDefinition]>,
+    on_chunk: &mut StreamCallback,
+    thinking_budget: Option<u32>,
+    effort: Option<crate::design_system::Effort>,
+) -> Result<CompletionResult> {
+    let spec = managed_cloud_spec(jwt)?;
+    let request_id = managed_request_id(&spec);
+    let mut pause = ManagedApprovalPause::default();
+    let mut completed = run_spec_observing(
+        client,
+        &spec,
+        model,
+        messages,
+        max_tokens,
+        temperature,
+        tools,
+        on_chunk,
+        thinking_budget,
+        effort,
+        Some(&mut pause),
+    )
+    .await?;
+    completed.managed_request_id = request_id;
+    while let Some((run_id, calls)) = pause.take_pending()? {
+        let decisions = managed_approvals::decide(&calls).await;
+        let body = serde_json::json!({ "run_id": run_id, "tool_approvals": decisions });
+        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause));
+        let next = agiworkforce_llm::post_openai_compat_stream(
+            client,
+            &managed_approval_resume_spec(jwt)?,
+            &body,
+            model,
+            STREAM_IDLE_TIMEOUT,
+            &mut on_event,
+        )
+        .await
+        .map_err(map_llm_error)?;
+        absorb_continuation(&mut completed, completion_result_from(next));
+    }
+    Ok(completed)
 }
 
 // ---------------------------------------------------------------------------
@@ -528,11 +644,9 @@ pub async fn stream_completion(
 
     match provider {
         Provider::ManagedCloud => {
-            let spec = managed_cloud_spec(key)?;
-            let request_id = managed_request_id(&spec);
-            match run_spec(
+            match run_managed_cloud(
                 &client,
-                &spec,
+                key,
                 model,
                 messages,
                 max_tokens,
@@ -544,10 +658,7 @@ pub async fn stream_completion(
             )
             .await
             {
-                Ok(mut completed) => {
-                    completed.managed_request_id = request_id;
-                    Ok(completed)
-                }
+                Ok(completed) => Ok(completed),
                 Err(error) => Err(with_usage_limit_context(error, key).await),
             }
         }

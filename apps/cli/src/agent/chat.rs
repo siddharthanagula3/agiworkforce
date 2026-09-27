@@ -947,6 +947,10 @@ message -- revise and call `update_plan` again.\n\n",
             max_budget_usd: self.max_budget_usd,
         };
 
+        let managed_tool_approval = models::managed_approvals::ManagedToolApproval {
+            callback: self.recorded_approval_callback(),
+            require_confirmation: !self.skips_approval(),
+        };
         let (run_result, completion_usage, managed_request_ids, incomplete) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
@@ -962,7 +966,11 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let result = run_turn(&mut adapter, params, &mut tracker).await;
+            let result = models::managed_approvals::with_managed_tool_approval(
+                managed_tool_approval,
+                run_turn(&mut adapter, params, &mut tracker),
+            )
+            .await;
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
