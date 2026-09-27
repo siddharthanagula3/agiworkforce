@@ -1164,9 +1164,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         }
 
         try {
+          const uploadContext = {
+            conversationId,
+            temporary:
+              useSettingsStore.getState().isTemporaryChat || conversation?.temporary === true,
+          };
           const uploadResults = await Promise.all(
             attachmentsNeedingUpload.map((a) =>
-              uploadWithRetry({ uri: a.uri, name: a.fileName, type: a.mimeType }, a.fileName, a.id),
+              uploadWithRetry(
+                { uri: a.uri, name: a.fileName, type: a.mimeType },
+                a.fileName,
+                a.id,
+                uploadContext,
+              ),
             ),
           );
           if (!isTurnAccountCurrent()) return false;
