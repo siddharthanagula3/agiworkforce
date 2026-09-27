@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { getUserScopedDb, verifySecondFactor, hasEnrolledSecondFactor, recordAuditEvent } =
-  vi.hoisted(() => ({
+const { getUserScopedDb, stepUpLevelFor, readSessionFactorAge, recordAuditEvent } = vi.hoisted(
+  () => ({
     getUserScopedDb: vi.fn(),
-    verifySecondFactor: vi.fn(),
-    hasEnrolledSecondFactor: vi.fn(),
+    stepUpLevelFor: vi.fn(),
+    readSessionFactorAge: vi.fn(),
     recordAuditEvent: vi.fn(async () => undefined),
-  }));
+  }),
+);
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -21,9 +22,10 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent,
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb }));
-vi.mock('@/lib/server/step-up/verify-factor', () => ({
-  verifySecondFactor,
-  hasEnrolledSecondFactor,
+vi.mock('@/lib/server/step-up/second-factor', () => ({ stepUpLevelFor }));
+vi.mock('@/lib/server/step-up/session-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/step-up/session-proof')>()),
+  readSessionFactorAge,
 }));
 
 process.env['CSRF_SECRET'] = 'step-up-route-secret-that-is-long-enough';
@@ -33,7 +35,7 @@ import { verifyStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 
-function challenge(body: unknown) {
+function grantRequest(body: unknown) {
   return new Request('http://localhost:3000/api/auth/step-up', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -45,76 +47,79 @@ beforeEach(() => {
   vi.clearAllMocks();
   resetStepUpSigningKeyCache();
   getUserScopedDb.mockResolvedValue({ db: {}, userId: 'user_1', organizationId: ORG });
+  stepUpLevelFor.mockResolvedValue('second_factor');
 });
 
 describe('POST /api/auth/step-up', () => {
-  it('mints a proof bound to the caller, action and resource', async () => {
-    verifySecondFactor.mockResolvedValue({ ok: true, method: 'totp' });
+  it('mints a proof bound to the caller, action and resource once the session re-verified', async () => {
+    readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 30, secondFactorMinutes: 0 });
 
     const response = await POST(
-      challenge({ action: 'organization.transfer_ownership', resourceId: ORG, code: '123456' }),
+      grantRequest({ action: 'organization.transfer_ownership', resourceId: ORG }),
     );
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { token: string; method: string };
-    expect(body.method).toBe('totp');
+    expect(body.method).toBe('second_factor');
     expect(
       verifyStepUpGrant(body.token, {
         userId: 'user_1',
         action: 'organization.transfer_ownership',
         resourceId: ORG,
       }).method,
-    ).toBe('totp');
+    ).toBe('second_factor');
     expect(recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'step_up_satisfied' }),
     );
   });
 
-  it('records a rejected attempt and mints nothing', async () => {
-    verifySecondFactor.mockResolvedValue({ ok: false, failure: 'invalid_code' });
+  it('asks for a fresh verification at the level the account can give, and mints nothing', async () => {
+    readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 0, secondFactorMinutes: 45 });
 
     const response = await POST(
-      challenge({ action: 'organization.transfer_ownership', resourceId: ORG, code: '000000' }),
+      grantRequest({ action: 'organization.transfer_ownership', resourceId: ORG }),
     );
 
-    expect(response.status).toBe(401);
-    expect(await response.json()).not.toHaveProperty('token');
-    expect(recordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: 'step_up_failed',
-        outcome: 'failure',
-        detail: expect.objectContaining({ reason: 'invalid_code' }),
-      }),
-    );
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as {
+      token?: string;
+      error: { code: string; details: { level: string } };
+    };
+    expect(body.token).toBeUndefined();
+    expect(body.error.code).toBe('STEP_UP_VERIFICATION_REQUIRED');
+    expect(body.error.details.level).toBe('second_factor');
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
-  it('answers an unenrolled account with a conflict rather than a bad code', async () => {
-    verifySecondFactor.mockResolvedValue({ ok: false, failure: 'not_enrolled' });
+  it('accepts a recent first factor for an account with no second factor', async () => {
+    stepUpLevelFor.mockResolvedValue('first_factor');
+    readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 1, secondFactorMinutes: null });
 
-    const response = await POST(challenge({ action: 'account.delete', code: '123456' }));
+    const response = await POST(grantRequest({ action: 'account.delete' }));
 
-    expect(response.status).toBe(409);
+    expect(response.status).toBe(200);
+    expect(((await response.json()) as { method: string }).method).toBe('first_factor');
   });
 
   it('refuses an action that is not in the registry', async () => {
-    const response = await POST(challenge({ action: 'settings.rename_workspace', code: '123456' }));
+    const response = await POST(grantRequest({ action: 'settings.rename_workspace' }));
 
     expect(response.status).toBe(400);
-    expect(verifySecondFactor).not.toHaveBeenCalled();
+    expect(readSessionFactorAge).not.toHaveBeenCalled();
   });
 });
 
 describe('GET /api/auth/step-up', () => {
-  it('reports whether the caller can satisfy a challenge at all', async () => {
-    hasEnrolledSecondFactor.mockResolvedValue(false);
+  it('reports the verification level and every action it can grant', async () => {
+    stepUpLevelFor.mockResolvedValue('first_factor');
 
     const response = await GET(new Request('http://localhost:3000/api/auth/step-up') as never);
 
     const body = (await response.json()) as {
-      enrolled: boolean;
+      level: string;
       actions: Record<string, { freshnessSeconds: number }>;
     };
-    expect(body.enrolled).toBe(false);
+    expect(body.level).toBe('first_factor');
     expect(body.actions['organization.transfer_ownership']?.freshnessSeconds).toBe(300);
   });
 });

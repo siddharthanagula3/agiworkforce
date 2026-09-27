@@ -1,13 +1,14 @@
 export interface StepUpActionSpec {
-  /** How long a proof of a fresh second factor stays usable for this action. */
+  /** How long a fresh reverification stays usable for this action. */
   readonly freshnessSeconds: number;
   /** Shown to the person being challenged, so the prompt names the consequence. */
   readonly consequence: string;
 }
 
 /**
- * The actions that demand a fresh second factor. A route names one of these;
- * nothing else in the product decides its own freshness window.
+ * The actions that demand a fresh reverification, with the second factor when
+ * the account has one. A route names one of these; nothing else in the product
+ * decides its own freshness window.
  */
 export const STEP_UP_ACTIONS = {
   'organization.transfer_ownership': {
@@ -18,6 +19,10 @@ export const STEP_UP_ACTIONS = {
   'account.delete': {
     freshnessSeconds: 300,
     consequence: 'Your account and its content are scheduled for deletion.',
+  },
+  'two_factor.enable': {
+    freshnessSeconds: 300,
+    consequence: 'Every sign-in to your account also asks for a code from your authenticator app.',
   },
   'two_factor.disable': {
     freshnessSeconds: 300,
@@ -34,6 +39,11 @@ export const STEP_UP_ACTIONS = {
   'email.change': {
     freshnessSeconds: 300,
     consequence: 'Password resets and security notices go to the new address.',
+  },
+  'password.change': {
+    freshnessSeconds: 300,
+    consequence:
+      'Your account gets a new password, and every other device signed in to it is signed out.',
   },
   'api_credential.reveal': {
     freshnessSeconds: 120,
@@ -71,6 +81,12 @@ export const STEP_UP_ACTIONS = {
 } as const satisfies Record<string, StepUpActionSpec>;
 
 export type StepUpAction = keyof typeof STEP_UP_ACTIONS;
+
+export const STEP_UP_LEVELS = ['second_factor', 'first_factor'] as const;
+
+export type StepUpLevel = (typeof STEP_UP_LEVELS)[number];
+
+export const STEP_UP_VERIFICATION_REQUIRED = 'STEP_UP_VERIFICATION_REQUIRED';
 
 export const STEP_UP_ACTION_IDS = Object.keys(STEP_UP_ACTIONS) as readonly StepUpAction[];
 

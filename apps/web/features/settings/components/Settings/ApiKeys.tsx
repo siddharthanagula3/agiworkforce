@@ -390,22 +390,25 @@ export function ApiKeysManager() {
   };
 
   return (
-    <ApiKeysPanel
-      apiKeys={apiKeys}
-      apiKeyForm={apiKeyForm}
-      showAPIKeyDialog={showAPIKeyDialog}
-      generatedAPIKey={generatedAPIKey}
-      keyToDelete={keyToDelete}
-      isCreatePending={createMutation.isPending}
-      isLoading={isLoading}
-      loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
-      onRetry={() => void refetch()}
-      onSetShowAPIKeyDialog={setDialogOpen}
-      onSetKeyToDelete={setKeyToDelete}
-      onGenerateAPIKey={generateAPIKey}
-      onDeleteAPIKey={deleteAPIKey}
-      onCopyAPIKey={copyAPIKey}
-      onDismissGeneratedKey={() => setDialogOpen(false)}
-    />
+    <>
+      <ApiKeysPanel
+        apiKeys={apiKeys}
+        apiKeyForm={apiKeyForm}
+        showAPIKeyDialog={showAPIKeyDialog}
+        generatedAPIKey={generatedAPIKey}
+        keyToDelete={keyToDelete}
+        isCreatePending={createMutation.isPending}
+        isLoading={isLoading}
+        loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
+        onRetry={() => void refetch()}
+        onSetShowAPIKeyDialog={setDialogOpen}
+        onSetKeyToDelete={setKeyToDelete}
+        onGenerateAPIKey={generateAPIKey}
+        onDeleteAPIKey={deleteAPIKey}
+        onCopyAPIKey={copyAPIKey}
+        onDismissGeneratedKey={() => setDialogOpen(false)}
+      />
+      {createMutation.stepUpDialog}
+    </>
   );
 }

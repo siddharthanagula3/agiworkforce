@@ -2581,7 +2581,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/api/settings/2fa/backup-codes/route.ts",
-          "text": "backup_codes_generated_at = now()"
+          "text": "registerSecondFactor(userId, { backupCodes: newCodes })"
         }
       ]
     },
@@ -2879,7 +2879,7 @@
       "kind": "prose",
       "sentence": "**Lost the authenticator and every backup code.** There is no self-serve way back in, and there is no screen from which support can remove a second factor.",
       "implementation": ["apps/web/app/api/settings/2fa/route.ts"],
-      "reason": "No operator or support route touches user_two_factor: its writers are the holder's own routes under apps/web/app/api/settings/2fa, step-up verification and account erasure. Nothing in the repository asserts that absence, so it stays unproven until a guard enumerates every writer of that table."
+      "reason": "No operator or support route touches user_two_factor: its writers are the holder's own routes under apps/web/app/api/settings/2fa, the registration of an earlier enrollment in apps/web/lib/server/step-up/second-factor.ts and account erasure. Nothing in the repository asserts that absence, so it stays unproven until a guard enumerates every writer of that table."
     }
   ],
   "narrative": [

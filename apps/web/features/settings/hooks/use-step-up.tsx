@@ -4,12 +4,15 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { StepUpDialog } from '@/features/auth/StepUpDialog';
 import {
   fetchWithStepUp,
+  requestStepUpGrant,
   type StepUpChallenge,
   type StepUpSend,
 } from '@/features/auth/step-up-fetch';
+import type { StepUpLevel } from '@/lib/server/step-up/actions';
 
 interface PendingChallenge {
   challenge: StepUpChallenge;
+  level: StepUpLevel | null;
   settle: (token: string | null) => void;
 }
 
@@ -43,13 +46,20 @@ export function useStepUp(): UseStepUp {
     (send: StepUpSend, resourceId: string | null = null): Promise<Response> =>
       fetchWithStepUp(
         send,
-        (challenge) =>
-          new Promise<string | null>((resolve) => {
+        async (challenge) => {
+          const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);
+          if (silent.kind === 'granted') return silent.token;
+          return new Promise<string | null>((resolve) => {
             pendingRef.current?.settle(null);
-            const next: PendingChallenge = { challenge, settle: resolve };
+            const next: PendingChallenge = {
+              challenge,
+              level: silent.kind === 'verify' ? silent.level : null,
+              settle: resolve,
+            };
             pendingRef.current = next;
             setPending(next);
-          }),
+          });
+        },
         resourceId,
       ),
     [],
@@ -61,6 +71,7 @@ export function useStepUp(): UseStepUp {
       action={pending.challenge.action}
       consequence={pending.challenge.consequence}
       resourceId={pending.challenge.resourceId}
+      level={pending.level}
       onCancel={() => close(null)}
       onSatisfied={(token) => close(token)}
     />

@@ -37,6 +37,10 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn(async () => ({ plan: 'enterprise', canManageTeam: true })),
 }));
 
+process.env['CSRF_SECRET'] = 'admin-key-reveal-step-up-secret-long-enough';
+
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE, GET, POST } from '../route';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -131,11 +135,25 @@ function bind(role: string, principal: Record<string, unknown> | null = principa
   });
 }
 
+function revealProof(): Record<string, string> {
+  const { token } = createStepUpGrant({
+    userId: 'user-1',
+    action: 'api_credential.reveal',
+    resourceId: ORG,
+    method: 'second_factor',
+  });
+  return { [STEP_UP_TOKEN_HEADER]: token };
+}
+
 function send(method: string, body: unknown, headers: Record<string, string> = {}): Request {
   return new Request('https://app.test/api/settings/organization/admin-api-keys', {
     method,
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(method === 'POST' ? revealProof() : {}),
+      ...headers,
+    },
   });
 }
 
@@ -282,7 +300,10 @@ describe('/api/settings/organization/admin-api-keys', () => {
       /insert into public\.organization_admin_api_keys/i.test(String(sql)),
     );
     expect(inserts).toHaveLength(1);
-    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    const created = mockRecordAuditEvent.mock.calls.filter(
+      ([event]) => (event as { eventType?: string }).eventType === 'admin_api_key_created',
+    );
+    expect(created).toHaveLength(1);
   });
 
   it('refuses the same Idempotency-Key used for a different key request', async () => {

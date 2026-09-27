@@ -9,7 +9,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getIdentityProvider, getRequestIdentity } from '@/lib/server/identity';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireStepUp } from '@/lib/server/step-up-auth';
-import { hasEnrolledSecondFactor } from '@/lib/server/step-up/verify-factor';
+import { readSecondFactorStatus } from '@/lib/server/step-up/second-factor';
 import {
   readOpenCompromiseResponse,
   resolveCompromiseResponse,
@@ -80,7 +80,7 @@ async function handleResolve(request: NextRequest): Promise<NextResponse> {
 
   // An account with no second factor cannot mint a grant, and demanding one
   // would make the hold permanent for exactly those accounts.
-  const enrolled = await hasEnrolledSecondFactor(db, userId);
+  const enrolled = (await readSecondFactorStatus(db, userId)).anySecondFactor;
   if (enrolled) {
     await requireStepUp({
       userId,

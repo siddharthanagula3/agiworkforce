@@ -49,6 +49,7 @@ export interface CreateAPIKeyResult {
  * Password change parameters
  */
 export interface ChangePasswordParams {
+  currentPassword: string | null;
   newPassword: string;
   confirmPassword: string;
 }
@@ -200,74 +201,85 @@ export function useUpdateSettings(): UseMutationResult<
   });
 }
 
-/**
- * Change password mutation
- *
- * @returns UseMutationResult for changing password
- */
-export function useChangePassword(): UseMutationResult<void, Error, ChangePasswordParams> {
-  return useMutation<void, Error, ChangePasswordParams>({
-    mutationFn: async ({ newPassword, confirmPassword }: ChangePasswordParams): Promise<void> => {
+export type ChangePasswordMutation = UseMutationResult<void, Error, ChangePasswordParams> & {
+  stepUpDialog: ReactElement | null;
+};
+
+export function useChangePassword(): ChangePasswordMutation {
+  const { withStepUp, dialog } = useStepUp();
+
+  const mutation = useMutation<void, Error, ChangePasswordParams>({
+    mutationFn: async ({ currentPassword, newPassword, confirmPassword }) => {
       if (newPassword !== confirmPassword) {
         throw new Error('Passwords do not match');
       }
-
-      if (newPassword.length < 6) {
-        throw new Error('Password must be at least 6 characters');
-      }
-
-      const { error } = await settingsService.changePassword(newPassword);
-      if (error) {
-        throw new Error(error);
-      }
+      const response = await withStepUp((headers) =>
+        sendAuthorizedJson(
+          '/api/settings/password',
+          {
+            method: 'POST',
+            body: { newPassword, ...(currentPassword === null ? {} : { currentPassword }) },
+          },
+          headers,
+        ),
+      );
+      if (!response.ok) throw new Error(await readApiError(response));
     },
     onSuccess: (): void => {
-      toast.success('Password changed successfully');
+      toast.success('Password changed. Your other devices were signed out.');
     },
     onError: (error: Error): void => {
+      if (isStepUpCancelled(error)) return;
       logger.error('Error changing password:', error);
       toast.error(toUserMessage(error, 'Failed to change password'));
     },
   });
+
+  return { ...mutation, stepUpDialog: dialog };
 }
 
-/**
- * Create API key mutation
- *
- * @returns UseMutationResult for creating API key
- */
-export function useCreateAPIKey(): UseMutationResult<
+export type CreateAPIKeyMutation = UseMutationResult<
   CreateAPIKeyResult,
   Error,
   CreateApiKeyFormData
-> {
-  const queryClient: QueryClient = useQueryClient();
+> & {
+  stepUpDialog: ReactElement | null;
+};
 
-  return useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
+export function useCreateAPIKey(): CreateAPIKeyMutation {
+  const queryClient: QueryClient = useQueryClient();
+  const { withStepUp, dialog } = useStepUp();
+
+  const mutation = useMutation<CreateAPIKeyResult, Error, CreateApiKeyFormData>({
     mutationFn: async ({ name, scopes }: CreateApiKeyFormData): Promise<CreateAPIKeyResult> => {
       if (!name.trim()) {
         throw new Error('Please enter a name for the API key');
       }
-
-      const { data, error, fullKey } = await settingsService.createAPIKey(name, scopes);
-      if (error || !data) {
-        throw new Error(error || 'Failed to create API key');
-      }
-
-      return { apiKey: data, fullKey: fullKey || '' };
+      const response = await withStepUp((headers) =>
+        sendAuthorizedJson(
+          '/api/settings/api-keys',
+          { method: 'POST', body: { name, scopes } },
+          headers,
+        ),
+      );
+      if (!response.ok) throw new Error(await readApiError(response));
+      const created = (await response.json()) as { api_key: APIKey; full_key: string };
+      return { apiKey: created.api_key, fullKey: created.full_key };
     },
     onSuccess: ({ apiKey }: CreateAPIKeyResult): void => {
-      // Add to cache
       queryClient.setQueryData<APIKey[]>(queryKeys.settings.apiKeys(), (old) =>
         old ? [apiKey, ...old] : [apiKey],
       );
       toast.success('API key generated successfully');
     },
     onError: (error: Error): void => {
+      if (isStepUpCancelled(error)) return;
       logger.error('Error generating API key:', error);
       toast.error(toUserMessage(error, 'Failed to generate API key'));
     },
   });
+
+  return { ...mutation, stepUpDialog: dialog };
 }
 
 /**
@@ -296,83 +308,6 @@ export function useDeleteAPIKey(): UseMutationResult<string, Error, string> {
     onError: (error: Error): void => {
       logger.error('Error deleting API key:', error);
       toast.error(toUserMessage(error, 'Failed to delete API key'));
-    },
-  });
-}
-
-/**
- * Toggle 2FA mutation
- *
- * @returns UseMutationResult for toggling 2FA
- */
-export function useToggle2FA(): UseMutationResult<
-  boolean,
-  Error,
-  boolean,
-  SettingsMutationContext
-> {
-  const queryClient: QueryClient = useQueryClient();
-
-  return useMutation<boolean, Error, boolean, SettingsMutationContext>({
-    mutationFn: async (enabled: boolean): Promise<boolean> => {
-      if (enabled) {
-        // Enabling 2FA is a multi-step enrollment (setup -> scan QR -> verify a
-        // TOTP code). enable2FA() only performs SETUP; the server keeps 2FA OFF
-        // until a code is verified. Reporting success here would be a lie, so we
-        // surface that verification is still required rather than flipping the
-        // flag. (Full enrollment dialog is tracked as a follow-up.)
-        const { error } = await settingsService.enable2FA();
-        if (error) {
-          throw new Error(error);
-        }
-        throw new Error(
-          'Two-factor setup started · enabling still requires verifying a code from your authenticator app. This step is not available yet.',
-        );
-      }
-
-      const { error } = await settingsService.disable2FA('');
-      if (error) {
-        throw new Error(error);
-      }
-      return false;
-    },
-    onMutate: async (enabled: boolean): Promise<SettingsMutationContext> => {
-      await queryClient.cancelQueries({
-        queryKey: queryKeys.settings.preferences(),
-      });
-
-      const previousSettings = queryClient.getQueryData<UserSettings>(
-        queryKeys.settings.preferences(),
-      );
-
-      // Only optimistically reflect a DISABLE (which truly takes effect on
-      // success). An enable is never real until a code is verified, so never
-      // optimistically flip 2FA on.
-      if (!enabled) {
-        queryClient.setQueryData<UserSettings>(queryKeys.settings.preferences(), (old) =>
-          old ? { ...old, two_factor_enabled: false } : old,
-        );
-      }
-
-      return { previousSettings };
-    },
-    onSuccess: (enabled: boolean): void => {
-      // Only a real disable reaches success; enable throws "verification
-      // required" above, so it never falsely toasts "enabled".
-      if (!enabled) {
-        toast.success('2FA disabled successfully');
-      }
-    },
-    onError: (
-      error: Error,
-      enabled: boolean,
-      context: SettingsMutationContext | undefined,
-    ): void => {
-      if (context?.previousSettings) {
-        queryClient.setQueryData(queryKeys.settings.preferences(), context.previousSettings);
-      }
-      logger.error('Error toggling 2FA:', error);
-      toast.error(toUserMessage(error, `Failed to ${enabled ? 'enable' : 'disable'} 2FA`));
     },
   });
 }
@@ -429,15 +364,24 @@ const SITE_HOME_PATH = '/';
 
 export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error, void> & {
   signOutAfterDeletion: () => Promise<void>;
+  stepUpDialog: ReactElement | null;
 } {
   const logout = useAuthStore((s) => s.logout);
   const identitySignOut = useSignOut();
   const router = useRouter();
+  const { withStepUp, dialog } = useStepUp();
 
   const mutation = useMutation<DeleteAccountResult, Error, void>({
     mutationFn: async (): Promise<DeleteAccountResult> => {
-      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const res = await fetch('/api/user/delete-account', { method: 'DELETE', headers });
+      const res = await withStepUp(async (stepUpHeaders) =>
+        fetch('/api/user/delete-account', {
+          method: 'DELETE',
+          headers: {
+            ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
+            ...stepUpHeaders,
+          },
+        }),
+      );
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(readDeleteAccountError(data, 'Account deletion failed.', res.status));
@@ -455,6 +399,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
       };
     },
     onError: (error: Error): void => {
+      if (isStepUpCancelled(error)) return;
       logger.error('Error deleting account:', error);
     },
   });
@@ -479,7 +424,7 @@ export function useDeleteAccount(): UseMutationResult<DeleteAccountResult, Error
     }
   }, [logout, identitySignOut, router]);
 
-  return { ...mutation, signOutAfterDeletion };
+  return { ...mutation, signOutAfterDeletion, stepUpDialog: dialog };
 }
 
 /**

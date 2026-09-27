@@ -84,7 +84,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'projects/sync/route.ts', reason: 'no_governed_state' },
   { route: 'referrals/code/route.ts', reason: 'own_content' },
   { route: 'search/route.ts', reason: 'own_content' },
-  { route: 'settings/2fa/setup/route.ts', reason: 'no_governed_state' },
   { route: 'settings/organization/active/route.ts', reason: 'no_governed_state' },
   { route: 'settings/preferences/route.ts', reason: 'own_content' },
   { route: 'settings/sync/route.ts', reason: 'no_governed_state' },

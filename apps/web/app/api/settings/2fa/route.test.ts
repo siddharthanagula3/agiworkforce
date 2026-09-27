@@ -3,8 +3,11 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
+  readSecondFactorStatus: vi.fn(),
+  removeSecondFactor: vi.fn(async (..._args: unknown[]) => undefined),
+  rememberMfaEnrollment: vi.fn(async (..._args: unknown[]) => undefined),
   recordAuditEvent: vi.fn(async (_event: Record<string, unknown>) => undefined),
-  identityEvent: vi.fn(async () => ({
+  identityEvent: vi.fn(async (_event: Record<string, unknown>) => ({
     assessment: { level: 'none', signals: [] },
     response: null,
   })),
@@ -31,13 +34,19 @@ vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
 vi.mock('@/lib/server/identity', () => ({
-  getRequestIdentity: vi.fn(async () => null),
-  getIdentityProvider: () => ({}),
+  getIdentityProvider: () => ({ removeSecondFactor: mocks.removeSecondFactor }),
+  getIdentityUser: vi.fn(),
+  getRequestIdentity: vi.fn(),
 }));
-vi.mock('@/lib/services/identity-events', () => ({
-  handleIdentitySecurityEvent: (...args: unknown[]) => mocks.identityEvent(...(args as [])),
+vi.mock('@/lib/server/step-up/second-factor', () => ({
+  readSecondFactorStatus: (...args: unknown[]) => mocks.readSecondFactorStatus(...args),
+}));
+vi.mock('@/lib/mfa-policy-gate', () => ({
+  rememberMfaEnrollment: (...args: unknown[]) => mocks.rememberMfaEnrollment(...args),
+}));
+vi.mock('@/lib/server/two-factor-security-events', () => ({
+  announceTwoFactorChange: (event: Record<string, unknown>) => mocks.identityEvent(event),
 }));
 
 process.env['CSRF_SECRET'] = 'two-factor-disable-step-up-secret-long-enough';
@@ -47,17 +56,8 @@ import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant, resetStepUpSigningKeyCache } from '@/lib/server/step-up/grant-token';
 import { GET, DELETE } from './route';
 
-const ROW = {
-  user_id: 'user-1',
-  totp_secret_enc: 'enc',
-  backup_codes_hashed: ['hash:a'],
-  enabled: true,
-  enabled_at: '2026-08-01T00:00:00.000Z',
-  backup_codes_generated_at: '2026-08-01T00:00:00.000Z',
-  last_verified_at: null,
-  created_at: '2026-08-01T00:00:00.000Z',
-  updated_at: '2026-08-01T00:00:00.000Z',
-};
+const ENROLLED = { authenticator: true, backupCodes: true, anySecondFactor: true };
+const NOT_ENROLLED = { authenticator: false, backupCodes: false, anySecondFactor: false };
 
 function getRequest() {
   return new NextRequest('http://localhost/api/settings/2fa');
@@ -73,7 +73,7 @@ function deleteRequest(stepUpToken?: string) {
   });
 }
 
-function grant(method: 'totp' | 'backup_code' = 'totp') {
+function grant(method: 'second_factor' | 'first_factor' = 'second_factor') {
   return createStepUpGrant({
     userId: 'user-1',
     action: 'two_factor.disable',
@@ -85,104 +85,87 @@ function grant(method: 'totp' | 'backup_code' = 'totp') {
 beforeEach(() => {
   vi.clearAllMocks();
   resetStepUpSigningKeyCache();
+  mocks.readSecondFactorStatus.mockResolvedValue(ENROLLED);
 });
 
 describe('GET /api/settings/2fa', () => {
-  it('reports enrollment status', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]);
-
+  it('reports whether sign-in asks for the authenticator and whether backup codes exist', async () => {
     const response = await GET(getRequest());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ enabled: true });
+    await expect(response.json()).resolves.toEqual({ enabled: true, backup_codes_ready: true });
   });
 
-  it('exempts an organization owner from the mfa gate so status stays reachable', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]);
-
+  it('stays reachable for a member whose workspace requires two-factor', async () => {
     await GET(getRequest());
 
     expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
-      mfaGateExemptForOwner: true,
+      mfaEnrollment: true,
       resolveOrganization: false,
     });
   });
 });
 
 describe('DELETE /api/settings/2fa', () => {
-  it('refuses to disable without a fresh second factor, and writes nothing', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]);
-
+  it('refuses to disable without a fresh verification, and removes nothing', async () => {
     const response = await DELETE(deleteRequest());
 
     expect(response.status).toBe(403);
     expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
       'STEP_UP_REQUIRED',
     );
-    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ eventType: 'step_up_challenged', outcome: 'denied' }),
     );
   });
 
   it('refuses a proof minted for a different action', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]);
     const otherAction = createStepUpGrant({
       userId: 'user-1',
       action: 'account.delete',
       resourceId: null,
-      method: 'totp',
+      method: 'second_factor',
     }).token;
 
     const response = await DELETE(deleteRequest(otherAction));
 
     expect(response.status).toBe(403);
-    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
   });
 
-  it('disables 2FA once the second factor has been re-verified', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
+  it('removes the sign-in factor once the account holder re-verified', async () => {
+    mocks.query.mockResolvedValueOnce([]);
 
     const response = await DELETE(deleteRequest(grant()));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ success: true });
-    expect(mocks.query.mock.calls[1]?.[0]).toContain('set enabled = false');
+    expect(mocks.removeSecondFactor).toHaveBeenCalledWith('user-1');
+    expect(mocks.rememberMfaEnrollment).toHaveBeenCalledWith('user-1', false);
   });
 
-  it('records how the second factor was proven, and tells the account owner', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
+  it('records how the account holder re-verified, and tells them', async () => {
+    mocks.query.mockResolvedValueOnce([]);
 
-    await DELETE(deleteRequest(grant('backup_code')));
+    await DELETE(deleteRequest(grant('first_factor')));
 
     expect(mocks.identityEvent).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
       expect.objectContaining({
         event: 'two_factor_disabled',
-        detail: expect.objectContaining({ source: 'backup_code' }),
+        detail: expect.objectContaining({ source: 'first_factor' }),
       }),
     );
   });
 
   it('stays idempotent for an account that never enrolled, without a challenge', async () => {
-    mocks.query.mockResolvedValueOnce([]);
+    mocks.readSecondFactorStatus.mockResolvedValueOnce(NOT_ENROLLED);
 
     const response = await DELETE(deleteRequest());
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({ success: true });
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
-  });
-
-  it('exempts an organization owner from the mfa gate so disabling stays reachable', async () => {
-    mocks.query.mockResolvedValueOnce([ROW]).mockResolvedValueOnce([]);
-
-    await DELETE(deleteRequest(grant()));
-
-    expect(getUserScopedDb).toHaveBeenCalledWith(expect.anything(), {
-      mfaGateExemptForOwner: true,
-      resolveOrganization: false,
-    });
+    expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
   });
 });

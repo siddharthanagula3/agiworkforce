@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  CLOUD_ACCOUNT_SETTINGS_PATH,
   CLOUD_API_KEY_SCOPES,
+  CloudStepUpRequiredError,
   createCloudApiKey,
   fetchCloudActiveSessions,
   listCloudApiKeys,
@@ -13,6 +15,7 @@ import {
   type CloudApiKey,
   type CloudApiKeyScope,
 } from '../../../../api/cloudAccountSettings';
+import { openDesktopCloudAccountWindow } from '../../../../services/desktopCloudAccountWindow';
 import { useAccountStore, useAuthStore } from '../../../../stores/auth';
 import {
   PRIMARY_BUTTON,
@@ -24,6 +27,37 @@ import {
 } from '../../cloud/sectionChrome';
 
 const DELETE_CONFIRMATION = 'DELETE';
+
+function FinishOnWebNotice({ message }: { message: string }) {
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const openAccountSettings = () => {
+    setOpening(true);
+    setError(null);
+    void openDesktopCloudAccountWindow(CLOUD_ACCOUNT_SETTINGS_PATH, 'AGI Cloud account')
+      .catch((caught: unknown) => {
+        setError(caught instanceof Error ? caught.message : 'Could not open account settings.');
+      })
+      .finally(() => setOpening(false));
+  };
+
+  return (
+    <div role="alert" className="rounded-lg border border-border bg-card/40 p-4">
+      <p className="text-xs leading-5 text-foreground">{message}</p>
+      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+      <button
+        type="button"
+        className={`mt-3 ${SMALL_BUTTON}`}
+        disabled={opening}
+        aria-busy={opening || undefined}
+        onClick={openAccountSettings}
+      >
+        {opening ? 'Opening…' : 'Open account settings'}
+      </button>
+    </div>
+  );
+}
 
 function AccountIdentifierRow() {
   const accountId = useAccountStore((state) => state.account.id);
@@ -77,6 +111,7 @@ function ActiveSessionsSection() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -124,14 +159,17 @@ function ActiveSessionsSection() {
     setRevokingAll(true);
     setError(null);
     setNotice(null);
+    setFinishOnWeb(null);
     try {
       await revokeAllCloudSessions();
       setSessions([]);
       await signOut();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
-      );
+      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      else
+        setError(
+          caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
+        );
       setRevokingAll(false);
     }
   };
@@ -156,6 +194,7 @@ function ActiveSessionsSection() {
 
       {loading ? <SectionLoading label="Loading active sessions…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {finishOnWeb ? <FinishOnWebNotice message={finishOnWeb} /> : null}
       {notice ? (
         <p role="status" className="text-xs text-muted-foreground">
           {notice}
@@ -245,6 +284,7 @@ function ApiKeysSection() {
   const [scopes, setScopes] = useState<CloudApiKeyScope[]>(['models:read', 'inference:write']);
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -280,13 +320,15 @@ function ApiKeysSection() {
     setCreating(true);
     setError(null);
     setIssuedKey(null);
+    setFinishOnWeb(null);
     try {
       const created = await createCloudApiKey(name.trim(), scopes);
       setKeys((current) => [created.apiKey, ...(current ?? [])]);
       setIssuedKey(created.fullKey);
       setName('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not create the API key.');
+      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      else setError(caught instanceof Error ? caught.message : 'Could not create the API key.');
     } finally {
       setCreating(false);
     }
@@ -319,6 +361,7 @@ function ApiKeysSection() {
 
       {loading ? <SectionLoading label="Loading API keys…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {finishOnWeb ? <FinishOnWebNotice message={finishOnWeb} /> : null}
 
       {issuedKey ? (
         <div role="status" className="rounded-lg border border-border bg-card/40 p-4">
@@ -411,10 +454,12 @@ function DangerZone() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
 
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
+    setFinishOnWeb(null);
     try {
       const outcome = await requestCloudAccountDeletion();
       setResult(
@@ -423,7 +468,9 @@ function DangerZone() {
       );
       setConfirmation('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not delete your Cloud account.');
+      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      else
+        setError(caught instanceof Error ? caught.message : 'Could not delete your Cloud account.');
     } finally {
       setDeleting(false);
     }
@@ -449,6 +496,11 @@ function DangerZone() {
         <p role="status" className="mt-3 text-xs text-foreground">
           {result}
         </p>
+      ) : null}
+      {finishOnWeb ? (
+        <div className="mt-3">
+          <FinishOnWebNotice message={finishOnWeb} />
+        </div>
       ) : null}
       <label className="mt-4 block text-xs text-muted-foreground" htmlFor="cloud-delete-confirm">
         Type {DELETE_CONFIRMATION} to confirm

@@ -113,9 +113,9 @@ export function CloudSecuritySection() {
           </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             {twoFactor.enabled
-              ? `${twoFactor.backupCodesRemaining} backup ${
-                  twoFactor.backupCodesRemaining === 1 ? 'code' : 'codes'
-                } remaining.`
+              ? twoFactor.backupCodesReady
+                ? 'Backup codes are set.'
+                : 'No backup codes are set. Generate a set in credential settings so you can still sign in without your authenticator app.'
               : 'Add a second factor to protect the account this Desktop is connected to.'}
           </p>
         </div>
