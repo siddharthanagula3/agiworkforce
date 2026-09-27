@@ -5,7 +5,10 @@ import { AppError, ErrorCode, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClientIp, recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { resolveIpAllowListPolicy } from '@/lib/services/organization-policy-gate';
+import {
+  readOrganizationIpAllowList,
+  resolveIpAllowListPolicy,
+} from '@/lib/services/organization-policy-gate';
 import { isIpAllowed } from '@/lib/services/ip-allow-list';
 
 const IP_NOT_ALLOWED_ERROR_REASON = 'ip_not_allowed';
@@ -27,17 +30,11 @@ export function isIpNotAllowedError(error: unknown): error is IpNotAllowedError 
   );
 }
 
-export async function assertIpAllowList(userId: string, request: NextRequest): Promise<void> {
-  const { governed } = await resolveIpAllowListPolicy(getNeonDb(), userId);
-  const enforcing = governed.filter((entry) => entry.cidrs.length > 0);
-  if (enforcing.length === 0) return;
-
-  const clientIp = getClientIp(request);
-  const refusing = enforcing.find((entry) => !isIpAllowed(clientIp, entry.cidrs));
-  if (!refusing) return;
-
-  const organizationId = refusing.organizationId;
-
+async function refuseOutsideAllowList(
+  userId: string,
+  organizationId: string,
+  request: NextRequest,
+): Promise<never> {
   logger.warn(
     { userId, organizationId },
     '[ip-allow-list] request refused by workspace ip allow list',
@@ -54,4 +51,27 @@ export async function assertIpAllowList(userId: string, request: NextRequest): P
   });
 
   throw new IpNotAllowedError();
+}
+
+export async function assertIpAllowList(userId: string, request: NextRequest): Promise<void> {
+  const { governed } = await resolveIpAllowListPolicy(getNeonDb(), userId);
+  const enforcing = governed.filter((entry) => entry.cidrs.length > 0);
+  if (enforcing.length === 0) return;
+
+  const clientIp = getClientIp(request);
+  const refusing = enforcing.find((entry) => !isIpAllowed(clientIp, entry.cidrs));
+  if (!refusing) return;
+
+  await refuseOutsideAllowList(userId, refusing.organizationId, request);
+}
+
+export async function assertOrganizationIpAllowList(
+  organizationId: string,
+  actorId: string,
+  request: NextRequest,
+): Promise<void> {
+  const { cidrs } = await readOrganizationIpAllowList(getNeonDb(), organizationId, actorId);
+  if (cidrs.length === 0 || isIpAllowed(getClientIp(request), cidrs)) return;
+
+  await refuseOutsideAllowList(actorId, organizationId, request);
 }

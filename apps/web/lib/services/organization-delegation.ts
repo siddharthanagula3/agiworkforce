@@ -320,7 +320,7 @@ export async function assertDelegatedScope(
 export type OwnerAction = 'remove' | 'demote' | 'transfer';
 
 export interface OwnerProtectionInput {
-  actorRole: OrganizationRole;
+  actorRole: OrganizationRole | null;
   targetRole: OrganizationRole;
   ownerCount: number;
   action: OwnerAction;

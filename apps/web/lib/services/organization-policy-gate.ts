@@ -495,6 +495,38 @@ export interface IpAllowListPolicyResult {
   governed: readonly GovernedIpAllowList[];
 }
 
+export async function readOrganizationIpAllowList(
+  db: DatabaseAdapter,
+  organizationId: string,
+  userId: string,
+): Promise<GovernedIpAllowList> {
+  const cached = getCachedIpAllowList(organizationId);
+  if (cached !== undefined) return { organizationId, cidrs: cached };
+
+  let policy: AdminPolicy | null;
+  try {
+    policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
+  } catch (error) {
+    const lastKnown = getLastKnownIpAllowList(organizationId);
+    if (lastKnown === undefined) {
+      logger.error(
+        { error, userId, organizationId },
+        '[ip-allow-list] policy read failed after retry and no allow list is known; request denied',
+      );
+      throw accountControlUnavailable();
+    }
+    logger.warn(
+      { error, userId, organizationId },
+      '[ip-allow-list] policy read failed after retry; enforcing the last known allow list',
+    );
+    return { organizationId, cidrs: lastKnown };
+  }
+
+  const cidrs = policy?.ipAllowList ?? [];
+  setCachedIpAllowList(organizationId, cidrs);
+  return { organizationId, cidrs };
+}
+
 export async function resolveIpAllowListPolicy(
   db: DatabaseAdapter,
   userId: string,
@@ -502,37 +534,8 @@ export async function resolveIpAllowListPolicy(
   const organizationIds = await governingOrganizationIdsOrDeny(db, userId, 'ip-allow-list');
 
   const governed: GovernedIpAllowList[] = [];
-
   for (const organizationId of organizationIds) {
-    const cached = getCachedIpAllowList(organizationId);
-    if (cached !== undefined) {
-      governed.push({ organizationId, cidrs: cached });
-      continue;
-    }
-
-    let policy: AdminPolicy | null;
-    try {
-      policy = await withAccountControlRetry(() => readOrganizationPolicy(db, organizationId));
-    } catch (error) {
-      const lastKnown = getLastKnownIpAllowList(organizationId);
-      if (lastKnown === undefined) {
-        logger.error(
-          { error, userId, organizationId },
-          '[ip-allow-list] policy read failed after retry and no allow list is known; request denied',
-        );
-        throw accountControlUnavailable();
-      }
-      logger.warn(
-        { error, userId, organizationId },
-        '[ip-allow-list] policy read failed after retry; enforcing the last known allow list',
-      );
-      governed.push({ organizationId, cidrs: lastKnown });
-      continue;
-    }
-
-    const cidrs = policy?.ipAllowList ?? [];
-    setCachedIpAllowList(organizationId, cidrs);
-    governed.push({ organizationId, cidrs });
+    governed.push(await readOrganizationIpAllowList(db, organizationId, userId));
   }
 
   return { governed };

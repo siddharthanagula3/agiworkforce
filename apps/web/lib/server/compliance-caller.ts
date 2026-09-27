@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { OrganizationPermission } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { assertOrganizationIpAllowList } from '@/lib/ip-allow-list-gate';
 import { isAdminApiKeyToken, verifyAdminApiKey } from '@/lib/server/admin-api-keys';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
@@ -26,10 +27,11 @@ export interface ComplianceCaller {
   role: string;
   keyId: string | null;
   servicePrincipalId: string | null;
+  permissions: ReadonlySet<OrganizationPermission>;
 }
 
 function bearerToken(request: Request): string | null {
-  const match = /^Bearer[ ]+(\S+)$/u.exec(request.headers.get('authorization')?.trim() ?? '');
+  const match = /^Bearer[ ]+(\S+)$/iu.exec(request.headers.get('authorization')?.trim() ?? '');
   return match?.[1] ?? null;
 }
 
@@ -59,22 +61,30 @@ export async function resolveComplianceCaller(
         'Workspace API keys require an active Team or Enterprise subscription.',
       );
     }
+    const actorUserId = servicePrincipalActorId(verified.principalId);
+    await assertOrganizationIpAllowList(verified.organizationId, actorUserId, request);
     assertServicePrincipalScope(verified, permission);
     return {
       kind: 'service_principal',
       db,
-      actorUserId: servicePrincipalActorId(verified.principalId),
+      actorUserId,
       organizationId: verified.organizationId,
       role: 'service_principal',
       keyId: verified.keyId,
       servicePrincipalId: verified.principalId,
+      permissions: verified.scopes,
     };
   }
 
   const { db, userId } = await getUserScopedDb(request);
   const membership = requireOrgMember(await resolveOrgMembership(db, userId));
   await requireTeamAdminAccess(db, userId, membership.organizationId);
-  await requireMemberPermission(membership.organizationId, userId, permission, deniedMessage);
+  const permissions = await requireMemberPermission(
+    membership.organizationId,
+    userId,
+    permission,
+    deniedMessage,
+  );
   return {
     kind: 'member',
     db,
@@ -83,5 +93,6 @@ export async function resolveComplianceCaller(
     role: membership.role,
     keyId: null,
     servicePrincipalId: null,
+    permissions,
   };
 }
