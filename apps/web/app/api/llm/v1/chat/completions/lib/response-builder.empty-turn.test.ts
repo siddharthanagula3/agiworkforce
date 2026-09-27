@@ -68,6 +68,7 @@ function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-nonstream-001',
     chatRequest: { model: 'fixture-model', messages: [] },
+    llmRequest: { model: 'fixture-model', messages: [] },
     requestedModel: 'fixture-model',
     provider: 'anthropic',
     conversationId: 'conv-1',

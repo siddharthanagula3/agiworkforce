@@ -39,6 +39,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 vi.mock('@/lib/services/provider-availability-service', () => ({
   markProviderDegraded: vi.fn(),
@@ -59,6 +64,7 @@ function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-upstream-001',
     chatRequest: { model: 'fixture-model', messages: [], stream: true },
+    llmRequest: { model: 'fixture-model', messages: [], stream: true },
     requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 5,

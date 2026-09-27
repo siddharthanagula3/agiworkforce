@@ -39,6 +39,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 import { buildAdapterStreamResponse } from '../lib/stream-transform';
@@ -63,6 +68,7 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   return {
     requestId: 'req-adapter-001',
     chatRequest: { model: 'fixture-model', messages: [], stream: true } as any,
+    llmRequest: { model: 'fixture-model', messages: [], stream: true } as any,
     requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 5,
@@ -442,6 +448,7 @@ describe('buildAdapterStreamResponse · billing reconciliation', () => {
       outcome: 'completed',
       provider: 'anthropic',
       model: 'fixture-model',
+      cost: { tokenMicrousd: 40000, toolMicrousd: 0 },
       usage: expect.objectContaining({
         promptTokens: 100,
         completionTokens: 50,

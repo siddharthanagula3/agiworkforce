@@ -25,6 +25,12 @@ vi.mock('@/lib/web-search/web-search-tool', async () => {
   };
 });
 
+const mockSettlePerplexitySearchCall = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock('@/lib/web-search/perplexity-search-cost', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/web-search/perplexity-search-cost')>()),
+  settlePerplexitySearchCall: (...args: unknown[]) => mockSettlePerplexitySearchCall(...args),
+}));
+
 const mockResolveSearchBudget = vi.fn();
 const mockReserveSearchCharge = vi.fn();
 vi.mock('@/lib/web-search/search-budget', async () => {
@@ -164,12 +170,14 @@ describe('runToolLoop, required web search', () => {
     mockResolveSearchBudget.mockResolvedValue({ outcome: 'included' });
     mockReserveSearchCharge.mockReset();
     mockGetE2BExecutor.mockResolvedValue(null);
+    mockSettlePerplexitySearchCall.mockClear();
     mockExecuteWebSearch.mockResolvedValue({
       ok: true,
       query: "today's top headline",
       results: [{ url: 'https://example.com', title: 'Example', snippet: 'x' }],
       providerId: 'perplexity',
       retrievedAt: '2026-09-22T00:00:00.000Z',
+      billableCalls: 1,
     });
   });
 
@@ -281,7 +289,11 @@ describe('runToolLoop, required web search', () => {
     expect(output).not.toContain('web_search_not_performed');
     expect(mockExecuteWebSearch).toHaveBeenCalledWith(
       { query: "today's top headline" },
-      expect.objectContaining({ userId: 'user-1' }),
+      expect.any(Object),
+    );
+    expect(mockSettlePerplexitySearchCall).toHaveBeenCalledTimes(1);
+    expect(mockSettlePerplexitySearchCall).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', billableCalls: 1, answered: true }),
     );
     expect(JSON.stringify(mockExecuteWebSearch.mock.calls)).not.toContain(
       'Private earlier context',

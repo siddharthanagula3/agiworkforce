@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
-const searchCostMocks = vi.hoisted(() => ({ record: vi.fn(async () => undefined) }));
+const searchCostMocks = vi.hoisted(() => ({ settle: vi.fn(async () => undefined) }));
 vi.mock('undici', async (importOriginal) => {
   // pinnedPublicFetch calls undici's own fetch so its Agent and its fetch come
   // from one undici instance; the production runtime rejects a foreign Agent on
@@ -52,9 +52,9 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
   normalizeProviderId: (provider: string | null | undefined) =>
     typeof provider === 'string' ? provider.toLowerCase() : null,
 }));
-vi.mock('@/lib/web-search/perplexity-search-cost', () => ({
-  recordPerplexitySearchCost: searchCostMocks.record,
-  PERPLEXITY_SEARCH_PROVIDER_ID: 'perplexity',
+vi.mock('@/lib/web-search/perplexity-search-cost', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/web-search/perplexity-search-cost')>()),
+  settlePerplexitySearchCall: searchCostMocks.settle,
 }));
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { runResearchLoop, READY_MARKER } from './research-loop';
@@ -484,9 +484,14 @@ describe('research loop runtime web_search', () => {
       expect(last?.['sources']).toBe(2);
       expect(last?.['searches']).toBe(1);
 
-      expect(searchCostMocks.record).toHaveBeenCalledTimes(1);
-      expect(searchCostMocks.record).toHaveBeenCalledWith(
-        expect.objectContaining({ userId: 'user-1', calls: 1 }),
+      expect(searchCostMocks.settle).toHaveBeenCalledTimes(1);
+      expect(searchCostMocks.settle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          billableCalls: 1,
+          answered: true,
+          callOrdinal: 1,
+        }),
       );
     } finally {
       vi.unstubAllGlobals();

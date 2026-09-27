@@ -39,6 +39,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 const persistence = vi.hoisted(() => ({
@@ -60,6 +65,7 @@ function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-citation-urls',
     chatRequest: { model: 'fixture-model', messages: [], stream: true },
+    llmRequest: { model: 'fixture-model', messages: [], stream: true },
     requestedModel: 'fixture-model',
     provider: 'google',
     conversationId: '99999999-9999-4999-8999-999999999999',

@@ -67,15 +67,26 @@ const finalizeMock = vi.fn(async (..._args: unknown[]) => ({
   actualCostCents: 1,
 }));
 const markStartedMock = vi.fn(async (..._args: unknown[]) => {});
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   reserveManagedUsageRequest: (...args: unknown[]) => reserveMock(...args),
   finalizeManagedUsageRequest: (...args: unknown[]) => finalizeMock(...args),
   markManagedUsageProviderStarted: (...args: unknown[]) => markStartedMock(...args),
   fingerprintManagedUsageRequest: () => 'hash',
 }));
 
-vi.mock('@/lib/services/subscription-service', () => ({
-  SubscriptionService: { getSubscription: async () => ({ plan_tier: 'pro' }) },
+const resolveEntitledPlanTierMock = vi.fn(async (..._args: unknown[]) => 'pro');
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/entitlement-resolution')>()),
+  resolveEntitledPlanTier: (...args: unknown[]) => resolveEntitledPlanTierMock(...args),
+}));
+
+const beginFreeTrialRequestMock = vi.fn();
+const settleFreeTrialRequestMock = vi.fn(async (..._args: unknown[]) => undefined);
+vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
+  beginFreeTrialRequest: (...args: unknown[]) => beginFreeTrialRequestMock(...args),
+  settleFreeTrialRequest: (...args: unknown[]) => settleFreeTrialRequestMock(...args),
 }));
 
 vi.mock('@/lib/services/provider-adapter-service', () => ({
@@ -141,6 +152,7 @@ function scheduleInput(
 beforeEach(() => {
   vi.clearAllMocks();
   redisClient = new FakeRedis();
+  resolveEntitledPlanTierMock.mockResolvedValue('pro');
   resolveAutoRouteMock.mockReturnValue(SELECTED_ROUTE);
   drainToLlmResponseMock.mockResolvedValue({
     model: 'test.model',
@@ -261,5 +273,81 @@ describe('exact-response cache integration', () => {
     scheduleConversationTitleGeneration(scheduleInput(dbUserTwo, { userId: 'user_b' }));
     await new Promise((resolve) => setImmediate(resolve));
     expect(drainToLlmResponseMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('free accounts on the Free usage windows', () => {
+  const FREE_RESERVATION = {
+    kind: 'free_trial' as const,
+    userId: USER_ID,
+    requestId: `title:${CONVERSATION_ID}`,
+    reservedMicrousd: 4_000,
+  };
+
+  beforeEach(() => {
+    resolveEntitledPlanTierMock.mockResolvedValue('free');
+  });
+
+  it('reserves the call on the Free windows and settles its measured cost there', async () => {
+    beginFreeTrialRequestMock.mockResolvedValue({ ok: true, reservation: FREE_RESERVATION });
+    const db = fakeDb();
+
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(reserveMock).not.toHaveBeenCalled();
+    expect(beginFreeTrialRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: USER_ID,
+        requestId: `title:${CONVERSATION_ID}`,
+        leaseSeconds: 60,
+        provider: SELECTED_ROUTE.provider,
+        model: SELECTED_ROUTE.modelKey,
+        estimatedMicrousd: expect.any(Number),
+      }),
+    );
+    expect(settleFreeTrialRequestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reservation: FREE_RESERVATION,
+        outcome: 'completed',
+        provider: SELECTED_ROUTE.provider,
+        model: SELECTED_ROUTE.modelKey,
+        cost: { tokenMicrousd: expect.any(Number), toolMicrousd: 0 },
+      }),
+    );
+    expect(finalizeMock).not.toHaveBeenCalled();
+    expect(db.executed[0]?.[0]).toBe('Refactor auth module');
+  });
+
+  it('keeps the truncated title and never calls the provider when the Free windows are spent', async () => {
+    beginFreeTrialRequestMock.mockResolvedValue({
+      ok: false,
+      code: 'budget_reached',
+      resetAt: '2026-09-27T15:00:00.000Z',
+    });
+    const db = fakeDb();
+
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(drainToLlmResponseMock).not.toHaveBeenCalled();
+    expect(settleFreeTrialRequestMock).not.toHaveBeenCalled();
+    expect(db.executed).toHaveLength(0);
+  });
+
+  it('releases the Free reservation at no charge when the provider call fails', async () => {
+    beginFreeTrialRequestMock.mockResolvedValue({ ok: true, reservation: FREE_RESERVATION });
+    drainToLlmResponseMock.mockRejectedValueOnce(new Error('upstream anthropic'));
+    const db = fakeDb();
+
+    scheduleConversationTitleGeneration(scheduleInput(db));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(settleFreeTrialRequestMock).toHaveBeenCalledTimes(1);
+    expect(settleFreeTrialRequestMock).toHaveBeenCalledWith({
+      reservation: FREE_RESERVATION,
+      outcome: 'failed',
+    });
+    expect(db.executed).toHaveLength(0);
   });
 });

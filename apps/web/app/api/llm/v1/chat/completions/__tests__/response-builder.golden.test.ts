@@ -53,6 +53,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 import { buildNonStreamResponse } from '../lib/response-builder';
@@ -67,6 +72,7 @@ function makeProcessed(overrides: Partial<ProcessedRequest> = {}): ProcessedRequ
   return {
     requestId: 'req-test-001',
     chatRequest: { model: 'fixture-model', messages: [], stream: false } as any,
+    llmRequest: { model: 'fixture-model', messages: [], stream: false } as any,
     requestedModel: 'fixture-model',
     provider: 'anthropic',
     estimatedCostCents: 100,
@@ -295,6 +301,7 @@ describe('buildNonStreamResponse golden fixture', () => {
       outcome: 'completed',
       provider: 'anthropic',
       model: 'fixture-model',
+      cost: { tokenMicrousd: 1230000, toolMicrousd: 0 },
       usage: expect.objectContaining({
         promptTokens: 100,
         completionTokens: 20,

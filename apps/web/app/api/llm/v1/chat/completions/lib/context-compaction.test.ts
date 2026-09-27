@@ -13,10 +13,8 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
     ),
   };
 });
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
-  estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
-    source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
-
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   fingerprintManagedUsageRequest: vi.fn(() => 'request-hash'),
   reserveManagedUsageRequest: vi.fn(),
   markManagedUsageProviderStarted: vi.fn(),

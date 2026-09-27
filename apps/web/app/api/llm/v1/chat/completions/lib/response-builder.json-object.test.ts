@@ -73,6 +73,7 @@ function jsonObjectRequest(): ProcessedRequest {
       stream: false,
       response_format: { type: 'json_object' },
     },
+    llmRequest: { model: 'fixture-model', messages: [], stream: false },
     requestedModel: 'fixture-model',
     provider: 'anthropic',
     conversationId: 'conv-1',

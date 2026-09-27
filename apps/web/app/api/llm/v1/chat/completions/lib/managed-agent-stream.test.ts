@@ -87,6 +87,11 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   isFreeTrialRequest: () => false,
   beginFreeTrialRequest: vi.fn(),
   applyFreeTrialProviderBudget: vi.fn(),
+  createFreeTrialToolSpend: vi.fn(),
+  fitsFreeTrialWindow: vi.fn(() => true),
+  freeTrialResetAt: vi.fn(async () => null),
+  freeTrialRetryAfterSeconds: vi.fn(() => undefined),
+  scopeFreeTrialToolSpend: vi.fn(),
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
@@ -104,8 +109,11 @@ vi.mock('@/lib/logger', () => ({
 
 import {
   accumulateObservedProviderUsage,
+  addToolSpend,
   createObservedProviderUsage,
+  observedProviderUsageLedgerMicrousd,
 } from '@/lib/services/managed-usage-accounting-service';
+import { nativeServerToolMicrousdPerRequest } from '@/lib/web-search/native-search-pricing';
 import { buildManagedAgentStream } from './managed-agent-stream';
 import type { ProcessedRequest } from './request-processor';
 import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
@@ -362,7 +370,12 @@ describe('managed agent stream', () => {
     events.length = 0;
     settleFreeTrialRequest.mockClear();
     const usage = createObservedProviderUsage();
-    accumulateObservedProviderUsage(usage, { inputTokens: 90, outputTokens: 30 });
+    accumulateObservedProviderUsage(usage, {
+      inputTokens: 90,
+      outputTokens: 30,
+      webSearchRequests: 2,
+    });
+    addToolSpend(usage, 7_000);
     const freeProcessed = {
       ...processed,
       managedUsage: undefined,
@@ -392,7 +405,13 @@ describe('managed agent stream', () => {
       outcome: 'completed',
       provider: 'anthropic',
       model: 'claude-test',
-      measuredCostDollars: expect.any(Number),
+      cost: {
+        tokenMicrousd: observedProviderUsageLedgerMicrousd(usage, {
+          provider: 'anthropic',
+          model: 'claude-test',
+        }),
+        toolMicrousd: 2 * nativeServerToolMicrousdPerRequest('anthropic', 'web_search') + 7_000,
+      },
       usage: expect.objectContaining({
         promptTokens: 90,
         completionTokens: 30,
@@ -429,7 +448,7 @@ describe('managed agent stream', () => {
       outcome: 'failed',
       provider: 'anthropic',
       model: 'claude-test',
-      measuredCostDollars: 0,
+      cost: { tokenMicrousd: 0, toolMicrousd: 0 },
       usage: expect.objectContaining({ totalTokens: 0 }),
     });
   });
