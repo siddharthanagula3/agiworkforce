@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { CircleAlert, X } from '@agiworkforce/icons';
-import { Spinner } from '@agiworkforce/ui';
-import type { VisualFrame } from '@agiworkforce/types';
+import { ApprovalCard, Spinner } from '@agiworkforce/ui';
+import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
 
 import { cn } from '@shared/lib/utils';
 import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
@@ -31,6 +31,7 @@ const LABEL = {
   stopCamera: 'Stop sharing your camera',
   cameraPreview: 'Preview of what your camera is sharing',
   cameraSharing: 'Your camera is being shared with this call.',
+  approvalTitle: 'Waiting for your approval',
 } as const;
 
 const ESCAPE = 'Escape';
@@ -109,6 +110,7 @@ export function VoiceModeSurface({
     status,
     muted,
     backendBusy: session.backendBusy,
+    approvalPending: session.toolApprovals.length > 0,
   });
 
   useEffect(() => {
@@ -252,6 +254,26 @@ export function VoiceModeSurface({
       </p>
 
       {notice}
+      {session.toolApprovals.map((approval) => (
+        <ApprovalCard
+          key={approval.callId}
+          data-testid="voice-tool-approval"
+          className="w-full max-w-md"
+          title={LABEL.approvalTitle}
+          requests={[{ id: approval.callId, name: approval.summary, detail: approval.name }]}
+          approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
+          denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
+          onApprove={() => session.decideToolApproval(approval.callId, 'approved')}
+          onDeny={() => session.decideToolApproval(approval.callId, 'rejected')}
+          pending={approval.deciding}
+        >
+          {approval.input ? (
+            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 font-mono text-caption text-muted-foreground">
+              {approval.input}
+            </pre>
+          ) : null}
+        </ApprovalCard>
+      ))}
       {sendingChip}
       {captionsOpen ? <VoiceCaptions lines={captions} /> : null}
 
