@@ -99,6 +99,7 @@ const OPERATIONAL_RECORD = [
   'agent_approval_requests',
   'agent_tools',
   'api_keys',
+  'auto_reload_settings',
   'background_jobs',
   'beta_applications',
   'beta_invites',
