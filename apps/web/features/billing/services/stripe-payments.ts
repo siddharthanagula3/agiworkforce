@@ -6,6 +6,10 @@ import {
   MIN_PURCHASABLE_SEATS,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
+import {
+  apiErrorCode as extractErrorCode,
+  apiErrorMessage as extractErrorMessage,
+} from '../lib/api-error';
 
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
@@ -13,26 +17,6 @@ function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): n
     throw new Error(`${plan} is billed per seat; choose how many seats to buy.`);
   }
   return seats;
-}
-
-function extractErrorMessage(body: unknown, fallback: string): string {
-  if (body && typeof body === 'object') {
-    const err = (body as { error?: unknown }).error;
-    if (typeof err === 'string' && err) return err;
-    if (err && typeof err === 'object') {
-      const message = (err as { message?: unknown }).message;
-      if (typeof message === 'string' && message) return message;
-    }
-  }
-  return fallback;
-}
-
-function extractErrorCode(body: unknown): string | null {
-  if (!body || typeof body !== 'object') return null;
-  const error = (body as { error?: unknown }).error;
-  if (!error || typeof error !== 'object') return null;
-  const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' ? code : null;
 }
 
 export class CheckoutRequiredError extends Error {
