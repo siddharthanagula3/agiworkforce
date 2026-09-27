@@ -10,6 +10,7 @@ import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import type { ScheduleModelOption } from '@/lib/schedules/schedule-models';
 import type { IntervalUnit, ScheduleDraft, ScheduleFormErrors } from '../types';
 import { DAYPART_PRESETS, DAYS_OF_WEEK } from '../types';
+import { ScheduleAccessFields } from './ScheduleAccessFields';
 
 interface ScheduleFormProps {
   draft: ScheduleDraft;
@@ -115,15 +116,14 @@ export function ScheduleForm({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pr-3">
         <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p>
-            Scheduled runs use Managed Cloud and return text. Each run reads your saved memories
-            when memory is on, and a project&rsquo;s instructions and files when the schedule
-            belongs to one.
+            Scheduled runs use Managed Cloud and return text. Choose below what each run can read
+            and which connectors it can use.
           </p>
           <p>
-            Nobody is there to approve actions, so a run uses only tools that need no approval: web
-            search, page fetch and code when Settings → Capabilities → Tool approvals lets them run
-            without asking, and connector tools you set to Always allow. Anything else is skipped,
-            and the output says so. Research and media generation are not available.
+            When a run reaches an action your Tool approvals setting asks about, it pauses and
+            notifies you, and continues once you approve or deny it in Run History. Web search and
+            code that the model runs itself are skipped instead when they need approval, and the
+            output says so. Research and media generation are not available.
           </p>
           <p>
             Email and mobile-push alerts for a finished run are account-wide, not per schedule. Turn
@@ -191,8 +191,7 @@ export function ScheduleForm({
               aria-describedby={describedBy('prompt', errors, 'schedule-prompt-helper')}
             />
             <p id="schedule-prompt-helper" className="text-xs text-muted-foreground">
-              Write a self-contained instruction. Scheduled runs do not see your chats, but they do
-              read your saved memories when memory is on.
+              Write a self-contained instruction. Scheduled runs do not see your chats.
             </p>
             <FieldError field="prompt" errors={errors} />
           </div>
@@ -598,6 +597,13 @@ export function ScheduleForm({
             </div>
           </details>
         )}
+
+        <ScheduleAccessFields
+          hasProject={Boolean(draft.projectId)}
+          sources={draft.sources}
+          connectors={draft.connectors}
+          onChange={set}
+        />
 
         <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
           <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

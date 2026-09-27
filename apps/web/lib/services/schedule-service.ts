@@ -2,8 +2,12 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
   ManagedCloudScheduleRunApprovalToolCallSchema,
+  ManagedCloudScheduleSourcesSchema,
+  type ManagedCloudScheduleSources,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudScheduleRunApprovalToolCall,
@@ -149,6 +153,8 @@ export interface ScheduleInput {
   retryBackoffSeconds?: number;
   missedExecutionPolicy?: MissedExecutionPolicy;
   condition?: unknown;
+  sources?: unknown;
+  connectors?: unknown;
 }
 
 export type ScheduleUpdateInput = Partial<ScheduleInput>;
@@ -356,6 +362,8 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
       row.paused_reason === 'credit_cap_reached' || row.paused_reason === 'approval_required'
         ? row.paused_reason
         : null,
+    sources: sourcesFromMetadata(row.metadata),
+    connectors: connectorsFromMetadata(row.metadata),
   };
 }
 
@@ -546,7 +554,52 @@ const SCHEDULE_INPUT_KEYS = new Set([
   'retryBackoffSeconds',
   'missedExecutionPolicy',
   'condition',
+  'sources',
+  'connectors',
 ]);
+
+const CONNECTOR_ID_PATTERN = /^[A-Za-z0-9_.-]{1,128}$/;
+
+function normalizeScheduleSources(value: unknown): ManagedCloudScheduleSources {
+  if (value === undefined || value === null) return { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES };
+  const parsed = ManagedCloudScheduleSourcesSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new ScheduleValidationError('sources must say true or false for project, memory and web');
+  }
+  return parsed.data;
+}
+
+function normalizeScheduleConnectors(value: unknown): string[] | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.length > MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS) {
+    throw new ScheduleValidationError(
+      `connectors must be a list of at most ${MANAGED_CLOUD_SCHEDULE_MAX_CONNECTORS} connector ids`,
+    );
+  }
+  const ids: string[] = [];
+  for (const entry of value) {
+    const id = typeof entry === 'string' ? entry.trim() : '';
+    if (!CONNECTOR_ID_PATTERN.test(id)) {
+      throw new ScheduleValidationError('Each connector must be a connector id');
+    }
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
+function sourcesFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): ManagedCloudScheduleSources {
+  const parsed = ManagedCloudScheduleSourcesSchema.safeParse(metadata?.['sources']);
+  return parsed.success ? parsed.data : { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES };
+}
+
+function connectorsFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+): string[] | null {
+  const stored = metadata?.['connectors'];
+  return Array.isArray(stored) ? stored.filter((id): id is string => typeof id === 'string') : null;
+}
 
 function validateScheduleInput(
   input: ScheduleInput,
@@ -632,6 +685,8 @@ function validateScheduleInput(
     }
     const dayparts = normalizeDayparts(input.dayparts);
     const condition = normalizeScheduleCondition(input.condition);
+    const sources = normalizeScheduleSources(input.sources);
+    const connectors = normalizeScheduleConnectors(input.connectors);
 
     let scheduleType: ScheduleTask['scheduleType'];
     let cronExpression: string | null = null;
@@ -723,6 +778,8 @@ function validateScheduleInput(
         ...(input.timeOfDay ? { timeOfDay: input.timeOfDay } : {}),
         ...(input.daysOfWeek ? { daysOfWeek: [...input.daysOfWeek] } : {}),
         ...(input.dayOfMonth ? { dayOfMonth: input.dayOfMonth } : {}),
+        sources,
+        ...(connectors ? { connectors } : {}),
       },
     };
   });
@@ -941,6 +998,8 @@ function inputFromTask(task: ScheduleTask): ScheduleInput {
     retryBackoffSeconds: task.retryBackoffSeconds ?? DEFAULT_RETRY_BACKOFF_SECONDS,
     missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
     condition: task.condition ?? null,
+    sources: task.sources ?? sourcesFromMetadata(task.metadata),
+    connectors: task.connectors ?? connectorsFromMetadata(task.metadata),
   };
 }
 
