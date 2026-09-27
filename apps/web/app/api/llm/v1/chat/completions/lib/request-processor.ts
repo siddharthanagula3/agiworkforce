@@ -17,6 +17,12 @@ import {
 } from '@agiworkforce/compliance';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 import { modelSupportsResearch } from '@/features/chat/lib/research-capability-gate';
+import {
+  composeStudyInstruction,
+  isStudyLevel,
+  isStudyMode,
+  normalizeStudyTopic,
+} from '@/features/study/lib/study-session';
 import { AgiWorkGoalSchema } from './agiwork-plan';
 import { FREE_USAGE_LIMIT_REACHED_MESSAGE } from './upstream-error-copy';
 import { demoteLowConfidencePremiumSelection } from './route-selection';
@@ -1182,6 +1188,7 @@ export function composeManagedSystemPreamble(input: {
   capabilityPreamble: string | null;
   customInstructionsPreamble: string | null | undefined;
   projectInstruction?: string | null;
+  studyInstruction?: string | null;
   dynamicSystemAddition: string;
 }): string {
   const withDynamicAddition = prependSystemPromptAdditionAfterCacheBoundary({
@@ -1191,6 +1198,7 @@ export function composeManagedSystemPreamble(input: {
   const split = splitSystemPromptCacheBoundary(withDynamicAddition);
   const stableBlock = orderInstructionBlocks([
     { layer: 'system', text: split ? split.stablePrefix : withDynamicAddition },
+    { layer: 'developer', text: input.studyInstruction ?? '' },
     { layer: 'project', text: input.projectInstruction ?? '' },
     { layer: 'personalized', text: input.customInstructionsPreamble ?? '' },
   ])
@@ -1201,6 +1209,16 @@ export function composeManagedSystemPreamble(input: {
   return dynamicBlock
     ? `${stableBlock}${SYSTEM_PROMPT_CACHE_BOUNDARY}${dynamicBlock}`
     : stableBlock;
+}
+
+function activeStudyInstruction(row: {
+  study_topic: string | null;
+  study_mode: string | null;
+  study_level: string | null;
+}): string | null {
+  const topic = normalizeStudyTopic(row.study_topic);
+  if (!topic || !isStudyMode(row.study_mode) || !isStudyLevel(row.study_level)) return null;
+  return composeStudyInstruction({ topic, mode: row.study_mode, level: row.study_level });
 }
 
 /**
@@ -2569,6 +2587,7 @@ export async function processRequest(
         projectId: string | null;
         projectBlocks: readonly ProjectContextBlock[];
         projectSources?: ProjectFileCitation[];
+        studyInstruction: string | null;
       }
     | ProcessFailure
   > = chatRequest.conversation_id
@@ -2598,10 +2617,16 @@ export async function processRequest(
             project_id: string | null;
             is_temporary: boolean;
             selected_route_id: string | null;
+            study_topic: string | null;
+            study_mode: string | null;
+            study_level: string | null;
           }>(
-            `select id, project_id, is_temporary, to_jsonb(web_conversations)->>'selected_route_id' as selected_route_id
-                 from web_conversations
-                where id = $1 and user_id = $2 and deleted_at is null
+            `select c.id, c.project_id, c.is_temporary, to_jsonb(c)->>'selected_route_id' as selected_route_id,
+                    s.topic as study_topic, s.mode as study_mode, s.level as study_level
+                 from web_conversations c
+                 left join study_sessions s
+                   on s.conversation_id = c.id and s.user_id = c.user_id and s.ended_at is null
+                where c.id = $1 and c.user_id = $2 and c.deleted_at is null
                 limit 1`,
             [chatRequest.conversation_id, userId],
           );
@@ -2682,6 +2707,7 @@ export async function processRequest(
             projectId: ownedRows[0].project_id,
             projectBlocks,
             ...(projectSources.length > 0 ? { projectSources } : {}),
+            studyInstruction: activeStudyInstruction(ownedRows[0]),
           };
         } catch (error) {
           logger.error(
@@ -2709,6 +2735,7 @@ export async function processRequest(
         selectedRouteId: null,
         projectId: null,
         projectBlocks: [],
+        studyInstruction: null,
       });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
@@ -4653,6 +4680,7 @@ export async function processRequest(
       capabilityPreamble,
       customInstructionsPreamble,
       projectInstruction: projectInstructionBlock,
+      studyInstruction: ownership.studyInstruction,
       dynamicSystemAddition: dynamicTurnInstruction,
     });
     const preambleSplit = preamble ? splitSystemPromptCacheBoundary(preamble) : undefined;
