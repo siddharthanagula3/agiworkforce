@@ -19,11 +19,16 @@ async fn http_initialize_sends_protocol_version_and_host_client_info() {
         .expect("connect + initialize should succeed");
     drop(client);
 
+    assert_eq!(
+        rec.methods().first().map(String::as_str),
+        Some("server/discover"),
+        "negotiation must probe for the stateless revision before falling back"
+    );
     let init = rec
         .last_for("initialize")
         .expect("server must have seen an initialize");
     let params = &init.body["params"];
-    assert_eq!(params["protocolVersion"], "2024-11-05");
+    assert_eq!(params["protocolVersion"], "2025-11-25");
     // clientInfo must be the host's identity (from ClientHooks), not the crate's.
     assert_eq!(params["clientInfo"]["name"], "test-harness");
     assert_eq!(params["clientInfo"]["version"], "9.9.9");
