@@ -45,6 +45,7 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
+  getClientIpForRateLimit: () => '203.0.113.7',
 }));
 
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
