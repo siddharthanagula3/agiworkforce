@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { BILLING_PLAN_CATALOG_VERSION } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({
   resolvePlanTier: vi.fn(),
@@ -23,7 +24,8 @@ vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
- CreditService: {} }));
+  CreditService: {},
+}));
 vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: (...args: unknown[]) => mocks.resolvePlanTier(...args),
   isValidPlanTier: (tier: unknown) => tier === 'pro' || tier === 'max_15x',
@@ -197,6 +199,7 @@ describe('checkout subscription Price authority', () => {
       new Date(periodStart * 1000),
       new Date((periodStart + 30 * 24 * 60 * 60) * 1000),
       db,
+      { next: BILLING_PLAN_CATALOG_VERSION },
     );
     expect(mocks.allocateCredits).not.toHaveBeenCalled();
   });
