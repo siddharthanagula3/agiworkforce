@@ -459,10 +459,6 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // and the pricing page use.
   const currentTier = subscription?.tier ?? (billingPolicyReady ? 'free' : undefined);
   const isFreeTier = isFreeBillingPlanTier(currentTier);
-  // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
-  // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
-  // label ("Max 15x"), the same source the chat sidebar and shared
-  // UserProfile already use, so all three footers agree.
   const tierLabel = currentTier ? getBillingPlanPricing(currentTier).label : null;
 
   const handleLogout = useCallback(async () => {

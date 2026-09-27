@@ -234,6 +234,50 @@ export function canUseBillingPlanCapability(
   return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
 }
 
+export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapability, string>> =
+  Object.freeze({
+    managed_chat: 'Managed Cloud chat on web, desktop, mobile and Chrome',
+    chat_tools: 'Chat tools',
+    projects: 'Projects',
+    memory_personalization: 'Memory and personalization',
+    skills_connectors: 'Skills and connectors',
+    cloud_sync: 'Sync across devices',
+    agi_work: 'AGI Work',
+    image_generation: 'Image generation',
+    video_generation: 'Video generation',
+    managed_api: 'Managed API access',
+    developer_surfaces: 'Managed Cloud in the CLI and VS Code',
+    team_admin: 'Team administration',
+    enterprise_controls: 'SSO, SCIM and admin controls',
+  });
+
+export function billingPlanCapabilities(plan: string | null | undefined): BillingPlanCapability[] {
+  return (Object.keys(BILLING_PLAN_CAPABILITY_TIERS) as BillingPlanCapability[]).filter(
+    (capability) => canUseBillingPlanCapability(plan, capability),
+  );
+}
+
+export function billingPlanCapabilitiesAddedOver(
+  plan: string | null | undefined,
+  baseline: string | null | undefined,
+): BillingPlanCapability[] {
+  const included = new Set(billingPlanCapabilities(baseline));
+  return billingPlanCapabilities(plan).filter((capability) => !included.has(capability));
+}
+
+export const USAGE_WORKLOAD_LABELS: Readonly<Record<string, string>> = Object.freeze({
+  chat: 'Chat',
+  work: 'AGI Work',
+  research: 'Deep Research',
+  code: 'AGI Code',
+  browser: 'Browser',
+  unknown: 'Not attributed',
+});
+
+export function usageWorkloadLabel(key: string): string {
+  return USAGE_WORKLOAD_LABELS[key] ?? key;
+}
+
 export type BillingPlanLimit = number | 'unlimited' | 'custom';
 
 const MINUTE_MS = 60_000;

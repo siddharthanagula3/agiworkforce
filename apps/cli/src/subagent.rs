@@ -281,9 +281,9 @@ impl SubagentManager {
             Some(budget) => match budget.child_cap_usd(self.max_concurrent) {
                 Some(cap) => Some(cap),
                 None => bail!(
-                    "Session spend cap reached (${:.2} of ${:.2}). No further subagent can be spawned.",
-                    budget.spent_usd,
-                    budget.cap_usd
+                    "Session spend cap reached ({} used of {}). No further subagent can be spawned.",
+                    crate::cost_ledger::format_usd_as_credits(budget.spent_usd),
+                    crate::cost_ledger::format_usd_as_credits(budget.cap_usd)
                 ),
             },
             None => None,

@@ -1,4 +1,4 @@
-import { CENTS_PER_USD, CREDITS_PER_CENT, creditsFromCents } from './credits';
+import { CENTS_PER_USD, CREDITS_PER_CENT, creditsFromCents, formatCredits } from './credits';
 
 export { CENTS_PER_USD, creditsFromCents };
 
@@ -126,18 +126,27 @@ export function isAutoReloadThresholdCredits(value: unknown): value is number {
   );
 }
 
+export const AUTO_RELOAD_CONSENT_VERSION = '2026-09-27';
+
+export interface AutoReloadCard {
+  brand: string;
+  last4: string;
+}
+
 export interface AutoReloadSettings {
   enabled: boolean;
   thresholdCredits: number;
   amountUsd: number;
-  paymentMethod: { brand: string; last4: string } | null;
+  paymentMethod: AutoReloadCard | null;
   lastFailure: { at: string; reason: string } | null;
+  consent: { version: string; acceptedAt: string } | null;
 }
 
 export interface AutoReloadSettingsUpdate {
   enabled: boolean;
   thresholdCredits: number;
   amountUsd: number;
+  consentVersion?: string;
 }
 
 export function isValidAutoReloadSettingsUpdate(value: unknown): value is AutoReloadSettingsUpdate {
@@ -146,6 +155,38 @@ export function isValidAutoReloadSettingsUpdate(value: unknown): value is AutoRe
   return (
     typeof update['enabled'] === 'boolean' &&
     isAutoReloadThresholdCredits(update['thresholdCredits']) &&
-    isTopUpAmountUsd(update['amountUsd'])
+    isTopUpAmountUsd(update['amountUsd']) &&
+    (update['consentVersion'] === undefined || typeof update['consentVersion'] === 'string')
   );
+}
+
+function formatChargeUsd(cents: number): string {
+  const fractionDigits = cents % CENTS_PER_USD === 0 ? 0 : 2;
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(cents / CENTS_PER_USD);
+}
+
+function cardLabel(card: AutoReloadCard): string {
+  return `${card.brand.charAt(0).toUpperCase()}${card.brand.slice(1)} ending in ${card.last4}`;
+}
+
+export function autoReloadConsentText(terms: {
+  amountUsd: number;
+  thresholdCredits: number;
+  card: AutoReloadCard;
+}): string | null {
+  const quote = quoteTopUp(terms.amountUsd, { autoReload: true });
+  if (!quote) return null;
+  const threshold = formatCredits(terms.thresholdCredits);
+  return [
+    `By turning on auto-reload, you authorize AGI Workforce to charge your default card, currently ${cardLabel(terms.card)}, ${formatChargeUsd(quote.priceCents)} plus any applicable tax for ${formatCredits(quote.credits)} each time your purchased and bonus credits fall below ${threshold}.`,
+    `This can repeat, up to ${formatChargeUsd(DAILY_TOP_UP_LIMIT_USD * CENTS_PER_USD)} of top-ups a day.`,
+    `If your balance is already below ${threshold}, the first charge may happen right away.`,
+    'We email a receipt for every charge. If a charge fails, auto-reload turns off and we email you.',
+    'You can turn off auto-reload at any time in Settings > Billing, which stops future charges.',
+  ].join(' ');
 }

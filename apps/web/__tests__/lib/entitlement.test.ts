@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   effectivePlanTier,
-  isEntitledStatus,
+  isEntitledSubscriptionStatus as isEntitledStatus,
   ENTITLED_SUBSCRIPTION_STATUSES,
-} from '@/lib/entitlement';
+} from '@agiworkforce/types';
 
 describe('entitlement · isEntitledStatus', () => {
   it.each(['active', 'trialing'])('grants entitlement for status: %s', (status) => {

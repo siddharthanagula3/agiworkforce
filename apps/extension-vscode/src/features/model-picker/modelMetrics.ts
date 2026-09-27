@@ -1,18 +1,10 @@
 import * as vscode from 'vscode';
-import { MODEL_COST_BLENDED, DEFAULT_BLENDED_RATE } from './modelConstants';
 import { escapeHtml } from '../sidebar-webview/webviewContent';
 
 export interface ModelMetricsEntry {
   model: string;
   requestCount: number;
   totalLatencyMs: number;
-  totalTokens: number;
-  estimatedCostUsd: number;
-}
-
-function estimateCost(model: string, tokens: number): number {
-  const rate = MODEL_COST_BLENDED[model] ?? DEFAULT_BLENDED_RATE;
-  return (tokens / 1_000_000) * rate;
 }
 
 const STORAGE_KEY = 'agiWorkforce.modelMetrics';
@@ -31,21 +23,15 @@ class ModelMetrics {
     }
   }
 
-  recordRequest(model: string, latencyMs: number, tokens?: number): void {
+  recordRequest(model: string, latencyMs: number): void {
     const existing = this._data.get(model) ?? {
       model,
       requestCount: 0,
       totalLatencyMs: 0,
-      totalTokens: 0,
-      estimatedCostUsd: 0,
     };
 
     existing.requestCount += 1;
     existing.totalLatencyMs += latencyMs;
-    if (tokens !== undefined) {
-      existing.totalTokens += tokens;
-      existing.estimatedCostUsd += estimateCost(model, tokens);
-    }
 
     this._data.set(model, existing);
     this._persist();
@@ -155,12 +141,10 @@ export class ModelMetricsPanel {
             <td>${escapeHtml(e.model)}</td>
             <td>${e.requestCount}</td>
             <td>${avgLatency}ms</td>
-            <td>${e.totalTokens.toLocaleString()}</td>
-            <td>$${e.estimatedCostUsd.toFixed(4)}</td>
           </tr>`;
             })
             .join('')
-        : '<tr><td colspan="5" style="text-align:center;color:var(--vscode-descriptionForeground)">No requests recorded yet. Start chatting to see metrics.</td></tr>';
+        : '<tr><td colspan="3" style="text-align:center;color:var(--vscode-descriptionForeground)">No requests recorded yet. Start chatting to see metrics.</td></tr>';
 
     return /*html*/ `<!DOCTYPE html>
 <html lang="en">
@@ -211,7 +195,7 @@ export class ModelMetricsPanel {
   </div>
   <table>
     <thead>
-      <tr><th>Model</th><th>Requests</th><th>Avg Latency</th><th>Total Tokens</th><th>Est. Cost</th></tr>
+      <tr><th>Model</th><th>Requests</th><th>Avg Latency</th></tr>
     </thead>
     <tbody>${rows}</tbody>
   </table>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { BILLING_PLAN_PRICING, type SelfServePaidPlanTier } from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
+import { formatUsdAmount } from '@features/billing/lib/billing-format';
 
 const POLL_INTERVAL_MS = 2_000;
 const POLL_TIMEOUT_MS = 30_000;
@@ -93,7 +94,9 @@ export function UpgradeWelcome({
                   {planLabel}
                 </span>
                 {monthlyPriceUsd !== null && monthlyPriceUsd > 0 ? (
-                  <span className="text-muted-foreground">${monthlyPriceUsd}/month</span>
+                  <span className="text-muted-foreground">
+                    {formatUsdAmount(monthlyPriceUsd)}/month
+                  </span>
                 ) : null}
                 {periodEnd ? (
                   <>

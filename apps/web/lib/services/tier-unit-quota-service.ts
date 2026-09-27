@@ -2,9 +2,16 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getTierPolicy } from '@agiworkforce/types';
+import { logger } from '@/lib/logger';
 import { ManagedUsageRequestError } from './managed-usage-request-service';
 
-export type TierMeteredUnit = 'video_seconds' | 'voice_minutes' | 'computer_use_requests';
+export const TIER_METERED_UNITS = [
+  'voice_minutes',
+  'video_seconds',
+  'computer_use_requests',
+] as const;
+
+export type TierMeteredUnit = (typeof TIER_METERED_UNITS)[number];
 
 export interface TierUnitAllowance {
   hardLimit: number | null;
@@ -131,6 +138,56 @@ async function readConsumedTierUnits(
   return Number.isFinite(raw) && raw > 0 ? toUnits(raw) : 0;
 }
 
+export interface TierUnitUsage extends TierUnitAllowance {
+  unit: TierMeteredUnit;
+  consumed: number;
+}
+
+export interface TierUnitUsagePeriod {
+  periodStart: string;
+  resetAt: string;
+  units: TierUnitUsage[];
+}
+
+async function readTierUnitPeriod(
+  db: DatabaseAdapter,
+): Promise<{ periodStart: string; resetAt: string }> {
+  const [period] = await db.query<{ period_start: string | Date; reset_at: string | Date }>(
+    `select date_trunc('month', now()) as period_start,
+            date_trunc('month', now()) + interval '1 month' as reset_at`,
+  );
+  if (!period) {
+    throw new ManagedUsageRequestError(
+      'Managed usage billing is temporarily unavailable.',
+      503,
+      'billing_unavailable',
+    );
+  }
+  return {
+    periodStart: new Date(period.period_start).toISOString(),
+    resetAt: new Date(period.reset_at).toISOString(),
+  };
+}
+
+export async function readTierUnitUsage(
+  db: DatabaseAdapter,
+  userId: string,
+  planTier: string | null | undefined,
+): Promise<TierUnitUsagePeriod> {
+  const [period, consumed] = await Promise.all([
+    readTierUnitPeriod(db),
+    Promise.all(TIER_METERED_UNITS.map((unit) => readConsumedTierUnits(db, userId, unit))),
+  ]);
+  return {
+    ...period,
+    units: TIER_METERED_UNITS.map((unit, index) => ({
+      unit,
+      consumed: consumed[index] ?? 0,
+      ...getTierUnitAllowance(planTier, unit),
+    })),
+  };
+}
+
 export async function assertTierUnitAllowance(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -164,7 +221,19 @@ export async function assertTierUnitAllowance(input: {
   }
   if (consumed + requested > hardLimit) {
     const { code, message } = EXHAUSTED_UNIT_ERRORS[input.unit];
-    throw new ManagedUsageRequestError(message, 429, code);
+    const refusal = new ManagedUsageRequestError(message, 429, code);
+    try {
+      refusal.limitContext = {
+        resetsAt: (await readTierUnitPeriod(input.db)).resetAt,
+        alternativeModel: null,
+      };
+    } catch (error) {
+      logger.warn(
+        { error, userId: input.userId, unit: input.unit },
+        'Monthly allowance reset could not be read; the refusal is sent without it',
+      );
+    }
+    throw refusal;
   }
 
   return {

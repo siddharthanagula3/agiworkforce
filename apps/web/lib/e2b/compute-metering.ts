@@ -366,7 +366,7 @@ export async function meterSandboxComputeInterval(
   if (metered <= 0) {
     unbilledMs += elapsedMs;
     const base = {
-      env: E2B_COMPUTE_RATE_ENV,
+      env: SANDBOX_COMPUTE_RATE_ENV,
       userId: interval.userId,
       sandboxId: interval.sandboxId,
       elapsedMs,
@@ -443,6 +443,7 @@ export async function meterSandboxComputeInterval(
     // Metering runs from sandbox teardown and from the reclaim sweep, neither of
     // which carries a request connection, so the scope comes from the interval's
     // own owner.
+    await markSandboxComputeStarted({ userId: interval.userId, reservation });
     await finalizeManagedUsageRequest({
       db: sandboxScopedDb(interval.userId),
       userId: interval.userId,

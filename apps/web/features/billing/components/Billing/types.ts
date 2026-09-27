@@ -61,20 +61,3 @@ export interface BillingInfo {
     download_url: string;
   }[];
 }
-
-const VALID_CURRENCY_RE = /^[A-Z]{3}$/;
-
-export function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-}
-
-export function formatCurrency(amount: number, currency: string) {
-  const safeCurrency = VALID_CURRENCY_RE.test(currency) ? currency : 'USD';
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: safeCurrency }).format(
-    amount,
-  );
-}
