@@ -1192,10 +1192,20 @@ mod tests {
     #[test]
     fn test_format_cost_small_token_counts() {
         let model = paid_catalog_model();
+        let rates = crate::cost_ledger::rates_for_input(&model.id, 100);
+        let input_cost = f64::from(100_u32) / 1_000_000.0 * rates.input_per_mtok;
+        let output_cost = f64::from(50_u32) / 1_000_000.0 * rates.output_per_mtok;
         let result = format_cost(&model.id, 100, 50, crate::design_system::AccessMode::Local);
-        assert!(result.contains("Cost:"));
-        assert!(result.contains("100 in"));
-        assert!(result.contains("50 out"));
+        assert!(result.contains("100 in"), "{result}");
+        assert!(result.contains("50 out"), "{result}");
+        assert!(
+            result.contains(&crate::cost_ledger::format_usd_as_credits(
+                input_cost + output_cost
+            )),
+            "{result}"
+        );
+        assert!(!result.contains('$'), "{result}");
+        assert!(!result.contains("Cost:"), "{result}");
     }
 
     #[test]
