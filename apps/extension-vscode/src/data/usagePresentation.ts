@@ -5,6 +5,7 @@ import {
   formatCredits,
   formatUsageResetIn,
   managedUsageBucketLabel,
+  usageWorkloadLabel,
   type ManagedUsageBucket,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
@@ -30,6 +31,7 @@ export interface UsageHistorySummary {
   rangeLabel: string;
   total: string;
   totalRequests: string;
+  byWorkload: UsageHistoryRow[];
   byModel: UsageHistoryRow[];
   byDay: UsageHistoryRow[];
   unsettled: string | null;
@@ -96,6 +98,9 @@ export function summarizeUsageHistory(history: UsageHistory): UsageHistorySummar
     rangeLabel: `last ${days} ${days === 1 ? 'day' : 'days'}`,
     total: formatCredits(creditsFromCents(history.totals.costCents)),
     totalRequests: requestCount(history.totals.requests),
+    byWorkload: history.byWorkload.map((row) =>
+      historyRow(usageWorkloadLabel(row.key), row.requests, row.costCents),
+    ),
     byModel: history.byModel
       .slice(0, HISTORY_MODEL_LIMIT)
       .map((row) => historyRow(modelDisplayLabel(row.key), row.requests, row.costCents)),

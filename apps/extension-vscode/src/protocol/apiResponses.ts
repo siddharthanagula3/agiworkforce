@@ -96,6 +96,7 @@ export const UsageHistorySchema = z.object({
   daily: z
     .array(z.object({ day: isoTimestamp, requests: requestCount, costCents: ledgerCents }))
     .max(400),
+  byWorkload: z.array(UsageHistoryModelRowSchema).max(50),
   byModel: z.array(UsageHistoryModelRowSchema).max(50),
   freshness: z.object({ unsettledRequests: requestCount }),
 });
