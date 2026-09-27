@@ -30,6 +30,7 @@ import { resolveEnterpriseFundingOrganizationId } from '@/lib/services/enterpris
 import { readOrganizationPolicy } from '@/lib/services/organization-policy-service';
 import { evaluateOrganizationPolicy } from '@/lib/services/organization-policy-evaluator';
 import { BLOCK_APPEAL_PATH, recordAuditEvent } from '@/lib/security-audit';
+import { maybeTriggerAutoReload } from '@/lib/services/auto-reload-service';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -861,6 +862,10 @@ export async function finalizeManagedUsageRequest(
       usage,
       ...attribution,
     });
+  }
+
+  if (operationResult === 'finalized' && settledCostMicrousd > 0) {
+    maybeTriggerAutoReload(input.userId);
   }
 
   return {
