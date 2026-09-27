@@ -10,14 +10,11 @@ nothing is left.
 
 - Done when: A visible switch turns Memory on or off, and when off the assistant neither reads nor saves memories.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, api
+- Already works on: web, desktop, mobile, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The only switch (/memories Auto-memory) stops learning; CLAUDE.md files, raw_memories.md and account memory are always injected, so Memory cannot be turned off. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3914-3931`, `apps/cli/src/agent/mod.rs:1660-1670`, `apps/cli/src/agent/mod.rs:578-588`
 
 ## S39.03: Separate past-chat-reference control.
 
@@ -291,16 +288,15 @@ Code: `apps/cli/src/tui/tui_app.rs:3914-3928`, `apps/cli/src/memory_pipeline.rs:
 
 - Done when: Organization or workspace knowledge is kept apart from personal memory: work memories never appear in personal chats and vice versa, and the user can tell which is which.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. On-device (Local) memory has no workspace at all. | ui |
 | cli | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 | vscode | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. Its list is still labelled 'Workspace memory facts' (VS Code folder), which is not the account workspace. | ui |
 | chrome | partial | Say which workspace's memory this surface shows; memory follows the account's active workspace on the server, but the surface never names it and has no shared workspace knowledge view. | ui |
 
-Code: `apps/mobile/src/features/memory/store.ts:85-94`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/cli/src/cloud/mod.rs:322-334`
+Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.ts:57-63`, `apps/web/lib/services/active-workspace-service.ts:63-88`, `apps/extension-vscode/src/features/surfaces/index.ts:333-341`
 
 ## S39.27: Memory-used indication.
 

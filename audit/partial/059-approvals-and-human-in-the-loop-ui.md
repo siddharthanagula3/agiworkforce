@@ -228,17 +228,17 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`, `apps/web/app/api/llm/v
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
 | desktop | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
 | mobile | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
-| cli | partial | Approvals are kept in the managed session activity, but nothing lists them, and the approval_audit log writer (record_approval) is never called. | ui |
 | vscode | partial | Decisions show on the approval card in the current session only. | ui |
 | chrome | partial | Decisions show as "decision recorded" on the step only. | ui |
 
-Code: `apps/web/lib/hooks/useChatStream.ts:4081-4083`, `apps/mobile/src/features/tasks/runPresentation.ts:204-205`, `apps/cli/src/platform/runtime/session_activity.rs:111-123`, `apps/cli/src/approval_audit.rs:57-61`
+Code: `apps/web/lib/hooks/useChatStream.ts:4081-4083`, `apps/mobile/src/features/tasks/runPresentation.ts:204-205`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4602-4605`, `apps/extension/src/features/side-panel/bubbles.ts:483-483`
 
 ## S59.25: Revoke saved permission.
 
