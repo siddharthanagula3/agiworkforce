@@ -6,45 +6,41 @@ import {
 
 import { resolveTurnCodeExecutionTools, type TurnCodeExecutionInput } from './execution-tools';
 
-const SECONDS_PER_HOUR = 3_600;
-const OPENAI_SESSION_SECONDS = 20 * 60;
-const ANTHROPIC_MINIMUM_BILLED_SECONDS = 5 * 60;
-const ANTHROPIC_FREE_WEB_TOOL = /^web_(?:search|fetch)_(\d{8})$/;
-const ANTHROPIC_FREE_WEB_TOOL_FROM = 20_260_209;
+export type HostedCodeExecutionProvider = 'anthropic' | 'openai';
+
+export interface HostedCodeExecutionPriceInput {
+  provider: HostedCodeExecutionProvider;
+  usage: unknown;
+  container: unknown;
+  requestHadWebSearchOrFetch: boolean;
+  elapsedMs?: number;
+}
+
+export interface HostedCodeExecutionPrice {
+  microusd: number;
+  sessions: number;
+  containerMs: number;
+}
+
+const MS_PER_MINUTE = 60_000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+const OPENAI_SESSION_MS = 20 * MS_PER_MINUTE;
+const ANTHROPIC_MINIMUM_BILLED_MS = 5 * MS_PER_MINUTE;
 const ANTHROPIC_CODE_EXECUTION_TOOL = /^code_execution_\d{8}$/;
 const OPENAI_CODE_INTERPRETER_TOOL = 'code_interpreter';
 const OPENAI_CODE_INTERPRETER_CALL = 'code_interpreter_call';
 const MAX_SCAN_NODES = 5_000;
 
-const FEATURE_BY_PROVIDER = {
+const FEATURE_BY_PROVIDER: Readonly<Record<HostedCodeExecutionProvider, RateCardFeature>> = {
   openai: 'hosted_code_execution_openai_session',
   anthropic: 'hosted_code_execution_anthropic_hour',
-} as const satisfies Record<string, RateCardFeature>;
-
-type HostedProvider = keyof typeof FEATURE_BY_PROVIDER;
-
-export interface HostedCodeExecutionTrace {
-  readonly containerIds: readonly string[];
-  readonly codeExecutionRequests: number;
-}
-
-export interface HostedCodeExecutionCharge {
-  readonly feature: RateCardFeature;
-  readonly containers: number;
-  readonly billedUnits: number;
-  readonly providerCostMicrousd: number;
-  readonly chargeMicrousd: number;
-}
-
-export const EMPTY_HOSTED_CODE_EXECUTION_TRACE: HostedCodeExecutionTrace = {
-  containerIds: [],
-  codeExecutionRequests: 0,
 };
 
-function hostedProvider(provider: string): HostedProvider | null {
-  const normalized = provider.trim().toLowerCase();
-  return normalized === 'openai' || normalized === 'anthropic' ? normalized : null;
-}
+const NO_HOSTED_CODE_EXECUTION: HostedCodeExecutionPrice = {
+  microusd: 0,
+  sessions: 0,
+  containerMs: 0,
+};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -52,104 +48,109 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function toolType(tool: unknown): string | null {
-  const type = asRecord(tool)?.['type'];
-  return typeof type === 'string' ? type : null;
+function nonEmptyString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-export function isHostedCodeExecutionTool(tool: unknown): boolean {
-  const type = toolType(tool);
-  return (
-    type !== null &&
-    (type === OPENAI_CODE_INTERPRETER_TOOL || ANTHROPIC_CODE_EXECUTION_TOOL.test(type))
-  );
-}
-
-function anthropicCodeExecutionIsFree(requestTools: readonly unknown[]): boolean {
-  return requestTools.some((tool) => {
-    const match = ANTHROPIC_FREE_WEB_TOOL.exec(toolType(tool) ?? '');
-    return match !== null && Number(match[1]) >= ANTHROPIC_FREE_WEB_TOOL_FROM;
-  });
-}
-
-export function traceHostedCodeExecution(
-  trace: HostedCodeExecutionTrace,
-  payload: unknown,
-): HostedCodeExecutionTrace {
-  const containers = new Set(trace.containerIds);
-  let requests = trace.codeExecutionRequests;
+function containerIds(container: unknown): Set<string> {
+  const ids = new Set<string>();
+  const addContainerObject = (value: unknown): void => {
+    const node = asRecord(value);
+    const id = nonEmptyString(node?.['id']);
+    if (id && nonEmptyString(node?.['expires_at'])) ids.add(id);
+  };
+  const direct = nonEmptyString(container);
+  if (direct) ids.add(direct);
+  addContainerObject(container);
   let visited = 0;
-  const visit = (value: unknown): void => {
+  const visit = (value: unknown, topLevel: boolean): void => {
     if (visited++ > MAX_SCAN_NODES) return;
     if (Array.isArray(value)) {
-      value.forEach(visit);
+      for (const item of value) {
+        const id = topLevel ? nonEmptyString(item) : null;
+        if (id) ids.add(id);
+        else visit(item, false);
+      }
       return;
     }
     const node = asRecord(value);
     if (!node) return;
-    const callContainerId = node['container_id'];
-    if (node['type'] === OPENAI_CODE_INTERPRETER_CALL && typeof callContainerId === 'string') {
-      containers.add(callContainerId);
+    const callContainerId = nonEmptyString(node['container_id']);
+    if (node['type'] === OPENAI_CODE_INTERPRETER_CALL && callContainerId) {
+      ids.add(callContainerId);
     }
-    const container = asRecord(node['container']);
-    const containerId = container?.['id'];
-    if (typeof containerId === 'string' && typeof container?.['expires_at'] === 'string') {
-      containers.add(containerId);
-    }
-    const counted = asRecord(node['server_tool_use'])?.['code_execution_requests'];
-    if (typeof counted === 'number' && Number.isFinite(counted) && counted > requests) {
-      requests = counted;
-    }
-    Object.values(node).forEach(visit);
+    addContainerObject(node['container']);
+    for (const child of Object.values(node)) visit(child, false);
   };
-  visit(payload);
-  return { containerIds: [...containers], codeExecutionRequests: requests };
+  visit(container, true);
+  return ids;
 }
 
-function hostedCost(
-  provider: HostedProvider,
+function codeExecutionRequests(usage: unknown): number {
+  const counted = asRecord(asRecord(usage)?.['server_tool_use'])?.['code_execution_requests'];
+  return typeof counted === 'number' && Number.isFinite(counted) && counted > 0 ? counted : 0;
+}
+
+function billedContainerMs(
+  provider: HostedCodeExecutionProvider,
   containers: number,
-  elapsedSeconds: number,
-): { billedUnits: number; providerCostMicrousd: number } {
-  const rate = resolveFeatureRate(FEATURE_BY_PROVIDER[provider]).providerCogsMicrousd ?? 0;
-  const billedUnits =
-    provider === 'openai'
-      ? containers * Math.max(1, Math.ceil(elapsedSeconds / OPENAI_SESSION_SECONDS))
-      : (containers * Math.max(ANTHROPIC_MINIMUM_BILLED_SECONDS, elapsedSeconds)) /
-        SECONDS_PER_HOUR;
-  return { billedUnits, providerCostMicrousd: Math.ceil(billedUnits * rate) };
+  elapsedMs: number,
+): { sessions: number; containerMs: number } {
+  if (provider === 'openai') {
+    const sessions = containers * Math.max(1, Math.ceil(elapsedMs / OPENAI_SESSION_MS));
+    return { sessions, containerMs: sessions * OPENAI_SESSION_MS };
+  }
+  return {
+    sessions: containers,
+    containerMs: containers * Math.max(ANTHROPIC_MINIMUM_BILLED_MS, elapsedMs),
+  };
 }
 
-export function priceHostedCodeExecution(input: {
-  provider: string;
-  requestTools: readonly unknown[];
-  trace: HostedCodeExecutionTrace;
-  elapsedMs: number;
-}): HostedCodeExecutionCharge | null {
-  const provider = hostedProvider(input.provider);
-  if (!provider) return null;
+function providerCostMicrousd(
+  provider: HostedCodeExecutionProvider,
+  sessions: number,
+  containerMs: number,
+): number {
+  const rate = resolveFeatureRate(FEATURE_BY_PROVIDER[provider]).providerCogsMicrousd ?? 0;
+  const units = provider === 'openai' ? sessions : containerMs / MS_PER_HOUR;
+  return Math.ceil(units * rate);
+}
+
+export function priceHostedCodeExecution(
+  input: HostedCodeExecutionPriceInput,
+): HostedCodeExecutionPrice {
+  if (input.provider === 'anthropic' && input.requestHadWebSearchOrFetch) {
+    return NO_HOSTED_CODE_EXECUTION;
+  }
+  const seen = containerIds(input.container).size;
   const containers =
-    input.trace.containerIds.length > 0
-      ? input.trace.containerIds.length
-      : input.trace.codeExecutionRequests > 0
+    seen > 0
+      ? seen
+      : input.provider === 'anthropic' && codeExecutionRequests(input.usage) > 0
         ? 1
         : 0;
-  if (containers === 0) return null;
-  if (provider === 'anthropic' && anthropicCodeExecutionIsFree(input.requestTools)) return null;
-  const elapsedSeconds = Math.max(0, input.elapsedMs) / 1_000;
-  const { billedUnits, providerCostMicrousd } = hostedCost(provider, containers, elapsedSeconds);
+  if (containers === 0) return NO_HOSTED_CODE_EXECUTION;
+  const elapsedMs = Math.max(0, input.elapsedMs ?? 0);
+  const { sessions, containerMs } = billedContainerMs(input.provider, containers, elapsedMs);
   return {
-    feature: FEATURE_BY_PROVIDER[provider],
-    containers,
-    billedUnits,
-    providerCostMicrousd,
-    chargeMicrousd: chargeMicrousdForProviderCost(providerCostMicrousd),
+    microusd: providerCostMicrousd(input.provider, sessions, containerMs),
+    sessions,
+    containerMs,
   };
+}
+
+function isHostedCodeExecutionTool(tool: unknown): boolean {
+  const type = asRecord(tool)?.['type'];
+  return (
+    typeof type === 'string' &&
+    (type === OPENAI_CODE_INTERPRETER_TOOL || ANTHROPIC_CODE_EXECUTION_TOOL.test(type))
+  );
 }
 
 export function hostedCodeExecutionReserveMicrousd(input: TurnCodeExecutionInput): number {
-  const provider = hostedProvider(input.provider);
-  if (!provider) return 0;
+  const provider = input.provider.trim().toLowerCase();
+  if (provider !== 'openai' && provider !== 'anthropic') return 0;
   if (!resolveTurnCodeExecutionTools(input).tools.some(isHostedCodeExecutionTool)) return 0;
-  return chargeMicrousdForProviderCost(hostedCost(provider, 1, 0).providerCostMicrousd);
+  const { sessions, containerMs } = billedContainerMs(provider, 1, 0);
+  return chargeMicrousdForProviderCost(providerCostMicrousd(provider, sessions, containerMs));
 }
