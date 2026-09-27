@@ -26,12 +26,7 @@ import {
 
 const AUTO_RELOAD_SCOPE = { resolveOrganization: false } as const;
 const PAYMENT_METHOD_REQUIRED_CODE = 'payment_method_required';
-const CONSENT_REQUIRED_CODE = 'consent_required';
-
-function consentVersionOf(body: object): string | null {
-  const value = (body as Record<string, unknown>)['consentVersion'];
-  return typeof value === 'string' ? value : null;
-}
+const CONSENT_OUTDATED_CODE = 'consent_outdated';
 
 async function handleGetAutoReload(request: NextRequest): Promise<NextResponse> {
   const { db, userId } = await getUserScopedDb(request, AUTO_RELOAD_SCOPE);
@@ -62,9 +57,10 @@ async function handlePutAutoReload(request: NextRequest): Promise<NextResponse> 
     enabled: body.enabled,
     thresholdCredits: body.thresholdCredits,
     amountUsd: body.amountUsd,
+    ...(body.consentVersion === undefined ? {} : { consentVersion: body.consentVersion }),
   };
 
-  const result = await saveAutoReloadSettings(db, userId, update, consentVersionOf(body));
+  const result = await saveAutoReloadSettings(db, userId, update);
   if (result.status === 'payment_method_required') {
     return NextResponse.json(
       {
@@ -76,13 +72,13 @@ async function handlePutAutoReload(request: NextRequest): Promise<NextResponse> 
       { status: 409 },
     );
   }
-  if (result.status === 'consent_required') {
+  if (result.status === 'consent_outdated') {
     return NextResponse.json(
       {
         error: {
-          code: CONSENT_REQUIRED_CODE,
-          message: 'Review and accept the auto-reload terms to turn it on.',
-          details: { consent: result.consent },
+          code: CONSENT_OUTDATED_CODE,
+          message:
+            'The auto-reload terms have changed. Reload the page, review them and turn auto-reload on again.',
         },
       },
       { status: 409 },

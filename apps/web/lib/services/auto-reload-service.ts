@@ -4,11 +4,13 @@ import { after } from 'next/server';
 import Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  AUTO_RELOAD_CONSENT_VERSION,
   AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS,
   DAILY_TOP_UP_LIMIT_USD,
   TOP_UP_CONVERSION,
   TOP_UP_PRESET_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
+  autoReloadConsentText,
   creditsFromMicrousd,
   formatCredits,
   isFreeBillingPlanTier,
@@ -21,6 +23,10 @@ import {
 } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { grantCreditTopUp, isCreditTopUpApplied } from '@/app/api/stripe-webhook/lib/db';
+import {
+  buildPaymentIntentTaxCalculationParams,
+  isTaxLocationMissing,
+} from '@/lib/billing/tax-policy';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -41,8 +47,6 @@ import { recordNotification } from '@/lib/services/notification-service';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { sendTransactionalEmail } from '@/lib/support/handoff/resend-client';
 
-export const AUTO_RELOAD_CONSENT_VERSION = '2026-09-27';
-
 const RELOAD_LEASE_SECONDS = 600;
 const ATTEMPT_LOOKUP_SLACK_SECONDS = 60;
 const ATTEMPT_LOOKUP_LIMIT = 20;
@@ -60,6 +64,8 @@ const FAILURE_MESSAGES = {
   expired_card: 'Your card has expired.',
   card_declined: 'Your card was declined.',
   payment_method_missing: 'There is no card on file for your plan.',
+  billing_address_missing:
+    'Your billing address is missing or incomplete, so the tax on the charge could not be worked out.',
   payment_canceled: 'The payment was canceled before it completed.',
   payment_failed: 'The payment did not go through.',
 } as const;
@@ -80,19 +86,10 @@ export type AutoReloadOutcome =
   | 'failed'
   | 'released';
 
-export interface AutoReloadConsent {
-  version: string;
-  text: string;
-}
-
-export interface AutoReloadSettingsView extends AutoReloadSettings {
-  consent: { version: string; acceptedAt: string } | null;
-}
-
 export type AutoReloadSaveResult =
-  | { status: 'saved'; settings: AutoReloadSettingsView }
+  | { status: 'saved'; settings: AutoReloadSettings }
   | { status: 'payment_method_required' }
-  | { status: 'consent_required'; consent: AutoReloadConsent };
+  | { status: 'consent_outdated' };
 
 export interface AutoReloadSweepReport {
   considered: number;
@@ -149,6 +146,13 @@ interface ReloadPurchase {
   attemptId: string;
   creditAmountCents: number;
   chargedCents: number;
+  taxCents: number;
+}
+
+interface ReloadCharge {
+  amountCents: number;
+  taxCents: number;
+  calculationId: string;
 }
 
 const SETTINGS_COLUMNS = `enabled, threshold_credits, amount_usd, reload_attempt_id,
@@ -212,29 +216,10 @@ function positiveInteger(value: unknown): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function formatUsdCents(cents: number): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100);
-}
-
-export function autoReloadConsentText(terms: {
-  quote: TopUpQuote;
-  thresholdCredits: number;
-  cardLast4: string;
-}): string {
-  const threshold = formatCredits(terms.thresholdCredits);
-  return [
-    `By turning on auto-reload, you authorize AGI Workforce to charge your default card, currently the one ending in ${terms.cardLast4}, ${formatUsdCents(terms.quote.priceCents)} plus any applicable tax for ${formatCredits(terms.quote.credits)} each time your purchased and bonus credits fall below ${threshold}.`,
-    `This can repeat, up to $${DAILY_TOP_UP_LIMIT_USD.toLocaleString('en-US')} of top-ups a day.`,
-    `If your balance is already below ${threshold}, the first charge may happen right away.`,
-    'We email a receipt for every charge. If a charge fails, auto-reload turns off and we email you.',
-    'You can turn off auto-reload at any time in Settings > Billing, which stops future charges.',
-  ].join(' ');
-}
-
 function toAutoReloadSettings(
   row: AutoReloadRow | undefined,
   card: DefaultCard | null,
-): AutoReloadSettingsView {
+): AutoReloadSettings {
   return {
     enabled: row?.enabled ?? false,
     thresholdCredits: row?.threshold_credits ?? AUTO_RELOAD_DEFAULT_THRESHOLD_CREDITS,
@@ -407,7 +392,7 @@ async function readInstrumentForSettings(
 export async function readAutoReloadSettings(
   db: DatabaseAdapter,
   userId: string,
-): Promise<AutoReloadSettingsView> {
+): Promise<AutoReloadSettings> {
   const [row, account] = await Promise.all([
     readSettingsRow(db, userId),
     readTopUpBillingAccount(db, userId),
@@ -477,7 +462,6 @@ export async function saveAutoReloadSettings(
   db: DatabaseAdapter,
   userId: string,
   update: AutoReloadSettingsUpdate,
-  consentVersion: string | null,
 ): Promise<AutoReloadSaveResult> {
   const account = await readTopUpBillingAccount(db, userId);
 
@@ -506,20 +490,14 @@ export async function saveAutoReloadSettings(
     );
   }
   if (!instrument.card) return { status: 'payment_method_required' };
+  if (update.consentVersion !== AUTO_RELOAD_CONSENT_VERSION) return { status: 'consent_outdated' };
 
-  const quote = quoteTopUp(update.amountUsd, { autoReload: true });
-  if (!quote) throw createError.validation('Choose a valid auto-reload amount.');
   const consentText = autoReloadConsentText({
-    quote,
+    amountUsd: update.amountUsd,
     thresholdCredits: update.thresholdCredits,
-    cardLast4: instrument.card.last4,
+    card: instrument.card,
   });
-  if (consentVersion !== AUTO_RELOAD_CONSENT_VERSION) {
-    return {
-      status: 'consent_required',
-      consent: { version: AUTO_RELOAD_CONSENT_VERSION, text: consentText },
-    };
-  }
+  if (!consentText) throw createError.validation('Choose a valid auto-reload amount.');
 
   const previous = await readSettingsRow(db, userId);
   const row = await saveConsentedSettings(db, userId, update, instrument.card);
@@ -780,6 +758,7 @@ function readReloadPurchase(paymentIntent: Stripe.PaymentIntent): ReloadPurchase
   const userId = metadata['user_id'];
   const attemptId = metadata['auto_reload_attempt_id'];
   const creditAmountCents = Number(metadata['credit_amount_cents']);
+  const taxCents = Number(metadata['tax_cents']);
   const chargedCents = topUpChargedCents({
     conversion: metadata['conversion'],
     amountCents: creditAmountCents,
@@ -788,8 +767,16 @@ function readReloadPurchase(paymentIntent: Stripe.PaymentIntent): ReloadPurchase
     amountUsd: Number(metadata['amount_usd']),
     autoReload: metadata['auto_reload'] === 'true',
   });
-  if (!userId || !attemptId || chargedCents === null) return null;
-  return { userId, attemptId, creditAmountCents, chargedCents };
+  if (
+    !userId ||
+    !attemptId ||
+    chargedCents === null ||
+    !Number.isSafeInteger(taxCents) ||
+    taxCents < 0
+  ) {
+    return null;
+  }
+  return { userId, attemptId, creditAmountCents, chargedCents, taxCents };
 }
 
 export async function settleAutoReloadPayment(
@@ -805,17 +792,18 @@ export async function settleAutoReloadPayment(
     throw new Error(`Invalid auto-reload metadata for PaymentIntent ${paymentIntent.id}`);
   }
 
+  const expectedCents = purchase.chargedCents + purchase.taxCents;
   if (
     paymentIntent.status !== 'succeeded' ||
     paymentIntent.currency !== 'usd' ||
-    paymentIntent.amount_received !== purchase.chargedCents
+    paymentIntent.amount_received !== expectedCents
   ) {
     logger.error(
       {
         paymentIntentId: paymentIntent.id,
         userId: purchase.userId,
         status: paymentIntent.status,
-        expectedCents: purchase.chargedCents,
+        expectedCents,
         actualAmountReceived: paymentIntent.amount_received,
       },
       'SECURITY: Auto-reload payment does not match its purchase metadata',
@@ -829,10 +817,6 @@ export async function settleAutoReloadPayment(
       'Auto-reload top-up was already applied',
     );
   } else {
-    logger.error(
-      { paymentIntentId: paymentIntent.id, userId: purchase.userId },
-      'TAX NOT COLLECTED: auto-reload PaymentIntents carry no Stripe Tax calculation',
-    );
     await grantCreditTopUp(db, {
       userId: purchase.userId,
       creditAmountCents: purchase.creditAmountCents,
@@ -961,6 +945,7 @@ function reloadMetadata(
   userId: string,
   attemptId: string,
   quote: TopUpQuote,
+  charge: ReloadCharge,
 ): Stripe.MetadataParam {
   return {
     type: 'credit_topup',
@@ -971,8 +956,33 @@ function reloadMetadata(
     discount_percent: String(quote.discountPercent),
     credit_amount_cents: String(quote.budgetCents),
     top_up_units: String(quote.credits),
+    tax_cents: String(charge.taxCents),
+    tax_calculation: charge.calculationId,
     auto_reload: 'true',
     auto_reload_attempt_id: attemptId,
+  };
+}
+
+async function calculateReloadCharge(
+  stripe: Stripe,
+  customerId: string,
+  attemptId: string,
+  quote: TopUpQuote,
+): Promise<ReloadCharge> {
+  const calculation = await stripe.tax.calculations.create(
+    buildPaymentIntentTaxCalculationParams({
+      customerId,
+      currency: 'usd',
+      amountMinor: quote.priceCents,
+      reference: `auto-reload:${attemptId}`,
+    }),
+    { idempotencyKey: `auto-reload-tax:${attemptId}` },
+  );
+  if (!calculation.id) throw new Error('Stripe Tax returned a calculation without an id');
+  return {
+    amountCents: calculation.amount_total,
+    taxCents: calculation.tax_amount_exclusive,
+    calculationId: calculation.id,
   };
 }
 
@@ -992,8 +1002,10 @@ async function chargeReload(
   try {
     instrument = await readBillingInstrument(stripe, plan.account);
   } catch (error) {
-    logger.warn({ error, userId }, 'Auto-reload deferred: the saved card could not be read');
-    await releaseLease(db, userId, attemptId);
+    logger.warn(
+      { error, userId, attemptId },
+      'Auto-reload deferred: the saved card could not be read; the lease holds until the sweep retries',
+    );
     return 'deferred';
   }
   if (instrument.currency !== 'usd') {
@@ -1011,6 +1023,21 @@ async function chargeReload(
     return 'failed';
   }
 
+  let charge: ReloadCharge;
+  try {
+    charge = await calculateReloadCharge(stripe, plan.account.customerId, attemptId, plan.quote);
+  } catch (error) {
+    if (isTaxLocationMissing(error)) {
+      await failReload(db, { ...failure, reason: 'billing_address_missing' });
+      return 'failed';
+    }
+    logger.error(
+      { error, userId, attemptId },
+      'Auto-reload deferred: Stripe Tax could not calculate the charge; the lease holds until the sweep retries',
+    );
+    return 'deferred';
+  }
+
   const receiptEmail = instrument.billingEmail ?? (await readProfileEmail(db, userId));
   if (!receiptEmail) {
     logger.warn({ userId }, 'Auto-reload charge has no email on file to send its receipt to');
@@ -1020,7 +1047,7 @@ async function chargeReload(
   try {
     paymentIntent = await stripe.paymentIntents.create(
       {
-        amount: plan.quote.priceCents,
+        amount: charge.amountCents,
         currency: 'usd',
         customer: plan.account.customerId,
         payment_method: instrument.card.id,
@@ -1028,7 +1055,8 @@ async function chargeReload(
         off_session: true,
         confirm: true,
         description: `AGI auto-reload, ${formatCredits(plan.quote.credits)}`,
-        metadata: reloadMetadata(userId, attemptId, plan.quote),
+        metadata: reloadMetadata(userId, attemptId, plan.quote, charge),
+        hooks: { inputs: { tax: { calculation: charge.calculationId } } },
         ...(receiptEmail ? { receipt_email: receiptEmail } : {}),
       },
       { idempotencyKey: `auto-reload:${attemptId}` },
