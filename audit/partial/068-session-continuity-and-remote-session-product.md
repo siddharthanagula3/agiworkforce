@@ -212,9 +212,9 @@ Code: `apps/web/features/code/components/CodeRail.tsx:292-292`, `apps/web/lib/e2
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | /continue-with-cloud moves the CONVERSATION to the managed cloud model with a reviewed payload; tools still run locally, and the app-server's cloud handoff record has no client that issues or accepts it. | handler |
-| vscode | partial | Continue in the Cloud (835ae2a5d) reviews and creates an AGI Code session on the pushed branch and runs the first turn. Session creation needs AGI_E2B_EXECUTION on in production; the title is not yet clipped to the shared title limit (pending lead approval for CLOUD_CODE_LIMITS in packages/contracts/types). | flag-off |
+| vscode | partial | Continue in the Cloud reviews what moves, creates an AGI Code session on the pushed branch within CLOUD_CODE_LIMITS and runs the first turn (835ae2a5d, 23c3054ad). Session creation needs AGI_E2B_EXECUTION on in production. | flag-off |
 
-Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/extension.ts:198-198`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:97-97`
+Code: `apps/cli/src/claude_parity.rs:169-179`, `apps/cli/src/claude_parity.rs:399-411`, `apps/extension-vscode/src/extension.ts:198-198`, `apps/extension-vscode/src/features/cloud-tasks/continueInCloud.ts:129-129`
 
 ## S68.17: Bring cloud results back to local workspace.
 
@@ -388,12 +388,11 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 
 - Done when: Activity in a session (approval needed, turn done, failure) notifies the user on their other clients.
 - Wave: 3
-- Already works on: desktop, mobile
+- Already works on: desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud and desktop-local sessions notify; CLI and VS Code local sessions send no activity yet. | handler |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | In-editor notice only: VS Code alerts when a turn needs approval, finishes or fails while the window is unfocused, and stays quiet on a user stop (d1fc39547). No phone push by lead decision, matching Claude's and Codex's IDE extensions. | handler |
 
-Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`, `apps/extension-vscode/src/features/sidebar-webview/sessionActivityAlert.ts:19-19`, `apps/extension-vscode/src/features/sidebar-webview/sidebarProvider.ts:149-149`, `apps/extension-vscode/src/providers/chatEditorPanel.ts:137-137`
+Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`
