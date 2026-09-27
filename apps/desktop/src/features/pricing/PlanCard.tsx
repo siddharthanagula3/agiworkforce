@@ -58,41 +58,40 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
       'Cross-device sync (desktop + mobile + web)',
       'Priority bug reports',
     ],
-    ctaLabel: 'Upgrade to Basic',
+    ctaLabel: `Upgrade to ${PLAN_LABEL.basic}`,
     ctaVariant: 'primary',
   },
   pro: {
     price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
     priceNote: `$${getPublishedPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
     bullets: [
-      'Higher token quota',
+      'More managed usage than Basic',
       'AGI Work and developer surfaces',
       'Image generation',
       'Advanced agent features',
     ],
-    ctaLabel: 'Upgrade to Pro',
+    ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
     price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
     bullets: [
-      '5x managed usage capacity',
+      'More managed usage than Pro',
       'Every flagship model included',
       'Advanced agents and research',
       'Priority support',
     ],
-    ctaLabel: 'Upgrade to Max',
+    ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
     price: `$${getPublishedPlanPriceUsd('max_15x', 'monthly')} / mo`,
     bullets: [
-      '15x managed usage capacity',
       'Highest individual usage limits',
       'Every flagship model included',
       'Video generation access',
     ],
-    ctaLabel: 'Upgrade to Max 15x',
+    ctaLabel: `Upgrade to ${PLAN_LABEL.max_15x}`,
     ctaVariant: 'primary',
   },
 };
@@ -130,7 +129,6 @@ export function PlanCard({
           : 'border-border bg-card hover:border-border/80 hover:shadow-sm',
       )}
     >
-      {/* Badges */}
       <div className="flex items-start justify-between gap-2">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold text-foreground">{label}</p>
@@ -150,7 +148,6 @@ export function PlanCard({
         </div>
       </div>
 
-      {/* Price */}
       <div>
         <p className="text-xl font-bold text-foreground tabular-nums">{content.price}</p>
         {content.priceNote && (
@@ -158,7 +155,6 @@ export function PlanCard({
         )}
       </div>
 
-      {/* Feature bullets */}
       <ul className="flex-1 space-y-1.5">
         {content.bullets.map((bullet) => (
           <li key={bullet} className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -168,7 +164,6 @@ export function PlanCard({
         ))}
       </ul>
 
-      {/* CTA */}
       <PlanCardCta
         tier={tier}
         variant={isCurrentPlan ? 'current' : content.ctaVariant}
