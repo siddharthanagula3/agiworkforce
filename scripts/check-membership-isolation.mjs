@@ -60,6 +60,16 @@ export const REVOCATION_AT_CALLER = [
     symbol: 'leaveOrganization',
     caller: 'apps/web/app/api/settings/organization/leave/route.ts',
   },
+  {
+    file: 'apps/web/lib/services/organization-member-admin-service.ts',
+    symbol: 'removeMember',
+    caller: 'apps/web/app/api/settings/team/[memberId]/route.ts',
+  },
+  {
+    file: 'apps/web/lib/services/organization-member-admin-service.ts',
+    symbol: 'removeMember',
+    caller: 'apps/web/app/api/settings/organization/members/[userId]/route.ts',
+  },
 ];
 
 /**

@@ -576,11 +576,14 @@ describe('the reset a refused Free turn reports', () => {
 describe('releaseExpiredFreeTrialReservations', () => {
   function sweepDb(rows: Array<Record<string, unknown>>) {
     const query = vi.fn(async (_sql: string, _params: unknown[]) => rows);
-    return { db: { query } as never, query };
+    const execute = vi.fn(async (_sql: string, _params: unknown[]) => undefined);
+    const tx = { query, execute };
+    const db = { transaction: async (work: (client: typeof tx) => unknown) => work(tx) };
+    return { db: db as never, query, execute };
   }
 
   it('releases only unsettled reservations past their lease, at no charge to the user', async () => {
-    const { db: serviceDb, query } = sweepDb([]);
+    const { db: serviceDb, query, execute } = sweepDb([]);
 
     await releaseExpiredFreeTrialReservations(serviceDb, 500);
 
@@ -591,9 +594,25 @@ describe('releaseExpiredFreeTrialReservations', () => {
     expect(sql).toContain('set actual_cost_microusd = 0');
     expect(sql).toContain("outcome = 'failed'");
     expect(sql).toContain('and reservation.settled_at is null');
+    expect(params).toEqual([500]);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('records one settled event per released reservation in the same transaction', async () => {
+    const { db: serviceDb, execute } = sweepDb([
+      { user_id: 'user-1', request_id: 'request-1', reserved_microusd: 10 },
+      { user_id: 'user-2', request_id: 'request-2', reserved_microusd: 20 },
+    ]);
+
+    await releaseExpiredFreeTrialReservations(serviceDb, 500);
+
+    const [sql, params] = execute.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain("'leaseExpired', true");
     expect(sql).toContain('on conflict do nothing');
-    expect(params).toEqual([500]);
+    expect(params).toEqual([
+      ['user-1', 'user-2'],
+      ['request-1', 'request-2'],
+    ]);
   });
 
   it('records each absorbed reservation once as undelivered COGS', async () => {

@@ -119,7 +119,7 @@ export const PRIMARY_OWNER_ROLE_READS = new Map([
     'the one gate for the lifecycle acts only the Primary Owner may perform',
   ],
   [
-    'apps/web/app/api/settings/team/[memberId]/route.ts',
+    'apps/web/lib/services/organization-member-admin-service.ts',
     'the owner invariant asks whether the target is the owner, not whether the actor may act',
   ],
   [
@@ -202,10 +202,6 @@ export const PERMISSIONS_NO_DECISION_ASKS = new Map([
   [
     'feature.content.view',
     'reading workspace content is bounded by the active-workspace scope, which binds every read to the organization the member resolved; no route asks the grid for it',
-  ],
-  [
-    'admin.members.view',
-    'apps/web/app/api/settings/team/route.ts serves the roster and asks members.manage, so a role holding only the view half sees nothing',
   ],
   [
     'admin.owners.view',

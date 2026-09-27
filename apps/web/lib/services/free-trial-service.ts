@@ -729,23 +729,23 @@ export async function releaseExpiredFreeTrialReservations(
   db: DatabaseAdapter,
   limit: number,
 ): Promise<{ released: number; absorbedMicrousd: number }> {
-  const rows = await db.query<{
-    user_id: string;
-    request_id: string;
-    reserved_microusd: number | string;
-    provider: string | null;
-    model: string | null;
-  }>(
-    `with expired as (
-       select id
-         from public.free_daily_usage_reservations
-        where settled_at is null
-          and (lease_expires_at is null or lease_expires_at <= now())
-        order by created_at
-        limit $1
-        for update skip locked
-     ),
-     released as (
+  const rows = await db.transaction(async (tx) => {
+    const released = await tx.query<{
+      user_id: string;
+      request_id: string;
+      reserved_microusd: number | string;
+      provider: string | null;
+      model: string | null;
+    }>(
+      `with expired as (
+         select id
+           from public.free_daily_usage_reservations
+          where settled_at is null
+            and (lease_expires_at is null or lease_expires_at <= now())
+          order by created_at
+          limit $1
+          for update skip locked
+       )
        update public.free_daily_usage_reservations reservation
           set actual_cost_microusd = 0,
               outcome = 'failed',
@@ -754,19 +754,22 @@ export async function releaseExpiredFreeTrialReservations(
         where reservation.id = expired.id
           and reservation.settled_at is null
        returning reservation.user_id, reservation.request_id, reservation.reserved_microusd,
-                 reservation.provider, reservation.model
-     ),
-     recorded as (
-       insert into public.usage_events (user_id, event_type, quantity, metadata)
-       select released.user_id, 'website_auto_economy_trial_usage_settled', 0,
-              jsonb_build_object('requestId', released.request_id, 'outcome', 'failed',
-                                 'recordedTokens', 0, 'leaseExpired', true)
-         from released
-       on conflict do nothing
-     )
-     select user_id, request_id, reserved_microusd, provider, model from released`,
-    [limit],
-  );
+                 reservation.provider, reservation.model`,
+      [limit],
+    );
+    if (released.length > 0) {
+      await tx.execute(
+        `insert into public.usage_events (user_id, event_type, quantity, metadata)
+         select released.user_id, 'website_auto_economy_trial_usage_settled', 0,
+                jsonb_build_object('requestId', released.request_id, 'outcome', 'failed',
+                                   'recordedTokens', 0, 'leaseExpired', true)
+           from unnest($1::text[], $2::text[]) as released(user_id, request_id)
+         on conflict do nothing`,
+        [released.map((row) => row.user_id), released.map((row) => row.request_id)],
+      );
+    }
+    return released;
+  });
 
   let absorbedMicrousd = 0;
   for (const row of rows) {
