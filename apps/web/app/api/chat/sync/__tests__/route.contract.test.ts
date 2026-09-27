@@ -229,9 +229,9 @@ describe('GET /api/chat/sync, shared cloud contract', () => {
     let inFlight = 0;
     let peakInFlight = 0;
     const rowsFor = (sql: string) => {
+      if (sql.includes('from web_artifacts')) return [artifactRow];
       if (sql.includes('from web_conversations')) return [conversationRow];
-      if (sql.includes('from web_messages')) return [messageRow];
-      return [artifactRow];
+      return [messageRow];
     };
 
     mockQuery.mockImplementation(async (sql: string) => {

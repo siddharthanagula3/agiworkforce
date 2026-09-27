@@ -1173,6 +1173,13 @@ export async function listCloudAgentRuns(
         and ($4::timestamptz is null or (runs.updated_at, runs.id) < ($4::timestamptz, $5::uuid))
         and ($7::text[] is null or runs.work_mode = any($7::text[]))
         and ($8::text is null or conversations.project_id = $8::text)
+        and coalesce(conversations.is_temporary, false) = false
+        and not exists (
+          select 1 from public.web_conversations withdrawn_conversation
+           where withdrawn_conversation.id = runs.conversation_id
+             and withdrawn_conversation.deleted_at is not null
+             and withdrawn_conversation.is_temporary
+        )
       order by runs.updated_at desc, runs.id desc
       limit $6`,
     [
