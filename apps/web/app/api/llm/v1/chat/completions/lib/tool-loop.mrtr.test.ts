@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
@@ -148,17 +148,6 @@ function makeResumeProcessed(): ProcessedRequest {
     },
   } as unknown as ProcessedRequest;
 }
-
-// The `input_required` pause ships behind a kill-switch that is off by default
-// (no client calls /resume-input yet). These tests cover the gated feature, so
-// they enable it for this file only; every other suite keeps the default-off path.
-beforeEach(() => {
-  vi.stubEnv('AGI_MCP_INPUT_PAUSE', '1');
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 describe('runToolLoop, MRTR input_required suspend', () => {
   beforeEach(() => {

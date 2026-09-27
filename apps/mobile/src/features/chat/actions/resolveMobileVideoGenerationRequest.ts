@@ -1,4 +1,8 @@
-import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityPlanLabels,
+  canUseBillingPlanCapability,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 import {
   MANAGED_MEDIA_VIDEO_ASPECT_RATIOS,
   MANAGED_MEDIA_VIDEO_RESOLUTIONS,
@@ -65,7 +69,7 @@ const BLOCKED_ALERTS: Readonly<Record<MobileVideoGenerationBlockCode, MobileVide
     },
     plan_required: {
       title: 'Video generation is not included',
-      message: 'Video generation is available on Max 15x and Enterprise plans.',
+      message: `Video generation is available on ${billingPlanCapabilityPlanLabels('video_generation')} plans.`,
     },
     offline: {
       title: 'Network connection required',

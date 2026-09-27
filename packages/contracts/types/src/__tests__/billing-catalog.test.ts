@@ -13,6 +13,8 @@ import {
   getPlanPriceCents,
   getPlanPriceInr,
   getPlanPriceUsd,
+  getPublishedMonthlyPriceUsd,
+  getPublishedPlanPricePerMonthUsd,
   getPublishedPlanPriceUsd,
   planOffersBillingInterval,
   isContractPricedPlan,
@@ -25,6 +27,7 @@ import {
   ENTERPRISE_CODE_HARNESS_DAILY_CEILING_CENTS,
   getPlanSandboxTtlMs,
   canUseBillingPlanCapability,
+  billingPlanCapabilityPlanLabels,
   isSelfServePaidPlanTier,
   isPlanSelectableOnSurface,
   PLAN_SURFACE_VISIBILITY,
@@ -117,6 +120,15 @@ describe('billing catalog', () => {
     expect(getPublishedPlanPriceUsd('team', 'yearly')).toBe(240);
   });
 
+  it('prices a yearly seat by its monthly equivalent and a monthly seat as sold', () => {
+    expect(getPublishedPlanPricePerMonthUsd('team', 'yearly')).toBe(20);
+    expect(getPublishedPlanPricePerMonthUsd('team', 'monthly')).toBe(
+      getPublishedMonthlyPriceUsd('team'),
+    );
+    expect(getPublishedPlanPricePerMonthUsd('pro', 'monthly')).toBe(20);
+    expect(getPublishedPlanPricePerMonthUsd('pro', 'yearly')).toBeNull();
+  });
+
   describe('contract-priced plans publish no amount', () => {
     it('reports Enterprise as contract-priced with no USD or cents figure', () => {
       expect(isContractPricedPlan('enterprise')).toBe(true);
@@ -204,13 +216,21 @@ describe('billing catalog', () => {
       expect(canUseBillingPlanCapability('pro', 'managed_api')).toBe(true);
     });
 
-    it('offers images from Pro and reserves video for Max 15x and Enterprise', () => {
+    it('offers images from Pro and reserves video for Max 20x and Enterprise', () => {
       expect(canUseBillingPlanCapability('pro', 'image_generation')).toBe(true);
       expect(canUseBillingPlanCapability('pro', 'video_generation')).toBe(false);
       expect(canUseBillingPlanCapability('max', 'video_generation')).toBe(false);
       expect(canUseBillingPlanCapability('max_15x', 'video_generation')).toBe(true);
       expect(canUseBillingPlanCapability('team', 'video_generation')).toBe(false);
       expect(canUseBillingPlanCapability('enterprise', 'video_generation')).toBe(true);
+    });
+
+    it('names the plans that include a capability with their customer-facing labels', () => {
+      expect(billingPlanCapabilityPlanLabels('video_generation')).toBe('Max 20x and Enterprise');
+      expect(billingPlanCapabilityPlanLabels('enterprise_controls')).toBe('Enterprise');
+      expect(billingPlanCapabilityPlanLabels('agi_work')).toBe(
+        'Pro, Max 5x, Max 20x, Team, and Enterprise',
+      );
     });
 
     it('fails closed for removed or unknown tier names', () => {

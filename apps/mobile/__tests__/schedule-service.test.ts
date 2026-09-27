@@ -114,6 +114,7 @@ describe('mobile schedule service', () => {
         lastRunAt: '2026-07-17T14:00:00.000Z',
         nextRunAt: '2026-07-18T14:00:00.000Z',
         lastRunStatus: 'success',
+        pausedReason: null,
         createdAt: '2026-07-01T12:00:00.000Z',
         updatedAt: '2026-07-17T14:00:01.000Z',
       },
@@ -185,6 +186,7 @@ describe('mobile schedule service', () => {
         completedAt: '2026-07-17T14:00:40.000Z',
         result: 'Partial result',
         error: 'Execution timed out',
+        pendingApproval: null,
       },
     ]);
     expect(apiMock.get).toHaveBeenCalledWith('/api/schedules/schedule%2F1/runs');

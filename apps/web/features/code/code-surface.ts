@@ -1,4 +1,5 @@
 import {
+  buildVsCodeCloudTaskHandoffUri,
   CLOUD_CODE_SESSION_STATUS_FILTERS,
   type CloudCodeChangeState,
   type CloudCodeNetworkAccess,
@@ -245,6 +246,9 @@ export const CODE_COPY = {
   pullRequestChipPrefix: 'Pull request',
   pullRequestNeedsBranch: 'A pull request needs a repository and a working branch.',
   pullRequestNeedsOpenSession: 'A closed or archived session cannot open a pull request.',
+  continueInVsCode: 'Continue in VS Code',
+  continueInVsCodeHelp:
+    'Opens this session in VS Code and offers to check out its branch in the folder you have open. Commit and push first so your computer can fetch it.',
   changesSettings: 'Changes settings',
   changesExpand: 'Widen the panel',
   changesCollapse: 'Narrow the panel',
@@ -354,6 +358,22 @@ export function repositoryLabel(repositoryUrl: string): string {
   const trimmed = repositoryUrl.replace(/\.git$/, '').replace(/\/$/, '');
   const parts = trimmed.split('/').filter(Boolean);
   return parts.slice(-2).join('/') || trimmed;
+}
+
+export function continueInVsCodeHref(
+  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch'>,
+): string | null {
+  if (session.workingBranch === null) return null;
+  try {
+    return buildVsCodeCloudTaskHandoffUri({
+      runId: session.id,
+      goal: session.title,
+      plan: [],
+      branch: session.workingBranch,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export function parseExtraHosts(value: string): string[] {

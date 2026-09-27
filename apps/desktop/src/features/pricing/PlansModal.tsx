@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { PlanCard } from './PlanCard';
 import {
   isFreePlan,
+  isPerSeatBillingPlan,
   isPlanSelectableOnSurface,
   isSelfServePaidPlanTier,
   normalizeUIPlanTier,
@@ -26,7 +27,16 @@ export interface PlansModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-const TIER_ORDER: UIPlanTier[] = ['local', 'byok', 'free', 'basic', 'pro', 'max', 'max_15x'];
+const TIER_ORDER: UIPlanTier[] = [
+  'local',
+  'byok',
+  'free',
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+  'team',
+];
 
 const VISIBLE_TIERS = TIER_ORDER.filter((tier) =>
   isPlanSelectableOnSurface(tier === 'local' ? 'local-only' : tier, 'desktop'),
@@ -61,6 +71,11 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
       return;
     }
     if (isFreePlan(tier)) {
+      return;
+    }
+
+    if (isPerSeatBillingPlan(tier)) {
+      void openExternalUrl(`${WEB_APP_URL}/pricing#pricing-team-title`);
       return;
     }
 
@@ -139,6 +154,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
                   isLowerPaidTier={
                     currentTier !== null &&
                     isSelfServePaidPlanTier(tier) &&
+                    !isPerSeatBillingPlan(tier) &&
                     tier !== currentTier &&
                     !isFreePlan(currentTier) &&
                     (!isSelfServePaidPlanTier(currentTier) || tierAtLeast(currentTier, tier))

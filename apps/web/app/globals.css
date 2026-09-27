@@ -88,6 +88,7 @@
 
   --color-accent-text: var(--accent-text);
   --color-danger-text: var(--danger-text);
+  --color-destructive-text: var(--danger-text);
   --color-danger-fill: var(--danger-fill);
   --color-danger-on-fill: var(--danger-on-fill);
   --color-warning-text: var(--warning-text);

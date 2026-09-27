@@ -21,6 +21,7 @@ export interface ToolCallCardProps {
   name: string;
   status: ToolCallStatus;
   requiresApproval?: boolean;
+  riskLevel?: 'low' | 'medium' | 'high';
   /**
    * Set while this step is running on one particular machine. Naming the device
    * is the whole point on every surface that is not it: the user has to know
@@ -47,6 +48,8 @@ export interface ToolCallCardProps {
   footer?: ReactNode;
   className?: string;
 }
+
+const HIGH_RISK_APPROVAL_NOTICE = 'High risk. Check the request below before you allow it.';
 
 const CODE_EXECUTION_TOOLS = new Set([
   'execute_code',
@@ -336,6 +339,7 @@ const ToolCallCardComponent = ({
   name,
   status,
   requiresApproval = false,
+  riskLevel,
   deviceStep,
   args,
   commandText,
@@ -375,6 +379,7 @@ const ToolCallCardComponent = ({
   const showExpiredDevice = status === 'awaiting_device' && expired;
   const showApprovalPrompt =
     isApprovalGated && !expired && (Boolean(onApprove) || Boolean(onReject));
+  const highRiskApproval = showApprovalPrompt && riskLevel === 'high';
   const showExpiredApproval = isApprovalGated && expired;
   const canCancel = status === 'running' && Boolean(onCancel);
   const hasArgs = args != null && Object.keys(args).length > 0;
@@ -467,10 +472,29 @@ const ToolCallCardComponent = ({
         )}
 
         {showApprovalPrompt && (
-          <div className="flex items-center gap-2 p-2 rounded-compact bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900">
-            <AlertCircle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-            <p className="flex-1 text-xs text-yellow-900 dark:text-yellow-100">
-              This tool requires approval before execution.
+          <div
+            className={cn(
+              'flex items-center gap-2 p-2 rounded-compact border',
+              highRiskApproval
+                ? 'border-danger-fill/40 bg-danger-fill/10'
+                : 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900',
+            )}
+          >
+            <AlertCircle
+              className={cn(
+                'h-3.5 w-3.5 flex-shrink-0',
+                highRiskApproval ? 'text-danger-text' : 'text-yellow-600 dark:text-yellow-400',
+              )}
+            />
+            <p
+              className={cn(
+                'flex-1 text-xs',
+                highRiskApproval ? 'text-danger-text' : 'text-yellow-900 dark:text-yellow-100',
+              )}
+            >
+              {highRiskApproval
+                ? HIGH_RISK_APPROVAL_NOTICE
+                : 'This tool requires approval before execution.'}
             </p>
             <div className="flex gap-1.5">
               {onApprove && (

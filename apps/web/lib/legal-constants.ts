@@ -82,7 +82,7 @@ export const POLICY_LAST_UPDATED = {
   dataRights: '2026-08-13',
   dataUse: '2026-08-14',
   disclaimer: '2026-09-02',
-  agentPermissions: '2026-09-22',
+  agentPermissions: '2026-09-27',
 } as const;
 
 export const CANONICAL_POLICY_ROUTES = {

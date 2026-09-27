@@ -1,7 +1,14 @@
-import type { ManagedCloudScheduleTask } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedCloudScheduleRun,
+  ManagedCloudScheduleRunApproval,
+  ManagedCloudScheduleRunPendingApproval,
+  ManagedCloudScheduleTask,
+} from '@agiworkforce/cloud-contracts';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   listChromeSchedules,
+  readChromeScheduleApproval,
+  resolveChromeScheduleApproval,
   runChromeScheduleNow,
   setChromeScheduleEnabled,
 } from '../cloud-bridge/schedulesClient';
@@ -99,12 +106,34 @@ export const SCHEDULES_SECTION_CSS = `
   }
   .sp-schedule-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-schedule-btn:disabled { cursor: wait; opacity: 0.55; }
+  .sp-schedule-approval {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--agi-ext-text);
+  }
+  .sp-schedule-approval-call { overflow-wrap: anywhere; }
+  .sp-schedule-approval-input {
+    margin: 0;
+    max-height: 120px;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    color: var(--agi-ext-text-muted);
+  }
 `;
 
 export interface SchedulesSectionDependencies {
   listSchedules: typeof listChromeSchedules;
   setScheduleEnabled: typeof setChromeScheduleEnabled;
   runScheduleNow: typeof runChromeScheduleNow;
+  readApproval: typeof readChromeScheduleApproval;
+  resolveApproval: typeof resolveChromeScheduleApproval;
   signIn: typeof openClerkSignIn;
   now: () => number;
 }
@@ -119,6 +148,8 @@ const DEFAULT_DEPENDENCIES: SchedulesSectionDependencies = {
   listSchedules: listChromeSchedules,
   setScheduleEnabled: setChromeScheduleEnabled,
   runScheduleNow: runChromeScheduleNow,
+  readApproval: readChromeScheduleApproval,
+  resolveApproval: resolveChromeScheduleApproval,
   signIn: openClerkSignIn,
   now: () => Date.now(),
 };
@@ -172,6 +203,7 @@ export function buildSchedulesSection(
   sectionEl.appendChild(listEl);
 
   let schedules: ManagedCloudScheduleTask[] = [];
+  let approvals = new Map<string, ManagedCloudScheduleRun>();
   let listed = false;
   let active = false;
   let inFlight: AbortController | null = null;
@@ -254,7 +286,52 @@ export function buildSchedulesSection(
     actions.appendChild(runBtn);
 
     row.appendChild(actions);
+
+    const waiting = approvals.get(schedule.id);
+    if (waiting?.pendingApproval) {
+      row.appendChild(buildApproval(schedule, waiting, waiting.pendingApproval, busy, now));
+    }
     return row;
+  }
+
+  function buildApproval(
+    schedule: ManagedCloudScheduleTask,
+    run: ManagedCloudScheduleRun,
+    pending: ManagedCloudScheduleRunPendingApproval,
+    busy: boolean,
+    now: number,
+  ): HTMLElement {
+    const block = el('div', { class: 'sp-schedule-approval', role: 'group' });
+    block.appendChild(el('strong', {}, t('spSchedulesWaitingApproval')));
+    for (const call of pending.toolCalls) {
+      block.appendChild(
+        el('div', { class: 'sp-schedule-approval-call' }, `${call.summary} (${call.name})`),
+      );
+      if (call.input) {
+        block.appendChild(el('pre', { class: 'sp-schedule-approval-input' }, call.input));
+      }
+    }
+    block.appendChild(
+      el(
+        'div',
+        { class: 'sp-schedule-sub' },
+        t('spSchedulesApprovalExpires', [formatRelative(pending.expiresAt, now)]),
+      ),
+    );
+    const decisions = el('div', { class: 'sp-schedule-actions' });
+    for (const [decision, label] of [
+      ['approved', t('spSchedulesApprove')],
+      ['rejected', t('spSchedulesDeny')],
+    ] as const) {
+      const button = el('button', { type: 'button', class: 'sp-schedule-btn' }, label);
+      button.disabled = busy;
+      button.addEventListener('click', () => {
+        void resolveApproval(schedule, run, decision);
+      });
+      decisions.appendChild(button);
+    }
+    block.appendChild(decisions);
+    return block;
   }
 
   function render(): void {
@@ -297,6 +374,48 @@ export function buildSchedulesSection(
     await refresh();
   }
 
+  async function resolveApproval(
+    schedule: ManagedCloudScheduleTask,
+    run: ManagedCloudScheduleRun,
+    decision: ManagedCloudScheduleRunApproval['decision'],
+  ): Promise<void> {
+    const pending = run.pendingApproval;
+    if (pendingScheduleId !== null || !pending) return;
+    pendingScheduleId = schedule.id;
+    render();
+    const result = await deps.resolveApproval(schedule.id, run.id, {
+      decision,
+      toolCallIds: pending.toolCalls.map((call) => call.id),
+    });
+    pendingScheduleId = null;
+    if (result.status === 'error') {
+      reportFailure(result);
+      render();
+      return;
+    }
+    setStatus(decision === 'approved' ? t('spSchedulesApproved') : t('spSchedulesDenied'));
+    render();
+    await refresh();
+  }
+
+  async function readApprovals(
+    listedSchedules: readonly ManagedCloudScheduleTask[],
+    signal: AbortSignal,
+  ): Promise<Map<string, ManagedCloudScheduleRun>> {
+    const paused = listedSchedules.filter(
+      (schedule) => schedule.pausedReason === 'approval_required',
+    );
+    const results = await Promise.all(
+      paused.map((schedule) => deps.readApproval(schedule.id, { signal })),
+    );
+    const found = new Map<string, ManagedCloudScheduleRun>();
+    results.forEach((result, index) => {
+      const schedule = paused[index];
+      if (schedule && result.status === 'success' && result.run) found.set(schedule.id, result.run);
+    });
+    return found;
+  }
+
   async function refresh(): Promise<void> {
     inFlight?.abort();
     const controller = new AbortController();
@@ -314,7 +433,10 @@ export function buildSchedulesSection(
       render();
       return;
     }
+    const waiting = await readApprovals(result.schedules, controller.signal);
+    if (controller.signal.aborted) return;
     schedules = result.schedules;
+    approvals = waiting;
     listed = true;
     setStatus('');
     render();
@@ -330,6 +452,7 @@ export function buildSchedulesSection(
     inFlight?.abort();
     inFlight = null;
     schedules = [];
+    approvals = new Map();
     listed = false;
     pendingScheduleId = null;
     setStatus('');
