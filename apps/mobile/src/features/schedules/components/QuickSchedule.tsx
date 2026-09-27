@@ -385,7 +385,10 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
                   {loading ? (
                     <ActivityIndicator color={colors.accentText} size="small" />
                   ) : (
-                    <Text className="text-[15px] font-semibold" style={{ color: colors.accentText }}>
+                    <Text
+                      className="text-[15px] font-semibold"
+                      style={{ color: colors.accentText }}
+                    >
                       Create Schedule
                     </Text>
                   )}

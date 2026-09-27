@@ -277,7 +277,12 @@ export {
   isPromoExpired,
   tokenizerDriftFactor,
 } from './pricing';
-export { canonicalProvider, evaluateModelAccess, policyRestrictsAnything } from './model-policy';
+export {
+  canonicalProvider,
+  evaluateModelAccess,
+  MODEL_POLICY_UNAVAILABLE,
+  policyRestrictsAnything,
+} from './model-policy';
 export type {
   ModelAccessAsk,
   ModelAccessCode,
