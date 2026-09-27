@@ -1,6 +1,7 @@
 import {
   BILLING_PLAN_PRICING,
   SELF_SERVE_PAID_PLAN_TIERS,
+  getBillingPlanPricing,
   isContractPricedPlan,
   isFreeOfChargePlanTier,
   normalizeBillingPlanTier,
@@ -49,6 +50,11 @@ export function isGrandfatheredBillingInterval(
   interval: BillingInterval,
 ): boolean {
   return WITHDRAWN_BILLING_INTERVALS[normalizeBillingPlanTier(tier)]?.[interval] !== undefined;
+}
+
+export function grandfatheredYearlyBillingNotice(tier: string | null | undefined): string | null {
+  if (!isGrandfatheredBillingInterval(tier, 'yearly')) return null;
+  return `If you already pay yearly for ${getBillingPlanPricing(tier).label}, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.`;
 }
 
 function sellabilityOf(tier: BillingPlanTier): PlanSellability {
