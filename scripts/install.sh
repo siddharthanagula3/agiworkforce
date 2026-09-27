@@ -1,22 +1,17 @@
 #!/bin/bash
-# AGI Workforce CLI, Install Script
+# AGI Workforce CLI installer
 # Usage: curl -fsSL https://agiworkforce.com/install.sh | bash
 #
 # Options:
-#   --version VERSION    Install a specific version (default: latest)
-#   --no-modify-path     Skip adding to PATH
-#   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
+#   --version VERSION    Install a specific version (default: the newest release)
+#   --install-dir DIR    Install directory (default: ~/.agi/bin)
+#   --no-modify-path     Leave shell profiles unchanged
 #
-# Windows: this is a bash script, so it needs Git Bash, MSYS2, Cygwin or WSL.
-# PowerShell and cmd.exe cannot run it. Native Windows installs go through npm:
-#   npm install -g @agiworkforce/cli
-# which resolves the @agiworkforce/cli-win32-x64 / -win32-arm64 binary package.
-#
-# Requires `cosign` to verify the release workflow's keyless Sigstore signature.
+# Windows needs Git Bash, MSYS2, Cygwin or WSL: PowerShell and cmd.exe cannot
+# run this script.
 
 set -euo pipefail
 
-# ── Colors ────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -26,30 +21,53 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 GITHUB_REPO="siddharthanagula3/agiworkforce"
-NPM_PACKAGE="@agiworkforce/cli"
+RELEASE_FEED_URL="https://agiworkforce.com/api/releases/cli/latest"
 BINARY_NAME="agi"
 LEGACY_BINARY_NAME="agiworkforce"
 ARCHIVE_BASENAME="agiworkforce"
 DEFAULT_INSTALL_DIR="$HOME/.agi/bin"
-# CLI release tags use the v-cli-X.Y.Z scheme (separate from desktop's v-desktop-*).
-# Override via --tag-prefix if a future channel uses a different scheme.
 TAG_PREFIX="v-cli-"
+RELEASE_SIGNING_KEY=''
 
-# ── Parse arguments ───────────────────────────────────────────────────────────
 VERSION=""
 MODIFY_PATH=true
 INSTALL_DIR="$DEFAULT_INSTALL_DIR"
+WORK_DIR=""
+
+fail() {
+  echo -e "${RED}$1${NC}" >&2
+  exit 1
+}
+
+cleanup() {
+  if [ -n "$WORK_DIR" ]; then
+    rm -rf "$WORK_DIR"
+  fi
+}
+trap cleanup EXIT
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version|-v)    VERSION="$2"; shift 2 ;;
-    --no-modify-path) MODIFY_PATH=false; shift ;;
-    --install-dir)   INSTALL_DIR="$2"; shift 2 ;;
-    *)               shift ;;
+    --version|-v)
+      [ $# -ge 2 ] || fail "--version needs a value."
+      VERSION="$2"
+      shift 2
+      ;;
+    --install-dir)
+      [ $# -ge 2 ] || fail "--install-dir needs a value."
+      INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --no-modify-path)
+      MODIFY_PATH=false
+      shift
+      ;;
+    *)
+      fail "Unknown option: $1"
+      ;;
   esac
 done
 
-# ── Platform detection ────────────────────────────────────────────────────────
 detect_platform() {
   local os arch
 
@@ -57,289 +75,211 @@ detect_platform() {
     Darwin*)  os="darwin" ;;
     Linux*)   os="linux" ;;
     MINGW*|MSYS*|CYGWIN*) os="windows" ;;
-    *)
-      echo -e "${RED}Unsupported OS: $(uname -s)${NC}" >&2
-      echo "On Windows, install through npm instead: npm install -g ${NPM_PACKAGE}" >&2
-      exit 1
-      ;;
+    *) fail "Unsupported operating system: $(uname -s)" ;;
   esac
 
   case "$(uname -m)" in
     x86_64|amd64)  arch="x64" ;;
     aarch64|arm64) arch="arm64" ;;
-    *)             echo -e "${RED}Unsupported architecture: $(uname -m)${NC}"; exit 1 ;;
+    *) fail "Unsupported architecture: $(uname -m)" ;;
   esac
 
-  # Detect Rosetta on macOS (running x86_64 on arm64 hardware)
-  if [ "$os" = "darwin" ] && [ "$arch" = "x64" ]; then
-    if sysctl -n sysctl.proc_translated 2>/dev/null | grep -q 1; then
-      arch="arm64"
-      echo -e "${YELLOW}Rosetta detected, installing native arm64 binary${NC}"
-    fi
+  if [ "$os" = "darwin" ] && [ "$arch" = "x64" ] \
+    && [ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" = "1" ]; then
+    arch="arm64"
+    echo -e "${YELLOW}Rosetta detected, installing the native arm64 build${NC}" >&2
   fi
 
-  # Detect musl libc on Linux
-  local libc=""
-  if [ "$os" = "linux" ]; then
-    if ldd --version 2>&1 | grep -qi musl; then
-      libc="-musl"
-    fi
+  if [ "$os" = "linux" ] && ldd --version 2>&1 | grep -qi musl; then
+    fail "musl-based Linux (such as Alpine) is not supported: the published builds need glibc."
   fi
 
-  echo "${os}-${arch}${libc}"
+  echo "${os}-${arch}"
 }
 
-# ── Version resolution ────────────────────────────────────────────────────────
 resolve_version() {
-  if [ -n "$VERSION" ]; then
-    if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-      echo "${TAG_PREFIX}${VERSION}"
-    elif [[ "$VERSION" =~ ^v-cli-[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-      echo "$VERSION"
-    else
-      echo -e "${RED}Invalid CLI version: ${VERSION}. Expected X.Y.Z or v-cli-X.Y.Z.${NC}" >&2
-      exit 1
+  local requested="$VERSION"
+  if [ -z "$requested" ]; then
+    echo -e "${BLUE}Finding the newest CLI release...${NC}" >&2
+    local feed
+    if ! feed=$(curl -fsSL "$RELEASE_FEED_URL" 2>/dev/null); then
+      fail "No signed AGI CLI release is published yet."
     fi
-    return
+    requested=$(printf '%s' "$feed" | sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    [ -n "$requested" ] || fail "The release feed did not name a version."
   fi
-
-  echo -e "${BLUE}Fetching latest CLI version...${NC}" >&2
-
-  # CLI releases use v-cli-X.Y.Z tag scheme. /releases/latest returns the
-  # newest release across ALL channels (CLI + desktop), so filter by prefix.
-  local latest
-  latest=$(curl -fsSL "https://api.github.com/repos/${GITHUB_REPO}/releases?per_page=20" 2>/dev/null \
-    | grep '"tag_name"' \
-    | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/' \
-    | grep "^${TAG_PREFIX}" \
-    | head -1)
-
-  if [ -z "$latest" ]; then
-    echo -e "${RED}Could not resolve a signed CLI release.${NC}" >&2
-    exit 1
-  fi
-
-  echo "$latest"
+  requested="${requested#"$TAG_PREFIX"}"
+  [[ "$requested" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] \
+    || fail "Invalid CLI version: $requested. Expected X.Y.Z."
+  echo "${TAG_PREFIX}${requested}"
 }
 
-# ── Download with progress ────────────────────────────────────────────────────
-download_binary() {
-  local platform="$1"
-  local version="$2"
+verify_manifest() {
+  local manifest="$1" signature="$2" version="$3"
+
+  [ -n "$RELEASE_SIGNING_KEY" ] \
+    || fail "This installer carries no release signing key, so it cannot verify any release. No signed AGI CLI release is published yet."
+  command -v openssl >/dev/null 2>&1 \
+    || fail "openssl is required to verify the release signature. Install it, then run the installer again."
+
+  local key_file="${WORK_DIR}/release-signing-key.pem"
+  printf '%s\n' "$RELEASE_SIGNING_KEY" > "$key_file"
+  openssl dgst -sha256 -verify "$key_file" -signature "$signature" "$manifest" >/dev/null 2>&1 \
+    || fail "Release signature verification failed; refusing to install."
+
+  if command -v cosign >/dev/null 2>&1; then
+    local bundle="${WORK_DIR}/SHA256SUMS.sigstore.json"
+    curl -fsSL -o "$bundle" \
+      "https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS.sigstore.json" \
+      || fail "The release's Sigstore bundle is missing; refusing to install."
+    cosign verify-blob \
+      --bundle "$bundle" \
+      --certificate-identity "https://github.com/${GITHUB_REPO}/.github/workflows/release-cli.yml@refs/tags/${version}" \
+      --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+      "$manifest" >/dev/null 2>&1 \
+      || fail "Sigstore provenance verification failed; refusing to install."
+  fi
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+extract_archive() {
+  local archive="$1" destination="$2"
+  case "$archive" in
+    *.tar.gz) tar -xzf "$archive" -C "$destination" ;;
+    *.zip)
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -qo "$archive" -d "$destination"
+      elif command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -NonInteractive -Command \
+          "Expand-Archive -LiteralPath '$(cygpath -w "$archive")' -DestinationPath '$(cygpath -w "$destination")' -Force"
+      else
+        fail "unzip or PowerShell is required to extract the Windows archive."
+      fi
+      ;;
+  esac
+}
+
+install_binaries() {
+  local platform="$1" version="$2"
   local ext="tar.gz"
   local exe_suffix=""
-
   if [[ "$platform" == windows-* ]]; then
     ext="zip"
     exe_suffix=".exe"
-    # A Windows archive is a zip, and Git Bash ships no unzip. Without this the
-    # run failed after downloading and verifying, at the extract step.
-    if ! command -v unzip >/dev/null 2>&1; then
-      echo -e "${RED}unzip is required to extract the Windows archive and was not found.${NC}" >&2
-      echo "Install it, or use the npm package instead: npm install -g ${NPM_PACKAGE}" >&2
-      exit 1
-    fi
   fi
 
-  # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
-  # (no version in filename, version is in the tag/path). Match that.
+  # Asset names follow release-cli.yml: agiworkforce-{platform}.{ext}
   local filename="${ARCHIVE_BASENAME}-${platform}.${ext}"
-  local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
-  local checksums_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS"
-  local signature_url="https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS.sigstore.json"
-  local tmpdir
-  tmpdir=$(mktemp -d)
+  WORK_DIR=$(mktemp -d)
 
-  if ! command -v cosign >/dev/null 2>&1; then
-    echo -e "${RED}cosign is required to verify AGI CLI release provenance.${NC}" >&2
-    echo "Install Cosign from https://docs.sigstore.dev/cosign/system_config/installation/ and retry." >&2
-    rm -rf "$tmpdir"
-    exit 1
+  echo -e "${BLUE}Downloading ${BOLD}${BINARY_NAME}${NC}${BLUE} ${version#"$TAG_PREFIX"} for ${platform}...${NC}"
+  curl -fsSL -o "${WORK_DIR}/${filename}" \
+    "https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}" \
+    || fail "Download failed: release ${version} has no build for ${platform}."
+
+  if ! curl -fsSL -o "${WORK_DIR}/SHA256SUMS" \
+    "https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS" \
+    || ! curl -fsSL -o "${WORK_DIR}/SHA256SUMS.sig" \
+      "https://github.com/${GITHUB_REPO}/releases/download/${version}/SHA256SUMS.sig"; then
+    fail "Release signature metadata is missing; refusing to install unverified bytes."
   fi
-
-  echo -e "${BLUE}Downloading ${BOLD}${BINARY_NAME}${NC}${BLUE} ${version} for ${platform}...${NC}"
-  echo -e "${CYAN}  ${url}${NC}"
-
-  if ! curl -fsSL --progress-bar -o "${tmpdir}/${filename}" "$url" 2>&1; then
-    echo -e "${RED}Download failed.${NC}"
-    echo ""
-    echo "This could mean:"
-    echo "  - The version ${version} doesn't have pre-built binaries yet"
-    echo "  - Your platform (${platform}) is not supported"
-    echo ""
-    echo "You can install through npm instead:"
-    echo "  npm install -g ${NPM_PACKAGE}"
-    echo "Or build from source:"
-    echo "  cargo install --git https://github.com/${GITHUB_REPO} agiworkforce-cli --bin agi"
-    rm -rf "$tmpdir"
-    exit 1
-  fi
-
-  if ! curl -fsSL -o "${tmpdir}/SHA256SUMS" "$checksums_url" \
-    || ! curl -fsSL -o "${tmpdir}/SHA256SUMS.sigstore.json" "$signature_url"; then
-    echo -e "${RED}Release signature metadata is missing; refusing to install unverified bytes.${NC}" >&2
-    rm -rf "$tmpdir"
-    exit 1
-  fi
-
-  local certificate_identity="https://github.com/${GITHUB_REPO}/.github/workflows/release-cli.yml@refs/tags/${version}"
-  if ! cosign verify-blob \
-    --bundle "${tmpdir}/SHA256SUMS.sigstore.json" \
-    --certificate-identity "$certificate_identity" \
-    --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
-    "${tmpdir}/SHA256SUMS" >/dev/null; then
-    echo -e "${RED}Release provenance verification failed; refusing to install.${NC}" >&2
-    rm -rf "$tmpdir"
-    exit 1
-  fi
+  verify_manifest "${WORK_DIR}/SHA256SUMS" "${WORK_DIR}/SHA256SUMS.sig" "$version"
 
   local expected_checksum actual_checksum
-  expected_checksum=$(awk -v filename="$filename" '$2 == filename || $2 == "*" filename { print $1; exit }' "${tmpdir}/SHA256SUMS")
-  if [ -z "$expected_checksum" ]; then
-    echo -e "${RED}The signed checksum manifest does not contain ${filename}.${NC}" >&2
-    rm -rf "$tmpdir"
-    exit 1
-  fi
-  if command -v sha256sum >/dev/null 2>&1; then
-    actual_checksum=$(sha256sum "${tmpdir}/${filename}" | awk '{print $1}')
-  else
-    actual_checksum=$(shasum -a 256 "${tmpdir}/${filename}" | awk '{print $1}')
-  fi
-  if [ "$actual_checksum" != "$expected_checksum" ]; then
-    echo -e "${RED}Archive checksum verification failed; refusing to install.${NC}" >&2
-    rm -rf "$tmpdir"
-    exit 1
-  fi
-  echo -e "${GREEN}Verified release provenance and SHA-256 checksum.${NC}"
+  expected_checksum=$(awk -v name="$filename" '$2 == name || $2 == "*" name { print $1; exit }' "${WORK_DIR}/SHA256SUMS")
+  [ -n "$expected_checksum" ] || fail "The signed checksum manifest does not list ${filename}."
+  actual_checksum=$(sha256_of "${WORK_DIR}/${filename}")
+  [ "$actual_checksum" = "$expected_checksum" ] \
+    || fail "Archive checksum verification failed; refusing to install."
+  echo -e "${GREEN}Verified the release signature and the archive's SHA-256 checksum.${NC}"
 
-  # Extract
-  mkdir -p "$INSTALL_DIR"
+  local unpacked="${WORK_DIR}/unpacked"
+  mkdir -p "$unpacked" "$INSTALL_DIR"
+  extract_archive "${WORK_DIR}/${filename}" "$unpacked"
+  [ -f "${unpacked}/${BINARY_NAME}${exe_suffix}" ] \
+    || fail "The release archive does not contain ${BINARY_NAME}${exe_suffix}."
+
   echo -e "${BLUE}Installing to ${INSTALL_DIR}...${NC}"
-
-  if [ "$ext" = "tar.gz" ]; then
-    tar -xzf "${tmpdir}/${filename}" -C "$INSTALL_DIR"
-  else
-    unzip -qo "${tmpdir}/${filename}" -d "$INSTALL_DIR"
-  fi
-
-  # New archives include both `agi` and `agiworkforce`. Older archives only
-  # include `agiworkforce`, so create the primary short command after extract.
-  local primary_file="${INSTALL_DIR}/${BINARY_NAME}${exe_suffix}"
-  local legacy_file="${INSTALL_DIR}/${LEGACY_BINARY_NAME}${exe_suffix}"
-  if [ ! -f "$primary_file" ] && [ -f "$legacy_file" ]; then
-    cp "$legacy_file" "$primary_file"
-  fi
-  if [ ! -f "$legacy_file" ] && [ -f "$primary_file" ]; then
-    cp "$primary_file" "$legacy_file"
-  fi
-
-  chmod +x "$primary_file" 2>/dev/null || true
-  chmod +x "$legacy_file" 2>/dev/null || true
-  rm -rf "$tmpdir"
+  local name
+  for name in "$BINARY_NAME" "$LEGACY_BINARY_NAME"; do
+    [ -f "${unpacked}/${name}${exe_suffix}" ] || continue
+    chmod +x "${unpacked}/${name}${exe_suffix}"
+    mv -f "${unpacked}/${name}${exe_suffix}" "${INSTALL_DIR}/${name}${exe_suffix}"
+  done
 }
 
-# ── PATH modification ─────────────────────────────────────────────────────────
 add_to_path() {
-  local platform="${1:-}"
+  local platform="$1"
+  [ "$MODIFY_PATH" = "true" ] || return 0
 
-  if [ "$MODIFY_PATH" != "true" ]; then
-    return
-  fi
-
-  # The rc file below is read by this bash only. A Windows user who later opens
-  # PowerShell or cmd.exe would find `agi` missing with no explanation.
   if [[ "$platform" == windows-* ]]; then
     echo -e "${YELLOW}PowerShell and cmd.exe do not read this shell's profile.${NC}"
-    echo -e "  To use ${BOLD}agi${NC} there, add ${BOLD}${INSTALL_DIR}${NC} to your Windows PATH:"
-    echo -e "  ${BOLD}setx PATH \"%PATH%;\$(cygpath -w '${INSTALL_DIR}' 2>/dev/null || echo '${INSTALL_DIR}')\"${NC}"
-    echo -e "  Or install through npm instead: ${BOLD}npm install -g ${NPM_PACKAGE}${NC}"
+    echo -e "  To use ${BOLD}agi${NC} there, add ${BOLD}${INSTALL_DIR}${NC} to your Windows PATH."
     echo ""
   fi
 
-  # Already in PATH?
   if echo "$PATH" | tr ':' '\n' | grep -qx "$INSTALL_DIR"; then
-    return
+    return 0
   fi
 
-  local shell_name
+  local shell_name export_line config_files
   shell_name=$(basename "${SHELL:-/bin/bash}")
-  local export_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
-
-  local config_files=""
+  export_line="export PATH=\"${INSTALL_DIR}:\$PATH\""
   case "$shell_name" in
     fish)
       export_line="fish_add_path ${INSTALL_DIR}"
       config_files="$HOME/.config/fish/config.fish"
       ;;
-    zsh)
-      config_files="${ZDOTDIR:-$HOME}/.zshrc"
-      ;;
-    bash)
-      config_files="$HOME/.bashrc $HOME/.bash_profile"
-      ;;
-    *)
-      config_files="$HOME/.profile"
-      ;;
+    zsh) config_files="${ZDOTDIR:-$HOME}/.zshrc" ;;
+    bash) config_files="$HOME/.bashrc $HOME/.bash_profile" ;;
+    *) config_files="$HOME/.profile" ;;
   esac
 
+  local config_file
   for config_file in $config_files; do
     if [ -f "$config_file" ]; then
       if ! grep -q "$INSTALL_DIR" "$config_file" 2>/dev/null; then
-        echo "" >> "$config_file"
-        echo "# AGI Workforce CLI" >> "$config_file"
-        echo "$export_line" >> "$config_file"
-        echo -e "${GREEN}Added to PATH in ${config_file}${NC}"
+        printf '\n# AGI Workforce CLI\n%s\n' "$export_line" >> "$config_file"
+        echo -e "${GREEN}Added ${INSTALL_DIR} to PATH in ${config_file}${NC}"
       fi
       break
     fi
   done
 
-  # Also add to current session
   export PATH="${INSTALL_DIR}:$PATH"
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
 main() {
   echo ""
-  echo -e "${BOLD}${CYAN}  AGI Workforce CLI Installer${NC}"
-  echo -e "  ${BLUE}One app, every AI model, full desktop control${NC}"
+  echo -e "${BOLD}${CYAN}  AGI Workforce CLI installer${NC}"
   echo ""
 
   local platform version
-
   platform=$(detect_platform)
   version=$(resolve_version)
 
   echo -e "  Platform:  ${BOLD}${platform}${NC}"
-  echo -e "  Version:   ${BOLD}${version}${NC}"
+  echo -e "  Version:   ${BOLD}${version#"$TAG_PREFIX"}${NC}"
   echo -e "  Directory: ${BOLD}${INSTALL_DIR}${NC}"
   echo ""
 
-  download_binary "$platform" "$version"
+  install_binaries "$platform" "$version"
   add_to_path "$platform"
 
-  # Verify installation
-  if command -v "$BINARY_NAME" &>/dev/null; then
-    local installed_version
-    installed_version=$("$BINARY_NAME" --version 2>/dev/null || echo "unknown")
-    echo ""
-    echo -e "${GREEN}${BOLD}Installation complete!${NC}"
-    echo -e "  ${installed_version}"
-    echo ""
-    echo -e "  Get started: ${BOLD}agi${NC}"
-    echo -e "  Quick run:   ${BOLD}agi exec \"explain this codebase\"${NC}"
-    echo -e "  Help:        ${BOLD}agi --help${NC}"
-    echo -e "  Alias kept:  ${BOLD}agiworkforce${NC}"
-  else
-    echo ""
-    echo -e "${GREEN}${BOLD}Binary installed to ${INSTALL_DIR}/${BINARY_NAME}${NC}"
-    echo ""
-    echo -e "  ${YELLOW}Restart your shell or run:${NC}"
-    echo -e "  ${BOLD}export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
-    echo ""
-    echo -e "  Then: ${BOLD}agi --help${NC}"
+  echo ""
+  echo -e "${GREEN}${BOLD}Installed ${BINARY_NAME} ${version#"$TAG_PREFIX"} to ${INSTALL_DIR}${NC}"
+  if ! command -v "$BINARY_NAME" >/dev/null 2>&1; then
+    echo -e "  ${YELLOW}Open a new shell, or run:${NC} ${BOLD}export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
   fi
-
+  echo -e "  Get started: ${BOLD}agi${NC}"
+  echo -e "  Help:        ${BOLD}agi --help${NC}"
   echo ""
 }
 
