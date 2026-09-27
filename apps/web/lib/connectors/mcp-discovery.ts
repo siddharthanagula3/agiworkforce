@@ -3,6 +3,7 @@ import 'server-only';
 import {
   auth,
   AuthorizationServerMismatchError,
+  discoverOAuthProtectedResourceMetadata,
   discoverOAuthServerInfo,
   IssuerMismatchError,
   OAuthError,
@@ -93,6 +94,15 @@ function describeFailure(error: unknown): {
     reason: 'unexpected',
     message: error instanceof Error ? error.message : 'Authorization could not be started.',
   };
+}
+
+export async function mcpServerPublishesProtectedResource(mcpUrl: string): Promise<boolean> {
+  try {
+    await discoverOAuthProtectedResourceMetadata(mcpUrl, undefined, mcpOAuthFetch);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function mcpServerRequiresAuthorization(mcpUrl: string): Promise<boolean> {
