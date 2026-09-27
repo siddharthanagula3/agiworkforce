@@ -685,9 +685,9 @@ describe('billed credits for a settled turn', () => {
   }
 
   async function billedCredits(requestId: string): Promise<number | null> {
-    const context = new ExtensionContext();
-    await setApiKey(context.secrets, 'agi-test-key');
-    const settled = fetchBilledCredits(context.secrets, requestId);
+    const secrets = new ExtensionContext().secrets as unknown as vscode.SecretStorage;
+    await setApiKey(secrets, 'agi-test-key');
+    const settled = fetchBilledCredits(secrets, requestId);
     await vi.advanceTimersByTimeAsync(10_000);
     return settled;
   }
