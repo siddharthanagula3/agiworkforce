@@ -153,6 +153,7 @@ interface ReloadCharge {
   amountCents: number;
   taxCents: number;
   calculationId: string;
+  country: string | null;
 }
 
 const SETTINGS_COLUMNS = `enabled, threshold_credits, amount_usd, reload_attempt_id,
@@ -958,6 +959,7 @@ function reloadMetadata(
     top_up_units: String(quote.credits),
     tax_cents: String(charge.taxCents),
     tax_calculation: charge.calculationId,
+    ...(charge.country ? { billing_country: charge.country } : {}),
     auto_reload: 'true',
     auto_reload_attempt_id: attemptId,
   };
@@ -983,6 +985,7 @@ async function calculateReloadCharge(
     amountCents: calculation.amount_total,
     taxCents: calculation.tax_amount_exclusive,
     calculationId: calculation.id,
+    country: calculation.customer_details.address?.country ?? null,
   };
 }
 
