@@ -206,6 +206,16 @@ const ALLOWLIST = [
       'from the model-rollout cron, which has no caller to constrain by.',
   },
   {
+    match: /lib\/services\/infrastructure-allocation-service\.ts$/,
+    tables: ['infrastructure_vendor_bills'],
+    reason:
+      'the table holds one vendor bill total per month and has no tenant column to constrain ' +
+      'by: a bill is the platform paying Vercel, Neon or Clerk, not a row any account owns. ' +
+      '0303 turns RLS on and revokes app_rls as defence in depth. It is read and written only ' +
+      'by the monthly allocation cron, which has no caller to constrain by and keys every ' +
+      'write by the bill id it has just locked.',
+  },
+  {
     match: /lib\/server\/data-region\.ts$/,
     tables: ['organizations'],
     reason:

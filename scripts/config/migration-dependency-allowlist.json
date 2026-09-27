@@ -5,6 +5,11 @@
       "file": "apps/web/lib/services/cogs-ledger-service.ts",
       "migration": 304,
       "reason": "Writes the attribution_kind and attribution_ref columns when it imports Stripe fees. The deploy applies 0304 before this release reaches production. Until then the daily import in reconcile-credits fails, logs cogs_stripe_import_failed and leaves every other reconciliation step running, and its three-day lookback re-imports the missed fees once 0304 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/infrastructure-allocation-service.ts",
+      "migration": 303,
+      "reason": "Owns infrastructure_vendor_bills and ships with 0303: the deploy applies 0303 before this release reaches production. Until then the monthly allocation cron fails on its first read, reports 500 and writes nothing, so no ledger row depends on a table that does not exist."
     }
   ]
 }
