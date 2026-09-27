@@ -1188,6 +1188,37 @@ mod tests {
     }
 
     #[test]
+    fn a_settled_turn_states_the_credits_it_was_billed() {
+        let billed = |credits, settled, pending, unavailable| {
+            render_billed_turn(&BilledTurn {
+                credits,
+                settled,
+                pending,
+                unavailable,
+            })
+        };
+        assert_eq!(billed(1.25, 2, 0, 0), "1.25 credits billed");
+        assert_eq!(billed(1.0, 1, 0, 0), "1 credit billed");
+        assert_eq!(
+            billed(0.5, 1, 1, 0),
+            "0.5 credits billed so far, 1 request not settled yet"
+        );
+        assert_eq!(
+            billed(3.0, 1, 1, 1),
+            "3 credits billed so far, 2 requests not settled yet"
+        );
+        assert_eq!(
+            billed(0.0, 0, 2, 0),
+            "billed credits are not available yet, run `agi usage` later"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_turn_with_no_managed_request_reports_no_bill() {
+        assert_eq!(billed_turn(&[]).await, None);
+    }
+
+    #[test]
     fn reset_suffix_handles_a_past_and_unparseable_timestamp() {
         assert_eq!(
             reset_suffix(Some("2026-09-13T11:00:00Z"), fixture_now()),

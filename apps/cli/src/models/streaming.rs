@@ -1215,6 +1215,26 @@ mod tests {
     }
 
     #[test]
+    fn a_managed_request_is_identified_by_the_idempotency_key_it_was_sent_with() {
+        let spec = managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com")
+            .expect("a trusted host resolves");
+        let sent = spec
+            .extra_headers
+            .iter()
+            .find(|(name, _)| name == "Idempotency-Key")
+            .map(|(_, value)| value.clone());
+        let request_id = managed_request_id(&spec);
+        assert_eq!(request_id, sent);
+        assert!(
+            request_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("agi.cli.chat.")),
+            "{request_id:?}"
+        );
+        assert_eq!(managed_request_id(&anthropic_spec("k")), None);
+    }
+
+    #[test]
     fn paywall_exit_code_is_78() {
         let err = crate::errors::CliError::paywall("chat", "hobby", "quota exceeded");
         assert_eq!(err.exit_code(), 78);
