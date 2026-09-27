@@ -189,7 +189,7 @@ describe('schedule service persistence', () => {
 
     expect(schedules).toHaveLength(1);
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/where task\.user_id = \$1/i);
+    expect(sql).toMatch(/where user_id = \$1/i);
     expect(params).toEqual(['user-1', 100, 0]);
   });
 
@@ -204,7 +204,7 @@ describe('schedule service persistence', () => {
 
     expect(schedules).toEqual([expect.objectContaining({ projectId: 'project-1' })]);
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toMatch(/where task\.user_id = \$1 and task\.project_id = \$2/i);
+    expect(sql).toMatch(/where user_id = \$1 and project_id = \$2/i);
     expect(params).toEqual(['user-1', 'project-1', 50, 0]);
   });
 
@@ -1090,23 +1090,43 @@ describe('routine credit caps', () => {
     expect(params.at(-1)).toBe(CAP_MICROUSD);
   });
 
-  it('will not enable a routine that has spent its cap, and says so in credits', async () => {
-    const query = vi
-      .fn()
-      .mockResolvedValueOnce([
-        { ...cappedRow, is_enabled: false, status: 'paused', paused_reason: 'credit_cap_reached' },
-      ]);
-    const creditsUsed = vi.fn(async () => [{ used: String(CAP_MICROUSD) }]);
-
-    const enabling = setScheduleEnabled(
-      database(query, vi.fn(), creditsUsed),
-      'user-1',
-      'task-1',
-      true,
+  it('reads what a routine spent in the same statement that locks it', async () => {
+    const query = vi.fn().mockResolvedValueOnce([
       {
-        now: new Date('2026-07-15T13:00:00.000Z'),
+        ...cappedRow,
+        is_enabled: false,
+        status: 'paused',
+        paused_reason: 'credit_cap_reached',
+        credits_used_microusd: String(CAP_MICROUSD),
       },
-    );
+    ]);
+    const creditsUsed = vi.fn();
+
+    await expect(
+      setScheduleEnabled(database(query, vi.fn(), creditsUsed), 'user-1', 'task-1', true),
+    ).rejects.toBeInstanceOf(ScheduleConflictError);
+
+    const [lockSql, lockParams] = query.mock.calls[0] as [string, unknown[]];
+    expect(lockSql).toContain('credits_used_microusd');
+    expect(lockSql).toContain('for update of task');
+    expect(lockParams).toEqual(['task-1', 'user-1']);
+    expect(creditsUsed).not.toHaveBeenCalled();
+  });
+
+  it('will not enable a routine that has spent its cap, and says so in credits', async () => {
+    const query = vi.fn().mockResolvedValueOnce([
+      {
+        ...cappedRow,
+        is_enabled: false,
+        status: 'paused',
+        paused_reason: 'credit_cap_reached',
+        credits_used_microusd: String(CAP_MICROUSD),
+      },
+    ]);
+
+    const enabling = setScheduleEnabled(database(query), 'user-1', 'task-1', true, {
+      now: new Date('2026-07-15T13:00:00.000Z'),
+    });
 
     await expect(enabling).rejects.toBeInstanceOf(ScheduleConflictError);
     await expect(enabling).rejects.toThrow(
@@ -1126,33 +1146,68 @@ describe('routine credit caps', () => {
         idempotencyKey: 'manual-capped',
       }),
     ).rejects.toBeInstanceOf(ScheduleConflictError);
-    expect(creditsUsed).toHaveBeenCalledWith(expect.any(String), ['user-1', 'task-1', null]);
+    expect(creditsUsed).toHaveBeenCalledWith(expect.any(String), ['user-1', 'task-1']);
     expect(query).toHaveBeenCalledTimes(2);
   });
 
-  it('pauses a routine whose run spent the rest of its cap and records the run in credits', async () => {
+  it('pauses a routine whose run spent the rest of its cap, and keeps the result as the run wrote it', async () => {
     const query = vi
       .fn()
-      .mockResolvedValueOnce([cappedRow])
+      .mockResolvedValueOnce([{ ...cappedRow, credits_used_microusd: String(CAP_MICROUSD) }])
       .mockResolvedValueOnce([runRow('success')])
       .mockResolvedValueOnce([{ id: 'task-1' }]);
-    const creditsUsed = vi.fn(async (_sql: string, params?: unknown[]) =>
-      params?.[2] === 'run-1'
-        ? [{ used: String(microusdFromCredits(8)) }]
-        : [{ used: String(CAP_MICROUSD) }],
-    );
 
-    await finalizeScheduleRun(database(query, vi.fn(), creditsUsed), claim, {
+    await finalizeScheduleRun(database(query), claim, {
       status: 'success',
       result: { text: 'Done' },
       completedAt: new Date('2026-07-15T12:00:02.000Z'),
     });
 
     const [, runParams] = query.mock.calls[1] as [string, unknown[]];
-    expect(JSON.parse(String(runParams[3]))).toEqual({ text: 'Done', credits: 8 });
+    expect(JSON.parse(String(runParams[3]))).toEqual({ text: 'Done' });
     const [taskSql, taskParams] = query.mock.calls[2] as [string, unknown[]];
     expect(taskSql).toContain("then 'credit_cap_reached'");
     expect(taskParams.at(-1)).toBe(true);
     expect(taskParams).toContain('paused');
+  });
+
+  it('keeps a routine under its cap running after a run', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        { ...cappedRow, credits_used_microusd: String(microusdFromCredits(10)) },
+      ])
+      .mockResolvedValueOnce([runRow('success')])
+      .mockResolvedValueOnce([{ id: 'task-1' }]);
+
+    await finalizeScheduleRun(database(query), claim, {
+      status: 'success',
+      result: { text: 'Done' },
+      completedAt: new Date('2026-07-15T12:00:02.000Z'),
+    });
+
+    const [, taskParams] = query.mock.calls[2] as [string, unknown[]];
+    expect(taskParams.at(-1)).toBe(false);
+    expect(taskParams).not.toContain('paused');
+  });
+
+  it('shows each run what its linked charges cost, and no figure for a run with none', async () => {
+    const query = vi.fn().mockResolvedValue([
+      { owner_task_id: 'task-1', ...runRow('success'), credits_used_microusd: '6250' },
+      { owner_task_id: 'task-1', ...runRow('failed'), id: 'run-2', credits_used_microusd: null },
+    ]);
+
+    const runs = await listScheduleRuns(database(query), 'user-1', 'task-1', {
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(runs.map((run) => [run.id, run.creditsUsed])).toEqual([
+      ['run-1', 1.25],
+      ['run-2', null],
+    ]);
+    const [sql] = query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('charge.scheduled_task_run_id = paged_runs.id');
+    expect(sql).toContain("charge.status = 'completed'");
   });
 });
