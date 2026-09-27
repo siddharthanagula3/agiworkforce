@@ -4,8 +4,14 @@ import { FEATURE_RATE_CARD, INFRASTRUCTURE_VENDORS, MICROUSD_PER_CENT } from '@a
 vi.mock('server-only', () => ({}));
 
 const logger = vi.hoisted(() => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }));
-vi.mock('@/lib/logger', () => ({ logger }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  logger,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: vi.fn(),
+}));
 
 import {
   INFRASTRUCTURE_ALLOCATION_SOURCE_PREFIX,
@@ -193,12 +199,17 @@ describe('allocateInfrastructureCosts', () => {
       (vendor) => committedMonthlyMicrousd(vendor, 2) !== null,
     );
     expect(run.estimated).toEqual(committed);
-    expect(run.missing).toEqual(INFRASTRUCTURE_VENDORS.filter((vendor) => !committed.includes(vendor)));
+    expect(run.missing).toEqual(
+      INFRASTRUCTURE_VENDORS.filter((vendor) => !committed.includes(vendor)),
+    );
     expect(run.allocated.map((allocation) => allocation.source)).toEqual(
       committed.map(() => 'rate_card'),
     );
     const hosting = run.allocated.find((allocation) => allocation.vendor === 'vercel');
-    expect(hosting).toMatchObject({ billMicrousd: HOSTING_MONTH, allocatedMicrousd: HOSTING_MONTH });
+    expect(hosting).toMatchObject({
+      billMicrousd: HOSTING_MONTH,
+      allocatedMicrousd: HOSTING_MONTH,
+    });
   });
 
   it('charges the whole remainder to one unattributed row when no account was active', async () => {

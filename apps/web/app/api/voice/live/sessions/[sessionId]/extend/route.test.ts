@@ -18,22 +18,30 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
   requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/cors')>()),
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
@@ -100,14 +108,11 @@ function activeSession(status: 'active' | 'closed' = 'active') {
 }
 
 function extend(body: unknown): Promise<Response> {
-  const request = new NextRequest(
-    `http://localhost/api/voice/live/sessions/${SESSION_ID}/extend`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    },
-  );
+  const request = new NextRequest(`http://localhost/api/voice/live/sessions/${SESSION_ID}/extend`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
   return POST(request, { params: Promise.resolve({ sessionId: SESSION_ID }) });
 }
 
@@ -338,7 +343,11 @@ describe('POST /api/voice/live/sessions/[sessionId]/extend', () => {
   });
 
   it('rejects a body that names the first block or carries no settlement', async () => {
-    for (const body of [{ block: 1, settlement: SETTLEMENT }, { block: 2 }, { settlement: SETTLEMENT }]) {
+    for (const body of [
+      { block: 1, settlement: SETTLEMENT },
+      { block: 2 },
+      { settlement: SETTLEMENT },
+    ]) {
       const response = await extend(body);
       expect(response.status).toBe(400);
       expect((await errorBody(response))['code']).toBe('invalid_request');

@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   freeResetAt: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.scopedQuery },
     userId: 'user-free',
@@ -44,9 +45,15 @@ vi.mock('@/lib/server/user-identity', async (importOriginal) => ({
   buildCustomInstructionsPreamble: mocks.customInstructions,
 }));
 
-vi.mock('@/app/api/chat/conversations/[id]/messages/lib/persist-message', () => ({
-  persistConversationMessage: mocks.persistMessage,
-}));
+vi.mock(
+  '@/app/api/chat/conversations/[id]/messages/lib/persist-message',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/app/api/chat/conversations/[id]/messages/lib/persist-message')
+    >()),
+    persistConversationMessage: mocks.persistMessage,
+  }),
+);
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/free-trial-service')>()),
@@ -143,7 +150,9 @@ describe('processRequest on the Free usage windows', () => {
     );
     const begun = mocks.beginFree.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(begun['estimatedMicrousd']).toBeUndefined();
-    expect(result.freeTrial).toEqual(expect.objectContaining({ kind: 'free_trial', reservedMicrousd: 7_500 }));
+    expect(result.freeTrial).toEqual(
+      expect.objectContaining({ kind: 'free_trial', reservedMicrousd: 7_500 }),
+    );
     expect(result.managedUsage).toBeUndefined();
     expect(mocks.fitFree).toHaveBeenCalledWith(
       expect.objectContaining({ reservation: result.freeTrial, provider: result.provider }),
