@@ -61,6 +61,7 @@ import {
   parkUnsentDraft,
   readMessageArrayPatch,
 } from '@shared/stores/web-chat-store';
+import { useStyleStore } from '@features/chat/stores/style-store';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -1463,6 +1464,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const pendingTemporaryChat = useChatStore((s) => s.pendingTemporaryChat);
+  const temporaryChatPersonalized = useChatStore((s) => s.temporaryChatPersonalized);
+  const setTemporaryChatPersonalized = useChatStore((s) => s.setTemporaryChatPersonalized);
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const addMessage = useChatStore((s) => s.addMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
@@ -1531,7 +1534,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setActiveConversation,
   } = useConversations();
   useConversationDraftSync();
-  const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingChatToggles = useChatStore((s) => s.adoptPendingComposerToggles);
+  const adoptPendingComposerToggles = useCallback(
+    (conversationId: string) => {
+      adoptPendingChatToggles(conversationId);
+      useStyleStore.getState().adoptSelection(PENDING_CONVERSATION_KEY, conversationId);
+    },
+    [adoptPendingChatToggles],
+  );
   const parkBlockedSend = useChatStore((s) => s.parkBlockedSend);
   const {
     groupsByMessageId: branchGroupsByMessageId,
@@ -5577,6 +5587,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <EyeOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
                     <span className="shrink-0">{t('chat:header.temporaryChat')}</span>
                   </span>
+                )}
+                {!voiceModeActive && temporaryChatActive && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={temporaryChatPersonalized}
+                    aria-label={t('chat:header.temporaryChatPersonalized')}
+                    title={t('chat:header.temporaryChatPersonalizationHint')}
+                    onClick={() => setTemporaryChatPersonalized(!temporaryChatPersonalized)}
+                    className="ml-1 inline-flex h-7 min-w-[24px] shrink-0 items-center rounded-md border border-border px-2 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {temporaryChatPersonalized
+                      ? t('chat:header.temporaryChatPersonalized')
+                      : t('chat:header.temporaryChatUnpersonalized')}
+                  </button>
                 )}
                 {!voiceModeActive &&
                   !temporaryChatActive &&

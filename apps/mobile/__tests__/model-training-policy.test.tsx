@@ -51,10 +51,10 @@ describe('model-training privacy policy', () => {
   it('removes the ambiguous consent promise from Cloud Privacy', () => {
     const { getByText, queryByText } = render(<CloudPrivacyScreen />);
 
-    expect(getByText('AGI model training: Always off')).toBeTruthy();
+    expect(getByText('Model training')).toBeTruthy();
     expect(
       getByText(
-        'AGI does not use customer prompts, responses, or files to train AGI-owned models. There is no training opt-in because this data path does not exist.',
+        'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send.',
       ),
     ).toBeTruthy();
     expect(queryByText(/without explicit consent/i)).toBeNull();

@@ -146,6 +146,8 @@ export interface Project {
   isArchived?: boolean;
   /** False confines this project's chats to its own memories (migration 0135). */
   usesGlobalMemory?: boolean;
+  usesAccountInstructions?: boolean;
+  usesAccountStyle?: boolean;
   defaultPrivacyMode?: PrivacyMode;
   defaultProviderMode?: ProviderMode;
   allowedSurfaces?: SourceSurface[];
