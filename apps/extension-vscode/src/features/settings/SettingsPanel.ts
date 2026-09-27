@@ -27,7 +27,6 @@ import {
   formatCreditSpendability,
 } from '../../data/usageMeter';
 import { creditWindowRows, summarizeUsageHistory } from '../../data/usagePresentation';
-import { withEffectivePlan } from '../account-auth/accountPresentation';
 import { planDisplayLabel } from '../account-auth/planLabel';
 import { getSettingsWebviewContent } from './settingsWebviewContent';
 import { agentConfigPath } from '../config/agentConfig';
@@ -52,10 +51,10 @@ const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
     'https://agiworkforce.com/docs?topic=custom-instructions&from=vscode-extension',
 };
 
-function buildPlanUsage(tierInfo: TierInfo): SettingsPlanUsage {
+function buildPlanUsage(tierInfo: TierInfo, accountPlanName?: string): SettingsPlanUsage {
   const planTier = tierInfo.accountPlanTier ?? tierInfo.tier;
   return {
-    planLabel: planDisplayLabel(planTier) ?? planTier,
+    planLabel: accountPlanName ?? planDisplayLabel(planTier) ?? planTier,
     windows: tierInfo.credits === undefined ? [] : creditWindowRows(tierInfo.credits),
     credits:
       tierInfo.creditBalanceCents === undefined
@@ -187,11 +186,9 @@ export class SettingsPanel {
       ...Config.settingsSnapshot(),
       accountConnected: currentlyConnected,
       accountStatus: currentAccountAuth.status,
-      ...(currentlyConnected && accountIdentity !== undefined
-        ? { accountIdentity: withEffectivePlan(accountIdentity, tierInfo) }
-        : {}),
+      ...(currentlyConnected && accountIdentity !== undefined ? { accountIdentity } : {}),
       ...(currentlyConnected && tierInfo !== undefined
-        ? { tierInfo, planUsage: buildPlanUsage(tierInfo) }
+        ? { tierInfo, planUsage: buildPlanUsage(tierInfo, accountIdentity?.planName) }
         : {}),
       ...(currentlyConnected && usageHistory !== undefined
         ? { usageHistory: toSettingsUsageHistory(usageHistory) }
