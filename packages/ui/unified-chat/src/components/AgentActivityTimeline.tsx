@@ -1023,6 +1023,7 @@ export function AgentActivityTimeline({
                     name={traceRowName(entry)}
                     status={entry.id === lastVisibleSearchId ? 'complete' : toToolStatus(entry)}
                     requiresApproval={entry.status === 'awaiting-approval'}
+                    riskLevel={entry.approval?.riskLevel}
                     args={asRecord(entry.input)}
                     result={connectRequest ? undefined : asResult(entry.output)}
                     errorDetail={connectRequest ? undefined : entry.error}

@@ -21,6 +21,18 @@ const UNGOVERNED: ModelAccessDecision = {
   reason: 'No workspace model policy applies to this request.',
 };
 
+const POLICY_UNAVAILABLE_RETRY_AFTER_SECONDS = '30';
+
+export function modelPolicyRefusalInit(
+  decision: ModelAccessDecision,
+  headers?: HeadersInit,
+): ResponseInit {
+  if (decision.code !== MODEL_POLICY_UNAVAILABLE.code) return { status: 403, headers };
+  const retryHeaders = new Headers(headers);
+  retryHeaders.set('Retry-After', POLICY_UNAVAILABLE_RETRY_AFTER_SECONDS);
+  return { status: 503, headers: retryHeaders };
+}
+
 interface WorkspaceScopedRequest {
   headers: { get(name: string): string | null };
 }

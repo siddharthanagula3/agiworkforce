@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  DEFAULT_TOOL_APPROVAL_POLICY,
+  CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   TOOL_APPROVAL_PREFERENCE_NAMESPACE,
   isToolApprovalPolicy,
   type ToolApprovalPolicy,
@@ -27,7 +27,7 @@ function storedPolicy(settings: unknown): ToolApprovalPolicy {
   ] as ToolApprovalPreferences | undefined;
   return isToolApprovalPolicy(namespace?.defaultPolicy)
     ? namespace.defaultPolicy
-    : DEFAULT_TOOL_APPROVAL_POLICY;
+    : CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY;
 }
 
 export function useToolApprovalPolicySync(): ToolApprovalPolicySync {
