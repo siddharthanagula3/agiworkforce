@@ -96,7 +96,6 @@ const ANTHROPIC_CHAT_MODEL = (() => {
   return candidate;
 })();
 
-
 interface WindowUse {
   fiveHour: number;
   weekly: number;
@@ -125,8 +124,10 @@ function storedReservation(requestId: string, reserved: number, settledAt: strin
   stored.set(requestId, { reserved, settledAt });
 }
 
-function executed(fragment: string): unknown[][] {
-  return tx.execute.mock.calls.filter(([sql]) => String(sql).includes(fragment)) as unknown[][];
+function executed(fragment: string): Array<[string, unknown[]]> {
+  return tx.execute.mock.calls.filter(([sql]) => String(sql).includes(fragment)) as Array<
+    [string, unknown[]]
+  >;
 }
 
 function reservation(overrides: Partial<FreeTrialReservation> = {}): FreeTrialReservation {
@@ -256,7 +257,14 @@ describe('beginFreeTrialRequest', () => {
     });
     const [insert] = executed('insert into public.free_daily_usage_reservations');
     expect(insert?.[0]).toContain('lease_expires_at');
-    expect(insert?.[1]).toEqual(['user-1', 'request-1', reserved, 300, 'openrouter', 'free-route-model']);
+    expect(insert?.[1]).toEqual([
+      'user-1',
+      'request-1',
+      reserved,
+      300,
+      'openrouter',
+      'free-route-model',
+    ]);
     expect(scopes).toContainEqual({ userId: 'user-1', organizationId: null });
   });
 
@@ -597,7 +605,13 @@ describe('releaseExpiredFreeTrialReservations', () => {
         provider: 'openrouter',
         model: 'free-route-model',
       },
-      { user_id: 'user-2', request_id: 'request-2', reserved_microusd: 1_000, provider: null, model: null },
+      {
+        user_id: 'user-2',
+        request_id: 'request-2',
+        reserved_microusd: 1_000,
+        provider: null,
+        model: null,
+      },
     ]);
 
     await expect(releaseExpiredFreeTrialReservations(serviceDb, 500)).resolves.toEqual({
@@ -691,48 +705,34 @@ describe('Free output budgeting', () => {
 
   it('budgets the next provider call separately from prior subthreshold spend', () => {
     const subthresholdTokens = Math.floor(TIERED_MODEL.firstTier.thresholdTokens * 0.75);
-    const priorCostDollars = LLMCostCalculator.calculateCostDollars(
-      TIERED_MODEL.provider,
-      TIERED_MODEL.id,
-      {
-        promptTokens: subthresholdTokens,
-        completionTokens: 0,
-        totalTokens: subthresholdTokens,
-      },
-    );
-    const separateCallsDollars =
-      priorCostDollars +
-      LLMCostCalculator.calculateCostDollars(TIERED_MODEL.provider, TIERED_MODEL.id, {
-        promptTokens: subthresholdTokens,
-        completionTokens: 1,
-        totalTokens: subthresholdTokens + 1,
+    const call = (completionTokens: number, promptTokens = subthresholdTokens) =>
+      LLMCostCalculator.calculateCostMicrousd(TIERED_MODEL.provider, TIERED_MODEL.id, {
+        promptTokens,
+        completionTokens,
+        totalTokens: promptTokens + completionTokens,
       });
-    const incorrectlyAggregatedDollars = LLMCostCalculator.calculateCostDollars(
-      TIERED_MODEL.provider,
-      TIERED_MODEL.id,
-      {
-        promptTokens: subthresholdTokens * 2,
-        completionTokens: 1,
-        totalTokens: subthresholdTokens * 2 + 1,
-      },
+    const priorCostMicrousd = call(0);
+    const reservedMicrousd = chargeMicrousdForProviderCost(priorCostMicrousd + call(1));
+    expect(chargeMicrousdForProviderCost(call(1, subthresholdTokens * 2))).toBeGreaterThan(
+      reservedMicrousd,
     );
-    expect(incorrectlyAggregatedDollars).toBeGreaterThan(separateCallsDollars);
-
-    expect(
+    const budget = (prior: number) =>
       fitFreeTrialOutputBudget({
         reservation: {
           kind: 'free_trial',
           userId: 'user-1',
           requestId: 'request-separated-calls',
-          reservedMicrousd: Math.ceil(separateCallsDollars * 1_000_000),
+          reservedMicrousd,
         },
         provider: TIERED_MODEL.provider,
         model: TIERED_MODEL.id,
         estimatedInputTokens: subthresholdTokens,
         requestedMaxOutputTokens: 1,
-        priorCostDollars,
-      }),
-    ).toEqual({ ok: true, maxOutputTokens: 1 });
+        priorCostMicrousd: prior,
+      });
+
+    expect(budget(priorCostMicrousd)).toEqual({ ok: true, maxOutputTokens: 1 });
+    expect(budget(reservedMicrousd)).toEqual({ ok: false, code: 'budget_reached' });
   });
 
   it('uses a byte upper bound for text and the model input ceiling for images', () => {

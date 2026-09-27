@@ -166,11 +166,18 @@ describe('parseCloudAgentToolResult', () => {
         },
       ],
       inputRequired: { inputRequests: { field: 'value' }, requestState: 'pending' },
+      freeTrialSpendMicrousd: 1_250,
     };
   }
 
   it('accepts the full shape ToolLoopToolResult actually returns, including generated files', () => {
     expect(() => parseCloudAgentToolResult(fullToolResult())).not.toThrow();
+  });
+
+  it('refuses a negative Free tool spend carried across an invocation', () => {
+    expect(() =>
+      parseCloudAgentToolResult({ ...fullToolResult(), freeTrialSpendMicrousd: -1 }),
+    ).toThrow();
   });
 
   it('rejects a generated file missing the fields the persistence layer always sets', () => {

@@ -123,9 +123,6 @@ interface UsageApi {
   history?: () => Answer;
 }
 
-// The stub answers only the URLs the pane is meant to ask for and refuses the
-// rest, so a pane that starts calling somewhere new fails here rather than
-// passing quietly.
 function stubUsageApi(api: UsageApi): string[] {
   const requested: string[] = [];
   global.fetch = vi.fn(async (input: RequestInfo | URL) => {

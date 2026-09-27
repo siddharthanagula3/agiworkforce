@@ -252,6 +252,7 @@ describe('compactContextWindow', () => {
       stream: vi.fn(() => ({}) as never),
     } as never);
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Summary of earlier turns.',
       promptTokens: 50,
@@ -325,6 +326,7 @@ describe('compactContextWindow', () => {
     await compactContextWindow(baseInput({ messages: buildMessages(3), db: db as never }));
     vi.clearAllMocks();
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Combined summary.',
       promptTokens: 50,
@@ -360,6 +362,7 @@ describe('compactContextWindow', () => {
     const staleSummary = db.conversation.compaction_summary;
     vi.clearAllMocks();
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Summary without the deleted turn.',
       promptTokens: 50,
@@ -386,6 +389,7 @@ describe('compactContextWindow', () => {
     const staleSummary = db.conversation.compaction_summary;
     vi.clearAllMocks();
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Summary of the edited turns.',
       promptTokens: 50,
@@ -409,6 +413,7 @@ describe('compactContextWindow', () => {
     expect(staleSummary).toBe('Summary of earlier turns.');
     vi.clearAllMocks();
     vi.mocked(drainToLlmResponse).mockResolvedValue({
+      providerElapsedMs: 0,
       model: 'model-key',
       content: 'Rebuilt summary.',
       promptTokens: 50,

@@ -139,9 +139,6 @@ describe('Settings > Usage history', () => {
     expect(historyCard().textContent).not.toMatch(/\$|tokens/iu);
   });
 
-  // The labels themselves are rendered in the reader's own locale, so the
-  // assertion is on the ORDER of the two days rather than on the text a given
-  // locale produces for them.
   it('shows the newest day first so the most recent spend is not below the fold', async () => {
     stubUsageApi('pro', () => ({ ok: true, body: history() }));
     renderSection();
