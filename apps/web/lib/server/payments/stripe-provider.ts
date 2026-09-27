@@ -1,20 +1,30 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
+import Stripe from 'stripe';
 
+import { buildPaymentIntentTaxCalculationParams } from '@/lib/billing/tax-policy';
 import { logger } from '@/lib/logger';
 import { getStripeClient, getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
   isStripeCheckoutSessionId,
+  isStripeResourceMissing,
   isStripeSubscriptionId,
 } from '@/lib/server/stripe-resource-ids';
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
 
 import type {
+  NormalizedBillingInstrument,
+  NormalizedCard,
+  NormalizedMoney,
+  NormalizedPayment,
+  NormalizedPaymentStatus,
   NormalizedPurchase,
   NormalizedSubscription,
+  OffSessionChargeInput,
+  OffSessionChargeResult,
   PollablePaymentProvider,
   PurchaseVerificationInput,
+  TaxCalculationResult,
 } from './domain';
 import {
   normalizeCurrency,
@@ -109,6 +119,174 @@ export function normalizeStripeCheckoutSession(
     amount: normalizeMoney(session.amount_total, normalizeCurrency(session.currency)),
     environment: stripeEnvironment(session.livemode),
   };
+}
+
+const PAYMENT_STATUSES: ReadonlySet<string> = new Set<NormalizedPaymentStatus>([
+  'succeeded',
+  'processing',
+  'requires_action',
+  'requires_payment_method',
+  'requires_confirmation',
+  'requires_capture',
+  'canceled',
+]);
+
+export function normalizeStripePaymentIntent(
+  paymentIntent: Stripe.PaymentIntent,
+): NormalizedPayment {
+  const status = PAYMENT_STATUSES.has(paymentIntent.status)
+    ? (paymentIntent.status as NormalizedPaymentStatus)
+    : 'unknown';
+  if (status === 'unknown') {
+    logger.error(
+      { paymentIntentId: paymentIntent.id, status: paymentIntent.status },
+      'Unknown Stripe PaymentIntent status; normalized to unknown so it is never treated as paid',
+    );
+  }
+  return {
+    reference: paymentIntent.id,
+    status,
+    amountReceived: normalizeMoney(paymentIntent.amount_received, paymentIntent.currency),
+    metadata: { ...(paymentIntent.metadata ?? {}) },
+    failureCode: paymentIntent.last_payment_error?.code ?? null,
+    declineCode: paymentIntent.last_payment_error?.decline_code ?? null,
+  };
+}
+
+function normalizeCard(
+  method: string | Stripe.PaymentMethod | null | undefined,
+): NormalizedCard | null {
+  if (!method || typeof method === 'string' || method.type !== 'card' || !method.card) return null;
+  return { reference: method.id, brand: method.card.brand, last4: method.card.last4 };
+}
+
+function liveCustomer(
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer,
+): Stripe.Customer | null {
+  if (typeof customer === 'string' || customer.deleted === true) return null;
+  return customer;
+}
+
+export async function readStripeBillingInstrument(
+  subscriptionReference: string,
+): Promise<NormalizedBillingInstrument | null> {
+  const stripe = getStripeClientOrNull();
+  if (!stripe) return null;
+  const subscription = await stripe.subscriptions.retrieve(subscriptionReference, {
+    expand: ['default_payment_method', 'customer.invoice_settings.default_payment_method'],
+  });
+  const customer = liveCustomer(subscription.customer);
+  return {
+    currency: normalizeCurrency(subscription.currency),
+    card: subscription.default_payment_method
+      ? normalizeCard(subscription.default_payment_method)
+      : normalizeCard(customer?.invoice_settings?.default_payment_method),
+    billingEmail: customer?.email?.trim() || null,
+  };
+}
+
+function isTaxLocationMissing(error: unknown): boolean {
+  return (
+    error instanceof Stripe.errors.StripeError && error.code === 'customer_tax_location_invalid'
+  );
+}
+
+export async function calculateStripeOffSessionTax(input: {
+  customerReference: string;
+  amount: NormalizedMoney;
+  reference: string;
+  idempotencyKey: string;
+}): Promise<TaxCalculationResult> {
+  try {
+    const calculation = await getStripeClient().tax.calculations.create(
+      buildPaymentIntentTaxCalculationParams({
+        customerId: input.customerReference,
+        currency: input.amount.currency.toLowerCase(),
+        amountMinor: input.amount.minorUnits,
+        reference: input.reference,
+      }),
+      { idempotencyKey: input.idempotencyKey },
+    );
+    const total = normalizeMoney(calculation.amount_total, calculation.currency);
+    if (!calculation.id || !total) {
+      throw new Error('Stripe Tax returned a calculation without an id or a total');
+    }
+    return {
+      outcome: 'calculated',
+      calculation: {
+        reference: calculation.id,
+        total,
+        taxMinorUnits: calculation.tax_amount_exclusive,
+        country: calculation.customer_details.address?.country ?? null,
+      },
+    };
+  } catch (error) {
+    if (isTaxLocationMissing(error)) return { outcome: 'location_missing' };
+    throw error;
+  }
+}
+
+export async function chargeStripeOffSession(
+  input: OffSessionChargeInput,
+): Promise<OffSessionChargeResult> {
+  try {
+    const paymentIntent = await getStripeClient().paymentIntents.create(
+      {
+        amount: input.amount.minorUnits,
+        currency: input.amount.currency.toLowerCase(),
+        customer: input.customerReference,
+        payment_method: input.paymentMethodReference,
+        payment_method_types: ['card'],
+        off_session: true,
+        confirm: true,
+        description: input.description,
+        metadata: { ...input.metadata },
+        hooks: { inputs: { tax: { calculation: input.taxCalculationReference } } },
+        ...(input.receiptEmail ? { receipt_email: input.receiptEmail } : {}),
+      },
+      { idempotencyKey: input.idempotencyKey },
+    );
+    return { outcome: 'created', payment: normalizeStripePaymentIntent(paymentIntent) };
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeCardError) {
+      return {
+        outcome: 'declined',
+        payment: error.payment_intent ? normalizeStripePaymentIntent(error.payment_intent) : null,
+        failureCode: error.code ?? null,
+        declineCode: error.decline_code ?? null,
+      };
+    }
+    if (error instanceof Stripe.errors.StripeInvalidRequestError) {
+      return { outcome: 'rejected', code: error.code ?? null, message: error.message };
+    }
+    return { outcome: 'unknown', error };
+  }
+}
+
+export async function cancelStripePayment(reference: string): Promise<void> {
+  await getStripeClient().paymentIntents.cancel(reference);
+}
+
+export async function retrieveStripePayment(reference: string): Promise<NormalizedPayment | null> {
+  try {
+    return normalizeStripePaymentIntent(await getStripeClient().paymentIntents.retrieve(reference));
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return null;
+    throw error;
+  }
+}
+
+export async function listStripeCustomerPayments(
+  customerReference: string,
+  createdSince: Date | null,
+  limit: number,
+): Promise<NormalizedPayment[]> {
+  const page = await getStripeClient().paymentIntents.list({
+    customer: customerReference,
+    limit,
+    ...(createdSince ? { created: { gte: Math.floor(createdSince.getTime() / 1000) } } : {}),
+  });
+  return page.data.map(normalizeStripePaymentIntent);
 }
 
 export const stripePaymentProvider: PollablePaymentProvider = {
