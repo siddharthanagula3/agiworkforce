@@ -210,5 +210,7 @@
   "usageExplainer": "Ogni piano a pagamento include crediti in tre finestre: ogni 5 ore, a settimana e al mese. {{baseline}} include {{fiveHour, number}} crediti ogni 5 ore, {{weekly, number}} a settimana e {{monthly, number}} al mese, e un moltiplicatore come 5x si applica a tutte e tre le finestre di questa quota.",
   "flagshipShare": "Da {{baseline}} in su, i modelli più capaci possono usare fino al {{percent}}% dei crediti di ogni settimana.",
   "switchToPlanCta": "Passa a {{plan}}",
-  "downgradeScheduledToast": "Il tuo piano passa a {{plan}} il {{date}}."
+  "downgradeScheduledToast": "Il tuo piano passa a {{plan}} il {{date}}.",
+  "pricingFootnote": "I prezzi indicati non includono le imposte applicabili. I pagamenti non sono rimborsabili, salvo quanto diversamente previsto dalla nostra politica di rimborso o richiesto dalla legge locale.",
+  "refundPolicyLink": "Politica di rimborso"
 }
