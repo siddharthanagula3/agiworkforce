@@ -60,13 +60,10 @@ Code: `apps/cli/src/lib.rs:3936-3940`, `apps/cli/src/oauth.rs:451-466`, `apps/we
 
 - Done when: Sign-in and sign-up offer social providers (e.g. Google, GitHub) that complete sign-in on this surface.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Let GitHub sign-in finish inside the desktop window: github.com is missing from the Electron sign-in host list, so the default GitHub button sends its page to the system browser and the window never gets the session (Google works). | handler |
-
-Code: `apps/web/features/auth/AuthProviderButtons.tsx:26-50`, `packages/client/client-runtime/src/authProviders.ts:17-17`, `apps/desktop/electron/windowPolicy.ts:16-22`, `apps/desktop/electron/windowPolicy.ts:56-72`
 
 ## S3.09: Enterprise SSO entry.
 
@@ -76,7 +73,7 @@ Code: `apps/web/features/auth/AuthProviderButtons.tsx:26-50`, `packages/client/c
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Keep enterprise SSO inside the desktop window: only Google/Microsoft/Apple hosts are allowed, so an Okta, OneLogin, Ping or other SAML/OIDC identity provider page opens in the system browser and the desktop never receives the session. | handler |
+| desktop | partial | Okta, OneLogin and PingOne sign-in now finish inside the desktop window (windowPolicy.ts:22-32), but an identity provider on a customer-owned domain opens in the system browser and cannot hand the session back. Move desktop sign-in to the system browser with a deep-link or loopback handoff, as the Claude and ChatGPT desktop apps do. | handler |
 
 Code: `apps/web/features/auth/identityAuthAdapter.tsx:267-269`, `apps/web/features/auth/identityAuthAdapter.tsx:185-197`, `apps/desktop/electron/windowPolicy.ts:16-22`, `apps/desktop/electron/windowPolicy.ts:56-72`
 

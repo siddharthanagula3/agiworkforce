@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S70.01: Native application shell.
-
-- Done when: The product runs as an installed desktop app window with its own lifecycle, single instance, sign-in and crash recovery.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | GitHub sign-in, which the web login offers, is sent out to the system browser because github.com is not on the shell's sign-in allowlist, so it cannot finish inside the app; add it. | handler |
-
-Code: `apps/desktop/electron/main.ts:879-912`, `apps/desktop/electron/main.ts:1320-1325`, `apps/desktop/electron/windowPolicy.ts:16-22`, `apps/web/features/auth/identityAuthAdapter.tsx:20-25`
-
 ## S70.07: Companion window.
 
 - Done when: A compact companion window can stay open beside other apps while the user works elsewhere.

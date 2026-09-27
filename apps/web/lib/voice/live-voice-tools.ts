@@ -2,7 +2,13 @@ import 'server-only';
 
 import type { ModelMetadata } from '@agiworkforce/types';
 import { appendWebSearchTool } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import { EXECUTE_CODE_TOOL, resolveCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import { WEB_SEARCH_TOOL } from '@/lib/web-search/web-search-tool';
+import {
+  toolApprovalPolicyOption,
+  type ToolApprovalPolicy,
+} from '@shared/types/toolApprovalPolicy';
 
 /**
  * The tools a live voice session's delegated backend model may run.
@@ -41,6 +47,7 @@ export interface LiveVoiceToolCapability {
   /** How long the voice UI waits before offering to cancel the call. */
   timeoutMs: number;
   requiresApproval: boolean;
+  policyTool?: string;
 }
 
 const DEFAULT_TOOL_TIMEOUT_MS = 20_000;
@@ -56,6 +63,7 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     reason: 'the provider runs it inside the delegated turn and folds the result back in',
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: WEB_SEARCH_TOOL,
   },
   {
     id: 'web_search_preview',
@@ -66,6 +74,7 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     reason: 'the provider runs it inside the delegated turn and folds the result back in',
     timeoutMs: DEFAULT_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: WEB_SEARCH_TOOL,
   },
   {
     id: 'code_interpreter',
@@ -76,6 +85,7 @@ export const LIVE_VOICE_TOOL_REGISTRY: readonly LiveVoiceToolCapability[] = [
     reason: 'the provider owns the container, so no workspace of ours is opened by a voice turn',
     timeoutMs: LONG_TOOL_TIMEOUT_MS,
     requiresApproval: false,
+    policyTool: EXECUTE_CODE_TOOL,
   },
   {
     id: 'url_fetch',
@@ -191,13 +201,52 @@ export function describeDelegationTools(tools: readonly unknown[]): string[] {
   return names;
 }
 
-export function resolveLiveVoiceDelegationTools(backendModel: ModelMetadata): unknown[] {
+export interface LiveVoiceDelegationTools {
+  tools: unknown[];
+  withheld: LiveVoiceToolCapability[];
+}
+
+export function resolveLiveVoiceDelegationTools(
+  backendModel: ModelMetadata,
+  toolApprovalPolicy: ToolApprovalPolicy,
+): LiveVoiceDelegationTools {
   const provider = String(backendModel.provider).toLowerCase();
   const capabilities = backendModel.capabilities;
-  if (capabilities?.tools === false) return [];
+  if (capabilities?.tools === false) return { tools: [], withheld: [] };
 
-  const tools = appendWebSearchTool(provider, undefined, capabilities) ?? [];
-  return capabilities?.codeExecution === true
-    ? [...tools, ...resolveCodeExecutionTools(provider)]
-    : tools;
+  const hosted = [
+    ...(appendWebSearchTool(provider, undefined, capabilities) ?? []),
+    ...(capabilities?.codeExecution === true ? resolveCodeExecutionTools(provider) : []),
+  ];
+  const tools: unknown[] = [];
+  const withheld: LiveVoiceToolCapability[] = [];
+  for (const tool of hosted) {
+    const id = describeDelegationTools([tool])[0] ?? '';
+    const capability = findLiveVoiceTool(id);
+    if (policyAutoApprovesTool(toolApprovalPolicy, capability?.policyTool ?? id)) {
+      tools.push(tool);
+    } else if (capability) {
+      withheld.push(capability);
+    }
+  }
+  return { tools, withheld };
+}
+
+export function formatWithheldLiveVoiceTools(
+  withheld: readonly LiveVoiceToolCapability[],
+  toolApprovalPolicy: ToolApprovalPolicy,
+): string | null {
+  const actions = [...new Set(withheld.map((tool) => tool.label))];
+  if (actions.length === 0) return null;
+  const { label } = toolApprovalPolicyOption(toolApprovalPolicy);
+  const list = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(
+    actions.map((action, index) => (index === 0 ? action : action.toLowerCase())),
+  );
+  return (
+    `${list} ${actions.length === 1 ? 'is' : 'are'} off in this voice session. The user's Tool ` +
+    `approvals setting ("${label}") asks before each of these, and a voice session cannot stop ` +
+    'to ask. If the user asks for something that needs one, say so in one sentence and suggest ' +
+    'typing the request in the chat, where each action can be approved. Never answer as if one ' +
+    'of them had run.'
+  );
 }

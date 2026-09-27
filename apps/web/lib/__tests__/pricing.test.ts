@@ -48,10 +48,10 @@ describe('STRIPE_PRICE_IDS structure', () => {
     expect(STRIPE_PRICE_IDS).not.toHaveProperty('pro_plus');
   });
 
-  it('pro has monthly and yearly slots', async () => {
+  it('pro has only a monthly slot', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
     expect(STRIPE_PRICE_IDS.pro).toHaveProperty('monthly');
-    expect(STRIPE_PRICE_IDS.pro).toHaveProperty('yearly');
+    expect(STRIPE_PRICE_IDS.pro).not.toHaveProperty('yearly');
   });
 
   it('pro.monthly is undefined when env var is not set', async () => {
@@ -60,31 +60,26 @@ describe('STRIPE_PRICE_IDS structure', () => {
       STRIPE_PRICE_PRO_YEARLY: undefined,
     });
     expect(STRIPE_PRICE_IDS.pro.monthly).toBeUndefined();
-    expect(STRIPE_PRICE_IDS.pro.yearly).toBeUndefined();
   });
 
   it('pro.monthly resolves to the env var value when it starts with price_', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_test',
-      STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly_test',
     });
     expect(STRIPE_PRICE_IDS.pro.monthly).toBe('price_pro_monthly_test');
-    expect(STRIPE_PRICE_IDS.pro.yearly).toBe('price_pro_yearly_test');
   });
 
   it('pro slots are undefined when env value does not start with price_', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'invalid_id',
-      STRIPE_PRICE_PRO_YEARLY: 'also_invalid',
     });
     expect(STRIPE_PRICE_IDS.pro.monthly).toBeUndefined();
-    expect(STRIPE_PRICE_IDS.pro.yearly).toBeUndefined();
   });
 
-  it('max.yearly is always undefined (monthly-only plan)', async () => {
+  it('gives no individual plan a yearly slot', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
-    expect(STRIPE_PRICE_IDS.max.yearly).toBeUndefined();
-    expect(STRIPE_PRICE_IDS.max_15x.yearly).toBeUndefined();
+    expect(STRIPE_PRICE_IDS.max).not.toHaveProperty('yearly');
+    expect(STRIPE_PRICE_IDS.max_15x).not.toHaveProperty('yearly');
   });
 });
 
@@ -97,12 +92,12 @@ describe('getPlanFromPriceId', () => {
     expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_monthly_abc')).toBe('pro');
   });
 
-  it('returns "pro" for a matching yearly price ID', async () => {
+  it('does not sell the retired yearly Pro price at checkout', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_abc',
       STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly_abc',
     });
-    expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_yearly_abc')).toBe('pro');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_yearly_abc')).toBeNull();
   });
 
   it('returns null for an unknown price ID', async () => {
@@ -253,7 +248,7 @@ describe('getConfiguredPriceId', () => {
     });
 
     expect(getConfiguredPriceId('basic', 'monthly')).toBe('price_basic_usd');
-    expect(getConfiguredPriceId('pro', 'yearly')).toBe('price_pro_yearly');
+    expect(getConfiguredPriceId('pro', 'yearly')).toBeUndefined();
     expect(getConfiguredPriceId('max', 'monthly')).toBe('price_max_monthly');
     expect(getConfiguredPriceId('max_15x', 'monthly')).toBe('price_max_15x_monthly');
     expect(getConfiguredPriceId('max', 'yearly')).toBeUndefined();
