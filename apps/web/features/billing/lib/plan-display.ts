@@ -194,15 +194,12 @@ export function summarizePlanChange(from: BillingPlanTier, to: BillingPlanTier):
 export interface BillingPlanDisplay {
   pricing: BillingPlanPricing;
   monthlyPriceUsd: number | null;
-  yearlyPriceUsd: number | null;
-  annualAvailable: boolean;
   features: string[];
 }
 
 export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay {
   const pricing = getBillingPlanPricing(plan);
   const monthlyPriceUsd = getPlanPriceUsd(plan, 'monthly');
-  const yearlyPriceUsd = getPlanPriceUsd(plan, 'yearly');
   const limits = getBillingPlanProductLimits(plan);
   const features: string[] = [];
 
@@ -224,8 +221,6 @@ export function getBillingPlanDisplay(plan: BillingPlanTier): BillingPlanDisplay
   return {
     pricing,
     monthlyPriceUsd,
-    yearlyPriceUsd,
-    annualAvailable: yearlyPriceUsd !== null && yearlyPriceUsd > 0,
     features,
   };
 }

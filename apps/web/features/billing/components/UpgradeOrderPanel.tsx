@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { getPublishedPlanPriceUsd } from '@agiworkforce/types';
+import { getPublishedPlanPriceUsd, type SelfServeIndividualPlanTier } from '@agiworkforce/types';
 import {
   CheckoutRequiredError,
   fetchSavedPaymentMethods,
@@ -17,18 +17,12 @@ import {
   type UpgradeChargeBreakdown,
   type UpgradePromotionSummary,
 } from '../services/stripe-payments';
-import {
-  getBillingPlanDisplay,
-  formatCatalogPrice,
-  type SelectablePaidPlan,
-} from '../lib/plan-display';
+import { getBillingPlanDisplay, formatCatalogPrice } from '../lib/plan-display';
 import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeOrderPanelProps {
-  plan: SelectablePaidPlan;
-  billingInterval: 'monthly' | 'yearly';
-  seats?: number;
+  plan: SelfServeIndividualPlanTier;
   returnPath: string;
   onUpgraded?: () => void;
 }
@@ -69,13 +63,7 @@ function describePaymentMethod(method: SavedPaymentMethod): string {
   return method.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function UpgradeOrderPanel({
-  plan,
-  billingInterval,
-  seats,
-  returnPath,
-  onUpgraded,
-}: UpgradeOrderPanelProps) {
+export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrderPanelProps) {
   const [amountDue, setAmountDue] = useState<{
     cents: number;
     currency: string;
@@ -114,9 +102,7 @@ export function UpgradeOrderPanel({
 
   const display = getBillingPlanDisplay(plan);
   const planLabel = display.pricing.label;
-  const unitPriceUsd = getPublishedPlanPriceUsd(plan, billingInterval);
-  const recurringUsd = unitPriceUsd * (seats ?? 1);
-  const intervalWord = billingInterval === 'yearly' ? 'year' : 'month';
+  const recurringUsd = getPublishedPlanPriceUsd(plan);
 
   useEffect(() => {
     if (!authInitialized || !signedIn) return;
@@ -124,11 +110,7 @@ export function UpgradeOrderPanel({
     setPreviewing(true);
     setError(null);
     setPromotion(null);
-    previewUpgrade({
-      plan,
-      billingInterval,
-      ...(seats === undefined ? {} : { seats }),
-    })
+    previewUpgrade({ plan, billingInterval: 'monthly' })
       .then((r) => {
         if (cancelled) return;
         setAmountDue({
@@ -161,7 +143,7 @@ export function UpgradeOrderPanel({
     return () => {
       cancelled = true;
     };
-  }, [plan, billingInterval, seats, authInitialized, signedIn, previewKey]);
+  }, [plan, authInitialized, signedIn, previewKey]);
 
   useEffect(() => {
     if (!authInitialized || !signedIn) return;
@@ -201,8 +183,7 @@ export function UpgradeOrderPanel({
     try {
       const result = await previewUpgrade({
         plan,
-        billingInterval,
-        ...(seats === undefined ? {} : { seats }),
+        billingInterval: 'monthly',
         promotionCode: code,
       });
       setAmountDue({
@@ -232,19 +213,14 @@ export function UpgradeOrderPanel({
     setError(null);
     try {
       if (checkoutRequired) {
-        await startPlanCheckout({
-          plan,
-          billingInterval,
-          ...(seats === undefined ? {} : { seats }),
-        });
+        await startPlanCheckout({ plan, billingInterval: 'monthly' });
         return;
       }
       if (!amountDue) throw new Error('Preview the upgrade price before subscribing.');
       await upgradePlanMidCycle({
         plan,
-        billingInterval,
+        billingInterval: 'monthly',
         previewToken: amountDue.previewToken,
-        ...(seats === undefined ? {} : { seats }),
         ...(promotion ? { promotionCode: promotion.code } : {}),
       });
       onUpgraded?.();
@@ -286,7 +262,7 @@ export function UpgradeOrderPanel({
                   From {formatRenewalDate(checkoutRequired.trial.convertsAt)}
                 </dt>
                 <dd className="tabular-nums">
-                  {`${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/${intervalWord} + tax`}
+                  {`${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/month + tax`}
                 </dd>
               </div>
             </dl>
@@ -437,10 +413,10 @@ export function UpgradeOrderPanel({
       {!previewing && (charge || amountDue || checkoutRequired) ? (
         <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
           {checkoutRequired?.trial
-            ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/${intervalWord} + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
+            ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/month + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
             : charge?.renewsAt
-              ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`
-              : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`}
+              ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/month + tax.`
+              : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/month + tax.`}
         </p>
       ) : null}
 
@@ -500,8 +476,8 @@ export function UpgradeOrderPanel({
           You agree that AGI Workforce will charge{' '}
           {checkoutRequired ? 'the payment method you provide at checkout' : 'your payment method'}{' '}
           {checkoutRequired?.trial
-            ? `${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)} plus tax on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}, when your free trial ends, and on a recurring ${intervalWord}ly basis after that`
-            : `in the amount above now and on a recurring ${intervalWord}ly basis`}{' '}
+            ? `${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)} plus tax on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}, when your free trial ends, and on a recurring monthly basis after that`
+            : 'in the amount above now and on a recurring monthly basis'}{' '}
           until you cancel in accordance with our{' '}
           <Link
             href="/terms"

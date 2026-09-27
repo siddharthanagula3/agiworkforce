@@ -143,8 +143,11 @@ export function UpgradeConfirmDialog({
   const display = getBillingPlanDisplay(request.plan);
   const planLabel = display.pricing.label;
   const unitPriceUsd = getPublishedPlanPriceUsd(request.plan, request.billingInterval);
-  const recurringUsd = unitPriceUsd * (request.seats ?? 1);
   const intervalWord = request.billingInterval === 'yearly' ? 'year' : 'month';
+  const recurringPrice =
+    unitPriceUsd === null
+      ? `the ${request.billingInterval} ${planLabel} price`
+      : `${formatCatalogPrice(unitPriceUsd * (request.seats ?? 1))}/${intervalWord}`;
 
   async function handleConfirm() {
     if (!request) return;
@@ -199,7 +202,7 @@ export function UpgradeConfirmDialog({
                   : amountDue
                     ? amountDue.charge
                       ? 'Review the charge before it goes to your saved card.'
-                      : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
+                      : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${recurringPrice} plus tax.`
                     : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
@@ -280,8 +283,8 @@ export function UpgradeConfirmDialog({
             */}
             <p className="mt-3 text-xs text-[color:var(--text-3)]">
               {amountDue.charge.renewsAt
-                ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
-                : `Then ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax at each renewal.`}
+                ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${recurringPrice} plus tax.`
+                : `Then ${recurringPrice} plus tax at each renewal.`}
             </p>
           </section>
         ) : null}
