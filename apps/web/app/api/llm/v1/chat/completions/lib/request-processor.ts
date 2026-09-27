@@ -138,6 +138,7 @@ import {
   WORKSPACE_FEATURE_LABELS,
   type Effort,
   getSlotForModel,
+  isFlagshipRoutingSlot,
   normalizeModelId,
   canUseBillingPlanCapability,
   isFreeBillingPlanTier,
@@ -3866,8 +3867,7 @@ export async function processRequest(
   });
 
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
-  const isFlagshipRequest =
-    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
+  const isFlagshipRequest = isFlagshipRoutingSlot(resolvedSlot);
 
   let quotaFeature: QuotaFeature = 'chat';
   if (resolvedSlot === 'image_generation') {
