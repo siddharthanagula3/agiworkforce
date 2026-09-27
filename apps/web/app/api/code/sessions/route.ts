@@ -1,10 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   CLOUD_CODE_NETWORK_ACCESS,
-  effectivePlanTier,
   getPlanMaxSandboxes,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
@@ -35,7 +33,10 @@ import {
   isCloudCodeSchemaUnavailable,
   listCloudCodeSessions,
 } from '@/lib/services/cloud-code-session-service';
-import { resolveEffectiveSubscription } from '@/lib/services/effective-subscription-service';
+import {
+  resolveEntitledPlanTier,
+  resolveEntitlementBundle,
+} from '@/lib/services/entitlement-resolution';
 import {
   buildWorkspaceFeatureGateResponse,
   isManagedComputePrivateBetaEnabled,
@@ -78,17 +79,12 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
   return value as Record<string, unknown>;
 }
 
-async function resolvePlan(db: DatabaseAdapter, userId: string): Promise<string> {
-  const subscription = await resolveEffectiveSubscription(db, userId);
-  return effectivePlanTier(subscription?.plan_tier, subscription?.status);
-}
-
 async function handleList(request: NextRequest) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const limited = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (limited) return limited;
 
-  const planTier = await resolvePlan(db, userId);
+  const planTier = await resolveEntitledPlanTier(db, userId);
   const maxSessions = getPlanMaxSandboxes(planTier);
   let status: CloudCodeSessionStatusFilter;
   try {
@@ -216,18 +212,18 @@ async function handleCreate(request: NextRequest) {
     if (hostGate) return hostGate;
   }
 
-  const subscription = await resolveEffectiveSubscription(db, userId);
+  const entitlement = await resolveEntitlementBundle(db, userId);
   const accessDecision = await evaluateManagedComputeAccess(
     db,
     userId,
-    subscription,
+    entitlement.subscription,
     resolveCloudChatSurface(request),
     { request },
     'code',
   );
   const accessGateResponse = buildManagedComputeAccessGateResponse(accessDecision);
   if (accessGateResponse) return accessGateResponse;
-  const planTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
+  const planTier = entitlement.plan;
   try {
     const session = await createCloudCodeSession(
       db,

@@ -18,7 +18,15 @@ import type {
   CloudCodeSession,
   CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import { getRoutingSlotModel, NOTEBOOK_TEMPLATE_ID } from '@agiworkforce/types';
+import {
+  canAccessModelForSubscriptionTier,
+  getDefaultModelFor,
+  getModelFamilyFallbackChain,
+  getModelFamilySlotForModel,
+  getRoutingSlotModel,
+  normalizeBillingPlanTier,
+  NOTEBOOK_TEMPLATE_ID,
+} from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
@@ -124,9 +132,24 @@ function titleFromTask(task: string): string {
   return words.length > 0 ? words : CODE_COPY.surface;
 }
 
-function resolveAgentModel(selectedModelId: string | null): string {
-  const capable = selectedModelId ? getModelMetadata(selectedModelId)?.capabilities.tools : false;
-  return capable && selectedModelId ? selectedModelId : getRoutingSlotModel(CODE_ROUTING_SLOT);
+function canRunCodeAgent(modelId: string): boolean {
+  return getModelMetadata(modelId)?.capabilities.tools === true;
+}
+
+function resolveAgentModel(selectedModelId: string | null, planTier: string): string {
+  if (selectedModelId && canRunCodeAgent(selectedModelId)) return selectedModelId;
+  const codingModel = getRoutingSlotModel(CODE_ROUTING_SLOT);
+  const codingFamily = getModelFamilySlotForModel(codingModel);
+  const planDefault = getDefaultModelFor(planTier, 'chat');
+  const candidates = [
+    ...(codingFamily ? getModelFamilyFallbackChain(codingFamily) : [codingModel]),
+    planDefault,
+  ];
+  return (
+    candidates.find(
+      (modelId) => canRunCodeAgent(modelId) && canAccessModelForSubscriptionTier(modelId, planTier),
+    ) ?? planDefault
+  );
 }
 
 export interface CloudCodePageProps {
@@ -185,6 +208,11 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const routerRef = useRef(router);
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
+  const planTier = normalizeBillingPlanTier(availability?.planTier);
+  const agentModel = useMemo(
+    () => resolveAgentModel(selectedModelId, planTier),
+    [selectedModelId, planTier],
+  );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
   useEffect(() => {
@@ -469,7 +497,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
       try {
         const turn = await api.startAgentTurn(session.id, {
           goal,
-          model: resolveAgentModel(selectedModelId),
+          model: agentModel,
           idempotencyKey: makeRequestId(),
         });
         applyTurn(recordId, turn, goal);
@@ -499,7 +527,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         setStopping(false);
       }
     },
-    [api, applyTurn, loadSessions, selectedModelId, statusFilter],
+    [agentModel, api, applyTurn, loadSessions, statusFilter],
   );
 
   const createSession = useCallback(
@@ -878,8 +906,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           : null
     : null;
 
-  const agentContextWindow =
-    getModelMetadata(resolveAgentModel(selectedModelId))?.contextWindow ?? null;
+  const agentContextWindow = getModelMetadata(agentModel)?.contextWindow ?? null;
   const closed = selectedSession?.state === 'closed';
   const archived = selectedSession?.archivedAt != null;
   const isNotebookSession = selectedSession?.runtimeId === NOTEBOOK_TEMPLATE_ID;
