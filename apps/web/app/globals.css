@@ -75,6 +75,7 @@
   --color-surface-subtle: var(--surface-subtle);
   --color-surface-elevated: var(--surface-elevated);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-active: var(--surface-active);
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);

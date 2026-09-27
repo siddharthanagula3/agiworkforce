@@ -108,7 +108,7 @@ export const CostDashboard = memo(function CostDashboard() {
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 px-6 py-4">
         <div>
-          <h2 className="text-2xl font-semibold text-foreground">Usage Analytics</h2>
+          <h2 className="text-h1 text-foreground">Usage Analytics</h2>
           <p className="text-sm text-muted-foreground">
             Track AI usage across providers, models, and conversations.
           </p>

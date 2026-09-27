@@ -33,7 +33,7 @@ function SheetOverlay({ className, ref, ...props }: SheetOverlayProps) {
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  'fixed z-[var(--z-modal)] max-h-[100dvh] gap-4 overflow-y-auto overscroll-contain bg-background p-6 shadow-lg transition ease-standard data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-moved data-[state=open]:duration-moved',
+  'fixed z-[var(--z-modal)] max-h-[100dvh] gap-4 overflow-y-auto overscroll-contain bg-background p-6 shadow-e3 transition ease-standard data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-moved data-[state=open]:duration-moved',
   {
     variants: {
       side: {

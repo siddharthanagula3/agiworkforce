@@ -202,7 +202,7 @@ export function ReferralsSection() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold text-foreground">Referrals</h1>
+        <h1 className="text-h1 text-foreground">Referrals</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {program
             ? `Invite friends to ${SITE_NAME}. They get ${program.friendTrialDays} days of Pro free, and when their first payment goes through you each get ${wholeCredits(program.rewardCredits)}.`
@@ -219,7 +219,7 @@ export function ReferralsSection() {
 
       {error ? (
         <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-6" role="alert">
-          <h2 className="text-base font-semibold text-foreground">Referrals could not load</h2>
+          <h2 className="text-h4 text-foreground">Referrals could not load</h2>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <Button
             type="button"
@@ -236,7 +236,7 @@ export function ReferralsSection() {
       {overview && overview.link && program ? (
         <>
           <section aria-labelledby="referral-link-heading" className="space-y-3">
-            <h2 id="referral-link-heading" className="text-base font-semibold text-foreground">
+            <h2 id="referral-link-heading" className="text-h4 text-foreground">
               Your invite link
             </h2>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -275,7 +275,7 @@ export function ReferralsSection() {
           </section>
 
           <section aria-labelledby="referral-progress-heading" className="space-y-3">
-            <h2 id="referral-progress-heading" className="text-base font-semibold text-foreground">
+            <h2 id="referral-progress-heading" className="text-h4 text-foreground">
               Your progress
             </h2>
             <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -312,7 +312,7 @@ export function ReferralsSection() {
           </section>
 
           <section aria-labelledby="referral-friends-heading" className="space-y-3">
-            <h2 id="referral-friends-heading" className="text-base font-semibold text-foreground">
+            <h2 id="referral-friends-heading" className="text-h4 text-foreground">
               Friends
             </h2>
             {overview.friends.length === 0 ? (
@@ -343,7 +343,7 @@ export function ReferralsSection() {
           </section>
 
           <section aria-labelledby="referral-rules-heading" className="space-y-2">
-            <h2 id="referral-rules-heading" className="text-base font-semibold text-foreground">
+            <h2 id="referral-rules-heading" className="text-h4 text-foreground">
               How it works
             </h2>
             <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">

@@ -97,7 +97,7 @@ export function AllowedDirectoriesSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-lg font-semibold mb-2">{t('settings:allowedDirectories')}</h3>
+        <h3 className="text-h3 mb-2">{t('settings:allowedDirectories')}</h3>
         <p className="text-sm text-muted-foreground mb-4">
           Specify which directories the agent is allowed to access. This restricts file operations
           (read/write/delete) to these paths for security.

@@ -289,7 +289,7 @@ function TicketThreadView({
 
       <div className={CARD_CLASS}>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h3 className="text-sm font-medium text-foreground">{ticket.subject}</h3>
+          <h3 className="text-h5 text-foreground">{ticket.subject}</h3>
           <StatusChip status={ticket.status} />
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{STATUS_MEANING[ticket.status]}</p>
@@ -443,7 +443,7 @@ export function SupportTicketsPanel() {
   return (
     <section className="flex flex-col gap-3" aria-labelledby="support-tickets-title">
       <div>
-        <h2 id="support-tickets-title" className="text-sm font-medium text-foreground">
+        <h2 id="support-tickets-title" className="text-h5 text-foreground">
           Your support tickets
         </h2>
         <p className="mt-0.5 text-xs text-muted-foreground">

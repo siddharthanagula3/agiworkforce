@@ -445,7 +445,7 @@ export function ResearchReportView({
         <div className="flex min-w-0 items-start gap-2">
           <Telescope className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">
+            <h2 className="truncate text-h5 text-foreground">
               {report.title || 'Research report'}
             </h2>
             <p className="mt-0.5 text-caption text-muted-foreground">

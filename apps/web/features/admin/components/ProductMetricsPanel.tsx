@@ -322,7 +322,7 @@ export default function ProductMetricsPanel() {
   return (
     <section className="flex flex-col gap-4" aria-labelledby="product-metrics-title">
       <div>
-        <h2 id="product-metrics-title" className="text-sm font-medium">
+        <h2 id="product-metrics-title" className="text-h5">
           Product metrics
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -391,7 +391,7 @@ export default function ProductMetricsPanel() {
                 className={CARD_CLASS}
                 aria-labelledby={`product-metrics-${group.id}`}
               >
-                <h3 id={`product-metrics-${group.id}`} className="text-sm font-medium">
+                <h3 id={`product-metrics-${group.id}`} className="text-h5">
                   {group.title}
                 </h3>
                 <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>

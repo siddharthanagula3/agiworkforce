@@ -522,7 +522,7 @@ export function QuickQuery({
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg',
                 'text-sm font-medium transition-all duration-150',
                 query.trim()
-                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/20'
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-e3 shadow-blue-600/20'
                   : 'bg-white/[0.04] text-zinc-600 cursor-not-allowed',
               )}
             >

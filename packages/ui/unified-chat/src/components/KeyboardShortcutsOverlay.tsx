@@ -66,9 +66,7 @@ function ShortcutRow({ description, keys }: ShortcutItem) {
       <div className="flex items-center gap-1 shrink-0">
         {keys.map((key, idx) => (
           <span key={idx} className="flex items-center gap-0.5">
-            {idx > 0 && (
-              <span className="text-muted-foreground text-xs mx-0.5">+</span>
-            )}
+            {idx > 0 && <span className="text-muted-foreground text-xs mx-0.5">+</span>}
             <KeyBadge label={key} />
           </span>
         ))}
@@ -150,16 +148,14 @@ export function KeyboardShortcutsOverlay({
               'fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[var(--z-modal)]',
               'w-full max-w-2xl max-h-[85vh]',
               'bg-card border border-border',
-              'rounded-2xl shadow-2xl flex flex-col overflow-hidden',
+              'rounded-2xl shadow-e4 flex flex-col overflow-hidden',
             )}
           >
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
               <div className="flex items-center gap-2">
                 <Keyboard className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-base font-semibold text-foreground">
-                  Keyboard Shortcuts
-                </h2>
+                <h2 className="text-h4 text-foreground">Keyboard Shortcuts</h2>
               </div>
               <Button
                 variant="ghost"

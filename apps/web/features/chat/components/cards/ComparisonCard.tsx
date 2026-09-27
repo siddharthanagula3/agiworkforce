@@ -226,7 +226,7 @@ export function ComparisonCard({ content }: ComparisonCardProps) {
             <Scale className="h-5 w-5 text-indigo-700 dark:text-indigo-400" aria-hidden="true" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold leading-tight">
+            <h3 className="text-h3">
               {items[0].name} vs {items[1].name}
             </h3>
             {comparison.title && !comparison.title.toLowerCase().includes('vs') && (

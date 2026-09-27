@@ -227,7 +227,7 @@ export default function EconomicsSummaryPanel() {
           </div>
 
           <div className={CARD_CLASS}>
-            <h3 className="text-sm font-medium">Provider reconciliation</h3>
+            <h3 className="text-h5">Provider reconciliation</h3>
             {reconciliation?.available ? (
               reconciliation.gaps.length > 0 ? (
                 <div className={`${TABLE_WRAP_CLASS} mt-3`}>
