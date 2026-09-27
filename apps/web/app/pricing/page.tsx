@@ -13,11 +13,11 @@ import {
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   canAccessModelForSubscriptionTier,
   canUseBillingPlanCapability,
+  compareManagedUsage,
   formatPrivacyModeLabel,
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   getModelMetadataById,
-  getPlanCreditAllowance,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
@@ -27,7 +27,6 @@ import {
   isMaxPlanTier,
   isMax15xPlanTier,
   isSelfServeIndividualPlanTier,
-  managedUsageMultipliers,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   PROVIDERS_IN_ORDER,
@@ -712,62 +711,52 @@ export default function PricingPage() {
 
   const freeHref = user ? '/' : '/login?redirectTo=%2F';
 
-  function creditWindowsCopy(plan: BillingPlanTier): string | null {
-    const allowance = getPlanCreditAllowance(plan);
-    if (allowance.unlimited || allowance.monthly <= 0) return null;
-    return t(isPerSeatBillingPlan(plan) ? 'planCreditWindowsPerSeat' : 'planCreditWindows', {
-      fiveHour: allowance.fiveHour,
-      weekly: allowance.weekly,
-      monthly: allowance.monthly,
-    });
-  }
-
-  function usageComparisonCopy(plan: BillingPlanTier, baseline: BillingPlanTier): string | null {
-    const multipliers = managedUsageMultipliers(plan, baseline);
-    if (!multipliers) return null;
-    const { fiveHour, weekly, monthly } = multipliers;
-    const baselineLabel = BILLING_PLAN_PRICING[baseline].label;
-    if (fiveHour === weekly && weekly === monthly) {
-      return fiveHour === 1
-        ? t('usageSameAs', { baseline: baselineLabel })
-        : t('usageMultiplierAll', { factor: fiveHour, baseline: baselineLabel });
+  function usageComparisonCopy(plan: BillingPlanTier): string[] {
+    const comparison = compareManagedUsage(plan);
+    if (!comparison) return [];
+    const baseline = BILLING_PLAN_PRICING[comparison.baseline].label;
+    if (comparison.factor === 1) {
+      return [t(comparison.perSeat ? 'usageSameAsPerSeat' : 'usageSameAs', { baseline })];
     }
-    return weekly === monthly
-      ? t('usageMultiplierSplit', { fiveHour, weekly, baseline: baselineLabel })
-      : t('usageMultiplierSplitMonthly', { fiveHour, weekly, monthly, baseline: baselineLabel });
+    if (comparison.factor !== null) {
+      return [
+        t(comparison.perSeat ? 'usageMultiplierAllPerSeat' : 'usageMultiplierAll', {
+          factor: comparison.factor,
+          baseline,
+        }),
+      ];
+    }
+    return presentCopy([
+      comparison.session === null
+        ? null
+        : t('usageMultiplierSession', { factor: comparison.session, baseline }),
+      comparison.weekly === null
+        ? null
+        : t('usageMultiplierWeekly', { factor: comparison.weekly, baseline }),
+    ]);
   }
 
   function presentCopy(parts: Array<string | null>): string[] {
     return parts.filter((part): part is string => Boolean(part));
   }
 
-  function usageCapacityCopy(plan: BillingPlanTier, baseline?: BillingPlanTier): string {
-    return presentCopy([
-      creditWindowsCopy(plan),
-      baseline ? usageComparisonCopy(plan, baseline) : null,
-    ]).join(' · ');
+  function usageCapacityCopy(plan: BillingPlanTier): string {
+    return usageComparisonCopy(plan).join(' · ');
   }
 
-  const proAllowance = getPlanCreditAllowance('pro');
-  const usageExplainer = `${t('usageExplainer', {
-    baseline: pro.label,
-    fiveHour: proAllowance.fiveHour,
-    weekly: proAllowance.weekly,
-    monthly: proAllowance.monthly,
-  })} ${t('flagshipShare', {
+  const usageExplainer = `${t('usageWindowsExplainer')} ${t('flagshipShare', {
     baseline: pro.label,
     percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
   })}`;
 
   const freeFeatures = presentCopy([
-    creditWindowsCopy('free'),
     t('freeFeature1'),
     t('freeFeature2'),
     t('freeFeature3'),
     t('freeLocalByok'),
   ]);
   const basicFeatures = presentCopy([
-    creditWindowsCopy('basic'),
+    ...usageComparisonCopy('basic'),
     t('basicFeature2'),
     t('basicFeature3'),
     t('basicFeature4'),
@@ -775,8 +764,7 @@ export default function PricingPage() {
     t('basicFeature6'),
   ]);
   const proFeatures = presentCopy([
-    creditWindowsCopy('pro'),
-    usageComparisonCopy('pro', 'basic'),
+    ...usageComparisonCopy('pro'),
     t('proFeature2'),
     t('proFeature3'),
     t('proFeature4'),
@@ -784,7 +772,7 @@ export default function PricingPage() {
     t('proFeature6'),
   ]);
   const teamFeatures = presentCopy([
-    creditWindowsCopy('team'),
+    ...usageComparisonCopy('team'),
     t('teamFeature2'),
     t('teamFeature3'),
     t('teamFeature4'),
@@ -793,16 +781,14 @@ export default function PricingPage() {
   const maxTierFeatures =
     maxVariant === 'max'
       ? presentCopy([
-          creditWindowsCopy('max'),
-          usageComparisonCopy('max', 'pro'),
+          ...usageComparisonCopy('max'),
           `All ${FLAGSHIP_MODEL_COUNT} flagship models unlocked for manual selection`,
           t('maxFeature4'),
           t('maxFeature5'),
           t('maxFeature6'),
         ])
       : presentCopy([
-          creditWindowsCopy('max_15x'),
-          usageComparisonCopy('max_15x', 'pro'),
+          ...usageComparisonCopy('max_15x'),
           t('max15xFeature2'),
           t('max15xFeature3'),
           t('max15xFeature4'),
@@ -856,7 +842,7 @@ export default function PricingPage() {
       label: BILLING_PLAN_PRICING.free.label,
       price: t('free'),
       billingInterval: t('foreverLabel'),
-      usageCapacity: usageCapacityCopy('free'),
+      usageCapacity: t('compareFreeUsage'),
       ...managedPlanCapabilities('free'),
       bestFor: t('compareFreeBestFor'),
     },
@@ -874,7 +860,7 @@ export default function PricingPage() {
       label: pro.label,
       price: `${proPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('pro', 'basic'),
+      usageCapacity: usageCapacityCopy('pro'),
       ...managedPlanCapabilities('pro'),
       bestFor: t('compareProBestFor'),
     },
@@ -883,7 +869,7 @@ export default function PricingPage() {
       label: max.label,
       price: `${maxPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max', 'pro'),
+      usageCapacity: usageCapacityCopy('max'),
       ...managedPlanCapabilities('max'),
       bestFor: t('compareMaxBestFor'),
     },
@@ -892,7 +878,7 @@ export default function PricingPage() {
       label: max15x.label,
       price: `${max15xPrice}/mo`,
       billingInterval: t('monthlyOnly'),
-      usageCapacity: usageCapacityCopy('max_15x', 'pro'),
+      usageCapacity: usageCapacityCopy('max_15x'),
       ...managedPlanCapabilities('max_15x'),
       bestFor: 'Highest-capacity work and video generation',
     },
@@ -908,7 +894,7 @@ export default function PricingPage() {
       billingInterval: teamYearlyAvailable
         ? t('compareTeamBillingYearly')
         : t('compareTeamBilling'),
-      usageCapacity: usageCapacityCopy('team', 'pro'),
+      usageCapacity: usageCapacityCopy('team'),
       ...managedPlanCapabilities('team'),
       bestFor: t('compareTeamBestFor'),
       highlighted: true,
