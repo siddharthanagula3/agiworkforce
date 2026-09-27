@@ -841,6 +841,7 @@ export type TerminateLocalRuntimeTree = (child: ChildProcessWithoutNullStreams) 
 
 export interface LocalRuntimeClientOptions {
   cliPath: string | (() => string);
+  memoryEnabled?: () => boolean;
   cwd: string;
   clientVersion: string;
   environmentLabel?: string;
@@ -1268,7 +1269,8 @@ export class LocalRuntimeClient {
     }
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawnRuntime(cliPath, ['app-server'], {
+      const memoryArgs = this.options.memoryEnabled?.() === false ? ['--no-memory'] : [];
+      child = spawnRuntime(cliPath, ['app-server', ...memoryArgs], {
         cwd: this.options.cwd,
         env: process.env,
         stdio: ['pipe', 'pipe', 'pipe'],

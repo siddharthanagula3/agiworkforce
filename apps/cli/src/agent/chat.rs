@@ -1067,7 +1067,9 @@ message -- revise and call `update_plan` again.\n\n",
                 }
             }
 
-            if crate::memory_pipeline::MemoryPipeline::needs_consolidation(&home) {
+            if self.memory_enabled
+                && crate::memory_pipeline::MemoryPipeline::needs_consolidation(&home)
+            {
                 let home_clone = home.clone();
                 let config_clone = config.clone();
                 // Local sessions must consolidate on-device only (no cloud egress).

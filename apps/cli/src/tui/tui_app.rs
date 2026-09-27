@@ -772,6 +772,8 @@ impl TuiApp {
                 let _ = crate::skills::save_disabled_skills(&set);
             }
             OverlayResult::Memory(settings) => {
+                self.session.memory_enabled =
+                    settings.auto_memory && crate::cli_options::memory_enabled();
                 // Persist; the memory pipeline (extract/prune/consolidate) reads it.
                 if let Ok(home) = crate::config::CliConfig::config_dir() {
                     let _ = crate::memory_pipeline::save_memory_settings(
