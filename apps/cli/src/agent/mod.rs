@@ -1759,6 +1759,12 @@ impl AgentSession {
         std::mem::take(&mut self.memory_consolidation_tasks)
     }
 
+    pub(crate) async fn refresh_mcp_tools(&mut self) {
+        if let Some(manager) = self.mcp_manager.as_mut() {
+            manager.refresh_changed_servers().await;
+        }
+    }
+
     /// Return MCP tool metadata (if any MCP servers are connected).
     pub fn mcp_info(&self) -> Option<&[mcp::McpTool]> {
         self.mcp_manager
