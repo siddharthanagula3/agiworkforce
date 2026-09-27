@@ -87,12 +87,12 @@ Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `app
 
 - Done when: The user can let the assistant search or reference their other chats when answering, and switch it off; temporary chats are never referenced.
 - Wave: 3
+- Already works on: mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Works for Managed Cloud chats (temporary chats excluded); a free promotional (free-pool) model chat never searches past chats. | handler |
 | desktop | partial | Same as web: not applied to free promotional (free-pool) model chats. | handler |
-| mobile | partial | Past-chat lookups now skip temporary chats through /api/search, but the mobile 'Search past chats' switch writes the memory setting instead of its own, so turning it off does not stop past-chat reference. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | Chrome has no switch; if "Search past chats" is on in web settings the server adds past-chat excerpts to Chrome Managed Cloud chats. | ui |

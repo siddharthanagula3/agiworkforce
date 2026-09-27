@@ -28,7 +28,6 @@ ledger cells are updated.
 - [22-settings-2fa-does-not-protect-sign-in.md](../blockers/22-settings-2fa-does-not-protect-sign-in.md)
 - [23-step-up-not-enforced.md](../blockers/23-step-up-not-enforced.md)
 - [24-password-change-without-current-password.md](../blockers/24-password-change-without-current-password.md)
-- [25-temporary-chats-leak-into-search.md](../blockers/25-temporary-chats-leak-into-search.md)
 - [26-api-key-calls-get-memory.md](../blockers/26-api-key-calls-get-memory.md)
 - [27-vscode-memory-switch-incomplete.md](../blockers/27-vscode-memory-switch-incomplete.md)
 - [30-product-definition-p0-gaps.md](../blockers/30-product-definition-p0-gaps.md)
