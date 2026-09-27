@@ -81,22 +81,24 @@ export const TierInfoSchema: z.ZodType<UsageSummaryFieldsUsedByVsCode> = z
 export type TierInfoResponse = UsageSummaryFieldsUsedByVsCode;
 
 const requestCount = z.number().int().nonnegative();
-const ledgerCents = z.number();
 
-const UsageHistoryModelRowSchema = z.object({
+const UsageHistoryBreakdownRowSchema = z.object({
   key: z.string().min(1).max(200),
+  label: z.string().max(200).nullable().optional(),
   requests: requestCount,
-  costCents: ledgerCents,
+  credits: creditAmount,
 });
 
 export const UsageHistorySchema = z.object({
   from: isoTimestamp,
   to: isoTimestamp,
-  totals: z.object({ requests: requestCount, costCents: ledgerCents }),
-  daily: z
-    .array(z.object({ day: isoTimestamp, requests: requestCount, costCents: ledgerCents }))
+  granularity: z.enum(['day', 'week', 'month']),
+  totals: z.object({ requests: requestCount, credits: creditAmount }),
+  periods: z
+    .array(z.object({ start: isoTimestamp, requests: requestCount, credits: creditAmount }))
     .max(400),
-  byModel: z.array(UsageHistoryModelRowSchema).max(50),
+  byWorkload: z.array(UsageHistoryBreakdownRowSchema).max(50),
+  byModel: z.array(UsageHistoryBreakdownRowSchema).max(50),
   freshness: z.object({ unsettledRequests: requestCount }),
 });
 

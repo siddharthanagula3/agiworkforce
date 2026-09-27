@@ -568,12 +568,13 @@ impl CliError {
             } => match alternative_model {
                 Some(model) => format!(
                     "Choose a model your plan includes, such as {} (`--model {model}`), or set \
-                     that provider's own key. {PAID_UPGRADES_ARE_STAGED}",
+                     that provider's own key. Run `agi plans` to see what each plan includes. \
+                     {PAID_UPGRADES_ARE_STAGED}",
                     crate::model_catalog::display_name(model)
                 ),
                 None => format!(
-                    "Choose a model your plan includes, or set that provider's own key. \
-                     {PAID_UPGRADES_ARE_STAGED}"
+                    "Choose a model your plan includes, or set that provider's own key. Run \
+                     `agi plans` to see what each plan includes. {PAID_UPGRADES_ARE_STAGED}"
                 ),
             },
             CliError::ModelUnavailable { .. } => {
@@ -583,7 +584,8 @@ impl CliError {
             }
             CliError::Paywall { .. } => format!(
                 "Run `agi usage` to see when the limit resets, or switch to your own provider \
-                 key with `--provider <name>`. {PAID_UPGRADES_ARE_STAGED}"
+                 key with `--provider <name>`. Run `agi plans` to see what each plan includes. \
+                 {PAID_UPGRADES_ARE_STAGED}"
             ),
             CliError::UsageLimit {
                 recovery_href,

@@ -231,7 +231,7 @@ string and a bucket configuration change, not a code change.
 | SCIM                             | `apps/web/app/api/scim/v2`, `apps/web/lib/server/scim/scim-auth.ts`, `apps/web/app/admin/directory-sync/page.tsx`                                         |
 | Stripe client                    | one factory, `apps/web/lib/server/stripe-client.ts`                                                                                                       |
 | Webhook and checkout             | `apps/web/app/api/stripe-webhook/route.ts`, `apps/web/app/api/checkout/route.ts`, `apps/web/app/api/upgrade/route.ts`, `apps/web/app/api/portal/route.ts` |
-| Plan tiers and entitlements      | `apps/web/lib/entitlement.ts`, `apps/web/lib/price-tier-mapping.ts`, `apps/web/lib/services/org-entitlements.ts`                                          |
+| Plan tiers and entitlements      | `apps/web/lib/services/entitlement-resolution.ts`, `apps/web/lib/price-tier-mapping.ts`, `apps/web/lib/services/org-entitlements.ts`                      |
 | Credits                          | `apps/web/app/api/cron/reconcile-credits/route.ts`                                                                                                        |
 | Usage accounting                 | `apps/web/lib/services/managed-usage-accounting-service.ts`, `managed-usage-summary-service.ts`                                                           |
 | COGS ledger                      | `apps/web/db/neon/0127_cogs_ledger.sql`, `0130_cogs_token_classes.sql`                                                                                    |

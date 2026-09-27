@@ -259,7 +259,7 @@ agi help
 Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
 `auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`,
-`models`, `plugin`, `sync`, `marketplace`, `hooks`, and `ecosystem`. Managed-cloud
+`models`, `usage`, `plans`, `plugin`, `sync`, `marketplace`, `hooks`, and `ecosystem`. Managed-cloud
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
 

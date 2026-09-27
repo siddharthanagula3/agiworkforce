@@ -99,6 +99,41 @@ export async function listInvitations(
   );
 }
 
+export async function listInvitationPage(
+  db: DatabaseAdapter,
+  organizationId: string,
+  page: { limit: number; afterId: string | null },
+): Promise<{ rows: OrganizationInvitationRow[]; hasMore: boolean }> {
+  if (page.afterId !== null) {
+    const [cursor] = await db.query<{ id: string }>(
+      `select id from public.organization_invitations
+        where organization_id = $1 and id = $2
+        limit 1`,
+      [organizationId, page.afterId],
+    );
+    if (!cursor) {
+      throw createError.validation('afterId does not name an invitation in this workspace');
+    }
+  }
+  const rows = await db.query<OrganizationInvitationRow>(
+    `select ${INVITATION_COLUMNS}
+       from public.organization_invitations
+      where organization_id = $1
+        and (
+          $2::uuid is null
+          or (created_at, id) < (
+            select cursor.created_at, cursor.id
+              from public.organization_invitations cursor
+             where cursor.organization_id = $1 and cursor.id = $2::uuid
+          )
+        )
+      order by created_at desc, id desc
+      limit $3`,
+    [organizationId, page.afterId, page.limit + 1],
+  );
+  return { rows: rows.slice(0, page.limit), hasMore: rows.length > page.limit };
+}
+
 export interface CreateInvitationInput {
   organizationId: string;
   email: string;

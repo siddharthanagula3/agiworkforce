@@ -2039,6 +2039,23 @@
       ]
     },
     {
+      "id": "billing-no-grace-period-after-failed-renewal",
+      "doc": "billing-and-plans",
+      "section": "When billing will not let you change plans",
+      "kind": "prose",
+      "sentence": "Paid features stay off until it succeeds; there is no grace period.",
+      "implementation": [
+        "packages/contracts/types/src/subscription-entitlement.ts#effectivePlanTier"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/lib/entitlement.test.ts",
+          "name": "downgrades a paid tier to free once the status is no longer entitled"
+        }
+      ]
+    },
+    {
       "id": "troubleshooting-states-are-distinct",
       "doc": "troubleshooting",
       "section": "Start here",

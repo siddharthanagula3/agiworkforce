@@ -6,6 +6,7 @@ import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
+import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { scheduleArtifactIndexing } from './index-artifacts';
 import { scheduleConversationTitleGeneration } from './generate-title';
 import { resolveSavedMessageSourceUrls } from './resolve-source-urls';
@@ -79,6 +80,14 @@ export async function persistConversationMessage(input: {
   );
 
   if (!conversation) throw createError.notFound('Conversation not found');
+
+  if (requestedMessage.role !== 'assistant') {
+    await assertFreeDailyAllowance({
+      db,
+      userId: scope.userId,
+      requested: { message_writes: 1 },
+    });
+  }
 
   const storedMetadata = await resolveSavedMessageSourceUrls(
     normalizeMessageMetadata(requestedMessage.metadata) ?? {},

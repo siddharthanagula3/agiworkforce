@@ -21,3 +21,17 @@ export async function readValidatedJsonBody<Schema extends z.ZodType>(
   if (!parsed.success) throw createError.validation(invalidMessage, parsed.error.issues);
   return parsed.data;
 }
+
+export function readValidatedSearchParams<Schema extends z.ZodType>(
+  request: Request,
+  schema: Schema,
+  invalidMessage: string,
+): z.infer<Schema> {
+  const params: Record<string, string> = {};
+  new URL(request.url).searchParams.forEach((value, key) => {
+    if (value !== '') params[key] = value;
+  });
+  const parsed = schema.safeParse(params);
+  if (!parsed.success) throw createError.validation(invalidMessage, parsed.error.issues);
+  return parsed.data;
+}

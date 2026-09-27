@@ -268,6 +268,7 @@ fn a_turn_ends_with_a_typed_failure_or_an_explicit_null() {
         output_tokens: 3,
         error: None,
         failure: None,
+        managed_request_ids: Vec::new(),
     };
     let value = serde_json::to_value(&completed).expect("serialize completed");
     assert_eq!(value["status"], "completed");
