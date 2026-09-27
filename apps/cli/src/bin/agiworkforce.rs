@@ -1,8 +1,3 @@
-use agiworkforce_cli::run_main;
-
-fn main() -> anyhow::Result<()> {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()?
-        .block_on(run_main())
+fn main() -> std::process::ExitCode {
+    agiworkforce_cli::run_to_exit_code()
 }
