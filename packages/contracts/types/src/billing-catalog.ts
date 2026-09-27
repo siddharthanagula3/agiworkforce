@@ -367,6 +367,20 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
 
 export const FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD = 1_000_000;
 
+export const FREE_DAILY_CAPS = Object.freeze({
+  messageWrites: 1_000,
+  conversationCreates: 100,
+  egressBytes: 500 * 1024 * 1024,
+  emailSends: 10,
+  vectorQueries: 200,
+});
+
+export type FreeDailyCap = keyof typeof FREE_DAILY_CAPS;
+
+export function getFreeDailyCap(plan: string | null | undefined, cap: FreeDailyCap): number | null {
+  return isFreeBillingPlanTier(plan) ? FREE_DAILY_CAPS[cap] : null;
+}
+
 export function getBillingPlanProductLimits(
   plan: string | null | undefined,
 ): BillingPlanProductLimits | null {

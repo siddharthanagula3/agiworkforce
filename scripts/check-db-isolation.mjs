@@ -107,6 +107,13 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
       'the scheduler worker writes back to the task id it claimed from the due-set; there is no ' +
       'request workspace to constrain by',
   },
+  {
+    match: /lib\/services\/tier-unit-quota-service\.ts$/,
+    reason:
+      'a Free daily cap limits the account, not one workspace: it counts the messages and ' +
+      'conversations the account wrote today in every workspace it holds, and each count is ' +
+      'constrained by user_id and returns only a number',
+  },
 ];
 
 function workspaceScopeExempt(relativePath) {

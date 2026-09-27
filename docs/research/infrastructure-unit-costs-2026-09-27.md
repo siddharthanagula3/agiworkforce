@@ -111,3 +111,47 @@ Store commission is recorded per verified purchase from
 The repository records no App Store Small Business Program enrollment, so the
 standard App Store rates are committed; enrollment moves every App Store row to
 15%.
+
+## Free daily caps
+
+`FREE_DAILY_CAPS` in `packages/contracts/types/src/billing-catalog.ts` bounds
+what one Free account can make the platform store, serve, send and search in a
+UTC day. What the leaders publish, read 2026-09-27:
+
+- **Claude.** "Every plan has usage limits that reset on a rolling five-hour
+  session window" and there is no fixed message count; Free "covers everyday
+  questions" ([Claude pricing](https://claude.com/pricing)). Free accounts can
+  create at most five projects, and retrieval over project knowledge is
+  paid-only ([What are projects](https://support.claude.com/en/articles/9517075-what-are-projects),
+  updated the week of 2026-09-27). Uploads are 500 MB per file and 20 files per
+  chat with no daily upload count, on every plan
+  ([Upload files](https://support.claude.com/en/articles/8241126-upload-files-to-claude),
+  updated 2026-07-23). Scheduled tasks are Pro and above.
+- **ChatGPT.** help.openai.com and chatgpt.com answered 403 to every fetch on
+  2026-09-27, so no ChatGPT Free figure is verified here. Search snippets of the
+  Free tier FAQ describe everyday chat as unlimited subject to abuse
+  safeguards, which matches Claude's no-fixed-count position; that reading is
+  unverified.
+- **Gemini** (the tie-breaker where both are silent) uses compute-based limits
+  that refresh every five hours up to a weekly limit, with no Free number
+  published ([Gemini limits](https://support.google.com/gemini/answer/16275805)).
+
+Neither leader publishes a daily cap on stored messages, downloads, emails or
+searches, and both bound Free by usage windows plus abuse safeguards. The caps
+below are that safeguard, sized so ordinary Free use never meets them:
+
+| Cap                                  | Free limit a UTC day                              | Enforced at                                                                                                                          |
+| ------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Messages saved                       | 1,000                                             | `persistConversationMessage` for user and system turns, the bulk save route, chat sync push, conversation fork                       |
+| Conversations started                | 100                                               | conversation create, chat sync push, conversation fork                                                                               |
+| File downloads                       | 500 MiB, five times the 100 MB Free storage quota | `/api/files/[id]` before bytes are served                                                                                            |
+| Emails sent on the account's behalf  | 10                                                | team invitation email; the invite link is still returned for manual delivery                                                         |
+| Semantic searches of files and chats | 200                                               | the query embedding in `embedTextsMetered`; over the cap, search ranks by full text alone, since Claude Free has no retrieval at all |
+
+A capped write answers 429 with a user-safe message that names the limit, the
+reset at midnight UTC and the upgrade path. Paid plans are uncapped. Messages
+and conversations are counted from their own tables; downloads, emails and
+semantic searches are counted from their `provider_cost_events` rows, which
+also carry their cost. Legal and support mail (privacy requests, copyright
+notices, support escalations) is never capped, and data export is left to its
+own rate limit so a Free account can always take its data.
