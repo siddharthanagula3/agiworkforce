@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {
+  FEATURE_RATE_CARD,
+  FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD,
+  chargeMicrousdForProviderCost,
+} from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: (db: unknown) => db,
+}));
 
 const logger = { warn: vi.fn(), error: vi.fn(), info: vi.fn() };
 vi.mock('@/lib/logger', () => ({ logger }));
@@ -9,8 +18,11 @@ const quotaValues = vi.hoisted(() => new Map<string, number | boolean>());
 const quotaStore = vi.hoisted(() => ({ set: vi.fn(), increment: vi.fn() }));
 vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => quotaStore }));
 
-const recordInfrastructureCostEvent = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/services/cogs-ledger-service', () => ({ recordInfrastructureCostEvent }));
+const recordSettledProviderCost = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>()),
+  recordSettledProviderCost,
+}));
 
 vi.mock('@/lib/services/credit-service', () => ({
   MICROUSD_PER_LEDGER_CENT: 10_000,
@@ -32,9 +44,11 @@ const TestManagedUsageRequestError = vi.hoisted(
 );
 const reserveManagedUsageRequest = vi.hoisted(() => vi.fn());
 const finalizeManagedUsageRequest = vi.hoisted(() => vi.fn());
+const markManagedUsageProviderStarted = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/managed-usage-request-service', () => ({
   reserveManagedUsageRequest,
   finalizeManagedUsageRequest,
+  markManagedUsageProviderStarted,
   fingerprintManagedUsageRequest: (value: unknown) => JSON.stringify(value),
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? source.estimatedCostCents * 10_000,
@@ -43,8 +57,11 @@ vi.mock('@/lib/services/managed-usage-request-service', () => ({
 
 const RATE_ENV = 'AGI_E2B_COMPUTE_MICROUSD_PER_SECOND';
 
-/** 2 vCPU at 14 microUSD plus 4 GiB at 4.5 microUSD, the published E2B default shape. */
-const DEFAULT_SHAPE_RATE = 46;
+const VCPU_RATE = FEATURE_RATE_CARD.sandbox_vcpu_second.providerCogsMicrousd as number;
+const GIB_RATE = FEATURE_RATE_CARD.sandbox_gib_second.providerCogsMicrousd as number;
+const DEFAULT_SHAPE_RATE = Math.round(2 * VCPU_RATE + 4 * GIB_RATE);
+const HOUR_AT_DEFAULT_SHAPE = 3_600 * DEFAULT_SHAPE_RATE;
+const MINUTE_AT_DEFAULT_SHAPE = 60 * DEFAULT_SHAPE_RATE;
 
 function clearScopedEnv(): void {
   vi.stubEnv(RATE_ENV, undefined);
@@ -80,8 +97,10 @@ function resetMocks(): void {
     quotaValues.set(key, next);
     return next;
   });
-  recordInfrastructureCostEvent.mockReset();
-  recordInfrastructureCostEvent.mockResolvedValue(undefined);
+  recordSettledProviderCost.mockReset();
+  recordSettledProviderCost.mockResolvedValue(undefined);
+  markManagedUsageProviderStarted.mockReset();
+  markManagedUsageProviderStarted.mockResolvedValue(undefined);
   reserveManagedUsageRequest.mockReset();
   reserveManagedUsageRequest.mockImplementation(async (input: Record<string, unknown>) => ({
     db: input['db'],
@@ -163,12 +182,18 @@ describe('getSandboxComputeMicrousdPerSecond', () => {
     expect(mod.getSandboxComputeMicrousdPerSecond()).toBe(DEFAULT_SHAPE_RATE);
   });
 
-  it('charges vCPU seconds and memory seconds together', async () => {
+  it('charges vCPU seconds and memory seconds together from the rate card', async () => {
     const mod = await loadModule();
-    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 1, memoryGib: 2 })).toBe(23);
-    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(46);
-    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 4, memoryGib: 8 })).toBe(92);
-    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 8, memoryGib: 16 })).toBe(184);
+    for (const [vcpuCount, memoryGib] of [
+      [1, 2],
+      [2, 4],
+      [4, 8],
+      [8, 16],
+    ] as const) {
+      expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount, memoryGib })).toBe(
+        Math.round(vcpuCount * VCPU_RATE + memoryGib * GIB_RATE),
+      );
+    }
   });
 
   it('treats a zero, negative or unknown dimension as undeclared and uses the default', async () => {
@@ -179,7 +204,9 @@ describe('getSandboxComputeMicrousdPerSecond', () => {
     expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: -1, memoryGib: null })).toBe(
       DEFAULT_SHAPE_RATE,
     );
-    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 4 })).toBe(74);
+    expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 4 })).toBe(
+      Math.round(4 * VCPU_RATE + 4 * GIB_RATE),
+    );
   });
 
   it('the override wins over the table regardless of sandbox shape', async () => {
@@ -204,25 +231,32 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(
+      chargeMicrousdForProviderCost(HOUR_AT_DEFAULT_SHAPE),
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostMicrousd: 165600,
+        actualCostMicrousd: chargeMicrousdForProviderCost(HOUR_AT_DEFAULT_SHAPE),
+        providerCostMicrousd: HOUR_AT_DEFAULT_SHAPE,
         usage: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
     expect(logger.error).toHaveBeenCalled();
   });
 
-  it('bills a minute that used to round away to nothing', async () => {
+  it('bills a minute at its provider cost rounded up to a hundredth of a credit', async () => {
     const mod = await loadModule();
 
-    // A minute at the table rate is 2,760 microUSD, under a third of a cent.
-    // Rounding it to cents billed zero and moved no usage cap, so a sandbox
-    // paused every minute ran indefinitely for free.
-    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(2_760);
+    const charged = chargeMicrousdForProviderCost(MINUTE_AT_DEFAULT_SHAPE);
+    expect(charged).toBeGreaterThanOrEqual(MINUTE_AT_DEFAULT_SHAPE);
+    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(charged);
+    expect(markManagedUsageProviderStarted).toHaveBeenCalledTimes(1);
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ actualCostMicrousd: 2_760 }),
+      expect.objectContaining({
+        outcome: 'completed',
+        actualCostMicrousd: charged,
+        providerCostMicrousd: MINUTE_AT_DEFAULT_SHAPE,
+      }),
     );
     expect(logger.warn).not.toHaveBeenCalled();
   });
@@ -243,11 +277,13 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(100800);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(
+      chargeMicrousdForProviderCost(3_600 * 28),
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        actualCostMicrousd: 100800,
+        actualCostMicrousd: chargeMicrousdForProviderCost(3_600 * 28),
         idempotencyKey: 'agi.e2b.compute.res-1',
         leaseToken: 'lease-1',
         quotaFeature: 'sandbox_compute',
@@ -260,11 +296,13 @@ describe('meterSandboxComputeInterval', () => {
     const mod = await loadModule();
     const hour = interval({ endedAtMs: 1_000_000 + 3_600_000 });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(
+      chargeMicrousdForProviderCost(HOUR_AT_DEFAULT_SHAPE),
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-1',
-        actualCostMicrousd: 165600,
+        actualCostMicrousd: chargeMicrousdForProviderCost(HOUR_AT_DEFAULT_SHAPE),
         usage: expect.objectContaining({ microusd_per_second: DEFAULT_SHAPE_RATE }),
       }),
     );
@@ -278,11 +316,14 @@ describe('meterSandboxComputeInterval', () => {
       memoryGib: 8,
     });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(331200);
+    const rate = Math.round(4 * VCPU_RATE + 8 * GIB_RATE);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(
+      chargeMicrousdForProviderCost(3_600 * rate),
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostMicrousd: 331200,
-        usage: expect.objectContaining({ microusd_per_second: 92 }),
+        actualCostMicrousd: chargeMicrousdForProviderCost(3_600 * rate),
+        usage: expect.objectContaining({ microusd_per_second: rate }),
       }),
     );
   });
@@ -297,10 +338,12 @@ describe('meterSandboxComputeInterval', () => {
       snapshotMicrousdPerSecond: 46,
     });
 
-    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(165600);
+    await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(
+      chargeMicrousdForProviderCost(3_600 * 46),
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        actualCostMicrousd: 165600,
+        actualCostMicrousd: chargeMicrousdForProviderCost(3_600 * 46),
         usage: expect.objectContaining({ microusd_per_second: 46 }),
       }),
     );
@@ -331,7 +374,11 @@ describe('meterSandboxComputeInterval', () => {
 
     await expect(mod.meterSandboxComputeInterval(hour)).resolves.toBe(HELD_MICROUSD);
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ actualCostMicrousd: HELD_MICROUSD }),
+      expect.objectContaining({
+        actualCostMicrousd: HELD_MICROUSD,
+        providerCostMicrousd: 3_600 * 5_000,
+        usage: expect.objectContaining({ metered_microusd: 3_600 * 5_000 }),
+      }),
     );
   });
 });
@@ -360,7 +407,11 @@ describe('reserveSandboxComputeInterval', () => {
     const outcome = await mod.reserveSandboxComputeInterval(reserveInput);
     expect(outcome.outcome).toBe('reserved');
     const held = reserveManagedUsageRequest.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(held['estimatedCostMicrousd']).toBe(3_600 * DEFAULT_SHAPE_RATE);
+    expect(held['estimatedCostMicrousd']).toBe(
+      chargeMicrousdForProviderCost(3_600 * DEFAULT_SHAPE_RATE),
+    );
+    expect(held['planTier']).toBe('pro');
+    expect(held['leaseSeconds']).toBeGreaterThan(3_600);
     expect(held['provider']).toBe('e2b');
     expect(held['model']).toBe('tpl-1');
     expect(held['quotaFeature']).toBe('sandbox_compute');
@@ -421,12 +472,14 @@ describe('reserveSandboxComputeInterval', () => {
 
   it('refuses Free compute after its daily platform allowance is exhausted', async () => {
     const mod = await loadModule();
+    const perHold = 600 * DEFAULT_SHAPE_RATE;
+    const fits = Math.floor(FREE_PLATFORM_SANDBOX_DAILY_BUDGET_MICROUSD / perHold);
     const outcomes = await Promise.all(
-      Array.from({ length: 37 }, () =>
+      Array.from({ length: fits + 1 }, () =>
         mod.reserveSandboxComputeInterval({ ...reserveInput, planTier: 'free', ttlMs: 600_000 }),
       ),
     );
-    expect(outcomes.filter((outcome) => outcome.outcome === 'reserved')).toHaveLength(36);
+    expect(outcomes.filter((outcome) => outcome.outcome === 'reserved')).toHaveLength(fits);
     const refusal = outcomes.find((outcome) => outcome.outcome === 'refused');
     expect(refusal).toMatchObject({
       outcome: 'refused',
@@ -472,22 +525,35 @@ describe('platform-funded Free sandbox settlement', () => {
     });
     if (outcome.outcome !== 'reserved') throw new Error('expected a reservation');
     const reservation = outcome.reservation;
-    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(2_760);
+    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(
+      MINUTE_AT_DEFAULT_SHAPE,
+    );
     if (reservation.fundingSource !== 'platform-free') throw new Error('expected Free funding');
-    expect(quotaValues.get(reservation.quotaKey)).toBe(2_760);
-    expect(recordInfrastructureCostEvent).toHaveBeenCalledWith(
+    expect(quotaValues.get(reservation.quotaKey)).toBe(MINUTE_AT_DEFAULT_SHAPE);
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    expect(recordSettledProviderCost).toHaveBeenCalledWith(
       expect.objectContaining({
-        capability: 'code_compute',
         provider: 'e2b',
         customerCanonicalMicrousd: 0,
-        providerEstimatedCostMicrousd: 2_760,
+        providerEstimatedCostMicrousd: MINUTE_AT_DEFAULT_SHAPE,
+        sourceRef: reservation.idempotencyKey,
+        usage: expect.objectContaining({
+          operation: 'e2b_sandbox_compute',
+          funding_source: 'platform-free',
+        }),
       }),
     );
     expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
+
+    await expect(mod.meterSandboxComputeInterval(interval({ reservation }))).resolves.toBe(
+      MINUTE_AT_DEFAULT_SHAPE,
+    );
+    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
+    expect(quotaValues.get(reservation.quotaKey)).toBe(MINUTE_AT_DEFAULT_SHAPE);
   });
 });
 
-describe('compute pricing is read from the registry, not a literal', () => {
+describe('compute pricing is read from the rate card, not a literal', () => {
   beforeEach(() => {
     clearScopedEnv();
     resetMocks();
@@ -499,40 +565,34 @@ describe('compute pricing is read from the registry, not a literal', () => {
     vi.doUnmock('@agiworkforce/types');
   });
 
-  it('reflects a different registry rate for the same sandbox shape', async () => {
+  it('prices every shape from the rate card rate pair', async () => {
     vi.doMock('@agiworkforce/types', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@agiworkforce/types')>()),
-      getProviderComputePricing: () => ({
-        unit: 'usd_per_vcpu_second' as const,
-        ratePerUnit: 0.00005,
-        ramRatePerGibSecond: 0.00001,
-      }),
+      sandboxComputeRate: () => ({ ok: true, microusdPerSecond: 140, overrideInvalid: false }),
     }));
     const mod = await loadModule();
     expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(140);
   });
 
-  it('refuses to price when the registry declares no memory rate', async () => {
+  it('is unpriced and logs an error when the rate card declares no rate pair', async () => {
     vi.doMock('@agiworkforce/types', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@agiworkforce/types')>()),
-      getProviderComputePricing: () => ({
-        unit: 'usd_per_vcpu_second' as const,
-        ratePerUnit: 0.00005,
-      }),
-    }));
-    const mod = await loadModule();
-    expect(mod.sandboxComputeIsPriceable()).toBe(false);
-    expect(logger.error).toHaveBeenCalled();
-  });
-
-  it('is unpriced and logs an error when the registry has no compute-pricing entry', async () => {
-    vi.doMock('@agiworkforce/types', async (importOriginal) => ({
-      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
-      getProviderComputePricing: () => null,
+      sandboxComputeRate: () => ({ ok: false, overrideInvalid: false }),
     }));
     const mod = await loadModule();
     expect(mod.sandboxComputeIsPriceable()).toBe(false);
     expect(mod.getSandboxComputeMicrousdPerSecond({ vcpuCount: 2, memoryGib: 4 })).toBe(0);
+    expect(logger.error).toHaveBeenCalled();
+  });
+
+  it('settles nothing from an unpriced sandbox and says so', async () => {
+    vi.doMock('@agiworkforce/types', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+      sandboxComputeRate: () => ({ ok: false, overrideInvalid: false }),
+    }));
+    const mod = await loadModule();
+    await expect(mod.meterSandboxComputeInterval(interval())).resolves.toBe(0);
+    expect(finalizeManagedUsageRequest).not.toHaveBeenCalled();
     expect(logger.error).toHaveBeenCalled();
   });
 });

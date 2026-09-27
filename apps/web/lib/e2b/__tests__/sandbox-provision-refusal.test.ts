@@ -46,6 +46,7 @@ vi.mock('../compute-metering', async (importOriginal) => ({
   meterSandboxComputeInterval: async () => 0,
   reserveSandboxComputeInterval: (input: unknown) => reserveSandboxComputeInterval(input),
   releaseSandboxComputeReservation: async () => {},
+  markSandboxComputeStarted: async () => {},
 }));
 
 vi.mock('../templates', async (importOriginal) => ({
