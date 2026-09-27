@@ -1,10 +1,14 @@
 import { Check, Zap } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
+  PLAN_CREDIT_ALLOWANCES,
   PLAN_LABEL,
   PLAN_DESCRIPTION,
+  creditAmount,
   getPublishedPlanPriceUsd,
   isFreePlan,
+  isSelfServePaidPlanTier,
+  managedUsageComparisonLabel,
   type UIPlanTier,
 } from '@agiworkforce/types';
 
@@ -64,23 +68,13 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   pro: {
     price: `$${getPublishedPlanPriceUsd('pro', 'monthly')} / mo`,
     priceNote: `$${getPublishedPlanPriceUsd('pro', 'yearly')} / yr on annual billing`,
-    bullets: [
-      'More managed usage than Basic',
-      'AGI Work and developer surfaces',
-      'Image generation',
-      'Advanced agent features',
-    ],
+    bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
     price: `$${getPublishedPlanPriceUsd('max', 'monthly')} / mo`,
-    bullets: [
-      'More managed usage than Pro',
-      'Every flagship model included',
-      'Advanced agents and research',
-      'Priority support',
-    ],
+    bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
@@ -95,6 +89,18 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
 };
+
+function planCreditBullets(tier: UIPlanTier): string[] {
+  if (!isSelfServePaidPlanTier(tier)) return [];
+  const allowance = PLAN_CREDIT_ALLOWANCES[tier];
+  if (allowance.unlimited || allowance.monthly <= 0) return [];
+  const comparison =
+    tier === 'pro' ? null : managedUsageComparisonLabel(tier, 'pro', PLAN_LABEL.pro);
+  return [
+    `${creditAmount(allowance.fiveHour)} credits per 5 hours, ${creditAmount(allowance.weekly)} per week, ${creditAmount(allowance.monthly)} per month`,
+    ...(comparison ? [comparison] : []),
+  ];
+}
 
 export interface PlanCardProps {
   tier: UIPlanTier;
@@ -118,6 +124,7 @@ export function PlanCard({
   const label = PLAN_LABEL[tier];
   const description = PLAN_DESCRIPTION[tier];
   const isFree = isFreePlan(tier);
+  const bullets = [...planCreditBullets(tier), ...content.bullets];
 
   return (
     <div
@@ -156,7 +163,7 @@ export function PlanCard({
       </div>
 
       <ul className="flex-1 space-y-1.5">
-        {content.bullets.map((bullet) => (
+        {bullets.map((bullet) => (
           <li key={bullet} className="flex items-start gap-2 text-xs text-muted-foreground">
             <Check size={12} className="mt-0.5 shrink-0 text-green-500" aria-hidden="true" />
             {bullet}
