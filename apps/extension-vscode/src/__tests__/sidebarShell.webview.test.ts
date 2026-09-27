@@ -465,14 +465,15 @@ describe('the composer command list', () => {
 
   it('keeps the composer icon buttons at a clickable size', () => {
     boot();
-    const rule = Array.from(document.querySelectorAll('style'))
+    const css = Array.from(document.querySelectorAll('style'))
       .map((node) => node.textContent ?? '')
-      .join('\n')
-      .match(/\.plus-btn\s*\{[^}]*\}/u);
+      .join('\n');
+    const rule = css.match(/\.plus-btn\s*\{[^}]*\}/u);
 
     expect(rule, 'the composer + and / buttons have no size rule').toBeTruthy();
-    expect(Number(/height:\s*(\d+)px/u.exec(rule![0])?.[1])).toBeGreaterThanOrEqual(28);
-    expect(Number(/width:\s*(\d+)px/u.exec(rule![0])?.[1])).toBeGreaterThanOrEqual(28);
+    expect(rule![0]).toContain('height: var(--control-md)');
+    expect(rule![0]).toContain('width: var(--control-md)');
+    expect(Number(/--control-md:\s*(\d+)px/u.exec(css)?.[1])).toBeGreaterThanOrEqual(28);
   });
 
   it('resumes a session without narrating the resume, and keeps a panel that says something', () => {
