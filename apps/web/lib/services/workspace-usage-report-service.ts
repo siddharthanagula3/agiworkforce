@@ -5,6 +5,7 @@ import { creditsFromMicrousd } from '@agiworkforce/types';
 
 import { createError } from '@/lib/errors';
 import {
+  COST_MICROUSD,
   OUT_TOKENS,
   SETTLED,
   TOKENS,
@@ -114,7 +115,7 @@ export async function readWorkspaceUsageReport(
             count(*)::int as requests,
             sum(${TOKENS})::bigint as input_tokens,
             sum(${OUT_TOKENS})::bigint as output_tokens,
-            sum(coalesce(actual_cost_microusd, 0))::bigint as cost_microusd
+            ${COST_MICROUSD} as cost_microusd
        from public.managed_usage_requests
       where organization_id = $1
         and ${SETTLED}
