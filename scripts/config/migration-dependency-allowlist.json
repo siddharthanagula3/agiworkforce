@@ -210,6 +210,11 @@
       "file": "apps/web/lib/triggers/trigger-service.ts",
       "migration": 307,
       "reason": "Returns the Gmail watch columns 0307 adds to event_triggers. The deploy applies 0307 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/services/schedule-service.ts",
+      "migration": 308,
+      "reason": "Reads and writes the approval checkpoint columns 0308 adds to scheduled_task_runs so a scheduled run can pause for approval and resume. The deploy applies 0308 before this code reaches production."
     }
   ]
 }

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0309: a scheduled run can pause for the owner's approval
+-- Migration 0308: a scheduled run can pause for the owner's approval
 --
 -- Why    : a run that reached a tool call the owner's Tool approvals setting
 --          asks about could only be stopped and failed, because nobody is
