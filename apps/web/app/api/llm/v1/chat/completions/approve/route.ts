@@ -51,7 +51,10 @@ import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../lib/tool-appro
 import { applySecretHandlingToTexts } from '../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
-import { checkpointRequestForResume } from '../lib/approval-checkpoint-request';
+import {
+  checkpointRequestForResume,
+  checkpointTurnAttachments,
+} from '../lib/approval-checkpoint-request';
 
 const SECRET_IN_GUIDANCE_MESSAGE =
   'This guidance was blocked because it appears to contain a secret, such as an API key or access token. Remove it and try again.';
@@ -210,6 +213,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
   const processed: ProcessedRequest = processResult;
 
   processed.llmRequest.messages = claim.checkpoint.messages;
+  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
 
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {

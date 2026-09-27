@@ -47,6 +47,10 @@ import { withStreamEnvelope } from '../../../lib/stream-envelope';
 import { addProjectSourcesHeader } from '@/lib/chat-project-sources';
 import { loadConnectorToolPermissions } from '../../../lib/connector-tool-permissions';
 import { hostedToolRunsUnasked, loadToolApprovalPolicy } from '../../../lib/tool-approval-policy';
+import {
+  checkpointRequestForResume,
+  checkpointTurnAttachments,
+} from '../../../lib/approval-checkpoint-request';
 import { applySecretHandlingToTexts } from '../../../lib/secret-handling-gate';
 import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
 import { WEB_SEARCH_TOOL, webSearchBackendConfigured } from '@/lib/web-search/web-search-tool';
@@ -78,7 +82,7 @@ function buildSyntheticRequest(
     method: 'POST',
     headers,
     body: JSON.stringify({
-      ...claim.checkpoint.request,
+      ...checkpointRequestForResume(claim.checkpoint.request, false),
       messages: claim.checkpoint.messages.map(
         ({ __canonicalThinking: _private, ...message }) => message,
       ),
@@ -194,6 +198,7 @@ async function handlePausedRunResume(
   }
   const processed = processResult;
   processed.llmRequest.messages = claim.checkpoint.messages;
+  processed.turnAttachments = checkpointTurnAttachments(claim.checkpoint.request);
 
   let discovery;
   try {

@@ -1025,6 +1025,7 @@ async function dispatchChatCompletions(
             request: buildApprovalCheckpointRequest(
               processed.chatRequest,
               processed.callerToolFields,
+              processed.turnAttachments,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1048,6 +1049,7 @@ async function dispatchChatCompletions(
             request: buildApprovalCheckpointRequest(
               processed.chatRequest,
               processed.callerToolFields,
+              processed.turnAttachments,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,
@@ -1068,6 +1070,7 @@ async function dispatchChatCompletions(
             request: buildApprovalCheckpointRequest(
               processed.chatRequest,
               processed.callerToolFields,
+              processed.turnAttachments,
             ),
             messages: checkpoint.messages,
             pendingToolCalls: checkpoint.pendingToolCalls,

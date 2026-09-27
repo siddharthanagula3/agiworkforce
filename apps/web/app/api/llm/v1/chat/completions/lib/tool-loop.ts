@@ -3402,11 +3402,17 @@ export async function* runToolLoop(
   // race past it and each attempt its own sandbox. One attempt per turn, and
   // every caller after the first sees the answer the first one got.
   let e2bResolution: Promise<E2BExecutorResolution> | null = null;
+  const continuesTurn =
+    options.resume !== undefined ||
+    options.resumedFromPause !== undefined ||
+    options.invocationContinuation === true;
   async function stageTurnAttachmentsForSandbox(executor: E2BExecutor): Promise<void> {
     const attachments = processed.turnAttachments ?? [];
     if (attachments.length === 0) return;
     try {
-      const outcome = await stageTurnAttachments(executor, attachments);
+      const outcome = await stageTurnAttachments(executor, attachments, {
+        keepExisting: continuesTurn,
+      });
       if (outcome.failed.length > 0) {
         logger.warn(
           { failed: outcome.failed, staged: outcome.staged.length, conversationId },
