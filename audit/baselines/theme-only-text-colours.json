@@ -1,11 +1,10 @@
 {
-  "total": 114,
+  "total": 111,
   "perFile": {
     "packages/ui/unified-chat/src/components/ActionLogTimeline.tsx": 5,
     "packages/ui/unified-chat/src/components/AgentProgressFooter.tsx": 1,
     "packages/ui/unified-chat/src/components/AgentStepTimeline.tsx": 7,
     "packages/ui/unified-chat/src/components/AgenticLoopStatusBar.tsx": 2,
-    "packages/ui/unified-chat/src/components/BrandedGreeting.tsx": 1,
     "packages/ui/unified-chat/src/components/BriefStatus.tsx": 4,
     "packages/ui/unified-chat/src/components/BrowserActivityBadge.tsx": 2,
     "packages/ui/unified-chat/src/components/CodeExecutionOutput.tsx": 3,
@@ -20,7 +19,6 @@
     "packages/ui/unified-chat/src/components/SlashCommandMenu.tsx": 1,
     "packages/ui/unified-chat/src/components/SubtaskTimeline.tsx": 5,
     "packages/ui/unified-chat/src/components/TaskPhaseSection.tsx": 3,
-    "packages/ui/unified-chat/src/components/TokenCounter.tsx": 2,
     "packages/ui/unified-chat/src/components/ToolCallCard.tsx": 1,
     "packages/ui/unified-chat/src/components/ToolTimeline.tsx": 4,
     "packages/ui/unified-chat/src/components/UserProfile.tsx": 4,

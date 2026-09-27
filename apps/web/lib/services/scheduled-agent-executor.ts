@@ -36,9 +36,15 @@ import {
   type ChatCompletionRequest,
   type ProcessedRequest,
 } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
+import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
+import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { loadMcpToolDefs, runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
-import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
-import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
+import {
+  classifyToolLoopInputs,
+  functionToolName,
+  type ToolLoopApprovalMode,
+} from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
+import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
@@ -78,7 +84,17 @@ import {
   loadUserConnectorToolCatalog,
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
-import { webSearchBackendConfigured, webSearchToolDef } from '@/lib/web-search/web-search-tool';
+import { URL_FETCH_TOOL } from '@/lib/url-fetch/url-fetch-tool';
+import {
+  WEB_SEARCH_TOOL,
+  webSearchBackendConfigured,
+  webSearchToolDef,
+} from '@/lib/web-search/web-search-tool';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  toolApprovalPolicyOption,
+  type ToolApprovalPolicy,
+} from '@shared/types/toolApprovalPolicy';
 import { logger } from '@/lib/logger';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
@@ -133,25 +149,56 @@ interface ScheduledToolPlan {
   mcpTools: WebMcpToolDef[];
   connectorPermissions: ConnectorToolPermissions;
   connectorExecutor?: ReturnType<typeof makeUserConnectorExecutor>;
+  toolApprovalPolicy: ToolApprovalPolicy;
   webSearch: boolean;
+  webFetch: boolean;
   codeExecution: boolean;
+  withheldTools: string[];
+  withheldConnectorTools: number;
 }
 
 const NO_SCHEDULED_TOOLS: ScheduledToolPlan = {
   tools: [],
   mcpTools: [],
   connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
   webSearch: false,
+  webFetch: false,
   codeExecution: false,
+  withheldTools: [],
+  withheldConnectorTools: 0,
 };
 
-/**
- * Unattended runs offer only what the catalog, the plan tier and the user's own
- * saved verdicts can back: a missing catalog entry grants nothing, and an MCP or
- * connector tool runs only when its saved level is already `allow`, a scheduled
- * run has nobody to answer an approval prompt, so anything still needing one is
- * never advertised to the model.
- */
+const HEADLINE_WITHHELD_TOOLS: ReadonlyArray<readonly [string, string]> = [
+  [WEB_SEARCH_TOOL, 'search the web'],
+  [URL_FETCH_TOOL, 'fetch web pages'],
+  [EXECUTE_CODE_TOOL, 'run code'],
+];
+
+function runsWithoutAsking(
+  qualifiedName: string,
+  toolApprovalPolicy: ToolApprovalPolicy,
+  connectorPermissions: ConnectorToolPermissions,
+): boolean {
+  return (
+    resolveToolCallGate(
+      {
+        qualifiedName,
+        savedLevel: connectorPermissions.levelFor(qualifiedName),
+        batchIntroducesUntrustedContent: false,
+      },
+      {
+        approvalMode: 'manual',
+        toolApprovalPolicy,
+        unattended: true,
+        deviceHostPresent: false,
+        untrustedContentInContext: false,
+        sensitiveSourceAvailable: false,
+      },
+    ).verdict === 'allow'
+  );
+}
+
 async function buildScheduledToolPlan(input: {
   db: Parameters<typeof loadConnectorToolPermissions>[0];
   userId: string;
@@ -164,9 +211,19 @@ async function buildScheduledToolPlan(input: {
   const policy = getTierPolicy(input.planTier);
   if (capabilities?.tools !== true || policy.allowToolUse === false) return NO_SCHEDULED_TOOLS;
 
+  const [toolApprovalPolicy, connectorPermissions] = await Promise.all([
+    loadToolApprovalPolicy(input.db, input.userId),
+    policy.allowMCP === false
+      ? Promise.resolve(EMPTY_CONNECTOR_TOOL_PERMISSIONS)
+      : loadConnectorToolPermissions(input.db, input.userId),
+  ]);
+  const unasked = (name: string) =>
+    runsWithoutAsking(name, toolApprovalPolicy, connectorPermissions);
+  const withheldTools: string[] = [];
+
   const provider = input.provider.toLowerCase();
   let tools: unknown[] = [];
-  const webSearch = policy.allowSearch;
+  const webSearch = policy.allowSearch && unasked(WEB_SEARCH_TOOL);
   if (webSearch) {
     tools = appendWebSearchTool(provider, tools, capabilities) ?? tools;
     if (
@@ -180,6 +237,12 @@ async function buildScheduledToolPlan(input: {
     ) {
       tools = [...tools, webSearchToolDef()];
     }
+  } else if (policy.allowSearch) {
+    withheldTools.push(WEB_SEARCH_TOOL);
+  }
+
+  const webFetch = policy.allowSearch && unasked(URL_FETCH_TOOL);
+  if (webFetch) {
     tools =
       resolveWebFetchTools({
         providerLower: provider,
@@ -188,6 +251,8 @@ async function buildScheduledToolPlan(input: {
         toolsCapable: true,
         stream: true,
       }) ?? tools;
+  } else if (policy.allowSearch) {
+    withheldTools.push(URL_FETCH_TOOL);
   }
 
   const codeExecution = resolveTurnCodeExecutionTools({
@@ -197,19 +262,31 @@ async function buildScheduledToolPlan(input: {
     toolsCapable: true,
     codeExecutionCapable: capabilities.codeExecution === true,
   });
-  tools = [...tools, ...codeExecution.tools];
+  let codeExecutionOffered = false;
+  for (const tool of codeExecution.tools) {
+    const name = functionToolName(tool) || EXECUTE_CODE_TOOL;
+    if (unasked(name)) {
+      tools = [...tools, tool];
+      codeExecutionOffered = true;
+    } else if (!withheldTools.includes(name)) {
+      withheldTools.push(name);
+    }
+  }
 
   if (policy.allowMCP === false) {
     return {
       tools,
       mcpTools: [],
-      connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+      connectorPermissions,
+      toolApprovalPolicy,
       webSearch,
-      codeExecution: codeExecution.tools.length > 0,
+      webFetch,
+      codeExecution: codeExecutionOffered,
+      withheldTools,
+      withheldConnectorTools: 0,
     };
   }
 
-  const connectorPermissions = await loadConnectorToolPermissions(input.db, input.userId);
   const [operatorTools, connectorCatalog] = await Promise.all([
     loadMcpToolDefs(),
     loadUserConnectorToolCatalog(input.userId, {
@@ -219,9 +296,8 @@ async function buildScheduledToolPlan(input: {
       isToolDenied: connectorPermissions.isConnectorToolDenied,
     }),
   ]);
-  const mcpTools = [...operatorTools, ...connectorCatalog.tools].filter(
-    (tool) => connectorPermissions.levelFor(tool.qualifiedName) === 'allow',
-  );
+  const catalog = [...operatorTools, ...connectorCatalog.tools];
+  const mcpTools = catalog.filter((tool) => unasked(tool.qualifiedName));
 
   return {
     tools,
@@ -230,9 +306,46 @@ async function buildScheduledToolPlan(input: {
     ...(mcpTools.some((tool) => tool.origin === 'connector')
       ? { connectorExecutor: makeUserConnectorExecutor(input.userId, input.organizationId) }
       : {}),
+    toolApprovalPolicy,
     webSearch,
-    codeExecution: codeExecution.tools.length > 0,
+    webFetch,
+    codeExecution: codeExecutionOffered,
+    withheldTools,
+    withheldConnectorTools: catalog.length - mcpTools.length,
   };
+}
+
+function withheldToolsDirective(plan: ScheduledToolPlan): string | null {
+  const withheld = [
+    ...plan.withheldTools,
+    ...(plan.withheldConnectorTools > 0 ? ['connector tools not set to Always allow'] : []),
+  ];
+  if (withheld.length === 0) return null;
+  const { label } = toolApprovalPolicyOption(plan.toolApprovalPolicy);
+  return (
+    `These tools were not offered to this run: ${withheld.join(', ')}. Under the account's ` +
+    `Tool approvals setting ("${label}") each would need the user's approval, and nobody is ` +
+    'present to give it. If the task needed one of them, say in the result which step was ' +
+    'skipped and why.'
+  );
+}
+
+function withheldCapabilityNote(plan: {
+  withheldTools: readonly string[];
+  toolApprovalPolicy: ToolApprovalPolicy;
+}): string | null {
+  const actions = HEADLINE_WITHHELD_TOOLS.filter(([name]) => plan.withheldTools.includes(name)).map(
+    ([, action]) => action,
+  );
+  if (actions.length === 0) return null;
+  const { label } = toolApprovalPolicyOption(plan.toolApprovalPolicy);
+  const readOnly = toolApprovalPolicyOption('auto_approve_read_only').label;
+  const list = new Intl.ListFormat('en', { style: 'long', type: 'disjunction' }).format(actions);
+  return (
+    `This run could not ${list}: under your Tool approvals setting ("${label}") each needs ` +
+    `your approval, and nobody is present to approve a scheduled run. Choose "${readOnly}" in ` +
+    'Settings → Capabilities → Tool approvals to let scheduled runs do this.'
+  );
 }
 
 const PROJECT_SOURCE_BUDGET_CHARS: Readonly<Record<string, number>> = {
@@ -375,7 +488,7 @@ function buildScheduledProcessedRequest(input: {
     messages,
     stream: true,
     web_search: input.plan.webSearch,
-    web_fetch: input.plan.webSearch,
+    web_fetch: input.plan.webFetch,
     code_execution: input.plan.codeExecution,
   };
 
@@ -417,6 +530,7 @@ function buildScheduledProcessedRequest(input: {
 async function runScheduledToolLoop(input: {
   processed: ProcessedRequest;
   plan: ScheduledToolPlan;
+  approvalMode: ToolLoopApprovalMode;
   userId: string;
   signal: AbortSignal;
   usage: ObservedProviderUsage;
@@ -429,7 +543,8 @@ async function runScheduledToolLoop(input: {
 
   const loop = runToolLoop(input.processed, {
     mcpTools: input.plan.mcpTools,
-    approvalMode: 'auto',
+    approvalMode: input.approvalMode,
+    toolApprovalPolicy: input.plan.toolApprovalPolicy,
     unattended: true,
     userId: input.userId,
     connectorPermissions: input.plan.connectorPermissions,
@@ -580,9 +695,8 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     provider: dispatchProvider,
     model: route.modelKey,
   });
-  const toolLoopRunnable =
-    classifyToolLoopInputs(plan.mcpTools, plan.tools).shouldRun &&
-    Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
+  const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
+  const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
   const projectContext = task.projectId
     ? await loadProjectContext(scope.db, { projectId: task.projectId, userId: scope.userId })
     : null;
@@ -594,6 +708,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     resolved.projectPrompt,
     resolved.memoryPrompt,
     buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
+    withheldToolsDirective(plan),
     SCHEDULED_TASK_DIRECTIVE,
   ]
     .filter((block): block is string => Boolean(block))
@@ -655,6 +770,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
             sensitiveContextPresent: projectContext !== null,
           }),
           plan,
+          approvalMode: loopInputs.approvalMode,
           userId: scope.userId,
           signal,
           usage: observedUsage,
@@ -680,8 +796,11 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
       },
     });
 
+    const note = withheldCapabilityNote(plan);
     return {
-      text: completion.text.slice(0, MAX_OUTPUT_CHARS),
+      text: note
+        ? `${completion.text.slice(0, MAX_OUTPUT_CHARS - note.length - 2)}\n\n${note}`
+        : completion.text.slice(0, MAX_OUTPUT_CHARS),
       model: route.modelKey,
       provider: route.provider,
       ...(completion.toolsUsed.length > 0 ? { toolsUsed: completion.toolsUsed } : {}),

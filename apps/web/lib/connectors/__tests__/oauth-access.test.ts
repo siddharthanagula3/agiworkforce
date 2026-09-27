@@ -25,6 +25,12 @@ const mocks = vi.hoisted(() => {
       this.name = 'ConnectorGrantDecryptionError';
     }
   }
+  class ConnectorGrantLockTimeoutError extends Error {
+    constructor() {
+      super('lock timeout');
+      this.name = 'ConnectorGrantLockTimeoutError';
+    }
+  }
   return {
     getGrant: vi.fn(),
     updateTokens: vi.fn(),
@@ -37,6 +43,7 @@ const mocks = vi.hoisted(() => {
     getProvider: vi.fn(),
     ConnectorOAuthTokenError,
     ConnectorGrantDecryptionError,
+    ConnectorGrantLockTimeoutError,
   };
 });
 
@@ -45,6 +52,18 @@ const MockDecryptionError = mocks.ConnectorGrantDecryptionError;
 
 vi.mock('@/lib/connectors/oauth-store', () => ({
   ConnectorGrantDecryptionError: mocks.ConnectorGrantDecryptionError,
+  ConnectorGrantLockTimeoutError: mocks.ConnectorGrantLockTimeoutError,
+  withLockedConnectorOAuthGrant: async (
+    userId: string,
+    connectorId: string,
+    accountKey: string,
+    run: (locked: unknown) => Promise<unknown>,
+  ) =>
+    run({
+      grant: await mocks.getGrant(userId, connectorId, accountKey),
+      saveTokens: (tokens: unknown) => mocks.updateTokens(userId, connectorId, tokens, accountKey),
+      revoke: () => mocks.revokeGrant(userId, connectorId, accountKey),
+    }),
   getConnectorOAuthGrant: (...a: unknown[]) => mocks.getGrant(...a),
   updateConnectorOAuthGrantTokens: (...a: unknown[]) => mocks.updateTokens(...a),
   revokeConnectorOAuthGrant: (...a: unknown[]) => mocks.revokeGrant(...a),
@@ -92,6 +111,7 @@ function grant(overrides: Record<string, unknown> = {}) {
     tokenEndpoint: 'https://auth.example.com/token',
     connectedAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
+    accountKey: 'default',
     ...overrides,
   };
 }
@@ -157,6 +177,7 @@ describe('resolveConnectorAccessToken', () => {
       'u1',
       'linear',
       expect.objectContaining({ accessToken: 'fresh-access' }),
+      'default',
     );
   });
 
@@ -182,7 +203,7 @@ describe('resolveConnectorAccessToken', () => {
     await expect(
       resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
     ).resolves.toEqual({ status: 'reauthorization-required', reason: 'expired' });
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'default');
   });
 
   it('revokes the grant when the provider says invalid_grant', async () => {
@@ -192,7 +213,7 @@ describe('resolveConnectorAccessToken', () => {
     await expect(
       resolveConnectorAccessToken('u1', 'linear', { forceRefresh: true }),
     ).resolves.toEqual({ status: 'reauthorization-required', reason: 'refresh-failed' });
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'default');
     expect(mocks.record).toHaveBeenCalledWith(
       { privileged: true },
       expect.objectContaining({
@@ -264,7 +285,7 @@ describe('resolveConnectorAccessToken', () => {
       tokenType: 'Bearer',
       grantedScopes: ['read'],
     });
-    expect(mocks.updateTokens).toHaveBeenCalledWith('u1', 'linear', tokens);
+    expect(mocks.updateTokens).toHaveBeenCalledWith('u1', 'linear', tokens, 'default');
     expect(mocks.refresh).not.toHaveBeenCalled();
   });
 
@@ -283,7 +304,7 @@ describe('resolveConnectorAccessToken', () => {
       status: 'reauthorization-required',
       reason: 'refresh-failed',
     });
-    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear');
+    expect(mocks.revokeGrant).toHaveBeenCalledWith('u1', 'linear', 'default');
     expect(mocks.updateTokens).not.toHaveBeenCalled();
   });
 });

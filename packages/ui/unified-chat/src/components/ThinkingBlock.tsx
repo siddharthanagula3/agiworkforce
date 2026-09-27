@@ -105,7 +105,7 @@ function Timeline({ steps, isRunning }: TimelineProps) {
                   className={cn(
                     'text-[13px] leading-relaxed break-words',
                     step.type === 'done' || step.type === 'complete'
-                      ? 'text-[var(--chat-success)]'
+                      ? 'text-[var(--chat-success-text)]'
                       : 'text-[var(--chat-thinking-text)]',
                   )}
                 >

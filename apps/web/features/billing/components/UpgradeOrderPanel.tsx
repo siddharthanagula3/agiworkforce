@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { getPublishedPlanPriceUsd, type SelfServeIndividualPlanTier } from '@agiworkforce/types';
+import { getPublishedMonthlyPriceUsd, type SelfServeIndividualPlanTier } from '@agiworkforce/types';
 import {
   CheckoutRequiredError,
   fetchSavedPaymentMethods,
@@ -103,7 +103,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
 
   const display = getBillingPlanDisplay(plan);
   const planLabel = display.pricing.label;
-  const recurringUsd = getPublishedPlanPriceUsd(plan);
+  const recurringUsd = getPublishedMonthlyPriceUsd(plan);
 
   useEffect(() => {
     if (!authInitialized || !signedIn) return;

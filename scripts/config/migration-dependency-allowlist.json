@@ -200,6 +200,16 @@
       "file": "apps/web/lib/services/infrastructure-allocation-service.ts",
       "migration": 306,
       "reason": "Counts active accounts from free_daily_usage_reservations by user and creation time only; it reads no column 0306 adds, so it runs unchanged before and after 0306."
+    },
+    {
+      "file": "apps/web/lib/triggers/gmail-watch.ts",
+      "migration": 307,
+      "reason": "Reads and writes the Gmail watch columns 0307 adds to event_triggers. Until 0307 is applied a watch write fails and the trigger stays pending with its error shown; the deploy applies 0307 before this code reaches production."
+    },
+    {
+      "file": "apps/web/lib/triggers/trigger-service.ts",
+      "migration": 307,
+      "reason": "Returns the Gmail watch columns 0307 adds to event_triggers. The deploy applies 0307 before this code reaches production."
     }
   ]
 }

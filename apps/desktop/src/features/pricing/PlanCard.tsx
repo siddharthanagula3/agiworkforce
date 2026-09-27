@@ -5,8 +5,8 @@ import {
   PLAN_LABEL,
   PLAN_DESCRIPTION,
   creditAmount,
+  getPublishedMonthlyPriceUsd,
   getPublishedPlanPricePerMonthUsd,
-  getPublishedPlanPriceUsd,
   isFreePlan,
   isSelfServePaidPlanTier,
   managedUsageComparisonLabel,
@@ -56,7 +56,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'current',
   },
   basic: {
-    price: `$${getPublishedPlanPriceUsd('basic')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('basic')} / mo`,
     bullets: [
       'Managed cloud entry tier',
       'Speed-optimized managed models',
@@ -67,19 +67,19 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
     ctaVariant: 'primary',
   },
   pro: {
-    price: `$${getPublishedPlanPriceUsd('pro')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('pro')} / mo`,
     bullets: ['AGI Work and developer surfaces', 'Image generation', 'Advanced agent features'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.pro}`,
     ctaVariant: 'primary',
   },
   max: {
-    price: `$${getPublishedPlanPriceUsd('max')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max')} / mo`,
     bullets: ['Every flagship model included', 'Advanced agents and research', 'Priority support'],
     ctaLabel: `Upgrade to ${PLAN_LABEL.max}`,
     ctaVariant: 'primary',
   },
   max_15x: {
-    price: `$${getPublishedPlanPriceUsd('max_15x')} / mo`,
+    price: `$${getPublishedMonthlyPriceUsd('max_15x')} / mo`,
     bullets: [
       'Highest individual usage limits',
       'Every flagship model included',
@@ -90,7 +90,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
   },
   team: {
     price: `$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`,
-    priceNote: `Billed yearly, or $${getPublishedPlanPriceUsd('team')} per seat billed monthly`,
+    priceNote: `Billed yearly, or $${getPublishedMonthlyPriceUsd('team')} per seat billed monthly`,
     bullets: [
       'Shared workspaces and organization administration',
       'Owner and admin roles with member management',

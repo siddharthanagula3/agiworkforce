@@ -62,6 +62,9 @@ export interface TriggerRow extends Record<string, unknown> {
   is_enabled: boolean;
   verification_status: string;
   verified_at: string | null;
+  watch_history_id?: string | null;
+  watch_expires_at?: string | null;
+  watch_error?: string | null;
   last_fired_at: string | null;
   created_at: string;
   updated_at: string;
@@ -98,6 +101,8 @@ export function mapTrigger(row: TriggerRow): EventTrigger {
     isEnabled: row.is_enabled,
     verificationStatus: row.verification_status === 'verified' ? 'verified' : 'pending',
     verifiedAt: row.verified_at,
+    watchExpiresAt: row.watch_expires_at ?? null,
+    watchError: row.watch_error ?? null,
     lastFiredAt: row.last_fired_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

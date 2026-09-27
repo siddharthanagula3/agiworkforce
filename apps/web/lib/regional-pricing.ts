@@ -1,5 +1,9 @@
 import countryToCurrency, { type Countries } from 'country-to-currency';
-import { getPlanPriceCents, type BillingInterval, type BillingPlanTier } from '@agiworkforce/types';
+import {
+  getPublishedPlanPriceCents,
+  type BillingInterval,
+  type BillingPlanTier,
+} from '@agiworkforce/types';
 
 export type PublicCheckoutPlan = Extract<
   BillingPlanTier,
@@ -41,7 +45,7 @@ export function resolveLocalizedPlanPrice(
   requestedCurrency: string,
   stripePrice: StripePriceLike | null,
 ): LocalizedPlanPrice | null {
-  const publishedMinor = getPlanPriceCents(plan, interval);
+  const publishedMinor = getPublishedPlanPriceCents(plan, interval);
   if (publishedMinor === null) return null;
   const currency = requestedCurrency.trim().toLowerCase();
   const publishedUsd: LocalizedPlanPrice = {

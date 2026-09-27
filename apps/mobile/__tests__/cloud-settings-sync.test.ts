@@ -592,6 +592,7 @@ describe('settings sync, pull applies into useCloudSettingsStore', () => {
     });
     expect(body.settings.capabilities).toEqual({
       memory: true,
+      searchPastChats: false,
       generateFromHistory: true,
       allowToolAssistedGeneration: true,
     });
@@ -652,6 +653,7 @@ describe('settings sync, pull applies into useCloudSettingsStore', () => {
           settings: {
             capabilities: {
               memory: true,
+              searchPastChats: true,
               generateFromHistory: false,
               allowToolAssistedGeneration: true,
             },
@@ -666,6 +668,7 @@ describe('settings sync, pull applies into useCloudSettingsStore', () => {
 
     await syncNow();
 
+    expect(useCloudSettingsStore.getState().memoryEnabled).toBe(true);
     expect(useCloudSettingsStore.getState().referencePastChats).toBe(true);
     expect(useCloudSettingsStore.getState().generateMemoryFromHistory).toBe(false);
     expect(
@@ -808,7 +811,8 @@ describe('settings mapping, leak guard (toCloudSettings)', () => {
     const payloadJson = JSON.stringify(payload);
 
     expect(payload.capabilities).toEqual({
-      memory: false,
+      memory: true,
+      searchPastChats: false,
       generateFromHistory: true,
     });
     expect(payloadJson).not.toContain('voiceEnabled');

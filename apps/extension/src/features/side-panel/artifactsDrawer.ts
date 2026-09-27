@@ -44,7 +44,7 @@ export const ARTIFACTS_DRAWER_CSS = `
     transition: color 0.12s, border-color 0.12s;
   }
   .sp-drawer-artifact-btn:hover {
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     border-color: var(--agi-ext-accent);
   }
   .sp-drawer-artifact-btn:disabled { cursor: wait; opacity: 0.55; }
@@ -61,7 +61,7 @@ export const ARTIFACTS_DRAWER_CSS = `
     margin-left: 6px;
     padding: 0;
     font: inherit;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     background: none;
     border: none;
     text-decoration: underline;

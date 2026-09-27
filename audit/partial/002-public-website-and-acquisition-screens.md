@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S2.01: Product homepage.
-
-- Done when: A visitor to / sees a product homepage with sign-in / try / download CTAs; a signed-in visitor lands in the product without error.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Signed-in visit to / crashes: / is rewritten to /chat but the identity provider is keyed on the browser path "/", so useSession (Clerk useAuth) throws; mount the provider for rewritten paths. | states |
-
-Code: `apps/web/features/marketing/components/MarketingLanding.tsx:44-57`, `apps/web/app/page.tsx:44-46`, `apps/web/proxy.ts:97-108`, `apps/web/app/BrowserIdentityBoundary.tsx:9-11`
-
 ## S2.04: Agentic work product page.
 
 - Done when: A public page presents agentic work (AGI Work) and a way to start; signed-in visitors reach the product without error.

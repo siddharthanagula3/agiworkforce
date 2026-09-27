@@ -166,7 +166,7 @@ function FormField({
       )}
 
       {success && !displayError && (
-        <p className="flex items-start gap-1 text-xs text-green-600" role="status">
+        <p className="flex items-start gap-1 text-xs text-success-text" role="status">
           <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
           {success}
         </p>
