@@ -13,6 +13,18 @@ const NATIVE_SERVER_TOOL_FEATURES: Readonly<
   openai: { web_search: 'web_search_openai', web_fetch: null },
 };
 
+const NATIVE_WEB_TOOL_TYPE = /^web_(?:search|fetch)_(\d{8})$/;
+const DYNAMIC_FILTERING_TOOL_VERSION = 20260209;
+
+export function offersDynamicFilteringWebTool(tools: readonly unknown[] | undefined): boolean {
+  return (tools ?? []).some((tool) => {
+    const type =
+      tool !== null && typeof tool === 'object' ? (tool as { type?: unknown }).type : undefined;
+    const version = typeof type === 'string' ? NATIVE_WEB_TOOL_TYPE.exec(type)?.[1] : undefined;
+    return version !== undefined && Number(version) >= DYNAMIC_FILTERING_TOOL_VERSION;
+  });
+}
+
 export function nativeServerToolMicrousdPerRequest(
   providerId: string,
   tool: NativeServerTool,

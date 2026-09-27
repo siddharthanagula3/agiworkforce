@@ -32,6 +32,12 @@ interface BlockState {
   toolUseId?: string;
 }
 
+function codeExecutionRequestCount(serverToolUse: object | null | undefined): number {
+  if (!serverToolUse || !('code_execution_requests' in serverToolUse)) return 0;
+  const counted = serverToolUse.code_execution_requests;
+  return typeof counted === 'number' && Number.isFinite(counted) && counted > 0 ? counted : 0;
+}
+
 const KNOWN_BLOCK_START_TYPES: ReadonlySet<string> = new Set([
   'tool_use',
   'text',
@@ -50,6 +56,8 @@ export async function* translateAnthropicStream(
   let cacheReadTokens: number | undefined;
   let cacheWriteTokens: number | undefined;
   let cacheWrite1hTokens: number | undefined;
+  let answeredWebSearches = 0;
+  const containerIds = new Set<string>();
   let stopEmitted = false;
   let started = false;
 
@@ -57,6 +65,7 @@ export async function* translateAnthropicStream(
     started = true;
     switch (event.type) {
       case 'message_start': {
+        if (event.message.container?.id) containerIds.add(event.message.container.id);
         const usage = event.message.usage;
         if (usage) {
           inputTokens = usage.input_tokens;
@@ -89,6 +98,9 @@ export async function* translateAnthropicStream(
           block.type === 'code_execution_tool_result' ||
           block.type === 'web_fetch_tool_result'
         ) {
+          if (block.type === 'web_search_tool_result' && Array.isArray(block.content)) {
+            answeredWebSearches += 1;
+          }
           yield { type: 'server-tool-result', toolUseId: block.tool_use_id, payload: block };
         } else if (!KNOWN_BLOCK_START_TYPES.has(block.type)) {
           yield { type: 'vendor-raw', payload: event };
@@ -135,10 +147,16 @@ export async function* translateAnthropicStream(
       }
       case 'message_delta': {
         if (stopEmitted) break;
+        if (event.delta.container?.id) containerIds.add(event.delta.container.id);
         const usage = event.usage;
         const outputTokens = usage?.output_tokens;
-        const webSearchRequests = usage?.server_tool_use?.web_search_requests ?? 0;
-        const webFetchRequests = usage?.server_tool_use?.web_fetch_requests ?? 0;
+        const serverToolUse = usage?.server_tool_use;
+        const webSearchRequests = Math.min(
+          serverToolUse?.web_search_requests ?? 0,
+          answeredWebSearches,
+        );
+        const webFetchRequests = serverToolUse?.web_fetch_requests ?? 0;
+        const codeExecutionRequests = codeExecutionRequestCount(serverToolUse);
         const usageChunk: StreamChunk = {
           type: 'usage',
           ...(inputTokens !== undefined ? { inputTokens } : {}),
@@ -148,6 +166,8 @@ export async function* translateAnthropicStream(
           ...(cacheWrite1hTokens !== undefined ? { cacheWrite1hTokens } : {}),
           ...(webSearchRequests > 0 ? { webSearchRequests } : {}),
           ...(webFetchRequests > 0 ? { webFetchRequests } : {}),
+          ...(codeExecutionRequests > 0 ? { codeExecutionRequests } : {}),
+          ...(containerIds.size > 0 ? { codeExecutionContainerIds: [...containerIds] } : {}),
         };
         yield usageChunk;
         yield { type: 'stop', reason: mapStopReason(event.delta.stop_reason) };
