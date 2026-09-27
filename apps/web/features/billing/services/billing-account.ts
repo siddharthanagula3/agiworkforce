@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
-import type { SelfServeIndividualPlanTier } from '@agiworkforce/types';
+import {
+  isValidAutoReloadSettingsUpdate,
+  type AutoReloadSettings,
+  type AutoReloadSettingsUpdate,
+  type SelfServeIndividualPlanTier,
+} from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { apiErrorCode, apiErrorMessage } from '../lib/api-error';
 import {
@@ -8,8 +13,6 @@ import {
   BillingRefundSchema,
   PlanChangeStateSchema,
   TopUpReceiptSchema,
-  type AutoReloadSettings,
-  type AutoReloadUpdate,
   type BillingRefund,
   type PlanChangeState,
   type TopUpReceipt,
@@ -97,7 +100,12 @@ export async function fetchAutoReload(): Promise<AutoReloadSettings> {
   );
 }
 
-export async function saveAutoReload(update: AutoReloadUpdate): Promise<AutoReloadSettings> {
+export async function saveAutoReload(
+  update: AutoReloadSettingsUpdate,
+): Promise<AutoReloadSettings> {
+  if (!isValidAutoReloadSettingsUpdate(update)) {
+    throw new Error('Choose a valid threshold and pack before saving auto-reload.');
+  }
   const response = await fetch(AUTO_RELOAD_PATH, {
     method: 'PUT',
     credentials: 'include',

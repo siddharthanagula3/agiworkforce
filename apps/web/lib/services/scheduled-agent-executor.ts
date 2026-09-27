@@ -13,6 +13,7 @@ import {
   getModelMetadataById,
   getSlotForModel,
   getTierPolicy,
+  isFlagshipRoutingSlot,
   type DomainErrorCodeValue,
 } from '@agiworkforce/types';
 import {
@@ -569,9 +570,7 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
     throw new Error('Scheduled media generation is unavailable');
   }
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
-  const resolvedSlot = getSlotForModel(route.modelKey);
-  const isFlagshipRoute =
-    resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
+  const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 
   const plan = await buildScheduledToolPlan({
     db: scope.db,

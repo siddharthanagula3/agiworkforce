@@ -1,6 +1,26 @@
+import {
+  CENTS_PER_USD,
+  MICROUSD_PER_USD,
+  centsFromCredits,
+  creditsFromMicrousd,
+  formatCredits,
+} from '@agiworkforce/types';
 import { invoke } from '../../lib/tauri-mock';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../../types/chat';
+
+export function creditsFromProviderUsd(usd: number | null | undefined): number {
+  if (typeof usd !== 'number' || !Number.isFinite(usd)) return 0;
+  return creditsFromMicrousd(usd * MICROUSD_PER_USD);
+}
+
+export function formatProviderCostCredits(usd: number | null | undefined): string {
+  return formatCredits(creditsFromProviderUsd(usd), { maximumFractionDigits: 2 });
+}
+
+export function providerUsdFromCredits(credits: number): number {
+  return Math.round(centsFromCredits(credits)) / CENTS_PER_USD;
+}
 
 export interface CostFilters {
   days: number;
@@ -20,7 +40,7 @@ export interface CostSliceState {
 export interface CostSliceActions {
   loadCostOverview: () => Promise<void>;
   loadCostAnalytics: (overrides?: Partial<CostFilters>) => Promise<void>;
-  setMonthlyBudget: (amount?: number) => Promise<void>;
+  setMonthlyBudget: (credits?: number) => Promise<void>;
 }
 
 export type CostSlice = CostSliceState & CostSliceActions;
@@ -87,11 +107,14 @@ export const createCostSlice = (
     }
   },
 
-  setMonthlyBudget: async (amount) => {
+  setMonthlyBudget: async (credits) => {
     try {
       const userId = cloudAccountAuth.getUser()?.id;
       if (!userId) throw new Error('User not authenticated');
-      await invoke('chat_set_monthly_budget', { userId, amount: amount ?? null });
+      await invoke('chat_set_monthly_budget', {
+        userId,
+        amount: credits === undefined ? null : providerUsdFromCredits(credits),
+      });
       await get().loadCostOverview();
     } catch (error) {
       console.error('Failed to update monthly budget:', error);

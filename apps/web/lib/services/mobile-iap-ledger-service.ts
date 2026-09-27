@@ -3,14 +3,21 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   BILLING_PLAN_CATALOG_VERSION,
+  BASIS_POINTS_PER_WHOLE,
+  CENTS_PER_USD,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isFreeBillingPlanTier,
+  mobileIapStoreCommissionBasisPoints,
   topUpBudgetCentsForCredits,
+  type MobileIapCatalogProduct,
+  type MobileIapPlatform,
   type MobileIapVerifyResponse,
 } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { recordCogsAdjustment } from './cogs-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import type { VerifiedMobileIapPurchase } from '@/lib/server/mobile-iap-store-verification';
 import {
@@ -54,7 +61,109 @@ async function findExistingReceipt(
   return row;
 }
 
+function intendedAmountCents(product: MobileIapCatalogProduct): number {
+  return Math.round(
+    (product.kind === 'top_up' ? product.amountUsd : product.intendedPriceUsd) * CENTS_PER_USD,
+  );
+}
+
+async function hasYearOfPaidService(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    platform: MobileIapPlatform;
+    originalTransactionId: string | null;
+    purchasedAt: Date;
+  },
+): Promise<boolean> {
+  if (!input.originalTransactionId) return false;
+  const [row] = await db.query<{ first_purchased_at: string | Date | null }>(
+    `select min(purchased_at) as first_purchased_at
+       from public.mobile_iap_transactions
+      where user_id = $1
+        and platform = $2
+        and original_transaction_id = $3`,
+    [input.userId, input.platform, input.originalTransactionId],
+  );
+  if (!row?.first_purchased_at) return false;
+  const anniversary = new Date(row.first_purchased_at);
+  anniversary.setUTCFullYear(anniversary.getUTCFullYear() + 1);
+  return anniversary.getTime() <= input.purchasedAt.getTime();
+}
+
+export async function recordMobileIapStoreCommission(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    platform: MobileIapPlatform;
+    product: MobileIapCatalogProduct;
+    storeTransactionId: string;
+    originalTransactionId: string | null;
+    purchasedAt: Date;
+  },
+): Promise<void> {
+  const afterFirstYear =
+    input.product.kind === 'subscription' && (await hasYearOfPaidService(db, input));
+  const basisPoints = mobileIapStoreCommissionBasisPoints({
+    platform: input.platform,
+    kind: input.product.kind,
+    afterFirstYear,
+  });
+  const priceCents = intendedAmountCents(input.product);
+  await recordCogsAdjustment(
+    {
+      userId: input.userId,
+      kind: 'store_commission',
+      amountCents: Math.round((priceCents * basisPoints) / BASIS_POINTS_PER_WHOLE),
+      sourceRef: `mobile_iap:${input.platform}:${input.storeTransactionId}`,
+      occurredAt: input.purchasedAt,
+      metadata: {
+        platform: input.platform,
+        productKey: input.product.key,
+        priceCents,
+        basisPoints,
+      },
+      attribution: {
+        kind: input.product.kind,
+        ref: input.originalTransactionId ?? input.storeTransactionId,
+      },
+    },
+    db,
+  );
+}
+
 export async function recordVerifiedMobileIapPurchase(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  purchaseToken: string;
+  verified: VerifiedMobileIapPurchase;
+}): Promise<MobileIapVerifyResponse> {
+  const result = await grantVerifiedMobileIapPurchase(input);
+  if (result.status === 'already_processed') return result;
+  try {
+    await recordMobileIapStoreCommission(input.db, {
+      userId: input.userId,
+      platform: input.verified.platform,
+      product: input.verified.product,
+      storeTransactionId: input.verified.storeTransactionId,
+      originalTransactionId: input.verified.originalTransactionId,
+      purchasedAt: input.verified.purchasedAt,
+    });
+  } catch (error) {
+    logger.error(
+      {
+        event: 'store_commission_not_recorded',
+        error: error instanceof Error ? error.message : String(error),
+        platform: input.verified.platform,
+        storeTransactionId: input.verified.storeTransactionId,
+      },
+      'The store commission on a granted purchase is missing from the COGS ledger',
+    );
+  }
+  return result;
+}
+
+async function grantVerifiedMobileIapPurchase(input: {
   db: DatabaseAdapter;
   userId: string;
   purchaseToken: string;
@@ -111,10 +220,6 @@ export async function recordVerifiedMobileIapPurchase(input: {
       throw createError.conflict('Start or restore an active paid plan before buying a top-up.');
     }
 
-    const intendedAmountCents =
-      input.verified.product.kind === 'top_up'
-        ? input.verified.product.amountUsd * 100
-        : input.verified.product.intendedPriceUsd * 100;
     const [receipt] = await tx.query<{ id: string }>(
       `insert into public.mobile_iap_transactions (
          user_id, platform, product_key, product_id, product_kind,
@@ -140,7 +245,7 @@ export async function recordVerifiedMobileIapPurchase(input: {
         input.verified.originalTransactionId,
         input.verified.product.kind === 'subscription' ? input.verified.product.planTier : null,
         input.verified.product.kind === 'top_up' ? input.verified.product.units : 0,
-        intendedAmountCents,
+        intendedAmountCents(input.verified.product),
         input.verified.environment,
         input.verified.purchasedAt.toISOString(),
         input.verified.expiresAt?.toISOString() ?? null,

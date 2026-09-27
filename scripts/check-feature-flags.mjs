@@ -29,10 +29,11 @@ export const BASELINE = 'scripts/config/feature-flag-reads.json';
  * they did not buy or wave away an approval somebody was owed.
  */
 export const GATE_MODULES = [
-  'apps/web/lib/entitlement.ts',
+  'apps/web/lib/services/entitlement-resolution.ts',
   'apps/web/lib/tool-approval-view.ts',
   'packages/contracts/types/src/subscription-entitlement.ts',
   'packages/contracts/types/src/billing-catalog.ts',
+  'packages/contracts/types/src/managed-usage-limits.ts',
   'packages/contracts/types/src/tool-approval-policy.ts',
   'packages/contracts/types/src/enterprise/permissions.ts',
   'packages/contracts/types/src/model-catalog.ts',

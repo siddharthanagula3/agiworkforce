@@ -31,6 +31,9 @@ import {
   RetrievalEmbeddingError,
 } from '@/lib/services/retrieval-embedding-service';
 import { toVectorLiteral } from '@/lib/services/retrieval-index-service';
+import { recordVectorQuery } from '@/lib/services/infrastructure-cost';
+
+const VECTOR_STORE_PROVIDER = 'neon';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_OBJECT = '42704';
@@ -268,6 +271,13 @@ export function createPostgresSearchProvider(scope: RetrievalSearchScope): Searc
         const semanticParam = embedding.vector ? params.push(embedding.vector) : null;
         const sql = candidateSql({ lexicalParam, semanticParam });
         rows = await scope.db.query<CandidateRow>(sql, params);
+        if (semanticParam !== null) {
+          recordVectorQuery({
+            userId: scope.userId,
+            organizationId: scope.organizationId,
+            provider: VECTOR_STORE_PROVIDER,
+          });
+        }
       } catch (error) {
         if (isRetrievalSchemaMissing(error)) return { hits: [], semantic: 'unavailable' };
         throw error;

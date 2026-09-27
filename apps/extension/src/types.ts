@@ -6,6 +6,10 @@ import type {
   ToolApprovalDecisionWire,
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
+import type {
+  ManagedQuotaBlock,
+  ManagedQuotaWarningSignal,
+} from './features/cloud-bridge/freeTrialClient';
 import type { SiteToolEffect } from './features/tools/siteToolRegistry';
 
 export type ConnectionStatus = 'connected' | 'disconnected' | 'connecting' | 'error';
@@ -545,6 +549,8 @@ export interface ChatChunkMessage {
   errorCode?: string;
   errorRetryAfterSeconds?: number;
   errorRequestId?: string;
+  errorQuota?: ManagedQuotaBlock;
+  quotaWarning?: ManagedQuotaWarningSignal;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;

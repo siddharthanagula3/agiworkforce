@@ -210,5 +210,7 @@
   "usageExplainer": "Every paid plan includes credits in three windows: per 5 hours, per week and per month. {{baseline}} includes {{fiveHour, number}} credits per 5 hours, {{weekly, number}} a week and {{monthly, number}} a month, and a multiplier such as 5x scales all three windows of that allowance.",
   "flagshipShare": "On {{baseline}} and higher plans, the most capable models can use up to {{percent}}% of each week's credits.",
   "switchToPlanCta": "Switch to {{plan}}",
-  "downgradeScheduledToast": "Your plan switches to {{plan}} on {{date}}."
+  "downgradeScheduledToast": "Your plan switches to {{plan}} on {{date}}.",
+  "pricingFootnote": "Prices shown don't include applicable tax. Payments are non-refundable, except where our refund policy says otherwise or where local law requires it.",
+  "refundPolicyLink": "Refund policy"
 }

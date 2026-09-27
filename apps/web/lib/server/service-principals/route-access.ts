@@ -1,4 +1,8 @@
-import type { OrganizationPermission } from '@agiworkforce/types';
+import {
+  canonicalOrganizationPermissions,
+  type CanonicalOrganizationPermission,
+  type OrganizationPermission,
+} from '@agiworkforce/types';
 
 export type WorkspaceRouteMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
 
@@ -40,6 +44,62 @@ export const WORKSPACE_ROUTE_ACCESS: readonly WorkspaceRouteAccess[] = Object.fr
     servicePrincipals: 'allowed',
   },
   {
+    route: '/api/settings/organization/members',
+    method: 'GET',
+    permission: 'admin.members.view',
+    deniedMessage: 'Your workspace role does not allow viewing workspace members.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/members/[userId]',
+    method: 'GET',
+    permission: 'admin.members.view',
+    deniedMessage: 'Your workspace role does not allow viewing workspace members.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/members/[userId]',
+    method: 'PATCH',
+    permission: 'admin.members.manage',
+    deniedMessage: 'Your workspace role does not allow changing member roles.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/members/[userId]',
+    method: 'DELETE',
+    permission: 'admin.members.manage',
+    deniedMessage: 'Your workspace role does not allow removing members.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/invitations',
+    method: 'GET',
+    permission: 'admin.members.view',
+    deniedMessage: 'Your workspace role does not allow viewing invitations.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/invitations',
+    method: 'POST',
+    permission: 'admin.members.manage',
+    deniedMessage: 'Your workspace role does not allow inviting members.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/invitations/[invitationId]',
+    method: 'DELETE',
+    permission: 'admin.members.manage',
+    deniedMessage: 'Your workspace role does not allow revoking invitations.',
+    servicePrincipals: 'allowed',
+  },
+  {
+    route: '/api/settings/organization/usage-report',
+    method: 'GET',
+    permission: 'admin.billing.view',
+    deniedMessage: 'Your workspace role does not allow viewing workspace usage.',
+    servicePrincipals: 'allowed',
+  },
+  {
     route: '/api/settings/organization/service-principals',
     method: 'GET',
     permission: 'identity.read',
@@ -61,6 +121,14 @@ const ACCESS = new Map(
 
 export function workspaceRouteAccess(route: string, method: string): WorkspaceRouteAccess | null {
   return ACCESS.get(`${method.toUpperCase()} ${route}`) ?? null;
+}
+
+export function servicePrincipalScopes(): CanonicalOrganizationPermission[] {
+  return canonicalOrganizationPermissions(
+    WORKSPACE_ROUTE_ACCESS.filter((entry) => entry.servicePrincipals === 'allowed').map(
+      (entry) => entry.permission,
+    ),
+  );
 }
 
 export function servicePrincipalRoutes(): string[] {

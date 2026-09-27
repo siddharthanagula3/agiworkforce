@@ -169,21 +169,31 @@ import { DEVICE_SCREENSHOT_MESSAGE_PREFIX } from '@agiworkforce/cloud-contracts'
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
 import type { E2BUnavailableCause } from '@/lib/e2b/unavailability';
 import { nativeSearchToolName } from '@/lib/web-search/required-search';
+import type { UsageAttribution } from '@/lib/billing/usage-attribution';
 import { reserveGroundingPoolUses } from '@/lib/web-search/grounding-pool';
-import { recordGoogleGroundingCost } from '@/lib/web-search/grounding-cost';
+import {
+  GOOGLE_GROUNDING_FEATURE,
+  googleGroundingChargeMicrousd,
+  googleGroundingMicrousdPerCall,
+  settleGoogleGroundingSpend,
+} from '@/lib/web-search/grounding-cost';
 import {
   includedMonthlySearchCalls,
+  INCLUDED_SEARCH_ADMISSION,
   reserveSearchCharge,
   resolveSearchBudget,
   resolveSearchCallerKind,
   SEARCH_BOUND_WINDOW_DAYS,
-  searchChargeCents,
-  searchChargeMicrousd,
-  settleSearchCharge,
+  type SearchAdmission,
   type SearchBudgetDecision,
-  type SearchChargeReservation,
 } from '@/lib/web-search/search-budget';
-import { PERPLEXITY_SEARCH_PROVIDER_ID } from '@/lib/web-search/perplexity-search-cost';
+import {
+  PERPLEXITY_SEARCH_FEATURE,
+  PERPLEXITY_SEARCH_PROVIDER_ID,
+  perplexitySearchChargeMicrousd,
+  perplexitySearchMicrousdPerCall,
+  settlePerplexitySearchCall,
+} from '@/lib/web-search/perplexity-search-cost';
 import {
   createToolTurnGovernor,
   emptyToolCapabilityEvidence,
@@ -246,6 +256,7 @@ import {
   webSearchResultsToFetchedSources,
   resolveRoutingRedirectUrls,
   isBareDomainTitle,
+  type WebSearchSpend,
 } from '@/lib/web-search/web-search-tool';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import { readTurnToolHistory } from './turn-tool-history';
@@ -263,9 +274,10 @@ import {
   type ProcessedRequest,
 } from './request-processor';
 import {
-  calculateObservedProviderUsageCostDollars,
+  addToolSpend,
   createObservedProviderUsage,
   mergeObservedProviderUsage,
+  observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
@@ -320,7 +332,16 @@ import {
 import { isRequiredPlacesToolChoice } from '@/lib/places/required-places';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
-import { applyFreeTrialProviderBudget, isFreePlanTier } from '@/lib/services/free-trial-service';
+import {
+  applyFreeTrialProviderBudget,
+  createFreeTrialToolSpend,
+  freeTrialResetAt,
+  scopeFreeTrialToolSpend,
+  freeTrialRetryAfterSeconds,
+  isFreePlanTier,
+  type FreeTrialReservation,
+  type FreeTrialToolSpend,
+} from '@/lib/services/free-trial-service';
 import {
   reserveManagedUsageProviderStep,
   ManagedUsageRequestError,
@@ -603,6 +624,7 @@ export interface ToolLoopToolResult {
   generatedFiles?: GeneratedFileWire[];
   /** Set when a connector call paused for additional input (MCP input_required). */
   inputRequired?: McpInputRequiredState;
+  freeTrialSpendMicrousd?: number;
 }
 
 export interface ToolLoopToolExecution {
@@ -1816,9 +1838,13 @@ async function runMcpTool(
     organizationId: string | null;
     model: string;
     turnRef?: string;
+    requestId?: string;
+    planTier?: string | null;
+    usageAttribution?: UsageAttribution;
     webSearchMaxResults?: number;
     surface?: string | null;
-    searchChargeCents?: number | null;
+    onWebSearchSpend?: (spend: WebSearchSpend) => void;
+    freeTrialSpend?: FreeTrialToolSpend;
     sourcePositionFor?: (url: string) => number | undefined;
     clientTimeZone?: string;
     signal?: AbortSignal;
@@ -1919,15 +1945,38 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
+    const billingUserId = executionContext?.userId;
+    const billingRequestId = executionContext?.requestId;
     const outcome = await executePlacesSearch(toolCall.args, {
       toolCallId: toolCall.id,
-      userId: executionContext?.userId,
-      organizationId: executionContext?.organizationId ?? null,
       timeZone: executionContext?.clientTimeZone,
       signal: executionContext?.signal,
+      ...(billingUserId && billingRequestId
+        ? {
+            billing: {
+              userId: billingUserId,
+              organizationId: executionContext?.organizationId ?? null,
+              planTier: executionContext?.planTier ?? null,
+              requestId: billingRequestId,
+              turnRef: executionContext?.turnRef ?? billingRequestId,
+              surface: executionContext?.surface ?? null,
+              attribution: executionContext?.usageAttribution,
+              db: callerScopedDb(executionContext, billingUserId),
+              ...(executionContext?.freeTrialSpend
+                ? { freeTrial: executionContext.freeTrialSpend }
+                : {}),
+            },
+          }
+        : {}),
     });
     const content = formatPlacesResultForModel(outcome);
-    if (!outcome.ok) return { content, isError: true };
+    if (!outcome.ok) {
+      return {
+        content,
+        isError: true,
+        ...(outcome.errorCode === 'unaffordable' ? { unavailable: true } : {}),
+      };
+    }
     const card = buildPlacesCard(outcome.payload, { toolCallId: toolCall.id });
     return card ? { content, isError: false, interactiveCard: card } : { content, isError: false };
   }
@@ -1969,16 +2018,13 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    // Identity is what turns a Perplexity call from unbilled into a recorded
-    // cost, so it travels with the call rather than being left behind here.
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
       ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
-      ...(executionContext?.userId ? { userId: executionContext.userId } : {}),
-      organizationId: executionContext?.organizationId ?? null,
-      ...(executionContext?.turnRef ? { turnRef: executionContext.turnRef } : {}),
-      surface: executionContext?.surface ?? null,
-      customerChargeCents: executionContext?.searchChargeCents ?? null,
+    });
+    executionContext?.onWebSearchSpend?.({
+      billableCalls: outcome.billableCalls,
+      answered: outcome.ok,
     });
     // Ranked before anything is numbered, because the number a source gets is
     // the order the reader sees: the primary, dated account has to be [1], not
@@ -3230,9 +3276,6 @@ export async function* runToolLoop(
     ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
     : WEB_SEARCH_MAX_CALLS_PER_TURN;
   const includedSearchCallsForTurn = includedMonthlySearchCalls(processed.subscriptionTier ?? null);
-  // What each search call in this turn was charged, so the COGS row records the
-  // customer figure alongside the provider one instead of leaving it null.
-  const searchChargeCentsByOrdinal = new Map<number, number>();
   let urlFetchCallsUsed = turnHistory.fetchCalls;
   const urlFetchCallBudget = agiWorkTurn
     ? URL_FETCH_MAX_CALLS_PER_AGI_WORK_TURN
@@ -3264,6 +3307,20 @@ export async function* runToolLoop(
   // step from what the stream reports rather than from a tool call we made.
   const nativeSearchCap = resolveNativeSearchMaxUses(processed.researchMode === true);
   let nativeSearchUses = 0;
+  let nativeSearchSpendSettled = false;
+  const nativeSearchSettlementRef = Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0));
+  const freeTurnCost = () =>
+    observedTurnCost(observedUsage, {
+      provider: servingProcessed.provider,
+      model: servingProcessed.chatRequest?.model ?? servingProcessed.llmRequest.model,
+    });
+  const freeTrialSpend = processed.freeTrial
+    ? createFreeTrialToolSpend({
+        reservation: processed.freeTrial,
+        spent: freeTurnCost,
+        record: (spentMicrousd) => addToolSpend(observedUsage, spentMicrousd),
+      })
+    : undefined;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   const executionRequirement =
@@ -3474,9 +3531,10 @@ export async function* runToolLoop(
    */
   async function admitSearchCall(
     callOrdinal: number,
-  ): Promise<{ refusal: ToolLoopToolResult } | { reservation: SearchChargeReservation | null }> {
+    freeSpend: FreeTrialToolSpend | undefined,
+  ): Promise<{ refusal: ToolLoopToolResult } | { admission: SearchAdmission }> {
     const userId = options.userId;
-    if (!userId) return { reservation: null };
+    if (!userId) return { admission: INCLUDED_SEARCH_ADMISSION };
 
     let decision: SearchBudgetDecision;
     let reserved: Awaited<ReturnType<typeof reserveSearchCharge>>;
@@ -3484,10 +3542,12 @@ export async function* runToolLoop(
       decision = await resolveSearchBudget({
         userId,
         planTier: processed.subscriptionTier ?? null,
-        feature: 'web_search_perplexity',
         callerKind: searchCallerKind,
       });
-      if (decision.outcome === 'included') return { reservation: null };
+      if (freeSpend && decision.outcome !== 'blocked') {
+        return admitOnFreeTrialWindows(freeSpend);
+      }
+      if (decision.outcome === 'included') return { admission: INCLUDED_SEARCH_ADMISSION };
       if (decision.outcome === 'blocked') {
         return {
           refusal: {
@@ -3508,15 +3568,18 @@ export async function* runToolLoop(
         organizationId: processed.organizationId ?? null,
         planTier: processed.subscriptionTier ?? null,
         requestId: processed.requestId,
-        callOrdinal,
-        feature: decision.feature,
+        callRef: callOrdinal,
+        feature: PERPLEXITY_SEARCH_FEATURE,
         provider: PERPLEXITY_SEARCH_PROVIDER_ID,
-        chargeMicrousd: decision.chargeMicrousd,
+        chargeMicrousd: perplexitySearchChargeMicrousd(),
+        attribution: processed.managedUsage?.attribution,
         db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
       });
     } catch (error) {
       logger.warn({ error }, '[tool-loop] search budget not resolved; treating call as included');
-      return { reservation: null };
+      return freeSpend
+        ? admitOnFreeTrialWindows(freeSpend)
+        : { admission: INCLUDED_SEARCH_ADMISSION };
     }
 
     if (reserved.outcome === 'refused') {
@@ -3524,21 +3587,37 @@ export async function* runToolLoop(
         refusal: { content: searchUnaffordableMessage(), isError: true, unavailable: true },
       };
     }
-    searchChargeCentsByOrdinal.set(callOrdinal, decision.chargeCents);
-    return { reservation: reserved.outcome === 'reserved' ? reserved.reservation : null };
+    return { admission: reserved.admission };
   }
 
-  /**
-   * The provider bills every call it accepted, so the hold is settled whatever
-   * the tool result said.
-   */
-  async function settleSearchCall(reservation: SearchChargeReservation): Promise<void> {
+  function admitOnFreeTrialWindows(
+    spend: FreeTrialToolSpend,
+  ): { refusal: ToolLoopToolResult } | { admission: SearchAdmission } {
+    return spend.hold(perplexitySearchMicrousdPerCall())
+      ? { admission: INCLUDED_SEARCH_ADMISSION }
+      : { refusal: { content: searchUnaffordableMessage(), isError: true, unavailable: true } };
+  }
+
+  async function settleSearchCall(
+    callOrdinal: number,
+    admission: SearchAdmission,
+    spend: WebSearchSpend,
+    freeSpend: FreeTrialToolSpend | undefined,
+  ): Promise<void> {
     const userId = options.userId;
     if (!userId) return;
-    await settleSearchCharge({
+    const perCallMicrousd = perplexitySearchMicrousdPerCall();
+    freeSpend?.settle(perCallMicrousd, spend.billableCalls * perCallMicrousd);
+    await settlePerplexitySearchCall({
       userId,
-      reservation,
+      organizationId: processed.organizationId ?? null,
+      admission,
+      billableCalls: spend.billableCalls,
+      answered: spend.answered,
+      turnRef: turnId,
+      callOrdinal,
       surface: processed.chatSurface,
+      attribution: processed.managedUsage?.attribution,
       db: callerScopedDb({ organizationId: processed.organizationId ?? null }, userId),
     });
   }
@@ -3550,75 +3629,87 @@ export async function* runToolLoop(
    * neither throws, so a turn is never failed by its own accounting.
    */
   async function recordGroundingSpend(delivered: boolean): Promise<void> {
-    if (nativeSearchUses <= 0 || !options.userId) return;
+    const userId = options.userId;
+    if (nativeSearchUses <= 0 || !userId || nativeSearchSpendSettled) return;
     if (processed.provider.toLowerCase() !== GOOGLE_GROUNDING_PROVIDER) return;
+    nativeSearchSpendSettled = true;
     try {
-      const reservation = await reserveGroundingPoolUses(
-        GOOGLE_GROUNDING_PROVIDER,
-        nativeSearchUses,
-      );
+      const pool = await reserveGroundingPoolUses(GOOGLE_GROUNDING_PROVIDER, nativeSearchUses);
       // The model runs native grounding itself, so it can only be priced after
       // the fact. The same policy still decides whether the customer pays.
-      const groundingDecision = await resolveSearchBudget({
-        userId: options.userId,
-        planTier: processed.subscriptionTier ?? null,
-        feature: 'web_search_grounding',
-        callerKind: searchCallerKind,
-      });
+      const groundingDecision = freeTrialSpend
+        ? null
+        : await resolveSearchBudget({
+            userId,
+            planTier: processed.subscriptionTier ?? null,
+            callerKind: searchCallerKind,
+          });
       const groundingScopedDb = callerScopedDb(
         { organizationId: processed.organizationId ?? null },
-        options.userId,
+        userId,
       );
       const groundingHold =
-        groundingDecision.outcome === 'charge'
+        groundingDecision?.outcome === 'charge'
           ? await reserveSearchCharge({
-              userId: options.userId,
+              userId,
               organizationId: processed.organizationId ?? null,
               planTier: processed.subscriptionTier ?? null,
               requestId: processed.requestId,
-              callOrdinal: 0,
-              feature: 'web_search_grounding',
+              callRef: nativeSearchSettlementRef,
+              feature: GOOGLE_GROUNDING_FEATURE,
               provider: GOOGLE_GROUNDING_PROVIDER,
-              chargeMicrousd: searchChargeMicrousd('web_search_grounding') * nativeSearchUses,
+              chargeMicrousd: googleGroundingChargeMicrousd(responseModel, nativeSearchUses),
               scope: 'grounding',
+              attribution: processed.managedUsage?.attribution,
               db: groundingScopedDb,
             })
           : null;
-      if (groundingHold?.outcome === 'reserved') {
-        await settleSearchCharge({
-          userId: options.userId,
-          reservation: groundingHold.reservation,
-          surface: processed.chatSurface,
-          db: groundingScopedDb,
-        });
-      }
-      const groundingChargeCents =
-        groundingHold?.outcome === 'reserved'
-          ? searchChargeCents('web_search_grounding') * nativeSearchUses
-          : 0;
-      await recordGoogleGroundingCost({
-        userId: options.userId,
+      freeTrialSpend?.settle(0, pool.billableCalls * googleGroundingMicrousdPerCall(responseModel));
+      await settleGoogleGroundingSpend({
+        userId,
         organizationId: processed.organizationId ?? null,
+        admission:
+          groundingHold?.outcome === 'admitted'
+            ? groundingHold.admission
+            : INCLUDED_SEARCH_ADMISSION,
         providerId: GOOGLE_GROUNDING_PROVIDER,
         model: responseModel,
         turnRef: turnId,
-        billableCalls: reservation.billableCalls,
+        settlementRef: nativeSearchSettlementRef,
+        billableCalls: pool.billableCalls,
         delivered,
         surface: processed.chatSurface,
-        customerChargeCents: groundingChargeCents > 0 ? groundingChargeCents : null,
+        attribution: processed.managedUsage?.attribution,
+        db: groundingScopedDb,
       });
     } catch (error) {
       logger.warn({ error, uses: nativeSearchUses }, '[tool-loop] grounding spend not recorded');
     }
   }
 
+  async function* stopAtFreeTrialLimit(
+    reservation: FreeTrialReservation,
+  ): AsyncGenerator<Uint8Array> {
+    const retryAfterSeconds = freeTrialRetryAfterSeconds(
+      await freeTrialResetAt(reservation.userId),
+    );
+    yield encoder.encode(
+      eventStream.emit({
+        type: 'error',
+        message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
+        code: 'free_trial_token_budget_reached',
+        retryable: false,
+        ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
+      }),
+    );
+    yield* flushTerminal('error');
+  }
+
   async function* flushTerminal(
     reason: AgentEventStopReason = 'end-turn',
     stoppedShort?: Extract<AgentTaskState, 'partial' | 'timed_out'>,
   ): AsyncGenerator<Uint8Array> {
-    if (reason !== 'tool-use') {
-      await recordGroundingSpend(reason !== 'error' && reason !== 'cancelled');
-    }
+    await recordGroundingSpend(reason !== 'error' && reason !== 'cancelled');
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
     }
@@ -3845,18 +3936,26 @@ export async function* runToolLoop(
         }
       }
       const searchCallOrdinal = webSearchCallsUsed;
-      const executeUntraced = async () => {
-        let searchReservation: SearchChargeReservation | null = null;
+      const executeUntraced = async (): Promise<ToolLoopToolResult> => {
+        const callSpend = freeTrialSpend ? scopeFreeTrialToolSpend(freeTrialSpend) : undefined;
+        let searchAdmission: SearchAdmission | null = null;
         if (isWebSearchTool(tc.qualifiedName)) {
-          const admission = await admitSearchCall(searchCallOrdinal);
+          const admission = await admitSearchCall(searchCallOrdinal, callSpend);
           if ('refusal' in admission) {
             toolGovernor.withdraw(tc.qualifiedName, 'budget');
             return admission.refusal;
           }
-          searchReservation = admission.reservation;
+          searchAdmission = admission.admission;
         }
+        let searchSpend: WebSearchSpend = { billableCalls: 0, answered: false };
+        const settleSearch = async () => {
+          const admitted = searchAdmission;
+          if (!admitted) return;
+          searchAdmission = null;
+          await settleSearchCall(searchCallOrdinal, admitted, searchSpend, callSpend);
+        };
         try {
-          return await runMcpTool(
+          const result = await runMcpTool(
             tc,
             resolveE2BExecutor,
             availableTools,
@@ -3866,9 +3965,15 @@ export async function* runToolLoop(
               organizationId: processed.organizationId ?? null,
               model: responseModel,
               turnRef: turnId,
+              requestId: processed.requestId,
+              planTier: processed.subscriptionTier ?? null,
+              usageAttribution: processed.managedUsage?.attribution,
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               surface: processed.chatSurface,
-              searchChargeCents: searchChargeCentsByOrdinal.get(searchCallOrdinal) ?? null,
+              onWebSearchSpend: (spend) => {
+                searchSpend = spend;
+              },
+              ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
               loadSkillInstallOverrides,
               ...(processed.chatRequest?.client_timezone
@@ -3880,8 +3985,11 @@ export async function* runToolLoop(
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
             },
           );
+          await settleSearch();
+          const freeTrialSpendMicrousd = callSpend?.spentMicrousd() ?? 0;
+          return freeTrialSpendMicrousd > 0 ? { ...result, freeTrialSpendMicrousd } : result;
         } finally {
-          if (searchReservation) await settleSearchCall(searchReservation);
+          await settleSearch();
         }
       };
       const execute = () =>
@@ -4217,6 +4325,7 @@ export async function* runToolLoop(
       inputEvents.push(pausedEmitted.envelope);
       inputChunks.push(encoder.encode(pausedEmitted.sse));
 
+      await recordGroundingSpend(true);
       await options.onInputCheckpoint?.({
         sessionId,
         turnId,
@@ -4653,6 +4762,7 @@ export async function* runToolLoop(
         const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
         pauseEvents.push(pausedEmitted.envelope);
         pauseChunks.push(encoder.encode(pausedEmitted.sse));
+        await recordGroundingSpend(true);
         await options.onPauseCheckpoint({
           sessionId,
           turnId,
@@ -4674,6 +4784,7 @@ export async function* runToolLoop(
           for (const line of await harvestGeneratedFilesEvents()) {
             yield encoder.encode(line);
           }
+          await recordGroundingSpend(true);
           await options.onInvocationCheckpoint({
             sessionId,
             turnId,
@@ -4736,25 +4847,17 @@ export async function* runToolLoop(
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
       if (processed.freeTrial) {
-        const fitted = applyFreeTrialProviderBudget({
-          reservation: processed.freeTrial,
-          provider: processed.provider,
-          request: stepRequest,
-          priorCostDollars: calculateObservedProviderUsageCostDollars(observedUsage, {
-            provider: servingProcessed.provider,
-            model: servingProcessed.chatRequest?.model ?? servingProcessed.llmRequest.model,
-          }),
-        });
-        if (!fitted.ok) {
-          yield encoder.encode(
-            eventStream.emit({
-              type: 'error',
-              message: FREE_USAGE_LIMIT_REACHED_MESSAGE,
-              code: 'free_trial_token_budget_reached',
-              retryable: false,
-            }),
-          );
-          yield* flushTerminal('error');
+        const spent = freeTurnCost();
+        const fitted = freeTrialSpend?.exhausted()
+          ? null
+          : applyFreeTrialProviderBudget({
+              reservation: processed.freeTrial,
+              provider: processed.provider,
+              request: stepRequest,
+              priorCostMicrousd: spent.tokenMicrousd + spent.toolMicrousd,
+            });
+        if (!fitted?.ok) {
+          yield* stopAtFreeTrialLimit(processed.freeTrial);
           return;
         }
       }
@@ -5489,6 +5592,7 @@ export async function* runToolLoop(
           deviceEvents.push(devicePaused.envelope);
           deviceChunks.push(encoder.encode(devicePaused.sse));
 
+          await recordGroundingSpend(true);
           await options.onDeviceCheckpoint({
             sessionId,
             turnId,
@@ -5561,6 +5665,7 @@ export async function* runToolLoop(
         approvalEvents.push(pausedEmitted.envelope);
         approvalChunks.push(encoder.encode(pausedEmitted.sse));
 
+        await recordGroundingSpend(true);
         await options.onApprovalCheckpoint?.({
           sessionId,
           turnId,
@@ -5627,6 +5732,7 @@ export async function* runToolLoop(
         { maxSteps, completedSteps: step, provider: processed.provider },
         '[tool-loop] step budget reached without terminal stop -- pausing for a step-budget decision',
       );
+      await recordGroundingSpend(true);
       await options.onStepBudgetCheckpoint({
         sessionId,
         turnId,
@@ -5656,6 +5762,7 @@ export async function* runToolLoop(
     );
     yield* flushTerminal('error', 'partial');
   } finally {
+    await recordGroundingSpend(false);
     if (e2bExecutor) {
       if (e2bSessionScope) {
         if (e2bExecutor.pause) {

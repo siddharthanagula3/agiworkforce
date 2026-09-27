@@ -1,12 +1,12 @@
 import 'server-only';
 
-import type Stripe from 'stripe';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { topUpChargedCents } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
+import type { Stripe } from '@/lib/stripe-types';
 
 interface PlanPeriod {
   subscription_id: string;

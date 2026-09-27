@@ -487,11 +487,10 @@ fn render_list(
 
                 let bullet = if is_current { "●" } else { " " };
                 let tier = capability_for_model(&model.id);
-                // CLI-PICKER-TIER-01: a row the active tier cannot route is
-                // labelled in place of its capability tier, so the reason it is
-                // unavailable is visible without selecting it.
+                let unlock;
                 let tier_label = if locked {
-                    "sign in"
+                    unlock = unlock_plan_label(&model.id);
+                    unlock.as_str()
                 } else {
                     capability_label(tier)
                 };
@@ -550,6 +549,23 @@ fn render_effort_bar(frame: &mut ratatui::Frame, area: Rect, state: &ModelPicker
     ]);
 
     frame.render_widget(Paragraph::new(line), area);
+}
+
+const PLAN_UNLOCK_LADDER: [crate::tier_cache::UserTier; 6] = [
+    crate::tier_cache::UserTier::Free,
+    crate::tier_cache::UserTier::Basic,
+    crate::tier_cache::UserTier::Pro,
+    crate::tier_cache::UserTier::Max,
+    crate::tier_cache::UserTier::Max15x,
+    crate::tier_cache::UserTier::Enterprise,
+];
+
+fn unlock_plan_label(model_id: &str) -> String {
+    PLAN_UNLOCK_LADDER
+        .iter()
+        .find(|tier| crate::model_catalog::can_access_model_for_tier(model_id, tier))
+        .map(|tier| format!("needs {}", tier.label()))
+        .unwrap_or_else(|| "unavailable".to_string())
 }
 
 fn format_model_row(
@@ -1102,7 +1118,7 @@ mod tests {
         }
     }
 
-    /// Team inherits the Pro roster. Flagships stay Max/Max 15x/Enterprise.
+    /// Team inherits the Pro roster. Flagships stay Max/Max 20x/Enterprise.
     #[test]
     fn team_uses_pro_roster_and_max_15x_reaches_flagships() {
         use crate::model_catalog::can_access_model_for_tier;
@@ -1126,7 +1142,7 @@ mod tests {
             );
             assert!(
                 can_access_model_for_tier(&flagship_id, &UserTier::Max15x),
-                "Max 15x must reach flagship model {flagship_id}"
+                "Max 20x must reach flagship model {flagship_id}"
             );
             assert!(
                 !can_access_model_for_tier(&flagship_id, &UserTier::Team),

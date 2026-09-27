@@ -151,6 +151,11 @@
         "icon": "$(rocket)"
       },
       {
+        "command": "agi-workforce.openReferrals",
+        "title": "AGI: Invite friends",
+        "icon": "$(gift)"
+      },
+      {
         "command": "agi-workforce.setApiKey",
         "title": "AGI Workforce: Set API Key",
         "icon": "$(key)"
@@ -443,6 +448,11 @@
         "command": "agi-workforce.showAccountUsage",
         "title": "AGI Workforce: Account & Usage",
         "icon": "$(account)"
+      },
+      {
+        "command": "agi-workforce.comparePlans",
+        "title": "AGI Workforce: Compare Plans",
+        "icon": "$(list-unordered)"
       },
       {
         "command": "agi-workforce.showOnboarding",

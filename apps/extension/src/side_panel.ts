@@ -13,7 +13,8 @@ import { t } from './i18n';
 import { pageChipLabel } from './utils';
 import {
   canUseBillingPlanCapability,
-  formatUsageRemaining,
+  classifyManagedQuotaErrorCode,
+  formatCredits,
   formatUsageResetIn,
   getBillingPlanPricing,
   getModelMetadataById,
@@ -24,8 +25,11 @@ import {
   getProviderDisplayLabel,
   PROVIDERS_IN_ORDER,
   resolveModelEffort,
+  USAGE_CRITICAL_REMAINING_PERCENT,
+  USAGE_WARNING_REMAINING_PERCENT,
   type Effort,
   type InteractiveCard,
+  type ManagedUsageWarning,
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
@@ -192,8 +196,28 @@ import {
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
+  FREE_TRIAL_GATEWAY,
+  getManagedUsageHistory,
   type ManagedModelAccess,
+  type ManagedUsageHistory,
+  type ManagedQuotaBlock,
+  type ManagedQuotaRecovery,
+  type ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
+import {
+  blockingUsageWindow,
+  describeUsageNotice,
+  planQuotaRecovery,
+  purchasedCreditsView,
+  quotaBlockWindow,
+  quotaWarningFromSignal,
+  usageLimitNotice,
+  usageWarning,
+  usageWindowViews,
+  type PurchasedCreditsView,
+  type UsageWindowView,
+} from './features/side-panel/usageWindows';
+import { planComparisonViews } from './features/side-panel/planComparison';
 import { createManagedChatPortName } from './features/cloud-bridge/managedChatPort';
 import {
   getClerkAccountProfile,
@@ -411,11 +435,35 @@ let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
 let initialCloudAccountRefresh: Promise<void> = Promise.resolve();
 type ManagedCloudChatState = 'loading' | 'ready' | 'signed_out' | 'unavailable';
 type ManagedCloudGateAction =
-  'none' | 'sign_in' | 'open_web' | 'upgrade' | 'billing' | 'usage' | 'retry';
+  'none' | 'sign_in' | 'open_web' | 'upgrade' | 'billing' | 'usage' | 'retry' | 'recovery';
 let managedCloudChatState: ManagedCloudChatState = 'loading';
 let managedCloudGateMessage = t('spGateChecking');
 let managedCloudGateAction: ManagedCloudGateAction = 'none';
 let managedCloudGateActionLabel = '';
+let managedCloudGateHref = '';
+
+function agiWebUrl(path: string): string {
+  const url = new URL(path, FREE_TRIAL_GATEWAY);
+  url.searchParams.set('from', 'chrome-extension');
+  return url.toString();
+}
+
+function quotaRecoveryLabel(recovery: ManagedQuotaRecovery): string {
+  switch (recovery.action) {
+    case 'top_up':
+      return t('spQuotaRecoveryTopUp');
+    case 'upgrade':
+      return t('spQuotaUpgrade');
+    case 'view_usage':
+      return t('spQuotaManageUsage');
+    case 'contact_support':
+      return t('spQuotaRecoverySupport');
+  }
+}
+
+function openQuotaRecovery(recovery: ManagedQuotaRecovery): void {
+  chrome.tabs.create({ url: agiWebUrl(recovery.href) }).catch(() => {});
+}
 
 function setManagedCloudChatState(
   state: ManagedCloudChatState,
@@ -423,6 +471,7 @@ function setManagedCloudChatState(
     message?: string;
     action?: ManagedCloudGateAction;
     actionLabel?: string;
+    href?: string;
   } = {},
 ): void {
   const becameReady = state === 'ready' && managedCloudChatState !== 'ready';
@@ -436,6 +485,11 @@ function setManagedCloudChatState(
         : managedCloudGateMessage);
   managedCloudGateAction = options.action ?? 'none';
   managedCloudGateActionLabel = options.actionLabel ?? '';
+  managedCloudGateHref = options.href ?? '';
+  if (state !== 'ready') {
+    renderUsageBanner(null);
+    renderModelNotice(null);
+  }
 
   const gate = document.getElementById('sp-cloud-gate');
   const message = document.getElementById('sp-cloud-gate-message');
@@ -459,6 +513,112 @@ function setManagedCloudChatState(
   if (becameReady) checkPendingChat();
 }
 
+interface UsageBanner {
+  text: string;
+  severity: ManagedUsageWarning['severity'];
+  recovery: ManagedQuotaRecovery;
+}
+
+let usageBanner: UsageBanner | null = null;
+const quotaWarnedStreamIds = new Set<string>();
+const MODEL_USAGE_ROW_LIMIT = 5;
+
+function renderUsageBanner(next: UsageBanner | null): void {
+  usageBanner = next;
+  const banner = document.getElementById('sp-usage-warning');
+  const text = document.getElementById('sp-usage-warning-text');
+  const action = document.getElementById('sp-usage-warning-action');
+  if (!banner || !text || !action) return;
+  banner.classList.toggle('visible', next !== null);
+  banner.dataset['severity'] = next?.severity ?? '';
+  text.textContent = next?.text ?? '';
+  action.textContent = next ? quotaRecoveryLabel(next.recovery) : '';
+}
+
+function renderModelNotice(text: string | null): void {
+  const notice = document.getElementById('sp-model-notice');
+  const noticeText = document.getElementById('sp-model-notice-text');
+  if (!notice || !noticeText) return;
+  notice.classList.toggle('visible', text !== null);
+  noticeText.textContent = text ?? '';
+}
+
+function managedPlanTier(access: ManagedModelAccess): string {
+  return access.accountPlanTier ?? access.subscriptionTier;
+}
+
+function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
+  if (!managedModelAccess || managedCloudChatState !== 'ready') return;
+  const warning = quotaWarningFromSignal(usageWindowViews(managedModelAccess.usage), signal);
+  if (!warning) return;
+  renderUsageBanner({
+    text: describeUsageNotice(warning),
+    severity: warning.severity,
+    recovery: planQuotaRecovery(managedPlanTier(managedModelAccess)),
+  });
+}
+
+function quotaResetLabel(quotaCode: string): string | null {
+  if (!managedModelAccess) return null;
+  const blocked = quotaBlockWindow(usageWindowViews(managedModelAccess.usage), quotaCode);
+  return blocked ? formatUsageResetIn(blocked.resetAt) : null;
+}
+
+function buildPurchasedCreditsRow(purchased: PurchasedCreditsView): HTMLElement {
+  const row = el('div', { class: 'sp-quota-window' });
+  const head = el('div', { class: 'sp-quota-bar-row' });
+  head.appendChild(el('span', {}, t('spQuotaPurchasedLabel')));
+  head.appendChild(
+    el(
+      'span',
+      { class: 'sp-quota-window-value' },
+      purchased.balance ?? t('spQuotaPurchasedUnavailable'),
+    ),
+  );
+  row.appendChild(head);
+  row.appendChild(
+    el(
+      'div',
+      { class: 'sp-quota-window-reset' },
+      purchased.overageEnabled ? t('spQuotaPurchasedOn') : t('spQuotaPurchasedOff'),
+    ),
+  );
+  return row;
+}
+
+function buildQuotaWindowRow(view: UsageWindowView): HTMLElement {
+  const row = el('div', { class: 'sp-quota-window' });
+  const head = el('div', { class: 'sp-quota-bar-row' });
+  head.appendChild(el('span', {}, view.label));
+  head.appendChild(el('span', { class: 'sp-quota-window-value' }, view.detail));
+  row.appendChild(head);
+  const usedPercent = Math.round(view.usedPercent);
+  const remainingPercent = 100 - view.usedPercent;
+  const bar = el('div', {
+    class: 'sp-quota-bar-bg',
+    role: 'progressbar',
+    'aria-label': view.label,
+    'aria-valuemin': '0',
+    'aria-valuemax': '100',
+    'aria-valuenow': String(usedPercent),
+    'aria-valuetext': view.detail,
+  });
+  const fill = el('div', {
+    class:
+      view.exhausted || remainingPercent <= USAGE_CRITICAL_REMAINING_PERCENT
+        ? 'sp-quota-bar-fill exhausted'
+        : remainingPercent <= USAGE_WARNING_REMAINING_PERCENT
+          ? 'sp-quota-bar-fill warning'
+          : 'sp-quota-bar-fill',
+  });
+  fill.style.width = `${usedPercent}%`;
+  bar.appendChild(fill);
+  row.appendChild(bar);
+  const resetLabel = formatUsageResetIn(view.resetAt);
+  if (resetLabel) row.appendChild(el('div', { class: 'sp-quota-window-reset' }, resetLabel));
+  return row;
+}
+
 type ChatMessage = SidePanelChatMessage;
 
 interface ChatChunk {
@@ -472,6 +632,8 @@ interface ChatChunk {
   errorCode?: string;
   errorRetryAfterSeconds?: number;
   errorRequestId?: string;
+  errorQuota?: ManagedQuotaBlock;
+  quotaWarning?: ManagedQuotaWarningSignal;
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
@@ -638,6 +800,7 @@ function managedOutboundEffortPayload(usePersistedSelection = false): { effort?:
     routingSelection,
     _ctx.currentModelKey,
     _ctx.reasoningEffort,
+    managedModelAccess?.subscriptionTier,
   );
   return effort === undefined ? {} : { effort };
 }
@@ -2048,6 +2211,45 @@ function injectStyles(): void {
     }
     #sp-cloud-gate-action:hover { opacity: 0.88; }
     #sp-cloud-gate-action:disabled { cursor: wait; opacity: 0.6; }
+    .sp-composer-notice {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 6px;
+      padding: 7px 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .sp-composer-notice.visible { display: flex; }
+    .sp-composer-notice > span { flex: 1; min-width: 0; }
+    #sp-usage-warning[data-severity='warning'] {
+      border-color: var(--agi-ext-warning-border);
+      background: var(--agi-ext-warning-bg);
+      color: var(--agi-ext-warning);
+    }
+    #sp-usage-warning[data-severity='critical'] {
+      border-color: var(--agi-ext-danger-border);
+      background: var(--agi-ext-danger-bg);
+      color: var(--agi-ext-danger);
+    }
+    .sp-composer-notice-action {
+      flex-shrink: 0;
+      background: none;
+      border: 1px solid currentColor;
+      border-radius: 5px;
+      color: inherit;
+      font: inherit;
+      padding: 2px 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .sp-composer-notice-action:hover {
+      background: color-mix(in srgb, currentColor 12%, transparent);
+    }
     /* outer composer shell */
     #sp-composer-shell {
       background: var(--agi-ext-surface);
@@ -3312,6 +3514,72 @@ function injectStyles(): void {
       transition: background 0.12s;
     }
     .sp-quota-upgrade-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent); }
+    .sp-quota-windows {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sp-quota-windows:empty { display: none; }
+    .sp-quota-window {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .sp-quota-window-value {
+      color: var(--agi-ext-text);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .sp-quota-window-reset {
+      font-size: 10px;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-quota-bar-fill.warning { background: var(--agi-ext-warning); }
+    .sp-quota-notice {
+      font-size: 10px;
+      line-height: 1.4;
+      color: var(--agi-ext-text);
+    }
+    .sp-quota-notice:empty { display: none; }
+    .sp-quota-notice[data-severity='warning'] { color: var(--agi-ext-warning); }
+    .sp-quota-notice[data-severity='critical'] { color: var(--agi-ext-danger); }
+    .sp-quota-models {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .sp-quota-models:empty { display: none; }
+    .sp-quota-models-heading {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    .sp-plan-compare > summary {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--agi-ext-text);
+      cursor: pointer;
+    }
+    .sp-plan-compare-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 6px;
+    }
+    .sp-plan-compare-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .sp-plan-compare-name {
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    .sp-plan-compare-detail {
+      color: var(--agi-ext-text-muted);
+    }
     .sp-cloud-link-hint {
       color: var(--agi-ext-text-muted);
       font-size: 9px;
@@ -4431,6 +4699,7 @@ function renderMessages(): void {
             resolveManagedToolApproval(msg.id, toolCallId, decision),
           onRetry: (messageId) => retryFailedMessage(messageId),
           onSwitchModel: () => document.getElementById('sp-model-selector-btn')?.click(),
+          quotaRecovery: { label: quotaRecoveryLabel, open: openQuotaRecovery },
         }),
       );
     }
@@ -4804,6 +5073,7 @@ function sendMessage(text: string): void {
   const prompt = resolveComposerPrompt(text, pendingAttachments.length)!;
   const owner = _ctx.managedCloudOwner!;
   _ctx.conversationGeneration += 1;
+  renderModelNotice(null);
 
   try {
     extensionSendQueue.enqueue({ value: prompt, mode: 'prompt' });
@@ -5002,19 +5272,26 @@ function handleStreamError(
   rawErrorText: string,
   errorCode?: string,
   detail: StreamFailureDetail = {},
+  quota?: ManagedQuotaBlock,
 ): void {
   if (_ctx.currentStreamId !== id) return;
-  const errorText = streamFailureText(rawErrorText, detail);
+  const quotaPresentation = classifyManagedQuotaErrorCode(quota?.code);
+  const resetLabel = quota && quotaPresentation?.showResetTime ? quotaResetLabel(quota.code) : null;
+  const errorText = streamFailureText(rawErrorText, {
+    ...detail,
+    ...(resetLabel ? { resetLabel } : {}),
+  });
   const errorAction =
-    errorCode !== undefined &&
-    ![
-      'auth_required',
-      'plan_required',
-      'quota_exceeded',
-      'cancelled',
-      'invalid_request',
-      'protocol_error',
-    ].includes(errorCode)
+    quotaPresentation?.suggestStandardModel === true ||
+    (errorCode !== undefined &&
+      ![
+        'auth_required',
+        'plan_required',
+        'quota_exceeded',
+        'cancelled',
+        'invalid_request',
+        'protocol_error',
+      ].includes(errorCode))
       ? 'switch-model'
       : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
@@ -5043,7 +5320,7 @@ function handleStreamError(
     existing.cloudApprovalDecisions = undefined;
     existing.cloudApprovalError = errorText.slice(0, 500);
   } else {
-    applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction);
+    applyStreamFailure(_ctx.messages, id, errorText, Date.now(), errorAction, quota?.recovery);
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
@@ -6054,6 +6331,7 @@ function buildUI(): void {
             : resolveModelEffort(m.value, _ctx.reasoningEffort);
       }
       _ctx.selectedModel = m.value;
+      renderModelNotice(null);
       chrome.storage.local.set({ [SELECTED_MODEL_STORAGE_KEY]: m.value }).catch(() => {});
       updateModelBadge(m.value);
       renderModelDropdown();
@@ -6073,6 +6351,7 @@ function buildUI(): void {
       _ctx.quickMode ? 'auto-economy' : _ctx.selectedModel,
       _ctx.quickMode ? undefined : _ctx.currentModelKey,
       _ctx.reasoningEffort,
+      managedModelAccess?.subscriptionTier,
     );
   }
 
@@ -6114,6 +6393,20 @@ function buildUI(): void {
         refreshEffortUI();
         saveMessages();
       });
+      modelDropdownEl.appendChild(row);
+    }
+    const unlockPlanLabel = state.unlockPlanLabel;
+    if (!unlockPlanLabel) return;
+    for (const option of state.gated) {
+      const gatedCopy = t('spEffortGated', [unlockPlanLabel]);
+      const row = el('div', {
+        class: 'sp-effort-option',
+        'aria-disabled': 'true',
+        'aria-label': `${EFFORT_LABEL[option]}, ${gatedCopy}`,
+        title: gatedCopy,
+      });
+      row.appendChild(el('span', { class: 'sp-effort-option-label' }, EFFORT_LABEL[option]));
+      row.appendChild(el('span', { class: 'sp-effort-option-badge' }, unlockPlanLabel));
       modelDropdownEl.appendChild(row);
     }
   }
@@ -6289,7 +6582,7 @@ function buildUI(): void {
   modelDropdownEl.addEventListener('keydown', (event: KeyboardEvent) => {
     const options = Array.from(
       modelDropdownEl.querySelectorAll<HTMLElement>(
-        '.sp-model-option:not(:disabled), .sp-effort-option:not(:disabled), .sp-menu-toggle:not(:disabled)',
+        ".sp-model-option:not(:disabled), .sp-effort-option:not(:disabled):not([aria-disabled='true']), .sp-menu-toggle:not(:disabled)",
       ),
     );
     if (event.key === 'Escape') {
@@ -7416,6 +7709,7 @@ function buildUI(): void {
   const settingsGroupBody = drawerGroupBody(t('spMenuSettings'), () => {
     void refreshDrawerAllowlist();
     void refreshDrawerMemory();
+    void refreshModelUsageHistory();
   });
   settingsGroupBody.appendChild(inPageSection);
 
@@ -8090,6 +8384,44 @@ function buildUI(): void {
   });
   const quotaLabelEl = el('span', { id: 'sp-quota-label' }, t('spQuotaPaidPlanRequired'));
   quotaWrap.appendChild(quotaLabelEl);
+  const quotaWindowsEl = el('div', { class: 'sp-quota-windows', id: 'sp-quota-windows' });
+  quotaWrap.appendChild(quotaWindowsEl);
+  const quotaNoticeEl = el('div', {
+    class: 'sp-quota-notice',
+    id: 'sp-quota-notice',
+    role: 'status',
+  });
+  quotaWrap.appendChild(quotaNoticeEl);
+  const quotaModelsEl = el('div', { class: 'sp-quota-models', id: 'sp-quota-models' });
+  quotaWrap.appendChild(quotaModelsEl);
+  const planCompareEl = el(
+    'details',
+    { class: 'sp-plan-compare', id: 'sp-plan-compare' },
+    el('summary', {}, t('spPlansHeading')),
+  );
+  const planCompareListEl = el('div', { class: 'sp-plan-compare-list' });
+  const planComparePricingBtn = el(
+    'button',
+    { class: 'sp-quota-upgrade-btn', type: 'button' },
+    t('spPlansPricing'),
+  );
+  planComparePricingBtn.addEventListener('click', () => {
+    chrome.tabs.create({ url: agiWebUrl('/pricing') }).catch(() => {});
+  });
+  planCompareEl.appendChild(planCompareListEl);
+  planCompareEl.appendChild(planComparePricingBtn);
+  quotaWrap.appendChild(planCompareEl);
+
+  function renderPlanComparison(currentPlan: string | null | undefined): void {
+    clearChildren(planCompareListEl);
+    for (const view of planComparisonViews(currentPlan)) {
+      const row = el('div', { class: 'sp-plan-compare-row' });
+      row.appendChild(el('span', { class: 'sp-plan-compare-name' }, view.label));
+      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.credits));
+      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.features));
+      planCompareListEl.appendChild(row);
+    }
+  }
 
   const quotaUpgradeRow = el('div', {
     class: 'sp-quota-upgrade-row',
@@ -8194,8 +8526,169 @@ function buildUI(): void {
   if (quotaSlot) quotaSlot.replaceWith(quotaBadgeEl);
   else document.body.appendChild(quotaBadgeEl);
 
+  let usageResetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearUsageResetTimer(): void {
+    if (usageResetTimer !== null) clearTimeout(usageResetTimer);
+    usageResetTimer = null;
+  }
+
+  function scheduleUsageResetRefresh(resetAt: string | null): void {
+    clearUsageResetTimer();
+    const resetTime = resetAt ? Date.parse(resetAt) : Number.NaN;
+    if (!Number.isFinite(resetTime)) return;
+    const untilReset = resetTime - Date.now();
+    usageResetTimer = setTimeout(
+      () => {
+        usageResetTimer = null;
+        if (Date.now() >= resetTime) void refreshCloudAccountUI();
+        else if (managedModelAccess) presentManagedUsage(managedModelAccess);
+      },
+      Math.max(1_000, Math.min(untilReset + 1_000, 60_000)),
+    );
+  }
+
+  function setQuotaNotice(text: string, severity: ManagedUsageWarning['severity'] | null): void {
+    quotaNoticeEl.textContent = text;
+    if (severity) quotaNoticeEl.dataset['severity'] = severity;
+    else delete quotaNoticeEl.dataset['severity'];
+  }
+
+  function clearManagedUsagePresentation(): void {
+    clearUsageResetTimer();
+    clearChildren(quotaWindowsEl);
+    setQuotaNotice('', null);
+    usageHistoryGeneration += 1;
+    clearChildren(quotaModelsEl);
+  }
+
+  let usageHistoryGeneration = 0;
+
+  function renderModelUsage(history: ManagedUsageHistory | null): void {
+    clearChildren(quotaModelsEl);
+    if (!history) {
+      quotaModelsEl.appendChild(
+        el('div', { class: 'sp-quota-window-reset' }, t('spQuotaByModelUnavailable')),
+      );
+      return;
+    }
+    const days = Math.max(
+      1,
+      Math.round((Date.parse(history.to) - Date.parse(history.from)) / 86_400_000),
+    );
+    quotaModelsEl.appendChild(
+      el('div', { class: 'sp-quota-models-heading' }, t('spQuotaByModelHeading', [String(days)])),
+    );
+    const rows = history.byModel.slice(0, MODEL_USAGE_ROW_LIMIT);
+    if (rows.length === 0) {
+      quotaModelsEl.appendChild(
+        el('div', { class: 'sp-quota-window-reset' }, t('spQuotaByModelEmpty')),
+      );
+      return;
+    }
+    for (const row of rows) {
+      const line = el('div', { class: 'sp-quota-bar-row' });
+      line.appendChild(el('span', {}, getModelBadgeLabel(row.modelId)));
+      line.appendChild(el('span', { class: 'sp-quota-window-value' }, formatCredits(row.credits)));
+      quotaModelsEl.appendChild(line);
+    }
+  }
+
+  async function refreshModelUsageHistory(): Promise<void> {
+    const generation = ++usageHistoryGeneration;
+    const accountGeneration = cloudAccountRefreshGeneration;
+    const access = managedModelAccess;
+    if (!access || !canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
+      clearChildren(quotaModelsEl);
+      return;
+    }
+    let history: ManagedUsageHistory | null = null;
+    try {
+      const authContext = await getManagedCloudAuthContext();
+      if (authContext) history = await getManagedUsageHistory(authContext.token);
+    } catch {
+      history = null;
+    }
+    if (
+      generation !== usageHistoryGeneration ||
+      accountGeneration !== cloudAccountRefreshGeneration
+    ) {
+      return;
+    }
+    renderModelUsage(history);
+  }
+
+  function presentManagedUsage(access: ManagedModelAccess): void {
+    clearUsageResetTimer();
+    const usage = access.usage;
+    const views = usageWindowViews(usage);
+    const purchased = purchasedCreditsView(usage);
+    const recovery = planQuotaRecovery(managedPlanTier(access));
+    const planLabel = getBillingPlanPricing(access.subscriptionTier).label;
+    clearChildren(quotaWindowsEl);
+    for (const view of views) quotaWindowsEl.appendChild(buildQuotaWindowRow(view));
+    if (purchased) quotaWindowsEl.appendChild(buildPurchasedCreditsRow(purchased));
+    renderPlanComparison(access.subscriptionTier);
+    quotaLabelEl.textContent = t('spQuotaHeading');
+    quotaBadgeEl.classList.add('visible');
+
+    if (usage.usage_allocation === 'pending') {
+      setQuotaNotice(t('spQuotaAllocationPending'), 'warning');
+      quotaUpgradeRow.style.display = 'none';
+      quotaBadgeEl.classList.add('has-prompts');
+      quotaBadgeEl.classList.remove('exhausted');
+      quotaBadgeEl.textContent = planLabel;
+      setManagedCloudChatState('unavailable', {
+        message: t('spQuotaAllocationPending'),
+        action: 'retry',
+        actionLabel: t('spGateRetry'),
+      });
+      return;
+    }
+
+    if (usage.has_usage_remaining === false && purchased?.spendable !== true) {
+      const blocking = blockingUsageWindow(views);
+      const notice = blocking ? usageLimitNotice(blocking) : null;
+      const message = notice ? describeUsageNotice(notice) : t('spGateUsageLimit');
+      const recoveryLabel = quotaRecoveryLabel(recovery);
+      setQuotaNotice('', null);
+      quotaExhaustedLabel.textContent = message;
+      quotaUpgradeBtn.textContent = recoveryLabel;
+      quotaUpgradeBtn.dataset['destination'] = 'recovery';
+      quotaUpgradeBtn.dataset['href'] = recovery.href;
+      quotaUpgradeRow.style.display = '';
+      quotaBadgeEl.classList.add('exhausted');
+      quotaBadgeEl.classList.remove('has-prompts');
+      quotaBadgeEl.textContent = t('spQuotaManageUsage');
+      setManagedCloudChatState('unavailable', {
+        message,
+        action: 'recovery',
+        actionLabel: recoveryLabel,
+        href: recovery.href,
+      });
+      scheduleUsageResetRefresh(blocking?.resetAt ?? null);
+      return;
+    }
+
+    const coveredByPurchased = usage.has_usage_remaining === false;
+    const warning = coveredByPurchased ? null : usageWarning(views);
+    const banner: UsageBanner | null = coveredByPurchased
+      ? { text: t('spQuotaUsingPurchased'), severity: 'warning', recovery }
+      : warning
+        ? { text: describeUsageNotice(warning), severity: warning.severity, recovery }
+        : null;
+    setQuotaNotice(banner?.text ?? '', banner?.severity ?? null);
+    quotaUpgradeRow.style.display = 'none';
+    quotaBadgeEl.classList.add('has-prompts');
+    quotaBadgeEl.classList.remove('exhausted');
+    quotaBadgeEl.textContent = planLabel;
+    setManagedCloudChatState('ready');
+    renderUsageBanner(banner);
+  }
+
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
+    clearUsageResetTimer();
     const accountProfilePromise = getClerkAccountProfile().catch(() => null);
     let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
     try {
@@ -8304,7 +8797,9 @@ function buildUI(): void {
     managedModelAccess = access;
     signInAwaitingCompletion = false;
     const reconciledSelection = reconcileManagedModelSelection(_ctx.selectedModel, access);
-    if (reconciledSelection !== _ctx.selectedModel) {
+    const unavailableSelection =
+      reconciledSelection !== _ctx.selectedModel ? _ctx.selectedModel : null;
+    if (unavailableSelection !== null) {
       _ctx.conversationGeneration += 1;
       _ctx.selectedModel = reconciledSelection;
       _ctx.currentModelKey = undefined;
@@ -8332,6 +8827,7 @@ function buildUI(): void {
       !isEntitledSubscriptionStatus(access.subscriptionStatus);
     if (subscriptionNeedsAttention) {
       const subscriptionStatusLabel = (access.subscriptionStatus ?? 'inactive').replace('_', ' ');
+      clearManagedUsagePresentation();
       quotaWrap.style.display = '';
       quotaLabelEl.textContent =
         access.subscriptionStatus === 'past_due'
@@ -8359,34 +8855,18 @@ function buildUI(): void {
 
     if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
-      const usage =
-        typeof access.usagePercentage === 'number'
-          ? formatUsageRemaining(100 - access.usagePercentage)
-          : 'usage unavailable';
-      const resets = formatUsageResetIn(access.usageResetAt ?? null);
-      quotaLabelEl.textContent = resets
-        ? t('spQuotaCloudUsageWithReset', [usage, resets])
-        : t('spQuotaCloudUsage', [usage]);
-      if (access.hasUsageRemaining === false) {
-        quotaExhaustedLabel.textContent = t('spQuotaUsageExhausted');
-        quotaUpgradeBtn.textContent = t('spQuotaManageUsage');
-        quotaUpgradeBtn.dataset['destination'] = 'usage';
-        quotaUpgradeRow.style.display = '';
-        quotaBadgeEl.classList.add('visible', 'exhausted');
-        quotaBadgeEl.classList.remove('has-prompts');
-        quotaBadgeEl.textContent = t('spQuotaManageUsage');
-        setManagedCloudChatState('unavailable', {
-          message: t('spGateUsageLimit'),
-          action: 'usage',
-          actionLabel: t('spQuotaManageUsage'),
-        });
-        return;
+      presentManagedUsage(access);
+      if (ownerChanged) clearChildren(quotaModelsEl);
+      if (!settingsGroupBody.hidden) void refreshModelUsageHistory();
+      if (managedCloudChatState !== 'ready') return;
+      if (unavailableSelection !== null) {
+        renderModelNotice(
+          t('spModelFallback', [
+            getModelBadgeLabel(unavailableSelection),
+            getModelBadgeLabel(reconciledSelection),
+          ]),
+        );
       }
-      quotaUpgradeRow.style.display = 'none';
-      quotaBadgeEl.classList.add('visible', 'has-prompts');
-      quotaBadgeEl.classList.remove('exhausted');
-      quotaBadgeEl.textContent = getBillingPlanPricing(access.subscriptionTier).label;
-      setManagedCloudChatState('ready');
       refreshPageHostname();
       if (ownerChanged) {
         refreshWorkflowsTasks();
@@ -8397,6 +8877,8 @@ function buildUI(): void {
       return;
     }
 
+    clearManagedUsagePresentation();
+    renderPlanComparison(access.subscriptionTier);
     quotaWrap.style.display = '';
     quotaLabelEl.textContent = t('spQuotaProRequired');
     quotaExhaustedLabel.textContent = t('spQuotaFreeElsewhere');
@@ -8434,12 +8916,15 @@ function buildUI(): void {
   });
 
   quotaUpgradeBtn.addEventListener('click', () => {
+    const recoveryHref = quotaUpgradeBtn.dataset['href'];
     const url =
-      quotaUpgradeBtn.dataset['destination'] === 'billing'
-        ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
-        : quotaUpgradeBtn.dataset['destination'] === 'usage'
-          ? 'https://agiworkforce.com/settings/usage?from=chrome-extension'
-          : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat';
+      quotaUpgradeBtn.dataset['destination'] === 'recovery' && recoveryHref
+        ? agiWebUrl(recoveryHref)
+        : quotaUpgradeBtn.dataset['destination'] === 'billing'
+          ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
+          : quotaUpgradeBtn.dataset['destination'] === 'usage'
+            ? 'https://agiworkforce.com/settings/usage?from=chrome-extension'
+            : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat';
     chrome.tabs.create({ url }).catch(() => {});
   });
 
@@ -9635,6 +10120,8 @@ function buildUI(): void {
         await chrome.tabs.create({
           url: 'https://agiworkforce.com/settings/usage?from=chrome-extension',
         });
+      } else if (action === 'recovery' && managedCloudGateHref) {
+        await chrome.tabs.create({ url: agiWebUrl(managedCloudGateHref) });
       } else if (action === 'retry') {
         await refreshCloudAccountUI(true);
       }
@@ -10133,6 +10620,43 @@ function buildUI(): void {
   bridgeNotice.appendChild(bridgeNoticeText);
   bridgeNotice.appendChild(bridgeNoticeReconnect);
 
+  const usageWarningBanner = el('div', {
+    id: 'sp-usage-warning',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  usageWarningBanner.appendChild(el('span', { id: 'sp-usage-warning-text' }));
+  const usageWarningAction = el('button', {
+    id: 'sp-usage-warning-action',
+    class: 'sp-composer-notice-action',
+    type: 'button',
+  });
+  usageWarningAction.addEventListener('click', () => {
+    if (usageBanner) openQuotaRecovery(usageBanner.recovery);
+  });
+  usageWarningBanner.appendChild(usageWarningAction);
+
+  const modelNotice = el('div', {
+    id: 'sp-model-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  modelNotice.appendChild(el('span', { id: 'sp-model-notice-text' }));
+  const modelNoticeAction = el(
+    'button',
+    { class: 'sp-composer-notice-action', type: 'button' },
+    t('spModelNoticeChoose'),
+  );
+  modelNoticeAction.addEventListener('click', () => {
+    renderModelNotice(null);
+    document.getElementById('sp-model-selector-btn')?.click();
+  });
+  modelNotice.appendChild(modelNoticeAction);
+
+  inputArea.appendChild(usageWarningBanner);
+  inputArea.appendChild(modelNotice);
   inputArea.appendChild(cloudGate);
   inputArea.appendChild(bridgeNotice);
   inputArea.appendChild(attachmentBar);
@@ -10142,7 +10666,9 @@ function buildUI(): void {
     message: managedCloudGateMessage,
     action: managedCloudGateAction,
     actionLabel: managedCloudGateActionLabel,
+    href: managedCloudGateHref,
   });
+  renderUsageBanner(usageBanner);
 
   buildOnboardingOverlay(() => {
     void probeBridgeStatus();
@@ -10694,19 +11220,31 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   const continuationChanged = !streamUsedQuick && applyRoutingContinuation(chunk.routing);
   if (routeStamped || continuationChanged) saveMessages();
 
+  if (chunk.quotaWarning) {
+    quotaWarnedStreamIds.add(chunk.id);
+    applyStreamQuotaWarning(chunk.quotaWarning);
+  }
+
   if (chunk.error) {
+    quotaWarnedStreamIds.delete(chunk.id);
     if (chunk.errorCode === 'quota_exceeded') void refreshCloudAccountUI();
     if (chunk.error === '__AUTH_REQUIRED__') {
       void refreshCloudAccountUI();
       handleStreamError(chunk.id, 'Sign in to AGI Cloud to send messages.');
       return;
     }
-    handleStreamError(chunk.id, chunk.error, chunk.errorCode, {
-      ...(chunk.errorRetryAfterSeconds !== undefined
-        ? { retryAfterSeconds: chunk.errorRetryAfterSeconds }
-        : {}),
-      ...(chunk.errorRequestId !== undefined ? { requestId: chunk.errorRequestId } : {}),
-    });
+    handleStreamError(
+      chunk.id,
+      chunk.error,
+      chunk.errorCode,
+      {
+        ...(chunk.errorRetryAfterSeconds !== undefined
+          ? { retryAfterSeconds: chunk.errorRetryAfterSeconds }
+          : {}),
+        ...(chunk.errorRequestId !== undefined ? { requestId: chunk.errorRequestId } : {}),
+      },
+      chunk.errorQuota,
+    );
     return;
   }
 
@@ -10844,6 +11382,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.done) {
+    if (quotaWarnedStreamIds.has(chunk.id)) {
+      quotaWarnedStreamIds.delete(chunk.id);
+      void refreshCloudAccountUI();
+    }
     resolvedRouteByStreamId.delete(chunk.id);
     quickModeByStreamId.delete(chunk.id);
     ownerByStreamId.delete(chunk.id);
