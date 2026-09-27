@@ -3827,7 +3827,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.theme_picker.open(app.theme_choice);
                 SlashResult::SystemMessage(String::new()) // picker handles confirmation
             } else {
-                // Direct-set: /theme dark|light|ansi|solarized-dark|solarized-light|colorblind
+                // Direct-set: /theme <slug>
                 use super::widgets::theme_picker::ThemeChoice;
                 match ThemeChoice::from_arg(arg) {
                     Some(choice) => {
@@ -3837,7 +3837,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         SlashResult::SystemMessage(format!("Theme set to {}", choice.label()))
                     }
                     None => SlashResult::SystemMessage(format!(
-                        "Unknown theme: '{arg}'. Available: dark | light | ansi | solarized-dark | solarized-light | colorblind"
+                        "Unknown theme: '{arg}'. Available: {}",
+                        ThemeChoice::available()
                     )),
                 }
             }

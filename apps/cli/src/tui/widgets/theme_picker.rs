@@ -5,14 +5,14 @@
 //! ```text
 //! ┌─ Theme ───────────────────────────────────────────────────────────────┐
 //! │                                                                      │
-//! │●  Dark              Neutral dark background                          │
-//! │   Light             Light background for bright terminals            │
-//! │   Ansi              Pure 16-color ANSI compatible                    │
-//! │   Solarized Dark    Solarized palette, dark variant                  │
-//! │   Solarized Light   Solarized palette, light variant                 │
-//! │   Colorblind        High-contrast deuteranopia-friendly              │
+//! │●  Dark                 Neutral dark background                       │
+//! │   Light                Light background for bright terminals         │
+//! │   Ansi                 Pure 16-color ANSI compatible                 │
+//! │   High Contrast Dark   Maximum contrast for dark terminals           │
+//! │   High Contrast Light  Maximum contrast for light terminals          │
+//! │   Colorblind           Deuteranopia-friendly status colours          │
 //! │                                                                      │
-//! │  Preview: Solarized Dark                                             │
+//! │  Preview: High Contrast Dark                                         │
 //! │  fn hello() -> &'static str {                                        │
 //! │      "world"  // returns a greeting                                  │
 //! │  }                                                                   │
@@ -38,8 +38,8 @@ pub enum ThemeChoice {
     Dark,
     Light,
     Ansi,
-    SolarizedDark,
-    SolarizedLight,
+    HighContrastDark,
+    HighContrastLight,
     Colorblind,
 }
 
@@ -48,8 +48,8 @@ impl ThemeChoice {
         ThemeChoice::Dark,
         ThemeChoice::Light,
         ThemeChoice::Ansi,
-        ThemeChoice::SolarizedDark,
-        ThemeChoice::SolarizedLight,
+        ThemeChoice::HighContrastDark,
+        ThemeChoice::HighContrastLight,
         ThemeChoice::Colorblind,
     ];
 
@@ -59,8 +59,8 @@ impl ThemeChoice {
             ThemeChoice::Dark => "Dark",
             ThemeChoice::Light => "Light",
             ThemeChoice::Ansi => "Ansi",
-            ThemeChoice::SolarizedDark => "Solarized Dark",
-            ThemeChoice::SolarizedLight => "Solarized Light",
+            ThemeChoice::HighContrastDark => "High Contrast Dark",
+            ThemeChoice::HighContrastLight => "High Contrast Light",
             ThemeChoice::Colorblind => "Colorblind",
         }
     }
@@ -71,9 +71,9 @@ impl ThemeChoice {
             ThemeChoice::Dark => "Neutral dark background",
             ThemeChoice::Light => "Light background for bright terminals",
             ThemeChoice::Ansi => "Pure 16-color ANSI compatible",
-            ThemeChoice::SolarizedDark => "Solarized palette, dark variant",
-            ThemeChoice::SolarizedLight => "Solarized palette, light variant",
-            ThemeChoice::Colorblind => "High-contrast deuteranopia-friendly",
+            ThemeChoice::HighContrastDark => "Maximum contrast for dark terminals",
+            ThemeChoice::HighContrastLight => "Maximum contrast for light terminals",
+            ThemeChoice::Colorblind => "Deuteranopia-friendly status colours",
         }
     }
 
@@ -83,12 +83,14 @@ impl ThemeChoice {
             "dark" => Some(ThemeChoice::Dark),
             "light" => Some(ThemeChoice::Light),
             "ansi" => Some(ThemeChoice::Ansi),
-            "solarized-dark" | "solarized_dark" | "solarizeddark" => {
-                Some(ThemeChoice::SolarizedDark)
+            "high-contrast-dark" | "high_contrast_dark" | "highcontrastdark" => {
+                Some(ThemeChoice::HighContrastDark)
             }
-            "solarized-light" | "solarized_light" | "solarizedlight" => {
-                Some(ThemeChoice::SolarizedLight)
+            "high-contrast-light" | "high_contrast_light" | "highcontrastlight" => {
+                Some(ThemeChoice::HighContrastLight)
             }
+            "solarized-dark" | "solarized_dark" | "solarizeddark" => Some(ThemeChoice::Dark),
+            "solarized-light" | "solarized_light" | "solarizedlight" => Some(ThemeChoice::Light),
             "colorblind" | "colour-blind" | "color-blind" => Some(ThemeChoice::Colorblind),
             _ => None,
         }
@@ -101,10 +103,18 @@ impl ThemeChoice {
             ThemeChoice::Dark => "dark",
             ThemeChoice::Light => "light",
             ThemeChoice::Ansi => "ansi",
-            ThemeChoice::SolarizedDark => "solarized-dark",
-            ThemeChoice::SolarizedLight => "solarized-light",
+            ThemeChoice::HighContrastDark => "high-contrast-dark",
+            ThemeChoice::HighContrastLight => "high-contrast-light",
             ThemeChoice::Colorblind => "colorblind",
         }
+    }
+
+    pub fn available() -> String {
+        Self::ALL
+            .iter()
+            .map(|choice| choice.slug())
+            .collect::<Vec<_>>()
+            .join(" | ")
     }
 
     /// Accent color used by the picker row highlight for this theme.
@@ -113,8 +123,8 @@ impl ThemeChoice {
             ThemeChoice::Dark => ui_brand(),
             ThemeChoice::Light => ui_warning(),
             ThemeChoice::Ansi => ui_muted(),
-            ThemeChoice::SolarizedDark => ui_accent(),
-            ThemeChoice::SolarizedLight => ui_success(),
+            ThemeChoice::HighContrastDark => ui_accent(),
+            ThemeChoice::HighContrastLight => ui_success(),
             ThemeChoice::Colorblind => ui_cloud(),
         }
     }
@@ -288,7 +298,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
 
             let bullet = if is_active { "●" } else { " " };
             let label = format!(
-                "{}  {:<16}  {}",
+                "{}  {:<19}  {}",
                 bullet,
                 choice.label(),
                 choice.description(),
@@ -378,8 +388,8 @@ mod tests {
                 "dark",
                 "light",
                 "ansi",
-                "solarized-dark",
-                "solarized-light",
+                "high-contrast-dark",
+                "high-contrast-light",
                 "colorblind"
             ]
         );
