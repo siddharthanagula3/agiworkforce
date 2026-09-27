@@ -1,8 +1,14 @@
 import {
   CAPABILITY_LABEL,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  canAccessManualModelSelection,
+  clampEffortToEntitlement,
+  getBillingPlanPricing,
   getModelEffortOptions,
   getModelMetadataById,
+  getModelReasoning,
   resolveModelEffort,
+  splitEffortsByEntitlement,
   type CapabilityTier,
   type Effort,
   type ModelQuality,
@@ -22,6 +28,8 @@ export interface ManagedEffortControlState {
   status: 'awaiting-route' | 'unavailable' | 'ready';
   modelId?: string;
   options: readonly Effort[];
+  gated: readonly Effort[];
+  unlockPlanLabel?: string;
   effort?: Effort;
   description: string;
 }
@@ -110,10 +118,18 @@ export function getManagedModelBadgeLabel(modelId: string): string {
   return getModelMetadataById(modelId)?.name ?? modelId;
 }
 
+function manualModelSelectionPlanLabel(): string | undefined {
+  const tier = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.find((candidate) =>
+    canAccessManualModelSelection(candidate),
+  );
+  return tier ? getBillingPlanPricing(tier).label : undefined;
+}
+
 export function getManagedEffortControlState(
   selection: string,
   currentModelKey: string | undefined,
   requestedEffort: string | undefined,
+  planTier: string | undefined,
 ): ManagedEffortControlState {
   const autoSelected = selection === 'auto' || selection.startsWith('auto-');
   const modelId = autoSelected ? currentModelKey : selection;
@@ -121,26 +137,37 @@ export function getManagedEffortControlState(
     return {
       status: 'awaiting-route',
       options: [],
+      gated: [],
       description: 'Auto chooses reasoning effort after routing to a model.',
     };
   }
 
-  const options = getModelEffortOptions(modelId);
+  const supported = getModelEffortOptions(modelId);
   const modelLabel = getManagedModelBadgeLabel(modelId);
-  if (options.length === 0) {
+  if (supported.length === 0) {
     return {
       status: 'unavailable',
       modelId,
-      options,
+      options: supported,
+      gated: [],
       description: `${modelLabel} does not expose a reasoning-effort control.`,
     };
   }
 
+  const entitlement = splitEffortsByEntitlement(getModelReasoning(modelId), planTier);
+  const gated = supported.filter((effort) => entitlement.gated.includes(effort));
+  const unlockPlanLabel = gated.length > 0 ? manualModelSelectionPlanLabel() : undefined;
   return {
     status: 'ready',
     modelId,
-    options,
-    effort: resolveModelEffort(modelId, requestedEffort),
+    options: supported.filter((effort) => !gated.includes(effort)),
+    gated,
+    ...(unlockPlanLabel ? { unlockPlanLabel } : {}),
+    effort: clampEffortToEntitlement(
+      modelId,
+      resolveModelEffort(modelId, requestedEffort),
+      planTier,
+    ),
     description: `Applies to ${modelLabel}.`,
   };
 }
@@ -149,10 +176,13 @@ export function getManagedOutboundEffort(
   selection: string,
   currentModelKey: string | undefined,
   requestedEffort: string | undefined,
+  planTier: string | undefined,
 ): Effort | undefined {
   const autoSelected = selection === 'auto' || selection.startsWith('auto-');
   const modelId = autoSelected ? currentModelKey : selection;
-  return modelId ? resolveModelEffort(modelId, requestedEffort) : undefined;
+  return modelId
+    ? clampEffortToEntitlement(modelId, resolveModelEffort(modelId, requestedEffort), planTier)
+    : undefined;
 }
 
 export function isFreeManagedTier(tier: string): boolean {
@@ -160,9 +190,8 @@ export function isFreeManagedTier(tier: string): boolean {
 }
 
 export function formatManagedTierLabel(tier: string): string {
-  const normalized = tier.trim().toLowerCase();
-  if (!normalized) return 'Account';
-  return `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)} plan`;
+  if (!tier.trim()) return 'Account';
+  return `${getBillingPlanPricing(tier.trim()).label} plan`;
 }
 
 export function getManagedCapabilityLabel(option: ManagedModelPickerOption): string | undefined {

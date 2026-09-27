@@ -297,8 +297,9 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   desc.className = 'agi-modal-desc';
   desc.textContent =
     'AGI Cloud is in public alpha, sign in to start using it, no invite needed. Have a ' +
-    'promo or invite code? Redeem it below for plan credits. You can also get product ' +
-    'updates by email.';
+    'promo or invite code? Redeem it below to start a trial of the plan it names, with ' +
+    "that plan's included credits for the trial, and to unlock paid upgrades. You can " +
+    'also get product updates by email.';
 
   titleGroup.appendChild(title);
   titleGroup.appendChild(desc);
