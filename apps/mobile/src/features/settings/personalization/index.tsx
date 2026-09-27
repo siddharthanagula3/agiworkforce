@@ -10,30 +10,48 @@ import { Card } from '@/components/ui/card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import type { PersonalizationStyle } from '@/stores/settingsStore';
+import type { PreferredLength, TechnicalLevel } from '@agiworkforce/types';
+import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
+import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n';
 import { useThemeColors } from '@/src/ui/theme';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
+  PERSONALIZATION_LENGTHS,
   PERSONALIZATION_SLIDERS as SLIDERS,
   PERSONALIZATION_STYLES,
+  PERSONALIZATION_TECHNICAL_LEVELS,
   type StyleSliderConfig as SliderConfig,
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
 
-function StylePresetSelector({
+const MAX_ABOUT_YOU_CHARS = 1500;
+
+const RESPONSE_LANGUAGE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: RESPONSE_LANGUAGE_AUTO, label: 'Match my message' },
+  ...SELECTABLE_LANGUAGES.map((language) => ({ value: language.code, label: language.nativeName })),
+];
+
+function ChoiceChips<T extends string>({
+  label,
+  options,
   value,
   onChange,
+  optionAccessibilityLabel,
 }: {
-  value: PersonalizationStyle;
-  onChange: (style: PersonalizationStyle) => void;
+  label: string;
+  options: ReadonlyArray<{ value: T; label: string }>;
+  value: T;
+  onChange: (value: T) => void;
+  optionAccessibilityLabel?: (optionLabel: string) => string;
 }) {
   const c = useThemeColors();
   return (
     <View className="gap-2">
       <Text className="text-sm" style={{ color: c.textMuted }}>
-        Style Preset
+        {label}
       </Text>
       <View className="flex-row flex-wrap gap-2">
-        {PERSONALIZATION_STYLES.map((option) => {
+        {options.map((option) => {
           const selected = value === option.value;
           return (
             <Pressable
@@ -45,7 +63,11 @@ function StylePresetSelector({
                 borderWidth: 1,
                 borderColor: selected ? c.accentBorder : c.border,
               }}
-              accessibilityLabel={`${option.label} style`}
+              accessibilityLabel={
+                optionAccessibilityLabel
+                  ? optionAccessibilityLabel(option.label)
+                  : `${label}: ${option.label}`
+              }
               accessibilityRole="button"
               accessibilityState={{ selected }}
             >
@@ -163,7 +185,18 @@ export default function PersonalizationScreen() {
   const [fullName, setFullName] = useState(personalization.fullName);
   const [nickname, setNickname] = useState(personalization.nickname);
   const [occupation, setOccupation] = useState(personalization.occupation);
+  const [aboutYou, setAboutYou] = useState(personalization.aboutYou ?? '');
   const [instructions, setInstructions] = useState(personalization.instructions);
+  const [preferredLength, setPreferredLength] = useState<PreferredLength>(
+    personalization.preferredLength ?? 'default',
+  );
+  const [technicalLevel, setTechnicalLevel] = useState<TechnicalLevel>(
+    personalization.technicalLevel ?? 'unspecified',
+  );
+  const [responseLanguage, setResponseLanguage] = useState(
+    personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO,
+  );
+  const resetChatStyleRef = useRef(false);
   const [style, setStyle] = useState(personalization.style);
   const [warmth, setWarmth] = useState(personalization.warmth);
   const [enthusiasm, setEnthusiasm] = useState(personalization.enthusiasm);
@@ -188,7 +221,12 @@ export default function PersonalizationScreen() {
     setFullName(personalization.fullName);
     setNickname(personalization.nickname);
     setOccupation(personalization.occupation);
+    setAboutYou(personalization.aboutYou ?? '');
     setInstructions(personalization.instructions);
+    setPreferredLength(personalization.preferredLength ?? 'default');
+    setTechnicalLevel(personalization.technicalLevel ?? 'unspecified');
+    setResponseLanguage(personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO);
+    resetChatStyleRef.current = false;
     setStyle(personalization.style);
     setWarmth(personalization.warmth);
     setEnthusiasm(personalization.enthusiasm);
@@ -235,7 +273,12 @@ export default function PersonalizationScreen() {
       fullName !== personalization.fullName ||
       nickname !== personalization.nickname ||
       occupation !== personalization.occupation ||
+      aboutYou !== (personalization.aboutYou ?? '') ||
       instructions !== personalization.instructions ||
+      preferredLength !== (personalization.preferredLength ?? 'default') ||
+      technicalLevel !== (personalization.technicalLevel ?? 'unspecified') ||
+      responseLanguage !== (personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO) ||
+      resetChatStyleRef.current ||
       style !== personalization.style ||
       warmth !== personalization.warmth ||
       enthusiasm !== personalization.enthusiasm ||
@@ -246,7 +289,11 @@ export default function PersonalizationScreen() {
     fullName,
     nickname,
     occupation,
+    aboutYou,
     instructions,
+    preferredLength,
+    technicalLevel,
+    responseLanguage,
     style,
     warmth,
     enthusiasm,
@@ -254,6 +301,19 @@ export default function PersonalizationScreen() {
     emoji,
     personalization,
   ]);
+
+  const handleResetStyle = useCallback(() => {
+    draftDirtyRef.current = true;
+    resetChatStyleRef.current = true;
+    setStyle('default');
+    setPreferredLength('default');
+    setTechnicalLevel('unspecified');
+    setResponseLanguage(RESPONSE_LANGUAGE_AUTO);
+    setWarmth(50);
+    setEnthusiasm(50);
+    setHeadersLists(50);
+    setEmoji(50);
+  }, []);
 
   const handleBack = useCallback(() => {
     if (hasChanges) {
@@ -272,19 +332,31 @@ export default function PersonalizationScreen() {
       fullName: fullName.trim(),
       nickname: nickname.trim(),
       occupation: occupation.trim(),
+      aboutYou: aboutYou.trim(),
       instructions: instructions.trim(),
+      preferredLength,
+      technicalLevel,
+      responseLanguage,
       style,
       warmth,
       enthusiasm,
       headersLists,
       emoji,
     });
+    if (resetChatStyleRef.current) {
+      useChatViewStore.getState().setChatStyle('normal');
+      resetChatStyleRef.current = false;
+    }
     goBack();
   }, [
     fullName,
     nickname,
     occupation,
+    aboutYou,
     instructions,
+    preferredLength,
+    technicalLevel,
+    responseLanguage,
     style,
     warmth,
     enthusiasm,
@@ -366,6 +438,16 @@ export default function PersonalizationScreen() {
             placeholder="e.g. Founder & Engineer"
           />
           <LabeledInput
+            label="More about you"
+            value={aboutYou}
+            onChangeText={(value) => {
+              draftDirtyRef.current = true;
+              setAboutYou(value.slice(0, MAX_ABOUT_YOU_CHARS));
+            }}
+            placeholder="Interests, values or background to keep in mind"
+            multiline
+          />
+          <LabeledInput
             label="Custom Instructions"
             value={instructions}
             onChangeText={(value) => {
@@ -377,13 +459,42 @@ export default function PersonalizationScreen() {
           />
         </Card>
 
-        {/* Base style preset */}
-        <Card className="mt-2">
-          <StylePresetSelector
+        <Card className="mt-2 gap-4">
+          <ChoiceChips
+            label="Style Preset"
+            options={PERSONALIZATION_STYLES}
             value={style}
+            optionAccessibilityLabel={(optionLabel) => `${optionLabel} style`}
             onChange={(value) => {
               draftDirtyRef.current = true;
               setStyle(value);
+            }}
+          />
+          <ChoiceChips
+            label="Response Length"
+            options={PERSONALIZATION_LENGTHS}
+            value={preferredLength}
+            onChange={(value) => {
+              draftDirtyRef.current = true;
+              setPreferredLength(value);
+            }}
+          />
+          <ChoiceChips
+            label="Technical Level"
+            options={PERSONALIZATION_TECHNICAL_LEVELS}
+            value={technicalLevel}
+            onChange={(value) => {
+              draftDirtyRef.current = true;
+              setTechnicalLevel(value);
+            }}
+          />
+          <ChoiceChips
+            label="Response Language"
+            options={RESPONSE_LANGUAGE_OPTIONS}
+            value={responseLanguage}
+            onChange={(value) => {
+              draftDirtyRef.current = true;
+              setResponseLanguage(value);
             }}
           />
         </Card>
@@ -407,6 +518,19 @@ export default function PersonalizationScreen() {
             ))}
           </Card>
         </View>
+
+        <Pressable
+          onPress={handleResetStyle}
+          className="self-start px-3 py-2 rounded-xl"
+          style={{ borderWidth: 1, borderColor: c.border }}
+          accessibilityRole="button"
+          accessibilityLabel="Reset response style"
+          accessibilityHint="Puts style, length, level, language and the style dials back to their defaults. Save to keep it."
+        >
+          <Text className="text-xs font-medium" style={{ color: c.textPrimary }}>
+            Reset response style
+          </Text>
+        </Pressable>
 
         {/* Note */}
         <View

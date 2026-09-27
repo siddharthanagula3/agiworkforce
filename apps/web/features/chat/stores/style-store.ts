@@ -2,16 +2,49 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { fenceUntrustedContent } from '@agiworkforce/utils';
 import {
-  fetchPreferenceNamespace,
+  fetchStoredPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
+import { RESPONSE_STYLE_GUIDANCE } from '@/lib/preferences/response-style-preferences';
 
-export type PresetStyle = 'default' | 'concise' | 'detailed' | 'technical' | 'creative';
+export type PresetStyle = 'default' | 'concise' | 'explanatory' | 'formal';
 
-export const DEFAULT_PRESET_STYLE: PresetStyle = 'concise';
+export const DEFAULT_PRESET_STYLE: PresetStyle = 'default';
 export type ResponseStyle = PresetStyle | 'custom';
 
 export type ResponseLength = 'brief' | 'standard' | 'thorough';
+
+export const DEFAULT_RESPONSE_LENGTH: ResponseLength = 'standard';
+
+const PRESET_STYLES: readonly PresetStyle[] = ['default', 'concise', 'explanatory', 'formal'];
+const RESPONSE_LENGTHS: readonly ResponseLength[] = ['brief', 'standard', 'thorough'];
+const RETIRED_PRESETS: Readonly<Record<string, PresetStyle>> = {
+  detailed: 'explanatory',
+  technical: 'default',
+  creative: 'default',
+};
+
+function currentStyle(value: unknown): ResponseStyle {
+  if (value === 'custom') return 'custom';
+  if (typeof value !== 'string') return DEFAULT_PRESET_STYLE;
+  if ((PRESET_STYLES as readonly string[]).includes(value)) return value as PresetStyle;
+  return RETIRED_PRESETS[value] ?? DEFAULT_PRESET_STYLE;
+}
+
+function currentLength(value: unknown): ResponseLength {
+  return typeof value === 'string' && (RESPONSE_LENGTHS as readonly string[]).includes(value)
+    ? (value as ResponseLength)
+    : DEFAULT_RESPONSE_LENGTH;
+}
+
+function withoutRetiredDefaults<T extends { style?: unknown; length?: unknown }>(
+  stored: T,
+): T & { style: ResponseStyle; length: ResponseLength } {
+  if (stored.style === 'concise' && stored.length === 'brief') {
+    return { ...stored, style: DEFAULT_PRESET_STYLE, length: DEFAULT_RESPONSE_LENGTH };
+  }
+  return { ...stored, style: currentStyle(stored.style), length: currentLength(stored.length) };
+}
 
 export interface CustomStyle {
   id: string;
@@ -35,23 +68,27 @@ interface StyleState {
     updates: Partial<Pick<CustomStyle, 'name' | 'instruction' | 'sampleText'>>,
   ) => void;
   deleteCustomStyle: (id: string) => void;
+  resetToDefault: () => void;
   hydrateFromServer: () => Promise<void>;
 }
 
 export const RESPONSE_STYLE_PREFERENCES_NAMESPACE = 'response-style';
+
+const STYLE_PAYLOAD_VERSION = 5;
 
 interface StylePreferencesPayload {
   style: ResponseStyle;
   length: ResponseLength;
   activeCustomStyleId: string | null;
   customStyles: CustomStyle[];
+  version?: number;
 }
 
 export const useStyleStore = create<StyleState>()(
   persist(
     (set) => ({
       style: DEFAULT_PRESET_STYLE,
-      length: 'brief' as ResponseLength,
+      length: DEFAULT_RESPONSE_LENGTH,
       activeCustomStyleId: null,
       customStyles: [],
 
@@ -100,22 +137,29 @@ export const useStyleStore = create<StyleState>()(
         void syncToServer();
       },
 
+      resetToDefault: () => {
+        set({
+          style: DEFAULT_PRESET_STYLE,
+          length: DEFAULT_RESPONSE_LENGTH,
+          activeCustomStyleId: null,
+        });
+        void syncToServer();
+      },
+
       hydrateFromServer: async () => {
         try {
-          const state = useStyleStore.getState();
-          const stored = await fetchPreferenceNamespace<StylePreferencesPayload>(
+          const stored = await fetchStoredPreferenceNamespace<StylePreferencesPayload>(
             RESPONSE_STYLE_PREFERENCES_NAMESPACE,
-            {
-              style: state.style,
-              length: state.length,
-              activeCustomStyleId: state.activeCustomStyleId,
-              customStyles: state.customStyles,
-            },
           );
+          if (Object.keys(stored).length === 0) return;
+          const normalized =
+            stored.version === STYLE_PAYLOAD_VERSION
+              ? { style: currentStyle(stored.style), length: currentLength(stored.length) }
+              : withoutRetiredDefaults(stored);
           set({
-            style: stored.style,
-            length: stored.length,
-            activeCustomStyleId: stored.activeCustomStyleId,
+            style: normalized.style,
+            length: normalized.length,
+            activeCustomStyleId: stored.activeCustomStyleId ?? null,
             customStyles: stored.customStyles ?? [],
           });
         } catch {
@@ -125,22 +169,17 @@ export const useStyleStore = create<StyleState>()(
     }),
     {
       name: 'agi-response-style',
-      version: 4,
+      version: 5,
       storage: createJSONStorage(() => localStorage),
       migrate: (persisted: unknown, version: number) => {
-        const old = (persisted ?? {}) as Record<string, unknown>;
+        let state = { ...((persisted ?? {}) as Record<string, unknown>) };
         if (version < 3) {
-          return {
-            ...old,
-            activeCustomStyleId: null,
-            customStyles: [],
-            length: 'brief' as ResponseLength,
-          };
+          state = { ...state, activeCustomStyleId: null, customStyles: [], length: 'brief' };
+        } else if (version < 4) {
+          state = { ...state, length: 'brief' };
         }
-        if (version < 4) {
-          return { ...old, length: 'brief' as ResponseLength };
-        }
-        return persisted as StyleState;
+        if (version < 5) state = withoutRetiredDefaults(state);
+        return state as unknown as StyleState;
       },
     },
   ),
@@ -159,6 +198,7 @@ function syncToServer(): void {
           length,
           activeCustomStyleId,
           customStyles,
+          version: STYLE_PAYLOAD_VERSION,
         }),
       )
       .catch(() => {
@@ -167,19 +207,20 @@ function syncToServer(): void {
   }, 600);
 }
 
+const OVERRIDE_PREAMBLE =
+  'For this conversation the user chose a response style in the composer. Follow it over any saved response style or length.';
+
 const STYLE_INSTRUCTIONS: Record<PresetStyle, string> = {
-  default:
-    'Answer directly. Do not restate the question, open with filler, or close with a summary of what you just said. Use prose by default and lists only when the content is genuinely a list.',
-  concise: 'Be brief and direct. Use short sentences. Avoid unnecessary detail.',
-  detailed: 'Provide thorough, comprehensive responses with examples and context.',
-  technical: 'Use precise technical language. Include code examples where relevant.',
-  creative: 'Be expressive and engaging. Use analogies and vivid descriptions.',
+  default: '',
+  concise: RESPONSE_STYLE_GUIDANCE.concise,
+  explanatory: RESPONSE_STYLE_GUIDANCE.explanatory,
+  formal: RESPONSE_STYLE_GUIDANCE.formal,
 };
 
 const LENGTH_INSTRUCTIONS: Record<ResponseLength, string> = {
   brief:
     'Keep the response as short as the question allows. A one-line question gets a one-line answer. Expand only when the user asks for more.',
-  standard: 'Match the response length to the complexity of the question; never pad.',
+  standard: '',
   thorough:
     'Cover the topic completely: include background, edge cases, and worked examples even when not explicitly requested.',
 };
@@ -190,7 +231,7 @@ export const RESPONSE_LENGTH_OPTIONS: ReadonlyArray<{
   desc: string;
 }> = [
   { id: 'brief', label: 'Brief', desc: 'Shortest answer that works' },
-  { id: 'standard', label: 'Standard', desc: 'Length follows the question' },
+  { id: 'standard', label: 'Default', desc: 'Your length from Settings' },
   { id: 'thorough', label: 'Thorough', desc: 'Full background and examples' },
 ];
 
@@ -225,5 +266,6 @@ export function getStyleInstruction(
     style === 'custom' ? (custom?.instruction ?? '') : (STYLE_INSTRUCTIONS[style] ?? '');
   const lengthText = LENGTH_INSTRUCTIONS[length ?? store.length] ?? '';
   const sampleText = custom ? writingSampleBlock(custom.sampleText) : '';
-  return [styleText, lengthText, sampleText].filter(Boolean).join(' ');
+  const parts = [styleText, lengthText, sampleText].filter(Boolean);
+  return parts.length > 0 ? [OVERRIDE_PREAMBLE, ...parts].join(' ') : '';
 }

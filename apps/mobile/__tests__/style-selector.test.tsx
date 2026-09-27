@@ -94,17 +94,17 @@ describe('StyleSelector', () => {
 
     expect(getByText('Normal')).toBeTruthy();
     expect(getByText('Concise')).toBeTruthy();
-    expect(getByText('Detailed')).toBeTruthy();
-    expect(getByText('Creative')).toBeTruthy();
+    expect(getByText('Explanatory')).toBeTruthy();
+    expect(getByText('Formal')).toBeTruthy();
   });
 
   it('shows descriptions for each option', () => {
     const { getByText } = renderOpenStyleSelector();
 
-    expect(getByText('Balanced, standard')).toBeTruthy();
+    expect(getByText('Your style from Personalization')).toBeTruthy();
     expect(getByText('Short, direct answers')).toBeTruthy();
-    expect(getByText('Thorough explanations')).toBeTruthy();
-    expect(getByText('Imaginative, expressive')).toBeTruthy();
+    expect(getByText('Reasoning and context')).toBeTruthy();
+    expect(getByText('Formal register')).toBeTruthy();
   });
 
   it('has Normal selected by default', () => {
@@ -126,18 +126,18 @@ describe('StyleSelector', () => {
     expect(useChatStore.getState().chatStyle).toBe('concise');
   });
 
-  it('tapping Detailed sets chatStyle to detailed', () => {
+  it('tapping Explanatory sets chatStyle to explanatory', () => {
     const { getByLabelText } = renderOpenStyleSelector();
 
-    fireEvent.press(getByLabelText('Detailed style'));
-    expect(useChatStore.getState().chatStyle).toBe('detailed');
+    fireEvent.press(getByLabelText('Explanatory style'));
+    expect(useChatStore.getState().chatStyle).toBe('explanatory');
   });
 
-  it('tapping Creative sets chatStyle to creative', () => {
+  it('tapping Formal sets chatStyle to formal', () => {
     const { getByLabelText } = renderOpenStyleSelector();
 
-    fireEvent.press(getByLabelText('Creative style'));
-    expect(useChatStore.getState().chatStyle).toBe('creative');
+    fireEvent.press(getByLabelText('Formal style'));
+    expect(useChatStore.getState().chatStyle).toBe('formal');
   });
 
   it('renders the "Choose Style" header', () => {
