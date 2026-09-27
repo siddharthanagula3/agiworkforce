@@ -143,7 +143,6 @@ async function handleExtendLiveSession(
       userId,
       planTier,
       modelId,
-      allowOverage: false,
     });
     resetsAt = block.resetsAt;
     await reserveManagedUsageProviderStep({

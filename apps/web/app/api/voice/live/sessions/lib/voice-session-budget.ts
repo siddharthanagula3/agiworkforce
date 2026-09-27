@@ -56,7 +56,6 @@ export async function planVoiceSessionBlock(input: {
   userId: string;
   planTier: string;
   modelId: string;
-  allowOverage: boolean;
 }): Promise<VoiceBlockPlan> {
   const sessionCap = getPlanSessionUsageCapMicrousd(input.planTier);
   const weeklyCap = getPlanWeeklyUsageCapMicrousd(input.planTier);
@@ -64,7 +63,7 @@ export async function planVoiceSessionBlock(input: {
     getRollingUsage(input.db, input.userId, ROLLING_SESSION_WINDOW_HOURS, false),
     getRollingUsage(input.db, input.userId, ROLLING_WEEKLY_WINDOW_HOURS, false),
     CreditService.getBalance(input.db, input.userId),
-    input.allowOverage ? getSpendableCredits(input.db, input.userId) : Promise.resolve(null),
+    getSpendableCredits(input.db, input.userId),
   ]);
   const monthlyRemaining =
     balance === null
@@ -78,7 +77,7 @@ export async function planVoiceSessionBlock(input: {
     weeklyCap === null ? Number.POSITIVE_INFINITY : weeklyCap - weekly.usedMicrousd,
     monthlyRemaining,
   );
-  const overage = spendable?.overageEnabled ? (spendable.availableMicrousd ?? 0) : 0;
+  const overage = spendable.overageEnabled ? (spendable.availableMicrousd ?? 0) : 0;
   const fullBlock = liveSessionChargeMicrousd(LIVE_SESSION_CEILING_SECONDS, input.modelId) ?? 0;
   const budget = Math.min(Math.max(planRemaining, overage, 0), fullBlock);
   return {
