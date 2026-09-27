@@ -142,7 +142,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   private _postToWebview(message: ExtToWebviewMessage): Thenable<boolean> | undefined {
     if (message.type === 'approvalRequested') this._attention.record('approval-requested');
     else if (message.type === 'approvalResolved') this._attention.record('approval-resolved');
-    else if (message.type === 'done' || message.type === 'error') {
+    else if ((message.type === 'done' && !message.payload?.stopped) || message.type === 'error') {
       this._attention.record('turn-finished');
     }
     this._refreshBadge();
