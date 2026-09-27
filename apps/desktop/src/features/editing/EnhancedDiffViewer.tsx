@@ -126,10 +126,10 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
           <span className="text-sm font-medium">{fileName}</span>
 
           <div className="flex items-center gap-3 text-xs">
-            <span className="text-green-500 flex items-center gap-1">
+            <span className="text-success-text flex items-center gap-1">
               <span className="font-mono">+{diff.stats.additions}</span>
             </span>
-            <span className="text-red-500 flex items-center gap-1">
+            <span className="text-danger-text flex items-center gap-1">
               <span className="font-mono">-{diff.stats.deletions}</span>
             </span>
             <Badge variant="outline" className="text-xs">
@@ -209,8 +209,8 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
                           <span className="text-xs font-mono">
                             @@ -{hunk.oldStart},{hunk.oldLines} +{hunk.newStart},{hunk.newLines} @@
                           </span>
-                          <span className="text-xs text-green-500">+{hunkAdditions}</span>
-                          <span className="text-xs text-red-500">-{hunkDeletions}</span>
+                          <span className="text-xs text-success-text">+{hunkAdditions}</span>
+                          <span className="text-xs text-danger-text">-{hunkDeletions}</span>
                           {hunk.accepted && (
                             <Badge variant="default" className="text-xs h-4">
                               Accepted
@@ -255,10 +255,8 @@ export function EnhancedDiffViewer({ filePath, className }: EnhancedDiffViewerPr
                                 key={changeIndex}
                                 className={cn(
                                   'px-2 py-0.5',
-                                  change.type === 'add' &&
-                                    'bg-green-500/10 text-green-700 dark:text-green-400',
-                                  change.type === 'delete' &&
-                                    'bg-red-500/10 text-red-700 dark:text-red-400',
+                                  change.type === 'add' && 'bg-success-fill/10 text-success-text',
+                                  change.type === 'delete' && 'bg-danger-fill/10 text-danger-text',
                                   change.type === 'context' && 'text-muted-foreground',
                                 )}
                               >

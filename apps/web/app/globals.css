@@ -99,6 +99,7 @@
   --color-success-on-fill: var(--success-on-fill);
   --color-info-text: var(--info-text);
   --color-info-fill: var(--info-fill);
+  --color-info-on-fill: var(--info-on-fill);
 
   /* Sans and serif each name a role, not a hue: --font-sans is the product
      face every unscoped element inherits (chat shell, app chrome), sourced

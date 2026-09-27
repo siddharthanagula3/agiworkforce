@@ -46,17 +46,17 @@ const severityConfig: Record<
   },
   warning: {
     Icon: AlertTriangle,
-    containerClass: 'bg-amber-500/10 border-b border-amber-500/30',
-    iconClass: 'text-amber-400',
-    textClass: 'text-amber-200',
-    dismissClass: 'text-amber-300 hover:text-amber-100',
+    containerClass: 'bg-warning-fill/10 border-b border-warning-fill/30',
+    iconClass: 'text-warning-text',
+    textClass: 'text-warning-text',
+    dismissClass: 'text-warning-text',
   },
   critical: {
     Icon: XCircle,
-    containerClass: 'bg-red-500/10 border-b border-red-500/30',
-    iconClass: 'text-red-400',
-    textClass: 'text-red-200',
-    dismissClass: 'text-red-300 hover:text-red-100',
+    containerClass: 'bg-danger-fill/10 border-b border-danger-fill/30',
+    iconClass: 'text-danger-text',
+    textClass: 'text-danger-text',
+    dismissClass: 'text-danger-text',
   },
 };
 

@@ -867,7 +867,7 @@ describe('MessageBubble', () => {
       const msg = makeMessage({ metadata: { isPinned: true } });
       const { container } = render(<MessageBubble message={msg} />);
       // lucide icons render as <svg>; the pinned badge carries the amber accent.
-      expect(container.querySelector('.text-amber-500')).toBeInTheDocument();
+      expect(container.querySelector('.text-amber-700')).toBeInTheDocument();
     });
   });
 
@@ -2199,7 +2199,8 @@ describe('MessageBubble', () => {
                     toolCallId: 'call-1',
                     name: 'web_search',
                     category: 'web-search',
-                    summary: 'Web search unavailable: 20 included searches used in the last 30 days.',
+                    summary:
+                      'Web search unavailable: 20 included searches used in the last 30 days.',
                     status: 'failed',
                     unavailable: true,
                     startedAtMs: 0,
@@ -2214,7 +2215,9 @@ describe('MessageBubble', () => {
       );
 
       expect(noSourcesNotice()).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Retry this response with web search' })).toBeNull();
+      expect(
+        screen.queryByRole('button', { name: 'Retry this response with web search' }),
+      ).toBeNull();
     });
 
     it('stays quiet when only the toggle asked and the search produced zero sources', () => {

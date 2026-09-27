@@ -27,6 +27,10 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 import { hashActionParams } from '../confirmation-token';
+process.env['CSRF_SECRET'] = 'support-retarget-step-up-secret-long-enough';
+
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { confirmSupportAction, proposeSupportAction } from '../service';
 
 const USER = 'user_a';
@@ -90,6 +94,13 @@ describe('support actions, a proposal cannot be swapped for a different effect',
     row.params = { keyId: '55555555-5555-4555-8555-555555555555' };
     expect(hashActionParams(row.params)).not.toBe(row.params_hash);
 
+    const revealProof = createStepUpGrant({
+      userId: USER,
+      action: 'api_credential.reveal',
+      resourceId: proposal.id,
+      method: 'first_factor',
+    }).token;
+
     await expect(
       confirmSupportAction({
         db: mocks.db!.adapter,
@@ -97,6 +108,10 @@ describe('support actions, a proposal cannot be swapped for a different effect',
         proposalId: proposal.id,
         confirmationToken,
         surface: 'web',
+        request: new Request('http://localhost/api/support/actions/confirm', {
+          method: 'POST',
+          headers: { [STEP_UP_TOKEN_HEADER]: revealProof },
+        }),
       }),
     ).rejects.toMatchObject({ code: 'SUPPORT_ACTION_INVALID_PARAMS' });
 

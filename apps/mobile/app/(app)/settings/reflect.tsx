@@ -20,11 +20,25 @@ import {
   type ReflectRecap,
 } from '@/src/features/reflect';
 
+type ReflectRecapOngoingWork = NonNullable<ReflectRecap['ongoingWork']>[number];
+
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ready'; recap: ReflectRecap }
   | { kind: 'memory-off' }
   | { kind: 'error'; message: string };
+
+function describeOngoingWork(item: ReflectRecapOngoingWork): string {
+  const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
+  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+  return [item.projectName, span, followUps, `last active ${lastActive}`]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 function formatDate(dateKey: string | null): string {
   if (!dateKey) return ', ';
@@ -435,6 +449,39 @@ export default function ReflectScreen() {
               </View>
             )}
 
+            {recap.ongoingWork && recap.ongoingWork.length > 0 && (
+              <View style={{ marginTop: 18 }}>
+                <Text
+                  style={{ fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 8 }}
+                >
+                  Work in progress
+                </Text>
+                {recap.ongoingWork.map((item) => (
+                  <Pressable
+                    key={item.conversationId}
+                    onPress={() =>
+                      router.push(
+                        `/(app)/chat/${item.conversationId}` as Parameters<typeof router.push>[0],
+                      )
+                    }
+                    accessibilityRole="link"
+                    accessibilityLabel={`Open ${item.title}`}
+                  >
+                    <Card>
+                      <View style={{ padding: 14, gap: 4 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: c.textPrimary }}>
+                          {item.title}
+                        </Text>
+                        <Text style={{ fontSize: 12, lineHeight: 17, color: c.textSecondary }}>
+                          {describeOngoingWork(item)}
+                        </Text>
+                      </View>
+                    </Card>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+
             {/* Insights */}
             {recap.insights.length > 0 && (
               <View style={{ marginTop: 18 }}>
@@ -483,8 +530,9 @@ export default function ReflectScreen() {
         )}
 
         <Text style={{ fontSize: 11, lineHeight: 16, color: c.textMuted, marginTop: 18 }}>
-          Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics and
-          broad topic labels, not message text, and viewing it does not use model quota.
+          Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics, broad
+          topic labels and the titles of chats you kept working on, not message text, and viewing it
+          does not use model quota.
         </Text>
       </ScrollView>
     </SafeAreaView>

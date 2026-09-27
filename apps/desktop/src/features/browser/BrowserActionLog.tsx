@@ -38,14 +38,14 @@ const ACTION_ICONS: Record<ActionType, ComponentType<{ className?: string }>> = 
 };
 
 const ACTION_COLORS: Record<ActionType, string> = {
-  navigate: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
-  click: 'bg-green-500/10 text-green-600 border-green-500/20',
-  type: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
-  extract: 'bg-orange-500/10 text-orange-600 border-orange-500/20',
-  screenshot: 'bg-pink-500/10 text-pink-600 border-pink-500/20',
-  scroll: 'bg-cyan-500/10 text-cyan-600 border-cyan-500/20',
-  wait: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-  execute: 'bg-red-500/10 text-red-600 border-red-500/20',
+  navigate: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20',
+  click: 'bg-green-500/10 text-green-700 dark:text-green-300 border-green-500/20',
+  type: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/20',
+  extract: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20',
+  screenshot: 'bg-pink-500/10 text-pink-700 dark:text-pink-300 border-pink-500/20',
+  scroll: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20',
+  wait: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-300 border-yellow-500/20',
+  execute: 'bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20',
 };
 
 export function BrowserActionLog({ className, onActionClick }: BrowserActionLogProps) {
@@ -197,7 +197,7 @@ export function BrowserActionLog({ className, onActionClick }: BrowserActionLogP
                   key={action.id}
                   className={cn(
                     'px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer',
-                    !action.success && 'bg-red-500/5',
+                    !action.success && 'bg-danger-fill/5',
                   )}
                   onClick={() => onActionClick?.(action)}
                 >
@@ -232,9 +232,9 @@ export function BrowserActionLog({ className, onActionClick }: BrowserActionLogP
                           </span>
                         )}
                         {action.success ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
+                          <CheckCircle className="h-4 w-4 text-success-text" />
                         ) : (
-                          <XCircle className="h-4 w-4 text-red-600" />
+                          <XCircle className="h-4 w-4 text-danger-text" />
                         )}
                       </div>
 
@@ -243,7 +243,7 @@ export function BrowserActionLog({ className, onActionClick }: BrowserActionLogP
                       </div>
 
                       {action.details.error && (
-                        <div className="text-xs text-red-600 mt-1 truncate">
+                        <div className="text-xs text-danger-text mt-1 truncate">
                           Action failed. Please retry.
                         </div>
                       )}
@@ -291,11 +291,11 @@ export function BrowserActionLog({ className, onActionClick }: BrowserActionLogP
           <div>Total: {actions.length} actions</div>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1">
-              <CheckCircle className="h-3 w-3 text-green-600" />
+              <CheckCircle className="h-3 w-3 text-success-text" />
               {actions.filter((a) => a.success).length} succeeded
             </div>
             <div className="flex items-center gap-1">
-              <XCircle className="h-3 w-3 text-red-600" />
+              <XCircle className="h-3 w-3 text-danger-text" />
               {actions.filter((a) => !a.success).length} failed
             </div>
           </div>

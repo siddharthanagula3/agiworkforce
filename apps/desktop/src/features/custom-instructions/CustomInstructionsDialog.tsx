@@ -124,7 +124,7 @@ export function CustomInstructionsDialog({
   const getCharCountColor = (count: number) => {
     const percentage = (count / maxInstructionsLength) * 100;
     if (count >= maxInstructionsLength) return 'text-destructive';
-    if (percentage > 80) return 'text-yellow-600 dark:text-yellow-500';
+    if (percentage > 80) return 'text-warning-text';
     return 'text-muted-foreground';
   };
 

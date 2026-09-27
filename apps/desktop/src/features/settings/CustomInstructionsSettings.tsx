@@ -127,7 +127,7 @@ export function CustomInstructionsSettings() {
                 isAtLimit
                   ? 'text-destructive'
                   : isNearLimit
-                    ? 'text-yellow-600 dark:text-yellow-500'
+                    ? 'text-warning-text'
                     : 'text-muted-foreground'
               }`}
             >
@@ -169,7 +169,9 @@ export function CustomInstructionsSettings() {
             </Button>
           </div>
           <div className="flex items-center gap-3">
-            {isDirty && <div className="text-amber-500 text-sm py-1">You have unsaved changes</div>}
+            {isDirty && (
+              <div className="text-warning-text text-sm py-1">You have unsaved changes</div>
+            )}
             <Button
               onClick={handleSave}
               disabled={!isDirty}

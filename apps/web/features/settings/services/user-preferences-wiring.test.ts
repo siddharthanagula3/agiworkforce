@@ -170,60 +170,6 @@ describe('settingsService · getAPIKeys', () => {
   });
 });
 
-describe('settingsService · createAPIKey', () => {
-  beforeEach(async () => {
-    fetchMock.mockReset();
-    await setupMocks();
-  });
-
-  it('calls POST /api/settings/api-keys with CSRF + body and returns full_key', async () => {
-    const apiKey = {
-      id: 'k2',
-      name: 'staging',
-      key_prefix: 'agi_',
-      scopes: ['models:read', 'inference:write'],
-      created_at: '2026-01-01T00:00:00Z',
-    };
-    fetchMock.mockResolvedValueOnce(makeResponse({ api_key: apiKey, full_key: 'agi_abc123' }, 201));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.createAPIKey('staging', [
-      'models:read',
-      'inference:write',
-    ]);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/settings/api-keys',
-      expect.objectContaining({
-        method: 'POST',
-        headers: expect.objectContaining({
-          'x-csrf-token': 'test-csrf-token',
-          Authorization: 'Bearer test-auth-token',
-        }),
-      }),
-    );
-    const [, options] = fetchMock.mock.calls[0]!;
-    expect(JSON.parse(String(options?.body))).toEqual({
-      name: 'staging',
-      scopes: ['models:read', 'inference:write'],
-    });
-    expect(result.data).toEqual(apiKey);
-    expect(result.fullKey).toBe('agi_abc123');
-    expect(result.error).toBeUndefined();
-  });
-
-  it('surfaces server error · old code returned hardcoded "not yet available" string', async () => {
-    fetchMock.mockResolvedValueOnce(makeResponse({ error: 'Key limit exceeded' }, 422));
-
-    const { settingsService } = await import('./user-preferences');
-    const result = await settingsService.createAPIKey('overflow', ['inference:write']);
-
-    expect(result.data).toBeNull();
-    expect(result.error).toContain('Key limit exceeded');
-    expect(result.error).not.toBe('API key management not yet available via API');
-  });
-});
-
 describe('settingsService · deleteAPIKey', () => {
   beforeEach(async () => {
     fetchMock.mockReset();

@@ -5,6 +5,7 @@ export {
   fetchWorkspaceOverview,
   removeWorkspaceMember,
   setActiveWorkspace,
+  transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
   type Workspace,
   type WorkspaceAccess,

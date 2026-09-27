@@ -24,13 +24,13 @@ export interface AgentStepTimelineProps {
 function agentTypeBadgeClasses(agentType: AgentType): string {
   switch (agentType) {
     case 'planner':
-      return 'bg-purple-500/15 text-purple-300 border border-purple-500/25';
+      return 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/25';
     case 'executor':
-      return 'bg-blue-500/15 text-blue-300 border border-blue-500/25';
+      return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/25';
     case 'reviewer':
-      return 'bg-green-500/15 text-green-300 border border-green-500/25';
+      return 'bg-success-fill/10 text-success-text border border-success-fill/25';
     case 'coordinator':
-      return 'bg-orange-500/15 text-orange-300 border border-orange-500/25';
+      return 'bg-warning-fill/10 text-warning-text border border-warning-fill/25';
     default:
       return 'bg-slate-500/15 text-slate-300 border border-slate-500/25';
   }
@@ -41,11 +41,11 @@ function statusDotClasses(status: StepStatus): string {
     case 'pending':
       return 'bg-slate-500 border-slate-600';
     case 'running':
-      return 'bg-amber-400 border-amber-500 animate-pulse';
+      return 'bg-warning-fill border-warning-fill animate-pulse';
     case 'complete':
-      return 'bg-green-400 border-green-500';
+      return 'bg-success-fill border-success-fill';
     case 'error':
-      return 'bg-red-400 border-red-500';
+      return 'bg-danger-fill border-danger-fill';
     case 'skipped':
       return 'bg-muted-foreground border-border opacity-50';
     default:
@@ -56,11 +56,11 @@ function statusDotClasses(status: StepStatus): string {
 function statusLabelClasses(status: StepStatus): string {
   switch (status) {
     case 'running':
-      return 'text-amber-300';
+      return 'text-warning-text';
     case 'complete':
-      return 'text-green-300';
+      return 'text-success-text';
     case 'error':
-      return 'text-red-300';
+      return 'text-danger-text';
     case 'skipped':
       return 'text-slate-500';
     default:

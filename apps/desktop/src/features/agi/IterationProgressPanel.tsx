@@ -23,13 +23,7 @@ import {
 } from 'lucide-react';
 
 type PanelStatus =
-  | 'idle'
-  | 'planning'
-  | 'executing'
-  | 'reflecting'
-  | 'completed'
-  | 'failed'
-  | 'paused';
+  'idle' | 'planning' | 'executing' | 'reflecting' | 'completed' | 'failed' | 'paused';
 
 interface IterationProgressPanelProps {
   goalId?: string;
@@ -123,13 +117,13 @@ function IterationHistoryCard({
         <div className="flex items-center gap-3">
           <div
             className={`p-1.5 rounded-full ${
-              status === 'completed' ? 'bg-green-500/10' : 'bg-red-500/10'
+              status === 'completed' ? 'bg-success-fill/10' : 'bg-danger-fill/10'
             }`}
           >
             {status === 'completed' ? (
-              <CheckCircle className="w-4 h-4 text-green-400" />
+              <CheckCircle className="w-4 h-4 text-success-text" />
             ) : (
-              <XCircle className="w-4 h-4 text-red-400" />
+              <XCircle className="w-4 h-4 text-danger-text" />
             )}
           </div>
           <div className="text-left">
@@ -161,11 +155,11 @@ function IterationHistoryCard({
             </div>
             <div className="rounded border border-border bg-surface-elevated p-2">
               <div className="text-muted-foreground">Succeeded</div>
-              <div className="font-medium text-green-400">{iteration.stepsSucceeded}</div>
+              <div className="font-medium text-success-text">{iteration.stepsSucceeded}</div>
             </div>
             <div className="rounded border border-border bg-surface-elevated p-2">
               <div className="text-muted-foreground">Failed</div>
-              <div className="font-medium text-red-400">{iteration.stepsFailed}</div>
+              <div className="font-medium text-danger-text">{iteration.stepsFailed}</div>
             </div>
           </div>
         </div>
@@ -186,21 +180,21 @@ function PlanCritiquePanel({
   };
 }) {
   return (
-    <div className="mb-4 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+    <div className="mb-4 p-3 rounded-lg bg-warning-fill/5 border border-warning-fill/20">
       <div className="flex items-center gap-2 mb-3">
-        <AlertTriangle className="w-4 h-4 text-amber-400" />
-        <span className="font-medium text-amber-400 text-sm">Plan Critique</span>
+        <AlertTriangle className="w-4 h-4 text-warning-text" />
+        <span className="font-medium text-warning-text text-sm">Plan Critique</span>
       </div>
       <div className="grid grid-cols-3 gap-2 mb-3 text-xs">
-        <div className="rounded border border-amber-500/20 bg-surface-base p-2">
+        <div className="rounded border border-warning-fill/20 bg-surface-base p-2">
           <div className="text-muted-foreground">Iteration</div>
           <div className="font-medium text-foreground">{critique.iteration}</div>
         </div>
-        <div className="rounded border border-amber-500/20 bg-surface-base p-2">
+        <div className="rounded border border-warning-fill/20 bg-surface-base p-2">
           <div className="text-muted-foreground">Quality</div>
           <div className="font-medium text-foreground">{critique.qualityScore}/100</div>
         </div>
-        <div className="rounded border border-amber-500/20 bg-surface-base p-2">
+        <div className="rounded border border-warning-fill/20 bg-surface-base p-2">
           <div className="text-muted-foreground">Risks</div>
           <div className="font-medium text-foreground">{critique.risksCount}</div>
         </div>
@@ -298,13 +292,13 @@ export function IterationProgressPanel({
         : 0);
 
   const statusConfig = {
-    idle: { icon: Clock, color: 'text-gray-400', label: 'Idle' },
-    planning: { icon: Brain, color: 'text-purple-400', label: 'Planning' },
-    executing: { icon: Zap, color: 'text-blue-400', label: 'Executing' },
-    reflecting: { icon: Brain, color: 'text-amber-400', label: 'Reflecting' },
-    completed: { icon: CheckCircle, color: 'text-green-400', label: 'Completed' },
-    failed: { icon: XCircle, color: 'text-red-400', label: 'Failed' },
-    paused: { icon: Pause, color: 'text-yellow-400', label: 'Paused' },
+    idle: { icon: Clock, color: 'text-gray-600 dark:text-gray-400', label: 'Idle' },
+    planning: { icon: Brain, color: 'text-purple-700 dark:text-purple-400', label: 'Planning' },
+    executing: { icon: Zap, color: 'text-blue-700 dark:text-blue-400', label: 'Executing' },
+    reflecting: { icon: Brain, color: 'text-amber-700 dark:text-amber-400', label: 'Reflecting' },
+    completed: { icon: CheckCircle, color: 'text-success-text', label: 'Completed' },
+    failed: { icon: XCircle, color: 'text-danger-text', label: 'Failed' },
+    paused: { icon: Pause, color: 'text-warning-text', label: 'Paused' },
   } satisfies Record<PanelStatus, { icon: ElementType; color: string; label: string }>;
 
   const StatusIcon = statusConfig[status].icon;
@@ -351,9 +345,9 @@ export function IterationProgressPanel({
             <div
               className={`h-full transition-all duration-300 ${
                 status === 'failed'
-                  ? 'bg-red-500'
+                  ? 'bg-danger-fill'
                   : status === 'completed'
-                    ? 'bg-green-500'
+                    ? 'bg-success-fill'
                     : 'bg-blue-500'
               }`}
               style={{ width: `${Math.min(progressPercent, 100)}%` }}
@@ -369,11 +363,11 @@ export function IterationProgressPanel({
             <div className="text-xs text-muted-foreground">Current</div>
           </div>
           <div className="bg-surface-base rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-green-400">{successfulIterations}</div>
+            <div className="text-lg font-bold text-success-text">{successfulIterations}</div>
             <div className="text-xs text-muted-foreground">Success</div>
           </div>
           <div className="bg-surface-base rounded-lg p-2 text-center">
-            <div className="text-lg font-bold text-red-400">
+            <div className="text-lg font-bold text-danger-text">
               {iterationProgress.consecutiveFailures}
             </div>
             <div className="text-xs text-muted-foreground">Failures</div>
@@ -474,8 +468,8 @@ export function IterationProgressPanel({
                   <div
                     className={
                       insightSummary.goalAchievable
-                        ? 'font-medium text-green-400'
-                        : 'font-medium text-red-400'
+                        ? 'font-medium text-success-text'
+                        : 'font-medium text-danger-text'
                     }
                   >
                     {insightSummary.goalAchievable ? 'Yes' : 'No'}
@@ -541,10 +535,10 @@ export function IterationProgressPanel({
                     key={iteration.iteration}
                     className={`flex-1 rounded-t ${
                       successRate === 1
-                        ? 'bg-green-500'
+                        ? 'bg-success-fill'
                         : successRate >= 0.5
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
+                          ? 'bg-warning-fill'
+                          : 'bg-danger-fill'
                     }`}
                     style={{ height: `${Math.max(successRate * 100, 8)}%` }}
                     title={`Iteration ${iteration.iteration}: ${Math.round(successRate * 100)}% success`}

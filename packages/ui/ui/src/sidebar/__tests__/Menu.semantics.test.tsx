@@ -164,8 +164,8 @@ describe('the one action that cannot be taken back is set apart', () => {
     const destructive = within(menu).getByRole('menuitem', { name: entry });
     const neighbour = within(menu).getAllByRole('menuitem')[0]!;
 
-    expect(destructive.getAttribute('class')).toContain('text-red-500');
-    expect(neighbour.getAttribute('class')).not.toContain('text-red-500');
+    expect(destructive.getAttribute('class')).toContain('text-danger-text');
+    expect(neighbour.getAttribute('class')).not.toContain('text-danger-text');
   });
 
   /**

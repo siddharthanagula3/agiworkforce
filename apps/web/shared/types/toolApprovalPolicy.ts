@@ -20,12 +20,14 @@ export type {
 } from '@agiworkforce/types';
 
 import {
+  CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,
   DEFAULT_TOOL_APPROVAL_POLICY,
   type ToolApprovalPolicy,
   type ToolApprovalPreferences,
 } from '@agiworkforce/types';
 
-export const WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY: ToolApprovalPolicy = 'autonomous';
+export const WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY: ToolApprovalPolicy =
+  CLOUD_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY;
 
 export const WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES: ToolApprovalPreferences = {
   defaultPolicy: WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY,

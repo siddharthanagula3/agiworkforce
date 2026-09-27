@@ -287,7 +287,7 @@ export function ProjectCard({
                       <button
                         type="button"
                         role="menuitem"
-                        className={cn(menuItemCls, 'text-red-400 hover:text-red-300')}
+                        className={cn(menuItemCls, 'text-danger-text')}
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpen(false);

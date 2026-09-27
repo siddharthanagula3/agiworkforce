@@ -11,6 +11,7 @@ import {
 import { RefreshCw } from 'lucide-react';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
+import { conversationHref } from '@/shared/components/layout/sidebar-session-actions';
 
 const RANGE_OPTIONS: ReadonlyArray<{ value: ManagedCloudReflectRange; label: string }> = [
   { value: '30d', label: 'Past 30 days' },
@@ -28,6 +29,23 @@ function formatDate(dateKey: string | null): string {
   const date = new Date(`${dateKey}T12:00:00`);
   if (!Number.isFinite(date.getTime())) return dateKey;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date);
+}
+
+function describeOngoingWork(item: {
+  projectName: string | null;
+  spanDays: number;
+  followUps: number;
+  lastActiveAt: string;
+}): string {
+  const span = item.spanDays > 1 ? `Active over ${item.spanDays} days` : 'Active on one day';
+  const followUps = `${item.followUps} follow-up${item.followUps === 1 ? '' : 's'}`;
+  const lastActive = new Date(item.lastActiveAt).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
+  return [item.projectName, span, followUps, `last active ${lastActive}`]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function formatHour(hour: number | null): string {
@@ -298,6 +316,32 @@ export function ReflectSection() {
             </div>
           </section>
 
+          {recap.ongoingWork && recap.ongoingWork.length > 0 ? (
+            <section aria-labelledby="reflect-ongoing-heading" className="space-y-4">
+              <h2 id="reflect-ongoing-heading" className="text-lg font-semibold text-foreground">
+                Work in progress
+              </h2>
+              <ul>
+                {recap.ongoingWork.map((item, index) => (
+                  <li
+                    key={item.conversationId}
+                    className={`py-3 ${index === 0 ? '' : 'border-t border-border/50'}`}
+                  >
+                    <SettingsPageLink
+                      href={conversationHref(item.conversationId)}
+                      className="text-sm font-medium text-foreground underline-offset-2 hover:underline"
+                    >
+                      {item.title}
+                    </SettingsPageLink>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {describeOngoingWork(item)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
           <section aria-labelledby="reflect-insights-heading" className="space-y-4">
             <div>
               <h2 id="reflect-insights-heading" className="text-lg font-semibold text-foreground">
@@ -340,9 +384,9 @@ export function ReflectSection() {
       ) : null}
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics and
-        broad topic labels to the browser, not message text, and viewing it does not use model
-        quota.
+        Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics, broad
+        topic labels and the titles of chats you kept working on to the browser, not message text,
+        and viewing it does not use model quota.
       </p>
     </div>
   );

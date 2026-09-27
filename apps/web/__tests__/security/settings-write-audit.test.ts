@@ -14,8 +14,6 @@ const AUDIT_CALL = /\b(?:recordAuditEvent|logSecurityEvent|logAdminDataAccess)\s
  * each such handler has to write the trail itself or through the service it calls.
  */
 const NOT_AUDITED: Record<string, string> = {
-  '2fa/setup/route.ts::POST':
-    'Starts enrolment and returns a secret to confirm; nothing is enforced until 2fa/verify succeeds, which records two_factor_enabled.',
   'organization/active/route.ts::PUT':
     'Chooses which of the caller’s own workspaces the next request acts in; it grants and removes nothing.',
   'workspaces/route.ts::PUT':

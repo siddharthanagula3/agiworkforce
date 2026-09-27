@@ -150,7 +150,7 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
       {/* Toolbar */}
       <div className="flex items-center justify-between px-2 py-1.5 border-b bg-muted/30">
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-compact text-xs font-medium">
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-success-fill/10 text-success-text rounded-compact text-xs font-medium">
             <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Sheet</span>
           </div>

@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader, Wifi, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -95,31 +94,31 @@ export function OfflineIndicator({
   })();
 
   const bgColor = {
-    success: 'bg-green-50 dark:bg-green-950',
+    success: 'bg-success-fill/10',
     info: 'bg-blue-50 dark:bg-blue-950',
-    warning: 'bg-yellow-50 dark:bg-yellow-950',
-    error: 'bg-red-50 dark:bg-red-950',
+    warning: 'bg-warning-fill/10',
+    error: 'bg-danger-fill/10',
   }[severity];
 
   const borderColor = {
-    success: 'border-green-200 dark:border-green-800',
+    success: 'border-success-fill/30',
     info: 'border-blue-200 dark:border-blue-800',
-    warning: 'border-yellow-200 dark:border-yellow-800',
-    error: 'border-red-200 dark:border-red-800',
+    warning: 'border-warning-fill/30',
+    error: 'border-danger-fill/30',
   }[severity];
 
   const textColor = {
-    success: 'text-green-900 dark:text-green-100',
+    success: 'text-success-text',
     info: 'text-blue-900 dark:text-blue-100',
-    warning: 'text-yellow-900 dark:text-yellow-100',
-    error: 'text-red-900 dark:text-red-100',
+    warning: 'text-warning-text',
+    error: 'text-danger-text',
   }[severity];
 
   const iconColor = {
-    success: 'text-green-600 dark:text-green-400',
+    success: 'text-success-text',
     info: 'text-blue-600 dark:text-blue-400',
-    warning: 'text-yellow-600 dark:text-yellow-400',
-    error: 'text-red-600 dark:text-red-400',
+    warning: 'text-warning-text',
+    error: 'text-danger-text',
   }[severity];
 
   const getIcon = () => {
@@ -176,8 +175,8 @@ export function OfflineIndicator({
               onClick={() => void handleRetry()}
               className={`
                 px-3 py-1 rounded text-sm font-medium
-                bg-red-200 hover:bg-red-300 dark:bg-red-800 dark:hover:bg-red-700
-                text-red-900 dark:text-red-100
+                bg-danger-fill/10 hover:bg-danger-fill 
+                text-danger-text
                 transition-colors duration-150
               `}
               aria-label="Retry sync"

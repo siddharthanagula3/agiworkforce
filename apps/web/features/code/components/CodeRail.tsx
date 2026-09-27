@@ -29,7 +29,13 @@ import {
   DropdownMenuTrigger,
   Spinner,
 } from '@agiworkforce/ui';
-import type { CloudCodeNetworkAccess, CloudCodeSession } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_SESSION_STATE_LABELS,
+  CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
+  cloudCodeSessionIsBusy,
+  type CloudCodeNetworkAccess,
+  type CloudCodeSession,
+} from '@agiworkforce/types';
 import {
   CODE_COPY,
   CODE_NETWORK_OPTIONS,
@@ -37,11 +43,8 @@ import {
   CODE_SORT_LABELS,
   CODE_SORT_OPTIONS,
   CODE_STATUS_FILTERS,
-  CODE_STATUS_FILTER_LABELS,
   DEFAULT_CODE_FILTERS,
   filtersAreDefault,
-  sessionIsBusy,
-  sessionStateLabel,
   type CodeSessionFilters,
   type CodeSortOption,
   type CodeStatusFilter,
@@ -98,7 +101,7 @@ function FilterMenu({
         >
           {CODE_STATUS_FILTERS.map((status) => (
             <DropdownMenuRadioItem key={status} value={status}>
-              {CODE_STATUS_FILTER_LABELS[status]}
+              {CLOUD_CODE_SESSION_STATUS_FILTER_LABELS[status]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
@@ -292,7 +295,7 @@ export function CodeRail({
               onClick={() => onSelectSession(session.id)}
             >
               <span className={styles['railRowGlyph']}>
-                {sessionIsBusy(session) ? (
+                {cloudCodeSessionIsBusy(session) ? (
                   <span
                     className={styles['railRunningDot']}
                     aria-label={CODE_COPY.runningSession}
@@ -303,7 +306,9 @@ export function CodeRail({
               </span>
               <span className={styles['railRowLabel']}>{session.title}</span>
               {session.state === 'failed' && (
-                <span className={styles['railRowState']}>{sessionStateLabel(session)}</span>
+                <span className={styles['railRowState']}>
+                  {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}
+                </span>
               )}
             </button>
           ))}

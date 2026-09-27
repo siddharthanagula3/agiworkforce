@@ -20,21 +20,21 @@ const severityConfig: Record<
   },
   warning: {
     icon: AlertTriangle,
-    bgClass: 'bg-yellow-50 dark:bg-yellow-950',
-    iconClass: 'text-yellow-500',
-    borderClass: 'border-yellow-200 dark:border-yellow-800',
+    bgClass: 'bg-warning-fill/10',
+    iconClass: 'text-warning-text',
+    borderClass: 'border-warning-fill/30',
   },
   error: {
     icon: AlertCircle,
-    bgClass: 'bg-red-50 dark:bg-red-950',
-    iconClass: 'text-red-500',
-    borderClass: 'border-red-200 dark:border-red-800',
+    bgClass: 'bg-danger-fill/10',
+    iconClass: 'text-danger-text',
+    borderClass: 'border-danger-fill/30',
   },
   critical: {
     icon: AlertCircle,
-    bgClass: 'bg-red-100 dark:bg-red-900',
-    iconClass: 'text-red-600',
-    borderClass: 'border-red-300 dark:border-red-700',
+    bgClass: 'bg-danger-fill/10',
+    iconClass: 'text-danger-text',
+    borderClass: 'border-danger-fill/30',
   },
 };
 

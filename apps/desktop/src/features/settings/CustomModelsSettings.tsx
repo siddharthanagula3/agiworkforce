@@ -149,7 +149,7 @@ function generateId(provider: string, modelId: string): string {
 function StatusDot({ status }: { status: CustomModelConfig['status'] }) {
   if (status === 'connected') {
     return (
-      <span className="flex items-center gap-1 text-xs text-green-600">
+      <span className="flex items-center gap-1 text-xs text-success-text">
         <Wifi className="h-3 w-3" />
         Connected
       </span>
@@ -157,7 +157,7 @@ function StatusDot({ status }: { status: CustomModelConfig['status'] }) {
   }
   if (status === 'error') {
     return (
-      <span className="flex items-center gap-1 text-xs text-red-500">
+      <span className="flex items-center gap-1 text-xs text-danger-text">
         <WifiOff className="h-3 w-3" />
         Error
       </span>
@@ -420,8 +420,8 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
             <div
               className={`flex items-center gap-2 text-sm rounded-md p-3 ${
                 testResult.connected
-                  ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-                  : 'bg-red-500/10 text-red-600 dark:text-red-400'
+                  ? 'bg-success-fill/10 text-success-text'
+                  : 'bg-danger-fill/10 text-danger-text'
               }`}
             >
               {testResult.connected ? (
@@ -458,7 +458,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
               )}
             </Button>
             {isVerified && (
-              <span className="text-green-500 text-sm font-medium ml-2">Verified ✓</span>
+              <span className="text-success-text text-sm font-medium ml-2">Verified ✓</span>
             )}
             <div className="flex-1" />
             <Button variant="outline" onClick={onClose}>
@@ -552,7 +552,7 @@ export function CustomModelsSettings() {
                   {model.baseUrl}, {model.modelId}
                 </p>
                 {model.status === 'error' && model.errorMessage && (
-                  <p className="text-xs text-red-500 mt-0.5">{model.errorMessage}</p>
+                  <p className="text-xs text-danger-text mt-0.5">{model.errorMessage}</p>
                 )}
               </div>
               <div className="flex items-center gap-1 shrink-0">

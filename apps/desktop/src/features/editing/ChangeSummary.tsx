@@ -63,22 +63,20 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
           <div className="text-2xl font-bold">{stats.filesChanged}</div>
         </div>
 
-        <div className="flex flex-col items-center p-3 rounded-lg bg-green-500/10">
-          <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400 mb-1">
+        <div className="flex flex-col items-center p-3 rounded-lg bg-success-fill/10">
+          <div className="flex items-center gap-1 text-sm text-success-text mb-1">
             <Plus className="h-4 w-4" />
             Additions
           </div>
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {stats.additions}
-          </div>
+          <div className="text-2xl font-bold text-success-text">{stats.additions}</div>
         </div>
 
-        <div className="flex flex-col items-center p-3 rounded-lg bg-red-500/10">
-          <div className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400 mb-1">
+        <div className="flex flex-col items-center p-3 rounded-lg bg-danger-fill/10">
+          <div className="flex items-center gap-1 text-sm text-danger-text mb-1">
             <Minus className="h-4 w-4" />
             Deletions
           </div>
-          <div className="text-2xl font-bold text-red-600 dark:text-red-400">{stats.deletions}</div>
+          <div className="text-2xl font-bold text-danger-text">{stats.deletions}</div>
         </div>
       </div>
 
@@ -107,14 +105,14 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
       {riskLevel.warnings.length > 0 && (
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertTriangle className="h-4 w-4 text-warning-text" />
             Risk Indicators
           </h4>
           <div className="space-y-1">
             {riskLevel.warnings.map((warning, index) => (
               <div
                 key={index}
-                className="flex items-start gap-2 p-2 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-400 text-sm"
+                className="flex items-start gap-2 p-2 rounded-md bg-warning-fill/10 text-warning-text text-sm"
               >
                 <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                 <span>{warning}</span>
@@ -161,11 +159,11 @@ export function ChangeSummary({ className }: ChangeSummaryProps) {
 function FileChangeIcon({ type }: { type: 'modified' | 'added' | 'deleted' }) {
   switch (type) {
     case 'added':
-      return <Plus className="h-4 w-4 text-green-500" />;
+      return <Plus className="h-4 w-4 text-success-text" />;
     case 'deleted':
-      return <Minus className="h-4 w-4 text-red-500" />;
+      return <Minus className="h-4 w-4 text-danger-text" />;
     case 'modified':
-      return <FileText className="h-4 w-4 text-amber-500" />;
+      return <FileText className="h-4 w-4 text-warning-text" />;
   }
 }
 
@@ -177,17 +175,17 @@ function FileChangeBadge({
   status: 'pending' | 'accepted' | 'rejected' | 'partial';
 }) {
   const getColor = () => {
-    if (status === 'accepted') return 'bg-green-500/20 text-green-700 dark:text-green-400';
-    if (status === 'rejected') return 'bg-red-500/20 text-red-700 dark:text-red-400';
-    if (status === 'partial') return 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
+    if (status === 'accepted') return 'bg-success-fill/10 text-success-text';
+    if (status === 'rejected') return 'bg-danger-fill/10 text-danger-text';
+    if (status === 'partial') return 'bg-warning-fill/10 text-warning-text';
 
     switch (type) {
       case 'added':
-        return 'bg-green-500/20 text-green-700 dark:text-green-400';
+        return 'bg-success-fill/10 text-success-text';
       case 'deleted':
-        return 'bg-red-500/20 text-red-700 dark:text-red-400';
+        return 'bg-danger-fill/10 text-danger-text';
       case 'modified':
-        return 'bg-amber-500/20 text-amber-700 dark:text-amber-400';
+        return 'bg-warning-fill/10 text-warning-text';
     }
   };
 

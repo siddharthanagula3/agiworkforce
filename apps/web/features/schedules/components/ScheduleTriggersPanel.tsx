@@ -11,6 +11,13 @@ import {
   type EventTrigger,
   type TriggerSource,
 } from '@/lib/triggers/trigger-types';
+import {
+  conditionDraftsFrom,
+  conditionsFromDrafts,
+  describeConditions,
+  TriggerConditionsEditor,
+  type TriggerConditionDraft,
+} from './TriggerConditionsEditor';
 
 interface ScheduleTriggersPanelProps {
   scheduleId: string;
@@ -111,6 +118,12 @@ export default function ScheduleTriggersPanel({
   const [account, setAccount] = useState('');
   const [eventTypes, setEventTypes] = useState('');
   const [debounceSeconds, setDebounceSeconds] = useState('0');
+  const [conditions, setConditions] = useState<TriggerConditionDraft[]>([]);
+  const [editingConditions, setEditingConditions] = useState<{
+    triggerId: string;
+    drafts: TriggerConditionDraft[];
+  } | null>(null);
+  const [savingConditions, setSavingConditions] = useState(false);
   const [watching, setWatching] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
@@ -137,6 +150,11 @@ export default function ScheduleTriggersPanel({
   }, [opened, load]);
 
   async function createTrigger() {
+    const parsedConditions = conditionsFromDrafts(conditions);
+    if (!parsedConditions.ok) {
+      setError(parsedConditions.error);
+      return;
+    }
     setSaving(true);
     setError(null);
     setSecrets(null);
@@ -155,6 +173,7 @@ export default function ScheduleTriggersPanel({
           eventTypes: chosenTypes.length > 0 ? chosenTypes : ['*'],
           ...(selected.accountLabel ? { sourceAccount: account.trim() } : {}),
           debounceSeconds: Number(debounceSeconds || '0'),
+          conditions: parsedConditions.conditions,
         }),
       });
       const body = await response.json().catch(() => null);
@@ -176,6 +195,7 @@ export default function ScheduleTriggersPanel({
       setName('');
       setAccount('');
       setEventTypes('');
+      setConditions([]);
       setAdding(false);
       await load();
     } catch (createError) {
@@ -200,6 +220,33 @@ export default function ScheduleTriggersPanel({
       await load();
     } catch (toggleError) {
       setError(toUserMessage(toggleError, 'Could not change that trigger.'));
+    }
+  }
+
+  async function saveConditions(trigger: EventTrigger, drafts: TriggerConditionDraft[]) {
+    const parsed = conditionsFromDrafts(drafts);
+    if (!parsed.ok) {
+      setError(parsed.error);
+      return;
+    }
+    setSavingConditions(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/triggers/${trigger.id}`, {
+        method: 'PATCH',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ conditions: parsed.conditions }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+      }
+      setEditingConditions(null);
+      await load();
+    } catch (saveError) {
+      setError(toUserMessage(saveError, 'Could not save the conditions for that trigger.'));
+    } finally {
+      setSavingConditions(false);
     }
   }
 
@@ -318,7 +365,10 @@ export default function ScheduleTriggersPanel({
               id={`trigger-source-${scheduleId}`}
               className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               value={source}
-              onChange={(event) => setSource(event.target.value as TriggerSource)}
+              onChange={(event) => {
+                setSource(event.target.value as TriggerSource);
+                setConditions([]);
+              }}
             >
               {SOURCES.map((entry) => (
                 <option key={entry.value} value={entry.value}>
@@ -369,6 +419,14 @@ export default function ScheduleTriggersPanel({
               onChange={(event) => setDebounceSeconds(event.target.value)}
             />
           </div>
+          <div className="sm:col-span-2">
+            <TriggerConditionsEditor
+              idPrefix={`trigger-conditions-${scheduleId}`}
+              source={source}
+              drafts={conditions}
+              onChange={setConditions}
+            />
+          </div>
           <div className="flex items-end sm:col-span-2 sm:justify-end">
             <Button type="submit" size="sm" disabled={saving} aria-busy={saving}>
               {saving ? 'Adding…' : 'Add trigger'}
@@ -405,6 +463,11 @@ export default function ScheduleTriggersPanel({
                       ? ` · repeats ignored for ${trigger.debounceSeconds}s`
                       : ''}
                   </p>
+                  {trigger.conditions.length > 0 ? (
+                    <p className="break-words text-xs text-muted-foreground">
+                      Only when {describeConditions(trigger.conditions, trigger.source)}
+                    </p>
+                  ) : null}
                   {watchNotice ? (
                     <p
                       className={
@@ -433,6 +496,24 @@ export default function ScheduleTriggersPanel({
                       Try again
                     </Button>
                   ) : null}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-expanded={editingConditions?.triggerId === trigger.id}
+                    onClick={() =>
+                      setEditingConditions((current) =>
+                        current?.triggerId === trigger.id
+                          ? null
+                          : {
+                              triggerId: trigger.id,
+                              drafts: conditionDraftsFrom(trigger.conditions, trigger.source),
+                            },
+                      )
+                    }
+                  >
+                    Conditions
+                  </Button>
                   <Switch
                     checked={trigger.isEnabled}
                     onCheckedChange={(checked) => void setEnabled(trigger, checked)}
@@ -447,6 +528,41 @@ export default function ScheduleTriggersPanel({
                     Delete
                   </Button>
                 </div>
+                {editingConditions?.triggerId === trigger.id ? (
+                  <form
+                    className="w-full space-y-3 border-t border-border/70 pt-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void saveConditions(trigger, editingConditions.drafts);
+                    }}
+                  >
+                    <TriggerConditionsEditor
+                      idPrefix={`trigger-conditions-${trigger.id}`}
+                      source={trigger.source}
+                      drafts={editingConditions.drafts}
+                      onChange={(drafts) => setEditingConditions({ triggerId: trigger.id, drafts })}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditingConditions(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        disabled={savingConditions}
+                        aria-busy={savingConditions}
+                      >
+                        {savingConditions ? <Spinner size="sm" /> : null}
+                        Save conditions
+                      </Button>
+                    </div>
+                  </form>
+                ) : null}
               </li>
             );
           })}

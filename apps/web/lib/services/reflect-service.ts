@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  MANAGED_CLOUD_REFLECT_MAX_ONGOING_WORK,
   ManagedCloudReflectRecapSchema,
   type ManagedCloudConversationTopic,
   type ManagedCloudReflectRange,
@@ -14,6 +15,9 @@ import {
 } from './conversation-classification-service';
 
 const MAX_REFLECT_CONVERSATIONS = 1_000;
+const DAY_MS = 24 * 60 * 60_000;
+const ONGOING_MIN_FOLLOW_UPS = 3;
+const UNTITLED_CONVERSATION = 'Untitled chat';
 
 const RANGE_PRESENTATION: Record<ManagedCloudReflectRange, { days: number; label: string }> = {
   '30d': { days: 30, label: 'Past 30 days' },
@@ -30,6 +34,7 @@ export interface ReflectConversationSample {
   userMessageCount: number;
   createdAt: string;
   updatedAt: string;
+  projectName?: string | null;
 }
 
 interface ReflectConversationRow {
@@ -41,6 +46,7 @@ interface ReflectConversationRow {
   total_conversations: number | string;
   created_at: string;
   updated_at: string;
+  project_name: string | null;
 }
 
 interface UserSettingsRow {
@@ -86,6 +92,31 @@ function highestCountKey(map: Map<string, number>): string | null {
     }
   }
   return result;
+}
+
+function spanDays(conversation: ReflectConversationSample): number {
+  const created = new Date(conversation.createdAt).getTime();
+  const updated = new Date(conversation.updatedAt).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(updated) || updated < created) return 1;
+  return Math.floor((updated - created) / DAY_MS) + 1;
+}
+
+function ongoingWork(conversations: readonly ReflectConversationSample[]) {
+  return conversations
+    .filter(
+      (conversation) =>
+        spanDays(conversation) > 1 || conversation.userMessageCount >= ONGOING_MIN_FOLLOW_UPS,
+    )
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, MANAGED_CLOUD_REFLECT_MAX_ONGOING_WORK)
+    .map((conversation) => ({
+      conversationId: conversation.id,
+      title: conversation.title.trim().slice(0, 200) || UNTITLED_CONVERSATION,
+      projectName: conversation.projectName?.trim().slice(0, 200) || null,
+      spanDays: spanDays(conversation),
+      followUps: Math.max(0, conversation.userMessageCount - 1),
+      lastActiveAt: new Date(conversation.updatedAt).toISOString(),
+    }));
 }
 
 function wordCount(value: string): number {
@@ -237,6 +268,7 @@ export function buildManagedReflectRecap(input: {
     dailyActivity,
     topics,
     insights,
+    ongoingWork: ongoingWork(input.conversations),
     sampled: input.totalConversations > sampledConversationCount,
     sampledConversationCount,
   });
@@ -284,8 +316,11 @@ export async function loadManagedReflectRecap(input: {
               limit 1
             ), '') as first_user_message,
             (select count(*) from public.web_messages wm where wm.conversation_id = wc.id and wm.role = 'user' and wm.deleted_at is null)::int as user_message_count,
-            count(*) over()::int as total_conversations
+            count(*) over()::int as total_conversations,
+            p.name as project_name
        from public.web_conversations wc
+       left join public.user_projects p
+         on p.id::text = wc.project_id and p.user_id = wc.user_id and p.deleted_at is null
       where wc.user_id = $1
         and wc.organization_id is not distinct from $5::uuid
         and wc.deleted_at is null
@@ -318,6 +353,7 @@ export async function loadManagedReflectRecap(input: {
     userMessageCount: Number(row.user_message_count),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    projectName: row.project_name,
   }));
 
   return {

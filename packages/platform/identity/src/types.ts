@@ -10,12 +10,33 @@ export class IdentityConfigError extends Error {
   }
 }
 
+export class IdentityRequestRejectedError extends Error {
+  constructor(
+    message: string,
+    readonly code: string | null,
+  ) {
+    super(message);
+    this.name = 'IdentityRequestRejectedError';
+    Object.setPrototypeOf(this, IdentityRequestRejectedError.prototype);
+  }
+}
+
+export function isIdentityRequestRejected(error: unknown): error is IdentityRequestRejectedError {
+  return error instanceof IdentityRequestRejectedError;
+}
+
+export interface IdentityFactorAge {
+  firstFactorMinutes: number | null;
+  secondFactorMinutes: number | null;
+}
+
 export interface IdentityClaims {
   subject: string;
   sessionId: string | null;
   organizationId: string | null;
   organizationRole: string | null;
   email: string | null;
+  factorAge?: IdentityFactorAge | null;
   raw: Readonly<Record<string, unknown>>;
 }
 
@@ -34,6 +55,7 @@ export interface IdentityRequestAuth {
   organizationId: string | null;
   organizationRole: string | null;
   isSignedIn: boolean;
+  factorAge?: IdentityFactorAge | null;
   getToken: () => Promise<string | null>;
 }
 
@@ -45,11 +67,24 @@ export interface IdentityEnterpriseAccount {
   active: boolean;
 }
 
+export interface IdentityEmailAddress {
+  id: string;
+  emailAddress: string;
+  verified: boolean;
+}
+
+export interface IdentitySecondFactorRegistration {
+  totpSecret?: string;
+  backupCodes?: readonly string[];
+}
+
 export interface IdentityUser {
   id: string;
   primaryEmail: string | null;
   primaryEmailVerification: IdentityEmailVerification;
+  primaryEmailAddressId: string | null;
   emails: readonly string[];
+  emailAddresses: readonly IdentityEmailAddress[];
   firstName: string | null;
   lastName: string | null;
   fullName: string | null;
@@ -59,7 +94,10 @@ export interface IdentityUser {
   privateMetadata: Readonly<Record<string, unknown>>;
   banned: boolean;
   locked: boolean;
+  passwordEnabled: boolean;
   twoFactorEnabled: boolean;
+  totpEnabled: boolean;
+  backupCodesEnabled: boolean;
   createdAt: number | null;
   lastSignInAt: number | null;
   enterpriseAccounts: readonly IdentityEnterpriseAccount[];
@@ -177,5 +215,15 @@ export interface IdentityProvider<Request = unknown> {
   getSession(sessionId: string): Promise<IdentitySession | null>;
   revokeSession(sessionId: string): Promise<void>;
   listOrganizationMemberships(userId: string): Promise<readonly IdentityMembership[]>;
+  registerSecondFactor(
+    userId: string,
+    registration: IdentitySecondFactorRegistration,
+  ): Promise<void>;
+  removeSecondFactor(userId: string): Promise<void>;
+  verifyPassword(userId: string, password: string): Promise<boolean>;
+  setPassword(userId: string, password: string): Promise<void>;
+  addEmailAddress(userId: string, emailAddress: string): Promise<IdentityEmailAddress>;
+  setPrimaryEmailAddress(userId: string, emailAddressId: string): Promise<void>;
+  removeEmailAddress(emailAddressId: string): Promise<void>;
   readonly middleware: IdentityMiddlewareSupport<Request>;
 }

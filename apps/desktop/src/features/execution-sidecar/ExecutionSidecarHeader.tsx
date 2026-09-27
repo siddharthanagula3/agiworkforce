@@ -102,7 +102,7 @@ export function ExecutionSidecarHeader() {
               <tab.Icon className="w-3 h-3" />
               <span className="hidden sm:inline">{tab.label}</span>
               {tab.id === 'approval' && pendingCount > 0 && (
-                <span className="ml-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-bold px-1">
+                <span className="ml-0.5 flex items-center justify-center min-w-[14px] h-[14px] rounded-full bg-danger-fill text-danger-on-fill text-[9px] font-bold px-1">
                   {pendingCount}
                 </span>
               )}

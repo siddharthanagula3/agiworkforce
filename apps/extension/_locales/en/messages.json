@@ -1139,6 +1139,36 @@
       }
     }
   },
+  "spSchedulesWaitingApproval": {
+    "message": "Paused until you approve or deny this step",
+    "description": "Heading of the step a paused scheduled run is waiting on"
+  },
+  "spSchedulesApprovalExpires": {
+    "message": "Expires $TIME$",
+    "description": "When an unanswered approval request ends the scheduled run",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "in 23 hours"
+      }
+    }
+  },
+  "spSchedulesApprove": {
+    "message": "Approve",
+    "description": "Button that approves the step a paused scheduled run is waiting on"
+  },
+  "spSchedulesDeny": {
+    "message": "Deny",
+    "description": "Button that denies the step a paused scheduled run is waiting on"
+  },
+  "spSchedulesApproved": {
+    "message": "Approved. The run continued.",
+    "description": "Status after the owner approved a paused scheduled run"
+  },
+  "spSchedulesDenied": {
+    "message": "Denied. The run continued without that step.",
+    "description": "Status after the owner denied a paused scheduled run"
+  },
   "spEffortHeading": {
     "message": "Effort",
     "description": "Heading above the reasoning-effort rows in the model menu"

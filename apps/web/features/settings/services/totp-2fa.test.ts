@@ -1,12 +1,10 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   generateTOTPSecret,
   generateOTPAuthURL,
   generateTOTPCode,
   verifyTOTPCode,
   generateBackupCodes,
-  hashBackupCode,
-  verifyBackupCode,
   TOTP_CONFIG,
 } from './user-preferences';
 
@@ -188,12 +186,11 @@ describe('TOTP 2FA Implementation', () => {
       expect(codes.length).toBe(TOTP_CONFIG.BACKUP_CODE_COUNT);
     });
 
-    it('should generate codes in the correct format', () => {
+    it('should generate codes in the identity provider format', () => {
       const codes = generateBackupCodes();
 
       codes.forEach((code) => {
-        // Format: XXXX-XXXX (alphanumeric)
-        expect(code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+        expect(code).toMatch(/^[a-z2-9]{8}$/);
       });
     });
 
@@ -208,113 +205,8 @@ describe('TOTP 2FA Implementation', () => {
       const codes = generateBackupCodes();
 
       codes.forEach((code) => {
-        expect(code).not.toMatch(/[IO]/);
+        expect(code).not.toMatch(/[ilo01]/);
       });
-    });
-  });
-
-  describe('hashBackupCode', () => {
-    it('keys the digest under the TOTP key and still verifies legacy unkeyed digests', async () => {
-      const { createHash } = await import('node:crypto');
-      vi.stubEnv('TOTP_ENCRYPTION_KEY', 'a'.repeat(32) + 'b'.repeat(32));
-      try {
-        const keyed = await hashBackupCode('ABCD-EFGH');
-        expect(keyed.startsWith('h1.')).toBe(true);
-        expect(keyed).not.toContain(createHash('sha256').update('ABCDEFGH').digest('hex'));
-        const legacy = createHash('sha256').update('ABCDEFGH').digest('hex');
-        expect(await verifyBackupCode('ABCD-EFGH', ['nope', legacy])).toBe(1);
-        expect(await verifyBackupCode('ABCD-EFGH', ['nope', keyed])).toBe(1);
-        expect(await verifyBackupCode('ABCD-EFGI', [legacy, keyed])).toBe(-1);
-      } finally {
-        vi.unstubAllEnvs();
-      }
-    });
-
-    it('should generate a consistent hash for the same code', async () => {
-      const code = 'ABCD-EFGH';
-
-      const hash1 = await hashBackupCode(code);
-      const hash2 = await hashBackupCode(code);
-
-      expect(hash1).toBe(hash2);
-    });
-
-    it('should generate different hashes for different codes', async () => {
-      const hash1 = await hashBackupCode('ABCD-EFGH');
-      const hash2 = await hashBackupCode('IJKL-MNOP');
-
-      expect(hash1).not.toBe(hash2);
-    });
-
-    it('should normalize codes (remove dashes and spaces)', async () => {
-      const hash1 = await hashBackupCode('ABCD-EFGH');
-      const hash2 = await hashBackupCode('ABCDEFGH');
-      const hash3 = await hashBackupCode('ABCD EFGH');
-
-      expect(hash1).toBe(hash2);
-      expect(hash1).toBe(hash3);
-    });
-
-    it('should be case-insensitive', async () => {
-      const hash1 = await hashBackupCode('ABCD-EFGH');
-      const hash2 = await hashBackupCode('abcd-efgh');
-
-      expect(hash1).toBe(hash2);
-    });
-
-    it('should generate a 64-character hex hash (SHA-256)', async () => {
-      const hash = await hashBackupCode('ABCD-EFGH');
-
-      expect(hash).toMatch(/^(h1\.)?[0-9a-f]{64}$/);
-    });
-  });
-
-  describe('verifyBackupCode', () => {
-    it('should verify a valid backup code', async () => {
-      const codes = generateBackupCodes();
-      const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
-
-      const index = await verifyBackupCode(codes[0]!, hashedCodes);
-
-      expect(index).toBe(0);
-    });
-
-    it('should return the correct index of the matched code', async () => {
-      const codes = generateBackupCodes();
-      const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
-
-      const index = await verifyBackupCode(codes[3]!, hashedCodes);
-
-      expect(index).toBe(3);
-    });
-
-    it('should return -1 for an invalid code', async () => {
-      const codes = generateBackupCodes();
-      const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
-
-      const index = await verifyBackupCode('INVALID-CODE', hashedCodes);
-
-      expect(index).toBe(-1);
-    });
-
-    it('should handle codes with different formatting', async () => {
-      const codes = generateBackupCodes();
-      const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
-
-      const codeWithoutDash = codes![0]!.replace('-', '')!;
-      const index = await verifyBackupCode(codeWithoutDash, hashedCodes);
-
-      expect(index).toBe(0);
-    });
-
-    it('should handle lowercase input', async () => {
-      const codes = generateBackupCodes();
-      const hashedCodes = await Promise.all(codes.map((c) => hashBackupCode(c)));
-
-      const lowercaseCode = codes![0]!.toLowerCase()!;
-      const index = await verifyBackupCode(lowercaseCode, hashedCodes);
-
-      expect(index).toBe(0);
     });
   });
 

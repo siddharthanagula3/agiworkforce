@@ -64,9 +64,9 @@ const STATUS_CONFIG: Record<
 > = {
   pending: { icon: Clock, color: 'text-muted-foreground', label: 'Pending' },
   running: { icon: Loader2, color: 'text-blue-500', label: 'Running' },
-  paused: { icon: Pause, color: 'text-yellow-500', label: 'Paused' },
-  completed: { icon: CheckCircle, color: 'text-green-500', label: 'Completed' },
-  failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
+  paused: { icon: Pause, color: 'text-warning-text', label: 'Paused' },
+  completed: { icon: CheckCircle, color: 'text-success-text', label: 'Completed' },
+  failed: { icon: XCircle, color: 'text-danger-text', label: 'Failed' },
   cancelled: { icon: Square, color: 'text-muted-foreground', label: 'Cancelled' },
 };
 
