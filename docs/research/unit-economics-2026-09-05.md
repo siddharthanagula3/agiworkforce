@@ -1,5 +1,7 @@
 # Unit economics per user profile
 
+Superseded by `docs/research/unit-economics-2026-09-27.md`, which reruns this model on the credit model; the script below now prints that version.
+
 Status: Historical calculation snapshot
 Owner: Fable (architect)
 Last updated: 2026-09-05

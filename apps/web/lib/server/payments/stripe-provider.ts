@@ -2,7 +2,17 @@ import 'server-only';
 
 import Stripe from 'stripe';
 
+import type {
+  BillingRefund,
+  RefundStatus,
+  TopUpReceipt,
+  TopUpReceiptStatus,
+} from '@/features/billing/lib/billing-account-types';
 import { buildPaymentIntentTaxCalculationParams } from '@/lib/billing/tax-policy';
+import {
+  WITHDRAWAL_CONSENT_AT_KEY,
+  WITHDRAWAL_CONSENT_VERSION_KEY,
+} from '@/lib/billing/withdrawal-consent';
 import { logger } from '@/lib/logger';
 import { getStripeClient, getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
@@ -13,9 +23,12 @@ import {
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
 
 import type {
+  ChargeRefundInput,
+  ChargeRefundResult,
   NormalizedBalanceEntry,
   NormalizedBillingInstrument,
   NormalizedCard,
+  NormalizedCharge,
   NormalizedChargeAttribution,
   NormalizedCostActivity,
   NormalizedInvoiceDiscount,
@@ -24,6 +37,8 @@ import type {
   NormalizedPaymentStatus,
   NormalizedPurchase,
   NormalizedSubscription,
+  NormalizedSubscriptionPayment,
+  NormalizedWithdrawalConsent,
   OffSessionChargeInput,
   OffSessionChargeResult,
   PollablePaymentProvider,
@@ -431,6 +446,177 @@ export async function readStripeCostActivity(window: {
   return { balanceEntries, invoiceDiscounts };
 }
 
+const CREDIT_AMOUNT_METADATA_KEY = 'credit_amount_cents';
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
+const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'canceled',
+  'incomplete_expired',
+]);
+
+function countryCodeOf(value: string | null | undefined): string | null {
+  const code = value?.trim().toUpperCase();
+  return code && COUNTRY_CODE_PATTERN.test(code) ? code : null;
+}
+
+function purchasedLedgerCentsOf(charge: Stripe.Charge): number | null {
+  const cents = Number(charge.metadata?.[CREDIT_AMOUNT_METADATA_KEY]);
+  return Number.isSafeInteger(cents) && cents > 0 ? cents : null;
+}
+
+function withdrawalConsentOf(
+  metadata: Stripe.Metadata | null | undefined,
+): NormalizedWithdrawalConsent | null {
+  const version = metadata?.[WITHDRAWAL_CONSENT_VERSION_KEY]?.trim();
+  const acceptedAt = new Date(metadata?.[WITHDRAWAL_CONSENT_AT_KEY] ?? '');
+  if (!version || !Number.isFinite(acceptedAt.getTime())) return null;
+  return { version, acceptedAt };
+}
+
+function paymentMetadataOf(charge: Stripe.Charge): Stripe.Metadata | null {
+  const paymentIntent = charge.payment_intent;
+  return paymentIntent && typeof paymentIntent !== 'string' ? paymentIntent.metadata : null;
+}
+
+export function normalizeStripeCharge(charge: Stripe.Charge): NormalizedCharge | null {
+  const amount = normalizeMoney(charge.amount, charge.currency);
+  if (!amount) return null;
+  const topUp = charge.metadata?.[PAYMENT_TYPE_METADATA_KEY] === TOP_UP_PAYMENT_TYPE;
+  return {
+    reference: charge.id,
+    paymentReference: referenceOf(charge.payment_intent as string | { id?: string } | null),
+    customerReference: referenceOf(charge.customer as string | { id?: string } | null),
+    kind: topUp ? 'top_up' : 'subscription',
+    amount,
+    refundedMinorUnits: charge.amount_refunded,
+    createdAt: new Date(charge.created * 1000),
+    settled: charge.status === 'succeeded' && charge.paid,
+    disputed: charge.disputed,
+    billingCountry: countryCodeOf(charge.billing_details?.address?.country),
+    cardCountry: countryCodeOf(charge.payment_method_details?.card?.country),
+    receiptUrl: charge.receipt_url ?? null,
+    purchasedLedgerCents: topUp ? purchasedLedgerCentsOf(charge) : null,
+    withdrawalConsent: topUp ? withdrawalConsentOf(paymentMetadataOf(charge)) : null,
+  };
+}
+
+export function isStripeConfigured(): boolean {
+  return getStripeClientOrNull() !== null;
+}
+
+export async function retrieveStripeCharge(reference: string): Promise<NormalizedCharge | null> {
+  try {
+    return normalizeStripeCharge(
+      await getStripeClient().charges.retrieve(reference, { expand: ['payment_intent'] }),
+    );
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return null;
+    throw error;
+  }
+}
+
+export async function listStripeCustomerCharges(
+  customerReference: string,
+  limit: number,
+): Promise<NormalizedCharge[]> {
+  const page = await getStripeClient().charges.list({
+    customer: customerReference,
+    limit,
+    expand: ['data.payment_intent'],
+  });
+  return page.data.flatMap((charge) => {
+    const normalized = normalizeStripeCharge(charge);
+    return normalized ? [normalized] : [];
+  });
+}
+
+export async function readStripePaymentCustomer(paymentReference: string): Promise<string | null> {
+  try {
+    const paymentIntent = await getStripeClient().paymentIntents.retrieve(paymentReference);
+    return referenceOf(paymentIntent.customer as string | { id?: string } | null);
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return null;
+    throw error;
+  }
+}
+
+export async function readStripeCustomerCountry(customerReference: string): Promise<string | null> {
+  try {
+    const customer = await getStripeClient().customers.retrieve(customerReference, {
+      expand: ['tax'],
+    });
+    if (customer.deleted === true) return null;
+    return (
+      countryCodeOf(customer.address?.country) ??
+      countryCodeOf(customer.tax?.location?.country) ??
+      countryCodeOf(customer.shipping?.address?.country)
+    );
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return null;
+    throw error;
+  }
+}
+
+export async function readStripeSubscriptionPayment(
+  paymentReference: string,
+): Promise<NormalizedSubscriptionPayment | null> {
+  const stripe = getStripeClient();
+  const payments = await stripe.invoicePayments.list({
+    payment: { type: 'payment_intent', payment_intent: paymentReference },
+    expand: ['data.invoice'],
+    limit: 1,
+  });
+  const invoice = payments.data[0]?.invoice;
+  if (!invoice || typeof invoice === 'string' || invoice.deleted === true) return null;
+  const latest = (invoice.lines?.data ?? []).reduce<Stripe.InvoiceLineItem | null>(
+    (found, line) => (found === null || line.period.end > found.period.end ? line : found),
+    null,
+  );
+  const subscriptionReference = referenceOf(
+    invoice.parent?.subscription_details?.subscription as string | { id?: string } | undefined,
+  );
+  const subscription = subscriptionReference
+    ? await stripe.subscriptions.retrieve(subscriptionReference)
+    : null;
+  return {
+    servicePeriod: latest ? normalizeProviderPeriod(latest.period.start, latest.period.end) : null,
+    withdrawalConsent: withdrawalConsentOf(subscription?.metadata),
+  };
+}
+
+export async function refundStripeCharge(input: ChargeRefundInput): Promise<ChargeRefundResult> {
+  let refund: Stripe.Refund;
+  try {
+    refund = await getStripeClient().refunds.create(
+      {
+        charge: input.chargeReference,
+        amount: input.amountMinorUnits,
+        reason: input.reason,
+        metadata: { ...input.metadata },
+      },
+      { idempotencyKey: input.idempotencyKey },
+    );
+  } catch (error) {
+    if (error instanceof Stripe.errors.StripeInvalidRequestError) {
+      return { outcome: 'rejected', code: error.code ?? null };
+    }
+    throw error;
+  }
+  const amount = normalizeMoney(refund.amount, refund.currency);
+  if (!amount) throw new Error(`Stripe returned refund ${refund.id} without an amount`);
+  return {
+    outcome: 'refunded',
+    refund: { reference: refund.id, status: refund.status ?? null, amount },
+  };
+}
+
+export async function cancelStripeSubscriptionNow(subscriptionReference: string): Promise<boolean> {
+  const stripe = getStripeClient();
+  const subscription = await stripe.subscriptions.retrieve(subscriptionReference);
+  if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) return false;
+  await stripe.subscriptions.cancel(subscriptionReference, { prorate: false, invoice_now: false });
+  return true;
+}
+
 export const stripePaymentProvider: PollablePaymentProvider = {
   id: PROVIDER_ID,
   capabilities: CAPABILITIES,
@@ -451,3 +637,107 @@ export const stripePaymentProvider: PollablePaymentProvider = {
     return normalizeStripeSubscription(subscription);
   },
 };
+
+const PAYMENT_HISTORY_LIMIT = 100;
+
+const REFUND_STATUS: Readonly<Record<string, RefundStatus>> = {
+  pending: 'processing',
+  requires_action: 'action_required',
+  succeeded: 'refunded',
+  failed: 'failed',
+  canceled: 'canceled',
+};
+
+export interface PaymentHistory {
+  receipts: TopUpReceipt[];
+  refunds: BillingRefund[];
+}
+
+function isoFromSeconds(seconds: number): string {
+  return new Date(seconds * 1000).toISOString();
+}
+
+function topUpCredits(metadata: Stripe.Metadata | null | undefined): number | null {
+  const credits = Number(metadata?.['top_up_units']);
+  return Number.isSafeInteger(credits) && credits > 0 ? credits : null;
+}
+
+function isTopUp(paymentIntent: Stripe.PaymentIntent): boolean {
+  return paymentIntent.metadata?.[PAYMENT_TYPE_METADATA_KEY] === TOP_UP_PAYMENT_TYPE;
+}
+
+function chargeOf(paymentIntent: Stripe.PaymentIntent): Stripe.Charge | null {
+  const charge = paymentIntent.latest_charge;
+  return charge && typeof charge !== 'string' ? charge : null;
+}
+
+function receiptStatusOf(
+  paymentIntent: Stripe.PaymentIntent,
+  charge: Stripe.Charge | null,
+): TopUpReceiptStatus | null {
+  if (paymentIntent.status === 'processing') return 'processing';
+  if (paymentIntent.status !== 'succeeded') return null;
+  if (charge?.refunded) return 'refunded';
+  return charge && charge.amount_refunded > 0 ? 'partially_refunded' : 'paid';
+}
+
+function receiptOf(paymentIntent: Stripe.PaymentIntent): TopUpReceipt | null {
+  const charge = chargeOf(paymentIntent);
+  const status = receiptStatusOf(paymentIntent, charge);
+  if (!status) return null;
+  return {
+    id: paymentIntent.id,
+    createdAt: isoFromSeconds(paymentIntent.created),
+    credits: topUpCredits(paymentIntent.metadata),
+    amountCents: charge?.amount ?? paymentIntent.amount,
+    refundedCents: charge?.amount_refunded ?? 0,
+    currency: paymentIntent.currency,
+    status,
+    autoReload: paymentIntent.metadata?.['auto_reload'] === 'true',
+    receiptUrl: charge?.receipt_url ?? null,
+  };
+}
+
+function refundsOf(paymentIntent: Stripe.PaymentIntent): BillingRefund[] {
+  const charge = chargeOf(paymentIntent);
+  if (!charge) return [];
+  const topUp = isTopUp(paymentIntent);
+  return (charge.refunds?.data ?? []).flatMap((refund) => {
+    const status = refund.status ? REFUND_STATUS[refund.status] : undefined;
+    if (!status) return [];
+    return [
+      {
+        id: refund.id,
+        createdAt: isoFromSeconds(refund.created),
+        amountCents: refund.amount,
+        currency: refund.currency,
+        status,
+        kind: topUp ? 'top_up' : 'plan',
+        credits: topUp ? topUpCredits(paymentIntent.metadata) : null,
+        paymentCreatedAt: isoFromSeconds(charge.created),
+        receiptUrl: charge.receipt_url ?? null,
+      },
+    ];
+  });
+}
+
+export async function readPaymentHistory(
+  stripe: Stripe,
+  customerId: string,
+): Promise<PaymentHistory> {
+  const page = await stripe.paymentIntents.list({
+    customer: customerId,
+    limit: PAYMENT_HISTORY_LIMIT,
+    expand: ['data.latest_charge.refunds'],
+  });
+
+  return {
+    receipts: page.data
+      .filter(isTopUp)
+      .map(receiptOf)
+      .filter((receipt): receipt is TopUpReceipt => receipt !== null),
+    refunds: page.data
+      .flatMap(refundsOf)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+  };
+}

@@ -370,6 +370,22 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
+    label: 'Referral program checks',
+    value: (
+      <>
+        <strong>Examples:</strong> when you join through a referral link, a one-way hash of the
+        network you signed up from, and a comparison of your app installations, your card&rsquo;s
+        Stripe fingerprint and a normalized form of your email address with those of the person who
+        referred you. Card fingerprints are read from Stripe when a reward falls due and are not
+        stored by us.
+        <br />
+        <strong>Why, and how it is protected:</strong> stopping self-referral and reward abuse. A
+        match withholds the reward and records why. The network hash stays with the referral record
+        and is deleted with your account.
+      </>
+    ),
+  },
+  {
     label: 'Things you send us on purpose',
     value: (
       <>
@@ -551,6 +567,18 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
         <strong>Basis:</strong> <strong>legitimate interests.</strong> Every user has an interest in
         the service not being taken over or abused, the data is operational rather than content, and
         you cannot opt out of it without also opting out of being protected by it.
+      </>
+    ),
+  },
+  {
+    label: 'Preventing referral abuse',
+    value: (
+      <>
+        <strong>Data used:</strong> the referral program checks described above.
+        <br />
+        <strong>Basis:</strong> <strong>legitimate interests.</strong> Referral rewards are meant
+        for genuine new customers, and the checks compare signals you already give us or Stripe
+        already holds instead of adding new tracking.
       </>
     ),
   },
@@ -1079,7 +1107,7 @@ export default function PrivacyPage() {
                         What deliberately survives deleting your account
                       </h3>
                       <Prose size="sm">
-                        &ldquo;Delete my account&rdquo; erases an enumerated list of 95 user-scoped
+                        &ldquo;Delete my account&rdquo; erases an enumerated list of 100 user-scoped
                         tables and your stored files. A short list of things is kept on purpose, and
                         you should know what before you decide, not after.
                       </Prose>

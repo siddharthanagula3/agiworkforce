@@ -194,7 +194,7 @@
   "basicFeature6": "2 scheduled tasks and 10-minute managed sandboxes",
   "proFeature4": "25 projects with 10 GB of knowledge storage",
   "proFeature5": "Image generation, AGI Work, and managed API access",
-  "proFeature6": "CLI, Chrome, and VS Code, plus 5 scheduled tasks",
+  "proFeature6": "Managed Cloud in the CLI and VS Code, plus 5 scheduled tasks",
   "maxFeature4": "Unlimited projects, storage, and custom MCP servers",
   "maxFeature5": "8 chats at once and up to 300 connector tools",
   "maxFeature6": "10 scheduled tasks and 30-minute managed sandboxes",

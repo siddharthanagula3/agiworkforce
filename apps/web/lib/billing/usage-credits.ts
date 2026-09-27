@@ -1,7 +1,12 @@
 import 'server-only';
 
-import type { BillingPlanTier, ManagedUsageCreditWindow } from '@agiworkforce/types';
-import { PLAN_CREDIT_ALLOWANCES, type PlanCreditAllowance } from '@/lib/billing/plan-credits';
+import {
+  PLAN_CREDIT_ALLOWANCES,
+  getPlanCreditAllowance,
+  type BillingPlanTier,
+  type ManagedUsageCreditWindow,
+  type PlanCreditAllowance,
+} from '@agiworkforce/types';
 
 /**
  * Null for a plan that has no managed allowance to state: BYOK and local-only
@@ -11,10 +16,11 @@ import { PLAN_CREDIT_ALLOWANCES, type PlanCreditAllowance } from '@/lib/billing/
  */
 export function resolvePlanCreditAllowance(
   plan: string | null | undefined,
+  catalogVersion?: number | null,
 ): PlanCreditAllowance | null {
   const tier = plan?.trim().toLowerCase() as BillingPlanTier | undefined;
   if (!tier || !Object.prototype.hasOwnProperty.call(PLAN_CREDIT_ALLOWANCES, tier)) return null;
-  const allowance = PLAN_CREDIT_ALLOWANCES[tier];
+  const allowance = getPlanCreditAllowance(tier, catalogVersion);
   if (allowance.unlimited || allowance.monthly <= 0) return null;
   return allowance;
 }

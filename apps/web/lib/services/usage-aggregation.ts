@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { creditsFromMicrousd } from '@agiworkforce/types';
+
 /**
  * The one definition of what "usage" means when it is read back.
  *
@@ -9,9 +11,10 @@ import 'server-only';
  * Two copies of these fragments would let one surface count a released turn
  * the other excluded.
  *
- * Cost is summed from `actual_cost_cents`, which is what the turn was charged
- * when it settled. Nothing here multiplies a stored quantity by a live rate,
- * so a later price change cannot move a figure already reported.
+ * Cost is summed from `actual_cost_microusd`, the exact charge recorded when
+ * the turn settled, and reported in credits. Nothing here multiplies a stored
+ * quantity by a live rate, so a later price change cannot move a figure
+ * already reported.
  */
 
 /**
@@ -40,6 +43,8 @@ export const TOKENS = `
 export const OUT_TOKENS = `
   coalesce((usage->>'output_tokens')::numeric, (usage->>'completion_tokens')::numeric, 0)`;
 
+export const COST_MICROUSD = `sum(coalesce(actual_cost_microusd, 0))::bigint`;
+
 /** A group-by that returns more rows than this is a report nobody reads. */
 export const BREAKDOWN_LIMIT = 50;
 
@@ -48,13 +53,13 @@ export interface AggregateRow {
   requests: string | number | null;
   input_tokens: string | number | null;
   output_tokens: string | number | null;
-  cost_cents: string | number | null;
+  cost_microusd: string | number | null;
 }
 
 export interface DayRow {
   day: string | Date;
   requests: string | number | null;
-  cost_cents: string | number | null;
+  cost_microusd: string | number | null;
 }
 
 export interface FreshnessRow {
@@ -66,7 +71,7 @@ export interface UsageTotals {
   requests: number;
   inputTokens: number;
   outputTokens: number;
-  costCents: number;
+  credits: number;
 }
 
 export interface UsageBreakdownRow {
@@ -74,13 +79,13 @@ export interface UsageBreakdownRow {
   requests: number;
   inputTokens: number;
   outputTokens: number;
-  costCents: number;
+  credits: number;
 }
 
 export interface UsageDayRow {
   day: string;
   requests: number;
-  costCents: number;
+  credits: number;
 }
 
 /**
@@ -114,7 +119,7 @@ export function toRow(row: AggregateRow): UsageBreakdownRow {
     requests: num(row.requests),
     inputTokens: num(row.input_tokens),
     outputTokens: num(row.output_tokens),
-    costCents: num(row.cost_cents),
+    credits: creditsFromMicrousd(num(row.cost_microusd)),
   };
 }
 
@@ -124,7 +129,7 @@ export function toTotals(row: AggregateRow | undefined): UsageTotals {
     requests: totals?.requests ?? 0,
     inputTokens: totals?.inputTokens ?? 0,
     outputTokens: totals?.outputTokens ?? 0,
-    costCents: totals?.costCents ?? 0,
+    credits: totals?.credits ?? 0,
   };
 }
 
@@ -132,7 +137,7 @@ export function toDays(rows: readonly DayRow[]): UsageDayRow[] {
   return rows.map((row) => ({
     day: row.day instanceof Date ? row.day.toISOString() : String(row.day),
     requests: num(row.requests),
-    costCents: num(row.cost_cents),
+    credits: creditsFromMicrousd(num(row.cost_microusd)),
   }));
 }
 

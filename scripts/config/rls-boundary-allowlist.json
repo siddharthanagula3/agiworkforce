@@ -210,6 +210,10 @@
       "reason": "auto-reload runs after a settled charge and from the run-auto-reloads cron, neither of which carries a request connection; every statement on subscriptions and credit_transactions is keyed by the user_id the reload was started for, and only the sweep reads auto_reload_settings across accounts, by design"
     },
     {
+      "path": "apps/web/lib/services/billing-refund-service.ts",
+      "reason": "a customer files and reads their own refund requests on the caller connection; only the decision on a request and the operator console reach the owner connection, and every statement there is keyed by the request id, the Stripe customer or the account the operator looked up"
+    },
+    {
       "path": "apps/web/lib/services/cogs-ledger-service.ts",
       "reason": "operator cost reconciliation, deliberately cross-account: it reads settled managed_usage_requests rows for every account in a time window to compare them with provider cost events, so there is no single owner to bind a policy role to"
     },

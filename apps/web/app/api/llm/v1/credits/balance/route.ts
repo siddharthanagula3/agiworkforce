@@ -92,7 +92,9 @@ async function handleGetBalance(request: NextRequest) {
   // Never for Free: the allowance is an undisclosed company COGS ceiling, and
   // stating it together with the spend against it publishes the ceiling twice.
   // A Free caller gets the percentage, the reset and whether anything is left.
-  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(entitlement.plan);
+  const planAllowance = isFreePlan
+    ? null
+    : resolvePlanCreditAllowance(entitlement.plan, entitlement.catalogVersion);
   const monthlyCredits = planAllowance
     ? creditWindow(planAllowance.monthly, creditsFromCents(used), resetAt)
     : null;

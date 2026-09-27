@@ -202,16 +202,14 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4008
 
 - Done when: Dates, times and numbers are formatted for the user's locale rather than a fixed US format.
 - Wave: 3
-- Already works on: vscode, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Most dates use the browser locale, but billing, linked devices and the composer schedule chip hard-code en-US; pass the user's locale there. | ui |
-| desktop | partial | Most dates use the browser locale, but billing, linked devices and the composer schedule chip hard-code en-US; pass the user's locale there. | ui |
 | mobile | partial | Usage, schedules and connector dates hard-code en-US; use the device locale. | ui |
 | cli | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/billing/components/Billing/types.ts:68-68`, `apps/web/features/chat/components/Composer/ComposerFooter.tsx:388-388`, `apps/web/features/settings/components/LinkedDevicesPanel.tsx:67-67`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:37-37`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:37-37`, `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:56-56`
 
 ## S11.23: Currency formatting.
 

@@ -413,7 +413,10 @@ function bonusRow(bonus: AccountCredits['bonus']): { value: string; detail: stri
   };
 }
 
-function purchasedRow(purchased: AccountCredits['purchased']): { value: string; detail: string } {
+function purchasedRow(
+  purchased: AccountCredits['purchased'],
+  expiry: AccountCredits['purchase_expiry'],
+): { value: string; detail: string } {
   if (purchased.remaining === null) {
     return {
       value: 'Unavailable',
@@ -422,13 +425,16 @@ function purchasedRow(purchased: AccountCredits['purchased']): { value: string; 
   }
   return {
     value: purchased.remaining > 0 ? formatCreditAmount(purchased.remaining) : 'None',
-    detail: "Purchased credits don't expire.",
+    detail:
+      expiry && expiry.expiring_credits > 0 && expiry.next_expiry_at
+        ? `${formatCreditAmount(expiry.expiring_credits)} expire as local law requires where they were bought, the next on ${formatAbsolute(expiry.next_expiry_at)}. The rest don't expire.`
+        : "Purchased credits don't expire.",
   };
 }
 
 function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
   const bonus = bonusRow(credits.bonus);
-  const purchased = purchasedRow(credits.purchased);
+  const purchased = purchasedRow(credits.purchased, credits.purchase_expiry);
   return (
     <section aria-labelledby="usage-balances-heading" style={CARD}>
       <div style={CARD_HEADER}>

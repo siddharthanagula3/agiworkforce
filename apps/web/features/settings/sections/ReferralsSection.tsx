@@ -7,8 +7,10 @@ import { Button, Spinner } from '@agiworkforce/ui';
 import { formatCredits } from '@agiworkforce/types';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { SITE_NAME } from '@/lib/seo/site';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 const REFERRALS_PATH = '/api/referrals';
 const REFERRAL_CODE_PATH = '/api/referrals/code';
@@ -368,6 +370,16 @@ export function ReferralsSection() {
                 Referring yourself, duplicate accounts, and sign-ups that share your card, device or
                 network do not qualify. Rewards from a refunded or disputed payment are removed. We
                 may change or end the program at any time.
+              </li>
+              <li>
+                The{' '}
+                <SettingsPageLink
+                  href={CANONICAL_POLICY_ROUTES.referralTerms}
+                  className="font-medium text-foreground underline underline-offset-2"
+                >
+                  referral program terms
+                </SettingsPageLink>{' '}
+                apply.
               </li>
             </ul>
           </section>

@@ -26,8 +26,9 @@ import {
   applySubscriptionOwnerHandoff,
   subscriptionOwnerHandoffConflictMessage,
 } from '@/lib/server/subscription-owner-handoff';
-import { topUpChargedCents } from '@agiworkforce/types';
+import { purchasedCreditMetadata, topUpChargedCents } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
+import { catalogVersionAtRenewal, catalogVersionSold } from '@/lib/services/plan-catalog-service';
 import {
   auditUnknownStripePriceIfEnterpriseConfigured,
   resolveEnterprisePlanTier,
@@ -197,7 +198,12 @@ export async function handleCreditTopUp(
     );
   }
 
-  await grantCreditTopUp(db, { userId, creditAmountCents, receiptId: session.id });
+  await grantCreditTopUp(db, {
+    userId,
+    creditAmountCents,
+    receiptId: session.id,
+    purchaseCountry: session.customer_details?.address?.country ?? null,
+  });
 }
 
 function creditTopUpDescription(receiptId: string): string {
@@ -220,7 +226,12 @@ export async function isCreditTopUpApplied(
 
 export async function grantCreditTopUp(
   db: DatabaseAdapter,
-  grant: { userId: string; creditAmountCents: number; receiptId: string },
+  grant: {
+    userId: string;
+    creditAmountCents: number;
+    receiptId: string;
+    purchaseCountry?: string | null;
+  },
 ): Promise<void> {
   const { userId, creditAmountCents } = grant;
   const transactionDescription = creditTopUpDescription(grant.receiptId);
@@ -271,12 +282,13 @@ export async function grantCreditTopUp(
 
     const previousBalance = await readRemainingMicrousd();
 
-    await db.execute('select add_credits_microusd($1, $2, $3, $4, $5)', [
+    await db.execute('select add_credits_microusd($1, $2, $3, $4, $5, $6)', [
       userId,
       creditAccount.id,
       creditAmountCents * MICROUSD_PER_LEDGER_CENT,
       transactionDescription,
       'purchase',
+      JSON.stringify(purchasedCreditMetadata(grant.purchaseCountry, new Date())),
     ]);
 
     const newBalance = await readRemainingMicrousd();
@@ -734,6 +746,7 @@ export async function upsertSubscriptionFromSession(
     }
   }
 
+  const catalogVersion = catalogVersionSold(session.metadata);
   const subData = {
     user_id: resolvedUserId,
     status,
@@ -757,9 +770,10 @@ export async function upsertSubscriptionFromSession(
 
   const upserted = await db
     .query<{ id: string }>(
-      `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at, plan_catalog_version)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        on conflict (user_id) do update set
+         plan_catalog_version = excluded.plan_catalog_version,
          status = excluded.status,
          plan_tier = excluded.plan_tier,
          stripe_customer_id = excluded.stripe_customer_id,
@@ -783,6 +797,7 @@ export async function upsertSubscriptionFromSession(
         subData.current_period_end,
         subData.cancel_at_period_end,
         subData.canceled_at,
+        catalogVersion,
       ],
     )
     .catch((error: unknown) => {
@@ -809,6 +824,7 @@ export async function upsertSubscriptionFromSession(
             new Date(currentPeriodStart),
             new Date(currentPeriodEnd),
             db,
+            { next: catalogVersion },
           );
         } else {
           await SubscriptionService.allocateCreditsForPeriod(
@@ -817,7 +833,7 @@ export async function upsertSubscriptionFromSession(
             planTier,
             new Date(currentPeriodStart),
             new Date(currentPeriodEnd),
-            { db },
+            { db, catalogVersion },
           );
         }
         logger.info(
@@ -1005,8 +1021,10 @@ export async function updateSubscriptionFromStripeSubscription(
         status: string | null;
         current_period_start: string | null;
         last_stripe_event_at: string | null;
+        stripe_price_id: string | null;
+        plan_catalog_version: number | null;
       }>(
-        'select id, user_id, plan_tier, status, current_period_start, last_stripe_event_at from subscriptions where stripe_subscription_id = $1 limit 1',
+        'select id, user_id, plan_tier, status, current_period_start, last_stripe_event_at, stripe_price_id, plan_catalog_version from subscriptions where stripe_subscription_id = $1 limit 1',
         [stripeSubId],
       )
       .catch((fetchError: unknown) => {
@@ -1057,6 +1075,11 @@ export async function updateSubscriptionFromStripeSubscription(
       const isNewPeriod =
         toIsoTimestamp(existingSub.current_period_start) !==
         toIsoTimestamp(updateData.current_period_start);
+      const catalogVersion = catalogVersionAtRenewal({
+        storedPriceId: existingSub.stripe_price_id,
+        storedCatalogVersion: existingSub.plan_catalog_version,
+        priceId: stripePriceId,
+      });
 
       const isPaidPlanUpgrade =
         isNewPeriod &&
@@ -1075,6 +1098,7 @@ export async function updateSubscriptionFromStripeSubscription(
           new Date(updateData.current_period_start),
           new Date(updateData.current_period_end),
           db,
+          { previous: existingSub.plan_catalog_version, next: catalogVersion },
         );
       }
 
@@ -1089,6 +1113,7 @@ export async function updateSubscriptionFromStripeSubscription(
             canceled_at = $6,
             stripe_coupon_id = $7,
             plan_tier = $8,
+            plan_catalog_version = $11,
             last_stripe_event_at = coalesce(to_timestamp($10::double precision), last_stripe_event_at)
           where stripe_subscription_id = $9
             and (
@@ -1108,6 +1133,7 @@ export async function updateSubscriptionFromStripeSubscription(
             updateData.plan_tier,
             stripeSubId,
             eventSequence,
+            catalogVersion,
           ],
         )
         .catch((updateError: unknown) => {
@@ -1148,7 +1174,7 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
-              { db },
+              { db, catalogVersion },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -1161,7 +1187,7 @@ export async function updateSubscriptionFromStripeSubscription(
               planTier,
               new Date(pStart),
               new Date(pEnd),
-              { db },
+              { db, catalogVersion },
             );
             logger.info(
               { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
@@ -1321,6 +1347,7 @@ export async function updateSubscriptionFromStripeSubscription(
           user_id: resolvedUserId,
           stripe_subscription_id: stripeSubId,
           stripe_customer_id: stripeCustomerId,
+          plan_catalog_version: catalogVersionSold(subscription.metadata),
         };
         logger.info({ createData }, 'Upserting subscription (will INSERT or UPDATE as needed)');
 
@@ -1328,9 +1355,10 @@ export async function updateSubscriptionFromStripeSubscription(
 
         const upserted = await db
           .query<{ id: string }>(
-            `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at, last_stripe_event_at)
-             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, to_timestamp($12::double precision))
+            `insert into subscriptions (user_id, status, plan_tier, stripe_customer_id, stripe_subscription_id, stripe_price_id, stripe_coupon_id, current_period_start, current_period_end, cancel_at_period_end, canceled_at, last_stripe_event_at, plan_catalog_version)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, to_timestamp($12::double precision), $13)
              on conflict (user_id) do update set
+               plan_catalog_version = excluded.plan_catalog_version,
                status = excluded.status,
                plan_tier = excluded.plan_tier,
                stripe_customer_id = excluded.stripe_customer_id,
@@ -1362,6 +1390,7 @@ export async function updateSubscriptionFromStripeSubscription(
               createData.cancel_at_period_end,
               createData.canceled_at,
               eventSequence,
+              createData.plan_catalog_version,
             ],
           )
           .catch((error: unknown) => {
@@ -1405,6 +1434,7 @@ export async function updateSubscriptionFromStripeSubscription(
                 new Date(pStart),
                 new Date(pEnd),
                 db,
+                { next: createData.plan_catalog_version },
               );
             } else {
               await SubscriptionService.allocateCreditsForPeriod(
@@ -1413,7 +1443,7 @@ export async function updateSubscriptionFromStripeSubscription(
                 planTier,
                 new Date(pStart),
                 new Date(pEnd),
-                { db },
+                { db, catalogVersion: createData.plan_catalog_version },
               );
             }
             logger.info(

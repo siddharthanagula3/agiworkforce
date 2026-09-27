@@ -1,268 +1,294 @@
 #!/usr/bin/env node
-/**
- * Deterministic monthly-COGS model per user profile, sourced entirely from
- * the model registry and the tool-pricing files the running product reads.
- * No model id, provider rate, or tool price is typed by hand here: every
- * number below is either read from
- * packages/ai/model-registry/generated/registry.json, from
- * apps/web/lib/web-search/web-search-pricing.json, or extracted from the
- * declared constants in apps/web/lib/places/places-config.ts and
- * packages/contracts/types/src/billing-catalog.ts.
- *
- * Usage-quantity assumptions (turns, tokens, tool calls per profile) are the
- * one input this script cannot source from the repo, because no profile like
- * this is metered yet. Each is documented with its reasoning next to its
- * definition below and printed in the report so the assumption is auditable.
- *
- * Run: node scripts/research/unit-economics-2026-09-05.mjs
- */
-
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import module from 'node:module';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../..');
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
-function readJson(relPath) {
-  return JSON.parse(readFileSync(path.join(ROOT, relPath), 'utf8'));
-}
+module.registerHooks({
+  resolve(specifier, context, next) {
+    if (specifier.startsWith('.') && context.parentURL?.endsWith('.ts')) {
+      const resolved = new URL(specifier, context.parentURL);
+      if (!/\.[cm]?[jt]s$/.test(resolved.pathname)) return next(`${resolved.href}.ts`, context);
+    }
+    return next(specifier, context);
+  },
+});
 
-function readText(relPath) {
-  return readFileSync(path.join(ROOT, relPath), 'utf8');
-}
-
-function extractNumberConst(text, name, sourceLabel) {
-  const match = text.match(new RegExp(`${name}[^=]*=\\s*([0-9_.eE+-]+)`));
-  if (!match) throw new Error(`could not find ${name} in ${sourceLabel}`);
-  return Number(match[1].replace(/_/g, ''));
-}
-
-function extractTierMonthlyPriceUsd(text, tierKey) {
-  const pattern = new RegExp(`\\b${tierKey}: \\{[\\s\\S]{0,220}?monthlyPriceUsd: ([0-9.]+)`);
-  const match = text.match(pattern);
-  if (!match)
-    throw new Error(`could not find monthlyPriceUsd for ${tierKey} in billing-catalog.ts`);
-  return Number(match[1]);
-}
-
-// ---------------------------------------------------------------------------
-// Sourced pricing
-// ---------------------------------------------------------------------------
-
-const registry = readJson('packages/ai/model-registry/generated/registry.json');
-const auto = registry.policies.auto;
-const webSearchPricing = readJson('apps/web/lib/web-search/web-search-pricing.json');
-const placesConfigText = readText('apps/web/lib/places/places-config.ts');
-const billingCatalogText = readText('packages/contracts/types/src/billing-catalog.ts');
-
-const GOOGLE_TEXT_SEARCH_ENTERPRISE_USD_PER_BLOCK = extractNumberConst(
-  placesConfigText,
-  'GOOGLE_TEXT_SEARCH_ENTERPRISE_USD_PER_BLOCK',
-  'apps/web/lib/places/places-config.ts',
-);
-
-const GOOGLE_GROUNDING_USD_PER_THOUSAND =
-  webSearchPricing.googleGrounding.currentTier.usdPerThousandBeyondPool;
-const GOOGLE_GROUNDING_FREE_POOL_PER_MONTH =
-  webSearchPricing.googleGrounding.currentTier.poolFreeRequests;
-const PERPLEXITY_USD_PER_THOUSAND = webSearchPricing.perplexitySearch.usdPerThousandRequests;
-
-const E2B_COMPUTE_RATE_PER_UNIT_USD = registry.computePricing.e2b.ratePerUnit; // usd_per_vcpu_second
-const E2B_DEFAULT_VCPU_COUNT = 2; // apps/web/lib/e2b/compute-metering.ts DEFAULT_E2B_VCPU_COUNT
-
-// The cache-write fallback multipliers a route with no explicit cache-write
-// price is billed at, taken verbatim from
-// apps/web/lib/services/llm-cost-calculator.ts CACHE_WRITE_FALLBACK_MULTIPLIERS.
-const CACHE_WRITE_FALLBACK_MULTIPLIER_5M = 1.25;
-
-const PLAN_MONTHLY_PRICE_USD = {
-  basic: extractTierMonthlyPriceUsd(billingCatalogText, 'basic'),
-  pro: extractTierMonthlyPriceUsd(billingCatalogText, 'pro'),
-  max: extractTierMonthlyPriceUsd(billingCatalogText, 'max'),
-  max_15x: extractTierMonthlyPriceUsd(billingCatalogText, 'max_15x'),
+const SOURCES = {
+  credits: 'packages/contracts/types/src/credits.ts',
+  allowances: 'packages/contracts/types/src/managed-usage-limits.ts',
+  rateCard: 'packages/contracts/types/src/rate-card.ts',
+  plans: 'packages/contracts/types/src/billing-catalog.ts',
+  storeCommission: 'packages/contracts/types/src/mobile-iap.ts',
+  modelPrices: 'packages/ai/model-registry/generated/registry.json',
+  cacheWritePremium: 'apps/web/lib/services/llm-cost-calculator.ts',
+  includedSearch: 'apps/web/lib/web-search/search-budget.ts',
+  groundingPool: 'apps/web/lib/web-search/web-search-pricing.json',
 };
 
-// Capability gates, mirrored from packages/contracts/types/src/billing-catalog.ts
-// BILLING_PLAN_CAPABILITY_TIERS (PRO_TIERS / the video_generation row). Read
-// directly rather than retyped, so a catalog change breaks this script's
-// assertion instead of silently drifting from it.
-function extractCapabilityTiers(text, capabilityKey) {
-  const pattern = new RegExp(`${capabilityKey}: (\\[[^\\]]*\\]|PRO_TIERS|CLOUD_CHAT_TIERS)`);
-  const match = text.match(pattern);
-  if (!match) throw new Error(`could not find capability row ${capabilityKey}`);
-  if (match[1] === 'PRO_TIERS') {
-    const proTiersMatch = text.match(/PRO_TIERS = (\[[^\]]*\])/);
-    return JSON.parse(proTiersMatch[1].replace(/'/g, '"'));
-  }
-  if (match[1] === 'CLOUD_CHAT_TIERS') {
-    const cloudMatch = text.match(/CLOUD_CHAT_TIERS = (\[[^\]]*\])/);
-    return JSON.parse(cloudMatch[1].replace(/'/g, '"'));
-  }
-  return JSON.parse(match[1].replace(/'/g, '"'));
+function sourcePath(relPath) {
+  return path.join(ROOT, relPath);
 }
 
-const IMAGE_GENERATION_TIERS = extractCapabilityTiers(billingCatalogText, 'image_generation');
-const VIDEO_GENERATION_TIERS = extractCapabilityTiers(billingCatalogText, 'video_generation');
-const AGI_WORK_TIERS = extractCapabilityTiers(billingCatalogText, 'agi_work');
+function readSource(relPath) {
+  return readFileSync(sourcePath(relPath), 'utf8');
+}
 
-// Enforced per-plan COGS ceiling, reproduced from the same conversion the
-// reservation system applies (apps/web/lib/server/managed-usage-policy.ts
-// getPlanUsageBudgetCents) over the unit table it reads
-// (packages/contracts/types/src/managed-usage-limits.ts MANAGED_USAGE_LIMITS). This is
-// the hard stop a real account hits regardless of what this script's profile
-// assumptions say, so every profile's modeled COGS is checked against it.
-const managedUsageCapsText = readText('packages/contracts/types/src/managed-usage-limits.ts');
-
-function extractMonthlyCredits(text, tierKey) {
-  const pattern = new RegExp(`'?${tierKey}'?: \\{[\\s\\S]{0,20}?monthlyCredits: ([0-9_]+)`);
-  const match = text.match(pattern);
-  if (!match)
-    throw new Error(`could not find monthlyCredits for ${tierKey} in managed-usage-limits.ts`);
+function readDeclaredNumber(relPath, pattern) {
+  const match = readSource(relPath).match(pattern);
+  if (!match) throw new Error(`could not find ${pattern} in ${relPath}`);
   return Number(match[1].replace(/_/g, ''));
 }
 
-const PLAN_MONTHLY_COGS_CEILING_CENTS = {};
-for (const tierKey of Object.keys(PLAN_MONTHLY_PRICE_USD)) {
-  PLAN_MONTHLY_COGS_CEILING_CENTS[tierKey] =
-    extractMonthlyCredits(managedUsageCapsText, tierKey) / CREDITS_PER_CENT;
+function importSource(relPath) {
+  return import(pathToFileURL(sourcePath(relPath)).href);
 }
 
-// ---------------------------------------------------------------------------
-// Router simulation - reproduces packages/ai/routing/src/auto.ts normalizeTier
-// and resolveRoutingLane against the SAME registry-declared policy tables, so
-// the model mix per profile is the router's actual admitted slot, not a
-// hand-picked model.
-// ---------------------------------------------------------------------------
+const { MICROUSD_PER_CREDIT, MICROUSD_PER_USD, creditsFromMicrousd } = await importSource(
+  SOURCES.credits,
+);
+const { MANAGED_USAGE_LIMITS } = await importSource(SOURCES.allowances);
+const {
+  DEFAULT_SANDBOX_MEMORY_GIB,
+  DEFAULT_SANDBOX_VCPU_COUNT,
+  FEATURE_RATE_CARD,
+  sandboxComputeRate,
+} = await importSource(SOURCES.rateCard);
+const { BILLING_PLAN_CAPABILITY_TIERS, BILLING_PLAN_PRICING, SELF_SERVE_PAID_PLAN_TIERS } =
+  await importSource(SOURCES.plans);
+const { BASIS_POINTS_PER_WHOLE, MOBILE_IAP_PRODUCT_DEFINITIONS, MOBILE_IAP_STORE_COMMISSION } =
+  await importSource(SOURCES.storeCommission);
+const registry = JSON.parse(readSource(SOURCES.modelPrices));
+const groundingPool = JSON.parse(readSource(SOURCES.groundingPool)).googleGrounding.currentTier;
+const auto = registry.policies.auto;
 
-function normalizeTier(tier) {
-  switch (tier) {
-    case 'pro':
-    case 'team':
-      return 'pro';
-    case 'basic':
-    case 'hobby':
-      return 'free';
-    case 'max':
-    case 'max_15x':
-      return 'max';
-    case 'enterprise':
-      return 'enterprise';
-    case 'byok':
-      return 'byok';
-    default:
-      return 'free';
-  }
+const CACHE_WRITE_PREMIUM = readDeclaredNumber(
+  SOURCES.cacheWritePremium,
+  /CACHE_WRITE_FALLBACK_MULTIPLIERS = \{\s*write5m: ([0-9.]+)/,
+);
+const INCLUDED_SEARCH_CALLS = readDeclaredNumber(
+  SOURCES.includedSearch,
+  /PAID_PLAN_INCLUDED_MONTHLY_SEARCH_CALLS = ([0-9_]+)/,
+);
+
+const TOKENS_PER_PRICED_UNIT = 1_000_000;
+const SECONDS_PER_MINUTE = 60;
+const MIB_PER_GIB = 1_024;
+const MONTHS_PER_YEAR = 12;
+
+const ASSUMED_ACTIVE_ACCOUNTS = 1_000;
+const ACTIVE_ACCOUNT_SENSITIVITY = [ASSUMED_ACTIVE_ACCOUNTS / 10, ASSUMED_ACTIVE_ACCOUNTS * 10];
+
+const INFRASTRUCTURE_FOOTPRINT = [
+  {
+    per: 'turn',
+    feature: 'database_compute_second',
+    quantity: 0.1,
+    reason:
+      'about 20 statements a turn (usage reservation and settlement, message and ledger writes, reads) at about 5 ms of one compute unit each',
+  },
+  {
+    per: 'turn',
+    feature: 'cache_command_request',
+    quantity: 10,
+    reason: 'rate limiter windows and cache reads and writes around one turn',
+  },
+  {
+    per: 'image',
+    feature: 'artifact_storage_gib_month',
+    quantity: 1.5 / MIB_PER_GIB,
+    reason: 'a 1.5 MiB image, accrued for one month of storage when it is saved',
+  },
+  {
+    per: 'image',
+    feature: 'network_egress_gib',
+    quantity: 1.5 / MIB_PER_GIB,
+    reason: 'the same image served once through the file route',
+  },
+  {
+    per: 'video second',
+    feature: 'artifact_storage_gib_month',
+    quantity: 1 / MIB_PER_GIB,
+    reason: 'about 8 Mbit/s of 1080p video, accrued for one month of storage',
+  },
+  {
+    per: 'video second',
+    feature: 'network_egress_gib',
+    quantity: 1 / MIB_PER_GIB,
+    reason: 'the same video served once through the file route',
+  },
+];
+
+const WITHOUT_DEPLOYMENT_OVERRIDES = {};
+
+function rateCardMicrousd(feature) {
+  const cost = FEATURE_RATE_CARD[feature]?.providerCogsMicrousd;
+  if (!(cost > 0)) throw new Error(`rate card row ${feature} declares no provider cost`);
+  return cost;
 }
+
+const sandboxRate = sandboxComputeRate(undefined, WITHOUT_DEPLOYMENT_OVERRIDES);
+if (!sandboxRate.ok) throw new Error('the rate card declares no sandbox vCPU and memory rate pair');
+const SANDBOX_MICROUSD_PER_MINUTE = sandboxRate.microusdPerSecond * SECONDS_PER_MINUTE;
+
+const SEARCH_TOOLS = {
+  webSearchGrounded: { feature: 'web_search_grounding', label: 'web search (grounded)' },
+  webSearchFallback: { feature: 'web_search_perplexity', label: 'web search (fallback provider)' },
+};
+
+const INCLUDED_SEARCH_FEATURES = Object.keys(FEATURE_RATE_CARD).filter(
+  (feature) => FEATURE_RATE_CARD[feature].includedInPlans === 'interactive_chat',
+);
+const INCLUDED_SEARCH_MICROUSD =
+  INCLUDED_SEARCH_CALLS * Math.max(...INCLUDED_SEARCH_FEATURES.map(rateCardMicrousd));
 
 const routesByModelKey = new Map();
 for (const [routeId, route] of Object.entries(registry.routes)) {
-  const list = routesByModelKey.get(route.modelKey) ?? [];
-  list.push({ routeId, ...route });
-  routesByModelKey.set(route.modelKey, list);
+  routesByModelKey.set(route.modelKey, [
+    ...(routesByModelKey.get(route.modelKey) ?? []),
+    { routeId, ...route },
+  ]);
 }
 
-function defaultRouteForModelKey(modelKey) {
-  const candidates = routesByModelKey.get(modelKey);
-  if (!candidates || candidates.length === 0) {
-    throw new Error(`no registry route for model key ${modelKey}`);
-  }
-  return candidates.find((route) => route.isDefault) ?? candidates[0];
+function slotRoute(slotId) {
+  const modelKey = auto.slots[slotId]?.modelKey;
+  const routes = routesByModelKey.get(modelKey) ?? [];
+  const route = routes.find((candidate) => candidate.isDefault) ?? routes[0];
+  if (!route) throw new Error(`no registry route for slot ${slotId}`);
+  return route;
 }
 
-function resolveTaskRoute(taskType, planTier) {
-  const registryTier = normalizeTier(planTier);
-  const maxProfile = auto.tierMaximumProfiles[registryTier] ?? 'economy';
-  const requestedProfile = auto.autoProfileByTask[taskType] ?? 'balanced';
+const imageRoute = slotRoute('image_generation');
+const IMAGE_MICROUSD =
+  imageRoute.pricing.imagePerImage > 0
+    ? Math.ceil(imageRoute.pricing.imagePerImage * MICROUSD_PER_USD)
+    : rateCardMicrousd(`image_generation_${imageRoute.provider}`);
+
+const videoRoute = slotRoute('video_generation');
+
+function videoMicrousdPerSecond(resolution) {
+  const usd = videoRoute.pricing.videoPerSecondByResolution?.[resolution];
+  if (!(usd > 0)) throw new Error(`no video rate declared for resolution ${resolution}`);
+  return usd * MICROUSD_PER_USD;
+}
+
+const ROUTING_TIER_BY_PLAN = {
+  basic: 'basic',
+  pro: 'pro',
+  team: 'pro',
+  max: 'max',
+  max_15x: 'max',
+  enterprise: 'enterprise',
+};
+const autoAlias = auto.aliases[auto.defaultAlias];
+
+function routingTier(planTier) {
+  return ROUTING_TIER_BY_PLAN[planTier] ?? 'free';
+}
+
+function tierMaximumProfile(planTier) {
+  return auto.tierMaximumProfiles[routingTier(planTier)] ?? 'economy';
+}
+
+function taskProfile(taskType) {
+  return autoAlias.computeProfile
+    ? (auto.autoProfileByTask[taskType] ?? autoAlias.profile)
+    : autoAlias.profile;
+}
+
+function admittedSlot(taskType, planTier, requestedProfile) {
   const order = auto.profileOrder;
-  const effectiveProfile =
-    order[Math.min(order.indexOf(requestedProfile), order.indexOf(maxProfile))];
-  const allowedSlots = new Set(auto.tierAllowedSlots[registryTier] ?? [auto.fallbackSlot]);
+  const maximum = tierMaximumProfile(planTier);
+  const profile =
+    order[Math.min(order.indexOf(requestedProfile), order.indexOf(maximum))] ?? maximum;
+  const tierSlots = auto.tierAllowedSlots[routingTier(planTier)] ?? [auto.fallbackSlot];
+  const fallbackSlot = tierSlots.includes(auto.fallbackSlot)
+    ? auto.fallbackSlot
+    : (tierSlots.find((slotId) => auto.slots[slotId]?.modelKey) ?? auto.fallbackSlot);
   const task = auto.tasks[taskType];
   if (!task) throw new Error(`no auto.tasks entry for task type ${taskType}`);
-  const preferred = task.preferredSlots[effectiveProfile] ?? [];
-  const chosenSlotId = preferred.find((slotId) => allowedSlots.has(slotId)) ?? auto.fallbackSlot;
-  const slot = auto.slots[chosenSlotId];
-  const route = defaultRouteForModelKey(slot.modelKey);
-  return { slotId: chosenSlotId, effectiveProfile, requestedProfile, route };
+  return (
+    (task.preferredSlots[profile] ?? []).find((slotId) => tierSlots.includes(slotId)) ??
+    fallbackSlot
+  );
 }
 
-function resolveCacheRates(pricing) {
-  const input = pricing.inputPerMillion;
+function cacheRates(route) {
+  const { inputPerMillion, cacheReadPerMillion, cacheWritePerMillion } = route.pricing;
+  const writesBilledApart =
+    registry.governance[route.provider]?.cacheTokenBillingClass === 'additional_to_input';
   return {
-    read: pricing.cacheReadPerMillion ?? input,
-    write5m: pricing.cacheWritePerMillion ?? input * CACHE_WRITE_FALLBACK_MULTIPLIER_5M,
+    read: cacheReadPerMillion ?? inputPerMillion,
+    write:
+      cacheWritePerMillion ??
+      (writesBilledApart ? inputPerMillion * CACHE_WRITE_PREMIUM : inputPerMillion),
   };
 }
 
-function chatCostCents(
-  route,
-  turns,
-  avgInputTokens,
-  avgOutputTokens,
-  cacheHitShare,
-  cacheWriteShare,
-) {
-  const pricing = route.pricing;
-  const totalInput = turns * avgInputTokens;
-  const cacheRead = totalInput * cacheHitShare;
-  const cacheWrite = totalInput * cacheWriteShare;
-  const fresh = Math.max(0, totalInput - cacheRead - cacheWrite);
-  const totalOutput = turns * avgOutputTokens;
-  const rates = resolveCacheRates(pricing);
-  const inputCostUsd =
-    (fresh / 1_000_000) * pricing.inputPerMillion +
-    (cacheRead / 1_000_000) * rates.read +
-    (cacheWrite / 1_000_000) * rates.write5m;
-  const outputCostUsd = (totalOutput / 1_000_000) * pricing.outputPerMillion;
-  return (inputCostUsd + outputCostUsd) * 100;
+function chatMicrousd(route, turns, profile, cacheHitShare, cacheWriteShare) {
+  const { inputPerMillion, outputPerMillion } = route.pricing;
+  if (typeof inputPerMillion !== 'number' || typeof outputPerMillion !== 'number') {
+    throw new Error(`route ${route.routeId} declares no token price`);
+  }
+  const input = turns * profile.avgInputTokens;
+  const cacheRead = input * cacheHitShare;
+  const cacheWrite = input * cacheWriteShare;
+  const fresh = Math.max(0, input - cacheRead - cacheWrite);
+  const rates = cacheRates(route);
+  const usd =
+    (fresh * inputPerMillion +
+      cacheRead * rates.read +
+      cacheWrite * rates.write +
+      turns * profile.avgOutputTokens * outputPerMillion) /
+    TOKENS_PER_PRICED_UNIT;
+  return usd * MICROUSD_PER_USD;
 }
 
-function groundingCostCents(calls) {
-  return calls * (GOOGLE_GROUNDING_USD_PER_THOUSAND / 10);
-}
-
-function fallbackSearchCostCents(calls) {
-  return calls * (PERPLEXITY_USD_PER_THOUSAND / 10);
-}
-
-function placesCostCents(calls) {
-  return calls * (GOOGLE_TEXT_SEARCH_ENTERPRISE_USD_PER_BLOCK / 10);
-}
-
-function sandboxMinutesCostCents(minutes) {
-  const microusdPerSecond = Math.round(
-    E2B_DEFAULT_VCPU_COUNT * E2B_COMPUTE_RATE_PER_UNIT_USD * 1_000_000,
+function footprintMicrousd(per, count) {
+  return INFRASTRUCTURE_FOOTPRINT.filter((row) => row.per === per).reduce(
+    (sum, row) => sum + count * row.quantity * rateCardMicrousd(row.feature),
+    0,
   );
-  const seconds = minutes * 60;
-  return (seconds * microusdPerSecond) / 10_000;
 }
 
-const imageGenerationRoute = defaultRouteForModelKey(auto.slots['image_generation'].modelKey);
-const IMAGE_USD_PER_IMAGE = imageGenerationRoute.pricing.imagePerImage;
+const PLATFORM_FEE_ROWS = Object.entries(FEATURE_RATE_CARD).filter(
+  ([, row]) => row.vendor && (row.unit === 'month' || row.unit === 'active_user_month'),
+);
 
-function imageCostCents(count) {
-  return count * IMAGE_USD_PER_IMAGE * 100;
+function platformFeesMicrousd(activeAccounts) {
+  return PLATFORM_FEE_ROWS.reduce((sum, [feature, row]) => {
+    const rate = rateCardMicrousd(feature);
+    if (row.unit === 'month') return sum + rate;
+    return sum + Math.max(0, activeAccounts - (row.includedPerMonth ?? 0)) * rate;
+  }, 0);
 }
 
-const videoGenerationRoute = defaultRouteForModelKey(auto.slots['video_generation'].modelKey);
-const VIDEO_USD_PER_SECOND_BY_RESOLUTION = videoGenerationRoute.pricing.videoPerSecondByResolution;
-
-function videoCostCents(count, durationSecs, resolution) {
-  const rate = VIDEO_USD_PER_SECOND_BY_RESOLUTION[resolution];
-  if (typeof rate !== 'number')
-    throw new Error(`no video rate declared for resolution ${resolution}`);
-  return count * durationSecs * rate * 100;
+function platformShareMicrousd(activeAccounts) {
+  return platformFeesMicrousd(activeAccounts) / activeAccounts;
 }
 
-// ---------------------------------------------------------------------------
-// Profiles
-//
-// Every quantity below is this script's own documented assumption (the repo
-// meters no profile like this yet); every PRICE applied to that quantity is
-// read from the registry / tool-pricing files above. `notes` states the
-// reasoning so the number is auditable rather than asserted.
-// ---------------------------------------------------------------------------
+const PLATFORM_SHARE_MICROUSD = platformShareMicrousd(ASSUMED_ACTIVE_ACCOUNTS);
+
+function planPriceMicrousd(planTier, interval = 'monthly') {
+  const pricing = BILLING_PLAN_PRICING[planTier];
+  return interval === 'yearly'
+    ? (pricing.yearlyPriceUsd * MICROUSD_PER_USD) / MONTHS_PER_YEAR
+    : pricing.monthlyPriceUsd * MICROUSD_PER_USD;
+}
+
+function monthlyCredits(planTier) {
+  return MANAGED_USAGE_LIMITS[planTier].monthlyCredits;
+}
+
+function allowanceMicrousd(planTier) {
+  return monthlyCredits(planTier) * MICROUSD_PER_CREDIT;
+}
+
+function planLabel(planTier) {
+  return BILLING_PLAN_PRICING[planTier].label;
+}
 
 const PROFILES = [
   {
@@ -436,248 +462,287 @@ const PROFILES = [
 ];
 
 const AGI_WORK_TASK_TYPES = ['agentic', 'computer-use'];
-for (const profile of PROFILES) {
-  const usesAgiWork = AGI_WORK_TASK_TYPES.some((taskType) => profile.taskMix[taskType] > 0);
-  if (usesAgiWork && !AGI_WORK_TIERS.includes(profile.planTier)) {
+
+function requireCapability(profile, capability, reason) {
+  if (!BILLING_PLAN_CAPABILITY_TIERS[capability].includes(profile.planTier)) {
     throw new Error(
-      `${profile.name} assumes agentic/computer-use task share on ${profile.planTier}, which billing-catalog.ts does not entitle to agi_work`,
+      `${profile.name} assumes ${reason} on ${profile.planTier}, which billing-catalog.ts does not entitle to ${capability}`,
     );
   }
 }
 
-// ---------------------------------------------------------------------------
-// Computation
-// ---------------------------------------------------------------------------
+for (const profile of PROFILES) {
+  if (AGI_WORK_TASK_TYPES.some((taskType) => profile.taskMix[taskType] > 0)) {
+    requireCapability(profile, 'agi_work', 'agentic or computer-use turns');
+  }
+  if (profile.tools.imageGenerations) requireCapability(profile, 'image_generation', 'images');
+  if (profile.tools.videoGenerations) requireCapability(profile, 'video_generation', 'video');
+}
 
 function computeProfile(profile) {
   const components = [];
-  let chatCentsTotal = 0;
-  let chatCentsNoCache = 0;
-  let chatCentsIfMaxProfile = 0;
-  const slotUsage = [];
+  let chat = 0;
+  let chatUncached = 0;
+  let chatAtTierMaximum = 0;
 
   for (const [taskType, share] of Object.entries(profile.taskMix)) {
     const turns = profile.turnsPerMonth * share;
-    const { slotId, effectiveProfile, route } = resolveTaskRoute(taskType, profile.planTier);
-    const cost = chatCostCents(
+    const slotId = admittedSlot(taskType, profile.planTier, taskProfile(taskType));
+    const route = slotRoute(slotId);
+    const cost = chatMicrousd(
       route,
       turns,
-      profile.avgInputTokens,
-      profile.avgOutputTokens,
+      profile,
       profile.cacheHitShare,
       profile.cacheWriteShare,
     );
-    chatCentsTotal += cost;
-    chatCentsNoCache += chatCostCents(
-      route,
+    chat += cost;
+    chatUncached += chatMicrousd(route, turns, profile, 0, 0);
+    chatAtTierMaximum += chatMicrousd(
+      slotRoute(admittedSlot(taskType, profile.planTier, tierMaximumProfile(profile.planTier))),
       turns,
-      profile.avgInputTokens,
-      profile.avgOutputTokens,
-      0,
-      0,
-    );
-
-    const maxProfileRoute = (() => {
-      const registryTier = normalizeTier(profile.planTier);
-      const maxProfile = auto.tierMaximumProfiles[registryTier] ?? 'economy';
-      const allowedSlots = new Set(auto.tierAllowedSlots[registryTier] ?? [auto.fallbackSlot]);
-      const task = auto.tasks[taskType];
-      const preferred = task.preferredSlots[maxProfile] ?? [];
-      const chosenSlotId = preferred.find((id) => allowedSlots.has(id)) ?? auto.fallbackSlot;
-      return defaultRouteForModelKey(auto.slots[chosenSlotId].modelKey);
-    })();
-    chatCentsIfMaxProfile += chatCostCents(
-      maxProfileRoute,
-      turns,
-      profile.avgInputTokens,
-      profile.avgOutputTokens,
+      profile,
       profile.cacheHitShare,
       profile.cacheWriteShare,
     );
-
-    slotUsage.push({ taskType, share, slotId, effectiveProfile, turns, costCents: cost });
-    components.push({ label: `chat: ${taskType} (${slotId})`, cents: cost });
+    components.push({ label: `chat: ${taskType} (${slotId})`, microusd: cost });
   }
 
-  const overheadCents = chatCentsTotal * (profile.retryShare + profile.gatewayOverheadShare);
-  if (overheadCents > 0) {
-    components.push({
-      label: `retries + gateway overhead (${Math.round((profile.retryShare + profile.gatewayOverheadShare) * 100)}%)`,
-      cents: overheadCents,
-    });
-  }
+  const overheadShare = profile.retryShare + profile.gatewayOverheadShare;
+  components.push({
+    label: `retries + gateway overhead (${Math.round(overheadShare * 100)}%)`,
+    microusd: chat * overheadShare,
+  });
 
-  const tools = profile.tools ?? {};
-  let toolsGatedNote = null;
-
-  if (tools.webSearchGrounded) {
-    const cents = groundingCostCents(tools.webSearchGrounded);
-    components.push({ label: `web search (grounded, beyond free pool)`, cents });
-  }
-  if (tools.webSearchFallback) {
-    const cents = fallbackSearchCostCents(tools.webSearchFallback);
-    components.push({ label: `web search (fallback provider)`, cents });
-  }
-  if (tools.placesSearch) {
-    components.push({ label: 'places search', cents: placesCostCents(tools.placesSearch) });
+  const { tools } = profile;
+  for (const [tool, { feature, label }] of Object.entries(SEARCH_TOOLS)) {
+    if (tools[tool]) components.push({ label, microusd: tools[tool] * rateCardMicrousd(feature) });
   }
   if (tools.sandboxMinutes) {
     components.push({
-      label: 'sandbox compute minutes',
-      cents: sandboxMinutesCostCents(tools.sandboxMinutes),
+      label: 'sandbox compute',
+      microusd: tools.sandboxMinutes * SANDBOX_MICROUSD_PER_MINUTE,
     });
   }
-  if (tools.browserMinutes) {
+  const images = tools.imageGenerations ?? 0;
+  if (images) components.push({ label: 'image generation', microusd: images * IMAGE_MICROUSD });
+  const video = tools.videoGenerations;
+  const videoSeconds = video ? video.count * video.durationSecs : 0;
+  if (video) {
     components.push({
-      label: 'browser (computer-use) compute minutes',
-      cents: sandboxMinutesCostCents(tools.browserMinutes),
+      label: 'video generation',
+      microusd: videoSeconds * videoMicrousdPerSecond(video.resolution),
     });
-  }
-  if (tools.imageGenerations) {
-    const entitled = IMAGE_GENERATION_TIERS.includes(profile.planTier);
-    if (entitled) {
-      components.push({ label: 'image generation', cents: imageCostCents(tools.imageGenerations) });
-    } else {
-      toolsGatedNote = `${tools.imageGenerations} image generations requested but ${profile.planTier} is not entitled to image_generation; excluded`;
-    }
-  }
-  if (tools.videoGenerations) {
-    const entitled = VIDEO_GENERATION_TIERS.includes(profile.planTier);
-    if (entitled) {
-      const { count, durationSecs, resolution } = tools.videoGenerations;
-      components.push({
-        label: 'video generation',
-        cents: videoCostCents(count, durationSecs, resolution),
-      });
-    } else {
-      toolsGatedNote = `${tools.videoGenerations.count} video generations requested but ${profile.planTier} is not entitled to video_generation; excluded`;
-    }
   }
 
-  const totalCents = components.reduce((sum, c) => sum + c.cents, 0);
-  const cachingSavingsCents = chatCentsNoCache - chatCentsTotal;
-  const routingSavingsCents = chatCentsIfMaxProfile - chatCentsTotal;
-  const priceUsd = PLAN_MONTHLY_PRICE_USD[profile.planTier];
-  const totalUsd = totalCents / 100;
-  const marginUsd = priceUsd - totalUsd;
-  const marginPercent = priceUsd > 0 ? (marginUsd / priceUsd) * 100 : null;
+  const providerMicrousd = components.reduce((sum, component) => sum + component.microusd, 0);
+  const perUseInfrastructureMicrousd =
+    footprintMicrousd('turn', profile.turnsPerMonth) +
+    footprintMicrousd('image', images) +
+    footprintMicrousd('video second', videoSeconds);
+  const infrastructureMicrousd = perUseInfrastructureMicrousd + PLATFORM_SHARE_MICROUSD;
+  const credits = creditsFromMicrousd(providerMicrousd);
+  const planCoveredMicrousd = Math.min(providerMicrousd, allowanceMicrousd(profile.planTier));
+  const priceMicrousd = planPriceMicrousd(profile.planTier);
+  const marginMicrousd = priceMicrousd - planCoveredMicrousd - infrastructureMicrousd;
 
   return {
     profile,
     components,
-    totalCents,
-    totalUsd,
-    priceUsd,
-    marginUsd,
-    marginPercent,
-    cachingSavingsCents,
-    routingSavingsCents,
-    slotUsage,
-    toolsGatedNote,
-    storageNote: tools.fileStorageGB
-      ? `${tools.fileStorageGB} GB/month of file storage assumed; no per-GB storage price exists in this repo, so it is excluded from the total`
-      : null,
+    providerMicrousd,
+    credits,
+    allowanceShare: credits / monthlyCredits(profile.planTier),
+    perUseInfrastructureMicrousd,
+    infrastructureMicrousd,
+    priceMicrousd,
+    marginMicrousd,
+    marginShare: marginMicrousd / priceMicrousd,
+    cachingSavingsMicrousd: chatUncached - chat,
+    routingSavingsMicrousd: chatAtTierMaximum - chat,
   };
 }
 
-// ---------------------------------------------------------------------------
-// Report
-// ---------------------------------------------------------------------------
-
-function usd(cents) {
-  return `$${(cents / 100).toFixed(2)}`;
+function usd(microusd, digits = 2) {
+  return `$${(microusd / MICROUSD_PER_USD).toFixed(digits)}`;
 }
 
-function pct(value) {
-  return `${value.toFixed(1)}%`;
+function pct(ratio) {
+  return `${(ratio * 100).toFixed(1)}%`;
 }
+
+function count(value, maximumFractionDigits = 0) {
+  return value.toLocaleString('en-US', { maximumFractionDigits });
+}
+
+function creditCount(credits) {
+  return count(credits, credits < 100 ? 1 : 0);
+}
+
+function rateCardRow(feature, unit, microusd) {
+  const row = FEATURE_RATE_CARD[feature];
+  return `| ${feature} | ${unit} | ${usd(microusd, 4)} | ${count(creditsFromMicrousd(microusd), 2)} | ${row.source}, verified ${row.verifiedOn} |`;
+}
+
+const results = PROFILES.map(computeProfile);
+const maxPerUseInfrastructureMicrousd = Math.max(
+  ...results.map((result) => result.perUseInfrastructureMicrousd),
+);
 
 console.log('# Unit economics model output\n');
-console.log('Sourced constants:\n');
 console.log(
-  `- Google grounding: $${GOOGLE_GROUNDING_USD_PER_THOUSAND}/1,000 calls beyond a ${GOOGLE_GROUNDING_FREE_POOL_PER_MONTH}/month free pool (apps/web/lib/web-search/web-search-pricing.json)`,
+  `Every price is read when the script runs: credits from ${SOURCES.credits}, plan allowances from ${SOURCES.allowances}, tool, media, search, sandbox and infrastructure rates from ${SOURCES.rateCard}, plan prices and capability gates from ${SOURCES.plans}, store commission from ${SOURCES.storeCommission}, and model token prices and routing policy from ${SOURCES.modelPrices}. The cache-write premium (${CACHE_WRITE_PREMIUM}x) is read from ${SOURCES.cacheWritePremium} and the included search allowance (${INCLUDED_SEARCH_CALLS} calls) from ${SOURCES.includedSearch}. Rate card figures are the published ones; deployment overrides are not applied.\n`,
 );
 console.log(
-  `- Fallback search (Perplexity): $${PERPLEXITY_USD_PER_THOUSAND}/1,000 calls (apps/web/lib/web-search/web-search-pricing.json)`,
-);
-console.log(
-  `- Places search: $${GOOGLE_TEXT_SEARCH_ENTERPRISE_USD_PER_BLOCK}/1,000 calls (apps/web/lib/places/places-config.ts)`,
-);
-console.log(
-  `- Sandbox/browser compute: $${E2B_COMPUTE_RATE_PER_UNIT_USD}/vCPU-second at ${E2B_DEFAULT_VCPU_COUNT} vCPU default (packages/ai/model-registry/catalog/provider-compute-pricing.json)`,
-);
-console.log(
-  `- Image generation: $${IMAGE_USD_PER_IMAGE}/image on the ${auto.slots['image_generation'].modelKey ? 'image_generation' : ''} slot (registry route pricing)`,
-);
-console.log(
-  `- Video generation: ${JSON.stringify(VIDEO_USD_PER_SECOND_BY_RESOLUTION)} USD/second by resolution on the video_generation slot (registry route pricing)`,
-);
-console.log(
-  `- Plan prices: ${Object.entries(PLAN_MONTHLY_PRICE_USD)
-    .map(([k, v]) => `${k}=$${v}`)
-    .join(', ')} (packages/contracts/types/src/billing-catalog.ts)\n`,
+  `1 credit = ${count(MICROUSD_PER_CREDIT)} microUSD of provider cost, so a profile's credits are its provider COGS divided by ${count(MICROUSD_PER_CREDIT)} microUSD, before the per-action round-up to 0.01 credit. Usage quantities (turns, tokens, tool calls per profile) are this script's own assumptions, because no profile like these is metered yet; each is printed with its reasoning.\n`,
 );
 
-const summaryRows = [];
+console.log('## Assumptions\n');
+console.log(
+  `- Active accounts sharing the platform fees: ${count(ASSUMED_ACTIVE_ACCOUNTS)}. An active account is one with a provider cost event or a Free usage reservation in the month; the monthly allocation job divides each vendor's bill by that count. No measured count is in the repository.`,
+);
+console.log(
+  `- Search calls are priced at the provider rate whether or not they draw credits. Paid plans include ${INCLUDED_SEARCH_CALLS} interactive search calls a month (${INCLUDED_SEARCH_FEATURES.join(', ')}) that draw no credits, so a search-heavy profile's credit count overstates what it draws by up to that many calls.`,
+);
+console.log(
+  "- Browser minutes are kept in the profiles as documented but carry no platform cost: no rate card row prices them, because every browser path drives the user's own Chrome, desktop app or CLI. The computer-use turns that drive the browser are priced as chat.",
+);
+console.log(
+  `- Sandbox minutes run at the default sandbox shape, ${DEFAULT_SANDBOX_VCPU_COUNT} vCPU and ${DEFAULT_SANDBOX_MEMORY_GIB} GiB.`,
+);
+console.log(
+  "- Each task's model is the routing slot the router admits for the plan (auto policy, tier ceiling and allow-list in the registry), priced on that model's default route.",
+);
+console.log(
+  `- Not modeled: payment processing fees (recorded per transaction from Stripe, not a rate), the flagship weekly share, the rolling 5-hour and weekly windows, the Google grounding free pool (${count(groundingPool.poolFreeRequests)} requests a ${groundingPool.poolWindow} for the whole platform, about ${count(groundingPool.poolFreeRequests / ASSUMED_ACTIVE_ACCOUNTS)} per account at ${count(ASSUMED_ACTIVE_ACCOUNTS)} accounts), and vendor invoices beyond the per-use rows (Neon, R2 and Upstash have no committed monthly fee row).\n`,
+);
+console.log('Per-use infrastructure footprint:\n');
+console.log('| Per | Rate card row | Quantity | Reasoning |');
+console.log('| --- | --- | --- | --- |');
+for (const row of INFRASTRUCTURE_FOOTPRINT) {
+  console.log(`| ${row.per} | ${row.feature} | ${count(row.quantity, 6)} | ${row.reason} |`);
+}
+console.log('');
 
-for (const profile of PROFILES) {
-  const result = computeProfile(profile);
-  summaryRows.push(result);
+console.log('## Unit prices\n');
+console.log('| Rate card row | Unit | Provider cost | Credits per unit | Source |');
+console.log('| --- | --- | --- | --- | --- |');
+for (const feature of [
+  'web_search_grounding',
+  'web_search_perplexity',
+  'web_search_anthropic',
+  'web_search_openai',
+  'places_text_search',
+  'hosted_code_execution_openai_session',
+  'hosted_code_execution_anthropic_hour',
+]) {
+  console.log(rateCardRow(feature, FEATURE_RATE_CARD[feature].unit, rateCardMicrousd(feature)));
+}
+console.log(
+  `| sandbox_vcpu_second, sandbox_gib_second | minute at ${DEFAULT_SANDBOX_VCPU_COUNT} vCPU and ${DEFAULT_SANDBOX_MEMORY_GIB} GiB | ${usd(SANDBOX_MICROUSD_PER_MINUTE, 4)} | ${count(creditsFromMicrousd(SANDBOX_MICROUSD_PER_MINUTE), 2)} | ${FEATURE_RATE_CARD.sandbox_vcpu_second.source}, verified ${FEATURE_RATE_CARD.sandbox_vcpu_second.verifiedOn} |`,
+);
+console.log(
+  `| image_generation slot | image | ${usd(IMAGE_MICROUSD, 4)} | ${count(creditsFromMicrousd(IMAGE_MICROUSD), 2)} | registry route price |`,
+);
+console.log(
+  `| video_generation slot | second at 1080p | ${usd(videoMicrousdPerSecond('1080p'), 4)} | ${count(creditsFromMicrousd(videoMicrousdPerSecond('1080p')), 2)} | registry route price |\n`,
+);
 
-  console.log(`## ${profile.name} (${profile.planTier}, $${result.priceUsd}/month)\n`);
+console.log('## Infrastructure platform fees\n');
+console.log('| Rate card row | Vendor | Monthly fee |');
+console.log('| --- | --- | --- |');
+for (const [feature, row] of PLATFORM_FEE_ROWS) {
+  const fee =
+    row.unit === 'month'
+      ? `${usd(rateCardMicrousd(feature))} a month`
+      : `${usd(rateCardMicrousd(feature))} per active account above ${count(row.includedPerMonth ?? 0)}`;
+  console.log(`| ${feature} | ${row.vendor} | ${fee} |`);
+}
+console.log(
+  `\nAt ${count(ASSUMED_ACTIVE_ACCOUNTS)} active accounts the fees total ${usd(platformFeesMicrousd(ASSUMED_ACTIVE_ACCOUNTS))} a month, ${usd(PLATFORM_SHARE_MICROUSD)} per account. Sensitivity: ${ACTIVE_ACCOUNT_SENSITIVITY.map((accounts) => `${usd(platformShareMicrousd(accounts))} per account at ${count(accounts)}`).join(', ')}.\n`,
+);
+
+for (const result of results) {
+  const { profile } = result;
+  console.log(
+    `## ${profile.name} (${planLabel(profile.planTier)}, ${usd(result.priceMicrousd)}/month)\n`,
+  );
   console.log(`Assumption: ${profile.notes}\n`);
   console.log(
-    `Turns/month: ${profile.turnsPerMonth}, avg input tokens: ${profile.avgInputTokens}, avg output tokens: ${profile.avgOutputTokens}, cache hit share: ${pct(profile.cacheHitShare * 100)}, cache write share: ${pct(profile.cacheWriteShare * 100)}\n`,
+    `Turns/month: ${profile.turnsPerMonth}, avg input tokens: ${profile.avgInputTokens}, avg output tokens: ${profile.avgOutputTokens}, cache hit share: ${pct(profile.cacheHitShare)}, cache write share: ${pct(profile.cacheWriteShare)}\n`,
   );
-
-  console.log('| Component | Monthly cost |');
-  console.log('| --- | --- |');
+  console.log('| Component | Monthly cost | Credits |');
+  console.log('| --- | --- | --- |');
   for (const component of result.components) {
-    console.log(`| ${component.label} | ${usd(component.cents)} |`);
+    console.log(
+      `| ${component.label} | ${usd(component.microusd)} | ${creditCount(creditsFromMicrousd(component.microusd))} |`,
+    );
   }
-  console.log(`| **Total COGS** | **${usd(result.totalCents)}** |\n`);
-
   console.log(
-    `Plan price: $${result.priceUsd.toFixed(2)} | Margin: ${usd(result.marginUsd * 100)} (${result.marginPercent === null ? 'n/a' : pct(result.marginPercent)})`,
+    `| **Provider COGS** | **${usd(result.providerMicrousd)}** | **${creditCount(result.credits)}** |\n`,
   );
-  console.log(`Prompt caching saves: ${usd(result.cachingSavingsCents)}/month versus no caching`);
+  const allowance = monthlyCredits(profile.planTier);
   console.log(
-    `Router savings: ${usd(result.routingSavingsCents)}/month versus forcing every task to the tier's maximum profile`,
+    `Credits: ${creditCount(result.credits)} of the plan's ${count(allowance)} monthly credits (${pct(result.allowanceShare)}).${result.credits > allowance ? ` The monthly window stops included use at ${count(allowance)} credits; the other ${creditCount(result.credits - allowance)} need bonus or purchased credits, so the plan price carries only ${usd(allowanceMicrousd(profile.planTier))}.` : ''}`,
   );
-  if (result.toolsGatedNote) console.log(`Note: ${result.toolsGatedNote}`);
-  if (result.storageNote) console.log(`Note: ${result.storageNote}`);
-
-  const candidateDeltas = [-0.2, 0.2];
-  const candidateLine = candidateDeltas
-    .map((delta) => {
-      const candidatePrice = result.priceUsd * (1 + delta);
-      const candidateMargin = candidatePrice - result.totalUsd;
-      const candidateMarginPct =
-        candidatePrice > 0 ? (candidateMargin / candidatePrice) * 100 : null;
-      return `$${candidatePrice.toFixed(2)} -> margin ${usd(candidateMargin * 100)} (${candidateMarginPct === null ? 'n/a' : pct(candidateMarginPct)})`;
-    })
-    .join(' | ');
-  console.log(`Candidate price points: ${candidateLine}\n`);
-
-  const ceilingCents = PLAN_MONTHLY_COGS_CEILING_CENTS[profile.planTier];
-  const ceilingRatio = (result.totalCents / ceilingCents) * 100;
   console.log(
-    `Enforced monthly COGS ceiling on ${profile.planTier} (reservation system): ${usd(ceilingCents)}; this profile reaches ${pct(ceilingRatio)} of it${result.totalCents > ceilingCents ? ' -- the reservation system would throttle this profile before it reached the modeled total' : ''}\n`,
+    `Infrastructure: ${usd(result.infrastructureMicrousd)} (per-use rows ${usd(result.perUseInfrastructureMicrousd)}, platform share ${usd(PLATFORM_SHARE_MICROUSD)}).`,
   );
+  console.log(
+    `Gross margin at list price: ${usd(result.marginMicrousd)} (${pct(result.marginShare)}).`,
+  );
+  console.log(
+    `Prompt caching saves ${usd(result.cachingSavingsMicrousd)}/month versus no caching; routing saves ${usd(result.routingSavingsMicrousd)}/month versus sending every task to the tier's maximum profile.`,
+  );
+  if (profile.tools.browserMinutes) {
+    console.log(
+      `Browser minutes: ${profile.tools.browserMinutes} assumed, at no platform cost (see assumptions).`,
+    );
+  }
+  console.log('');
 }
 
 console.log('## Summary across profiles\n');
-console.log('| Profile | Plan | Price | Total COGS | Margin | Margin % | % of enforced ceiling |');
-console.log('| --- | --- | --- | --- | --- | --- | --- |');
-for (const result of summaryRows) {
-  const ceilingCents = PLAN_MONTHLY_COGS_CEILING_CENTS[result.profile.planTier];
-  const ceilingRatio = (result.totalCents / ceilingCents) * 100;
+console.log(
+  '| Profile | Plan | Price | Provider COGS | Credits | Share of monthly credits | Infrastructure | Gross margin at list price |',
+);
+console.log('| --- | --- | --- | --- | --- | --- | --- | --- |');
+for (const result of results) {
   console.log(
-    `| ${result.profile.name} | ${result.profile.planTier} | $${result.priceUsd.toFixed(2)} | ${usd(result.totalCents)} | ${usd(result.marginUsd * 100)} | ${result.marginPercent === null ? 'n/a' : pct(result.marginPercent)} | ${pct(ceilingRatio)} |`,
+    `| ${result.profile.name} | ${planLabel(result.profile.planTier)} | ${usd(result.priceMicrousd)} | ${usd(result.providerMicrousd)} | ${creditCount(result.credits)} | ${pct(result.allowanceShare)} | ${usd(result.infrastructureMicrousd)} | ${pct(result.marginShare)} |`,
   );
 }
-console.log(
-  `\nEnforced monthly COGS ceilings by plan: ${Object.entries(PLAN_MONTHLY_COGS_CEILING_CENTS)
-    .map(([tier, cents]) => `${tier}=${usd(cents)}`)
-    .join(', ')}`,
+console.log('');
+
+const iosCommissionShare =
+  MOBILE_IAP_STORE_COMMISSION.ios.subscriptionFirstYearBasisPoints / BASIS_POINTS_PER_WHOLE;
+const storeMonthlyPlans = new Set(
+  MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
+    (definition) => definition.kind === 'subscription' && definition.interval === 'monthly',
+  ).map((definition) => definition.planTier),
 );
+
+console.log('## Gross margin per plan\n');
+console.log(
+  `Worst case: the whole monthly allowance spent at ${usd(MICROUSD_PER_CREDIT, 3)} a credit, plus the platform share at ${count(ASSUMED_ACTIVE_ACCOUNTS)} active accounts. "With included search" adds the ${INCLUDED_SEARCH_CALLS} interactive search calls a month that draw no credits, at the dearest included rate (${usd(INCLUDED_SEARCH_MICROUSD)}). "Yearly billing" uses the yearly price spread over ${MONTHS_PER_YEAR} months. "App Store, first year" takes ${pct(iosCommissionShare)} commission off the list price. Per-use infrastructure rows come to at most ${usd(maxPerUseInfrastructureMicrousd)} a month in any modeled profile and are not in the worst case. Margins are shares of the monthly list price, except yearly billing, which is a share of the yearly price per month.\n`,
+);
+console.log(
+  '| Plan | Price | Monthly credits | Modeled profiles at list price | Worst-case cost | Worst-case margin | With included search | Yearly billing | App Store, first year |',
+);
+console.log('| --- | --- | --- | --- | --- | --- | --- | --- | --- |');
+for (const planTier of SELF_SERVE_PAID_PLAN_TIERS) {
+  const price = planPriceMicrousd(planTier);
+  const worstCost = allowanceMicrousd(planTier) + PLATFORM_SHARE_MICROUSD;
+  const onPlan = results.filter((result) => result.profile.planTier === planTier);
+  const modeled =
+    onPlan.length === 0
+      ? 'none modeled'
+      : onPlan.map((result) => `${result.profile.name} ${pct(result.marginShare)}`).join(', ');
+  const yearlyPrice = planPriceMicrousd(planTier, 'yearly');
+  const yearly = yearlyPrice > 0 ? pct((yearlyPrice - worstCost) / yearlyPrice) : 'not offered';
+  const store = storeMonthlyPlans.has(planTier)
+    ? pct((price * (1 - iosCommissionShare) - worstCost) / price)
+    : 'not sold in the store';
+  console.log(
+    `| ${planLabel(planTier)} (${planTier}) | ${usd(price)} | ${count(monthlyCredits(planTier))} | ${modeled} | ${usd(worstCost)} | ${pct((price - worstCost) / price)} | ${pct((price - worstCost - INCLUDED_SEARCH_MICROUSD) / price)} | ${yearly} | ${store} |`,
+  );
+}

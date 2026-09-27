@@ -43,7 +43,7 @@ export function retirementLabel(entry: ModelCatalogueEntry, now: Date = new Date
   if (!deprecatedOn) return null;
   const date = new Date(`${deprecatedOn}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return null;
-  const formatted = date.toLocaleDateString('en-GB', {
+  const formatted = date.toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',

@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react';
 import { Button, Input, Label, Switch, Textarea } from '@agiworkforce/ui';
+import { MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP } from '@agiworkforce/cloud-contracts';
+import { formatCredits } from '@agiworkforce/types';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
@@ -15,6 +17,7 @@ interface ScheduleFormProps {
   submitError: string | null;
   saving: boolean;
   isEdit: boolean;
+  creditsUsed: number | null;
   modelOptions: readonly ScheduleModelOption[];
   onChange: (patch: Partial<ScheduleDraft>) => void;
   onSubmit: () => void;
@@ -37,6 +40,7 @@ const FIELD_ORDER: (keyof ScheduleDraft)[] = [
   'timezone',
   'expiresLocal',
   'maxExecutions',
+  'creditCap',
 ];
 
 const fieldId = (field: keyof ScheduleDraft) => `schedule-${field}`;
@@ -73,6 +77,7 @@ export function ScheduleForm({
   submitError,
   saving,
   isEdit,
+  creditsUsed,
   modelOptions,
   onChange,
   onSubmit,
@@ -619,6 +624,30 @@ export function ScheduleForm({
                 aria-describedby={describedBy('maxExecutions', errors)}
               />
               <FieldError field="maxExecutions" errors={errors} />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor={fieldId('creditCap')}>Credit Cap</Label>
+              <Input
+                id={fieldId('creditCap')}
+                name="creditCap"
+                type="number"
+                inputMode="numeric"
+                autoComplete="off"
+                min={1}
+                max={MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP}
+                step={1}
+                value={draft.creditCap}
+                onChange={(event) => set({ creditCap: event.target.value })}
+                placeholder="No limit…"
+                aria-invalid={Boolean(errors.creditCap)}
+                aria-describedby={describedBy('creditCap', errors, 'schedule-credit-cap-helper')}
+              />
+              <p id="schedule-credit-cap-helper" className="text-xs text-muted-foreground">
+                The schedule pauses once its runs have used this many credits, counting every model,
+                search and tool charge. A run that starts under the cap finishes.
+                {creditsUsed !== null ? ` It has used ${formatCredits(creditsUsed)} so far.` : ''}
+              </p>
+              <FieldError field="creditCap" errors={errors} />
             </div>
           </div>
         </details>

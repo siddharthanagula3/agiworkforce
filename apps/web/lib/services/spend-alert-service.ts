@@ -1,8 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { isOrganizationAdminRole, type OrganizationRole } from '@agiworkforce/types';
-import { formatCurrency } from '@agiworkforce/utils';
+import {
+  centsFromCredits,
+  formatCredits,
+  isOrganizationAdminRole,
+  type OrganizationRole,
+} from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { recordNotification } from '@/lib/services/notification-service';
@@ -18,7 +22,7 @@ export type SpendAlertOutcome =
   | { dispatched: true; kind: SpendAlertKind; recipientsNotified: number };
 
 export function dueSpendAlertKind(state: SpendState): SpendAlertKind | null {
-  if (!state.configured || state.enforcement === 'off' || state.monthlyCapCents === null) {
+  if (!state.configured || state.enforcement === 'off' || state.monthlyCapCredits === null) {
     return null;
   }
   if (state.overCap) return 'cap';
@@ -33,21 +37,17 @@ interface AdminRecipientRow {
   workspace_name: string | null;
 }
 
-function centsToDisplay(cents: number): string {
-  return formatCurrency(cents / 100, 'USD', 'en-US');
-}
-
 export async function dispatchSpendAlertIfDue(
   organizationId: string,
   state: SpendState,
   db: DatabaseAdapter = getNeonDb(),
 ): Promise<SpendAlertOutcome> {
   const kind = dueSpendAlertKind(state);
-  if (!kind || state.monthlyCapCents === null || state.enforcement === 'off') {
+  if (!kind || state.monthlyCapCredits === null || state.enforcement === 'off') {
     return { dispatched: false, reason: 'not_due' };
   }
   const enforcement = state.enforcement;
-  const cap = state.monthlyCapCents;
+  const cap = state.monthlyCapCredits;
 
   const claimed = await db.query<{ period_start: string }>(
     `insert into public.organization_spend_alerts
@@ -59,8 +59,8 @@ export async function dispatchSpendAlertIfDue(
       organizationId,
       kind,
       enforcement,
-      Math.max(0, Math.round(state.spentCents)),
-      cap,
+      Math.max(0, Math.round(centsFromCredits(state.spentCredits))),
+      Math.round(centsFromCredits(cap)),
       state.alertThresholdPct,
     ],
   );
@@ -78,7 +78,7 @@ export async function dispatchSpendAlertIfDue(
       resourceId: organizationId,
       status: kind === 'cap' ? 'cap_reached' : 'threshold_reached',
       scope: enforcement,
-      count: Math.round(state.spentCents),
+      count: Math.round(state.spentCredits),
     },
   }).catch((error) => {
     logger.error(
@@ -121,8 +121,8 @@ export async function dispatchSpendAlertIfDue(
       isOrganizationAdminRole(member.role) && typeof member.email === 'string',
   );
 
-  const spent = centsToDisplay(state.spentCents);
-  const capDisplay = centsToDisplay(cap);
+  const spent = formatCredits(state.spentCredits);
+  const capDisplay = formatCredits(cap);
   const results = await Promise.all(
     recipients.map((recipient) =>
       sendSpendAlertEmail({

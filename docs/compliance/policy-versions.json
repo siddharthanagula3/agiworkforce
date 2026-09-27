@@ -43,6 +43,11 @@
           "date": "2026-09-22",
           "digest": "0423a664d94b8c05",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "364b3259e3db9d72",
+          "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables."
         }
       ]
     },
@@ -128,6 +133,11 @@
           "date": "2026-08-14",
           "digest": "3c80b8fc321b9d27",
           "note": "Targeted 2026-09-23 corrections align protected-route coverage, connector and built-in-tool logging limits, public Desktop release status, and the host-neutral restore drill with current code. The printed date remains the last full-page review; these targeted checks do not establish a new whole-page review."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "30c31f001ef6e8e3",
+          "note": "The erasure table count moves from 95 to 100 as the billing tables joined the list; no security commitment changed, so the date stays."
         }
       ]
     },
@@ -163,6 +173,21 @@
           "date": "2026-08-13",
           "digest": "d13877c05d7e454d",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "16e8983458c38814",
+          "note": "Adds the signed-in refund request, the 14-day withdrawal for the EU, EEA and UK, the 7-day unused refund once per account, and the dispute hold, and corrects plan upgrades, which start a new billing period on the day of the upgrade while added seats keep the renewal date. Checkout now asks every customer to confirm, in wording version 2026-09-27: 'I ask for immediate access. I understand that if I withdraw within 14 days, my refund is reduced in proportion to the credits I have used.' A withdrawal is prorated by the credits used, as Claude does (support.claude.com/en/articles/12386328), only when that confirmation is recorded on the subscription or payment, and is refunded in full otherwise."
+        }
+      ]
+    },
+    "referralTerms": {
+      "page": "apps/web/app/referral-terms/page.tsx",
+      "versions": [
+        {
+          "date": "2026-09-27",
+          "digest": "5e63ba8ad8126ac1",
+          "note": "First published version of the referral program terms, adapted from Perplexity’s Refer-a-Friend terms and Anthropic’s credit terms; listed for a lawyer’s review."
         }
       ]
     },
@@ -198,6 +223,11 @@
           "date": "2026-09-21",
           "digest": "dad1996e59ea6dd4",
           "note": "Records the targeted 2026-09-23 database route count update and its dated change record. The printed date remains the last whole-page review; this route measurement does not establish a new review of every Trust claim."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "723eea51e7af4969",
+          "note": "The erasure table count moves from 95 to 100 and the change record gains its 2026-09-27 entry; no commitment changed, so the date stays."
         }
       ]
     },
@@ -213,6 +243,11 @@
           "date": null,
           "digest": "0db69193fc02515b",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": null,
+          "digest": "51546d0f78f9150d",
+          "note": "Lists the new referral program terms at /referral-terms; the index prints no date of its own."
         }
       ]
     },
