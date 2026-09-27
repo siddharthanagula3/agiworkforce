@@ -140,12 +140,12 @@ Code: `apps/web/app/api/github/webhook/route.ts:215-238`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Design source can be viewed/downloaded but there is no spec handoff (S32.28 partial), and web cloud Code needs AGI_E2B_EXECUTION=1 and has no file-write tool (S67.06 partial). | ui, flag-off |
-| desktop | partial | Design must be downloaded and referenced by hand in a local session (no design-to-code handoff, S32.28 partial); local sessions spawn an unpublished CLI. | ui |
+| desktop | partial | Local sessions now run the CLI bundled with the desktop app (partials/desktop-cli). Still open: a design must be downloaded and referenced by hand in a local session; there is no design-to-code handoff (S32.28). | ui |
 | mobile | partial | Phone can only steer an existing desktop session (S67.06 partial) and saves design source as a text file (S32.28 partial). | ui |
 | cli | partial | `agi artifacts show --out` writes the design source into the repo and the agent can implement it, but there is no spec/inspect handoff and no Figma import (S32.28 partial, S32.30 missing). | ui |
 | vscode | partial | 'Save Artifact into Workspace' copies the design source into the folder for the agent; no spec handoff (S32.28 partial). | ui |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`, `apps/desktop/electron/runtime/dispatcher.ts:892-900`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`
+Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1220-1232`, `apps/desktop/electron/runtime/developerSessionService.ts:160-160`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:426-436`, `apps/cli/src/lib.rs:1034-1043`
 
 ## S110.14: Completed task → reusable Skill.
 
@@ -183,15 +183,15 @@ Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-156`, `apps/web
 
 - Done when: From the phone the user sends a new request that runs on their paired computer under that computer's approvals, and sees the result on the phone.
 - Wave: 3
+- Already works on: desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Electron wires only code-session controls for the phone (remoteControlService.ts); it receipts and then drops dispatch.task.create, so a phone request cannot start new local work; add a handler that starts an authorized session or task. | handler |
 | mobile | partial | The phone can steer, stop and approve a desktop coding session that is already running, but its 'Start on Desktop' request (dispatch.task.create) is acknowledged and then dropped by Electron, and it cannot start a session in an allowed folder (S68.24); add a desktop handler that starts authorized work. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/desktop/electron/remote/remoteControlService.ts:32-48`, `apps/desktop/electron/remote/remoteControlHost.ts:134-155`, `apps/desktop/electron/remote/codeRemoteController.ts:297-302`, `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40-62`
+Code: `apps/mobile/src/features/companion/components/DispatchTaskComposer.tsx:40-62`, `apps/mobile/services/companion.ts:130-140`, `apps/mobile/src/features/companion/remote-code/service.ts:41-50`
 
 ## S110.22: Local work → explicit cloud handoff.
 

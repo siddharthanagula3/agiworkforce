@@ -59,14 +59,13 @@ Code: `apps/mobile/app.config.js:182-186`, `apps/mobile/native/android/withAGISh
 
 - Done when: A shortcut captures the screen and attaches it to an AGI chat.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | A screenshot can reach chat only by sharing it to AGI from the share sheet; no shortcut captures the screen into a chat. | ui |
-| chrome | partial | The side panel has a capture button, but the "Capture page" keyboard command has no default key and sends the image to the desktop app, which does not handle page_capture, so it never reaches a chat. | handler |
 
-Code: `apps/mobile/app.config.js:166-176`, `apps/extension/manifest.json:66-77`, `apps/extension/src/background.ts:4721-4762`, `apps/extension/src/side_panel.ts:7028-7043`
+Code: `apps/mobile/app.config.js:166-176`
 
 ## S109.10: Window-to-chat shortcut.
 
