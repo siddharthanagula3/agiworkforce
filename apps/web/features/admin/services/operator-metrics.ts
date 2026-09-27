@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { creditsFromMicrousd } from '@agiworkforce/types';
+
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 
@@ -33,8 +35,8 @@ export interface UserRow {
   displayName: string | null;
   planTier: string | null;
   status: string | null;
-  creditsAllocatedCents: number | null;
-  creditsUsedCents: number | null;
+  creditsAllocated: number | null;
+  creditsUsed: number | null;
   createdAt: string;
 }
 
@@ -181,18 +183,18 @@ export async function readRecentUsers(limit = 50): Promise<UserRow[]> {
     display_name: string | null;
     plan_tier: string | null;
     status: string | null;
-    credits_allocated_cents: number | null;
-    credits_used_cents: number | null;
+    credits_allocated_microusd: string | number | null;
+    credits_used_microusd: string | number | null;
     created_at: string;
   }>(
     `select p.id, p.email, p.display_name,
             s.plan_tier, s.status,
-            tc.credits_allocated_cents, tc.credits_used_cents,
+            tc.credits_allocated_microusd, tc.credits_used_microusd,
             p.created_at
        from public.profiles p
        left join public.subscriptions s on s.user_id = p.id
        left join lateral (
-         select credits_allocated_cents, credits_used_cents
+         select credits_allocated_microusd, credits_used_microusd
            from public.token_credits
           where user_id = p.id and period_end > now()
           order by period_end desc
@@ -208,8 +210,14 @@ export async function readRecentUsers(limit = 50): Promise<UserRow[]> {
     displayName: row.display_name,
     planTier: row.plan_tier,
     status: row.status,
-    creditsAllocatedCents: row.credits_allocated_cents,
-    creditsUsedCents: row.credits_used_cents,
+    creditsAllocated:
+      row.credits_allocated_microusd === null
+        ? null
+        : creditsFromMicrousd(Number(row.credits_allocated_microusd)),
+    creditsUsed:
+      row.credits_used_microusd === null
+        ? null
+        : creditsFromMicrousd(Number(row.credits_used_microusd)),
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }
@@ -226,10 +234,14 @@ export async function readRecentUsers(limit = 50): Promise<UserRow[]> {
 export async function resetUserUsage(
   userId: string,
   actorId: string,
-): Promise<{ reset: boolean; clearedCents: number }> {
+): Promise<{ reset: boolean; clearedCredits: number }> {
   const db = getNeonDb();
-  const [current] = await db.query<{ id: string; credits_used_cents: number }>(
-    `select id, credits_used_cents
+  const [current] = await db.query<{
+    id: string;
+    credits_used_cents: number;
+    credits_used_microusd: string | number;
+  }>(
+    `select id, credits_used_cents, credits_used_microusd
        from public.token_credits
       where user_id = $1 and period_end > now()
       order by period_end desc
@@ -237,10 +249,10 @@ export async function resetUserUsage(
     [userId],
   );
 
-  if (!current) return { reset: false, clearedCents: 0 };
+  if (!current) return { reset: false, clearedCredits: 0 };
 
   const clearedCents = Number(current.credits_used_cents) || 0;
-  if (clearedCents === 0) return { reset: true, clearedCents: 0 };
+  if (clearedCents === 0) return { reset: true, clearedCredits: 0 };
 
   await db.execute(
     `update public.token_credits
@@ -263,12 +275,15 @@ export async function resetUserUsage(
     ],
   );
 
-  return { reset: true, clearedCents };
+  return {
+    reset: true,
+    clearedCredits: creditsFromMicrousd(Number(current.credits_used_microusd) || 0),
+  };
 }
 
 export interface BulkResetPreview {
   affectedUsers: number;
-  clearedCents: number;
+  clearedCredits: number;
 }
 
 /**
@@ -277,7 +292,7 @@ export interface BulkResetPreview {
  *
  * Split into a preview and an execute because this rewrites live billing state
  * for every active user at once and cannot be undone by re-running it, the
- * operator needs to see the blast radius ("2,431 users, $840.12") before
+ * operator needs to see the blast radius ("2,431 users, 168,024 credits") before
  * committing. Allocation is never touched, only consumption, and each affected
  * account gets its own `reset` ledger row so the change stays attributable per
  * user rather than as one opaque bulk mutation.
@@ -286,21 +301,26 @@ export async function previewBulkUsageReset(): Promise<BulkResetPreview> {
   const db = getNeonDb();
   const [row] = await db.query<{ affected: string; cleared: string }>(
     `select count(*)::text as affected,
-            coalesce(sum(credits_used_cents), 0)::text as cleared
+            coalesce(sum(credits_used_microusd), 0)::text as cleared
        from public.token_credits
       where period_end > now() and credits_used_cents > 0`,
   );
   return {
     affectedUsers: Number(row?.affected ?? 0),
-    clearedCents: Number(row?.cleared ?? 0),
+    clearedCredits: creditsFromMicrousd(Number(row?.cleared ?? 0)),
   };
 }
 
 export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPreview> {
   const db = getNeonDb();
-  const affected = await db.query<{ id: string; user_id: string; cleared_cents: number }>(
+  const affected = await db.query<{
+    id: string;
+    user_id: string;
+    cleared_cents: number;
+    cleared_microusd: string | number;
+  }>(
     `with before as (
-       select id, user_id, credits_used_cents
+       select id, user_id, credits_used_cents, credits_used_microusd
          from public.token_credits
         where period_end > now() and credits_used_cents > 0
           for update
@@ -311,10 +331,11 @@ export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPrev
             updated_at = now()
        from before
       where tc.id = before.id
-      returning tc.id, tc.user_id, before.credits_used_cents as cleared_cents`,
+      returning tc.id, tc.user_id, before.credits_used_cents as cleared_cents,
+                before.credits_used_microusd as cleared_microusd`,
   );
 
-  if (affected.length === 0) return { affectedUsers: 0, clearedCents: 0 };
+  if (affected.length === 0) return { affectedUsers: 0, clearedCredits: 0 };
 
   const values: unknown[] = [];
   const tuples = affected.map((row, i) => {
@@ -337,7 +358,9 @@ export async function resetAllUsersUsage(actorId: string): Promise<BulkResetPrev
 
   return {
     affectedUsers: affected.length,
-    clearedCents: affected.reduce((sum, r) => sum + (Number(r.cleared_cents) || 0), 0),
+    clearedCredits: creditsFromMicrousd(
+      affected.reduce((sum, r) => sum + (Number(r.cleared_microusd) || 0), 0),
+    ),
   };
 }
 
@@ -351,7 +374,7 @@ export async function grantBonusCredits(
   amountCents: number,
   actorId: string,
   reason: string,
-): Promise<{ granted: boolean; balanceCents: number }> {
+): Promise<{ granted: boolean; balanceCredits: number }> {
   if (!Number.isInteger(amountCents) || amountCents <= 0) {
     throw new Error('Bonus credit must be a positive whole number of cents.');
   }
@@ -363,15 +386,15 @@ export async function grantBonusCredits(
       limit 1`,
     [userId],
   );
-  if (!account) return { granted: false, balanceCents: 0 };
+  if (!account) return { granted: false, balanceCredits: 0 };
 
-  const [updated] = await db.query<{ credits_allocated_cents: number }>(
+  const [updated] = await db.query<{ credits_allocated_microusd: string | number }>(
     `update public.token_credits
         set credits_allocated_cents = credits_allocated_cents + $2,
             bonus_granted_cents = bonus_granted_cents + $2,
             updated_at = now()
       where id = $1
-      returning credits_allocated_cents`,
+      returning credits_allocated_microusd`,
     [account.id, amountCents],
   );
 
@@ -382,5 +405,8 @@ export async function grantBonusCredits(
     [userId, account.id, amountCents, JSON.stringify({ reason, actor_id: actorId })],
   );
 
-  return { granted: true, balanceCents: Number(updated?.credits_allocated_cents ?? 0) };
+  return {
+    granted: true,
+    balanceCredits: creditsFromMicrousd(Number(updated?.credits_allocated_microusd ?? 0)),
+  };
 }

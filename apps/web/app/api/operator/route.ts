@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { creditsFromCents, formatCredits } from '@agiworkforce/types';
 import { getPrivateObject } from '@/lib/server/object-storage';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         details: {
           action: 'reset-all-usage',
           affected_users: result.affectedUsers,
-          cleared_cents: result.clearedCents,
+          cleared_credits: result.clearedCredits,
         },
       });
       return NextResponse.json(result);
@@ -178,7 +179,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
       if ((amountCents as number) > MAX_GRANT_CENTS) {
         throw createError.validation(
-          `A single grant is capped at $${MAX_GRANT_CENTS / 100}. Split a larger goodwill award.`,
+          `A single grant is capped at ${formatCredits(creditsFromCents(MAX_GRANT_CENTS))}. Split a larger goodwill award.`,
         );
       }
       const reason = typeof body.reason === 'string' ? body.reason.trim().slice(0, 280) : '';
@@ -264,7 +265,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       details: {
         action: 'reset-usage',
         target_user_id: targetUserId,
-        cleared_cents: result.clearedCents,
+        cleared_credits: result.clearedCredits,
         found_period: result.reset,
       },
     });
