@@ -45,7 +45,7 @@ describe('url_fetch cancellation', () => {
 });
 
 describe('web_search cancellation', () => {
-  it('never calls the search provider once the caller has already stopped the turn', async () => {
+  it('never calls the search provider or bills a call once the caller has already stopped the turn', async () => {
     const fetchImpl = vi.fn();
     const controller = new AbortController();
     controller.abort();
@@ -64,10 +64,11 @@ describe('web_search cancellation', () => {
       ok: false,
       errorCode: 'cancelled',
       error: 'The request was cancelled.',
+      billableCalls: 0,
     });
   });
 
-  it("aborts an in-flight search when the caller's signal fires", async () => {
+  it("aborts an in-flight search without billing it when the caller's signal fires", async () => {
     const controller = new AbortController();
     const fetchImpl = vi.fn(
       (_url: string, init?: RequestInit) =>
@@ -90,6 +91,7 @@ describe('web_search cancellation', () => {
       ok: false,
       errorCode: 'cancelled',
       error: 'The request was cancelled.',
+      billableCalls: 0,
     });
   });
 });

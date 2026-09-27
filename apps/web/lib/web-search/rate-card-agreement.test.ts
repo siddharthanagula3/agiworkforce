@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  centsFromMicrousdCeil,
-  customerChargeMicrousd,
+  chargeMicrousdForProviderCost,
   FEATURE_RATE_CARD,
+  listCanonicalModels,
+  MICROUSD_PER_USD,
   requireProviderDefaultModel,
 } from '@agiworkforce/types';
 
-import { LIVE_SESSION_CENTS_PER_MINUTE } from '@/lib/voice/live-voice-billing';
+import {
+  liveSessionChargeMicrousd,
+  liveSessionProviderCostMicrousd,
+} from '@/lib/voice/live-voice-billing';
 import {
   googleGroundingPricingSource,
   perplexitySearchPricingSource,
@@ -14,16 +18,31 @@ import {
   resolveGoogleGroundingPricingTier,
 } from '@/lib/web-search/web-search-pricing';
 
-/**
- * `live-voice-billing.ts` owns the live-voice charge and is edited by another
- * lane, so the rate card mirrors it rather than replacing it. This is the
- * guard that the mirror never drifts from the constant it mirrors.
- */
+const LIVE_VOICE_MODELS = listCanonicalModels().filter(
+  (model) => (model.sessionPerMinuteCost ?? 0) > 0,
+);
+
+function perMinuteMicrousd(usdPerMinute: number | undefined): number {
+  return Math.ceil((usdPerMinute ?? 0) * MICROUSD_PER_USD);
+}
+
 describe('live voice rate card entry', () => {
-  it('agrees with the constant the live voice route bills from', () => {
-    expect(centsFromMicrousdCeil(customerChargeMicrousd('voice_live_minute'))).toBe(
-      LIVE_SESSION_CENTS_PER_MINUTE,
-    );
+  it('bills every live voice model from its catalogue session rate at provider cost', () => {
+    expect(LIVE_VOICE_MODELS.length).toBeGreaterThan(0);
+    for (const model of LIVE_VOICE_MODELS) {
+      const providerMicrousd = perMinuteMicrousd(model.sessionPerMinuteCost);
+      expect(liveSessionProviderCostMicrousd(60, model.id)).toBe(providerMicrousd);
+      expect(liveSessionChargeMicrousd(60, model.id)).toBe(
+        chargeMicrousdForProviderCost(providerMicrousd),
+      );
+    }
+  });
+
+  it('keeps its reference figure on a rate the catalogue actually bills', () => {
+    expect(FEATURE_RATE_CARD.voice_live_minute.providerCogsBasis).toBe('derived_from_model');
+    expect(
+      LIVE_VOICE_MODELS.map((model) => perMinuteMicrousd(model.sessionPerMinuteCost)),
+    ).toContain(FEATURE_RATE_CARD.voice_live_minute.providerCogsMicrousd);
   });
 });
 

@@ -1,130 +1,173 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { requireProviderDefaultModel } from '@agiworkforce/types';
+import {
+  FEATURE_RATE_CARD,
+  MICROUSD_PER_USD,
+  RATE_CARD_PROVIDER_COGS_ENV,
+  chargeMicrousdForProviderCost,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
 
-const recordSettledProviderCost = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/services/cogs-ledger-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/cogs-ledger-service')>();
-  return { ...actual, recordSettledProviderCost };
-});
+vi.mock('server-only', () => ({}));
 
-import { resolveCogsCapability, resolveCogsUnits } from '@/lib/services/cogs-ledger-service';
+const settleSearchCall = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/web-search/search-budget', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/web-search/search-budget')>()),
+  settleSearchCall,
+}));
+
+import { INCLUDED_SEARCH_ADMISSION } from '@/lib/web-search/search-budget';
+import { resolveGoogleGroundingPricingTier } from '@/lib/web-search/web-search-pricing';
 
 import {
-  GOOGLE_GROUNDING_UNIT_PRICE_ENV,
-  googleGroundingCostCents,
-  recordGoogleGroundingCost,
+  GOOGLE_GROUNDING_FEATURE,
+  googleGroundingChargeMicrousd,
+  googleGroundingMicrousdPerCall,
+  settleGoogleGroundingSpend,
 } from './grounding-cost';
 
 const GOOGLE_MODEL = requireProviderDefaultModel('google');
+const UNREGISTERED_MODEL = 'not-a-registered-model';
+const OVERRIDE_ENV = RATE_CARD_PROVIDER_COGS_ENV.web_search_grounding;
+const PUBLISHED_MICROUSD_PER_CALL = FEATURE_RATE_CARD.web_search_grounding
+  .providerCogsMicrousd as number;
+const PREVIOUS_TIER_MICROUSD_PER_CALL = Math.round(
+  (resolveGoogleGroundingPricingTier(UNREGISTERED_MODEL).usdPerThousandBeyondPool / 1_000) *
+    MICROUSD_PER_USD,
+);
+const db = {} as never;
 
-/** 14,000 microUSD per call, rounded once over the whole batch rather than per call. */
-const PUBLISHED_CENTS_PER_CALL = 1;
-const PUBLISHED_CENTS_PER_FIVE_CALLS = 7;
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
-describe('googleGroundingCostCents', () => {
-  const previous = process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
-
-  afterEach(() => {
-    if (previous === undefined) delete process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
-    else process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] = previous;
-  });
-
-  it('prices a call from the published rate when nothing is configured', () => {
-    delete process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV];
-    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_CALL);
-    expect(googleGroundingCostCents(5, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_FIVE_CALLS);
-  });
-
-  it('honours a configured unit price', () => {
-    process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] = '20000';
-    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(2);
-  });
-
-  it('falls back to the published rate on an unusable override', () => {
-    process.env[GOOGLE_GROUNDING_UNIT_PRICE_ENV] = 'not-a-number';
-    expect(googleGroundingCostCents(1, GOOGLE_MODEL)).toBe(PUBLISHED_CENTS_PER_CALL);
-  });
-
-  it('prices nothing for calls that never landed beyond the pool', () => {
-    expect(googleGroundingCostCents(0, GOOGLE_MODEL)).toBe(0);
-    expect(googleGroundingCostCents(-1, GOOGLE_MODEL)).toBe(0);
+describe('googleGroundingMicrousdPerCall', () => {
+  it('prices a current model from the published rate when nothing is configured', () => {
+    vi.stubEnv(OVERRIDE_ENV, '');
+    expect(PUBLISHED_MICROUSD_PER_CALL).toBeGreaterThan(0);
+    expect(googleGroundingMicrousdPerCall(GOOGLE_MODEL)).toBe(PUBLISHED_MICROUSD_PER_CALL);
   });
 
   it('prices an unrecognized model from the older, lower-volume tier', () => {
-    expect(googleGroundingCostCents(1, 'not-a-registered-model')).toBe(4);
+    vi.stubEnv(OVERRIDE_ENV, '');
+    expect(PREVIOUS_TIER_MICROUSD_PER_CALL).toBeGreaterThan(PUBLISHED_MICROUSD_PER_CALL);
+    expect(googleGroundingMicrousdPerCall(UNREGISTERED_MODEL)).toBe(
+      PREVIOUS_TIER_MICROUSD_PER_CALL,
+    );
+  });
+
+  it('applies a configured unit price to every tier', () => {
+    vi.stubEnv(OVERRIDE_ENV, '20000');
+    expect(googleGroundingMicrousdPerCall(GOOGLE_MODEL)).toBe(20_000);
+    expect(googleGroundingMicrousdPerCall(UNREGISTERED_MODEL)).toBe(20_000);
+  });
+
+  it('falls back to the published rate on an unusable override', () => {
+    vi.stubEnv(OVERRIDE_ENV, 'not-a-number');
+    expect(googleGroundingMicrousdPerCall(GOOGLE_MODEL)).toBe(PUBLISHED_MICROUSD_PER_CALL);
   });
 });
 
-describe('recordGoogleGroundingCost', () => {
-  beforeEach(() => {
-    recordSettledProviderCost.mockReset();
-    recordSettledProviderCost.mockResolvedValue(undefined);
+describe('googleGroundingChargeMicrousd', () => {
+  it('charges the provider cost of the calls beyond the pool, rounded once over the batch', () => {
+    vi.stubEnv(OVERRIDE_ENV, '');
+    expect(googleGroundingChargeMicrousd(GOOGLE_MODEL, 5)).toBe(
+      chargeMicrousdForProviderCost(5 * PUBLISHED_MICROUSD_PER_CALL),
+    );
   });
 
-  it('records only the billable calls as a per-request tool cost in the ledger', async () => {
-    await recordGoogleGroundingCost({
+  it('rounds a provider cost up to the next hundredth of a credit', () => {
+    vi.stubEnv(OVERRIDE_ENV, '5001');
+    expect(googleGroundingChargeMicrousd(GOOGLE_MODEL, 1)).toBe(5_050);
+  });
+
+  it('charges nothing for calls that never landed beyond the pool', () => {
+    expect(googleGroundingChargeMicrousd(GOOGLE_MODEL, 0)).toBe(0);
+    expect(googleGroundingChargeMicrousd(GOOGLE_MODEL, -1)).toBe(0);
+    expect(googleGroundingChargeMicrousd(GOOGLE_MODEL, Number.NaN)).toBe(0);
+  });
+});
+
+describe('settleGoogleGroundingSpend', () => {
+  beforeEach(() => {
+    settleSearchCall.mockReset();
+    settleSearchCall.mockResolvedValue(undefined);
+    vi.stubEnv(OVERRIDE_ENV, '');
+  });
+
+  it('settles the billable grounded calls at provider cost through the search owner', async () => {
+    await settleGoogleGroundingSpend({
       userId: 'user_1',
       organizationId: 'org_1',
+      admission: INCLUDED_SEARCH_ADMISSION,
       providerId: 'google',
       model: GOOGLE_MODEL,
       turnRef: 'turn-1',
-      billableCalls: 1,
+      settlementRef: 0,
+      billableCalls: 2,
       delivered: true,
+      surface: 'web',
+      db,
     });
 
-    expect(recordSettledProviderCost).toHaveBeenCalledTimes(1);
-    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(event['provider']).toBe('google');
-    expect(event['model']).toBe(GOOGLE_MODEL);
-    expect(event['sourceRef']).toBe('google_grounding:turn-1');
-    expect(event['taskOutcome']).toBe('delivered');
-    expect(event['actualCostCents']).toBe(PUBLISHED_CENTS_PER_CALL);
-
-    const usage = event['usage'] as Record<string, unknown>;
-    expect(resolveCogsCapability(usage)).toBe('tool');
-    expect(resolveCogsUnits('tool', usage)).toEqual({ unitBasis: 'request', units: 1 });
+    expect(settleSearchCall).toHaveBeenCalledTimes(1);
+    expect(settleSearchCall).toHaveBeenCalledWith({
+      userId: 'user_1',
+      organizationId: 'org_1',
+      admission: INCLUDED_SEARCH_ADMISSION,
+      feature: GOOGLE_GROUNDING_FEATURE,
+      provider: 'google',
+      model: GOOGLE_MODEL,
+      tool: 'google_search_grounding',
+      calls: 2,
+      providerCostMicrousd: 2 * PUBLISHED_MICROUSD_PER_CALL,
+      charged: true,
+      delivered: true,
+      costRef: 'google_grounding:turn-1:0',
+      taskRef: 'turn-1',
+      surface: 'web',
+      db,
+    });
   });
 
-  it('records an undelivered outcome without throwing', async () => {
-    await recordGoogleGroundingCost({
+  it('keeps the charge for grounding the model ran even when the turn was not delivered', async () => {
+    await settleGoogleGroundingSpend({
       userId: 'user_1',
+      admission: INCLUDED_SEARCH_ADMISSION,
       providerId: 'google',
       model: GOOGLE_MODEL,
       turnRef: 'turn-2',
-      billableCalls: 2,
+      settlementRef: 1,
+      billableCalls: 1,
       delivered: false,
+      db,
     });
 
-    const event = recordSettledProviderCost.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(event['taskOutcome']).toBe('undelivered');
-    expect(resolveCogsUnits('tool', event['usage'] as Record<string, unknown>).units).toBe(2);
+    expect(settleSearchCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: null,
+        charged: true,
+        delivered: false,
+        costRef: 'google_grounding:turn-2:1',
+        surface: null,
+      }),
+    );
   });
 
-  it('writes nothing when every grounded call stayed inside the pool', async () => {
-    await recordGoogleGroundingCost({
+  it('counts no provider cost when every grounded call stayed inside the pool', async () => {
+    await settleGoogleGroundingSpend({
       userId: 'user_1',
+      admission: INCLUDED_SEARCH_ADMISSION,
       providerId: 'google',
       model: GOOGLE_MODEL,
       turnRef: 'turn-3',
+      settlementRef: 0,
       billableCalls: 0,
       delivered: true,
+      db,
     });
 
-    expect(recordSettledProviderCost).not.toHaveBeenCalled();
-  });
-
-  it('swallows a ledger failure rather than failing the turn', async () => {
-    recordSettledProviderCost.mockRejectedValueOnce(new Error('ledger down'));
-
-    await expect(
-      recordGoogleGroundingCost({
-        userId: 'user_1',
-        providerId: 'google',
-        model: GOOGLE_MODEL,
-        turnRef: 'turn-4',
-        billableCalls: 1,
-        delivered: true,
-      }),
-    ).resolves.toBeUndefined();
+    expect(settleSearchCall).toHaveBeenCalledWith(
+      expect.objectContaining({ calls: 0, providerCostMicrousd: 0 }),
+    );
   });
 });
