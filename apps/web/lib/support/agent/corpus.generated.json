@@ -494,7 +494,7 @@
       "platforms": [
         "chrome"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-09-27",
       "source": "content/support/chrome-extension.md",
       "chunks": [
         {
@@ -502,7 +502,7 @@
           "ordinal": 0,
           "heading": "Availability",
           "headingPath": "The Chrome extension › Availability",
-          "text": "The Chrome extension, AGI Browser Companion, is not published yet. The Chrome\npage carries its status and a notify list; there is no Web Store listing to\ninstall from today."
+          "text": "The Chrome extension, AGI Browser Companion, is not published yet. The Chrome\npage carries its status and the download page keeps a notify list; there is no\nWeb Store listing to install from today."
         },
         {
           "id": "chrome-extension#1",
@@ -523,7 +523,7 @@
           "ordinal": 3,
           "heading": "Managed cloud from the extension",
           "headingPath": "The Chrome extension › Managed cloud from the extension",
-          "text": "Managed cloud access from the Chrome extension is part of the higher paid tiers.\nThe extension does not accept provider keys: web, mobile, desktop and Chrome all\nrun on your AGI account, while BYOK is a CLI and VS Code capability."
+          "text": "Managed chat in the Chrome side panel works on every cloud plan, Free included,\nand spends the same credits as the web app. The extension does not accept\nprovider keys: web, mobile, desktop and Chrome all run on your AGI account,\nwhile BYOK is a CLI and VS Code capability."
         },
         {
           "id": "chrome-extension#4",
