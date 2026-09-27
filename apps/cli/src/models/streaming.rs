@@ -1064,6 +1064,98 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_limit_refusal_becomes_a_usage_limit_with_its_code_message_and_recovery() {
+        for (status, code) in [
+            (429, "rolling_five_hour_limit_reached"),
+            (429, "flagship_weekly_limit_reached"),
+            (402, "insufficient_credits"),
+            (402, "monthly_credit_limit_reached"),
+        ] {
+            let body = serde_json::json!({
+                "error": {
+                    "message": "Limit reached for this window.",
+                    "type": "insufficient_quota",
+                    "code": code,
+                    "resets_at": "2026-09-27T18:00:00.000Z",
+                    "recovery": { "action": "view_usage", "href": "/settings/usage" }
+                }
+            })
+            .to_string();
+            let err = map_llm_error(agiworkforce_llm::classify_error_response(
+                "managed_cloud",
+                "m",
+                status,
+                Some("90"),
+                &body,
+            ));
+            match err.downcast_ref::<CliError>() {
+                Some(CliError::UsageLimit {
+                    code: mapped,
+                    message,
+                    recovery_href,
+                    retry_after,
+                    ..
+                }) => {
+                    assert_eq!(mapped, code);
+                    assert_eq!(message, "Limit reached for this window.");
+                    assert_eq!(recovery_href.as_deref(), Some("/settings/usage"));
+                    assert_eq!(*retry_after, Some(90));
+                }
+                other => panic!("{status} {code} did not map to a usage limit: {other:?}"),
+            }
+            let cli = err.downcast_ref::<CliError>().expect("CliError");
+            assert!(!cli.is_retryable(), "{code}");
+            assert_eq!(cli.exit_code(), 78, "{code}");
+        }
+    }
+
+    #[test]
+    fn a_recovery_link_off_the_product_origin_is_dropped() {
+        for href in ["https://attacker.example/pay", "//attacker.example/pay"] {
+            let body = serde_json::json!({
+                "error": {
+                    "message": "Weekly limit reached.",
+                    "code": "rolling_weekly_limit_reached",
+                    "recovery": { "action": "upgrade", "href": href }
+                }
+            })
+            .to_string();
+            let err = map_llm_error(agiworkforce_llm::classify_error_response(
+                "managed_cloud",
+                "m",
+                429,
+                None,
+                &body,
+            ));
+            assert!(
+                matches!(
+                    err.downcast_ref::<CliError>(),
+                    Some(CliError::UsageLimit {
+                        recovery_href: None,
+                        ..
+                    })
+                ),
+                "{href}: {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_request_rate_limit_stays_a_retryable_rate_limit() {
+        let body = r#"{"error":{"code":"rate_limit_exceeded","message":"Too many requests."}}"#;
+        let err = map_llm_error(agiworkforce_llm::classify_error_response(
+            "managed_cloud",
+            "m",
+            429,
+            Some("3"),
+            body,
+        ));
+        let cli = err.downcast_ref::<CliError>().expect("CliError");
+        assert!(matches!(cli, CliError::RateLimited { .. }), "{cli:?}");
+        assert!(cli.is_retryable());
+    }
+
+    #[test]
     fn paywall_exit_code_is_78() {
         let err = crate::errors::CliError::paywall("chat", "hobby", "quota exceeded");
         assert_eq!(err.exit_code(), 78);

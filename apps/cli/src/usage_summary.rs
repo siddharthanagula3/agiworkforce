@@ -1107,6 +1107,87 @@ mod tests {
     }
 
     #[test]
+    fn a_refusing_window_states_its_own_reset() {
+        let usage = parse_account_usage(contract_fixture()).expect("contract fixture must parse");
+        for (code, resets_in) in [
+            ("rolling_five_hour_limit_reached", "3h 0m"),
+            ("rolling_weekly_limit_reached", "1d 12h"),
+            ("flagship_weekly_limit_reached", "1d 12h"),
+            ("monthly_credit_limit_reached", "16d 12h"),
+            ("insufficient_credits", "16d 12h"),
+            ("free_trial_token_budget_reached", "16d 12h"),
+        ] {
+            assert_eq!(
+                usage_limit_context_from(&usage, code, fixture_now())
+                    .resets_in
+                    .as_deref(),
+                Some(resets_in),
+                "{code}"
+            );
+        }
+        assert_eq!(
+            usage_limit_context_from(&usage, "plan_upgrade_required", fixture_now()),
+            UsageLimitContext::default(),
+            "a capability the plan lacks has no window to reset"
+        );
+    }
+
+    #[test]
+    fn a_reset_is_read_from_the_percentage_fields_when_no_credits_are_stated() {
+        let mut usage =
+            parse_account_usage(contract_fixture()).expect("contract fixture must parse");
+        usage.credits = None;
+        usage.session_reset_at = Some("2026-09-13T12:45:00Z".to_string());
+        assert_eq!(
+            usage_limit_context_from(&usage, "rolling_five_hour_limit_reached", fixture_now())
+                .resets_in
+                .as_deref(),
+            Some("45m")
+        );
+        usage.session_reset_at = Some("2026-09-13T11:00:00Z".to_string());
+        assert_eq!(
+            usage_limit_context_from(&usage, "rolling_five_hour_limit_reached", fixture_now())
+                .resets_in,
+            None,
+            "a window that already reset promises no wait"
+        );
+    }
+
+    #[test]
+    fn only_the_flagship_limit_names_a_standard_model_the_plan_includes() {
+        let usage = parse_account_usage(contract_fixture()).expect("contract fixture must parse");
+        let flagship =
+            usage_limit_context_from(&usage, "flagship_weekly_limit_reached", fixture_now());
+        let model = flagship
+            .alternative_model
+            .expect("a Max 20x plan includes a standard model");
+        assert_eq!(
+            Some(model.as_str()),
+            crate::model_catalog::standard_model_for_tier(&UserTier::Max15x).as_deref()
+        );
+        assert!(crate::model_catalog::can_access_model_for_tier(
+            &model,
+            &UserTier::Max15x
+        ));
+        assert!(
+            !crate::model_catalog::tier_allowed_models("flagship_additions").contains(&model),
+            "{model} is itself a flagship model"
+        );
+
+        for code in [
+            "rolling_five_hour_limit_reached",
+            "rolling_weekly_limit_reached",
+            "monthly_credit_limit_reached",
+        ] {
+            assert_eq!(
+                usage_limit_context_from(&usage, code, fixture_now()).alternative_model,
+                None,
+                "{code}: a standard model spends the same window"
+            );
+        }
+    }
+
+    #[test]
     fn reset_suffix_handles_a_past_and_unparseable_timestamp() {
         assert_eq!(
             reset_suffix(Some("2026-09-13T11:00:00Z"), fixture_now()),
