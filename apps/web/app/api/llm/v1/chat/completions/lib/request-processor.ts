@@ -25,6 +25,7 @@ import { logger } from '@/lib/logger';
 import { stagedAttachmentPaths, type TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { hostedCodeExecutionReserveMicrousd } from '@/lib/e2b/hosted-code-execution';
 import {
   DEVICE_HOST_HEADER,
   parseDesktopHostDeclaration,
@@ -4081,6 +4082,16 @@ export async function processRequest(
       estimatedPromptTokens,
       maxTokens,
     );
+  const turnCodeExecutionInput = {
+    provider: providerLower,
+    stream: chatRequest.stream,
+    e2bEnabled: e2bProvisioningReady(),
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
+  };
+  const codeExecutionHoldMicrousd = chatRequest.code_execution
+    ? hostedCodeExecutionReserveMicrousd(turnCodeExecutionInput)
+    : 0;
   let freeTrial: FreeTrialReservation | undefined;
   let managedUsage: ManagedUsageRequestReservation | undefined;
 
@@ -4267,7 +4278,7 @@ export async function processRequest(
           requestHash: managedRequestHash,
           provider,
           model: chatRequest.model,
-          estimatedCostMicrousd,
+          estimatedCostMicrousd: estimatedCostMicrousd + codeExecutionHoldMicrousd,
           leaseSeconds: resolveManagedUsageLeaseSeconds(chatRequest),
           planTier: subscription.plan_tier,
           isFlagship: isFlagshipRequest,
@@ -4438,13 +4449,7 @@ export async function processRequest(
 
   let codeExecutionUnavailable = false;
   if (chatRequest.code_execution) {
-    const turnCodeExecution = resolveTurnCodeExecutionTools({
-      provider: providerLower,
-      stream: chatRequest.stream,
-      e2bEnabled: e2bProvisioningReady(),
-      toolsCapable: resolvedModelCaps?.tools ?? true,
-      codeExecutionCapable: resolvedModelCaps?.codeExecution === true,
-    });
+    const turnCodeExecution = resolveTurnCodeExecutionTools(turnCodeExecutionInput);
     if (turnCodeExecution.tools.length > 0) {
       resolvedTools = [...(resolvedTools ?? []), ...turnCodeExecution.tools];
     }

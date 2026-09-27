@@ -10,6 +10,15 @@ export interface UsageAccumulator {
   cacheCreationInputTokens?: number;
   cacheCreation1hInputTokens?: number;
   providerReportedCostUsd?: number;
+  webSearchRequests?: number;
+  webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: string[];
+}
+
+function maxCount(current: number | undefined, next: number | undefined): number | undefined {
+  if (next === undefined || !Number.isFinite(next) || next < 0) return current;
+  return Math.max(current ?? 0, next);
 }
 
 export function createUsageAccumulator(): UsageAccumulator {
@@ -39,5 +48,13 @@ export function ingestUsageChunk(acc: UsageAccumulator, chunk: StreamChunk): voi
   const reportedCost = chunk.providerReportedCostUsd ?? chunk.costUsd;
   if (reportedCost !== undefined) {
     acc.providerReportedCostUsd = reportedCost;
+  }
+  acc.webSearchRequests = maxCount(acc.webSearchRequests, chunk.webSearchRequests);
+  acc.webFetchRequests = maxCount(acc.webFetchRequests, chunk.webFetchRequests);
+  acc.codeExecutionRequests = maxCount(acc.codeExecutionRequests, chunk.codeExecutionRequests);
+  if (chunk.codeExecutionContainerIds?.length) {
+    acc.codeExecutionContainerIds = [
+      ...new Set([...(acc.codeExecutionContainerIds ?? []), ...chunk.codeExecutionContainerIds]),
+    ];
   }
 }

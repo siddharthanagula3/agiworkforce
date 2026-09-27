@@ -41,6 +41,11 @@ import {
   estimateMicrousdOf,
 } from '@/lib/services/managed-usage-request-service';
 import { settleFreeTrialRequest } from '@/lib/services/free-trial-service';
+import {
+  hostedCodeExecutionEvidence,
+  priceServerToolUsage,
+} from '@/lib/services/managed-usage-accounting-service';
+import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
 import { createUsageAccumulator, ingestUsageChunk } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
@@ -64,6 +69,9 @@ interface StreamBillingUsage {
   providerReportedCostUsd?: number;
   webSearchRequests?: number;
   webFetchRequests?: number;
+  codeExecutionRequests?: number;
+  codeExecutionContainerIds?: string[];
+  providerElapsedMs?: number;
 }
 
 /**
@@ -175,6 +183,18 @@ async function settleStreamBilling(input: {
   let providerCostMicrousd: number;
   let billedCostMicrousd: number;
   let costSource: 'provider_reported' | 'estimated';
+  const hostedCodeExecution = hostedCodeExecutionEvidence(provider, {
+    codeExecutionRequests: usage.codeExecutionRequests,
+    codeExecutionContainerIds: usage.codeExecutionContainerIds,
+    elapsedMs: usage.providerElapsedMs,
+  });
+  const serverTools = priceServerToolUsage({
+    provider,
+    webSearchRequests: usage.webSearchRequests,
+    webFetchRequests: usage.webFetchRequests,
+    hostedCodeExecution,
+    dynamicFilteringWebTool: offersDynamicFilteringWebTool(processed.llmRequest.tools),
+  });
 
   if (billedOutcome === 'failed') {
     providerCostMicrousd = 0;
@@ -189,8 +209,6 @@ async function settleStreamBilling(input: {
       cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
       cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
       cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens || undefined,
-      webSearchRequests: usage.webSearchRequests || undefined,
-      webFetchRequests: usage.webFetchRequests || undefined,
     };
     const estimateCostMicrousd = LLMCostCalculator.calculateCostMicrousd(
       provider,
@@ -208,11 +226,13 @@ async function settleStreamBilling(input: {
         'Ignored provider-reported cost outside the catalog sanity band',
       );
     }
-    providerCostMicrousd = reportedAdmitted
+    const tokenProviderCostMicrousd = reportedAdmitted
       ? reportedCostMicrousdFromUsd(reportedCostUsd as number)
       : estimateCostMicrousd;
+    providerCostMicrousd = tokenProviderCostMicrousd + serverTools.providerMicrousd;
     billedCostMicrousd =
-      LLMCostCalculator.calculateListCostMicrousd(model, tokenUsage) ?? providerCostMicrousd;
+      (LLMCostCalculator.calculateListCostMicrousd(model, tokenUsage) ??
+        tokenProviderCostMicrousd) + serverTools.chargeMicrousd;
     costSource = reportedAdmitted ? 'provider_reported' : 'estimated';
   } else {
     providerCostMicrousd = estimateMicrousdOf(processed);
@@ -235,6 +255,7 @@ async function settleStreamBilling(input: {
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
         ...(usage.webSearchRequests ? { webSearchRequests: usage.webSearchRequests } : {}),
         ...(usage.webFetchRequests ? { webFetchRequests: usage.webFetchRequests } : {}),
+        ...(hostedCodeExecution ? { hostedCodeExecution } : {}),
         ...(totalTokens > 0 && billedOutcome !== 'failed' ? { costSource } : {}),
         ...compactionUsageFields(processed.contextTrim),
         ...buildCpstUsageFields(processed, {
@@ -324,6 +345,11 @@ export async function buildStreamResponse(
   let cacheReadInputTokens: number | undefined;
   let cacheCreationInputTokens: number | undefined;
   let cacheCreation1hInputTokens: number | undefined;
+  let reportedWebSearchRequests = 0;
+  let answeredWebSearches = 0;
+  let webFetchRequests = 0;
+  let codeExecutionRequests = 0;
+  const codeExecutionContainerIds = new Set<string>();
   let buffer = '';
   let hasTerminalSentinel = false;
   const encoder = new TextEncoder();
@@ -351,6 +377,32 @@ export async function buildStreamResponse(
 
           try {
             const event = JSON.parse(jsonStr);
+
+            if (event.type === 'message_start' && event.message?.container?.id) {
+              codeExecutionContainerIds.add(event.message.container.id);
+            }
+            if (event.type === 'message_delta' && event.delta?.container?.id) {
+              codeExecutionContainerIds.add(event.delta.container.id);
+            }
+            if (
+              event.type === 'content_block_start' &&
+              event.content_block?.type === 'web_search_tool_result' &&
+              Array.isArray(event.content_block.content)
+            ) {
+              answeredWebSearches += 1;
+            }
+            const serverToolUse = event.usage?.server_tool_use;
+            if (serverToolUse) {
+              reportedWebSearchRequests = Math.max(
+                reportedWebSearchRequests,
+                serverToolUse.web_search_requests || 0,
+              );
+              webFetchRequests = Math.max(webFetchRequests, serverToolUse.web_fetch_requests || 0);
+              codeExecutionRequests = Math.max(
+                codeExecutionRequests,
+                serverToolUse.code_execution_requests || 0,
+              );
+            }
 
             if (event.type === 'message_start' && event.message?.usage) {
               inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
@@ -729,6 +781,11 @@ export async function buildStreamResponse(
             cacheReadInputTokens,
             cacheCreationInputTokens,
             cacheCreation1hInputTokens,
+            webSearchRequests: Math.min(reportedWebSearchRequests, answeredWebSearches),
+            webFetchRequests,
+            codeExecutionRequests,
+            codeExecutionContainerIds: [...codeExecutionContainerIds],
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
         });
       } catch (reconciliationError) {
@@ -1015,6 +1072,9 @@ export async function buildAdapterStreamResponse(
               providerReportedCostUsd: usage.providerReportedCostUsd,
               webSearchRequests: usage.webSearchRequests,
               webFetchRequests: usage.webFetchRequests,
+              codeExecutionRequests: usage.codeExecutionRequests,
+              codeExecutionContainerIds: usage.codeExecutionContainerIds,
+              providerElapsedMs: Date.now() - streamStartedAt,
             },
             outcome: 'failed',
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -1124,6 +1184,9 @@ export async function buildAdapterStreamResponse(
             providerReportedCostUsd: usage.providerReportedCostUsd,
             webSearchRequests: usage.webSearchRequests,
             webFetchRequests: usage.webFetchRequests,
+            codeExecutionRequests: usage.codeExecutionRequests,
+            codeExecutionContainerIds: usage.codeExecutionContainerIds,
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
           outcome: assembler.lastError === null ? 'completed' : 'failed',
           ...(firstTokenTimestampMs !== null ? { latencyMs: firstTokenTimestampMs } : {}),
@@ -1240,6 +1303,9 @@ export async function buildAdapterStreamResponse(
             providerReportedCostUsd: usage.providerReportedCostUsd,
             webSearchRequests: usage.webSearchRequests,
             webFetchRequests: usage.webFetchRequests,
+            codeExecutionRequests: usage.codeExecutionRequests,
+            codeExecutionContainerIds: usage.codeExecutionContainerIds,
+            providerElapsedMs: Date.now() - streamStartedAt,
           },
           outcome: 'failed',
           cancelled: true,
