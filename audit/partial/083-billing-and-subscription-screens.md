@@ -309,27 +309,3 @@ Code: `apps/web/app/pricing/page.tsx:1078-1093`, `apps/web/lib/validations/check
 | mobile | partial | Mobile shows 'X of Y seats used' and adds members in-app on iOS only; Android opens web to add a member. | surface-only |
 
 Code: `apps/mobile/app/(app)/settings/workspace.tsx:459-463`, `apps/mobile/app/(app)/settings/workspace.tsx:129-141`
-
-## S83.30: Enterprise billing contacts.
-
-- Done when: Enterprise admins can see (and have on record) billing and procurement contacts for their contract.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Ship pending migration 0286 and pending migration 0287: the contract view (/api/settings/organization/billing-contract) reads agreement columns (change_kind, terminated_at, purchase_order_required, invoice_recipient_emails, billing_currency...) that production at 0273 lacks, so the read fails. | pending-migration |
-| desktop | partial | Same as web (hosted web app): blocked by pending migration 0286 and pending migration 0287. | pending-migration |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx:278-287`, `apps/web/app/api/settings/organization/billing-contract/route.ts:114-122`, `apps/web/lib/services/enterprise-contracts/agreement-store.ts:31-41`
-
-## S83.31: Purchase-order and invoicing workflows.
-
-- Done when: Enterprise customers can buy through purchase orders and invoices (PO numbers on invoices, invoice terms, offline payment reporting).
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Ship pending migration 0287 and pending migration 0288: PO-required and invoice-recipient terms and the offline-payment records table exist only there, so PO/invoice workflows cannot run on production schema 0273. | pending-migration |
-| desktop | partial | Same as web (hosted web app): needs pending migration 0287 and pending migration 0288. | pending-migration |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceEnterpriseContract.tsx:270-274`, `apps/web/lib/services/enterprise-contracts/invoicing.ts:287-312`, `apps/web/db/neon/0288_enterprise_offline_payment_records.sql:33-43`

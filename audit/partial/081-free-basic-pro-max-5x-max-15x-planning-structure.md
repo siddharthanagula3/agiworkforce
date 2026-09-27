@@ -201,14 +201,14 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:976-990`, `apps/we
 ## S81.21: Optional overage.
 
 - Done when: Users can opt in to spending purchased credits past a plan limit (overage), off by default, and overage use is accounted separately from the plan windows.
-- Wave: 1
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Ship pending migration 0281: until then an admitted overage turn is not classified, so its reservation and later reconciliation rows can push rolling plan usage down (even below zero) and let plan allowance be spent after limits should bind. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | pending-migration, flag-off |
-| desktop | partial | Same as web (hosted web app): overage toggle works but correct window accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | pending-migration, flag-off |
-| cli | partial | CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, pending-migration, flag-off |
-| vscode | partial | VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, pending-migration, flag-off |
+| web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Ship pending migration 0281: until then an admitted overage turn is not classified, so its reservation and later reconciliation rows can push rolling plan usage down (even below zero) and let plan allowance be spent after limits should bind. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
+| desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Same as web (hosted web app): overage toggle works but correct window accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | flag-off |
+| cli | partial | Migration 0281 is now applied in production (2026-09-27). Still open: CLI shows overage on/off but cannot change it (web billing), and overage accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
+| vscode | partial | Migration 0281 is now applied in production (2026-09-27). Still open: VS Code shows whether credits are spent past a limit and points to billing to enable it; toggle lives on web; accounting needs pending migration 0281. Also the upgrade-waitlist gate (hasBillingWaitlistAccess: a beta_redemptions row) blocks first-time buyers. | surface-only, flag-off |
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:1091-1129`, `apps/web/app/api/billing/overage/route.ts:73-85`, `apps/web/lib/services/managed-usage-request-service.ts:425-445`, `apps/web/db/neon/0281_managed_usage_overage_classification.sql:1-27`
 

@@ -104,14 +104,3 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/turn-completeness.ts:14-25`,
 | platform | partial | Approvals queue and resume, but the connector input_required pause is off by default (AGI_MCP_INPUT_PAUSE must be 1) and no client calls /resume-input, so connector questions fail safe instead of waiting. | flag-off |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:1077-1085`, `apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql:8-12`
-
-## S92.29: Durable task scheduler.
-
-- Done when: A durable scheduler starts scheduled agent runs on time and runs them to completion unattended.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Schedules fire from the run-schedules cron, but every scheduled run writes a context manifest with columns that only exist in pending migration 0284, so the insert fails at the applied schema. | pending-migration |
-
-Code: `apps/web/app/api/cron/run-schedules/route.ts:10-10`, `apps/web/lib/services/scheduled-agent-executor.ts:305-318`, `packages/platform/context-engine/src/manifest-store.ts:56-60`

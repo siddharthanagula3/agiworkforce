@@ -6,28 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S103.09: Context manifests.
-
-- Done when: Context manifests (what went into each turn's context) are durably recorded and classified.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Only scheduled-agent runs write context manifests; ordinary chat turns record none on any deployment, and the writer's manifest_id and token_estimate columns need pending migration 0284. | pending-migration |
-
-Code: `packages/platform/context-engine/src/manifest-store.ts:55-61`, `apps/web/db/neon/0252_context_manifests_and_source_policy.sql:30-33`, `apps/web/lib/services/deletion-manifest.ts:86-86`
-
-## S103.10: Memory items and provenance.
-
-- Done when: Memory items and their provenance (source conversation and turn) are durably stored and classified.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | writeConsolidatedMemory, the single server memory insert behind POST /api/memory, the /remember command and the automatic consolidator, writes provenance columns from pending migration 0285, so on production every server memory write except the mobile sync route fails. | pending-migration |
-
-Code: `apps/web/app/api/memory/sync/route.ts:211-215`, `apps/web/lib/services/managed-memory-context-service.ts:721-728`, `apps/web/db/neon/0010_memory.sql:1-4`, `apps/web/lib/services/deletion-manifest.ts:71-71`
-
 ## S103.14: External resource references.
 
 - Done when: References to external resources (repositories, URLs, connector items) are stored as canonical, classified references.
@@ -49,25 +27,3 @@ Code: `apps/web/db/neon/0075_cloud_code_sessions.sql:13-15`, `apps/web/app/api/c
 | platform | partial | The current artifact is synced, but nothing writes web_artifact_versions, so cloud artifact revision history is never stored (only published artifacts keep versions). | handler |
 
 Code: `apps/web/app/api/chat/sync/route.ts:691-695`, `apps/web/db/neon/0039_artifact_cloud_sync.sql:40-43`, `apps/web/lib/services/deletion-manifest.ts:77-77`, `apps/web/db/neon/0039_artifact_cloud_sync.sql:58-66`
-
-## S103.32: Usage and credit ledger entries.
-
-- Done when: Usage and credit ledger entries are durably recorded, classified, and correctly attributed to plan or overage.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ledger rows persist, but overage turns are not classified until pending migration 0281, so their later ledger rows count against plan windows. | pending-migration |
-
-Code: `apps/web/lib/services/credit-service.ts:545-549`, `apps/web/db/neon/0004_token_credits.sql:20-23`, `apps/web/lib/services/deletion-manifest.ts:115-115`, `apps/web/db/neon/0281_managed_usage_overage_classification.sql:1-9`
-
-## S103.33: Invoices and payment references.
-
-- Done when: Invoices and payment references are durably stored and classified.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Enterprise invoice reads join offline payment records from pending migration 0288 and agreement columns from pending migration 0286, so enterprise invoice positions fail on production; self-serve Stripe invoices are not stored locally (invoice.paid only updates subscription status). | pending-migration |
-
-Code: `apps/web/lib/services/enterprise-billing-service.ts:908-912`, `apps/web/db/neon/0163_enterprise_billing_contracts.sql:66-69`, `apps/web/lib/services/deletion-manifest.ts:146-146`, `apps/web/lib/services/enterprise-contracts/invoicing.ts:177-184`

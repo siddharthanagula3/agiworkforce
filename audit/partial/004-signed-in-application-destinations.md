@@ -487,12 +487,12 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:2050-2058`, `apps/extensio
 ## S4.40: Billing settings.
 
 - Done when: A billing settings destination shows the current plan, renewal, payment method and invoices, and lets the user change or cancel the plan.
-- Wave: 1
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | pending-migration, flag-off |
-| desktop | partial | Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | pending-migration, flag-off |
+| web | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
+| desktop | partial | Migration 0281 is now applied in production (2026-09-27). Still open: Plan, invoices, payment methods and the Stripe portal work; the overage toggle's accounting needs pending migration 0281 (see S81), and paid checkout sits behind the beta_redemptions waitlist gate. | flag-off |
 | mobile | partial | Subscription screen shows the plan, but FEATURES.billing is false in v1, so the portal, plan changes and Stripe management are off; native IAP depends on an unset store catalog. | flag-off |
 | vscode | partial | The Account & usage pick shows the plan and subscription attention state; invoices, payment method and plan changes open web settings/billing. | surface-only |
 | chrome | partial | Side panel shows plan tier and past-due/canceled status; all billing management opens web settings/billing. | surface-only |

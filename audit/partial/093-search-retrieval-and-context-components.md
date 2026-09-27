@@ -20,24 +20,13 @@ Code: `packages/contracts/context/src/context-source.ts:1-17`, `packages/platfor
 ## S93.04: Context manifest builder.
 
 - Done when: Each turn produces a stored manifest of which context sources were included, excluded and why.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | A manifest builder and store exist but are used only by scheduled runs, and the store writes columns (manifest_id, assembler_version, token_estimate, budget_tokens) that only exist in pending migration 0284. | handler, pending-migration |
+| platform | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A manifest builder and store exist but are used only by scheduled runs, and the store writes columns (manifest_id, assembler_version, token_estimate, budget_tokens) that only exist in pending migration 0284. | handler |
 
 Code: `packages/platform/context-engine/src/manifest-store.ts:56-60`, `apps/web/lib/services/scheduled-agent-executor.ts:317-317`, `apps/web/db/neon/0252_context_manifests_and_source_policy.sql:30-30`
-
-## S93.06: Summary versioning.
-
-- Done when: Stored summaries are versioned against the messages they cover so an edited or deleted message invalidates the summary.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The summary digest over covered message versions is computed in code, but its column is created by pending migration 0282. | pending-migration |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/context-compaction.ts:121-125`, `apps/web/db/neon/0282_compaction_summary_coverage.sql:29-29`
 
 ## S93.25: Source locator registry.
 

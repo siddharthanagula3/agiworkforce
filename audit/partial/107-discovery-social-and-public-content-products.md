@@ -53,11 +53,11 @@ Code: `apps/web/app/gallery/GalleryClient.tsx:1245-1248`, `apps/web/features/cha
 ## S107.13: Attribution and source lineage.
 
 - Done when: Public and third-party content shows who made it and where it came from (publisher, author, source, versions, "copied from").
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Publisher, author and source show on plugin and directory pages, but shared chats, forks and published artifacts carry no creator or "copied from" lineage, and plugin release history reads signature columns from pending migration 0289, so it is empty in production. | persistence, pending-migration |
+| web | partial | Migration 0289 is now applied in production (2026-09-27). Still open: Publisher, author and source show on plugin and directory pages, but shared chats, forks and published artifacts carry no creator or "copied from" lineage, and plugin release history reads signature columns from pending migration 0289, so it is empty in production. | persistence |
 | desktop | partial | The in-app directory shows publisher and author; shared chats, forks and artifacts carry no creator or lineage (plugin public pages open in the system browser). | persistence |
 
 Code: `apps/web/app/plugins/[id]/page.tsx:176-178`, `packages/ui/ui/src/directory/ConnectorDetailView.tsx:254-257`, `apps/web/lib/services/plugin-lifecycle.ts:100-102`, `apps/web/features/plugins/server/registry-source.ts:114-120`

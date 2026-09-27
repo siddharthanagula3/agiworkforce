@@ -39,17 +39,6 @@ Code: `apps/web/lib/e2b/gate.ts:16-18`, `apps/web/lib/e2b/runtime.ts:889-893`
 
 Code: `apps/desktop/electron/runtime/shellService.ts:257-262`, `apps/cli/src/features/exec/tools/bash/mod.rs:230-233`
 
-## S102.27: Scheduler.
-
-- Done when: A scheduler fires due scheduled runs and completes them.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | The 15-minute cron claims due runs, but the context engine writes manifest columns that exist only in pending migration 0284, so every scheduled run is finalized failed; ship it to production. | pending-migration |
-
-Code: `vercel.json:26-26`, `apps/web/app/api/cron/run-schedules/route.ts:7-11`, `packages/platform/context-engine/src/engine.ts:349-349`
-
 ## S102.32: Generated-application hosting runtime.
 
 - Done when: Generated applications are hosted at a public URL with the runtime they need.

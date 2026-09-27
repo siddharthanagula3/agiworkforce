@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S100.06: Usage ledger.
-
-- Done when: An append-only usage ledger holds every reservation, settlement and release so balances and windows can be recomputed correctly.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ship pending migration 0281: only an overage turn's reservation row is tagged, so its later reconciliation and release rows are counted against plan windows and can push rolling usage below zero. | pending-migration |
-
-Code: `apps/web/db/neon/0056_managed_usage_request_lifecycle.sql:13-20`, `apps/web/db/neon/0182_managed_usage_microusd_ledger.sql:256-260`, `apps/web/db/neon/0281_managed_usage_overage_classification.sql:1-27`
-
 ## S100.14: Checkout adapter.
 
 - Done when: A checkout adapter creates a payment-provider checkout for any eligible user and returns them to a verified result.
@@ -82,14 +71,3 @@ Code: `apps/web/app/api/checkout/route.ts:371-389`, `apps/web/features/admin/ser
 | platform | partial | Build the referral service: a referrals table exists (migration 0016) and is included in data export, but no code creates referral codes, records referred sign-ups or grants rewards. | handler, ui |
 
 Code: `apps/web/db/neon/0016_misc.sql:35-40`, `apps/web/app/api/user/export/route.ts:1225-1241`
-
-## S100.25: Enterprise billing integration.
-
-- Done when: Enterprise contracts (committed seats, invoicing terms, PO, offline payment) are stored and drive billing.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Ship pending migration 0286, pending migration 0287 and pending migration 0288: the commercial-agreement store selects lifecycle and procurement columns (seat price, PO required, invoice recipients) and writes offline payments that only exist there. | pending-migration |
-
-Code: `apps/web/lib/services/enterprise-contracts/agreement-store.ts:31-41`, `apps/web/db/neon/0287_commercial_agreement_procurement_terms.sql:31-34`, `apps/web/lib/services/enterprise-contracts/invoicing.ts:287-312`, `apps/web/app/api/stripe-webhook/lib/handlers.ts:133-145`

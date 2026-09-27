@@ -127,24 +127,24 @@ Code: `apps/extension/src/side_panel.ts:10879-10887`, `apps/extension/src/backgr
 ## S106.13: Slack direct-message assistant.
 
 - Done when: A user can DM the product's Slack bot and gets the assistant's reply in that DM.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Slack message event can start a saved routine with the message as data, but nothing replies in the DM (the routine would have to post through the user's own Slack connector). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui, pending-migration |
-| desktop | partial | Same as web (hosted web): Slack events start a routine, no DM reply. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack message event can start a saved routine with the message as data, but nothing replies in the DM (the routine would have to post through the user's own Slack connector). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web): Slack events start a routine, no DM reply. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, ui |
 
 Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
 
 ## S106.14: Slack channel agent.
 
 - Done when: An agent listens in a Slack channel and acts (and reports back) when channel messages or events arrive.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Slack trigger starts a saved routine for channel events (with ownership verification), but the result is not posted back to the channel unless the routine uses the user's Slack connector. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, pending-migration |
-| desktop | partial | Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack trigger starts a saved routine for channel events (with ownership verification), but the result is not posted back to the channel unless the routine uses the user's Slack connector. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
 
 Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
 
@@ -164,12 +164,12 @@ Code: `apps/extension/src/content.ts:114-118`, `apps/extension/src/inPagePanel/s
 ## S106.16: Mention-to-task handoff.
 
 - Done when: Mentioning the assistant in a channel message turns that message into a task the agent runs.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A Slack trigger on app_mention (or any event type) starts one fixed saved routine with the message as data; the mention text does not create its own task and nothing replies. Teams mentions are not received. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, pending-migration |
-| desktop | partial | Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler, pending-migration |
+| web | partial | Migration 0284 is now applied in production (2026-09-27). Still open: A Slack trigger on app_mention (or any event type) starts one fixed saved routine with the message as data; the mention text does not create its own task and nothing replies. Teams mentions are not received. The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
+| desktop | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Same as web (hosted web). The product Slack app has no in-product install path (only SLACK_SIGNING_SECRET); every triggered run fails at production schema until pending migration 0284 ships. | handler |
 
 Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, `apps/web/features/schedules/components/ScheduleCard.tsx:430-436`, `apps/web/app/api/webhooks/slack/route.ts:82-100`, `apps/web/lib/triggers/trigger-fire.ts:126-141`
 
@@ -184,18 +184,6 @@ Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:43-50`, 
 | desktop | partial | Same as web (hosted web): service accounts only for credential-based connectors; channel actions post as the user. | handler |
 
 Code: `apps/web/features/connectors/components/ConnectorAccountSelector.tsx:43-48`, `apps/web/lib/connectors/catalog.ts:274-285`, `apps/web/lib/connectors/accounts.ts:1-1`
-
-## S106.24: Results mirrored into the main application.
-
-- Done when: Work the agent does from a channel or host shows up in the main app (run history, results) for review.
-- Wave: 1
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Slack-triggered runs are recorded in the routine's Run History and each delivery stores its run id, but every triggered run fails at production schema until pending migration 0284 ships, so no results appear; Teams/email/host-app work does not exist. | pending-migration |
-| desktop | partial | Same as web (hosted web); triggered runs fail until pending migration 0284 ships. | pending-migration |
-
-Code: `apps/web/features/schedules/components/ScheduleCard.tsx:408-436`, `apps/web/lib/triggers/trigger-fire.ts:135-141`, `apps/web/lib/services/scheduled-agent-executor.ts:588-596`, `packages/platform/context-engine/src/manifest-store.ts:54-62`
 
 ## S106.25: Native-host and standalone-app handoff.
 

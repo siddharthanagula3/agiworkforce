@@ -138,12 +138,12 @@ Code: `apps/web/features/auth/AuthFlow.tsx:232-247`, `apps/web/features/auth/ide
 ## S3.16: Account-recovery flow.
 
 - Done when: A user who has lost their password, email or second factor can start and complete an account-recovery flow that restores access.
-- Wave: 1
+- Wave: 3
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Build a recovery flow beyond the emailed password reset: nothing starts a recovery for a lost email or factor, the recovery_requested security event is defined but never emitted, and the recovery_pending account state needs pending migration 0277. | handler, pending-migration |
-| desktop | partial | Same as web (hosted page): only the emailed password reset exists; recovery_pending needs pending migration 0277. | handler, pending-migration |
+| web | partial | Migration 0277 is now applied in production (2026-09-27). Still open: Build a recovery flow beyond the emailed password reset: nothing starts a recovery for a lost email or factor, the recovery_requested security event is defined but never emitted, and the recovery_pending account state needs pending migration 0277. | handler |
+| desktop | partial | Migration 0277 is now applied in production (2026-09-27). Still open: Same as web (hosted page): only the emailed password reset exists; recovery_pending needs pending migration 0277. | handler |
 | mobile | partial | Mobile recovery only opens the web page for a password reset; there is no recovery for a lost email or second factor. | handler |
 
 Code: `apps/web/features/auth/AuthPasswordStep.tsx:84-92`, `apps/web/features/auth/identityAuthAdapter.tsx:414-422`, `apps/web/lib/auth/account-status.ts:72-88`, `apps/web/lib/services/identity-events/catalogue.ts:197-205`
