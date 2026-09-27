@@ -442,6 +442,10 @@ const heartbeatMessageSchema = z.object({
   type: z.literal('heartbeat'),
 });
 
+const endPairingMessageSchema = z.object({
+  type: z.literal('end_pairing'),
+});
+
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
@@ -999,6 +1003,11 @@ wss.on('connection', (socket, request) => {
         }
       }
       socket.send(JSON.stringify({ type: 'heartbeat_ack', timestamp: Date.now() }));
+      return;
+    }
+
+    if (endPairingMessageSchema.safeParse(data).success) {
+      void handleEndPairing(socket, correlationId);
       return;
     }
 
@@ -1587,6 +1596,22 @@ function endPairing(session: Session): void {
   disconnectParticipants(session);
   activeSessions.delete(session.code);
   pendingApprovals.delete(session.code);
+}
+
+async function handleEndPairing(socket: WebSocket, correlationId: string): Promise<void> {
+  metrics.recordMessage('end_pairing');
+  const client = clients.get(socket);
+  if (!client) return;
+
+  logger.info(
+    { correlationId, code: client.code, role: client.role },
+    'Pairing ended by a participant',
+  );
+  const session = activeSessions.get(client.code);
+  if (session) endPairing(session);
+
+  const { error } = await deleteSessionByCode(client.code);
+  if (error) logger.error({ code: client.code, error }, 'Failed to delete an ended pairing');
 }
 
 async function endRevokedPairing(session: Session): Promise<void> {
