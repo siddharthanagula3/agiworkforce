@@ -514,10 +514,12 @@ function HistoryRows({
   caption,
   rows,
   labelFor,
+  limit = HISTORY_ROW_LIMIT,
 }: {
   caption: string;
   rows: readonly HistoryRow[];
   labelFor: (row: HistoryRow) => string;
+  limit?: number;
 }) {
   if (rows.length === 0) return null;
   return (
@@ -525,7 +527,7 @@ function HistoryRows({
       <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>
         {caption}
       </h3>
-      {rows.slice(0, HISTORY_ROW_LIMIT).map((row) => (
+      {rows.slice(0, limit).map((row) => (
         <div key={row.key} style={{ ...ROW, ...DETAIL }}>
           <span style={{ color: 'var(--text-2)', minWidth: 0, overflowWrap: 'anywhere' }}>
             {labelFor(row)}
@@ -758,6 +760,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
             <HistoryRows
               caption={GRANULARITY_CAPTION[shown.granularity]}
               rows={periods}
+              limit={periods.length}
               labelFor={(row) => formatPeriod(row.key, shown.granularity)}
             />
             <HistoryRows
