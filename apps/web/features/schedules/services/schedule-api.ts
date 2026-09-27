@@ -9,10 +9,14 @@ import {
   ManagedCloudScheduleRunApprovalResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
+  ManagedCloudScheduleShareResponseSchema,
+  managedCloudScheduleSharedPath,
+  managedCloudScheduleSharePath,
   managedCloudSchedulePath,
   managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
   type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleShare,
 } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
 import type { ScheduleMutation, ScheduleRun, ScheduleTask } from '../types';
@@ -78,6 +82,9 @@ export interface ScheduleApi {
     approval: ManagedCloudScheduleRunApproval,
     signal?: AbortSignal,
   ): Promise<ScheduleRun>;
+  shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
+  unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void>;
+  getSharedSchedule(token: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare>;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -282,6 +289,35 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
         'The approval returned an invalid response.',
       );
       return body.run as ScheduleRun;
+    },
+
+    async shareSchedule(scheduleId, signal) {
+      const body = await request(
+        managedCloudScheduleSharePath(scheduleId),
+        { method: 'POST', credentials: 'include', headers: await mutationHeaders(false), signal },
+        ManagedCloudScheduleShareResponseSchema,
+        'Sharing the schedule returned an invalid response.',
+      );
+      return body.share;
+    },
+
+    async unshareSchedule(scheduleId, signal) {
+      await request(
+        managedCloudScheduleSharePath(scheduleId),
+        { method: 'DELETE', credentials: 'include', headers: await mutationHeaders(false), signal },
+        ManagedCloudScheduleDeleteResponseSchema,
+        'Stopping the schedule share returned an invalid response.',
+      );
+    },
+
+    async getSharedSchedule(token, signal) {
+      const body = await request(
+        managedCloudScheduleSharedPath(token),
+        { credentials: 'include', signal },
+        ManagedCloudScheduleShareResponseSchema,
+        'The shared schedule returned an invalid response.',
+      );
+      return body.share;
     },
   };
 }

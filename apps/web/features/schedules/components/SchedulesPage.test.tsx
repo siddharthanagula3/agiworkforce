@@ -97,6 +97,29 @@ function createApi(overrides: Partial<ScheduleApi> = {}): ScheduleApi {
     listRuns: vi.fn(async () => runsPage()),
     runNow: vi.fn(async () => ({ run: successfulRun, replay: false })),
     resolveRunApproval: vi.fn(async () => successfulRun),
+    shareSchedule: vi.fn(async () => ({
+      token: 'abcdefghijklmnopqrstuvwx',
+      snapshot: {
+        name: schedule.name,
+        description: null,
+        prompt: schedule.prompt ?? '',
+        model: null,
+        scheduleType: schedule.scheduleType,
+        cronExpression: null,
+        intervalMs: null,
+        recurrenceRule: null,
+        dayparts: null,
+        metadata: null,
+        missedExecutionPolicy: 'run_once' as const,
+        retryMaxAttempts: 0,
+        retryBackoffSeconds: 300,
+      },
+      createdAt: '2026-07-15T12:00:00.000Z',
+    })),
+    unshareSchedule: vi.fn(async () => undefined),
+    getSharedSchedule: vi.fn(async () => {
+      throw new Error('No shared schedule in this test');
+    }),
     ...overrides,
   };
 }
