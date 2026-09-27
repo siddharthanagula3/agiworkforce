@@ -21,7 +21,7 @@ import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
 import { cn } from '@shared/utils/cn';
 import { formatRelativeTime } from '@shared/utils/format';
-import type { ScheduleTask } from '../types';
+import type { ScheduleRun, ScheduleTask } from '../types';
 import {
   DAYS_OF_WEEK,
   formatDateTime,
@@ -29,10 +29,14 @@ import {
   scheduleModelLabel,
   taskRecurrence,
 } from '../types';
-import { ScheduleRunHistory, type ScheduleHistoryState } from './ScheduleRunHistory';
+import {
+  ScheduleRunHistory,
+  type ScheduleApprovalDecision,
+  type ScheduleHistoryState,
+} from './ScheduleRunHistory';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
 
-export type ScheduleOperation = 'toggle' | 'run' | 'delete' | null;
+export type ScheduleOperation = 'toggle' | 'run' | 'delete' | 'approval' | null;
 
 export function scheduleCardElementId(scheduleId: string): string {
   return `schedule-${scheduleId}`;
@@ -63,6 +67,11 @@ interface ScheduleCardProps {
   onToggleHistory: (schedule: ScheduleTask) => void;
   onRetryHistory: (schedule: ScheduleTask) => void;
   onLoadMoreHistory: (schedule: ScheduleTask) => void;
+  onResolveApproval: (
+    schedule: ScheduleTask,
+    run: ScheduleRun,
+    decision: ScheduleApprovalDecision,
+  ) => void;
 }
 
 const TERMINAL_STATUSES = new Set<ScheduleTask['status']>(['completed', 'expired']);
@@ -128,6 +137,7 @@ export function ScheduleCard({
   onToggleHistory,
   onRetryHistory,
   onLoadMoreHistory,
+  onResolveApproval,
 }: ScheduleCardProps) {
   const terminal = TERMINAL_STATUSES.has(schedule.status);
   const supported = schedule.actionType === 'agent';
@@ -221,19 +231,19 @@ export function ScheduleCard({
 
             <dl className="grid gap-x-6 gap-y-2 text-xs text-muted-foreground sm:grid-cols-2 xl:grid-cols-3">
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Timing</dt>
+                <dt className="font-medium text-muted-foreground">Timing</dt>
                 <dd className="break-words font-mono" title={rawCron ?? undefined}>
                   {scheduleTiming(schedule)}
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Time Zone</dt>
+                <dt className="font-medium text-muted-foreground">Time Zone</dt>
                 <dd className="break-words font-mono" translate="no">
                   {schedule.timezone}
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Next Run</dt>
+                <dt className="font-medium text-muted-foreground">Next Run</dt>
                 <dd>
                   {schedule.isEnabled
                     ? formatDateTime(schedule.nextExecutionAt, schedule.timezone)
@@ -241,11 +251,11 @@ export function ScheduleCard({
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Last Run</dt>
+                <dt className="font-medium text-muted-foreground">Last Run</dt>
                 <dd>{formatDateTime(schedule.lastExecutedAt, schedule.timezone)}</dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Runs</dt>
+                <dt className="font-medium text-muted-foreground">Runs</dt>
                 <dd className="tabular-nums">
                   {new Intl.NumberFormat().format(schedule.executionCount)}
                   {schedule.maxExecutions === null
@@ -254,7 +264,7 @@ export function ScheduleCard({
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Credits</dt>
+                <dt className="font-medium text-muted-foreground">Credits</dt>
                 <dd className="tabular-nums">
                   {formatCredits(schedule.creditsUsed ?? 0)}
                   {schedule.creditCap === null || schedule.creditCap === undefined
@@ -263,7 +273,7 @@ export function ScheduleCard({
                 </dd>
               </div>
               <div className="min-w-0">
-                <dt className="font-medium text-foreground/70">Model</dt>
+                <dt className="font-medium text-muted-foreground">Model</dt>
                 <dd className="break-words">{scheduleModelLabel(schedule.model)}</dd>
               </div>
             </dl>
@@ -275,6 +285,28 @@ export function ScheduleCard({
                 Paused: it used its {formatCredits(schedule.creditCap)} cap. Raise the cap in Edit
                 to run it again.
               </p>
+            ) : null}
+
+            {schedule.pausedReason === 'approval_required' ? (
+              <div
+                role="status"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs"
+              >
+                <span className="min-w-0 break-words">
+                  Paused: a run needed your approval. Approve or deny it in Run History; if the
+                  request expired, resume the schedule to run it again.
+                </span>
+                {historyExpanded ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onToggleHistory(schedule)}
+                  >
+                    Review
+                  </Button>
+                )}
+              </div>
             ) : null}
 
             {schedule.lastError && (
@@ -451,6 +483,8 @@ export function ScheduleCard({
               timezone={schedule.timezone}
               onRetry={() => onRetryHistory(schedule)}
               onLoadMore={() => onLoadMoreHistory(schedule)}
+              onResolveApproval={(run, decision) => onResolveApproval(schedule, run, decision)}
+              approvalPending={operation === 'approval'}
             />
             <ScheduleTriggersPanel scheduleId={schedule.id} scheduleName={schedule.name} />
           </section>

@@ -6,10 +6,13 @@ import {
   ManagedCloudScheduleDeleteResponseSchema,
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleResponseSchema,
+  ManagedCloudScheduleRunApprovalResponseSchema,
   ManagedCloudScheduleRunListResponseSchema,
   ManagedCloudScheduleRunResponseSchema,
   managedCloudSchedulePath,
+  managedCloudScheduleRunApprovalPath,
   managedCloudScheduleRunsPath,
+  type ManagedCloudScheduleRunApproval,
 } from '@agiworkforce/cloud-contracts';
 import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
 import type { ScheduleMutation, ScheduleRun, ScheduleTask } from '../types';
@@ -69,6 +72,12 @@ export interface ScheduleApi {
     idempotencyKey: string,
     signal?: AbortSignal,
   ): Promise<{ run: ScheduleRun; replay: boolean }>;
+  resolveRunApproval(
+    scheduleId: string,
+    runId: string,
+    approval: ManagedCloudScheduleRunApproval,
+    signal?: AbortSignal,
+  ): Promise<ScheduleRun>;
 }
 
 async function responseBody(response: Response): Promise<unknown> {
@@ -257,6 +266,22 @@ export function createScheduleApi(dependencies: ScheduleApiDependencies = {}): S
         'Manual schedule run returned an invalid response.',
       );
       return { run: body.run as ScheduleRun, replay: body.replay };
+    },
+
+    async resolveRunApproval(scheduleId, runId, approval, signal) {
+      const body = await request(
+        managedCloudScheduleRunApprovalPath(scheduleId, runId),
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: await mutationHeaders(),
+          body: JSON.stringify(approval),
+          signal,
+        },
+        ManagedCloudScheduleRunApprovalResponseSchema,
+        'The approval returned an invalid response.',
+      );
+      return body.run as ScheduleRun;
     },
   };
 }
