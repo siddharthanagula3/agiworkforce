@@ -111,17 +111,15 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1902`, `apps/extensio
 ## S39.11: Explicit “remember this” action.
 
 - Done when: From inside a conversation the user can explicitly ask the assistant to remember something and gets confirmation it was saved.
-- Wave: 2
-- Already works on: mobile, cli
+- Wave: 3
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
-| desktop | partial | Remember and forget from chat work, with a confirmation that lists what a forget removes (use-explicit-memory-commands.ts, /api/memory/commands). Still open: request-processor.ts must use passiveMemoryText so the passive extractor cannot re-learn a fact the user just asked to forget; the diff is with the chat-gates lane. | mount |
 | vscode | partial | Add a 'remember this' action from a chat or selection; only the separate 'Add a memory fact' command exists. | ui |
 | chrome | partial | Migration 0285 is now applied in production (2026-09-27). Still open: Add a 'remember this' action in the side-panel chat; only the drawer's Add memory exists, and it saves through pending migration 0285. | ui |
 
-Code: `apps/web/app/api/memory/commands/route.ts:25-66`, `packages/ai/agent-core/src/memory.ts:44-48`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1278-1296`, `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1863-1870`, `apps/extension/src/side_panel.ts:7928-7938`
 
 ## S39.12: Automatic Memory update.
 
