@@ -228,6 +228,11 @@
           "date": "2026-09-21",
           "digest": "723eea51e7af4969",
           "note": "The erasure table count moves from 95 to 100 and the change record gains its 2026-09-27 entry; no commitment changed, so the date stays."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "d4b49134572c44e4",
+          "note": "The row-level isolation figures were re-measured after the billing routes merged (191 of 303 database-backed routes); no commitment changed, so the date stays."
         }
       ]
     },

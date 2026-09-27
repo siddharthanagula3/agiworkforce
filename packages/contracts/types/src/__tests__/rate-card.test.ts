@@ -150,7 +150,7 @@ describe('rateCardUsageLabel', () => {
 
   it('leaves models and other rows to their own labels', () => {
     expect(rateCardUsageLabel('voice_live_minute')).toBeNull();
-    expect(rateCardUsageLabel('claude-sonnet-5')).toBeNull();
+    expect(rateCardUsageLabel('fixture-model-under-test')).toBeNull();
     expect(rateCardUsageLabel(null)).toBeNull();
   });
 });

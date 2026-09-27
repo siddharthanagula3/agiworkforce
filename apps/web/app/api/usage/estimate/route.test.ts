@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
   chargeCreditsForMicrousd,
+  listChatModels,
   requireProviderDefaultModel,
   resolveMaxOutputTokens,
 } from '@agiworkforce/types';
@@ -35,7 +36,13 @@ import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { POST } from './route';
 
 const MODEL = requireProviderDefaultModel('openai');
-const UNPRICED_MODEL = 'openrouter-auto';
+function requireUnpricedChatModel(): string {
+  const model = listChatModels().find((entry) => entry.inputCost === 0 && entry.outputCost === 0);
+  if (!model) throw new Error('The catalog lists no unpriced chat model to refuse.');
+  return model.id;
+}
+
+const UNPRICED_MODEL = requireUnpricedChatModel();
 
 function estimate(body: unknown): NextRequest {
   return new NextRequest('http://localhost:3000/api/usage/estimate', {
