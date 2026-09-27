@@ -2084,7 +2084,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: `${formatSessionCreditEstimate(counter)} · not an invoice, provider bill, or AGI quota`,
         },
         {
-          label: `$(credit-card) Billed for editor actions`,
+          label: `$(credit-card) Billed this session`,
           description: formatBilledCredits(counter),
         },
       );
