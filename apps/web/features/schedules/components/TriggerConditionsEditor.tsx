@@ -2,161 +2,20 @@
 
 import { Button, Input } from '@agiworkforce/ui';
 import { Plus, X } from 'lucide-react';
-import type {
-  FieldCondition,
-  FieldConditionOperator,
-  FieldConditionValue,
-} from '@/lib/automation/field-conditions';
+import {
+  MANAGED_CLOUD_TRIGGER_CONDITION_OPERATORS,
+  MANAGED_CLOUD_TRIGGER_EVENT_FIELDS,
+  MANAGED_CLOUD_TRIGGER_MAX_CONDITIONS,
+  TRIGGER_CONDITION_OTHER_FIELD,
+  newTriggerConditionDraft,
+  triggerConditionIsNumeric,
+  triggerConditionTakesValue,
+  type TriggerConditionDraft,
+} from '@agiworkforce/cloud-contracts';
 import type { TriggerSource } from '@/lib/triggers/trigger-types';
-
-export const MAX_TRIGGER_CONDITIONS = 10;
-
-const OTHER_FIELD = '__other__';
-
-export interface TriggerConditionDraft {
-  key: string;
-  field: string;
-  customField: string;
-  operator: FieldConditionOperator;
-  value: string;
-}
-
-const FIELD_SUGGESTIONS: Record<TriggerSource, ReadonlyArray<{ label: string; path: string }>> = {
-  github: [
-    { label: 'Repository', path: 'data.repository' },
-    { label: 'Action', path: 'data.action' },
-    { label: 'Branch', path: 'data.branch' },
-    { label: 'Author', path: 'data.author' },
-    { label: 'Title', path: 'data.title' },
-    { label: 'Base branch', path: 'data.baseRef' },
-    { label: 'Head branch', path: 'data.headRef' },
-    { label: 'Is draft', path: 'data.draft' },
-    { label: 'Is merged', path: 'data.merged' },
-    { label: 'Conclusion', path: 'data.conclusion' },
-    { label: 'Workflow or check name', path: 'data.name' },
-  ],
-  gmail: [
-    { label: 'From', path: 'data.from' },
-    { label: 'To', path: 'data.to' },
-    { label: 'Subject', path: 'data.subject' },
-    { label: 'Preview', path: 'data.snippet' },
-    { label: 'Labels', path: 'data.labels' },
-  ],
-  slack: [
-    { label: 'Channel', path: 'data.channel' },
-    { label: 'User', path: 'data.user' },
-    { label: 'Message text', path: 'data.text' },
-  ],
-  google_calendar: [{ label: 'Resource state', path: 'data.resourceState' }],
-  connector: [],
-};
-
-const OPERATORS: ReadonlyArray<{ value: FieldConditionOperator; label: string }> = [
-  { value: 'equals', label: 'is' },
-  { value: 'not_equals', label: 'is not' },
-  { value: 'contains', label: 'contains' },
-  { value: 'not_contains', label: 'does not contain' },
-  { value: 'starts_with', label: 'starts with' },
-  { value: 'in', label: 'is one of' },
-  { value: 'exists', label: 'is present' },
-  { value: 'not_exists', label: 'is missing' },
-  { value: 'greater_than', label: 'is greater than' },
-  { value: 'less_than', label: 'is less than' },
-];
-
-const VALUELESS: ReadonlySet<FieldConditionOperator> = new Set(['exists', 'not_exists']);
-const NUMERIC: ReadonlySet<FieldConditionOperator> = new Set(['greater_than', 'less_than']);
 
 const selectClass =
   'h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
-
-let draftKey = 0;
-
-function nextKey(): string {
-  draftKey += 1;
-  return `condition-${draftKey}`;
-}
-
-export function newConditionDraft(source: TriggerSource): TriggerConditionDraft {
-  const first = FIELD_SUGGESTIONS[source][0];
-  return {
-    key: nextKey(),
-    field: first ? first.path : OTHER_FIELD,
-    customField: '',
-    operator: 'contains',
-    value: '',
-  };
-}
-
-function valueText(value: FieldConditionValue | undefined): string {
-  if (value === undefined) return '';
-  return Array.isArray(value) ? value.join(', ') : String(value);
-}
-
-export function conditionDraftsFrom(
-  conditions: readonly FieldCondition[],
-  source: TriggerSource,
-): TriggerConditionDraft[] {
-  const known = new Set(FIELD_SUGGESTIONS[source].map((entry) => entry.path));
-  return conditions.map((condition) => ({
-    key: nextKey(),
-    field: known.has(condition.field) ? condition.field : OTHER_FIELD,
-    customField: known.has(condition.field) ? '' : condition.field,
-    operator: condition.operator,
-    value: valueText(condition.value),
-  }));
-}
-
-export function conditionsFromDrafts(
-  drafts: readonly TriggerConditionDraft[],
-): { ok: true; conditions: FieldCondition[] } | { ok: false; error: string } {
-  const conditions: FieldCondition[] = [];
-  for (const draft of drafts) {
-    const field = (draft.field === OTHER_FIELD ? draft.customField : draft.field).trim();
-    if (!field) return { ok: false, error: 'Choose a field for every condition.' };
-    if (VALUELESS.has(draft.operator)) {
-      conditions.push({ field, operator: draft.operator });
-      continue;
-    }
-    const text = draft.value.trim();
-    if (!text) return { ok: false, error: 'Give every condition a value to compare against.' };
-    if (NUMERIC.has(draft.operator)) {
-      const number = Number(text);
-      if (!Number.isFinite(number)) {
-        return { ok: false, error: 'Greater than and less than compare against a number.' };
-      }
-      conditions.push({ field, operator: draft.operator, value: number });
-      continue;
-    }
-    if (draft.operator === 'in') {
-      const list = text
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
-      conditions.push({ field, operator: 'in', value: list });
-      continue;
-    }
-    conditions.push({ field, operator: draft.operator, value: text });
-  }
-  return { ok: true, conditions };
-}
-
-export function describeConditions(
-  conditions: readonly FieldCondition[],
-  source: TriggerSource,
-): string {
-  const labels = new Map(FIELD_SUGGESTIONS[source].map((entry) => [entry.path, entry.label]));
-  return conditions
-    .map((condition) => {
-      const field = labels.get(condition.field) ?? condition.field;
-      const operator =
-        OPERATORS.find((entry) => entry.value === condition.operator)?.label ?? condition.operator;
-      return VALUELESS.has(condition.operator)
-        ? `${field} ${operator}`
-        : `${field} ${operator} ${valueText(condition.value)}`;
-    })
-    .join('; ');
-}
 
 interface TriggerConditionsEditorProps {
   idPrefix: string;
@@ -171,7 +30,7 @@ export function TriggerConditionsEditor({
   drafts,
   onChange,
 }: TriggerConditionsEditorProps) {
-  const suggestions = FIELD_SUGGESTIONS[source];
+  const suggestions = MANAGED_CLOUD_TRIGGER_EVENT_FIELDS[source];
   const update = (key: string, patch: Partial<TriggerConditionDraft>) =>
     onChange(drafts.map((draft) => (draft.key === key ? { ...draft, ...patch } : draft)));
 
@@ -199,9 +58,9 @@ export function TriggerConditionsEditor({
                     {entry.label}
                   </option>
                 ))}
-                <option value={OTHER_FIELD}>Other field…</option>
+                <option value={TRIGGER_CONDITION_OTHER_FIELD}>Other field…</option>
               </select>
-              {draft.field === OTHER_FIELD ? (
+              {draft.field === TRIGGER_CONDITION_OTHER_FIELD ? (
                 <Input
                   aria-label={`Condition ${index + 1} field path`}
                   value={draft.customField}
@@ -218,16 +77,18 @@ export function TriggerConditionsEditor({
               className={selectClass}
               value={draft.operator}
               onChange={(event) =>
-                update(draft.key, { operator: event.target.value as FieldConditionOperator })
+                update(draft.key, {
+                  operator: event.target.value as TriggerConditionDraft['operator'],
+                })
               }
             >
-              {OPERATORS.map((entry) => (
+              {MANAGED_CLOUD_TRIGGER_CONDITION_OPERATORS.map((entry) => (
                 <option key={entry.value} value={entry.value}>
                   {entry.label}
                 </option>
               ))}
             </select>
-            {VALUELESS.has(draft.operator) ? (
+            {!triggerConditionTakesValue(draft.operator) ? (
               <span aria-hidden="true" />
             ) : (
               <Input
@@ -237,11 +98,11 @@ export function TriggerConditionsEditor({
                 placeholder={
                   draft.operator === 'in'
                     ? 'first, second'
-                    : NUMERIC.has(draft.operator)
+                    : triggerConditionIsNumeric(draft.operator)
                       ? '0'
                       : 'Value'
                 }
-                inputMode={NUMERIC.has(draft.operator) ? 'decimal' : undefined}
+                inputMode={triggerConditionIsNumeric(draft.operator) ? 'decimal' : undefined}
                 spellCheck={false}
                 maxLength={500}
               />
@@ -259,19 +120,19 @@ export function TriggerConditionsEditor({
           </div>
         );
       })}
-      {drafts.length < MAX_TRIGGER_CONDITIONS ? (
+      {drafts.length < MANAGED_CLOUD_TRIGGER_MAX_CONDITIONS ? (
         <Button
           type="button"
           variant="outline"
           size="sm"
-          onClick={() => onChange([...drafts, newConditionDraft(source)])}
+          onClick={() => onChange([...drafts, newTriggerConditionDraft(source)])}
         >
           <Plus className="mr-1 h-4 w-4" aria-hidden="true" />
           Add condition
         </Button>
       ) : (
         <p className="text-xs text-muted-foreground">
-          A trigger holds up to {MAX_TRIGGER_CONDITIONS} conditions.
+          A trigger holds up to {MANAGED_CLOUD_TRIGGER_MAX_CONDITIONS} conditions.
         </p>
       )}
     </fieldset>

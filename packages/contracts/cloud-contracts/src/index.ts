@@ -41,6 +41,7 @@ export * from './connectors';
 export * from './capability-handshake';
 export * from './schedules';
 export * from './live-voice-tools';
+export * from './triggers';
 export * from './skills';
 export * from './plugin-marketplaces';
 export * from './device-registry';
