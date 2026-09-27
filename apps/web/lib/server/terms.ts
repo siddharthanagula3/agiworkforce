@@ -6,7 +6,7 @@ import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const CURRENT_TERMS_VERSION: string = POLICY_LAST_UPDATED.terms;
 
-export type TermsAcceptanceSurface = 'web-signup' | 'web-login';
+export type TermsAcceptanceSurface = 'web-signup' | 'web-login' | 'mobile-auth';
 
 export interface TermsAcceptance {
   version: string;
