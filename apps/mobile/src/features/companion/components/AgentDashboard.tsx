@@ -418,8 +418,10 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             accessibilityLabel={`Approve ${request.toolName}`}
             accessibilityRole="button"
           >
-            <ShieldCheck size={13} color="#fff" />
-            <Text className="text-xs font-semibold text-white">Approve</Text>
+            <ShieldCheck size={13} color={colors.accentText} />
+            <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
+              Approve
+            </Text>
           </Pressable>
           <Pressable
             onPress={handleReject}
@@ -428,8 +430,10 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             accessibilityLabel={`Reject ${request.toolName}`}
             accessibilityRole="button"
           >
-            <ShieldAlert size={13} color="#fff" />
-            <Text className="text-xs font-semibold text-white">Deny</Text>
+            <ShieldAlert size={13} color={colors.accentText} />
+            <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
+              Deny
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -1037,8 +1041,10 @@ export function AgentDashboard() {
             accessibilityLabel="Emergency stop, cancel all running tasks"
             accessibilityRole="button"
           >
-            <AlertOctagon size={18} color="#fff" />
-            <Text className="text-[15px] font-bold text-white">Emergency Stop</Text>
+            <AlertOctagon size={18} color={colors.accentText} />
+            <Text className="text-[15px] font-bold" style={{ color: colors.accentText }}>
+              Emergency Stop
+            </Text>
           </Pressable>
         </Animated.View>
       )}

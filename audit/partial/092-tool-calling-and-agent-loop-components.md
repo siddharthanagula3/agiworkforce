@@ -46,7 +46,7 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3947-3959`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | The gate misses four paths. Uploaded documents never raise the untrusted-content leg (only prior tool results do), so an injected upload plus a connector and url_fetch runs unasked; provider-native code execution, Anthropic native web_fetch and live-voice hosted tools run inside the provider turn unevaluated; scheduled runs use approvalMode auto without reading the account policy; and the deep-research loop executes url_fetch through its own runToolCalls with no policy evaluator. | handler |
+| platform | partial | Live voice and scheduled runs now read the approval policy (blockers 03 and 04). Still open: uploaded documents never raise the untrusted-content leg, and provider-native code execution and Anthropic native web_fetch skip the gate (blockers 01 and 02, in progress). | handler |
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:66-78`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts:166-169`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:2780-2792`, `apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts:108-113`
 

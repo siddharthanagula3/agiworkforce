@@ -282,13 +282,17 @@ export function CompanionDemoWalkthrough({ visible, onDone }: CompanionDemoWalkt
             >
               {isLast ? (
                 <>
-                  <CheckCircle2 size={16} color="#fff" />
-                  <Text className="text-sm font-semibold text-white">Done</Text>
+                  <CheckCircle2 size={16} color={colors.accentText} />
+                  <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
+                    Done
+                  </Text>
                 </>
               ) : (
                 <>
-                  <Text className="text-sm font-semibold text-white">Next</Text>
-                  <ChevronRight size={16} color="#fff" />
+                  <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
+                    Next
+                  </Text>
+                  <ChevronRight size={16} color={colors.accentText} />
                 </>
               )}
             </Pressable>

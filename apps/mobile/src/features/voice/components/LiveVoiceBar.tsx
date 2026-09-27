@@ -234,7 +234,7 @@ export function LiveVoiceBar({
           }}
         >
           {muted ? (
-            <MicOff size={22} color={colors.white} />
+            <MicOff size={22} color={colors.accentText} />
           ) : (
             <Mic size={22} color={status === 'live' ? colors.agentActive : colors.textSecondary} />
           )}

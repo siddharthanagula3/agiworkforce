@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Button } from '@agiworkforce/ui';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, grandfatheredYearlyBillingNotice } from '@agiworkforce/types';
 import type { PlanChangeState } from '../lib/billing-account-types';
 import {
   formatBillingDate,
@@ -30,11 +30,12 @@ export interface BillingPlanNoticesProps {
   catalogPriceLabel: string | null;
   paymentMethodLabel: string | null;
   openInvoice: OpenInvoiceLink | null;
-  resumePending: boolean;
-  resumeError: string | null;
+  actionPending: boolean;
+  actionError: string | null;
   portalPending: boolean;
   onResume: () => void;
   onOpenPortal: () => void;
+  onSwitchToMonthly?: () => void;
 }
 
 function Notice({
@@ -78,11 +79,12 @@ export function BillingPlanNotices({
   catalogPriceLabel,
   paymentMethodLabel,
   openInvoice,
-  resumePending,
-  resumeError,
+  actionPending,
+  actionError,
   portalPending,
   onResume,
   onOpenPortal,
+  onSwitchToMonthly,
 }: BillingPlanNoticesProps) {
   const stripeBilled = billingSource === 'stripe';
   const periodEnd =
@@ -102,8 +104,8 @@ export function BillingPlanNotices({
       variant="outline"
       className="pointer-coarse:h-11"
       onClick={onResume}
-      disabled={resumePending}
-      isLoading={resumePending}
+      disabled={actionPending}
+      isLoading={actionPending}
     >
       {label}
     </Button>
@@ -206,32 +208,81 @@ export function BillingPlanNotices({
     );
   }
 
+  const currentInterval = planState?.price?.interval ?? null;
+
   if (scheduled) {
     const nextLabel = getBillingPlanPricing(scheduled.plan).label;
     const switchOn = formatBillingDate(scheduled.effectiveAt);
+    const nextInterval = scheduled.price?.interval ?? null;
+    const cadenceOnly =
+      scheduled.plan === planState?.plan &&
+      nextInterval !== null &&
+      currentInterval !== null &&
+      nextInterval !== currentInterval;
     notices.push(
-      <Notice key="scheduled" tone="neutral" actions={resumeButton(`Keep ${planLabel}`)}>
+      <Notice
+        key="scheduled"
+        tone="neutral"
+        actions={resumeButton(
+          cadenceOnly ? `Keep ${currentInterval} billing` : `Keep ${planLabel}`,
+        )}
+      >
         <p className="font-medium">
-          Your plan switches to {nextLabel}
+          {cadenceOnly
+            ? `Your ${planLabel} plan switches to ${nextInterval} billing`
+            : `Your plan switches to ${nextLabel}`}
           {switchOn ? ` on ${switchOn}` : ''}
           {scheduled.price
             ? `, at ${formatRecurringMoney(scheduled.price.amountCents, scheduled.price.currency, scheduled.price.interval)} plus tax`
             : ''}
           .
         </p>
-        <p>You keep {planLabel} and its credits until then.</p>
+        <p>
+          {cadenceOnly
+            ? `You keep ${currentInterval} billing until then.`
+            : `You keep ${planLabel} and its credits until then.`}
+        </p>
       </Notice>,
     );
   }
 
-  if (notices.length === 0 && !resumeError) return null;
+  const grandfatheredNotice =
+    currentInterval === 'yearly' && planState
+      ? grandfatheredYearlyBillingNotice(planState.plan)
+      : null;
+  if (grandfatheredNotice && !endingSoon && !scheduled) {
+    notices.push(
+      <Notice
+        key="grandfathered"
+        tone="neutral"
+        actions={
+          stripeBilled && planState?.cadenceSwitch && onSwitchToMonthly ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="pointer-coarse:h-11"
+              onClick={onSwitchToMonthly}
+              disabled={actionPending}
+              isLoading={actionPending}
+            >
+              Switch to monthly billing
+            </Button>
+          ) : null
+        }
+      >
+        <p>{grandfatheredNotice}</p>
+      </Notice>,
+    );
+  }
+
+  if (notices.length === 0 && !actionError) return null;
 
   return (
     <div className="flex flex-col gap-3">
       {notices}
-      {resumeError ? (
+      {actionError ? (
         <p role="alert" className="text-[13px] text-destructive-text">
-          {resumeError}
+          {actionError}
         </p>
       ) : null}
     </div>

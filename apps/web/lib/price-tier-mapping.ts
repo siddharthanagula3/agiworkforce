@@ -3,6 +3,7 @@ import {
   isBillingPlanTier,
   isByokPlanTier,
   isFreeOfChargePlanTier,
+  isGrandfatheredBillingInterval,
   isLocalOnlyPlanTier,
   isPerSeatBillingPlan,
   type BillingInterval,
@@ -172,6 +173,12 @@ export function getConfiguredStripePriceIds(): string[] {
 export function isPriceIdRegistered(priceId: string | null | undefined): boolean {
   if (!priceId) return false;
   return normalizePriceId(priceId) in getTierMapping();
+}
+
+export function isGrandfatheredPriceId(priceId: string | null | undefined): boolean {
+  if (!priceId) return false;
+  const entry = getTierMapping()[normalizePriceId(priceId)];
+  return entry !== undefined && isGrandfatheredBillingInterval(entry.tier, entry.interval);
 }
 
 export function getEnterpriseProductId(): string | null {

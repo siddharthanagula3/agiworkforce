@@ -11,7 +11,11 @@ import {
   DialogTitle,
   Spinner,
 } from '@agiworkforce/ui';
-import { getBillingPlanPricing, type SelfServeIndividualPlanTier } from '@agiworkforce/types';
+import {
+  getBillingPlanPricing,
+  grandfatheredYearlyBillingNotice,
+  type SelfServeIndividualPlanTier,
+} from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { DowngradeBlock, PlanChangeState } from '../lib/billing-account-types';
 import { formatBillingDate, formatRecurringMoney } from '../lib/billing-format';
@@ -110,6 +114,8 @@ export function DowngradeReviewDialog({
   const effectiveOn = formatBillingDate(state?.periodEnd);
   const summary = state && target ? summarizePlanChange(state.plan, target.plan) : null;
   const scheduled = state?.scheduledChange ?? null;
+  const grandfatheredNotice =
+    state?.price?.interval === 'yearly' ? grandfatheredYearlyBillingNotice(state.plan) : null;
 
   async function confirm() {
     if (!target || submitting) return;
@@ -234,6 +240,10 @@ export function DowngradeReviewDialog({
               switch from Settings, Billing.
             </p>
           </section>
+        ) : null}
+
+        {grandfatheredNotice && target ? (
+          <p className="text-sm text-muted-foreground">{grandfatheredNotice}</p>
         ) : null}
 
         {scheduled && target && scheduled.plan !== target.plan ? (

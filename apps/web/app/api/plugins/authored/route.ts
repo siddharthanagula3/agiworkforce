@@ -15,6 +15,7 @@ import {
   type OwnedPluginSkill,
 } from '@/lib/services/plugin-owned-source-service';
 import { pluginKeyFrom } from '@/features/plugins/server/directory/archive';
+import { refusePluginInstall } from '@/features/plugins/server/directory/install-gate';
 import { installsDisabledResponse } from '@/features/plugins/server/directory/install-responses';
 import {
   CLAUDE_PLUGIN_SKILLS_DIRECTORY,
@@ -84,7 +85,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrf = await requireCsrfToken(request);
   if (csrf) return csrf as NextResponse;
 
-  const { db, userId, organizationId } = await getUserScopedDb(request);
+  const scope = await getUserScopedDb(request);
+  const { db, userId, organizationId } = scope;
   const limited = await withRateLimit(request, 'plugin-installation-write', `user:${userId}`);
   if (limited) return limited;
 
@@ -98,6 +100,12 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const key = pluginKeyFrom(parsed.data.name);
   if (!key) return rejected(uploadUnusableNameMessage(parsed.data.name));
+
+  const refused = await refusePluginInstall(request, scope, {
+    pluginKeys: [key],
+    authorsSkills: true,
+  });
+  if (refused) return refused;
 
   const skillFiles = skillFilesOf(parsed.data.skills);
   if ('issues' in skillFiles) {
