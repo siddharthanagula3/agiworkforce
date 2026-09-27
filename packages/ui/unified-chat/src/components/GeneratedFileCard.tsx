@@ -52,10 +52,10 @@ export interface GeneratedFileCardProps {
 function getKindIcon(kindLabel: string): ReactElement {
   const lower = kindLabel.toLowerCase();
   if (lower.includes('pdf')) {
-    return <FileText size={16} className="text-rose-400" aria-hidden />;
+    return <FileText size={16} className="text-rose-700 dark:text-rose-400" aria-hidden />;
   }
   if (lower.includes('word') || lower.includes('docx') || lower.includes('document')) {
-    return <FileText size={16} className="text-sky-400" aria-hidden />;
+    return <FileText size={16} className="text-sky-700 dark:text-sky-400" aria-hidden />;
   }
   if (
     lower.includes('excel') ||
@@ -63,21 +63,23 @@ function getKindIcon(kindLabel: string): ReactElement {
     lower.includes('csv') ||
     lower.includes('spreadsheet')
   ) {
-    return <FileSpreadsheet size={16} className="text-emerald-400" aria-hidden />;
+    return (
+      <FileSpreadsheet size={16} className="text-emerald-700 dark:text-emerald-400" aria-hidden />
+    );
   }
   if (lower.includes('pptx') || lower.includes('presentation')) {
-    return <Presentation size={16} className="text-amber-400" aria-hidden />;
+    return <Presentation size={16} className="text-amber-700 dark:text-amber-400" aria-hidden />;
   }
   if (lower.includes('archive') || lower.includes('zip')) {
-    return <Archive size={16} className="text-zinc-300" aria-hidden />;
+    return <Archive size={16} className="text-zinc-600 dark:text-zinc-300" aria-hidden />;
   }
   if (lower.includes('image')) {
-    return <ImageIcon size={16} className="text-fuchsia-400" aria-hidden />;
+    return <ImageIcon size={16} className="text-fuchsia-700 dark:text-fuchsia-400" aria-hidden />;
   }
   if (lower.includes('html')) {
-    return <Code2 size={16} className="text-orange-400" aria-hidden />;
+    return <Code2 size={16} className="text-orange-700 dark:text-orange-400" aria-hidden />;
   }
-  return <Layers size={16} className="text-zinc-400" aria-hidden />;
+  return <Layers size={16} className="text-zinc-600 dark:text-zinc-400" aria-hidden />;
 }
 
 // `GeneratedFileKind` has no video member, so a video asset arrives with the
@@ -103,7 +105,7 @@ function VideoMarker({ overlay }: { overlay: boolean }) {
       {overlay ? (
         <Play className="h-4 w-4 fill-white text-white" aria-hidden />
       ) : (
-        <Video size={16} className="text-indigo-300" aria-hidden />
+        <Video size={16} className="text-indigo-700 dark:text-indigo-300" aria-hidden />
       )}
     </span>
   );
@@ -139,7 +141,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
       <span
         role="status"
         aria-live="polite"
-        className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300"
+        className="inline-flex items-center gap-1 rounded-full bg-success-fill/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-success-text"
       >
         <ShieldCheck className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
@@ -150,7 +152,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
     <span
       role="status"
       aria-live="polite"
-      className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-zinc-300"
+      className="inline-flex items-center gap-1 rounded-full bg-zinc-500/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
     >
       <Clock className="h-3 w-3" aria-hidden />
       {presentation.statusLabel}

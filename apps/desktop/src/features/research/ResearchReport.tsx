@@ -25,11 +25,11 @@ export interface ResearchReportProps {
 }
 
 const CONFIDENCE_COLORS: Record<string, string> = {
-  very_low: 'bg-red-500/15 text-red-400 border-red-500/30',
-  low: 'bg-orange-500/15 text-orange-400 border-orange-500/30',
-  medium: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30',
-  high: 'bg-green-500/15 text-green-400 border-green-500/30',
-  very_high: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+  very_low: 'bg-danger-fill/10 text-danger-text border-danger-fill/30',
+  low: 'bg-warning-fill/10 text-warning-text border-warning-fill/30',
+  medium: 'bg-warning-fill/10 text-warning-text border-warning-fill/30',
+  high: 'bg-success-fill/10 text-success-text border-success-fill/30',
+  very_high: 'bg-success-fill/10 text-success-text border-success-fill/30',
 };
 
 export const ResearchReport = memo(function ResearchReport({
@@ -107,7 +107,7 @@ export const ResearchReport = memo(function ResearchReport({
             className="gap-1.5 border-white/10 text-slate-300 hover:border-white/20 hover:text-white"
           >
             {copied ? (
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+              <CheckCircle2 className="h-3.5 w-3.5 text-success-text" />
             ) : (
               <Copy className="h-3.5 w-3.5" />
             )}
@@ -146,7 +146,7 @@ export const ResearchReport = memo(function ResearchReport({
           <ul className="space-y-1.5">
             {result.key_findings.map((finding, idx) => (
               <li key={idx} className="flex items-start gap-2 text-sm text-slate-300">
-                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-success-text" />
                 <span>{finding}</span>
               </li>
             ))}

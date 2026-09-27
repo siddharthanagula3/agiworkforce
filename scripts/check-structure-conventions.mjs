@@ -759,7 +759,6 @@ const desktopFeatureForbiddenImports = [
 const userFacingCliDocs = [
   'README.md',
   'apps/cli/README.md',
-  'apps/cli/npm/README.md',
   'apps/cli/scripts/demo.sh',
   'docs/surfaces/cli.md',
   'docs/development/agent-operability.md',
@@ -883,8 +882,6 @@ requireIncludes(
 requireIncludes('apps/cli/Cargo.toml', 'default-run = "agi"');
 requireIncludes('apps/cli/Cargo.toml', 'name = "agi"\npath = "src/main.rs"');
 requireIncludes('apps/cli/Cargo.toml', 'name = "agiworkforce"\npath = "src/bin/agiworkforce.rs"');
-requireIncludes('apps/cli/npm/package.json', '"agi": "bin/agi.js"');
-requireIncludes('apps/cli/npm/package.json', '"agiworkforce": "bin/agiworkforce.js"');
 requireIncludes('vercel.json', 'bash apps/web/scripts/build-with-chat.sh');
 requireIncludes(
   'apps/web/scripts/build-with-chat.sh',
@@ -896,7 +893,7 @@ requireIncludes('.github/workflows/release-cli.yml', "- 'v-cli-*'");
 requireIncludes('.github/workflows/release-cli.yml', 'agiworkforce-*.${{ matrix.archive }}');
 requireIncludes('.github/workflows/release-cli.yml', 'platform: linux-arm64');
 requireIncludes('.github/workflows/release-cli.yml', 'Replace("win32-", "windows-")');
-requireIncludes('scripts/install.sh', 'agiworkforce-{platform}.{ext}');
+requireIncludes('apps/web/public/install.sh', 'agiworkforce-{platform}.{ext}');
 requireIncludes('scripts/update-homebrew-tap.sh', 'agiworkforce-$platform.tar.gz');
 requireIncludes('scripts/update-homebrew-tap.sh', 'SHA_LINUX_ARM64');
 

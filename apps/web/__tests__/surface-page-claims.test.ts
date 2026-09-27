@@ -760,7 +760,7 @@ describe('/changelog, the served-by line names where the code renders it', () =>
 
 describe('/changelog, CLI v1.0 promises no install route the release cannot serve', () => {
   it('reads the provenance gate install.sh actually enforces', () => {
-    const installer = repoText('scripts', 'install.sh');
+    const installer = repoText('apps', 'web', 'public', 'install.sh');
     expect(installer).toMatch(/releases\/download\/\$\{version\}\/SHA256SUMS/u);
     expect(installer).toMatch(
       /Release signature metadata is missing; refusing to install unverified bytes/u,

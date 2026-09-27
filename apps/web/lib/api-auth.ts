@@ -49,6 +49,7 @@ export interface AuthResult {
 export interface AuthOptions {
   apiKeyScope?: ApiKeyScope;
   mfaGateExemptForOwner?: boolean;
+  mfaEnrollment?: boolean;
 }
 
 const EXEMPT_ORGANIZATION_ROLE = 'owner';
@@ -63,10 +64,16 @@ async function isExemptOrganizationOwner(userId: string): Promise<boolean> {
  * outside help: enabling `requireMfa` while unenrolled, or the ip allow list
  * excluding the owner's own network, would otherwise leave the workspace with
  * no self-service way to turn the policy back off. Only the caller's own
- * exemption opt-in and the requester actually being an owner skip it; the ip
- * allow list is never exempted here.
+ * exemption opt-in and the requester actually being an owner skip it, and so
+ * does a route that enrolls the caller's own second factor, which is how any
+ * member meets the policy; the ip allow list is never exempted here.
  */
-async function assertMfaPolicyUnlessExemptOwner(userId: string, exempt: boolean): Promise<void> {
+async function assertMfaPolicyUnlessExemptOwner(
+  userId: string,
+  exempt: boolean,
+  enrollment = false,
+): Promise<void> {
+  if (enrollment) return;
   if (exempt && (await isExemptOrganizationOwner(userId))) return;
   await assertMfaPolicy(userId);
 }
@@ -317,6 +324,7 @@ export async function getClerkAuthUser(
         await assertMfaPolicyUnlessExemptOwner(
           result.userId,
           options.mfaGateExemptForOwner ?? false,
+          options.mfaEnrollment,
         );
         await assertIpAllowList(result.userId, request);
         return { userId: result.userId };
@@ -331,7 +339,11 @@ export async function getClerkAuthUser(
       await assertSessionWithinAbsoluteLifetime(sessionId, auth.userId);
       await assertAccountActive(auth.userId, request);
       setTenantScope({ userId: auth.userId });
-      await assertMfaPolicyUnlessExemptOwner(auth.userId, options.mfaGateExemptForOwner ?? false);
+      await assertMfaPolicyUnlessExemptOwner(
+        auth.userId,
+        options.mfaGateExemptForOwner ?? false,
+        options.mfaEnrollment,
+      );
       await assertIpAllowList(auth.userId, request);
       return auth;
     }
@@ -346,7 +358,11 @@ export async function getClerkAuthUser(
     await assertSessionWithinAbsoluteLifetime(sessionId, userId);
     await assertAccountActive(userId, request);
     setTenantScope({ userId });
-    await assertMfaPolicyUnlessExemptOwner(userId, options.mfaGateExemptForOwner ?? false);
+    await assertMfaPolicyUnlessExemptOwner(
+      userId,
+      options.mfaGateExemptForOwner ?? false,
+      options.mfaEnrollment,
+    );
     await assertIpAllowList(userId, request);
     return authResultFor(account);
   }

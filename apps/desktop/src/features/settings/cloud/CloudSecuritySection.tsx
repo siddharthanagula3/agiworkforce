@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
+  cloudWebActionFor,
   getCloudTwoFactorStatus,
   listCloudSecurityActivity,
   type CloudSecurityActivity,
   type CloudTwoFactorStatus,
+  type CloudWebAction,
 } from '../../../api/cloudAccountSettings';
 import {
   isPresentationModeEnabled,
   setPresentationModeEnabled,
 } from '../../../services/ownedWindowPresentation';
 import { CloudBridgedSection } from './CloudBridgedSection';
+import { CloudWebActionNotice } from './CloudWebActionNotice';
 import { SectionError, SectionHeading, SectionLoading, formatSettingsDate } from './sectionChrome';
 
 function PresentationModeRow() {
@@ -57,12 +60,14 @@ export function CloudSecuritySection() {
   const [activity, setActivity] = useState<CloudSecurityActivity[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
     const current = ++generation.current;
     setLoading(true);
     setError(null);
+    setWebAction(null);
     try {
       const [status, entries] = await Promise.all([
         getCloudTwoFactorStatus(),
@@ -73,9 +78,12 @@ export function CloudSecuritySection() {
       setActivity(entries);
     } catch (caught) {
       if (generation.current === current) {
-        setError(
-          caught instanceof Error ? caught.message : 'Could not load your Cloud security status.',
-        );
+        const action = cloudWebActionFor(caught);
+        if (action) setWebAction(action);
+        else
+          setError(
+            caught instanceof Error ? caught.message : 'Could not load your Cloud security status.',
+          );
       }
     } finally {
       if (generation.current === current) setLoading(false);
@@ -98,6 +106,7 @@ export function CloudSecuritySection() {
 
       {loading ? <SectionLoading label="Loading Cloud security status…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {webAction ? <CloudWebActionNotice action={webAction} /> : null}
 
       {!loading && twoFactor ? (
         <div className="rounded-lg border border-border bg-card/40 p-5">
@@ -113,9 +122,9 @@ export function CloudSecuritySection() {
           </div>
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
             {twoFactor.enabled
-              ? `${twoFactor.backupCodesRemaining} backup ${
-                  twoFactor.backupCodesRemaining === 1 ? 'code' : 'codes'
-                } remaining.`
+              ? twoFactor.backupCodesReady
+                ? 'Backup codes are set.'
+                : 'No backup codes are set. Generate a set in credential settings so you can still sign in without your authenticator app.'
               : 'Add a second factor to protect the account this Desktop is connected to.'}
           </p>
         </div>

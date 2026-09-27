@@ -134,7 +134,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === 'deny.toml' ||
       file.startsWith('rust-toolchain') ||
       syncParitySource ||
-      (isWithin(file, 'apps/cli') && !isWithin(file, 'apps/cli/npm')) ||
+      isWithin(file, 'apps/cli') ||
       isWithin(file, 'apps/desktop/src-tauri') ||
       isWithin(file, 'crates')
     ) {

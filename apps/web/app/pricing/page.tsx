@@ -18,6 +18,7 @@ import {
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   getModelMetadataById,
+  getPlanContextWindowTokens,
   isPlanSelectableOnSurface,
   isPerSeatBillingPlan,
   isFreeBillingPlanTier,
@@ -136,6 +137,7 @@ const COMPARISON_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ['price', 'Price'],
   ['billingInterval', 'Billing'],
   ['usageCapacity', 'Managed usage'],
+  ['contextWindow', 'Context window'],
   ['managedChat', BILLING_PLAN_CAPABILITY_LABELS.managed_chat],
   ['projects', 'Projects'],
   ['customMcp', 'Custom MCP'],
@@ -185,6 +187,7 @@ interface CompareRow {
   price: string;
   billingInterval: string;
   usageCapacity: string;
+  contextWindow: string;
   managedChat: string;
   projects: string;
   customMcp: string;
@@ -218,9 +221,22 @@ function capabilityCell(plan: BillingPlanTier, capability: BillingPlanCapability
   return canUseBillingPlanCapability(plan, capability) ? 'Yes' : 'No';
 }
 
+const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 2,
+});
+
+function contextWindowCell(plan: BillingPlanTier): string {
+  const tokens = getPlanContextWindowTokens(plan);
+  return tokens === null
+    ? 'Model-dependent'
+    : `Up to ${CONTEXT_WINDOW_FORMAT.format(tokens)} tokens`;
+}
+
 function managedPlanCapabilities(plan: BillingPlanTier) {
   const limits = getBillingPlanProductLimits(plan);
   return {
+    contextWindow: contextWindowCell(plan),
     managedChat: capabilityCell(plan, 'managed_chat'),
     projects: limits ? formatLimit(limits.projects, 'project', 'projects') : ', ',
     customMcp: limits ? formatLimit(limits.customMcpServers, 'custom MCP', 'custom MCP') : ', ',
@@ -449,6 +465,10 @@ export default function PricingPage() {
     ['active', 'trialing'].includes(billing.status ?? '');
   const stripeSubscriber =
     hasActivePaidPlan && accountSubscription?.subscription_source === 'stripe';
+  const paymentOverdue =
+    billing != null &&
+    !isFreeBillingPlanTier(billing.plan) &&
+    ['past_due', 'unpaid'].includes(billing.status ?? '');
 
   useEffect(() => {
     if (!stripeSubscriber) return;
@@ -505,7 +525,7 @@ export default function PricingPage() {
   }
 
   const unavailableCheckoutPlans: CheckoutPlan[] =
-    user && !hasActivePaidPlan && pricingStatus === 'ready'
+    user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'ready'
       ? SELF_SERVE_PAID_PLAN_TIERS.filter((plan) => !isPlanCheckoutReady(plan))
       : [];
 
@@ -559,6 +579,13 @@ export default function PricingPage() {
         <button type="button" className="agi-tier-cta" disabled>
           Checking account…
         </button>
+      );
+    }
+    if (paymentOverdue) {
+      return (
+        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
+          Update payment
+        </Link>
       );
     }
     const relationship = planRelationship(plan);
@@ -803,6 +830,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareLocalUsage'),
+      contextWindow: 'Model-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited local',
@@ -823,6 +851,7 @@ export default function PricingPage() {
       price: t('free'),
       billingInterval: t('foreverLabel'),
       usageCapacity: t('compareByokUsage'),
+      contextWindow: 'Provider-dependent',
       managedChat: 'No',
       projects: 'Device-bound',
       customMcp: 'Unlimited custom',
@@ -1108,8 +1137,8 @@ export default function PricingPage() {
                 style={{ margin: 0, fontSize: 13, color: 'var(--agi-ink-quiet)' }}
               >
                 {teamInterval === 'yearly'
-                  ? t('seatTotalAnnual', { count: teamSeats, total: teamYearlyTotalPrice })
-                  : t('seatTotal', { count: teamSeats, total: teamTotalPrice })}
+                  ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
+                  : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
               </p>
               <div className="agi-tier-cta-group">
                 {renderPlanAction(
@@ -1167,7 +1196,17 @@ export default function PricingPage() {
         >
           <h2 className="sr-only">{t('audienceIndividual')}</h2>
 
-          {user && !hasActivePaidPlan && pricingStatus === 'loading' ? (
+          {paymentOverdue ? (
+            <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
+              Your last payment didn&rsquo;t go through. Pay the open invoice or update your payment
+              method in{' '}
+              <Link href="/settings/billing" className="agi-ds-link">
+                Billing
+              </Link>{' '}
+              before you change plans.
+            </p>
+          ) : null}
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'loading' ? (
             <p
               role="status"
               className="agi-fl-section-lede"
@@ -1176,7 +1215,7 @@ export default function PricingPage() {
               Loading checkout availability…
             </p>
           ) : null}
-          {user && !hasActivePaidPlan && pricingStatus === 'error' ? (
+          {user && !hasActivePaidPlan && !paymentOverdue && pricingStatus === 'error' ? (
             <p role="alert" className="agi-fl-section-lede" style={{ marginTop: 'var(--space-4)' }}>
               Checkout availability could not be verified. Refresh this page to try again.
             </p>
@@ -1427,6 +1466,7 @@ export default function PricingPage() {
                         {row.usageCapacity}
                       </td>
                       {[
+                        row.contextWindow,
                         row.managedChat,
                         row.projects,
                         row.customMcp,

@@ -134,7 +134,7 @@ describe('ErrorToast', () => {
       });
       rerender(<ErrorToastContainer />);
       const warningAlert = screen.getByRole('alert');
-      expect(warningAlert).toHaveClass('bg-yellow-50');
+      expect(warningAlert).toHaveClass('bg-warning-fill/10');
 
       act(() => {
         useErrorStore.getState().clearHistory();
@@ -146,7 +146,7 @@ describe('ErrorToast', () => {
       });
       rerender(<ErrorToastContainer />);
       const errorAlert = screen.getByRole('alert');
-      expect(errorAlert).toHaveClass('bg-red-50');
+      expect(errorAlert).toHaveClass('bg-danger-fill/10');
     });
 
     it('should limit number of visible toasts', () => {

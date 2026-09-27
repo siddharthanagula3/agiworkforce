@@ -17,12 +17,12 @@ describe('Alert', () => {
 
   it('applies success variant styling', () => {
     render(<Alert variant="success">Done</Alert>);
-    expect(screen.getByRole('alert').className).toContain('border-green-500/50');
+    expect(screen.getByRole('alert').className).toContain('border-success-fill/50');
   });
 
   it('applies warning variant styling', () => {
     render(<Alert variant="warning">Careful</Alert>);
-    expect(screen.getByRole('alert').className).toContain('border-yellow-500/50');
+    expect(screen.getByRole('alert').className).toContain('border-warning-fill/50');
   });
 
   it('lets callers override aria-live', () => {

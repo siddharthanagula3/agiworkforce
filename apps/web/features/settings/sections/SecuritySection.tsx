@@ -20,11 +20,14 @@ import { PasskeysPanel } from '@features/settings/components/Settings/PasskeysPa
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
+import { useCurrentUser } from '@/lib/identity/client';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 export function SecuritySection() {
   const { data: serverSettings, isLoading } = useUserSettings();
   const updateSettingsMutation = useUpdateSettings();
   const changePasswordMutation = useChangePassword();
+  const hasPassword = useCurrentUser().user?.hasPassword === true;
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -39,6 +42,7 @@ export function SecuritySection() {
   const passwordForm = useForm<ChangePasswordFormData>({
     resolver: zodResolver(changePasswordSchema),
     defaultValues: {
+      currentPassword: '',
       newPassword: '',
       confirmPassword: '',
     },
@@ -76,8 +80,16 @@ export function SecuritySection() {
 
   const handlePasswordChange = useCallback(
     (data: ChangePasswordFormData) => {
+      if (hasPassword && !data.currentPassword) {
+        passwordForm.setError('currentPassword', { message: 'Enter your current password' });
+        return;
+      }
       changePasswordMutation.mutate(
-        { newPassword: data.newPassword, confirmPassword: data.confirmPassword },
+        {
+          currentPassword: hasPassword ? (data.currentPassword ?? null) : null,
+          newPassword: data.newPassword,
+          confirmPassword: data.confirmPassword,
+        },
         {
           onSuccess: () => {
             passwordForm.reset();
@@ -85,7 +97,7 @@ export function SecuritySection() {
         },
       );
     },
-    [changePasswordMutation, passwordForm],
+    [changePasswordMutation, hasPassword, passwordForm],
   );
 
   return (
@@ -105,6 +117,9 @@ export function SecuritySection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Passkeys, two-factor authentication, session timeout, and password.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="account-security" label="How account security works" />
+        </div>
       </div>
 
       <PasskeysPanel />
@@ -120,6 +135,7 @@ export function SecuritySection() {
           isSaving={updateSettingsMutation.isPending || changePasswordMutation.isPending}
           isUpdateSettingsPending={updateSettingsMutation.isPending}
           isChangePasswordPending={changePasswordMutation.isPending}
+          hasPassword={hasPassword}
           showNewPassword={showNewPassword}
           showConfirmPassword={showConfirmPassword}
           onSaveSecurity={handleSaveSecurity}
@@ -128,6 +144,8 @@ export function SecuritySection() {
           onToggleShowConfirmPassword={() => setShowConfirmPassword((p) => !p)}
         />
       )}
+
+      {changePasswordMutation.stepUpDialog}
 
       <AuditLogPanel />
 

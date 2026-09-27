@@ -4,7 +4,7 @@ export const AVAILABLE_NOW_LABEL = 'Available now';
 export const SURFACE_STATUS = {
   web: AVAILABLE_NOW_LABEL,
   desktop: COMING_SOON_LABEL,
-  cli: AVAILABLE_NOW_LABEL,
+  cli: COMING_SOON_LABEL,
   mobile: COMING_SOON_LABEL,
   vscode: COMING_SOON_LABEL,
   chrome: COMING_SOON_LABEL,

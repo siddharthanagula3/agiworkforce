@@ -4,6 +4,7 @@ import {
   auth,
   AuthorizationServerMismatchError,
   discoverOAuthServerInfo,
+  IssuerMismatchError,
   OAuthError,
   RegistrationRejectedError,
 } from '@modelcontextprotocol/client';
@@ -14,8 +15,10 @@ import { TOKEN_REQUEST_TIMEOUT_MS } from '@/lib/connectors/oauth-client';
 import { generateOAuthState } from '@/lib/connectors/pkce';
 import {
   McpOAuthClientProvider,
+  McpPkceUnsupportedError,
   type McpOAuthProviderSeed,
 } from '@/lib/connectors/mcp-oauth-provider';
+import { McpOAuthEgressRefusedError, mcpOAuthFetch } from '@/lib/connectors/mcp-oauth-fetch';
 import { deleteMcpOAuthClient } from '@/lib/connectors/mcp-oauth-clients';
 import {
   createPendingAuthorization,
@@ -45,6 +48,8 @@ export type McpAuthorizationFailure =
   | 'registration-rejected'
   /** The MCP server moved to a different authorization server (SEP-2352). */
   | 'authorization-server-changed'
+  | 'pkce-unsupported'
+  | 'issuer-mismatch'
   | 'unexpected';
 
 function describeFailure(error: unknown): {
@@ -58,6 +63,20 @@ function describeFailure(error: unknown): {
         'This server now uses a different authorization server than the one your existing ' +
         'authorization was issued by. Reconnect to authorize against the new one.',
     };
+  }
+  if (error instanceof McpPkceUnsupportedError) {
+    return { reason: 'pkce-unsupported', message: error.message };
+  }
+  if (error instanceof IssuerMismatchError) {
+    return {
+      reason: 'issuer-mismatch',
+      message:
+        'The authorization response did not come from the authorization server this connection ' +
+        'was started with, so it was discarded. Connect again.',
+    };
+  }
+  if (error instanceof McpOAuthEgressRefusedError) {
+    return { reason: 'discovery-failed', message: error.message };
   }
   if (error instanceof RegistrationRejectedError) {
     return {
@@ -78,7 +97,7 @@ function describeFailure(error: unknown): {
 
 export async function mcpServerRequiresAuthorization(mcpUrl: string): Promise<boolean> {
   try {
-    const info = await discoverOAuthServerInfo(mcpUrl);
+    const info = await discoverOAuthServerInfo(mcpUrl, { fetchFn: mcpOAuthFetch });
     return Boolean(info.resourceMetadata ?? info.authorizationServerMetadata);
   } catch {
     return true;
@@ -104,7 +123,7 @@ async function ceilingScopeFor(
 
   let advertised: readonly string[] | undefined;
   try {
-    const info = await discoverOAuthServerInfo(mcpUrl);
+    const info = await discoverOAuthServerInfo(mcpUrl, { fetchFn: mcpOAuthFetch });
     advertised =
       info.resourceMetadata?.scopes_supported ?? info.authorizationServerMetadata?.scopes_supported;
   } catch {
@@ -145,7 +164,7 @@ export async function beginMcpAuthorization(
     if (ceiling) scope = ceiling.scope;
   }
   const state = generateOAuthState();
-  const provider = new McpOAuthClientProvider({ mcpUrl, state });
+  const provider = new McpOAuthClientProvider({ mcpUrl, state, refuseWithoutPkce: true });
 
   if (!provider.redirectUrl) {
     return {
@@ -162,6 +181,7 @@ export async function beginMcpAuthorization(
   try {
     result = await auth(provider, {
       serverUrl: mcpUrl,
+      fetchFn: mcpOAuthFetch,
       ...(scope ? { scope } : {}),
     });
   } catch (error) {
@@ -264,8 +284,9 @@ export async function completeMcpAuthorization(input: {
   try {
     await auth(provider, {
       serverUrl: mcpUrl,
+      fetchFn: mcpOAuthFetch,
       authorizationCode: input.code,
-      ...(input.iss ? { iss: input.iss } : {}),
+      ...(input.iss === undefined ? {} : { iss: input.iss }),
     });
   } catch (error) {
     const described = describeFailure(error);
@@ -331,14 +352,13 @@ export type McpRefreshOutcome =
       grantedScopes: string[];
       accessTokenExpiresAt: Date | null;
     }
-  /**
-   * The MCP server now points at a DIFFERENT authorization server than the one
-   * this grant was minted by (SEP-2352). The stored credential is not merely
-   * stale, it is addressed to a party that is no longer the right audience, so
-   * it must be discarded rather than refreshed.
-   */
   | { status: 'authorization-server-changed' }
+  | { status: 'rejected' }
   | { status: 'failed'; message: string };
+
+function sameIssuer(left: string, right: string): boolean {
+  return left.replace(/\/$/, '') === right.replace(/\/$/, '');
+}
 
 export async function refreshDiscoveredGrant(input: {
   mcpUrl: string;
@@ -370,11 +390,12 @@ export async function refreshDiscoveredGrant(input: {
   });
 
   const deadline = createDeadline(TOKEN_REQUEST_TIMEOUT_MS);
+  let result: Awaited<ReturnType<typeof auth>>;
   try {
-    await auth(provider, {
+    result = await auth(provider, {
       serverUrl: input.mcpUrl,
       fetchFn: (url, init) =>
-        fetch(url, {
+        mcpOAuthFetch(url, {
           ...init,
           signal: init?.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal,
         }),
@@ -395,6 +416,14 @@ export async function refreshDiscoveredGrant(input: {
     deadline.release();
   }
 
+  if (provider.issuer !== null && !sameIssuer(provider.issuer, input.issuer)) {
+    logger.warn(
+      { mcpUrl: input.mcpUrl },
+      '[mcp-discovery] authorization server changed under a live grant; forcing reconnect',
+    );
+    return { status: 'authorization-server-changed' };
+  }
+
   const tokens = provider.resolvedTokens as
     | {
         access_token?: string;
@@ -405,8 +434,10 @@ export async function refreshDiscoveredGrant(input: {
       }
     | undefined;
 
-  if (!tokens?.access_token) {
-    return { status: 'failed', message: 'Refresh returned no access token.' };
+  if (result !== 'AUTHORIZED' || !tokens?.access_token) {
+    return tokens?.refresh_token
+      ? { status: 'failed', message: 'The authorization server did not refresh the token.' }
+      : { status: 'rejected' };
   }
 
   return {

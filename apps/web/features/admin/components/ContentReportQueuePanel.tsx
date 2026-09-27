@@ -134,7 +134,7 @@ export default function ContentReportQueuePanel() {
       {loadError ? (
         <div
           role="alert"
-          className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-100"
+          className="flex items-start gap-2 rounded-md border border-danger-fill/30 bg-danger-fill/10 p-3 text-sm text-danger-text"
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           {loadError}
@@ -165,13 +165,13 @@ export default function ContentReportQueuePanel() {
             className="rounded-md border border-border bg-card p-4"
           >
             <div className="flex flex-wrap items-center gap-2">
-              <Flag className="h-4 w-4 text-amber-600 dark:text-amber-300" aria-hidden="true" />
+              <Flag className="h-4 w-4 text-warning-text" aria-hidden="true" />
               <span className="text-sm text-foreground">{report.category}</span>
               <span className="rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
                 {report.status}
               </span>
               {report.overdue ? (
-                <span className="rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-xs text-red-700 dark:text-red-100">
+                <span className="rounded-md border border-danger-fill/30 bg-danger-fill/10 px-2 py-1 text-xs text-danger-text">
                   Past SLA · due {formatTimestamp(report.dueAt)}
                 </span>
               ) : null}

@@ -413,7 +413,7 @@ describe('developer session runtime', () => {
 
     expect(status.available).toBe(false);
     expect(status.path).toBeNull();
-    expect(status.hint).toContain('agiworkforce.com/download');
+    expect(status.hint).toContain('agiworkforce.com/install.sh');
   });
 
   it('refuses a CLI older than the runtime this app supports, naming the floor', async () => {
@@ -450,7 +450,7 @@ describe('developer session runtime', () => {
     expect(list.groups).toHaveLength(1);
     expect(list.groups[0]?.sessions).toEqual([]);
     expect(list.groups[0]?.unavailable?.message).toContain('not on this app');
-    expect(list.groups[0]?.unavailable?.hint).toContain('agiworkforce.com/download');
+    expect(list.groups[0]?.unavailable?.hint).toContain('agiworkforce.com/install.sh');
   });
 
   it('reads the models, the configured default and the account in one call', async () => {

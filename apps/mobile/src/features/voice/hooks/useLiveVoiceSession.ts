@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
+import type {
+  LiveVoicePendingApproval,
+  LiveVoiceToolDecision,
+} from '@agiworkforce/cloud-contracts';
 import { useChatStore } from '@/stores/chatStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
 import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
@@ -40,6 +44,8 @@ export interface LiveVoiceController {
   interrupted: boolean;
   turns: LiveTranscriptTurn[];
   error: string | null;
+  approvals: readonly LiveVoicePendingApproval[];
+  decideToolApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   toggleMute: () => void;
   retry: () => void;
 }
@@ -67,6 +73,7 @@ export function useLiveVoiceSession({
   const [interrupted, setInterrupted] = useState(false);
   const [turns, setTurns] = useState<LiveTranscriptTurn[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [approvals, setApprovals] = useState<readonly LiveVoicePendingApproval[]>([]);
   const [attempt, setAttempt] = useState(0);
 
   const sessionRef = useRef<LiveVoiceSession | null>(null);
@@ -109,6 +116,7 @@ export function useLiveVoiceSession({
     setTurns([]);
     setMuted(false);
     setInterrupted(false);
+    setApprovals([]);
 
     const finish = (session: LiveVoiceSession, closed: LiveSessionClosed) => {
       void liveVoice?.settleLiveVoiceSession(session.sessionId, session.settlement, closed);
@@ -141,6 +149,9 @@ export function useLiveVoiceSession({
           onBackendBusy: (busy) => {
             if (!cancelled) setBackendBusy(busy);
           },
+          onToolApprovals: (pending) => {
+            if (!cancelled) setApprovals(pending);
+          },
           onTranscript: recordTurn,
           onInterrupted: () => {
             if (!cancelled) setInterrupted(true);
@@ -153,6 +164,7 @@ export function useLiveVoiceSession({
             if (cancelled) return;
             setStatus('idle');
             setBackendBusy(false);
+            setApprovals([]);
             endedRef.current(
               closed.reason === 'close_requested' ? null : LIVE_VOICE_MESSAGE.sessionEnded,
             );
@@ -162,6 +174,7 @@ export function useLiveVoiceSession({
             if (cancelled) return;
             setStatus('error');
             setBackendBusy(false);
+            setApprovals([]);
             setError(message);
           },
         },
@@ -192,6 +205,7 @@ export function useLiveVoiceSession({
       setStatus('idle');
       setAssistantSpeaking(false);
       setBackendBusy(false);
+      setApprovals([]);
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
     });
 
@@ -203,6 +217,7 @@ export function useLiveVoiceSession({
       setStatus('idle');
       setAssistantSpeaking(false);
       setBackendBusy(false);
+      setApprovals([]);
       if (session) void session.close().then((closed) => finish(session, closed));
     };
   }, [active, attempt, recordTurn]);
@@ -217,6 +232,10 @@ export function useLiveVoiceSession({
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
+  const decideToolApproval = useCallback((callId: string, decision: LiveVoiceToolDecision) => {
+    void sessionRef.current?.decideToolApproval(callId, decision);
+  }, []);
+
   return {
     status,
     muted,
@@ -225,6 +244,8 @@ export function useLiveVoiceSession({
     interrupted,
     turns,
     error,
+    approvals,
+    decideToolApproval,
     toggleMute,
     retry,
   };

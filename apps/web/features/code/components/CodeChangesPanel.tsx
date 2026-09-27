@@ -21,16 +21,15 @@ import {
   DropdownMenuTrigger,
   Spinner,
 } from '@agiworkforce/ui';
-import type { CloudCodeSession, CloudCodeTerminalEntry } from '@agiworkforce/types';
 import {
-  CODE_COPY,
-  CODE_LIMITS,
-  changeStateLabel,
-  continueInVsCodeHref,
-  repositoryLabel,
-} from '../code-surface';
+  cloudCodePullRequestLabel,
+  cloudCodeRepositoryLabel,
+  type CloudCodeSession,
+  type CloudCodeTerminalEntry,
+} from '@agiworkforce/types';
+import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
+import { CODE_COPY, CODE_LIMITS, changeStateLabel, continueInVsCodeHref } from '../code-surface';
 import { diffByPath, diffLineKind } from '../code-diff';
-import type { CloudCodeChanges } from '../services/cloud-code-api';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -185,7 +184,7 @@ export function CodeChangesPanel({
           <GitBranch size={GLYPH_SIZE} aria-hidden="true" />
           {hasRepository && workingBranch ? (
             <>
-              <span>{base ?? repositoryLabel(session.repositoryUrl ?? '')}</span>
+              <span>{base ?? cloudCodeRepositoryLabel(session.repositoryUrl ?? '')}</span>
               <ArrowRight size={GLYPH_SIZE} aria-hidden="true" />
               <span className={styles['changesBranchName']}>{workingBranch}</span>
             </>
@@ -319,7 +318,7 @@ export function CodeChangesPanel({
                 rel="noopener noreferrer"
               >
                 <ExternalLink size={GLYPH_SIZE} aria-hidden="true" />
-                <span>{`${CODE_COPY.pullRequestChipPrefix} #${session.pullRequestNumber ?? ''}`}</span>
+                <span>{cloudCodePullRequestLabel(session)}</span>
               </a>
             ) : (
               <>

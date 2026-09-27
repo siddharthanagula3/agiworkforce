@@ -90,11 +90,8 @@ requireIncludes(
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:audit-inventory');
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:ui-gaps');
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:ui-gaps:monotonic');
-requireIncludes(
-  '.github/workflows/repo-operability.yml',
-  'needs: [validate-version, build, sign-release-assets]',
-);
-requireNotIncludes('.github/workflows/repo-operability.yml', 'needs: [build, sign-release-assets]');
+requireIncludes('.github/workflows/repo-operability.yml', 'openssl dgst -sha256 -sign');
+requireIncludes('.github/workflows/repo-operability.yml', 'openssl dgst -sha256 -verify');
 requireIncludes('.github/workflows/repo-operability.yml', 'pnpm check:llm-operability');
 
 requireIncludes('.github/workflows/ci.yml', 'python3 scripts/check-no-conflict-markers.py');
@@ -377,14 +374,6 @@ requireIncludes(
   'cargo install cross --version 0.2.5 --locked',
 );
 requireIncludes('.github/workflows/release-cli.yml', 'needs: [validate-version, validate]');
-requireIncludes('.github/workflows/release-cli.yml', 'npm_dist_tag:');
-requireIncludes('.github/workflows/release-cli.yml', 'NPM_DIST_TAG:');
-requireIncludes('.github/workflows/release-cli.yml', 'NPM_TOKEN is required for npm publication');
-requireOnlyAfter(
-  '.github/workflows/release-cli.yml',
-  '  publish-npm:',
-  'NPM_TOKEN is required for npm publication',
-);
 requireIncludes('.github/workflows/release-cli.yml', 'Smoke exact release archive (Unix)');
 requireIncludes('.github/workflows/release-cli.yml', 'Smoke exact release archive (Windows)');
 requireIncludes('.github/workflows/release-cli.yml', 'AGI_CLI_SMOKE_BINARY');
@@ -392,8 +381,6 @@ requireIncludes(
   '.github/workflows/release-cli.yml',
   'prerelease: ${{ needs.validate-version.outputs.prerelease }}',
 );
-requireIncludes('scripts/publish-cli.sh', 'npm publish --access public --tag "$NPM_DIST_TAG"');
-requireIncludes('scripts/publish-cli.sh', 'npm pack --dry-run');
 requireNotIncludes('.github/workflows/release-desktop.yml', 'Available in v1.2.1');
 requireIncludes('.github/workflows/release-desktop.yml', "format('v-desktop-{0}', inputs.version)");
 requireIncludes('.github/workflows/release-desktop.yml', 'cancel-in-progress: false');

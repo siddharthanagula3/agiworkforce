@@ -190,7 +190,7 @@ function BYOKApiKeysSection() {
               {(providerHealth || errors[id]) && (
                 <p
                   className={`mt-1.5 text-xs ${
-                    providerHealth?.available ? 'text-green-600' : 'text-muted-foreground'
+                    providerHealth?.available ? 'text-success-text' : 'text-muted-foreground'
                   }`}
                   style={{ marginLeft: 156 }}
                 >
@@ -346,7 +346,7 @@ export function ModelsKeysTab({
                     </div>
                   ) : isOllamaAvailable ? (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs text-green-600">
+                      <div className="flex items-center gap-2 text-xs text-success-text">
                         <Check className="h-3 w-3" />
                         <span>Ollama is running and available</span>
                       </div>
@@ -436,7 +436,7 @@ export function ModelsKeysTab({
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-yellow-600">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-warning-text">
                       <span>
                         Ollama not detected. Correct the URL above, or install from{' '}
                         <a

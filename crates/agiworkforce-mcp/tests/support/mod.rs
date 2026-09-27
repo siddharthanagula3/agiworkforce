@@ -51,6 +51,7 @@ pub fn hooks_with(
         elicitation,
         browser,
         client_info: client_info(),
+        client_metadata_url: None,
         on_log: noop_log(),
     }
 }
@@ -373,6 +374,8 @@ pub fn http_oauth() -> (Router, Arc<HttpRecord>) {
     let asm = get(|req: Request| async move {
         let host = host_of(&req);
         axum::Json(serde_json::json!({
+            "issuer": format!("http://{host}"),
+            "code_challenge_methods_supported": ["S256"],
             "authorization_endpoint": format!("http://{host}/authorize"),
             "token_endpoint": format!("http://{host}/token"),
             "registration_endpoint": format!("http://{host}/register")
@@ -421,6 +424,16 @@ pub fn http_stale() -> Router {
             let id = frame.get("id").cloned().unwrap_or(serde_json::Value::Null);
             let _ = &headers;
             match method.as_str() {
+                "server/discover" => json_response(
+                    StatusCode::NOT_FOUND,
+                    None,
+                    serde_json::json!({
+                        "jsonrpc": "2.0",
+                        "id": id,
+                        "error": { "code": -32601, "message": "Method not found" }
+                    })
+                    .to_string(),
+                ),
                 "initialize" => {
                     json_response(StatusCode::OK, None, rpc_result(&id, initialize_result()))
                 }

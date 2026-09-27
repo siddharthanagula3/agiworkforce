@@ -1,7 +1,8 @@
 import 'server-only';
 
-import { AuthorizationServerMismatchError } from '@modelcontextprotocol/client';
 import type {
+  AuthorizationServerMetadata,
+  OAuthClientInformationContext,
   OAuthClientMetadata,
   OAuthClientProvider,
   OAuthDiscoveryState,
@@ -12,14 +13,19 @@ import type {
 import { logger } from '@/lib/logger';
 import {
   buildMcpClientMetadataDocument,
+  clientApplicationTypeFor,
   resolveClientMetadataUrl,
   resolveClientRedirectUri,
 } from '@/lib/connectors/mcp-client-metadata';
 import {
+  deleteMcpOAuthClient,
   getMcpOAuthClient,
   saveMcpOAuthClient,
   type McpClientRegistrationMethod,
 } from '@/lib/connectors/mcp-oauth-clients';
+
+const PKCE_METHOD = 'S256';
+const CLIENT_NAME = 'AGI Workforce';
 
 export interface McpPendingAuthorizationDraft {
   authorizationUrl: string;
@@ -44,6 +50,7 @@ export interface McpOAuthProviderOptions {
   mcpUrl: string;
   state: string;
   seed?: McpOAuthProviderSeed;
+  refuseWithoutPkce?: boolean;
 }
 
 export class McpClientIdentityUnavailableError extends Error {
@@ -57,19 +64,31 @@ export class McpClientIdentityUnavailableError extends Error {
   }
 }
 
+export class McpPkceUnsupportedError extends Error {
+  constructor(readonly issuer: string) {
+    super(
+      `${issuer} does not advertise PKCE with ${PKCE_METHOD}, which MCP authorization requires, ` +
+        'so it cannot be connected safely.',
+    );
+    this.name = 'McpPkceUnsupportedError';
+  }
+}
+
+export function supportsS256Pkce(metadata: AuthorizationServerMetadata | undefined): boolean {
+  return metadata?.code_challenge_methods_supported?.includes(PKCE_METHOD) === true;
+}
+
 export class McpOAuthClientProvider implements OAuthClientProvider {
   private _authorizationUrl: string | null = null;
   private _codeVerifier: string | null;
-  private _discovery: OAuthDiscoveryState | null = null;
+  private _discovery: OAuthDiscoveryState | null;
   private _clientInformation: StoredOAuthClientInformation | undefined;
   private _tokens: StoredOAuthTokens | undefined;
   private _resourceUrl: string | null = null;
-  private _authorizationServerUrl: string | null;
   private _registrationMethod: McpClientRegistrationMethod | null = null;
 
   constructor(private readonly options: McpOAuthProviderOptions) {
     this._codeVerifier = options.seed?.codeVerifier ?? null;
-    this._authorizationServerUrl = options.seed?.issuer ?? null;
     this._tokens = options.seed?.tokens;
     this._discovery = options.seed?.discoveryState ?? null;
   }
@@ -86,30 +105,38 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
     const document = buildMcpClientMetadataDocument();
     if (document) {
       const { client_id: _clientId, ...metadata } = document;
-      return metadata as unknown as OAuthClientMetadata;
+      return metadata as OAuthClientMetadata;
     }
+    const redirectUri = this.redirectUrl ?? '';
     return {
-      client_name: 'AGI Workforce',
-      redirect_uris: [this.redirectUrl ?? ''],
+      client_name: CLIENT_NAME,
+      redirect_uris: [redirectUri],
       grant_types: ['authorization_code', 'refresh_token'],
       response_types: ['code'],
       token_endpoint_auth_method: 'none',
-    } as unknown as OAuthClientMetadata;
+      ...(redirectUri ? { application_type: clientApplicationTypeFor(redirectUri) } : {}),
+    } as OAuthClientMetadata;
   }
 
   state(): string {
     return this.options.state;
   }
 
-  async clientInformation(ctx?: {
-    issuer: string;
-  }): Promise<StoredOAuthClientInformation | undefined> {
+  async clientInformation(
+    ctx?: OAuthClientInformationContext,
+  ): Promise<StoredOAuthClientInformation | undefined> {
     if (this._clientInformation) return this._clientInformation;
-    const issuer = ctx?.issuer ?? this._authorizationServerUrl;
+    const issuer = ctx?.issuer ?? this.issuer;
     if (!issuer) return undefined;
 
     const record = await getMcpOAuthClient(issuer);
     if (!record) return undefined;
+    if (
+      record.registrationMethod === 'cimd' &&
+      record.clientMetadataUrl !== resolveClientMetadataUrl()
+    ) {
+      return undefined;
+    }
 
     this._registrationMethod = record.registrationMethod;
     this._clientInformation = {
@@ -122,10 +149,10 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
 
   async saveClientInformation(
     clientInformation: StoredOAuthClientInformation,
-    ctx?: { issuer: string },
+    ctx?: OAuthClientInformationContext,
   ): Promise<void> {
     this._clientInformation = clientInformation;
-    const issuer = clientInformation.issuer ?? ctx?.issuer ?? this._authorizationServerUrl;
+    const issuer = clientInformation.issuer ?? ctx?.issuer ?? this.issuer;
     if (!issuer) {
       logger.warn(
         { mcpUrl: this.options.mcpUrl },
@@ -187,28 +214,16 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
   }
 
   saveDiscoveryState(state: OAuthDiscoveryState): void {
+    if (this.options.refuseWithoutPkce && !supportsS256Pkce(state.authorizationServerMetadata)) {
+      throw new McpPkceUnsupportedError(
+        state.authorizationServerMetadata?.issuer ?? state.authorizationServerUrl,
+      );
+    }
     this._discovery = state;
   }
 
   discoveryState(): OAuthDiscoveryState | undefined {
     return this._discovery ?? undefined;
-  }
-
-  saveAuthorizationServerUrl(authorizationServerUrl: string): void {
-    const recordedIssuer = this.options.seed?.issuer;
-    if (
-      recordedIssuer &&
-      recordedIssuer !== authorizationServerUrl &&
-      `${recordedIssuer}/` !== authorizationServerUrl &&
-      recordedIssuer !== `${authorizationServerUrl}/`
-    ) {
-      throw new AuthorizationServerMismatchError(recordedIssuer, authorizationServerUrl);
-    }
-    this._authorizationServerUrl = authorizationServerUrl;
-  }
-
-  authorizationServerUrl(): string | undefined {
-    return this._authorizationServerUrl ?? undefined;
   }
 
   saveResourceUrl(resourceUrl: string): void {
@@ -219,9 +234,25 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
     return this._resourceUrl ?? undefined;
   }
 
+  async invalidateCredentials(
+    scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery',
+  ): Promise<void> {
+    if (scope === 'all' || scope === 'tokens') this._tokens = undefined;
+    if (scope === 'all' || scope === 'verifier') this._codeVerifier = null;
+    if (scope === 'all' || scope === 'client') {
+      const issuer = this.issuer;
+      this._clientInformation = undefined;
+      if (issuer) await deleteMcpOAuthClient(issuer);
+    }
+    if (scope === 'all' || scope === 'discovery') this._discovery = null;
+  }
+
   get issuer(): string | null {
     return (
-      this._discovery?.authorizationServerMetadata?.issuer ?? this._authorizationServerUrl ?? null
+      this._discovery?.authorizationServerMetadata?.issuer ??
+      this._discovery?.authorizationServerUrl ??
+      this.options.seed?.issuer ??
+      null
     );
   }
 

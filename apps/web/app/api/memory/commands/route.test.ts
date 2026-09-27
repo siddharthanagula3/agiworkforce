@@ -24,6 +24,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/services/memory-commands', () => ({
   runMemoryCommand: (...a: unknown[]) => mocks.runMemoryCommand(...a),
+  memoryCommandSource: () => 'web',
 }));
 
 const { POST } = await import('./route');

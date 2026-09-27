@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   CLOUD_API_KEY_SCOPES,
+  cloudWebActionFor,
   createCloudApiKey,
   fetchCloudActiveSessions,
   listCloudApiKeys,
@@ -12,8 +13,10 @@ import {
   type CloudAccountSession,
   type CloudApiKey,
   type CloudApiKeyScope,
+  type CloudWebAction,
 } from '../../../../api/cloudAccountSettings';
 import { useAccountStore, useAuthStore } from '../../../../stores/auth';
+import { CloudWebActionNotice } from '../../cloud/CloudWebActionNotice';
 import {
   PRIMARY_BUTTON,
   SECONDARY_BUTTON,
@@ -77,6 +80,7 @@ function ActiveSessionsSection() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -91,7 +95,12 @@ function ActiveSessionsSection() {
       }
     } catch (caught) {
       if (generation.current === current) {
-        setError(caught instanceof Error ? caught.message : 'Could not load your active sessions.');
+        const action = cloudWebActionFor(caught);
+        if (action) setWebAction(action);
+        else
+          setError(
+            caught instanceof Error ? caught.message : 'Could not load your active sessions.',
+          );
       }
     } finally {
       if (generation.current === current) setLoading(false);
@@ -124,14 +133,18 @@ function ActiveSessionsSection() {
     setRevokingAll(true);
     setError(null);
     setNotice(null);
+    setWebAction(null);
     try {
       await revokeAllCloudSessions();
       setSessions([]);
       await signOut();
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
-      );
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
+      else
+        setError(
+          caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
+        );
       setRevokingAll(false);
     }
   };
@@ -156,6 +169,7 @@ function ActiveSessionsSection() {
 
       {loading ? <SectionLoading label="Loading active sessions…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {webAction ? <CloudWebActionNotice action={webAction} /> : null}
       {notice ? (
         <p role="status" className="text-xs text-muted-foreground">
           {notice}
@@ -245,6 +259,7 @@ function ApiKeysSection() {
   const [scopes, setScopes] = useState<CloudApiKeyScope[]>(['models:read', 'inference:write']);
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -256,7 +271,9 @@ function ApiKeysSection() {
       if (generation.current === current) setKeys(next);
     } catch (caught) {
       if (generation.current === current) {
-        setError(caught instanceof Error ? caught.message : 'Could not load your API keys.');
+        const action = cloudWebActionFor(caught);
+        if (action) setWebAction(action);
+        else setError(caught instanceof Error ? caught.message : 'Could not load your API keys.');
       }
     } finally {
       if (generation.current === current) setLoading(false);
@@ -280,13 +297,16 @@ function ApiKeysSection() {
     setCreating(true);
     setError(null);
     setIssuedKey(null);
+    setWebAction(null);
     try {
       const created = await createCloudApiKey(name.trim(), scopes);
       setKeys((current) => [created.apiKey, ...(current ?? [])]);
       setIssuedKey(created.fullKey);
       setName('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not create the API key.');
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
+      else setError(caught instanceof Error ? caught.message : 'Could not create the API key.');
     } finally {
       setCreating(false);
     }
@@ -319,6 +339,7 @@ function ApiKeysSection() {
 
       {loading ? <SectionLoading label="Loading API keys…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
+      {webAction ? <CloudWebActionNotice action={webAction} /> : null}
 
       {issuedKey ? (
         <div role="status" className="rounded-lg border border-border bg-card/40 p-4">
@@ -411,10 +432,12 @@ function DangerZone() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
 
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
+    setWebAction(null);
     try {
       const outcome = await requestCloudAccountDeletion();
       setResult(
@@ -423,7 +446,10 @@ function DangerZone() {
       );
       setConfirmation('');
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not delete your Cloud account.');
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
+      else
+        setError(caught instanceof Error ? caught.message : 'Could not delete your Cloud account.');
     } finally {
       setDeleting(false);
     }
@@ -449,6 +475,11 @@ function DangerZone() {
         <p role="status" className="mt-3 text-xs text-foreground">
           {result}
         </p>
+      ) : null}
+      {webAction ? (
+        <div className="mt-3">
+          <CloudWebActionNotice action={webAction} />
+        </div>
       ) : null}
       <label className="mt-4 block text-xs text-muted-foreground" htmlFor="cloud-delete-confirm">
         Type {DELETE_CONFIRMATION} to confirm

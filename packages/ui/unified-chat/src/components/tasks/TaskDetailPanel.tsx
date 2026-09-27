@@ -203,7 +203,7 @@ const TOOL_CATEGORY_ICON: Record<AgentEventToolCategory, ComponentType<LucidePro
 };
 
 function statusToneClass(status: AgentActivityToolEntry['status']): string {
-  if (status === 'completed') return 'text-emerald-500';
+  if (status === 'completed') return 'text-success-text';
   if (status === 'failed') return 'text-danger';
   if (status === 'cancelled') return 'text-muted-foreground';
   if (status === 'running' || status === 'awaiting-approval') return 'text-primary';
@@ -227,7 +227,7 @@ function ProgressRow({ entry }: { entry: AgentActivityProgressEntry | AgentActiv
           aria-hidden
           className={cn(
             'mt-1 h-2 w-2 shrink-0 rounded-full',
-            entry.status === 'completed' && 'bg-emerald-500',
+            entry.status === 'completed' && 'bg-success-fill',
             entry.status === 'failed' && 'bg-destructive',
             entry.status === 'cancelled' && 'bg-muted-foreground',
             (entry.status === 'running' || entry.status === 'awaiting-approval') && 'bg-primary',
@@ -516,7 +516,7 @@ export function TaskDetailPanel({
                   aria-hidden
                   className={cn(
                     'mt-1 h-1.5 w-1.5 shrink-0 rounded-full',
-                    step.status === 'completed' && 'bg-emerald-500',
+                    step.status === 'completed' && 'bg-success-fill',
                     step.status === 'failed' && 'bg-destructive',
                     step.status === 'cancelled' && 'bg-muted-foreground',
                     step.status === 'running' && 'bg-primary',

@@ -51,9 +51,13 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: vi.fn().mockResolvedValue({ maxMembers: null }),
 }));
 
+process.env['CSRF_SECRET'] = 'audit-trail-step-up-secret-long-enough';
+
 import { NextRequest } from 'next/server';
 import { BUILT_IN_ORGANIZATION_ROLES } from '@agiworkforce/types';
 import { recordAuditEvent } from '@/lib/security-audit';
+import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
+import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKey } from '@/app/api/settings/api-keys/[keyId]/route';
 import { PATCH as updateMemberRole } from '@/app/api/settings/team/[memberId]/route';
@@ -83,6 +87,15 @@ function decodeAuditRow(params: unknown[]) {
     endpoint: params[5],
     details: JSON.parse(String(params[6])) as Record<string, unknown>,
   };
+}
+
+function revealProof(userId: string): string {
+  return createStepUpGrant({
+    userId,
+    action: 'api_credential.reveal',
+    resourceId: null,
+    method: 'first_factor',
+  }).token;
 }
 
 function enterpriseWrites(): Array<[string, unknown[]]> {
@@ -323,15 +336,22 @@ describe('POST /api/settings/api-keys writes api_key_created', () => {
     const response = await createApiKey(
       new NextRequest('https://app.example.com/api/settings/api-keys', {
         method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-real-ip': '203.0.113.5' },
+        headers: {
+          'content-type': 'application/json',
+          'x-real-ip': '203.0.113.5',
+          [STEP_UP_TOKEN_HEADER]: revealProof('user_actor'),
+        },
         body: JSON.stringify({ name: 'CI deploy key', scopes: ['inference:write'] }),
       }),
     );
 
     expect(response.status).toBe(201);
 
-    expect(auditInserts()).toHaveLength(1);
-    const row = decodeAuditRow(auditParams());
+    expect(auditInserts().map(([, params]) => params[1])).toEqual([
+      'step_up_satisfied',
+      'api_key_created',
+    ]);
+    const row = decodeAuditRow(auditParams(1));
     expect(row.eventType).toBe('api_key_created');
     expect(row.userId).toBe('user_actor');
     expect(row.ipAddress).toBe('203.0.113.5');

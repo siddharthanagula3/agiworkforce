@@ -12,15 +12,18 @@ import {
   RotateCcw,
   Trash2,
   X,
+  Zap,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { ApprovalCard } from '@agiworkforce/ui';
-import type {
-  ManagedCloudScheduleMutation,
-  ManagedCloudScheduleRecurrence,
-  ManagedCloudScheduleRun,
-  ManagedCloudScheduleRunApproval,
-  ManagedCloudScheduleTask,
+import {
+  MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
+  type ManagedCloudScheduleMutation,
+  type ManagedCloudScheduleRecurrence,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleSources,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { selectHasCloudAccountSession, useAuthStore } from '../../stores/auth';
 import { getCloudModels, type CloudModelInfo } from '../../api/cloudApi';
@@ -30,6 +33,8 @@ import {
   desktopCloudSchedules,
   type DesktopCloudSchedulesApi,
 } from '../../services/desktopCloudSchedules';
+import { DesktopScheduleAccessFields } from './DesktopScheduleAccessFields';
+import { DesktopScheduleTriggersPanel } from './DesktopScheduleTriggersPanel';
 
 const SCHEDULE_PAGE_SIZE = 50;
 const RUN_PAGE_SIZE = 20;
@@ -70,6 +75,8 @@ interface ScheduleDraft {
   isActive: boolean;
   expiresLocal: string;
   maxExecutions: string;
+  sources: ManagedCloudScheduleSources;
+  connectors: string[] | null;
 }
 
 interface HistoryState {
@@ -116,6 +123,8 @@ function initialDraft(model = ''): ScheduleDraft {
     isActive: true,
     expiresLocal: '',
     maxExecutions: '',
+    sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES },
+    connectors: null,
   };
 }
 
@@ -282,6 +291,8 @@ function draftFromSchedule(
     isActive: schedule.isEnabled,
     expiresLocal: isoToLocalInput(schedule.expiresAt, schedule.timezone),
     maxExecutions: schedule.maxExecutions === null ? '' : String(schedule.maxExecutions),
+    sources: { ...(schedule.sources ?? MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES) },
+    connectors: schedule.connectors ? [...schedule.connectors] : null,
   };
 }
 
@@ -352,6 +363,8 @@ function mutationFromDraft(draft: ScheduleDraft): ManagedCloudScheduleMutation {
     isActive: draft.isActive,
     expiresAt,
     maxExecutions,
+    sources: draft.sources,
+    connectors: draft.connectors,
   };
 }
 
@@ -451,6 +464,7 @@ function AuthenticatedDesktopCloudSchedules({
   const [operation, setOperation] = useState<Record<string, string | null>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string | null>>({});
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [expandedTriggersId, setExpandedTriggersId] = useState<string | null>(null);
   const [historyById, setHistoryById] = useState<Record<string, HistoryState>>({});
   const [discoveredModels, setDiscoveredModels] = useState<CloudModelInfo[]>([]);
   const [modelStatus, setModelStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -922,6 +936,7 @@ function AuthenticatedDesktopCloudSchedules({
             {schedules.map((schedule) => {
               const busy = operation[schedule.id];
               const expanded = expandedHistoryId === schedule.id;
+              const triggersExpanded = expandedTriggersId === schedule.id;
               const historyState = historyById[schedule.id] ?? EMPTY_HISTORY;
               return (
                 <article
@@ -1015,6 +1030,24 @@ function AuthenticatedDesktopCloudSchedules({
                         </button>
                         <button
                           type="button"
+                          onClick={() =>
+                            setExpandedTriggersId((current) =>
+                              current === schedule.id ? null : schedule.id,
+                            )
+                          }
+                          className={SECONDARY_BUTTON}
+                          aria-expanded={triggersExpanded}
+                        >
+                          <Zap className="h-3.5 w-3.5" aria-hidden />
+                          Triggers
+                          {triggersExpanded ? (
+                            <ChevronUp className="h-3.5 w-3.5" aria-hidden />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                        </button>
+                        <button
+                          type="button"
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
@@ -1063,6 +1096,15 @@ function AuthenticatedDesktopCloudSchedules({
                       </p>
                     ) : null}
                   </div>
+
+                  {triggersExpanded ? (
+                    <div className="border-t border-[var(--chat-border)] px-4 py-3">
+                      <DesktopScheduleTriggersPanel
+                        scheduleId={schedule.id}
+                        scheduleName={schedule.name}
+                      />
+                    </div>
+                  ) : null}
 
                   {expanded ? (
                     <div className="border-t border-[var(--chat-border)] px-4 py-3">
@@ -1478,6 +1520,13 @@ function AuthenticatedDesktopCloudSchedules({
                 <span className="text-sm text-[var(--chat-text-secondary)]">Enabled</span>
               </label>
             </div>
+
+            <DesktopScheduleAccessFields
+              hasProject={Boolean(editing?.projectId)}
+              sources={draft.sources}
+              connectors={draft.connectors}
+              onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+            />
 
             {formError ? (
               <p role="alert" className="mt-4 text-sm text-[var(--chat-destructive)]">

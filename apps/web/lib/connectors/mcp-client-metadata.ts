@@ -8,6 +8,17 @@ import {
 import { isLocalDevOrigin } from '@/lib/connectors/oauth-registry';
 
 const CLIENT_NAME = 'AGI Workforce';
+const NATIVE_CLIENT_NAMES = {
+  cli: 'AGI Workforce CLI',
+  desktop: 'AGI Workforce Desktop',
+} as const;
+const NATIVE_REDIRECT_URIS = ['http://127.0.0.1/callback', 'http://localhost/callback'];
+const GRANT_TYPES = ['authorization_code', 'refresh_token'];
+const RESPONSE_TYPES = ['code'];
+const PUBLIC_CLIENT_AUTH_METHOD = 'none';
+
+export type McpClientApplicationType = 'web' | 'native';
+export type McpNativeClient = keyof typeof NATIVE_CLIENT_NAMES;
 
 function resolveConfiguredBaseUrl(): URL | null {
   const configured = (
@@ -42,9 +53,19 @@ export function resolveClientMetadataUrl(): string | null {
   return origin ? `${origin}${MCP_CLIENT_METADATA_PATH}` : null;
 }
 
+function resolveNativeClientMetadataUrl(client: McpNativeClient): string | null {
+  const origin = resolveClientMetadataOrigin();
+  return origin ? `${origin}${MCP_CLIENT_METADATA_PATH}/${client}` : null;
+}
+
 export function resolveClientRedirectUri(): string | null {
   const origin = resolveClientRedirectOrigin();
   return origin ? `${origin}${CONNECTOR_OAUTH_CALLBACK_PATH}` : null;
+}
+
+export function clientApplicationTypeFor(redirectUri: string): McpClientApplicationType {
+  const url = new URL(redirectUri);
+  return url.protocol === 'https:' ? 'web' : 'native';
 }
 
 export interface McpClientMetadataDocument {
@@ -55,6 +76,7 @@ export interface McpClientMetadataDocument {
   grant_types: string[];
   response_types: string[];
   token_endpoint_auth_method: string;
+  application_type: McpClientApplicationType;
 }
 
 export function buildMcpClientMetadataDocument(): McpClientMetadataDocument | null {
@@ -68,8 +90,28 @@ export function buildMcpClientMetadataDocument(): McpClientMetadataDocument | nu
     client_name: CLIENT_NAME,
     client_uri: origin,
     redirect_uris: [redirectUri],
-    grant_types: ['authorization_code', 'refresh_token'],
-    response_types: ['code'],
-    token_endpoint_auth_method: 'none',
+    grant_types: GRANT_TYPES,
+    response_types: RESPONSE_TYPES,
+    token_endpoint_auth_method: PUBLIC_CLIENT_AUTH_METHOD,
+    application_type: 'web',
+  };
+}
+
+export function buildMcpNativeClientMetadataDocument(
+  client: McpNativeClient,
+): McpClientMetadataDocument | null {
+  const origin = resolveClientMetadataOrigin();
+  const clientId = resolveNativeClientMetadataUrl(client);
+  if (!origin || !clientId) return null;
+
+  return {
+    client_id: clientId,
+    client_name: NATIVE_CLIENT_NAMES[client],
+    client_uri: origin,
+    redirect_uris: NATIVE_REDIRECT_URIS,
+    grant_types: GRANT_TYPES,
+    response_types: RESPONSE_TYPES,
+    token_endpoint_auth_method: PUBLIC_CLIENT_AUTH_METHOD,
+    application_type: 'native',
   };
 }

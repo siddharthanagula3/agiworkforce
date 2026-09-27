@@ -12,9 +12,9 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@modelcontextprotocol/client', () => ({
+vi.mock('@modelcontextprotocol/client', async (importOriginal) => ({
+  ...(await importOriginal()),
   discoverOAuthProtectedResourceMetadata: (...args: unknown[]) => mocks.protectedResource(...args),
-  LATEST_PROTOCOL_VERSION: '2025-06-18',
 }));
 vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: vi.fn(async () => undefined),
@@ -192,6 +192,9 @@ describe('resolveConnectorCredentialSpec', () => {
       'https://bare.example.com/mcp',
       expect.objectContaining({ method: 'POST' }),
     );
+    const [, probe] = mocks.pinnedFetch.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(probe.body))).toMatchObject({ method: 'server/discover' });
+    expect(probe.headers).toMatchObject({ 'mcp-method': 'server/discover' });
   });
 
   it('defaults to a bearer Authorization header when nothing declares otherwise', async () => {

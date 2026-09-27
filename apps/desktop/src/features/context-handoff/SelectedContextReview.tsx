@@ -308,7 +308,7 @@ export function SelectedContextReview({ onAccept }: SelectedContextReviewProps) 
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
             <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] font-medium">
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-600 dark:text-emerald-300">
+              <span className="inline-flex items-center gap-1 rounded-full bg-success-fill/10 px-2 py-1 text-success-text">
                 <ShieldCheck size={12} /> Authenticated Chrome handoff
               </span>
               <span className="rounded-full bg-sky-500/10 px-2 py-1 text-sky-600 dark:text-sky-300">

@@ -1,4 +1,3 @@
-
 import 'server-only';
 
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -43,6 +42,26 @@ export async function insertProposal(input: InsertProposalInput): Promise<{ id: 
   );
   if (!row) throw new Error('Failed to record support action proposal');
   return { id: row.id };
+}
+
+export async function readPendingProposalAction(args: {
+  proposalId: string;
+  userId: string;
+  tokenHash: string;
+}): Promise<string | null> {
+  const db = getNeonDb();
+  const [row] = await db.query<{ action_id: string }>(
+    `select action_id
+       from public.support_action_proposals
+      where id = $1
+        and user_id = $2
+        and token_hash = $3
+        and consumed_at is null
+        and expires_at > now()
+      limit 1`,
+    [args.proposalId, args.userId, args.tokenHash],
+  );
+  return row?.action_id ?? null;
 }
 
 export async function claimProposal(args: {

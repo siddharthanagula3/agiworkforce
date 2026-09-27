@@ -760,7 +760,7 @@ export function SkillsPluginsSettings() {
             <span
               className={`rounded-full px-2 py-0.5 text-xs ${
                 pluginCliAvailable
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-success-fill/10 text-success-text'
                   : 'bg-muted text-muted-foreground'
               }`}
             >

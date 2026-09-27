@@ -5,7 +5,10 @@ import { AlertTriangle, Boxes, FileText, MessageSquareText, Wrench } from 'lucid
 
 import { Spinner } from '@agiworkforce/ui';
 
-import { useConnectorCapabilities } from '../hooks/use-connector-capabilities';
+import {
+  useConnectorCapabilities,
+  type ConnectorCapabilityCatalog,
+} from '../hooks/use-connector-capabilities';
 import { publishMcpContextSelection } from '../lib/mcp-context-selection';
 
 const CAPABILITY_DISCOVERY_COPY = 'Discovering live MCP capabilities…';
@@ -16,6 +19,79 @@ function itemHint(item: { name: string; title?: string; description?: string }):
 const NO_CAPABILITIES_COPY =
   'This connector answered but offers no tools, resources or prompts yet. Nothing from it can be used in a conversation until it publishes some.';
 const PARTIAL_DISCOVERY_PREFIX = 'Unavailable during discovery:';
+const LEGACY_HANDSHAKE_COPY =
+  'This server does not answer the stateless discovery request, so it is connected with the older initialize handshake. Everything it offers still works.';
+const SSE_TRANSPORT_COPY =
+  'This server uses the deprecated HTTP+SSE transport. It keeps working, but the server should move to Streamable HTTP.';
+const TRANSPORT_LABELS: Record<NonNullable<ConnectorCapabilityCatalog['transport']>, string> = {
+  stdio: 'Local process',
+  sse: 'HTTP+SSE',
+  'streamable-http': 'Streamable HTTP',
+};
+const REJECTION_COPY: Record<
+  ConnectorCapabilityCatalog['rejectedTools'][number]['reason'],
+  string
+> = {
+  'non-canonical-name': 'its name is not one a model can call',
+  'invalid-input-schema': 'its input schema was refused',
+};
+
+function protocolLabel(catalog: ConnectorCapabilityCatalog): string {
+  if (catalog.protocolVersion) return `MCP ${catalog.protocolVersion}`;
+  return catalog.protocolEra === 'modern' ? 'MCP stateless' : 'MCP initialize handshake';
+}
+
+function CompatibilityDetails({ catalog }: { catalog: ConnectorCapabilityCatalog }) {
+  const notices = [
+    ...(catalog.protocolEra === 'legacy' ? [LEGACY_HANDSHAKE_COPY] : []),
+    ...(catalog.transport === 'sse' ? [SSE_TRANSPORT_COPY] : []),
+    ...catalog.rejectedTools.map(
+      (tool) =>
+        `${tool.toolName ? `Tool ${tool.toolName}` : 'A tool'} is not offered: ${
+          REJECTION_COPY[tool.reason]
+        }${tool.detail ? ` (${tool.detail})` : ''}.`,
+    ),
+  ];
+  return (
+    <section className="rounded-lg border border-border/80 p-3" aria-label="Compatibility">
+      <h4 className="text-xs font-semibold text-foreground">Compatibility</h4>
+      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-caption">
+        <dt className="text-muted-foreground">Protocol</dt>
+        <dd className="text-foreground">{protocolLabel(catalog)}</dd>
+        {catalog.supportedVersions.length > 0 ? (
+          <>
+            <dt className="text-muted-foreground">Server supports</dt>
+            <dd className="text-foreground">{catalog.supportedVersions.join(', ')}</dd>
+          </>
+        ) : null}
+        {catalog.transport ? (
+          <>
+            <dt className="text-muted-foreground">Transport</dt>
+            <dd className="text-foreground">{TRANSPORT_LABELS[catalog.transport]}</dd>
+          </>
+        ) : null}
+        {catalog.serverInfo ? (
+          <>
+            <dt className="text-muted-foreground">Server</dt>
+            <dd className="break-all text-foreground">
+              {catalog.serverInfo.name} {catalog.serverInfo.version}
+            </dd>
+          </>
+        ) : null}
+      </dl>
+      {notices.length > 0 ? (
+        <ul className="mt-2 space-y-1 text-caption text-muted-foreground">
+          {notices.map((notice, index) => (
+            <li key={`${index}:${notice}`} className="flex gap-1.5">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <span>{notice}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
 
 function CapabilityGroup({
   title,
@@ -111,7 +187,7 @@ export function ConnectorCapabilitiesPanel({
     <div className="space-y-2" aria-label="Live MCP capabilities">
       <div className="flex flex-wrap items-center gap-1.5 text-caption text-muted-foreground">
         <span className="rounded-full border border-border px-2 py-0.5">
-          {catalog.protocolEra === 'modern' ? 'MCP 2026 stateless' : 'Legacy adapter'}
+          {protocolLabel(catalog)}
         </span>
         {catalog.tasksSupported ? (
           <span className="rounded-full border border-border px-2 py-0.5">Tasks</span>
@@ -229,6 +305,7 @@ export function ConnectorCapabilitiesPanel({
           Select a resource or prompt to attach it to your next chat turn.
         </p>
       ) : null}
+      <CompatibilityDetails catalog={catalog} />
       {catalog.discoveryErrors.length > 0 ? (
         <p className="text-caption text-muted-foreground">
           {PARTIAL_DISCOVERY_PREFIX}{' '}

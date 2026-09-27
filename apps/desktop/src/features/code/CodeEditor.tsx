@@ -200,7 +200,7 @@ export function CodeEditor({
               {path}
             </span>
           )}
-          {isDirty && <span className="text-xs text-amber-500 font-medium">* Modified</span>}
+          {isDirty && <span className="text-xs text-warning-text font-medium">* Modified</span>}
         </div>
 
         <div className="flex items-center gap-1">
@@ -299,7 +299,7 @@ export function CodeEditor({
           <span>Characters: {value.length}</span>
         </div>
         <div className="flex items-center gap-3">
-          {readOnly && <span className="text-amber-500">Read-only</span>}
+          {readOnly && <span className="text-warning-text">Read-only</span>}
           <span>UTF-8</span>
         </div>
       </div>
