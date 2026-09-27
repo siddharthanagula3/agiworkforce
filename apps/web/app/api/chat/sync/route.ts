@@ -112,15 +112,13 @@ async function handlePull(request: NextRequest) {
       ),
       db.query<ArtifactDelta>(
         `
-        select id, conversation_id, message_id, title, artifact_type, language, content,
-               current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
-        from web_artifacts
-        where user_id = $1 and server_version > $2
-          and not exists (
-            select 1 from web_conversations c
-             where c.id = web_artifacts.conversation_id and c.is_temporary
-          )
-        order by server_version asc
+        select a.id, a.conversation_id, a.message_id, a.title, a.artifact_type, a.language,
+               a.content, a.current_version, a.pinned, a.tags, a.created_at, a.updated_at,
+               a.deleted_at, a.server_version
+        from web_artifacts a
+        join web_conversations c on c.id = a.conversation_id
+        where a.user_id = $1 and a.server_version > $2 and c.is_temporary = false
+        order by a.server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
         [userId, since],
