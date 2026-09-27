@@ -92,7 +92,7 @@ export function TopUpPanel({ tier, canBuy }: { tier: string; canBuy: boolean }) 
           Buy credits
         </h2>
         <p className="text-[13px] text-muted-foreground">
-          Credit packs are available on paid plans billed by AGI Workforce.
+          Credit packs are available on paid plans.
         </p>
         <UpgradePrompt tier={tier} quote={baseQuote} />
       </section>
