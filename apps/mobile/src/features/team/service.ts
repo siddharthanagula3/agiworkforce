@@ -161,6 +161,18 @@ export async function updateWorkspaceMemberRole(
   await api.patch(`/api/settings/team/${encodeURIComponent(memberId)}`, { role });
 }
 
+export async function transferWorkspaceOwnership(
+  organizationId: string,
+  toUserId: string,
+  headers: Record<string, string>,
+): Promise<void> {
+  await api.post(
+    '/api/settings/organization/transfer-ownership',
+    { organizationId, toUserId, outgoingOwnerRole: 'admin' },
+    { headers },
+  );
+}
+
 export async function removeWorkspaceMember(memberId: string): Promise<void> {
   await api.delete(`/api/settings/team/${encodeURIComponent(memberId)}`);
 }

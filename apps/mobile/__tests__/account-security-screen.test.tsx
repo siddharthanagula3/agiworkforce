@@ -11,7 +11,8 @@ const mockSaveSessionTimeout = jest.fn();
 const mockFetchAuditLog = jest.fn();
 const mockFetchAccountSessions = jest.fn();
 const mockRevokeAccountSession = jest.fn();
-const mockUpdatePassword = jest.fn();
+const mockReloadUser = jest.fn();
+const mockChangeAccountPassword = jest.fn();
 const mockSetAppMode = jest.fn();
 let mockAppMode: 'local' | 'cloud' = 'cloud';
 let mockOwnerId = 'account-a';
@@ -57,7 +58,8 @@ jest.mock('../src/features/chat/store/appModeStore', () => ({
 }));
 
 jest.mock('@clerk/expo', () => ({
-  useUser: () => ({ user: { updatePassword: mockUpdatePassword } }),
+  useUser: () => ({ user: { passwordEnabled: true, reload: mockReloadUser } }),
+  useSession: () => ({ session: null }),
 }));
 
 jest.mock('../lib/biometricFlagStore', () => ({
@@ -72,6 +74,7 @@ jest.mock('../src/features/settings/account-security/service', () => ({
   fetchAuditLog: (...args: unknown[]) => mockFetchAuditLog(...args),
   fetchAccountSessions: (...args: unknown[]) => mockFetchAccountSessions(...args),
   revokeAccountSession: (...args: unknown[]) => mockRevokeAccountSession(...args),
+  changeAccountPassword: (...args: unknown[]) => mockChangeAccountPassword(...args),
   groupAuditEntries: jest.requireActual('../src/features/settings/account-security/service')
     .groupAuditEntries,
   SESSION_TIMEOUT_MINUTES: [15, 30, 60, 120, 480],
@@ -143,11 +146,7 @@ describe('Mobile Account Security screen', () => {
       isClerkSignedIn: true,
       clerkUserId: 'account-a',
     };
-    mockFetchStatus.mockResolvedValue({
-      twoFactorEnabled: true,
-      enabledAt: '2026-07-30T12:00:00.000Z',
-      backupCodesRemaining: 4,
-    });
+    mockFetchStatus.mockResolvedValue({ twoFactorEnabled: true, backupCodesReady: true });
     mockFetchSessionTimeout.mockResolvedValue(60);
     mockSaveSessionTimeout.mockResolvedValue(undefined);
     mockFetchAuditLog.mockResolvedValue([]);
@@ -178,7 +177,7 @@ describe('Mobile Account Security screen', () => {
   it('renders authoritative factor and current-session state with bounded Web handoffs', async () => {
     const screen = render(<AccountSecurityScreen />);
 
-    await waitFor(() => expect(screen.getByText('4 remaining')).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText('Backup codes. Ready')).toBeTruthy());
     expect(screen.getByLabelText('Authenticator app. On')).toBeTruthy();
     expect(
       screen.getByText(

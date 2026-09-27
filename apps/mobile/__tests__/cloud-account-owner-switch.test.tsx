@@ -8,6 +8,12 @@ jest.mock('../lib/mmkv', () => ({
     set: jest.fn(),
     delete: jest.fn(),
   },
+  mmkvStorage: {
+    getItem: jest.fn().mockReturnValue(null),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+  rehydrateWhenMmkvReady: jest.fn(),
 }));
 
 let mockClerkUser = {

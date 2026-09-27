@@ -31,12 +31,15 @@ import {
   fetchWorkspaceOverview,
   removeWorkspaceMember,
   setActiveWorkspace,
+  transferWorkspaceOwnership,
   updateWorkspaceMemberRole,
   type WorkspaceMember,
   type WorkspaceOverview,
   type WorkspaceRole,
 } from '@/src/features/team';
 import { useChatStore } from '@/stores/chatStore';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';
 
@@ -65,6 +68,7 @@ export default function WorkspaceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [switchingWorkspace, setSwitchingWorkspace] = useState(false);
+  const { withStepUp, modal: stepUpModal } = useStepUp();
 
   const load = useCallback(async (signal?: AbortSignal) => {
     try {
@@ -160,24 +164,50 @@ export default function WorkspaceScreen() {
     );
   }, [load, state]);
 
-  const handleChangeRole = useCallback(
+  const applyRole = useCallback(
+    (member: WorkspaceMember, role: WorkspaceRole) => {
+      void (async () => {
+        setBusyMemberId(member.id);
+        try {
+          await updateWorkspaceMemberRole(member.id, role);
+          await load();
+        } catch (error) {
+          Alert.alert(
+            'Could not change role',
+            error instanceof Error ? error.message : 'Please try again.',
+          );
+        } finally {
+          setBusyMemberId(null);
+        }
+      })();
+    },
+    [load],
+  );
+
+  const transferOwnership = useCallback(
     (member: WorkspaceMember) => {
+      if (state.kind !== 'ready' || !state.overview.workspace) return;
+      const workspace = state.overview.workspace;
       Alert.alert(
-        member.name,
-        'Choose a role for this member.',
+        'Transfer ownership?',
+        `${member.name} becomes the owner of ${workspace.name}, with billing, workspace deletion and every administrative control. You become an Admin and lose those controls immediately. Only ${member.name} can transfer ownership back.`,
         [
-          ...WORKSPACE_ROLES.map((role) => ({
-            text: `${member.role === role ? '✓ ' : ''}${titleCase(role)}`,
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Transfer ownership',
+            style: 'destructive',
             onPress: () => {
-              if (role === member.role) return;
               void (async () => {
                 setBusyMemberId(member.id);
                 try {
-                  await updateWorkspaceMemberRole(member.id, role);
+                  await withStepUp('organization.transfer_ownership', workspace.id, (headers) =>
+                    transferWorkspaceOwnership(workspace.id, member.userId, headers),
+                  );
                   await load();
                 } catch (error) {
+                  if (isStepUpCancelled(error)) return;
                   Alert.alert(
-                    'Could not change role',
+                    'Could not transfer ownership',
                     error instanceof Error ? error.message : 'Please try again.',
                   );
                 } finally {
@@ -185,12 +215,31 @@ export default function WorkspaceScreen() {
                 }
               })();
             },
-          })),
-          { text: 'Cancel', style: 'cancel' as const },
-        ].filter(Boolean),
+          },
+        ],
       );
     },
-    [load],
+    [load, state, withStepUp],
+  );
+
+  const handleChangeRole = useCallback(
+    (member: WorkspaceMember) => {
+      const isOwner =
+        state.kind === 'ready' && state.overview.workspace?.currentUserRole === 'owner';
+      const roles = WORKSPACE_ROLES.filter((role) => role !== 'owner' || isOwner);
+      Alert.alert(member.name, 'Choose a role for this member.', [
+        ...roles.map((role) => ({
+          text: `${member.role === role ? '✓ ' : ''}${titleCase(role)}`,
+          onPress: () => {
+            if (role === member.role) return;
+            if (role === 'owner') transferOwnership(member);
+            else applyRole(member, role);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' as const },
+      ]);
+    },
+    [applyRole, state, transferOwnership],
   );
 
   const handleRemoveMember = useCallback(
@@ -269,6 +318,7 @@ export default function WorkspaceScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
+      {stepUpModal}
       <StatusBar style={statusBarStyle} />
       {header}
 
