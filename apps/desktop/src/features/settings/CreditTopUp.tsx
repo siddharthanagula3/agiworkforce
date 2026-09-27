@@ -19,9 +19,11 @@ import {
   quoteTopUp,
 } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
+import { WEB_APP_URL } from '../../api/config';
 import { cn } from '../../lib/utils';
 import { openTopUpCheckout } from '../../lib/stripeCheckout';
 import { selectPlan, useAuthStore } from '../../stores/auth';
+import { openExternalUrl } from '../../utils/navigation';
 
 type TopUpSelection = { kind: 'pack'; amountUsd: number } | { kind: 'other' };
 
@@ -89,8 +91,18 @@ export function CreditTopUp({ onComparePlans }: { onComparePlans?: () => void })
           Buy credits
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Credits you buy are kept apart from your plan allowance and do not change your plan or
-          renewal date. Larger packs cost less per credit.
+          Credits you buy are added to your balance and don&rsquo;t change your plan or renewal
+          date. They don&rsquo;t expire, except where local law requires it, such as in Japan.
+          Purchases are non-refundable except where our{' '}
+          <button
+            type="button"
+            onClick={() => void openExternalUrl(`${WEB_APP_URL}/refund-policy`)}
+            className="underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            refund policy
+          </button>{' '}
+          or the law says otherwise. Up to{' '}
+          {formatTopUpPrice(DAILY_TOP_UP_LIMIT_USD * CENTS_PER_USD)} a day.
         </p>
       </div>
 
@@ -152,10 +164,7 @@ export function CreditTopUp({ onComparePlans }: { onComparePlans?: () => void })
         />
       </label>
 
-      <p className="text-xs text-muted-foreground">
-        Tax, if any, is calculated at checkout. You can add up to{' '}
-        {formatCredits(DAILY_TOP_UP_LIMIT_USD * TOP_UP_UNITS_PER_USD)} a day.
-      </p>
+      <p className="text-xs text-muted-foreground">Tax calculated at checkout.</p>
 
       {error ? (
         <p role="alert" className="text-sm text-destructive">
