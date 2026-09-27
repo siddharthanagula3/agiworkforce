@@ -13,6 +13,7 @@ export const LIVE_SESSION_PROVIDER_COST_SOURCE = 'provider_published_rate';
 const SECONDS_PER_MINUTE = 60;
 
 export const LIVE_SESSION_CEILING_SECONDS = LIVE_SESSION_BLOCK_MINUTES * SECONDS_PER_MINUTE;
+export const LIVE_SESSION_MIN_BLOCK_SECONDS = SECONDS_PER_MINUTE;
 
 export function liveSessionProviderCostMicrousd(
   seconds: number,
@@ -30,6 +31,26 @@ export function liveSessionChargeMicrousd(
 ): number | null {
   const providerMicrousd = liveSessionProviderCostMicrousd(seconds, modelId);
   return providerMicrousd === null ? null : chargeMicrousdForProviderCost(providerMicrousd);
+}
+
+export function liveSessionMinutes(seconds: number): number {
+  return Math.ceil(Math.max(0, seconds) / SECONDS_PER_MINUTE);
+}
+
+export function liveSessionSecondsCoveredBy(
+  microusd: number,
+  modelId: string | null | undefined,
+): number {
+  const perMinute = liveSessionChargeMicrousd(SECONDS_PER_MINUTE, modelId);
+  if (perMinute === null || !(perMinute > 0) || !(microusd > 0) || !Number.isFinite(microusd)) {
+    return 0;
+  }
+  const charge = (seconds: number): number =>
+    liveSessionChargeMicrousd(seconds, modelId) ?? Number.POSITIVE_INFINITY;
+  let seconds = Math.floor((microusd * SECONDS_PER_MINUTE) / perMinute);
+  while (seconds > 0 && charge(seconds) > microusd) seconds -= 1;
+  while (charge(seconds + 1) <= microusd) seconds += 1;
+  return seconds;
 }
 
 export interface LiveSessionFailure {

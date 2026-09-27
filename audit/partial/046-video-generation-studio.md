@@ -161,15 +161,11 @@ Code: `apps/web/app/api/media/video/generate/route.ts:1001-1007`, `apps/mobile/s
 
 - Done when: User cancels a video generation in progress and the job stops.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Stop only records the request: provider cancellation exists for Runway alone, which is not released, so Google and OpenRouter jobs keep running and are billed if they deliver. | handler |
-| desktop | partial | Stop only records the request: provider cancellation exists for Runway alone, which is not released, so Google and OpenRouter jobs keep running and are billed if they deliver. | handler |
-| mobile | partial | Same server limit: Stop calls the cancel route, but released providers have no provider cancellation. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx:147-158`, `apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx:178-182`, `apps/web/app/api/media/video/cancel/route.ts:56-58`, `apps/web/lib/server/video-provider-release-policy.ts:16-18`
 
 ## S46.29: Retry failed job.
 

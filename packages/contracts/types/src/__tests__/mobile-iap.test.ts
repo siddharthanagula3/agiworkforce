@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOBILE_IAP_PRODUCT_DEFINITIONS,
-  TOP_UP_PRESET_AMOUNTS_USD,
+  MOBILE_IAP_TOP_UP_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
   getMobileIapProductDefinition,
 } from '../index';
 
 describe('mobile IAP business catalog', () => {
-  it('offers every canonical top-up preset at exactly 50 units per intended USD', () => {
+  it('offers every store top-up at exactly 50 credits per intended USD', () => {
     const topUps = MOBILE_IAP_PRODUCT_DEFINITIONS.filter(
       (definition) => definition.kind === 'top_up',
     );
 
-    expect(topUps.map((definition) => definition.amountUsd)).toEqual(TOP_UP_PRESET_AMOUNTS_USD);
+    expect(topUps.map((definition) => definition.amountUsd)).toEqual(MOBILE_IAP_TOP_UP_AMOUNTS_USD);
     for (const definition of topUps) {
       expect(definition.units).toBe(definition.amountUsd * TOP_UP_UNITS_PER_USD);
     }
