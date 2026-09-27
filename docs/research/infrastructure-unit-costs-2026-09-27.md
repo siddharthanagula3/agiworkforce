@@ -85,3 +85,29 @@ committed estimate; the procedure is in
 `docs/runbooks/infrastructure-cost-allocation.md`. Infrastructure is cost of
 goods, never a credit charge: every infrastructure row is
 `includedInPlans: 'all_plans'`.
+
+## Payment fees
+
+Stripe fees are not computed from a rate: the daily Stripe import in
+`reconcile-credits` records the fee Stripe reports on each balance transaction
+and attributes it to the subscription, through the invoice payment's
+subscription metadata, or to the top-up, through the payment intent metadata
+([Stripe metadata copying](https://docs.stripe.com/metadata), read 2026-09-27).
+For reference, [Stripe pricing](https://stripe.com/pricing) lists 2.9% + 30¢ for
+domestic cards, plus 1.5% for international cards and 1% for currency
+conversion.
+
+Store commission is recorded per verified purchase from
+`MOBILE_IAP_STORE_COMMISSION` in `packages/contracts/types/src/mobile-iap.ts`:
+
+| Store                                                  | Rate                                                                            | Source, read 2026-09-27                                                                 |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| App Store subscription, first year                     | 30% ("you receive 70% of the subscription price")                               | [Auto-renewable subscriptions](https://developer.apple.com/app-store/subscriptions/)    |
+| App Store subscription, after one year of paid service | 15% ("net revenue increases to 85%")                                            | same page                                                                               |
+| App Store one-time purchase                            | 30%, 15% only inside the Small Business Program                                 | [Small Business Program](https://developer.apple.com/app-store/small-business-program/) |
+| Google Play auto-renewing subscription                 | 15% (10% service fee plus 5% billing fee in the US, EEA and UK from 2026-06-30) | [Service fees](https://support.google.com/googleplay/android-developer/answer/112622)   |
+| Google Play one-time purchase, first $1M a year        | 15% (10% plus 5% billing fee on new installs from 2026-06-30)                   | same page                                                                               |
+
+The repository records no App Store Small Business Program enrollment, so the
+standard App Store rates are committed; enrollment moves every App Store row to
+15%.
