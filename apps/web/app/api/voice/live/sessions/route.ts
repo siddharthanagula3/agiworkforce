@@ -21,7 +21,7 @@ import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { getModelMetadataById, getRoutingSlotModel, isModelLive } from '@agiworkforce/types';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
@@ -263,17 +263,17 @@ async function handleCreateLiveSession(request: NextRequest) {
   }
   let reservation: ManagedUsageRequestReservation;
   try {
-    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
       scoped.db,
       userId,
-      subscription,
+      entitlement.subscription,
     );
     if (!subscriptionAccess.allowed) {
       const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, gateHeaders);
       if (gateResponse) return gateResponse;
     }
-    const planTier = subscription?.plan_tier ?? 'free';
+    const planTier = entitlement.plan;
     await assertTierUnitAllowance({
       db: scoped.db,
       userId,
