@@ -23,8 +23,12 @@ import {
   type MemoryIneligibilityReason,
 } from '@/lib/services/managed-memory-context-service';
 import { excludedMemoryMessage } from '@/lib/services/memory-write-service';
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
 
 export const MEMORY_COMMAND_SOURCE = 'web';
+
+export const MEMORY_COMMAND_CLIENT_SURFACES: ReadonlySet<CloudChatSurface> =
+  new Set<CloudChatSurface>(['web', 'desktop']);
 
 /** A search that matched everything would offer to delete everything. */
 const MIN_FORGET_SUBJECT_CHARS = 3;
