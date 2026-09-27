@@ -1282,5 +1282,115 @@
   "spModelAutoDescription": {
     "message": "Route each turn to the model that fits it",
     "description": "One-line description of the automatic model choice"
+  },
+  "spPlansHeading": {
+    "message": "What each plan includes",
+    "description": "Disclosure heading over the per-plan comparison in the account section"
+  },
+  "spPlansYourPlan": {
+    "message": "$PLAN$ (your plan)",
+    "description": "Plan name marked as the account's current plan",
+    "placeholders": {
+      "plan": {
+        "content": "$1",
+        "example": "Pro"
+      }
+    }
+  },
+  "spPlansCredits": {
+    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month",
+    "description": "A plan's credits in each usage window",
+    "placeholders": {
+      "five_hour": {
+        "content": "$1",
+        "example": "50"
+      },
+      "weekly": {
+        "content": "$2",
+        "example": "500"
+      },
+      "monthly": {
+        "content": "$3",
+        "example": "2,000"
+      }
+    }
+  },
+  "spPlansCreditsFree": {
+    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month, free models only",
+    "description": "The Free plan's credits in each usage window, which apply to free models",
+    "placeholders": {
+      "five_hour": {
+        "content": "$1",
+        "example": "50"
+      },
+      "weekly": {
+        "content": "$2",
+        "example": "500"
+      },
+      "monthly": {
+        "content": "$3",
+        "example": "2,000"
+      }
+    }
+  },
+  "spPlansCreditsPerSeat": {
+    "message": "$FIVE_HOUR$ / $WEEKLY$ / $MONTHLY$ credits per 5 hours / week / month per seat",
+    "description": "A per-seat plan's credits in each usage window",
+    "placeholders": {
+      "five_hour": {
+        "content": "$1",
+        "example": "50"
+      },
+      "weekly": {
+        "content": "$2",
+        "example": "500"
+      },
+      "monthly": {
+        "content": "$3",
+        "example": "2,000"
+      }
+    }
+  },
+  "spPlansContract": {
+    "message": "Usage set by your contract",
+    "description": "Usage line for a contract-priced plan"
+  },
+  "spPlansIncludes": {
+    "message": "Includes: $FEATURES$",
+    "description": "The features a plan includes",
+    "placeholders": {
+      "features": {
+        "content": "$1",
+        "example": "Projects, AGI Work"
+      }
+    }
+  },
+  "spPlansAdds": {
+    "message": "Adds over $CURRENT$: $FEATURES$",
+    "description": "The features a plan adds over the account's current plan",
+    "placeholders": {
+      "current": {
+        "content": "$1",
+        "example": "Pro"
+      },
+      "features": {
+        "content": "$2",
+        "example": "Video generation"
+      }
+    }
+  },
+  "spPlansNothingMore": {
+    "message": "No features beyond $CURRENT$",
+    "description": "A plan that adds no features over the account's current plan",
+    "placeholders": {
+      "current": {
+        "content": "$1",
+        "example": "Pro"
+      }
+    }
+  },
+  "spPlansPricing": {
+    "message": "Prices and checkout",
+    "description": "Button that opens web pricing from the plan comparison"
   }
 }
