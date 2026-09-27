@@ -152,43 +152,9 @@ const RAW_SUBSCRIPTION_READ_PATTERNS = Object.freeze([
 
 export const UNCONVERTED_ENTITLEMENT_READS = Object.freeze([
   {
-    path: 'apps/web/app/api/chat/conversations/[id]/messages/[messageId]/follow-ups/route.ts',
-    why: 'follow-up reservation tier',
-  },
-  {
-    path: 'apps/web/app/api/chat/conversations/[id]/messages/lib/generate-title.ts',
-    why: 'title reservation tier',
-  },
-  { path: 'apps/web/app/api/download-beta/route.ts', why: 'desktop download entitlement' },
-  {
-    path: 'apps/web/app/api/llm/v1/audio/transcriptions/route.ts',
-    why: 'voice minutes and reservation tier',
-  },
-  {
-    path: 'apps/web/app/api/llm/v1/credits/balance/route.ts',
-    why: 'balance refusal and plan budget',
-  },
-  {
-    path: 'apps/web/app/api/llm/v1/embeddings/route.ts',
-    why: 'compute access and reservation tier',
-  },
-  { path: 'apps/web/app/api/projects/sync/route.ts', why: 'project cap' },
-  { path: 'apps/web/app/api/schedules/[id]/route.ts', why: 'schedule plan tier' },
-  { path: 'apps/web/app/api/schedules/route.ts', why: 'schedule cap' },
-  {
     path: 'apps/web/app/api/voice/live/sessions/route.ts',
     why: 'voice minutes and reservation tier',
   },
-  { path: 'apps/web/lib/connectors/mcp-custom-connections.ts', why: 'custom connector cap' },
-  {
-    path: 'apps/web/lib/services/retrieval-embedding-service.ts',
-    why: 'compute access and reservation tier',
-  },
-  {
-    path: 'apps/web/lib/services/scheduled-agent-executor.ts',
-    why: 'compute access and routing tier',
-  },
-  { path: 'apps/web/lib/support/handoff/account-context.ts', why: 'support handoff plan' },
 ]);
 
 export const BILLING_PLAN_TIERS = Object.freeze([

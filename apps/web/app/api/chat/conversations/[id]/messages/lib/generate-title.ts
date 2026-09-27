@@ -37,7 +37,8 @@ import {
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
+import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { estimateTokens } from '@agiworkforce/routing';
@@ -196,8 +197,8 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
   if (cacheLookup.outcome === 'hit' && cacheLookup.entry) {
     title = sanitizeGeneratedTitle(cacheLookup.entry.content);
   } else {
-    const subscription = await SubscriptionService.getSubscription(input.db, input.userId).catch(
-      () => null,
+    const planTier = await resolveEntitledPlanTier(input.db, input.userId).catch(() =>
+      normalizeBillingPlanTier(null),
     );
     let reservation;
     try {
@@ -221,7 +222,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
           MAX_OUTPUT_TOKENS,
         ),
         leaseSeconds: 60,
-        planTier: subscription?.plan_tier ?? 'free',
+        planTier,
         isFlagship: false,
         quotaFeature: CONVERSATION_TITLE_QUOTA_FEATURE,
       });
