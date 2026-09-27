@@ -21,12 +21,14 @@ function postgresReturning(
   sql: string,
   accounts: Array<{ id: string; user_id: string; used: number }>,
 ) {
-  const readsBefore = /before\.credits_used_cents\s+as\s+cleared_cents/i.test(sql);
+  const readsCentsBefore = /before\.credits_used_cents\s+as\s+cleared_cents/i.test(sql);
+  const readsMicrousdBefore = /before\.credits_used_microusd\s+as\s+cleared_microusd/i.test(sql);
   return accounts.map((account) => ({
     id: account.id,
     user_id: account.user_id,
     credits_used_cents: 0,
-    ...(readsBefore ? { cleared_cents: account.used } : {}),
+    ...(readsCentsBefore ? { cleared_cents: account.used } : {}),
+    ...(readsMicrousdBefore ? { cleared_microusd: String(account.used * 10_000) } : {}),
   }));
 }
 
@@ -46,7 +48,7 @@ describe('resetAllUsersUsage', () => {
 
     const result = await resetAllUsersUsage('operator_1');
 
-    expect(result).toEqual({ affectedUsers: 2, clearedCents: 1550 });
+    expect(result).toEqual({ affectedUsers: 2, clearedCredits: 3100 });
     const [ledgerSql, ledgerValues] = mocks.execute.mock.calls[0] as [string, unknown[]];
     expect(ledgerSql).toMatch(/insert into public\.credit_transactions/i);
     expect(ledgerValues).toEqual([
@@ -66,7 +68,7 @@ describe('resetAllUsersUsage', () => {
 
     await expect(resetAllUsersUsage('operator_1')).resolves.toEqual({
       affectedUsers: 0,
-      clearedCents: 0,
+      clearedCredits: 0,
     });
     expect(mocks.execute).not.toHaveBeenCalled();
   });

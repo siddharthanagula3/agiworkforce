@@ -95,7 +95,7 @@ describe('readEconomicsSummary', () => {
     const summary = await readEconomicsSummary({ from: FROM, to: TO, groupBy: 'total', db });
 
     expect(summary.totals.canonicalValueMicrousd).toBe(1_500_000);
-    expect(summary.totals.canonicalValueCredits).toBe(75);
+    expect(summary.totals.canonicalValueCredits).toBe(300);
     expect(summary.totals.canonicalValueToCogsRatio).toBe(3);
     expect(summary.totals.legacyRows).toBe(1);
   });

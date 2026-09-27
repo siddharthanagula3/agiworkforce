@@ -50,17 +50,22 @@ function post(body: unknown): NextRequest {
 beforeEach(() => {
   securityEvents.length = 0;
   vi.clearAllMocks();
-  service.previewBulkUsageReset.mockResolvedValue({ affectedUsers: 3, clearedCents: 1234 });
-  service.resetAllUsersUsage.mockResolvedValue({ affectedUsers: 3, clearedCents: 1234 });
-  service.grantBonusCredits.mockResolvedValue({ granted: true, balanceCents: 3000 });
-  service.resetUserUsage.mockResolvedValue({ reset: true, clearedCents: 500 });
+  service.previewBulkUsageReset.mockResolvedValue({ affectedUsers: 3, clearedCredits: 2468 });
+  service.resetAllUsersUsage.mockResolvedValue({ affectedUsers: 3, clearedCredits: 2468 });
+  service.grantBonusCredits.mockResolvedValue({
+    granted: true,
+    grantId: 'grant_1',
+    credits: 2_000,
+    expiresAt: '2026-12-26T00:00:00.000Z',
+  });
+  service.resetUserUsage.mockResolvedValue({ reset: true, clearedCredits: 1_000 });
 });
 
 describe('fleet-wide usage reset', () => {
   it('previews the blast radius without mutating anything', async () => {
     const res = await POST(post({ action: 'preview-reset-all' }));
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({ affectedUsers: 3, clearedCents: 1234 });
+    await expect(res.json()).resolves.toEqual({ affectedUsers: 3, clearedCredits: 2468 });
     expect(service.resetAllUsersUsage).not.toHaveBeenCalled();
   });
 
@@ -82,17 +87,35 @@ describe('fleet-wide usage reset', () => {
     expect(service.resetAllUsersUsage).toHaveBeenCalledWith('operator_1');
     const event = securityEvents.at(-1);
     expect(event?.['severity']).toBe('critical');
-    expect((event?.['details'] as Record<string, unknown>)['affected_users']).toBe(3);
+    expect(event?.['details']).toMatchObject({ affected_users: 3, cleared_credits: 2468 });
   });
 });
 
 describe('goodwill credit grants', () => {
-  it('grants a positive amount with a stated reason', async () => {
+  it('grants a positive amount as an expiring bonus and audits the stated reason', async () => {
     const res = await POST(
       post({ action: 'grant-credits', userId: 'u1', amountCents: 1000, reason: 'outage 8/20' }),
     );
     expect(res.status).toBe(200);
-    expect(service.grantBonusCredits).toHaveBeenCalledWith('u1', 1000, 'operator_1', 'outage 8/20');
+    await expect(res.json()).resolves.toEqual({
+      granted: true,
+      grantId: 'grant_1',
+      credits: 2_000,
+      expiresAt: '2026-12-26T00:00:00.000Z',
+    });
+    expect(service.grantBonusCredits).toHaveBeenCalledWith('u1', 1000, 'operator_1');
+    expect(securityEvents.at(-1)).toMatchObject({
+      severity: 'high',
+      details: {
+        action: 'grant-credits',
+        target_user_id: 'u1',
+        amount_cents: 1000,
+        reason: 'outage 8/20',
+        grant_id: 'grant_1',
+        credits: 2_000,
+        expires_at: '2026-12-26T00:00:00.000Z',
+      },
+    });
   });
 
   it('requires a reason so the grant stays explainable', async () => {
