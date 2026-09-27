@@ -7,6 +7,7 @@ import { getModelMetrics } from '../features/model-picker/modelMetrics';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import {
   TierInfoSchema,
+  TurnSettlementSchema,
   UsageHistorySchema,
   type TierInfoResponse,
   type UsageHistory,
@@ -604,12 +605,24 @@ interface StreamCallbacks {
   onDone: () => void;
 }
 
+export type ManagedRequestBilling = 'settle-now' | 'deferred';
+
+export interface ManagedRequestCompletion {
+  requestId: string;
+  billing: ManagedRequestBilling;
+}
+
+const managedRequestCompleted = new vscode.EventEmitter<ManagedRequestCompletion>();
+
+export const onDidCompleteManagedRequest = managedRequestCompleted.event;
+
 export async function streamChatCompletion(
   secrets: vscode.SecretStorage,
   messages: LlmChatMessage[],
   callbacks: StreamCallbacks,
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
+  billing: ManagedRequestBilling = 'settle-now',
 ): Promise<void> {
   const credential = await getCloudCredential(secrets);
   if (credential.kind === 'none') {
@@ -678,7 +691,28 @@ export async function streamChatCompletion(
   if (!cancellationToken.isCancellationRequested) {
     callbacks.onDone();
     getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
+    managedRequestCompleted.fire({ requestId: idempotencyKey, billing });
   }
+}
+
+const TURN_SETTLEMENT_POLL_DELAYS_MS = [0, 500, 1_000, 2_000] as const;
+
+export async function fetchBilledCredits(
+  secrets: vscode.SecretStorage,
+  requestId: string,
+): Promise<number | null> {
+  for (const delayMs of TURN_SETTLEMENT_POLL_DELAYS_MS) {
+    if (delayMs > 0) await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    const response = await getAccountJson(
+      secrets,
+      `/api/usage/turns/${encodeURIComponent(requestId)}`,
+    );
+    if (response?.kind !== 'ok') return null;
+    const parsed = TurnSettlementSchema.safeParse(response.body);
+    if (!parsed.success) return null;
+    if (parsed.data.status === 'settled') return parsed.data.credits ?? 0;
+  }
+  return null;
 }
 
 export async function chatCompletion(
@@ -686,6 +720,7 @@ export async function chatCompletion(
   messages: LlmChatMessage[],
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
+  billing: ManagedRequestBilling = 'settle-now',
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -712,6 +747,7 @@ export async function chatCompletion(
       },
       cancellationToken,
       overrideModel,
+      billing,
     ).catch(safeReject);
   });
 }

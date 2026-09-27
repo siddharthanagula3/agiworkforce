@@ -102,6 +102,14 @@ export const UsageHistorySchema = z.object({
 
 export type UsageHistory = z.infer<typeof UsageHistorySchema>;
 
+export const TurnSettlementSchema = z.object({
+  requestId: z.string().min(1).max(200),
+  status: z.enum(['settled', 'pending']),
+  credits: z.number().nonnegative().nullable(),
+});
+
+export type TurnSettlement = z.infer<typeof TurnSettlementSchema>;
+
 export const PaywallPayloadSchema = z.object({
   kind: z.literal('paywall'),
   feature: z.string().min(1).max(200),
