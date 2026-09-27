@@ -37,7 +37,8 @@ vi.mock('../../../api/cloudSkills', () => ({
   listCloudSkills: mocks.listCloudSkills,
 }));
 
-vi.mock('../../../utils/navigation', () => ({
+vi.mock('../../../utils/navigation', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../utils/navigation')>()),
   openExternalUrl: mocks.openExternalUrl,
 }));
 

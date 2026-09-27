@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   getUser: vi.fn(),
 }));
 
-vi.mock('../../../lib/tauri-mock', () => ({
+vi.mock('../../../lib/tauri-mock', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../lib/tauri-mock')>()),
   invoke: mocks.invoke,
 }));
 
-vi.mock('../../../services/cloudAccountAuth', () => ({
+vi.mock('../../../services/cloudAccountAuth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../services/cloudAccountAuth')>()),
   cloudAccountAuth: { getUser: mocks.getUser },
 }));
 
