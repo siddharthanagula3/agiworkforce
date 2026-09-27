@@ -164,10 +164,6 @@ Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | Decisions show on the approval card in the current session only. | ui |
-| chrome | partial | Decisions show as "decision recorded" on the step only. | ui |
-
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4602-4605`, `apps/extension/src/features/side-panel/bubbles.ts:483-483`
 
 ## S59.26: Approval from another device.
 
