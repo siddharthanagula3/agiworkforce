@@ -26,6 +26,7 @@ type SubRow = Pick<
   | 'current_period_start'
   | 'current_period_end'
   | 'status'
+  | 'plan_catalog_version'
 >;
 
 /**
@@ -45,7 +46,8 @@ type SubRow = Pick<
  * timestamps collide in bulk.
  */
 const PAGE_SQL = `
-  select id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status
+  select id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status,
+         plan_catalog_version
     from subscriptions
    where status = any($1)
      and ($2::timestamptz is null or (current_period_start, id) < ($2::timestamptz, $3::uuid))
@@ -95,7 +97,11 @@ export async function GET(request: NextRequest) {
             subscription.plan_tier || 'free',
             new Date(subscription.current_period_start),
             new Date(subscription.current_period_end),
-            { db, stripePriceId: subscription.stripe_price_id },
+            {
+              db,
+              stripePriceId: subscription.stripe_price_id,
+              catalogVersion: subscription.plan_catalog_version ?? null,
+            },
           );
           if (accountId) resetCount++;
           if (isSeatBearingBillingPlan(subscription.plan_tier)) {
@@ -104,6 +110,7 @@ export async function GET(request: NextRequest) {
               subscriptionId: subscription.id,
               periodStart: new Date(subscription.current_period_start),
               periodEnd: new Date(subscription.current_period_end),
+              catalogVersion: subscription.plan_catalog_version ?? null,
             });
           }
         } catch (error) {

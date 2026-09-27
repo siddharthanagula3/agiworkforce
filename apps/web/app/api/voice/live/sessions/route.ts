@@ -257,6 +257,7 @@ async function handleCreateLiveSession(request: NextRequest) {
       db: scoped.db,
       userId,
       planTier,
+      catalogVersion: entitlement.catalogVersion,
       modelId: liveModel.id,
     });
     limitResets = block.resetsAt;

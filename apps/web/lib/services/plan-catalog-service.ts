@@ -8,6 +8,7 @@ import {
   normalizeBillingPlanTier,
   planCatalogEntry,
   resolveGrandfatheredPlan,
+  resolvePlanCatalogVersion,
   resolvePurchasablePlan,
   toEntitlement,
   toProduct,
@@ -86,4 +87,21 @@ export function resolveSubscriberPlan(input: {
     soldUnderCatalogVersion: soldUnder,
     repriced: soldUnder !== BILLING_PLAN_CATALOG_VERSION,
   };
+}
+
+export function catalogVersionSold(metadata: Record<string, string> | null | undefined): number {
+  return (
+    resolvePlanCatalogVersion(metadata?.['plan_catalog_version']) ?? BILLING_PLAN_CATALOG_VERSION
+  );
+}
+
+export function catalogVersionAtRenewal(input: {
+  storedPriceId: string | null;
+  storedCatalogVersion: number | null;
+  priceId: string | null;
+}): number {
+  const stored = resolvePlanCatalogVersion(input.storedCatalogVersion);
+  return stored !== null && input.storedPriceId !== null && input.storedPriceId === input.priceId
+    ? stored
+    : BILLING_PLAN_CATALOG_VERSION;
 }

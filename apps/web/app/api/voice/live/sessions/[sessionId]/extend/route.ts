@@ -137,11 +137,13 @@ async function handleExtendLiveSession(
     }
     if (state.extensionStatus === 'extended') return covered(state.reservedMicrousd);
 
-    const planTier = (await resolveEntitlementBundle(scoped.db, userId)).plan;
+    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
+    const planTier = entitlement.plan;
     const block = await planVoiceSessionBlock({
       db: scoped.db,
       userId,
       planTier,
+      catalogVersion: entitlement.catalogVersion,
       modelId,
     });
     resetsAt = block.resetsAt;

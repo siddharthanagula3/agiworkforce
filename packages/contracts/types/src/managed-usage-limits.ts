@@ -5,6 +5,7 @@ import {
   isProPlanTier,
   type BillingPlanTier,
 } from './billing-catalog';
+import { BILLING_PLAN_CATALOG_VERSION } from './billing-plan-catalog';
 
 export interface ManagedUsageLimit {
   monthlyCredits: number;
@@ -72,6 +73,31 @@ export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsage
     },
     enterprise: { ...NO_MANAGED_USAGE, unlimited: true },
   });
+
+export type ManagedUsageLimitTable = Readonly<Record<BillingPlanTier, ManagedUsageLimit>>;
+
+export const MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION: Readonly<
+  Record<number, ManagedUsageLimitTable>
+> = Object.freeze({ [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS });
+
+export function resolvePlanCatalogVersion(value: unknown): number | null {
+  const version = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;
+  return typeof version === 'number' &&
+    Number.isSafeInteger(version) &&
+    Object.prototype.hasOwnProperty.call(MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION, version)
+    ? version
+    : null;
+}
+
+export function managedUsageLimitsForCatalogVersion(
+  catalogVersion: number | null | undefined,
+): ManagedUsageLimitTable {
+  const version = resolvePlanCatalogVersion(catalogVersion);
+  return (
+    (version === null ? undefined : MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION[version]) ??
+    MANAGED_USAGE_LIMITS
+  );
+}
 
 export interface ManagedUsageWindowMultipliers {
   fiveHour: number;
@@ -144,8 +170,11 @@ function hasFlagshipWeeklyAllowance(tier: BillingPlanTier): boolean {
   );
 }
 
-function buildPlanCreditAllowance(tier: BillingPlanTier): PlanCreditAllowance {
-  const limit = MANAGED_USAGE_LIMITS[tier];
+function buildPlanCreditAllowance(
+  tier: BillingPlanTier,
+  limits: ManagedUsageLimitTable = MANAGED_USAGE_LIMITS,
+): PlanCreditAllowance {
+  const limit = limits[tier];
   if (limit.unlimited) {
     return {
       monthly: Infinity,
@@ -176,6 +205,12 @@ export const PLAN_CREDIT_ALLOWANCES: Readonly<Record<BillingPlanTier, PlanCredit
     ) as Record<BillingPlanTier, PlanCreditAllowance>,
   );
 
-export function getPlanCreditAllowance(tier: BillingPlanTier): PlanCreditAllowance {
-  return PLAN_CREDIT_ALLOWANCES[tier];
+export function getPlanCreditAllowance(
+  tier: BillingPlanTier,
+  catalogVersion?: number | null,
+): PlanCreditAllowance {
+  const limits = managedUsageLimitsForCatalogVersion(catalogVersion);
+  return limits === MANAGED_USAGE_LIMITS
+    ? PLAN_CREDIT_ALLOWANCES[tier]
+    : buildPlanCreditAllowance(tier, limits);
 }
