@@ -68,6 +68,10 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
   getMcpStatelessRuntime: vi.fn(async () => ({})),
+  mcpAuthorizationContext: {
+    userOauthConnector: (userId: string, connectorId: string) =>
+      `user:${userId}:oauth:${connectorId}`,
+  },
   NeonMcpResponseCacheStore: class {
     async get() {
       return undefined;

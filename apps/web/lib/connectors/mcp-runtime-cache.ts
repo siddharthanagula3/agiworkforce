@@ -12,6 +12,7 @@ import type {
 
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { DEFAULT_CONNECTOR_ACCOUNT_KEY } from '@/lib/connectors/accounts';
 
 const DISCOVERY_TTL_MS = 24 * 60 * 60 * 1_000;
 const PG_UNDEFINED_TABLE = '42P01';
@@ -287,8 +288,10 @@ export async function saveMcpDiscovery(
 export const mcpAuthorizationContext = {
   userCustomConnector: (userId: string, rowId: string) => `user:${userId}:custom:${rowId}`,
   userCustomUrl: (userId: string, url: string) => `user:${userId}:custom-url:${url}`,
-  userOauthConnector: (userId: string, connectorId: string) =>
-    `user:${userId}:oauth:${connectorId}`,
+  userOauthConnector: (userId: string, connectorId: string, accountKey?: string | null) =>
+    accountKey && accountKey !== DEFAULT_CONNECTOR_ACCOUNT_KEY
+      ? `user:${userId}:oauth:${connectorId}:account:${accountKey}`
+      : `user:${userId}:oauth:${connectorId}`,
   operatorConnector: (connectorId: string) => `operator:${connectorId}`,
   organizationSharedServer: (organizationId: string, rowId: string) =>
     `organization:${organizationId}:shared:${rowId}`,
