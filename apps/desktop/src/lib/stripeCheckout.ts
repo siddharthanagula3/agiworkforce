@@ -233,6 +233,7 @@ export type UpgradePreview =
       recurringAmountCents: number;
       currency: string;
       previewToken: string;
+      grandfatheredNotice: string | null;
     }
   | {
       kind: 'checkout-required';
@@ -287,6 +288,7 @@ export async function previewPlanUpgrade(tierId: BillingPlanTier): Promise<Upgra
   const recurringAmount = payload['recurringAmountCents'];
   const currency = payload['currency'];
   const previewToken = payload['previewToken'];
+  const grandfatheredNotice = payload['grandfatheredNotice'];
   if (
     typeof amount !== 'number' ||
     typeof recurringAmount !== 'number' ||
@@ -302,6 +304,8 @@ export async function previewPlanUpgrade(tierId: BillingPlanTier): Promise<Upgra
     recurringAmountCents: recurringAmount,
     currency,
     previewToken,
+    grandfatheredNotice:
+      typeof grandfatheredNotice === 'string' && grandfatheredNotice ? grandfatheredNotice : null,
   };
 }
 

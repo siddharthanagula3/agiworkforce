@@ -164,6 +164,10 @@ export function DesktopUpgradeConfirmDialog({
           </div>
         ) : null}
 
+        {preview?.kind === 'prorated' && preview.grandfatheredNotice ? (
+          <p className="text-sm text-muted-foreground">{preview.grandfatheredNotice}</p>
+        ) : null}
+
         {error ? <p className="text-sm text-red-500">{error}</p> : null}
         {syncPending ? (
           <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-300">
