@@ -4,8 +4,8 @@ import { ShieldAlert } from 'lucide-react';
 
 const POINTS: { title: string; body: string }[] = [
   {
-    title: 'Connector tools ask before they act',
-    body: 'When a connector tool is available in a conversation, every tool call in that turn waits for your approval, not once at connect time, every time.',
+    title: 'Tools AGI does not recognise ask before they act',
+    body: 'A connector tool AGI does not recognise waits for your approval on every call until you set it to Allow. A tool AGI knows only reads data, such as a pull-request diff, follows your Tool approvals default, which runs it without asking unless you change it.',
   },
   {
     title: 'A Block is absolute',

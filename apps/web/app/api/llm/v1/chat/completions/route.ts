@@ -101,6 +101,7 @@ import { CloudAgentWorkflowBillingUnavailableError } from '@/lib/workflows/cloud
 import { areDurableInitialTurnsEnabled } from '@/lib/workflows/durable-initial-turns';
 import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
+  loadConnectorToolPermissions,
   withDisabledConnectorIds,
   withoutStandingApprovals,
 } from './lib/connector-tool-permissions';
@@ -518,6 +519,15 @@ async function dispatchChatCompletions(
       const startedRun = await beginCloudAgentRun(userId, processed, 'research', requestDb);
       if (startedRun instanceof NextResponse) return startedRun;
       const { run, db: runDb } = startedRun;
+      const researchToolApprovalPolicy =
+        processed.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
+      const researchConnectorPermissions = await timePhase(CHAT_TURN_PHASE.toolPermissions, () =>
+        loadConnectorToolPermissions(requestDb, userId),
+      );
+      processed.llmRequest.tools = substituteGatedWebSearchTool(processed.llmRequest.tools, {
+        approvalRequired: !policyAutoApprovesTool(researchToolApprovalPolicy, WEB_SEARCH_TOOL),
+        genericBackendConfigured: webSearchBackendConfigured(),
+      });
       const researchUsage = createObservedProviderUsage();
       // The research loop can rotate to a managed-failover candidate. Track the
       // view that is actually serving so settlement and attribution price by it,
@@ -600,6 +610,10 @@ async function dispatchChatCompletions(
           requirePlanApproval: (processed.researchResume?.approvedSteps.length ?? 0) === 0,
           domainPolicy: researchDomainPolicy,
           fileSources: researchFileSources,
+          toolApprovalPolicy: researchToolApprovalPolicy,
+          connectorPermissions: processed.conversationIsTemporary
+            ? withoutStandingApprovals(researchConnectorPermissions)
+            : researchConnectorPermissions,
           isCancellationRequested: () =>
             isCloudAgentRunCancellationRequested(runDb, { userId, runId: run.id }),
           // AUDIT-FIX BUG-1: a client cancel now aborts the in-flight upstream
@@ -692,7 +706,8 @@ async function dispatchChatCompletions(
     const connectorPermissionsRequired =
       modelSupportsTools && (userConnectorToolsEnabled || operatorTools.length > 0);
     const toolApprovalPolicyRequired =
-      connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn;
+      processed.toolApprovalPolicy === undefined &&
+      (connectorPermissionsRequired || requestOffersTools || isAgiWorkTurn);
     // AUDIT-FIX CON-1/CON-2: load the user's saved allow/ask/deny verdicts BEFORE
     // the catalog is built. `deny` tools are dropped from the catalog entirely
     // (so a Blocked tool is never advertised to the model and stops re-surfacing
@@ -702,7 +717,7 @@ async function dispatchChatCompletions(
     // whether the provider-native search below is withdrawn for the gated
     // shape, so skipping the read forced the default onto accounts that had
     // chosen otherwise and broke search-native models.
-    const { connectorPermissions, toolApprovalPolicy } =
+    const turnToolPermissions =
       connectorPermissionsRequired || toolApprovalPolicyRequired
         ? await timePhase(CHAT_TURN_PHASE.toolPermissions, async () => {
             return loadTurnToolPermissions(requestDb, userId, {
@@ -715,6 +730,9 @@ async function dispatchChatCompletions(
             connectorPermissions: EMPTY_CONNECTOR_TOOL_PERMISSIONS,
             toolApprovalPolicy: DEFAULT_TOOL_APPROVAL_POLICY,
           };
+    const { connectorPermissions } = turnToolPermissions;
+    const toolApprovalPolicy =
+      processed.toolApprovalPolicy ?? turnToolPermissions.toolApprovalPolicy;
     // Per-conversation connector opt-out: connectors the client switched off
     // for THIS turn only, layered on top of the user's standing allow/ask/deny
     // verdicts. Neither replaces the other -- a connector can be off for one
