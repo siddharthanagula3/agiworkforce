@@ -4,10 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import {
-  GRANTABLE_ORGANIZATION_PERMISSIONS,
-  type OrganizationPermission,
-} from '@agiworkforce/types';
+import type { OrganizationPermission } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -32,6 +29,7 @@ import {
   readServicePrincipal,
   type ServicePrincipal,
 } from '@/lib/server/service-principal';
+import { servicePrincipalScopes } from '@/lib/server/service-principals/route-access';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
@@ -92,7 +90,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const payload: AdminApiKeysResponse = {
     organizationId: membership.organizationId,
     canManageKeys: permissions.has('identity.manage'),
-    grantableScopes: GRANTABLE_ORGANIZATION_PERMISSIONS.filter((scope) => permissions.has(scope)),
+    grantableScopes: servicePrincipalScopes().filter((scope) => permissions.has(scope)),
     keys,
     servicePrincipals,
   };

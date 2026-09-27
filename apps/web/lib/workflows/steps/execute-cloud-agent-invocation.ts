@@ -315,6 +315,7 @@ const ToolResultSchema = z
         requestState: z.string().optional(),
       })
       .optional(),
+    freeTrialSpendMicrousd: z.number().nonnegative().optional(),
   })
   .strict();
 const toolResultSchemaCoversToolLoopToolResult: SameKeys<
@@ -473,6 +474,8 @@ export async function executeCloudAgentWorkflowInvocation(
         payload: toolCall,
         resultSchema: ToolResultSchema,
         execute,
+        usage: (result) =>
+          result.freeTrialSpendMicrousd ? { toolSpendMicrousd: result.freeTrialSpendMicrousd } : {},
       });
     },
     onInvocationCheckpoint: async (checkpoint) => {

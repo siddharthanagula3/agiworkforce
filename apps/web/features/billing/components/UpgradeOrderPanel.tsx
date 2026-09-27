@@ -12,6 +12,7 @@ import {
   previewUpgrade,
   startPlanCheckout,
   upgradePlanMidCycle,
+  type CheckoutTrialTerms,
   type SavedPaymentMethod,
   type UpgradeChargeBreakdown,
   type UpgradePromotionSummary,
@@ -86,6 +87,7 @@ export function UpgradeOrderPanel({
   const [checkoutRequired, setCheckoutRequired] = useState<{
     cents: number;
     currency: string;
+    trial: CheckoutTrialTerms | null;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -141,7 +143,11 @@ export function UpgradeOrderPanel({
         if (cancelled) return;
         if (e instanceof CheckoutRequiredError) {
           if (e.amountDueNowCents !== null && e.currency) {
-            setCheckoutRequired({ cents: e.amountDueNowCents, currency: e.currency });
+            setCheckoutRequired({
+              cents: e.amountDueNowCents,
+              currency: e.currency,
+              trial: e.trial ?? null,
+            });
           } else {
             setError('Could not verify the full checkout price. Please refresh and try again.');
           }
@@ -266,6 +272,28 @@ export function UpgradeOrderPanel({
           <p className="text-muted-foreground">Loading your account…</p>
         ) : previewing ? (
           <p className="text-muted-foreground">Calculating your prorated cost…</p>
+        ) : checkoutRequired?.trial ? (
+          <div className="flex flex-col gap-2">
+            <dl className="flex flex-col gap-2">
+              <div className="flex justify-between gap-4 font-semibold">
+                <dt>Due today</dt>
+                <dd className="tabular-nums">
+                  {formatMoney(checkoutRequired.cents, checkoutRequired.currency)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">
+                  From {formatRenewalDate(checkoutRequired.trial.convertsAt)}
+                </dt>
+                <dd className="tabular-nums">
+                  {`${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/${intervalWord} + tax`}
+                </dd>
+              </div>
+            </dl>
+            <p className="text-xs text-muted-foreground">
+              {checkoutRequired.trial.days}-day free trial. Checkout asks for a card.
+            </p>
+          </div>
         ) : checkoutRequired ? (
           /*
             Not "Total due today". Starting a plan goes through Stripe Checkout,
@@ -408,9 +436,11 @@ export function UpgradeOrderPanel({
 
       {!previewing && (charge || amountDue || checkoutRequired) ? (
         <p className="rounded-2xl border border-border bg-card p-4 text-sm text-muted-foreground">
-          {charge?.renewsAt
-            ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`
-            : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`}
+          {checkoutRequired?.trial
+            ? `Your free trial ends on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}. You will then be charged ${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)}/${intervalWord} + tax until you cancel. Cancel before ${formatRenewalDate(checkoutRequired.trial.convertsAt)} in Settings > Billing and you won't be charged.`
+            : charge?.renewsAt
+              ? `Your subscription will auto renew on ${formatRenewalDate(charge.renewsAt)}. You will be charged ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`
+              : `Your subscription will auto renew at ${formatCatalogPrice(recurringUsd)}/${intervalWord} + tax.`}
         </p>
       ) : null}
 
@@ -469,8 +499,10 @@ export function UpgradeOrderPanel({
         <span>
           You agree that AGI Workforce will charge{' '}
           {checkoutRequired ? 'the payment method you provide at checkout' : 'your payment method'}{' '}
-          in the amount above now and on a recurring {intervalWord}ly basis until you cancel in
-          accordance with our{' '}
+          {checkoutRequired?.trial
+            ? `${formatMoney(checkoutRequired.trial.amountCents, checkoutRequired.currency)} plus tax on ${formatRenewalDate(checkoutRequired.trial.convertsAt)}, when your free trial ends, and on a recurring ${intervalWord}ly basis after that`
+            : `in the amount above now and on a recurring ${intervalWord}ly basis`}{' '}
+          until you cancel in accordance with our{' '}
           <Link
             href="/terms"
             target="_blank"
@@ -494,7 +526,11 @@ export function UpgradeOrderPanel({
           (!amountDue && !checkoutRequired)
         }
       >
-        {confirming ? 'Subscribing…' : `Subscribe to ${planLabel}`}
+        {confirming
+          ? 'Subscribing…'
+          : checkoutRequired?.trial
+            ? 'Start free trial'
+            : `Subscribe to ${planLabel}`}
       </Button>
     </div>
   );

@@ -11382,7 +11382,10 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.done) {
-    if (quotaWarnedStreamIds.delete(chunk.id)) void refreshCloudAccountUI();
+    if (quotaWarnedStreamIds.has(chunk.id)) {
+      quotaWarnedStreamIds.delete(chunk.id);
+      void refreshCloudAccountUI();
+    }
     resolvedRouteByStreamId.delete(chunk.id);
     quickModeByStreamId.delete(chunk.id);
     ownerByStreamId.delete(chunk.id);

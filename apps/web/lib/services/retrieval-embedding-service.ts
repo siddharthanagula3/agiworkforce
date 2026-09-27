@@ -37,6 +37,7 @@ import {
   resolveServerProviderCredentials,
 } from '@/lib/services/provider-adapter-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import { freeDailyLimitError, hasDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 
 const EMBEDDING_SLOT = 'embedding_default';
 const EMBEDDING_LEASE_SECONDS = 120;
@@ -76,7 +77,7 @@ export interface RetrievalEmbeddingRoute {
 }
 
 export type RetrievalEmbeddingFailureCode =
-  'no_route' | 'not_entitled' | 'billing_refused' | 'provider_failed';
+  'no_route' | 'not_entitled' | 'billing_refused' | 'provider_failed' | 'daily_limit';
 
 export class RetrievalEmbeddingError extends Error {
   constructor(
@@ -218,6 +219,18 @@ export async function embedTextsMetered(
   );
   if (!access.allowed) {
     throw new RetrievalEmbeddingError(access.reason, 'not_entitled');
+  }
+  if (
+    input.purpose === 'query' &&
+    !(await hasDailyAllowance({
+      db: input.db,
+      userId: input.userId,
+      planTier: entitlement.plan,
+      unit: 'vector_queries',
+      requestedUnits: 1,
+    }))
+  ) {
+    throw new RetrievalEmbeddingError(freeDailyLimitError('vector_queries').message, 'daily_limit');
   }
 
   const estimatedTokens = estimateEmbeddingTokens(texts);

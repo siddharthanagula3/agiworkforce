@@ -12,14 +12,12 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { resolveWireMode } from './adapter-providers';
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import {
   fingerprintManagedUsageRequest,
-  finalizeManagedUsageRequest,
-  markManagedUsageProviderStarted,
-  reserveManagedUsageRequest,
+  ManagedUsageRequestError,
 } from '@/lib/services/managed-usage-request-service';
+import { reserveBackgroundUsage } from '@/lib/services/background-usage-lease';
 import { drainToLlmResponse } from './adapter-response';
 import { redactSecrets } from '@/lib/security/secrets-audit';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
@@ -182,32 +180,24 @@ async function generateCompactionSummary(params: {
     provider: route.provider,
     model: route.modelKey,
   });
-  const estimatedPromptTokens =
-    estimateTokens(`${systemPrompt}\n${userContent}`, route.modelKey) + 32;
-  const estimatedCostCents = LLMCostCalculator.estimateCost(
-    route.provider,
-    route.modelKey,
-    estimatedPromptTokens,
-    MAX_COMPACTION_SUMMARY_OUTPUT_TOKENS,
-  );
-
-  const reservation = await reserveManagedUsageRequest({
+  const lease = await reserveBackgroundUsage({
     db: params.db,
     userId: params.userId,
     organizationId: params.organizationId,
+    planTier: params.planTier,
     idempotencyKey,
     requestHash,
     provider: route.provider,
     model: route.modelKey,
-    estimatedCostCents,
+    routeId: route.routeId,
+    estimatedPromptTokens: estimateTokens(`${systemPrompt}\n${userContent}`, route.modelKey) + 32,
+    maxOutputTokens: MAX_COMPACTION_SUMMARY_OUTPUT_TOKENS,
     leaseSeconds: 60,
-    planTier: params.planTier,
-    isFlagship: false,
   });
 
   let providerCompleted = false;
   try {
-    await markManagedUsageProviderStarted(reservation);
+    await lease.providerStarted();
     const adapter = buildServerProviderAdapter(dispatchProvider);
     const response = await drainToLlmResponse(
       adapter.stream(chatRequest, new AbortController().signal),
@@ -217,21 +207,19 @@ async function generateCompactionSummary(params: {
     );
     providerCompleted = true;
 
-    const actualCostCents = LLMCostCalculator.calculateCost(route.provider, response.model, {
+    const tokenUsage = {
       promptTokens: response.promptTokens,
       completionTokens: response.completionTokens,
       totalTokens: response.totalTokens,
-    });
-    await finalizeManagedUsageRequest({
-      ...reservation,
-      outcome: 'completed',
-      actualCostCents,
-      usage: {
+    };
+    await lease.completed({
+      provider: route.provider,
+      model: response.model,
+      usage: tokenUsage,
+      record: {
         type: 'context_compaction',
         conversationId: params.conversationId,
-        promptTokens: response.promptTokens,
-        completionTokens: response.completionTokens,
-        totalTokens: response.totalTokens,
+        ...tokenUsage,
       },
     });
 
@@ -240,21 +228,18 @@ async function generateCompactionSummary(params: {
     return summary;
   } catch (error) {
     if (!providerCompleted) {
-      await finalizeManagedUsageRequest({
-        ...reservation,
-        outcome: 'failed',
-        actualCostCents: 0,
-        usage: {
+      await lease
+        .failed({
           type: 'context_compaction',
           conversationId: params.conversationId,
           reason: error instanceof Error ? error.message : String(error),
-        },
-      }).catch((releaseError: unknown) => {
-        logger.error(
-          { releaseError, conversationId: params.conversationId },
-          '[context-compaction] reservation release failed',
-        );
-      });
+        })
+        .catch((releaseError: unknown) => {
+          logger.error(
+            { releaseError, conversationId: params.conversationId },
+            '[context-compaction] reservation release failed',
+          );
+        });
     }
     throw error;
   }
@@ -434,7 +419,7 @@ export async function compactContextWindow(
       input.model,
     );
   } catch (error) {
-    logger.error(
+    logger[error instanceof ManagedUsageRequestError ? 'warn' : 'error'](
       { error, conversationId },
       '[context-compaction] summarization failed; falling back to the mechanical trim',
     );

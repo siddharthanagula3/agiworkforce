@@ -1,12 +1,10 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import type { OrganizationPermission } from '@agiworkforce/types';
-
+import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { isAdminApiKeyToken } from '@/lib/server/admin-api-keys';
-import { resolveComplianceCaller } from '@/lib/server/compliance-caller';
+import { resolveComplianceCaller, type ComplianceCaller } from '@/lib/server/compliance-caller';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { assertInteractiveMemberActor } from '@/lib/server/service-principal';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
@@ -14,24 +12,19 @@ import { requireMemberPermission } from '@/lib/services/organization-permission-
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import { workspaceRouteAccess } from './route-access';
 
-export interface WorkspaceApiCaller {
-  kind: 'member' | 'service_principal';
-  db: DatabaseAdapter;
-  actorUserId: string;
-  organizationId: string;
-  role: string;
-  keyId: string | null;
-  servicePrincipalId: string | null;
-  permissions: ReadonlySet<OrganizationPermission> | null;
-}
+export type WorkspaceApiCaller = ComplianceCaller;
 
 function bearerToken(request: Request): string | null {
-  const match = /^Bearer[ ]+(\S+)$/u.exec(request.headers.get('authorization')?.trim() ?? '');
+  const match = /^Bearer[ ]+(\S+)$/iu.exec(request.headers.get('authorization')?.trim() ?? '');
   return match?.[1] ?? null;
 }
 
 export function presentsWorkspaceApiKey(request: Request): boolean {
   return isAdminApiKeyToken(bearerToken(request));
+}
+
+export async function requireCsrfUnlessWorkspaceApiKey(request: Request): Promise<Response | null> {
+  return presentsWorkspaceApiKey(request) ? null : requireCsrfToken(request);
 }
 
 /**
@@ -56,8 +49,7 @@ export async function resolveWorkspaceApiCaller(
         .forbidden('This endpoint is not available to workspace API keys.')
         .asUserSafe();
     }
-    const caller = await resolveComplianceCaller(request, access.permission, access.deniedMessage);
-    return { ...caller, permissions: null };
+    return resolveComplianceCaller(request, access.permission, access.deniedMessage);
   }
 
   const { db, userId } = await getUserScopedDb(request);
@@ -79,6 +71,14 @@ export async function resolveWorkspaceApiCaller(
     servicePrincipalId: null,
     permissions,
   };
+}
+
+export function auditSurfaceOf(caller: WorkspaceApiCaller): string | undefined {
+  return caller.kind === 'service_principal' ? 'api' : undefined;
+}
+
+export function auditSourceOf(caller: WorkspaceApiCaller): string | undefined {
+  return caller.keyId === null ? undefined : `admin_api_key:${caller.keyId}`;
 }
 
 export function assertInteractiveCaller(caller: WorkspaceApiCaller, capability: string): void {

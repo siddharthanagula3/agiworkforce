@@ -9,6 +9,7 @@ import { chargeMicrousdForProviderCost, getModelMetadataById } from '@agiworkfor
 export { FREE_TRIAL_MODEL, FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { eventAllowsModel } from '@/lib/server/event-access';
+import { rollingResetAt, toIsoTimestamp } from '@/lib/server/capability-limit-resets';
 import {
   reserveEventSpend,
   settleEventSpend,
@@ -21,6 +22,8 @@ import {
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
 import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
+import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
+import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
 
 export const FREE_TRIAL_INTERNAL_USAGE_POLICY = Object.freeze({
   fiveHourBudgetMicrousd: getPlanFiveHourUsageBudgetMicrousd('free'),
@@ -278,6 +281,21 @@ export function createFreeTrialToolSpend(input: {
   };
 }
 
+export function scopeFreeTrialToolSpend(
+  parent: FreeTrialToolSpend,
+): FreeTrialToolSpend & { spentMicrousd(): number } {
+  let spentMicrousd = 0;
+  return {
+    hold: (providerMicrousd) => parent.hold(providerMicrousd),
+    settle(heldMicrousd, spent) {
+      spentMicrousd += nonNegativeMicrousd(spent);
+      parent.settle(heldMicrousd, spent);
+    },
+    exhausted: () => parent.exhausted(),
+    spentMicrousd: () => spentMicrousd,
+  };
+}
+
 export function fitsFreeTrialWindow(providerMicrousd: number): boolean {
   const { fiveHourBudgetMicrousd, weeklyBudgetMicrousd, monthlyBudgetMicrousd } =
     FREE_TRIAL_INTERNAL_USAGE_POLICY;
@@ -484,6 +502,10 @@ export async function beginFreeTrialRequest(params: {
   /** The requested model is selectable only because the event promotes it. */
   eventPromoted?: boolean;
   freePoolRoute?: boolean;
+  estimatedMicrousd?: number;
+  leaseSeconds: number;
+  provider: string;
+  model: string;
 }): Promise<ReserveResult> {
   const db = createClaimedUserScopedDb(getNeonDb(), {
     userId: params.userId,
@@ -528,7 +550,11 @@ export async function beginFreeTrialRequest(params: {
     if (!snapshot) throw new Error('Free-tier usage snapshot unavailable');
 
     const remainingMicrousd = remainingFromSnapshot(snapshot);
-    if (remainingMicrousd === 0) {
+    const reserveMicrousd =
+      params.estimatedMicrousd === undefined
+        ? remainingMicrousd
+        : Math.max(1, chargeMicrousdForProviderCost(params.estimatedMicrousd));
+    if (remainingMicrousd === 0 || reserveMicrousd > remainingMicrousd) {
       if (params.freePoolRoute !== true) {
         return { ok: false, code: 'budget_reached', resetAt: bindingResetAt(snapshot) };
       }
@@ -546,9 +572,17 @@ export async function beginFreeTrialRequest(params: {
 
     const reserved = await tx.execute(
       `insert into public.free_daily_usage_reservations
-         (user_id, request_id, window_started_at, reserved_microusd)
-       values ($1, $2, now(), $3)`,
-      [params.userId, params.requestId, remainingMicrousd],
+         (user_id, request_id, window_started_at, reserved_microusd,
+          lease_expires_at, provider, model)
+       values ($1, $2, now(), $3, now() + make_interval(secs => $4), $5, $6)`,
+      [
+        params.userId,
+        params.requestId,
+        reserveMicrousd,
+        params.leaseSeconds,
+        params.provider,
+        params.model,
+      ],
     );
     if (reserved !== 1) throw new Error('Free-tier usage reservation failed');
 
@@ -558,7 +592,7 @@ export async function beginFreeTrialRequest(params: {
         kind: 'free_trial',
         userId: params.userId,
         requestId: params.requestId,
-        reservedMicrousd: remainingMicrousd,
+        reservedMicrousd: reserveMicrousd,
         ...unmetered,
       },
     };
@@ -691,19 +725,72 @@ export async function settleFreeTrialRequest(params: {
   }
 }
 
-function toIsoTimestamp(value: string | Date | null | undefined): string | null {
-  if (!value) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+export async function releaseExpiredFreeTrialReservations(
+  db: DatabaseAdapter,
+  limit: number,
+): Promise<{ released: number; absorbedMicrousd: number }> {
+  const rows = await db.query<{
+    user_id: string;
+    request_id: string;
+    reserved_microusd: number | string;
+    provider: string | null;
+    model: string | null;
+  }>(
+    `with expired as (
+       select id
+         from public.free_daily_usage_reservations
+        where settled_at is null
+          and (lease_expires_at is null or lease_expires_at <= now())
+        order by created_at
+        limit $1
+        for update skip locked
+     ),
+     released as (
+       update public.free_daily_usage_reservations reservation
+          set actual_cost_microusd = 0,
+              outcome = 'failed',
+              settled_at = now()
+         from expired
+        where reservation.id = expired.id
+          and reservation.settled_at is null
+       returning reservation.user_id, reservation.request_id, reservation.reserved_microusd,
+                 reservation.provider, reservation.model
+     ),
+     recorded as (
+       insert into public.usage_events (user_id, event_type, quantity, metadata)
+       select released.user_id, 'website_auto_economy_trial_usage_settled', 0,
+              jsonb_build_object('requestId', released.request_id, 'outcome', 'failed',
+                                 'recordedTokens', 0, 'leaseExpired', true)
+         from released
+       on conflict do nothing
+     )
+     select user_id, request_id, reserved_microusd, provider, model from released`,
+    [limit],
+  );
+
+  let absorbedMicrousd = 0;
+  for (const row of rows) {
+    const reservedMicrousd = toNonNegativeInteger(row.reserved_microusd);
+    absorbedMicrousd += reservedMicrousd;
+    await recordSettledProviderCost({
+      userId: row.user_id,
+      organizationId: null,
+      provider: row.provider ?? 'unknown',
+      model: row.model,
+      actualCostCents: ledgerCentsFromMicrousd(reservedMicrousd),
+      providerEstimatedCostMicrousd: reservedMicrousd,
+      sourceRef: `free_trial_lease_expired:${row.user_id}:${row.request_id}`,
+      taskOutcome: 'undelivered',
+      taskRef: row.request_id,
+      usage: { type: 'free_trial_lease_expired', reservedMicrousd },
+      db,
+    });
+  }
+  return { released: rows.length, absorbedMicrousd };
 }
 
-function getRollingResetAt(
-  oldestAt: string | Date | null | undefined,
-  windowHours: number,
-): string | null {
-  const oldestTimestamp = toIsoTimestamp(oldestAt);
-  if (!oldestTimestamp) return null;
-  return new Date(Date.parse(oldestTimestamp) + windowHours * 60 * 60 * 1_000).toISOString();
+function getRollingResetAt(oldestAt: string | Date | null, windowHours: number): string | null {
+  return rollingResetAt(toIsoTimestamp(oldestAt), windowHours);
 }
 
 function nonNegativeMicrousd(value: number | undefined): number {

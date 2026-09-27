@@ -6,9 +6,12 @@ import { lifecycleStatusFromParts, type LifecycleStatus } from '@agiworkforce/ty
 import { z } from 'zod';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
 import type { SameKeys } from '@/lib/schema-key-guard';
-import type {
-  ObservedProviderUsage,
-  ProviderUsageObservation,
+import {
+  addToolSpend,
+  createObservedProviderUsage,
+  mergeObservedProviderUsage,
+  type ObservedProviderUsage,
+  type ProviderUsageObservation,
 } from '@/lib/services/managed-usage-accounting-service';
 
 const OperationKindSchema = z.enum(['provider', 'tool']);
@@ -554,6 +557,7 @@ interface CloudAgentExecutionUsageRow extends Record<string, unknown> {
   cache_write_1h_tokens: number | string;
   reasoning_tokens: number | string;
   provider_usage_receipts: unknown;
+  tool_spend_microusd: number | string;
 }
 
 const ProviderUsageObservationSchema = z
@@ -591,6 +595,18 @@ const ProviderUsageReceiptSchema = z
     model: z.string().min(1).optional(),
     providerCostDollars: z.number().finite().nonnegative().optional(),
     providerCallObservations: z.array(ProviderUsageObservationSchema).optional(),
+    webSearchRequests: z.number().int().nonnegative().optional(),
+    webFetchRequests: z.number().int().nonnegative().optional(),
+    hostedCodeExecution: z
+      .object({
+        provider: z.string().min(1),
+        requests: z.number().nonnegative(),
+        containerIds: z.array(z.string().min(1)),
+        elapsedMs: z.number().nonnegative(),
+      })
+      .strict()
+      .optional(),
+    toolSpendMicrousd: z.number().nonnegative().optional(),
   })
   .passthrough();
 
@@ -614,7 +630,14 @@ async function readCloudAgentUsage(
             coalesce(sum(case when jsonb_typeof(usage->'reasoningTokens') = 'number'
               then (usage->>'reasoningTokens')::bigint else 0 end), 0)::bigint as reasoning_tokens,
             coalesce(jsonb_agg(usage order by created_at, operation_key), '[]'::jsonb)
-              as provider_usage_receipts
+              as provider_usage_receipts,
+            (select coalesce(sum((tool.usage->>'toolSpendMicrousd')::numeric), 0)
+               from public.cloud_agent_execution_operations tool
+              where tool.run_id = $1 and tool.user_id = $2
+                and tool.operation_kind = 'tool' and tool.status = 'completed'
+                and jsonb_typeof(tool.usage->'toolSpendMicrousd') = 'number'
+                and ($3::text is null or tool.usage->>'billingIdempotencyKey' = $3))
+              as tool_spend_microusd
        from public.cloud_agent_execution_operations
       where run_id = $1 and user_id = $2
         and operation_kind = 'provider' and status = 'completed'
@@ -646,7 +669,19 @@ async function readCloudAgentUsage(
   const recordedCosts = receipts
     .map((receipt) => receipt.providerCostDollars)
     .filter((cost): cost is number => cost !== undefined);
+  const toolUsage = createObservedProviderUsage();
+  for (const receipt of receipts) {
+    mergeObservedProviderUsage(toolUsage, {
+      ...createObservedProviderUsage(),
+      ...(receipt.webSearchRequests ? { webSearchRequests: receipt.webSearchRequests } : {}),
+      ...(receipt.webFetchRequests ? { webFetchRequests: receipt.webFetchRequests } : {}),
+      ...(receipt.hostedCodeExecution ? { hostedCodeExecution: receipt.hostedCodeExecution } : {}),
+      ...(receipt.toolSpendMicrousd ? { toolSpendMicrousd: receipt.toolSpendMicrousd } : {}),
+    });
+  }
+  addToolSpend(toolUsage, z.coerce.number().nonnegative().parse(row.tool_spend_microusd));
   return {
+    ...toolUsage,
     providerCalls: counter.parse(row.provider_calls),
     inputTokens: counter.parse(row.input_tokens),
     outputTokens: counter.parse(row.output_tokens),

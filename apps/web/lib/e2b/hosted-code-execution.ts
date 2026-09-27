@@ -8,6 +8,14 @@ import { resolveTurnCodeExecutionTools, type TurnCodeExecutionInput } from './ex
 
 export type HostedCodeExecutionProvider = 'anthropic' | 'openai';
 
+export function hostedCodeExecutionProviderOf(
+  provider: string,
+): HostedCodeExecutionProvider | null {
+  return Object.hasOwn(FEATURE_BY_PROVIDER, provider)
+    ? (provider as HostedCodeExecutionProvider)
+    : null;
+}
+
 export interface HostedCodeExecutionPriceInput {
   provider: HostedCodeExecutionProvider;
   usage: unknown;
