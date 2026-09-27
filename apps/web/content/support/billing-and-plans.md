@@ -4,7 +4,7 @@ title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-09-21
+updated: 2026-09-27
 scope: public
 ---
 
@@ -28,6 +28,10 @@ in usage capacity and in which features they include: projects, custom MCP
 connections, concurrent responses, sandboxes, connector tools and scheduled
 tasks all scale with the plan. The pricing page carries the current prices,
 regional prices and per-plan limits.
+
+Basic, Pro, Max 5x and Max 20x are billed monthly only; Team can be billed
+monthly or yearly. A yearly Pro plan bought before 27 September 2026 keeps
+renewing yearly at its price until you change or cancel it.
 
 ## Cancelling
 
