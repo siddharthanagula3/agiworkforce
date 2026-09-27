@@ -5,6 +5,7 @@ import {
   PLAN_CREDIT_ALLOWANCES,
   PLAN_LABEL,
   creditAmount,
+  getPublishedPlanPricePerMonthUsd,
   managedUsageComparisonLabel,
   type UIPlanTier,
 } from '@agiworkforce/types';
@@ -41,7 +42,9 @@ describe('PlanCard', () => {
   it.each(['basic', 'pro'] as const)('makes no multiple claim for %s', (tier) => {
     render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
 
-    expect(bulletTexts().join('\n')).not.toMatch(new RegExp(`x ${PLAN_LABEL.pro}\\b|than ${PLAN_LABEL.pro}`));
+    expect(bulletTexts().join('\n')).not.toMatch(
+      new RegExp(`x ${PLAN_LABEL.pro}\\b|than ${PLAN_LABEL.pro}`),
+    );
   });
 
   it('sells the $200 plan under its catalog name, Max 20x', () => {
@@ -56,6 +59,26 @@ describe('PlanCard', () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: `Upgrade to ${PLAN_LABEL.max_15x}` }));
     expect(onCtaClick).toHaveBeenCalledWith('max_15x');
+  });
+
+  it('prices Team per seat on yearly billing and names the monthly seat price', () => {
+    const onCtaClick = vi.fn();
+
+    render(<PlanCard tier="team" isCurrentPlan={false} onCtaClick={onCtaClick} />);
+
+    expect(
+      screen.getByText(`$${getPublishedPlanPricePerMonthUsd('team', 'yearly')} / seat / mo`),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        `Billed yearly, or $${BILLING_PLAN_PRICING.team.monthlyPriceUsd} per seat billed monthly`,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(`$${BILLING_PLAN_PRICING.team.yearlyPriceUsd}`, { exact: false }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose seats' }));
+    expect(onCtaClick).toHaveBeenCalledWith('team');
   });
 
   it.each(['local', 'byok', 'free'] as const satisfies readonly UIPlanTier[])(

@@ -13,6 +13,7 @@ import {
   getPlanPriceCents,
   getPlanPriceInr,
   getPlanPriceUsd,
+  getPublishedPlanPricePerMonthUsd,
   getPublishedPlanPriceUsd,
   planOffersBillingInterval,
   isContractPricedPlan,
@@ -112,10 +113,19 @@ describe('billing catalog', () => {
     for (const plan of SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER) {
       expect(billingIntervalsForPlan(plan)).toEqual(['monthly']);
       expect(planOffersBillingInterval(plan, 'yearly')).toBe(false);
-      expect(getPublishedPlanPriceUsd(plan, 'yearly')).toBeNull();
+      expect(getPlanPriceUsd(plan, 'yearly')).toBeNull();
     }
     expect(billingIntervalsForPlan('team')).toEqual(['monthly', 'yearly']);
-    expect(getPublishedPlanPriceUsd('team', 'yearly')).toBe(240);
+    expect(getPlanPriceUsd('team', 'yearly')).toBe(240);
+  });
+
+  it('prices a yearly seat by its monthly equivalent and a monthly seat as sold', () => {
+    expect(getPublishedPlanPricePerMonthUsd('team', 'yearly')).toBe(20);
+    expect(getPublishedPlanPricePerMonthUsd('team', 'monthly')).toBe(
+      getPublishedPlanPriceUsd('team'),
+    );
+    expect(getPublishedPlanPricePerMonthUsd('pro', 'monthly')).toBe(20);
+    expect(getPublishedPlanPricePerMonthUsd('pro', 'yearly')).toBeNull();
   });
 
   describe('contract-priced plans publish no amount', () => {

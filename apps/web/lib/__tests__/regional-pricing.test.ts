@@ -53,7 +53,7 @@ describe('regional pricing', () => {
   });
 
   it('never lets a Stripe USD amount override the published USD price', () => {
-    const published = getPublishedPlanPriceCents('pro', 'monthly');
+    const published = getPublishedPlanPriceCents('pro');
     const liveCatalogPrice = {
       currency: 'usd',
       unit_amount: published + 999,
