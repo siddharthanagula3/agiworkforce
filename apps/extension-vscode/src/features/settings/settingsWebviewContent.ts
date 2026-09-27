@@ -341,6 +341,48 @@ export function getSettingsWebviewContent(
         background: var(--vscode-editorWarning-foreground, var(--agi-vscode-warning));
       }
 
+      .usage-window-list > .setting-row,
+      .usage-credits-row {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .usage-history-caption {
+        margin: 0;
+        padding: 12px 18px 4px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .usage-history-list {
+        margin: 0;
+        padding: 0 18px 12px;
+        list-style: none;
+      }
+
+      .usage-history-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 6px 0;
+        font-size: 12px;
+      }
+
+      .usage-history-row + .usage-history-row {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .usage-history-row > span:first-child {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .usage-history-value {
+        color: var(--vscode-descriptionForeground);
+        white-space: nowrap;
+      }
+
       .override-notice {
         margin-bottom: 18px;
         padding: 12px 14px;
@@ -760,13 +802,6 @@ export function getSettingsWebviewContent(
 
       .capability-availability-row {
         display: grid;
-        /*
-         * The second column was minmax(170px, auto). An auto max lets a long
-         * "Available in Pro, Max 5x, Max 15x, Team and Enterprise" string grow
-         * without bound, so the SECONDARY column ended up wider than the
-         * capability name and description it qualifies. Cap it: the primary
-         * content keeps the space, and the availability text wraps.
-         */
         grid-template-columns: minmax(0, 1fr) minmax(140px, 30%);
         align-items: center;
         gap: 18px;
@@ -1640,7 +1675,27 @@ export function getSettingsWebviewContent(
                 <span id="planUsageFill"></span>
               </div>
             </div>
+            <div class="usage-window-list" id="planUsageWindows" hidden></div>
+            <div class="setting-row usage-credits-row" id="planCreditsRow" hidden>
+              <div>
+                <span class="setting-name" id="planCreditsLabel">Credits</span>
+                <span class="setting-description" id="planCreditsCopy"></span>
+              </div>
+              <div class="control-stack">
+                <button class="secondary-button" id="planCreditsButton" type="button" data-command="manageBilling">
+                  Add credits
+                </button>
+              </div>
+            </div>
             <div class="status plan-status" id="planStatus" role="status" aria-live="polite"></div>
+          </div>
+
+          <div class="card" id="usageHistoryCard" hidden>
+            <div class="card-heading">
+              <h3>Usage history</h3>
+              <p id="usageHistoryRange">Settled usage on this account, in credits.</p>
+            </div>
+            <div id="usageHistoryBody"></div>
           </div>
 
           <details class="card diagnostic-card"${showDeveloperControls ? '' : ' hidden'}>
@@ -1927,6 +1982,107 @@ ${capabilityAvailabilityRows}
           }
         }
 
+        function renderPlanUsageWindows(windows) {
+          var container = document.getElementById('planUsageWindows');
+          if (!container) return;
+          container.textContent = '';
+          windows.forEach(function (row) {
+            var item = document.createElement('div');
+            item.className = 'setting-row';
+            var copy = document.createElement('div');
+            var name = document.createElement('span');
+            name.className = 'setting-name';
+            name.textContent = row.label;
+            var description = document.createElement('span');
+            description.className = 'setting-description';
+            description.textContent = row.reset ? row.usage + ' · ' + row.reset : row.usage;
+            copy.appendChild(name);
+            copy.appendChild(description);
+            var progress = document.createElement('div');
+            progress.className = 'usage-progress';
+            progress.setAttribute('role', 'progressbar');
+            progress.setAttribute('aria-label', row.label + ' usage');
+            progress.setAttribute('aria-valuemin', '0');
+            progress.setAttribute('aria-valuemax', '100');
+            progress.setAttribute('aria-valuenow', String(row.usedPercent));
+            progress.setAttribute('aria-valuetext', row.usage);
+            progress.classList.toggle('is-warning', row.usedPercent >= 80);
+            var fill = document.createElement('span');
+            fill.style.width = row.usedPercent + '%';
+            progress.appendChild(fill);
+            item.appendChild(copy);
+            item.appendChild(progress);
+            container.appendChild(item);
+          });
+          container.hidden = windows.length === 0;
+        }
+
+        function renderPlanCredits(credits) {
+          var row = document.getElementById('planCreditsRow');
+          if (!row) return;
+          row.hidden = !credits;
+          if (!credits) return;
+          document.getElementById('planCreditsLabel').textContent = credits.label;
+          document.getElementById('planCreditsCopy').textContent =
+            credits.balance + ' · ' + credits.spendability;
+          document.getElementById('planCreditsButton').textContent = credits.topUpLabel;
+        }
+
+        function appendUsageHistoryList(body, caption, rows) {
+          if (!rows || rows.length === 0) return;
+          var heading = document.createElement('h4');
+          heading.className = 'usage-history-caption';
+          heading.textContent = caption;
+          var list = document.createElement('ul');
+          list.className = 'usage-history-list';
+          rows.forEach(function (row) {
+            var item = document.createElement('li');
+            item.className = 'usage-history-row';
+            var label = document.createElement('span');
+            label.textContent = row.label;
+            var value = document.createElement('span');
+            value.className = 'usage-history-value';
+            value.textContent = row.credits + ' · ' + row.requests;
+            item.appendChild(label);
+            item.appendChild(value);
+            list.appendChild(item);
+          });
+          body.appendChild(heading);
+          body.appendChild(list);
+        }
+
+        function renderUsageHistory(history) {
+          var card = document.getElementById('usageHistoryCard');
+          var range = document.getElementById('usageHistoryRange');
+          var body = document.getElementById('usageHistoryBody');
+          if (!card || !range || !body) return;
+          body.textContent = '';
+          card.hidden = !history;
+          if (!history) return;
+          if (history.status !== 'ready') {
+            range.textContent = 'Settled usage on this account, in credits.';
+            var failure = document.createElement('p');
+            failure.className = 'status plan-status';
+            failure.dataset.kind = 'error';
+            failure.setAttribute('role', 'status');
+            failure.textContent = history.message;
+            body.appendChild(failure);
+            return;
+          }
+          var summary = history.summary;
+          range.textContent =
+            'Settled usage in the ' + summary.rangeLabel + ': ' + summary.total +
+            ' across ' + summary.totalRequests + '.';
+          appendUsageHistoryList(body, 'By model', summary.byModel);
+          appendUsageHistoryList(body, 'By day', summary.byDay);
+          if (summary.unsettled) {
+            var pending = document.createElement('p');
+            pending.className = 'status plan-status';
+            pending.textContent = summary.unsettled + '.';
+            body.appendChild(pending);
+          }
+        }
+
         function applySnapshot(nextState) {
           state = nextState;
           document.querySelectorAll('[data-setting]').forEach(function (control) {
@@ -1947,8 +2103,6 @@ ${capabilityAvailabilityRows}
           var modelPreference = document.getElementById('setting-model');
           if (modelPreference) modelPreference.value = String(state.values.model || 'auto');
 
-          // Raw id stays on the developer pill; the plan card gets the canonical
-          // catalog label the rest of the product uses ("Max 15x", not "max 15x").
           document.getElementById('currentTier').textContent =
             String(state.values.currentTier || 'unknown');
           var tierLabelEl = document.getElementById('currentTierLabel');
@@ -1964,7 +2118,12 @@ ${capabilityAvailabilityRows}
             (state.accountConnected === null ? 'loading' : state.accountConnected ? 'signed-in' : 'signed-out');
           var identity = state.accountIdentity || null;
           var tierInfo = state.tierInfo || null;
+          var planUsage = state.planUsage || null;
           var connected = accountAuthStatus === 'signed-in';
+          var usageWindows = (connected && planUsage && planUsage.windows) || [];
+          renderPlanUsageWindows(usageWindows);
+          renderPlanCredits(connected && planUsage ? planUsage.credits : null);
+          renderUsageHistory(connected ? state.usageHistory || null : null);
 
           if (tierLabelEl) {
             tierLabelEl.textContent = connected && identity
@@ -1990,7 +2149,11 @@ ${capabilityAvailabilityRows}
           }
           if (planSignInButton) planSignInButton.hidden = connected || accountAuthStatus === 'loading';
           if (planBillingButton) planBillingButton.hidden = !connected;
-          if (planUsageRow) planUsageRow.hidden = !connected || !tierInfo || typeof tierInfo.usagePercentage !== 'number';
+          if (planUsageRow) {
+            planUsageRow.hidden =
+              !connected || !tierInfo || typeof tierInfo.usagePercentage !== 'number' ||
+              usageWindows.length > 0;
+          }
           if (planUsageCopy && tierInfo && typeof tierInfo.usagePercentage === 'number') {
             var used = Math.max(0, Math.min(100, Math.round(tierInfo.usagePercentage)));
             var resetCopy = tierInfo.resetsAt
@@ -2022,7 +2185,7 @@ ${capabilityAvailabilityRows}
                     ? 'Organization-managed billing'
                     : '';
             planStatus.textContent = billingIssue
-              ? (tierInfo.accountPlanTier + ' billing needs attention. Managed developer access is paused; Local and provider BYOK remain available.')
+              ? (((planUsage && planUsage.planLabel) || tierInfo.accountPlanTier) + ' billing needs attention. Managed developer access is paused; Local and provider BYOK remain available.')
               : scheduledCancellation
                 ? identity.planName + ' remains active through ' + cancellationDate +
                   ', then ends.' + (billingOwner ? ' Billing owner: ' + billingOwner + '.' : '')

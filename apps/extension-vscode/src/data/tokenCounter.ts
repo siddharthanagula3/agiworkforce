@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { MICROUSD_PER_USD, creditsFromMicrousd, formatCredits } from '@agiworkforce/types';
 import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { isAutoRoutingModel } from '../integrations/routingTask';
 
@@ -40,6 +41,10 @@ export class TokenCounter implements vscode.Disposable {
     return this._estimatedCostUsd;
   }
 
+  get estimatedCredits(): number {
+    return creditsFromMicrousd(this._estimatedCostUsd * MICROUSD_PER_USD);
+  }
+
   addMeasuredUsage(model: string, promptTokens: number, completionTokens: number): void {
     this._promptTokens += promptTokens;
     this._completionTokens += completionTokens;
@@ -79,7 +84,7 @@ export class TokenCounter implements vscode.Disposable {
       `Output: ${formatTokenCount(this._completionTokens)}\n` +
       `Total: ${formatTokenCount(this.totalTokens)}\n` +
       `Turns: ${this._requestCount}\n` +
-      `Est. cost: ${costLabel(this)}\n\n` +
+      `Estimate: ${formatSessionCreditEstimate(this)}\n\n` +
       `Click for detailed breakdown`;
     this._statusBarItem.show();
   }
@@ -141,8 +146,8 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
           detail: 'Combined input + output usage this session, across every model used',
         },
         {
-          label: `$(credit-card) Estimated Cost`,
-          description: costLabel(counter),
+          label: `$(credit-card) Estimated Credits`,
+          description: formatSessionCreditEstimate(counter),
           detail: 'Published rates applied to measured tokens, not an invoice or provider bill',
         },
         {
@@ -170,9 +175,9 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
   );
 }
 
-function costLabel(counter: TokenCounter): string {
+export function formatSessionCreditEstimate(counter: TokenCounter): string {
   if (counter.unpricedRequestCount === counter.requestCount) return 'no published rate';
-  const amount = `$${counter.estimatedCostUsd.toFixed(4)}`;
+  const amount = formatCredits(counter.estimatedCredits, { maximumFractionDigits: 2 });
   return counter.unpricedRequestCount === 0
     ? amount
     : `${amount} (excludes ${counter.unpricedRequestCount} turn(s) with no published rate)`;

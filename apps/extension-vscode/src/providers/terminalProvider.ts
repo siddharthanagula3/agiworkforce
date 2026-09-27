@@ -418,6 +418,7 @@ export function activateTerminal(
       await showCloudUtilityErrorActions(failure, {
         title: 'AGI Workforce: Failed to suggest command',
         retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),
+        secrets,
       });
     }),
   );
