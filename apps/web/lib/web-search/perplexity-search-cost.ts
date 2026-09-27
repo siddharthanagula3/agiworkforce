@@ -1,14 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { resolveFeatureRate } from '@agiworkforce/types';
+import { chargeMicrousdForProviderCost, resolveFeatureRate } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
-import {
-  searchChargeMicrousd,
-  settleSearchCall,
-  type SearchAdmission,
-} from '@/lib/web-search/search-budget';
+import { settleSearchCall, type SearchAdmission } from '@/lib/web-search/search-budget';
 
 export const PERPLEXITY_SEARCH_FEATURE = 'web_search_perplexity';
 const PERPLEXITY_SEARCH_TOOL_NAME = 'perplexity_search';
@@ -28,7 +24,7 @@ export function perplexitySearchMicrousdPerCall(): number {
 }
 
 export function perplexitySearchChargeMicrousd(): number {
-  return searchChargeMicrousd(perplexitySearchMicrousdPerCall());
+  return chargeMicrousdForProviderCost(perplexitySearchMicrousdPerCall());
 }
 
 export interface PerplexitySearchSettlement {
