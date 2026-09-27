@@ -220,14 +220,16 @@ function phaseItemsOf(
 function phaseDiscountsOf(
   phase: Stripe.SubscriptionSchedule.Phase,
 ): Stripe.SubscriptionScheduleUpdateParams.Phase.Discount[] {
-  return phase.discounts.flatMap((entry) => {
-    const discount = idOf(entry.discount);
-    if (discount) return [{ discount }];
-    const coupon = idOf(entry.coupon);
-    if (coupon) return [{ coupon }];
-    const promotionCode = idOf(entry.promotion_code);
-    return promotionCode ? [{ promotion_code: promotionCode }] : [];
-  });
+  return phase.discounts.flatMap<Stripe.SubscriptionScheduleUpdateParams.Phase.Discount>(
+    (entry) => {
+      const discount = idOf(entry.discount);
+      if (discount) return [{ discount }];
+      const coupon = idOf(entry.coupon);
+      if (coupon) return [{ coupon }];
+      const promotionCode = idOf(entry.promotion_code);
+      return promotionCode ? [{ promotion_code: promotionCode }] : [];
+    },
+  );
 }
 
 export async function scheduleDowngrade(
