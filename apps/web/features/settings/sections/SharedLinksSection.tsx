@@ -19,6 +19,7 @@ import {
   AlertDialogTitle,
 } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 function formatDate(value: string): string {
   const date = new Date(value);
@@ -125,6 +126,9 @@ export function SharedLinksSection() {
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
           Review and revoke conversation links and published artifact pages created from Web chat.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="sharing-conversations" label="How sharing works" />
+        </div>
       </div>
 
       {error ? (
