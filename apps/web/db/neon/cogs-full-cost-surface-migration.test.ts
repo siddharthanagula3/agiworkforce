@@ -56,11 +56,30 @@ function latestCapabilityWidening(): string {
   throw new Error('No migration defines provider_cost_events_capability_check');
 }
 
+/** The newest migration that rewrites the unit basis constraint is what the schema enforces. */
+function latestUnitBasisWidening(): string {
+  const directory = import.meta.dirname;
+  const files = fs
+    .readdirSync(directory)
+    .filter((name) => name.endsWith('.sql'))
+    .sort()
+    .reverse();
+  for (const name of files) {
+    const sql = fs.readFileSync(path.resolve(directory, name), 'utf8');
+    if (/add constraint provider_cost_events_unit_basis_check/.test(sql)) return sql;
+  }
+  throw new Error('No migration defines provider_cost_events_unit_basis_check');
+}
+
+const RETIRED_CAPABILITIES = ['browser', 'code_compute', 'visual', 'work_compute'];
+
 describe('cogs full cost surface migration', () => {
   it('accepts every capability the ledger writes once the newest widening is applied', () => {
-    expect(constraintValues(latestCapabilityWidening(), 'capability').sort()).toEqual(
-      [...COGS_CAPABILITIES].sort(),
-    );
+    const accepted = constraintValues(latestCapabilityWidening(), 'capability');
+    expect(accepted).toEqual(expect.arrayContaining([...COGS_CAPABILITIES]));
+    expect(
+      accepted.filter((capability) => !(COGS_CAPABILITIES as readonly string[]).includes(capability)).sort(),
+    ).toEqual(RETIRED_CAPABILITIES);
   });
 
   it('leaves 0215 as the historical subset it was applied as', () => {
@@ -70,8 +89,14 @@ describe('cogs full cost surface migration', () => {
     expect(applied).not.toContain('artifact');
   });
 
-  it('accepts every unit basis the ledger writes', () => {
-    expect(constraintValues(migration, 'unit_basis').sort()).toEqual([...COGS_UNIT_BASES].sort());
+  it('accepts every unit basis the ledger writes once the newest widening is applied', () => {
+    expect(constraintValues(latestUnitBasisWidening(), 'unit_basis').sort()).toEqual(
+      [...COGS_UNIT_BASES].sort(),
+    );
+  });
+
+  it('leaves 0215 as the unit bases it was applied with', () => {
+    expect(constraintValues(migration, 'unit_basis')).not.toContain('active_user_month');
   });
 
   it('gives a cache hit an accounting line of its own', () => {
@@ -96,8 +121,9 @@ describe('cogs full cost surface migration', () => {
     );
   });
 
-  it('names a live camera or screen share as a capability of its own', () => {
+  it('keeps the retired camera and screen-share capability valid for the rows 0246 allowed', () => {
     expect(constraintValues(latestCapabilityWidening(), 'capability')).toContain('visual');
+    expect(COGS_CAPABILITIES as readonly string[]).not.toContain('visual');
     expect(constraintValues(visualCapabilityReversal, 'capability')).not.toContain('visual');
     expect(visualCapabilityReversal.indexOf("where capability = 'visual'")).toBeLessThan(
       visualCapabilityReversal.indexOf('add constraint provider_cost_events_capability_check'),

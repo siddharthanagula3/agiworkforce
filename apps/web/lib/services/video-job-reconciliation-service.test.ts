@@ -898,17 +898,24 @@ describe('video job reconciliation', () => {
     expect(mocks.recordCancellation).not.toHaveBeenCalled();
   });
 
-  it('does not invent Google cancellation and continues honest provider reconciliation', async () => {
+  it('ends a cancelled Google job at once, charging nothing and recording its spend as undelivered', async () => {
     const cancelling = job({ cancelRequestedAt: new Date().toISOString() });
     mocks.claim.mockResolvedValue(cancelling);
     mocks.poll.mockResolvedValue({ status: 'processing', progress: 70 });
 
     const result = await reconcileVideoGenerationJob(db, cancelling);
 
-    expect(result.status).toBe('processing');
+    expect(result.status).toBe('failed');
     expect(mocks.cancelProvider).not.toHaveBeenCalled();
-    expect(mocks.poll).toHaveBeenCalledTimes(1);
-    expect(mocks.finalize).not.toHaveBeenCalled();
+    expect(mocks.poll).not.toHaveBeenCalled();
+    expect(mocks.finalize).toHaveBeenCalledTimes(1);
+    expect(mocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'failed',
+        publicError: 'Video generation was cancelled, so the result was not delivered or charged.',
+        undeliveredProviderCostCents: cancelling.estimatedCostCents,
+      }),
+    );
     expect(publicVideoJobStatus(cancelling)).toMatchObject({
       cancel_requested: true,
       cancellation_state: 'unsupported',
@@ -957,7 +964,7 @@ describe('video job reconciliation', () => {
     expect(mocks.finalize).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'failed',
-        publicError: expect.stringContaining('did not deliver'),
+        publicError: 'Video generation was cancelled, so the result was not delivered or charged.',
       }),
     );
     expect(mocks.download).not.toHaveBeenCalled();
@@ -1093,26 +1100,22 @@ describe('video job reconciliation', () => {
     expect(mocks.finalize.mock.calls[0]?.[0]).not.toHaveProperty('undeliveredProviderCostCents');
   });
 
-  it('keeps holding a cancelled task the provider cannot stop, then bills the delivered video once', async () => {
+  it('never bills a video a provider that cannot stop finishes after the cancel', async () => {
     const cancelling = job({ cancelRequestedAt: new Date().toISOString() });
     mocks.claim.mockResolvedValue(cancelling);
     mocks.getSystem.mockResolvedValue(cancelling);
-    mocks.poll.mockResolvedValueOnce({ status: 'processing', progress: 80 });
-
-    const stillRunning = await reconcileVideoGenerationJob(db, cancelling);
-    expect(stillRunning.status).toBe('processing');
-    expect(mocks.finalize).not.toHaveBeenCalled();
-
-    mocks.poll.mockResolvedValueOnce({
+    mocks.poll.mockResolvedValue({
       status: 'completed',
       output: { url: 'https://generativelanguage.googleapis.com/video' },
     });
+
     const settled = await reconcileVideoGenerationJob(db, cancelling);
 
-    expect(settled.status).toBe('completed');
+    expect(settled.status).toBe('failed');
+    expect(mocks.download).not.toHaveBeenCalled();
     expect(mocks.finalize).toHaveBeenCalledTimes(1);
-    expect(mocks.finalize).toHaveBeenCalledWith(
-      expect.objectContaining({ outcome: 'completed', actualCostCents: 240 }),
+    expect(mocks.finalize).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed' }),
     );
   });
 

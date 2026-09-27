@@ -510,132 +510,117 @@ describe('cogs ledger · retail matches the actual cost path in the same units',
 });
 
 describe('cogs ledger · stripe settlement import', () => {
-  function stripeWith(entries: unknown[], invoices: unknown[] = []) {
+  function balanceEntry(overrides: Record<string, unknown>) {
     return {
-      balanceTransactions: {
-        list: vi.fn(() => ({
-          autoPagingEach: async (handler: (entry: unknown) => void) => {
-            for (const entry of entries) handler(entry);
-          },
-        })),
-      },
-      invoices: {
-        list: vi.fn(() => ({
-          autoPagingEach: async (handler: (entry: unknown) => void) => {
-            for (const invoice of invoices) handler(invoice);
-          },
-        })),
-      },
+      reference: 'txn',
+      type: 'charge',
+      occurredAt: new Date('2026-06-02T00:00:00Z'),
+      currency: 'usd',
+      amountMinorUnits: 0,
+      feeMinorUnits: 0,
+      chargeReference: null,
+      attribution: null,
+      ...overrides,
     };
+  }
+
+  function writes(db: ReturnType<typeof fakeDb>): unknown[][] {
+    return db.execute.mock.calls.map((call) => (call as unknown as [string, unknown[]])[1]);
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('imports processing fees, refunds and chargebacks from the authoritative source', async () => {
+  it('imports processing fees, refunds and chargebacks from the payment ledger', async () => {
     const db = fakeDb();
-    const stripe = stripeWith([
-      {
-        id: 'txn_fee',
-        amount: 2000,
-        fee: 88,
-        currency: 'usd',
-        created: 1_780_000_000,
-        type: 'charge',
-      },
-      {
-        id: 'txn_refund',
-        amount: -1500,
-        fee: 0,
-        currency: 'usd',
-        created: 1_780_000_100,
-        type: 'refund',
-      },
-      {
-        id: 'txn_dispute',
-        amount: -2500,
-        fee: 1500,
-        currency: 'usd',
-        created: 1_780_000_200,
-        type: 'adjustment',
-      },
-    ]);
 
     const summary = await importStripeCogsAdjustments({
-      stripe: stripe as never,
-      since: new Date('2026-06-01T00:00:00Z'),
-      until: new Date('2026-06-04T00:00:00Z'),
+      activity: {
+        balanceEntries: [
+          balanceEntry({
+            reference: 'txn_fee',
+            amountMinorUnits: 2000,
+            feeMinorUnits: 88,
+            chargeReference: 'ch_1',
+            attribution: { kind: 'subscription', reference: 'sub_1', ownerReference: 'user_1' },
+          }),
+          balanceEntry({ reference: 'txn_refund', type: 'refund', amountMinorUnits: -1500 }),
+          balanceEntry({
+            reference: 'txn_dispute',
+            type: 'adjustment',
+            amountMinorUnits: -2500,
+            feeMinorUnits: 1500,
+          }),
+        ],
+        invoiceDiscounts: [],
+      },
       db: db as never,
     });
 
-    expect(summary.examined).toBe(3);
-    expect(summary.feesRecorded).toBe(2);
-    expect(summary.adjustmentsRecorded).toBe(2);
+    expect(summary).toEqual({
+      examined: 3,
+      feesRecorded: 2,
+      feesAttributed: 1,
+      adjustmentsRecorded: 2,
+      discountsRecorded: 0,
+    });
+    const kinds = writes(db).map((params) => params[1]);
+    expect(kinds).toEqual(['stripe_fee', 'refund', 'stripe_fee', 'chargeback']);
+    const attributedFee = writes(db)[0];
+    expect(attributedFee?.slice(0, 5)).toEqual([
+      'user_1',
+      'stripe_fee',
+      88,
+      'usd',
+      'balance_txn:txn_fee',
+    ]);
+    expect(attributedFee?.slice(7)).toEqual(['subscription', 'sub_1']);
+  });
 
-    const kinds = db.execute.mock.calls.map(
-      (call) => (call as unknown as [string, unknown[]])[1][1],
-    );
-    expect(kinds).toContain('stripe_fee');
-    expect(kinds).toContain('refund');
-    expect(kinds).toContain('chargeback');
+  it('counts a standalone Stripe fee line as a processing fee', async () => {
+    const db = fakeDb();
+
+    const summary = await importStripeCogsAdjustments({
+      activity: {
+        balanceEntries: [
+          balanceEntry({ reference: 'txn_billing_fee', type: 'stripe_fee', amountMinorUnits: -45 }),
+        ],
+        invoiceDiscounts: [],
+      },
+      db: db as never,
+    });
+
+    expect(summary.feesRecorded).toBe(1);
+    expect(summary.adjustmentsRecorded).toBe(0);
+    expect(writes(db)[0]?.slice(1, 3)).toEqual(['stripe_fee', 45]);
   });
 
   it('records every invoice discount as a margin deduction', async () => {
     const db = fakeDb();
-    const stripe = stripeWith(
-      [],
-      [
-        {
-          id: 'in_discounted',
-          currency: 'usd',
-          created: 1_780_000_300,
-          total_discount_amounts: [
-            { amount: 400, discount: 'di_launch' },
-            { amount: 100, discount: { id: 'di_loyalty' } },
-          ],
-        },
-        {
-          id: 'in_full_price',
-          currency: 'usd',
-          created: 1_780_000_400,
-          total_discount_amounts: [],
-        },
-      ],
-    );
 
     const summary = await importStripeCogsAdjustments({
-      stripe: stripe as never,
-      since: new Date('2026-06-01T00:00:00Z'),
-      until: new Date('2026-06-04T00:00:00Z'),
+      activity: {
+        balanceEntries: [],
+        invoiceDiscounts: [
+          {
+            invoiceReference: 'in_discounted',
+            occurredAt: new Date('2026-06-02T00:00:00Z'),
+            currency: 'usd',
+            discountMinorUnits: 500,
+            discountReferences: ['di_launch', 'di_loyalty'],
+          },
+        ],
+      },
       db: db as never,
     });
 
     expect(summary.discountsRecorded).toBe(1);
-
-    const writes = db.execute.mock.calls.map((call) => (call as unknown as [string, unknown[]])[1]);
-    const discountWrite = writes.find((params) => params[1] === 'discount');
-    expect(discountWrite).toBeDefined();
+    const discountWrite = writes(db).find((params) => params[1] === 'discount');
     expect(discountWrite?.[2]).toBe(500);
     expect(discountWrite?.[4]).toBe('invoice:in_discounted');
-    expect(writes.filter((params) => params[1] === 'discount')).toHaveLength(1);
-  });
-
-  it('asks Stripe only for the requested window', async () => {
-    const stripe = stripeWith([]);
-    await importStripeCogsAdjustments({
-      stripe: stripe as never,
-      since: new Date('2026-06-01T00:00:00Z'),
-      until: new Date('2026-06-04T00:00:00Z'),
-      db: fakeDb() as never,
-    });
-
-    expect(stripe.balanceTransactions.list).toHaveBeenCalledWith({
-      created: {
-        gte: Math.floor(Date.UTC(2026, 5, 1) / 1000),
-        lt: Math.floor(Date.UTC(2026, 5, 4) / 1000),
-      },
-      limit: 100,
+    expect(JSON.parse(String(discountWrite?.[6]))).toEqual({
+      discountIds: ['di_launch', 'di_loyalty'],
     });
   });
 });
