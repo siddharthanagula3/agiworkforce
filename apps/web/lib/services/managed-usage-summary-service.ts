@@ -148,22 +148,22 @@ export async function getManagedUsageSummary(
     ROLLING_WEEKLY_WINDOW_HOURS,
   );
 
-  const planAllowance = isFreePlan ? null : resolvePlanCreditAllowance(planTier);
+  const planAllowance = resolvePlanCreditAllowance(planTier);
   const credits: AccountUsageCredits | null = planAllowance
     ? {
         monthly: creditWindow(
           planAllowance.monthly,
-          creditsFromMicrousd(creditsUsed),
+          creditsFromMicrousd(freeUsage?.monthlyUsedMicrousd ?? creditsUsed),
           usageResetAt,
         ),
         weekly: creditWindow(
           planAllowance.weekly,
-          creditsFromMicrousd(weekly.usedMicrousd),
+          creditsFromMicrousd(freeUsage?.weeklyUsedMicrousd ?? weekly.usedMicrousd),
           weeklyResetAt,
         ),
         five_hour: creditWindow(
           planAllowance.fiveHour,
-          creditsFromMicrousd(session.usedMicrousd),
+          creditsFromMicrousd(freeUsage?.fiveHourUsedMicrousd ?? session.usedMicrousd),
           sessionResetAt,
         ),
         flagship_weekly:
