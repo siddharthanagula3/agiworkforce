@@ -193,6 +193,10 @@ const CAPABILITY_BY_OPERATION: Record<string, CogsCapability> = {
   connector: 'connector',
   artifact: 'artifact',
   decision: 'decision',
+  hosting: 'hosting',
+  auth: 'auth',
+  cache: 'cache',
+  observability: 'observability',
 };
 
 const UNIT_BASIS_BY_CAPABILITY: Record<CogsCapability, CogsUnitBasis> = {
@@ -293,6 +297,11 @@ export function resolveCogsUnits(
       return { unitBasis, units: numeric(usage['gibibytes']) ?? 0 };
     case 'database':
       return { unitBasis, units: numeric(usage['computeSeconds']) ?? 0 };
+    case 'hosting':
+    case 'auth':
+    case 'cache':
+    case 'observability':
+      return { unitBasis, units: numeric(usage['activeUserMonths']) ?? 0 };
     default: {
       const input = numeric(usage['promptTokens']) ?? numeric(usage['inputTokens']) ?? 0;
       const output = numeric(usage['completionTokens']) ?? numeric(usage['outputTokens']) ?? 0;
