@@ -37,6 +37,11 @@ export const useSettingsSyncStateStore = create<SettingsSyncState>()(
       name: 'settings-sync-state',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      version: 1,
+      migrate: (persisted, version) =>
+        version < 1
+          ? { settingsCursor: '0', lastPushedSnapshot: '', serverSnapshot: '' }
+          : persisted,
       partialize: (s) => ({
         settingsCursor: s.settingsCursor,
         lastPushedSnapshot: s.lastPushedSnapshot,
