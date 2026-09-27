@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { getModels, isModelLive } from '@agiworkforce/types';
+import { creditsFromCents, getModels, isModelLive } from '@agiworkforce/types';
 
-import { formatCostCents, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
+import { formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
 import type { ScheduleRun } from './index';
 
 function run(result: Record<string, unknown> | null): ScheduleRun {
@@ -23,13 +23,14 @@ function run(result: Record<string, unknown> | null): ScheduleRun {
 }
 
 describe('scheduleRunUsage', () => {
-  it('reads what the executor recorded', () => {
+  it('reads the credits the executor recorded', () => {
     const usage = scheduleRunUsage(
       run({
         text: 'done',
         model: 'fixture-model',
         provider: 'anthropic',
-        usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500, costCents: 0.45 },
+        credits: 0.9,
+        usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500 },
       }),
     );
 
@@ -37,8 +38,21 @@ describe('scheduleRunUsage', () => {
       model: 'fixture-model',
       provider: 'anthropic',
       totalTokens: 1500,
-      costCents: 0.45,
+      credits: 0.9,
     });
+  });
+
+  it('converts a run recorded before credits from its cents into credits', () => {
+    const usage = scheduleRunUsage(
+      run({
+        model: 'fixture-model',
+        provider: 'anthropic',
+        usage: { totalTokens: 1500, costCents: 0.45 },
+      }),
+    );
+
+    expect(usage?.credits).toBe(creditsFromCents(0.45));
+    expect(usage).not.toHaveProperty('costCents');
   });
 
   it('returns null when the run recorded no usage at all', () => {
@@ -53,7 +67,7 @@ describe('scheduleRunUsage', () => {
       model: 'fixture-model',
       provider: null,
       totalTokens: null,
-      costCents: null,
+      credits: null,
     });
   });
 
@@ -68,22 +82,6 @@ describe('scheduleRunUsage', () => {
   it('survives a result whose usage field is not an object', () => {
     expect(() => scheduleRunUsage(run({ usage: 'unavailable' }))).not.toThrow();
     expect(scheduleRunUsage(run({ usage: 'unavailable' }))).toBeNull();
-  });
-});
-
-describe('formatCostCents', () => {
-  it('shows an exact zero as free, because it is', () => {
-    expect(formatCostCents(0)).toBe('$0.00');
-  });
-
-  it('does not round a real cost down to free', () => {
-    expect(formatCostCents(0.45)).toBe('<$0.01');
-    expect(formatCostCents(0.0001)).toBe('<$0.01');
-  });
-
-  it('formats ordinary costs as dollars', () => {
-    expect(formatCostCents(150)).toBe('$1.50');
-    expect(formatCostCents(1)).toBe('$0.01');
   });
 });
 
