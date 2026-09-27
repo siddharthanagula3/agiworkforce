@@ -1,10 +1,12 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromMicrousd } from '@agiworkforce/types';
 
 import type { UsageWorkload } from '@/lib/billing/usage-attribution';
 import {
   BREAKDOWN_LIMIT,
+  COST_MICROUSD,
   OUT_TOKENS,
   SETTLED,
   TOKENS,
@@ -55,7 +57,7 @@ export interface WorkloadSessionUsage {
   requests: number;
   inputTokens: number;
   outputTokens: number;
-  costCents: number;
+  credits: number;
 }
 
 export interface OrganizationUsage {
@@ -96,7 +98,7 @@ async function aggregateWorkloadSessions(
             count(*)::int as requests,
             sum(${TOKENS})::bigint as input_tokens,
             sum(${OUT_TOKENS})::bigint as output_tokens,
-            sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents
+            ${COST_MICROUSD} as cost_microusd
        from public.managed_usage_requests
       where organization_id = $1
         and ${SETTLED}
@@ -117,7 +119,7 @@ async function aggregateWorkloadSessions(
         requests: num(row.requests),
         inputTokens: num(row.input_tokens),
         outputTokens: num(row.output_tokens),
-        costCents: num(row.cost_cents),
+        credits: creditsFromMicrousd(num(row.cost_microusd)),
       },
     ]),
   );
@@ -134,7 +136,7 @@ function workloadUsage(
       requests: 0,
       inputTokens: 0,
       outputTokens: 0,
-      costCents: 0,
+      credits: 0,
     }
   );
 }
@@ -151,14 +153,14 @@ async function aggregateBy(
             count(*)::int as requests,
             sum(${TOKENS})::bigint as input_tokens,
             sum(${OUT_TOKENS})::bigint as output_tokens,
-            sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents
+            ${COST_MICROUSD} as cost_microusd
        from public.managed_usage_requests
       where organization_id = $1
         and ${SETTLED}
         and created_at >= $2
         and created_at < $3
       group by 1
-      order by cost_cents desc, requests desc
+      order by cost_microusd desc, requests desc
       limit ${BREAKDOWN_LIMIT}`,
     [organizationId, from, to],
   );
@@ -188,7 +190,7 @@ export async function readOrganizationUsage(
               count(*)::int as requests,
               sum(${TOKENS})::bigint as input_tokens,
               sum(${OUT_TOKENS})::bigint as output_tokens,
-              sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents
+              ${COST_MICROUSD} as cost_microusd
          from public.managed_usage_requests
         where organization_id = $1
           and ${SETTLED}
@@ -205,7 +207,7 @@ export async function readOrganizationUsage(
     db.query<DayRow>(
       `select date_trunc('day', created_at) as day,
               count(*)::int as requests,
-              sum(coalesce(actual_cost_cents, 0))::bigint as cost_cents
+              ${COST_MICROUSD} as cost_microusd
          from public.managed_usage_requests
         where organization_id = $1
           and ${SETTLED}

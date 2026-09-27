@@ -116,6 +116,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'managed_usage_requests', column: 'user_id' },
   { table: 'auto_reload_settings', column: 'user_id' },
   { table: 'bonus_credit_grants', column: 'user_id' },
+  { table: 'expiring_credit_purchases', column: 'user_id' },
   { table: 'credit_transactions', column: 'user_id' },
   { table: 'token_credits', column: 'user_id' },
   { table: 'subscriptions', column: 'user_id' },

@@ -22,7 +22,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getStripeClient } from '@/lib/server/stripe-client';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
-import { buildCheckoutTrialParams, resolveCheckoutTrialDays } from '@/lib/billing/trial-policy';
+import { buildCheckoutTrialParams, resolveTrialDaysForCheckout } from '@/lib/billing/trial-policy';
 import { BILLING_PLAN_CATALOG_VERSION, getPlanTrialDays } from '@agiworkforce/types';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
 import { isStripeCustomerId, isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
@@ -37,8 +37,10 @@ import {
   holdsLivePaidSubscription,
   waitlistAccessRequiredResponse,
 } from '@/lib/server/billing-waitlist-access';
-import { formatLocalizedPrice } from '@/lib/regional-pricing';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
+import { absoluteUrl } from '@/lib/seo/site';
 import { referralTrialDays } from '@/lib/services/referral-service';
+import { TRIAL_REMINDER_DAYS, formatChargeAmount } from '@/lib/services/trial-reminder-service';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
 
@@ -57,17 +59,22 @@ function trialDisclosure(input: {
   amountMinor: number;
   currency: string;
   billingInterval: 'monthly' | 'yearly';
+  referral: boolean;
 }): string {
   const endsOn = new Date(input.startedAt.getTime() + input.trialDays * DAY_MS).toLocaleDateString(
     'en-US',
     { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' },
   );
   const period = input.billingInterval === 'yearly' ? 'year' : 'month';
-  const price = formatLocalizedPrice(input.amountMinor, input.currency, 'en-US');
+  const price = formatChargeAmount(input.amountMinor, input.currency);
   return (
     `Your ${input.trialDays}-day free trial ends on ${endsOn}. On that date your card is ` +
     `charged ${price} plus any applicable tax, and again every ${period}, unless you cancel ` +
-    'before then in Settings > Billing. We email you a reminder before the trial ends.'
+    `before then. ${TRIAL_REMINDER_DAYS} days before the trial ends we email you a reminder ` +
+    'with a one-click cancel link, and you can also cancel any time in Settings > Billing.' +
+    (input.referral
+      ? ` The [referral program terms](${absoluteUrl(CANONICAL_POLICY_ROUTES.referralTerms)}) apply.`
+      : '')
   );
 }
 
@@ -86,50 +93,6 @@ async function findLiveStripeSubscription(
     }
   }
   return null;
-}
-
-async function customerHasSubscriptionHistory(
-  stripe: Stripe,
-  customerId: string,
-  userId: string,
-): Promise<boolean | null> {
-  try {
-    const page = await stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 1 });
-    return page.data.length > 0;
-  } catch (error) {
-    logger.warn(
-      { error, userId, customerId },
-      'Trial eligibility could not be verified; checkout continues without a trial',
-    );
-    return null;
-  }
-}
-
-async function resolveTrialDaysForCheckout(input: {
-  stripe: Stripe;
-  plan: string;
-  userId: string;
-  stripeCustomerId: string | null;
-  referralTrialDays: number | null;
-  existingSubscription: Pick<
-    SubscriptionRow,
-    'stripe_subscription_id' | 'apple_original_transaction_id' | 'google_purchase_token'
-  > | null;
-}): Promise<number | null> {
-  const trialDays = getPlanTrialDays(input.plan) ?? input.referralTrialDays;
-  if (trialDays === null) return null;
-  const existing = input.existingSubscription;
-  return resolveCheckoutTrialDays({
-    trialDays,
-    priorStoreOrStripeSubscription: Boolean(
-      existing?.stripe_subscription_id ||
-      existing?.apple_original_transaction_id ||
-      existing?.google_purchase_token,
-    ),
-    customerHasSubscriptionHistory: input.stripeCustomerId
-      ? await customerHasSubscriptionHistory(input.stripe, input.stripeCustomerId, input.userId)
-      : false,
-  });
 }
 
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
@@ -396,6 +359,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
                 amountMinor: priceSelection.amountMinor * quantity,
                 currency,
                 billingInterval,
+                referral: getPlanTrialDays(plan) === null,
               }),
             },
           },

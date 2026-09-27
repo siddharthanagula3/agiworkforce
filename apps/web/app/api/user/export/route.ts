@@ -233,6 +233,17 @@ const referralCodeExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const expiringCreditPurchaseExportSchema = z.object({
+  id: z.string(),
+  purchase_country: z.string(),
+  purchased_microusd: numericSchema,
+  remaining_microusd: numericSchema,
+  expires_at: timestampSchema,
+  reminded_at: nullableTimestampSchema,
+  expired_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+});
+
 const bonusCreditGrantExportSchema = z.object({
   id: z.string(),
   source: z.string(),
@@ -1326,6 +1337,16 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: bonusCreditGrantExportSchema,
+  },
+  {
+    section: 'expiring_credit_purchases',
+    table: 'expiring_credit_purchases',
+    sql: `select id, purchase_country, purchased_microusd, remaining_microusd, expires_at,
+                 reminded_at, expired_at, created_at
+          from expiring_credit_purchases
+          where user_id = $1
+          order by created_at asc`,
+    schema: expiringCreditPurchaseExportSchema,
   },
   {
     section: 'cloud_waitlist',

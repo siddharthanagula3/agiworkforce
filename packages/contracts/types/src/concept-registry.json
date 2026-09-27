@@ -1043,16 +1043,19 @@
         "credit_transactions",
         "token_credits",
         "credit_idempotency_keys",
-        "bonus_credit_grants"
+        "bonus_credit_grants",
+        "expiring_credit_purchases"
       ],
       "writeFunctions": [
         "grant_bonus_credits",
         "revoke_bonus_credit_grant",
-        "reconcile_bonus_credit_grants"
+        "reconcile_bonus_credit_grants",
+        "reconcile_expiring_credit_purchases"
       ],
       "mutators": [
         "apps/web/lib/services/credit-service.ts",
-        "apps/web/lib/services/bonus-credit-service.ts"
+        "apps/web/lib/services/bonus-credit-service.ts",
+        "apps/web/lib/services/purchased-credit-expiry-service.ts"
       ],
       "projections": ["packages/contracts/types/src/usage-vocabulary.ts"],
       "providerCopies": [],

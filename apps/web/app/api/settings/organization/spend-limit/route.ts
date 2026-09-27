@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { centsFromCredits, creditsFromCents } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
@@ -27,11 +28,11 @@ import {
 
 export const runtime = 'nodejs';
 
+const MAX_MONTHLY_CAP_CENTS = 100_000_000;
+
 const PutSchema = z
   .object({
-    // Cents, so the smallest cap is one cent rather than zero. A cap of zero
-    // would refuse every turn and is not something anyone means to save.
-    monthlyCapCents: z.number().int().min(1).max(100_000_000),
+    monthlyCapCredits: z.number().int().min(1).max(creditsFromCents(MAX_MONTHLY_CAP_CENTS)),
     enforcement: z.enum(['off', 'notify', 'block']),
     alertThresholdPct: z.number().int().min(1).max(100),
   })
@@ -88,7 +89,16 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
 
   const body = await readValidatedJsonBody(request, PutSchema, 'Invalid spend limit');
 
-  const limit = await upsertSpendLimit(getNeonDb(), membership.organizationId, body, userId);
+  const limit = await upsertSpendLimit(
+    getNeonDb(),
+    membership.organizationId,
+    {
+      monthlyCapCents: Math.ceil(centsFromCredits(body.monthlyCapCredits)),
+      enforcement: body.enforcement,
+      alertThresholdPct: body.alertThresholdPct,
+    },
+    userId,
+  );
 
   await recordAuditEvent({
     userId,
@@ -104,7 +114,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
       resourceId: membership.organizationId,
       role: membership.role,
       status: limit.enforcement,
-      count: limit.monthlyCapCents,
+      count: creditsFromCents(limit.monthlyCapCents),
     },
   });
 

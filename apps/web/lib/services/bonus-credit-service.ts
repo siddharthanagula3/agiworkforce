@@ -26,11 +26,24 @@ export interface BonusCreditReconciliation {
   materializedMicrousd: number;
 }
 
+export interface PrepaidCreditLot {
+  credits: number;
+  expiresAt: string;
+}
+
+export interface BonusCreditLot extends PrepaidCreditLot {
+  source: BonusCreditSource;
+}
+
 export interface PrepaidCreditBalances {
   bonusCredits: number;
   purchasedCredits: number;
+  expiringPurchasedCredits: number;
   overageHeadroomMicrousd: number;
   nextBonusExpiry: string | null;
+  nextPurchaseExpiry: string | null;
+  bonusGrants: BonusCreditLot[];
+  expiringPurchases: PrepaidCreditLot[];
 }
 
 export interface BonusCreditSweepSummary {
@@ -144,39 +157,57 @@ export async function expireDueBonusCredits(
   return summary;
 }
 
+function isBonusCreditSource(value: string): value is BonusCreditSource {
+  return value === 'referral_referrer' || value === 'referral_friend' || value === 'promo';
+}
+
 export async function getPrepaidCreditBalances(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<PrepaidCreditBalances> {
   const [account] = await db.query<{
-    bonus_microusd: number | string;
     purchased_microusd: number | string;
+    expiring_purchased_microusd: number | string;
     overage_headroom_microusd: number | string;
     next_bonus_expiry: string | Date | null;
+    next_purchase_expiry: string | Date | null;
   }>('select * from public.prepaid_credit_balances_microusd($1::text)', [userId]);
-  const [pending] = await db.query<{
-    pending_microusd: number | string;
-    next_expiry: string | Date | null;
+  const lots = await db.query<{
+    lot_kind: string;
+    source: string;
+    remaining_microusd: number | string;
+    expires_at: string | Date;
   }>(
-    `select coalesce(sum(grant_row.remaining_microusd), 0) as pending_microusd,
-            min(grant_row.expires_at) as next_expiry
-       from public.bonus_credit_grants grant_row
-      where grant_row.user_id = $1
-        and grant_row.credit_account_id is null
-        and grant_row.revoked_at is null
-        and grant_row.remaining_microusd > 0
-        and grant_row.expires_at > now()`,
+    `select lot_kind, source, remaining_microusd, expires_at
+       from public.prepaid_credit_lots_microusd($1::text)
+      where remaining_microusd > 0
+      order by expires_at`,
     [userId],
   );
-  const expiries = [toIso(account?.next_bonus_expiry), toIso(pending?.next_expiry)].filter(
-    (value): value is string => value !== null,
-  );
+
+  const bonusGrants: BonusCreditLot[] = [];
+  const expiringPurchases: PrepaidCreditLot[] = [];
+  let bonusMicrousd = 0;
+  for (const lot of lots) {
+    const expiresAt = toIso(lot.expires_at);
+    const microusd = toNumber(lot.remaining_microusd);
+    if (!expiresAt) continue;
+    if (lot.lot_kind === 'purchase') {
+      expiringPurchases.push({ credits: creditsFromMicrousd(microusd), expiresAt });
+    } else if (isBonusCreditSource(lot.source)) {
+      bonusGrants.push({ credits: creditsFromMicrousd(microusd), expiresAt, source: lot.source });
+      bonusMicrousd += microusd;
+    }
+  }
+
   return {
-    bonusCredits: creditsFromMicrousd(
-      toNumber(account?.bonus_microusd) + toNumber(pending?.pending_microusd),
-    ),
+    bonusCredits: creditsFromMicrousd(bonusMicrousd),
     purchasedCredits: creditsFromMicrousd(toNumber(account?.purchased_microusd)),
+    expiringPurchasedCredits: creditsFromMicrousd(toNumber(account?.expiring_purchased_microusd)),
     overageHeadroomMicrousd: toNumber(account?.overage_headroom_microusd),
-    nextBonusExpiry: expiries.sort()[0] ?? null,
+    nextBonusExpiry: bonusGrants[0]?.expiresAt ?? null,
+    nextPurchaseExpiry: expiringPurchases[0]?.expiresAt ?? null,
+    bonusGrants,
+    expiringPurchases,
   };
 }

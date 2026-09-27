@@ -1,5 +1,6 @@
 'use client';
 
+import { formatCredits } from '@agiworkforce/types';
 import { useConfirmAction } from '@agiworkforce/ui';
 
 import { useEffect, useState } from 'react';
@@ -12,10 +13,10 @@ type Enforcement = 'off' | 'notify' | 'block';
 
 interface SpendState {
   configured: boolean;
-  monthlyCapCents: number | null;
+  monthlyCapCredits: number | null;
   enforcement: Enforcement;
   alertThresholdPct: number;
-  spentCents: number;
+  spentCredits: number;
   usedPct: number | null;
   overCap: boolean;
   overThreshold: boolean;
@@ -83,7 +84,7 @@ export function WorkspaceSpendLimit() {
 
   const save = useMutation({
     mutationFn: async (body: {
-      monthlyCapCents: number;
+      monthlyCapCredits: number;
       enforcement: Enforcement;
       alertThresholdPct: number;
     }) => {
@@ -109,14 +110,14 @@ export function WorkspaceSpendLimit() {
     },
   });
 
-  const [dollars, setDollars] = useState('');
+  const [capInput, setCapInput] = useState('');
   const [enforcement, setEnforcement] = useState<Enforcement>('notify');
   const [threshold, setThreshold] = useState(80);
 
   useEffect(() => {
     const state = data?.state;
-    if (!state?.configured || state.monthlyCapCents === null) return;
-    setDollars((state.monthlyCapCents / 100).toFixed(2));
+    if (!state?.configured || state.monthlyCapCredits === null) return;
+    setCapInput(String(state.monthlyCapCredits));
     setEnforcement(state.enforcement);
     setThreshold(state.alertThresholdPct);
   }, [data]);
@@ -153,8 +154,9 @@ export function WorkspaceSpendLimit() {
   if (data === null) return null;
 
   const { state, canManageLimit } = data;
-  const cents = Math.round(Number.parseFloat(dollars || '0') * 100);
-  const canSave = canManageLimit && Number.isFinite(cents) && cents >= 1 && !save.isPending;
+  const capCredits = Number(capInput);
+  const canSave =
+    canManageLimit && Number.isInteger(capCredits) && capCredits >= 1 && !save.isPending;
 
   return (
     <section style={cardStyle} aria-labelledby="spend-limit-heading">
@@ -173,7 +175,7 @@ export function WorkspaceSpendLimit() {
         </p>
       </div>
 
-      {state.configured && state.monthlyCapCents !== null ? (
+      {state.configured && state.monthlyCapCredits !== null ? (
         <div className="px-5 pt-4">
           <div
             className="h-1.5 w-full overflow-hidden rounded-full"
@@ -190,8 +192,8 @@ export function WorkspaceSpendLimit() {
             />
           </div>
           <p className="mt-2 text-xs tabular-nums" style={{ color: 'var(--text-2)' }}>
-            ${(state.spentCents / 100).toFixed(2)} of ${(state.monthlyCapCents / 100).toFixed(2)}{' '}
-            used this month
+            {formatCredits(state.spentCredits)} of {formatCredits(state.monthlyCapCredits)} used
+            this month
             {state.overCap
               ? ' · over the limit'
               : state.overThreshold
@@ -204,16 +206,16 @@ export function WorkspaceSpendLimit() {
       <div className="flex flex-col gap-3 px-5 py-4">
         <div className="flex flex-wrap items-center gap-2">
           <label className="text-xs" style={{ color: 'var(--text-3)' }} htmlFor="spend-cap">
-            Cap (USD)
+            Cap (credits)
           </label>
           <input
             id="spend-cap"
             type="number"
-            min={0.01}
-            step={0.01}
-            value={dollars}
+            min={1}
+            step={1}
+            value={capInput}
             disabled={!canManageLimit}
-            onChange={(event) => setDollars(event.target.value)}
+            onChange={(event) => setCapInput(event.target.value)}
             style={{ ...controlStyle, width: 120 }}
           />
           <label className="text-xs" style={{ color: 'var(--text-3)' }} htmlFor="spend-alert">
@@ -270,7 +272,7 @@ export function WorkspaceSpendLimit() {
             disabled={!canSave}
             onClick={() =>
               save.mutate({
-                monthlyCapCents: cents,
+                monthlyCapCredits: capCredits,
                 enforcement,
                 alertThresholdPct: threshold,
               })
