@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
 
 vi.mock('server-only', () => ({}));
@@ -11,6 +12,7 @@ const { mockGetClerkAuthUser, mockNeonQuery, mockGetSubscription } = vi.hoisted(
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
+  getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
 
 vi.mock('@/lib/csrf', () => ({
@@ -55,9 +57,32 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 import { GET } from '../route';
 
+const SEAT_PERIOD_END = '2026-10-05T00:00:00.000Z';
+
+function seatCandidate(over: Record<string, unknown> = {}) {
+  return {
+    organization_id: '33333333-3333-4333-8333-333333333333',
+    owner_user_id: 'user_org_owner',
+    billing_plan_tier: 'team',
+    licensed_seats: 5,
+    seat_rank: 2,
+    subscription_id: 'subscription_org_owner',
+    status: 'active',
+    current_period_start: '2026-09-05T00:00:00.000Z',
+    current_period_end: SEAT_PERIOD_END,
+    cancel_at_period_end: false,
+    stripe_subscription_id: 'sub_org_owner',
+    stripe_price_id: null,
+    apple_original_transaction_id: null,
+    google_purchase_token: null,
+    plan_catalog_version: null,
+    ...over,
+  };
+}
+
 function makeGetRequest(query?: string) {
   const url = query ? `http://localhost:3000/api/me?${query}` : 'http://localhost:3000/api/me';
-  return new Request(url, { method: 'GET' }) as never;
+  return new NextRequest(url, { method: 'GET' });
 }
 
 describe('GET /api/me, shared cloud contract', () => {
@@ -159,6 +184,66 @@ describe('GET /api/me, shared cloud contract', () => {
     const parsed = MeResponseSchema.parse(await res.json());
 
     expect(parsed.plan.subscription_source).toBeUndefined();
+  });
+
+  it('names the plan by its catalog label, so max_15x reads as Max 20x', async () => {
+    mockGetSubscription.mockResolvedValue({
+      plan_tier: 'max_15x',
+      status: 'active',
+      current_period_end: '2026-10-05T00:00:00.000Z',
+      stripe_subscription_id: 'sub_contract1',
+    });
+
+    const res = await GET(makeGetRequest());
+    const parsed = MeResponseSchema.parse(await res.json());
+
+    expect(parsed.plan.tier).toBe('max_15x');
+    expect(parsed.plan.display_name).toBe('Max 20x');
+  });
+
+  it.each([
+    ['team', 'Team', 'tier:pro'],
+    ['enterprise', 'Enterprise', 'tier:enterprise'],
+  ] as const)(
+    'gives a %s seat member with no subscription of their own the organization plan, managed by the organization',
+    async (orgTier, label, tierPolicy) => {
+      mockGetSubscription.mockResolvedValue(null);
+      mockNeonQuery.mockImplementation(async (sql: string) =>
+        sql.includes('from public.organization_members membership')
+          ? [seatCandidate({ billing_plan_tier: orgTier })]
+          : [{ routing_preferences: { us_only: false } }],
+      );
+
+      const res = await GET(makeGetRequest());
+      expect(res.status).toBe(200);
+      const parsed = MeResponseSchema.parse(await res.json());
+
+      expect(parsed.plan).toEqual({
+        tier: orgTier,
+        display_name: label,
+        status: 'active',
+        current_period_end: Date.parse(SEAT_PERIOD_END) / 1000,
+        cancel_at_period_end: false,
+        subscription_source: 'manual',
+      });
+      expect(parsed.capability_handshake?.sources.tier).toBe(tierPolicy);
+      expect(parsed.feature_flags.advanced_model_access).toBe(true);
+    },
+  );
+
+  it('keeps a seat member on Free when the organization has used every licensed seat', async () => {
+    mockGetSubscription.mockResolvedValue(null);
+    mockNeonQuery.mockImplementation(async (sql: string) =>
+      sql.includes('from public.organization_members membership')
+        ? [seatCandidate({ licensed_seats: 2, seat_rank: 3 })]
+        : [],
+    );
+
+    const res = await GET(makeGetRequest());
+    const parsed = MeResponseSchema.parse(await res.json());
+
+    expect(parsed.plan).toMatchObject({ tier: 'free', display_name: 'Free', status: 'none' });
+    expect(parsed.capability_handshake?.sources.tier).toBe('tier:free');
   });
 
   it('fails closed when subscription entitlement cannot be verified', async () => {

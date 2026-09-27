@@ -38,6 +38,14 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { POST as postBulkMessages } from '@/app/api/chat/conversations/[id]/messages/bulk/route';
 
 const ATTACKER = 'user_attacker';
@@ -98,6 +106,9 @@ describe('POST /api/chat/conversations/[id]/messages/bulk, IDOR guard (#17)', ()
       1,
       expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
       [ATTACKER_CONVERSATION_ID, ATTACKER, null],
+    );
+    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: ATTACKER, requested: { message_writes: 1 } }),
     );
     const [sql] = mockQuery.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('on conflict (id) do update');

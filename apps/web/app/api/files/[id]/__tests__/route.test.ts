@@ -40,8 +40,17 @@ vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMedia: vi.fn(),
 }));
 
+const { mockAssertFreeDailyAllowance } = vi.hoisted(() => ({
+  mockAssertFreeDailyAllowance: vi.fn(async (_input: unknown) => undefined),
+}));
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
+  assertFreeDailyAllowance: mockAssertFreeDailyAllowance,
+}));
+
 import { GET } from '../route';
 import { createError } from '@/lib/errors';
+import { freeDailyLimitError } from '@/lib/services/tier-unit-quota-service';
 
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
 
@@ -144,6 +153,29 @@ describe('GET /api/files/[id]', () => {
     const servedHash = createHash('sha256').update(served).digest('hex');
     expect(servedHash).toBe(storedHash);
     expect(mockGetObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf');
+    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-owner',
+        requested: { egress_bytes: stored.byteLength },
+      }),
+    );
+  });
+
+  it('answers 429 with no bytes once the Free daily download cap is used up', async () => {
+    const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: stored.byteLength }),
+    );
+    mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
+    mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    await expect(res.json()).resolves.toMatchObject({
+      error: { message: freeDailyLimitError('egress_bytes').message },
+    });
   });
 
   it.each([
@@ -301,6 +333,21 @@ describe('GET /api/files/[id]', () => {
       start: 2,
       end: 5,
     });
+    expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ requested: { egress_bytes: 4 } }),
+    );
+  });
+
+  it('checks the Free daily download cap before streaming any video bytes', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', byteSize: 100 }),
+    );
+    mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('egress_bytes'));
+
+    const res = await GET(makeRequest(ASSET_ID, '', { Range: 'bytes=2-5' }), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(429);
+    expect(mockStreamObject).not.toHaveBeenCalled();
   });
 
   it('rejects malformed or multi-range video requests without touching storage', async () => {

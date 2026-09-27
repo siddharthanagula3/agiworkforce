@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
@@ -254,10 +253,39 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should call handle_refund SQL with correct parameters', async () => {
+    it('revokes the refunded share of the current period plan allowance, never purchased credits', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const planAllowanceMicrousd = 10_000_000;
+      const purchasedMicrousd = 2_000_000;
 
-      const refundedAmount = 500;
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('profiles')) return Promise.resolve([{ id: 'user_123' }]);
+        if (sql.includes('from subscriptions')) {
+          return Promise.resolve([
+            {
+              subscription_id: 'sub_db_1',
+              plan_tier: 'pro',
+              current_period_start: new Date((nowSeconds - 10 * 86_400) * 1000).toISOString(),
+              current_period_end: new Date((nowSeconds + 20 * 86_400) * 1000).toISOString(),
+            },
+          ]);
+        }
+        if (sql.includes('from token_credits')) {
+          return Promise.resolve([
+            {
+              id: 'credit_account_1',
+              credits_allocated_microusd: planAllowanceMicrousd + purchasedMicrousd,
+              top_up_allocated_microusd: purchasedMicrousd,
+            },
+          ]);
+        }
+        if (sql.includes('from credit_transactions')) return Promise.resolve([{ revoked: 0 }]);
+        return Promise.resolve([]);
+      });
 
       const eventPayload = JSON.stringify({
         id: 'evt_refund_rpc',
@@ -267,7 +295,8 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
             id: 'ch_test_rpc',
             customer: 'cus_test_123',
             amount: 1200,
-            amount_refunded: refundedAmount,
+            amount_refunded: 500,
+            created: nowSeconds - 86_400,
           },
         },
       });
@@ -286,12 +315,17 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
       await POST(request);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining('handle_refund'),
-        expect.arrayContaining([
+        'select revoke_plan_allowance_microusd($1, $2, $3, $4)',
+        [
           'user_123',
-          refundedAmount,
-          expect.stringContaining('ch_test_rpc'),
-        ]),
+          'credit_account_1',
+          Math.floor((planAllowanceMicrousd * 500) / 1200),
+          'Refund for charge ch_test_rpc',
+        ],
+      );
+      expect(mockExecute).not.toHaveBeenCalledWith(
+        expect.stringContaining('handle_refund('),
+        expect.anything(),
       );
     });
   });

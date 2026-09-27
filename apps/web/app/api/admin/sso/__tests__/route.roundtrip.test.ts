@@ -68,6 +68,15 @@ const store = {
 const mockQuery = vi.fn(async (sql: string, params: unknown[] = []): Promise<Row[]> => {
   const text = sql.replace(/\s+/g, ' ').trim().toLowerCase();
 
+  const roles: Record<string, string> = { [ORG_ID]: store.role ?? '', ...store.roleByOrg };
+  const entitlement = answerSsoEntitlementSql(text, {
+    memberships: Object.entries(roles)
+      .filter(([, role]) => role !== '')
+      .map(([organization_id, role]) => ({ organization_id, role })),
+    billingUserId: 'owner-user',
+  });
+  if (entitlement) return entitlement;
+
   if (text.startsWith('select role from organization_members')) {
     const orgId = params[0] as string;
     const role = store.roleByOrg[orgId] ?? store.role;
@@ -169,6 +178,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 import { DELETE, GET as LIST, POST } from '../route';
 import { GET as GET_ONE, PATCH } from '../[id]/route';
 import { POST as VERIFY, PUT as REISSUE } from '../verify-domain/route';
+import { answerSsoEntitlementSql } from './sso-entitlement-sql';
 
 function req(url: string, method: string, body?: unknown) {
   return new Request(url, {

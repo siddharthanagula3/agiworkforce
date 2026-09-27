@@ -39,7 +39,13 @@ export async function authorizeSSORequest(
   }
 
   const db = getNeonDb();
-  const { access, denial } = await requireSSOAdminAccess(db, userId);
+  let gate: Awaited<ReturnType<typeof requireSSOAdminAccess>>;
+  try {
+    gate = await requireSSOAdminAccess(db, userId);
+  } catch (error) {
+    return { principal: null, response: ssoErrorResponse(error, { userId, endpoint }) };
+  }
+  const { access, denial } = gate;
 
   if (denial) {
     await logSecurityEvent({
