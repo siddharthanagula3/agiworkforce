@@ -109,16 +109,16 @@ const AGI_WORK_TIERS = extractCapabilityTiers(billingCatalogText, 'agi_work');
 // Enforced per-plan COGS ceiling, reproduced from the same conversion the
 // reservation system applies (apps/web/lib/server/managed-usage-policy.ts
 // getPlanUsageBudgetCents) over the unit table it reads
-// (apps/web/lib/billing/managed-usage-caps.ts MANAGED_USAGE_LIMITS). This is
+// (packages/contracts/types/src/managed-usage-limits.ts MANAGED_USAGE_LIMITS). This is
 // the hard stop a real account hits regardless of what this script's profile
 // assumptions say, so every profile's modeled COGS is checked against it.
-const managedUsageCapsText = readText('apps/web/lib/billing/managed-usage-caps.ts');
+const managedUsageCapsText = readText('packages/contracts/types/src/managed-usage-limits.ts');
 
 function extractMonthlyCredits(text, tierKey) {
   const pattern = new RegExp(`'?${tierKey}'?: \\{[\\s\\S]{0,20}?monthlyCredits: ([0-9_]+)`);
   const match = text.match(pattern);
   if (!match)
-    throw new Error(`could not find monthlyCredits for ${tierKey} in managed-usage-caps.ts`);
+    throw new Error(`could not find monthlyCredits for ${tierKey} in managed-usage-limits.ts`);
   return Number(match[1].replace(/_/g, ''));
 }
 

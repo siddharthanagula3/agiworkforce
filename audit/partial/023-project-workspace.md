@@ -80,17 +80,15 @@ Code: `apps/cli/src/agent/mod.rs:1627-1627`, `apps/cli/src/agent/mod.rs:1924-192
 
 - Done when: Users can upload files to a project, see them listed, preview/download and remove them, and project chats can use them.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The knowledge-storage cap reads only the uploader's own subscriptions row (SubscriptionService.getSubscription); a never-paid Free user or a Team seat member has no row, so the cap resolves to 0 bytes and every project file upload is refused (live QA E034 hit exactly this on Free). Resolve the cap through resolveEntitledPlanTier like project creation does. | handler |
-| desktop | partial | The knowledge-storage cap reads only the uploader's own subscriptions row (SubscriptionService.getSubscription); a never-paid Free user or a Team seat member has no row, so the cap resolves to 0 bytes and every project file upload is refused (live QA E034 hit exactly this on Free). Resolve the cap through resolveEntitledPlanTier like project creation does. | handler |
-| mobile | partial | Mobile uploads through the same route, so knowledge-storage cap reads only the uploader's own subscriptions row (SubscriptionService.getSubscription); a never-paid Free user or a Team seat member has no row, so the cap resolves to 0 bytes and every project file upload is refused (live QA E034 hit exactly this on Free). Resolve the cap through resolveEntitledPlanTier like project creation does. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | VS Code lists a project's knowledge files read-only; uploading, previewing and removing them happen on the web. | surface-only |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1242-1242`, `apps/web/features/projects/components/ProjectSettingsDialog.tsx:283-283`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-383`, `apps/web/app/api/projects/[id]/knowledge-files/route.ts:381-384`
+Code: `apps/extension-vscode/src/features/projects/projectActions.ts:78-90`, `apps/extension-vscode/src/features/projects/projectsClient.ts:48-53`
 
 ## S23.08: Project sources.
 
@@ -380,17 +378,14 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1528-1542
 
 - Done when: A project owner can duplicate a project, getting a copy with its settings, instructions and files.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Duplicate copies settings, instructions and knowledge files, but its project cap reads only the user's own subscription row (not resolveEntitledPlanTier as create does), so a Team-seat member with one project is refused. Route through resolveEntitledPlanTier. | handler |
-| desktop | partial | Duplicate copies settings, instructions and knowledge files, but its project cap reads only the user's own subscription row (not resolveEntitledPlanTier as create does), so a Team-seat member with one project is refused. Route through resolveEntitledPlanTier. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectSettingsDialog.tsx:310-320`, `apps/web/features/projects/components/ProjectSettingsDialog.tsx:69-76`, `apps/web/app/chat/projects/[id]/page.tsx:1260-1266`, `apps/web/app/api/projects/[id]/duplicate/route.ts:70-75`
 
 ## S23.30: Archive and restore.
 

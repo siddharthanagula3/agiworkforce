@@ -5,11 +5,7 @@ import {
   toEmbeddingInputs,
   type ManagedEmbeddingsResponse,
 } from '@agiworkforce/cloud-contracts';
-import {
-  getModels,
-  getModelMetadataById,
-  type ModelMetadata,
-} from '@agiworkforce/types';
+import { getModels, getModelMetadataById, type ModelMetadata } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -40,7 +36,7 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import {
   buildManagedComputeAccessGateResponse,
   evaluateManagedComputeSubscriptionAccess,
@@ -184,11 +180,11 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     if (scoped.userId !== userId) {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
-    const subscription = await SubscriptionService.getSubscription(scoped.db, userId);
+    const entitlement = await resolveEntitlementBundle(scoped.db, userId);
     const subscriptionAccess = await evaluateManagedComputeSubscriptionAccess(
       scoped.db,
       userId,
-      subscription,
+      entitlement.subscription,
     );
     if (!subscriptionAccess.allowed) {
       const gateResponse = buildManagedComputeAccessGateResponse(subscriptionAccess, {
@@ -205,7 +201,7 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
       provider: model.provider,
       model: model.id,
       estimatedCostMicrousd: estimateEmbeddingCostMicrousd(model, estimatedTokens),
-      planTier: subscription?.plan_tier ?? 'free',
+      planTier: entitlement.plan,
       isFlagship: false,
     });
   } catch (error) {

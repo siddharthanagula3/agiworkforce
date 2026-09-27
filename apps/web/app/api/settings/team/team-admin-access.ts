@@ -1,16 +1,13 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import {
-  canUseBillingPlanCapability,
-  effectivePlanTier,
-  normalizeBillingPlanTier,
-  type BillingPlanTier,
-} from '@agiworkforce/types';
+import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
 import { AppError, type ErrorCodeValue } from '@/lib/errors';
-import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
-import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
+import {
+  resolveOrganizationEntitlementPlan,
+  resolveUserPersonalPlanTier,
+} from '@/lib/services/org-entitlements';
 
 export interface TeamAdminAccess {
   plan: BillingPlanTier;
@@ -28,12 +25,7 @@ export async function getTeamAdminAccess(
 ): Promise<TeamAdminAccess> {
   const plan = organizationId
     ? await resolveOrganizationEntitlementPlan(organizationId)
-    : await (async () => {
-        const subscription = await SubscriptionService.getSubscription(db, userId);
-        return normalizeBillingPlanTier(
-          effectivePlanTier(subscription?.plan_tier, subscription?.status),
-        );
-      })();
+    : await resolveUserPersonalPlanTier(db, userId);
 
   const base: TeamAdminAccess = {
     plan,
