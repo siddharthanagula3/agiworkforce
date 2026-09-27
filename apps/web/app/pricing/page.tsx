@@ -1045,8 +1045,8 @@ export default function PricingPage() {
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">
                   {teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice}
-                </span>
-                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>
+                </span>{' '}
+                <span className="agi-tier-price-sub">{t('perSeatPricingSub')}</span>{' '}
                 <span className="agi-tier-price-sub">
                   {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
                 </span>

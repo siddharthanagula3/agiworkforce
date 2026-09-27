@@ -380,6 +380,9 @@ describe('PricingPage', () => {
     expect(card.getByText('$20')).toBeVisible();
     expect(card.getByText('perSeatPricingSub')).toBeVisible();
     expect(card.getByText('billedYearly')).toBeVisible();
+    expect(card.getByText('$20').closest('p')!.textContent).toBe(
+      '$20 perSeatPricingSub billedYearly',
+    );
     expect(card.getByText('2 seats · $480/yr')).toBeVisible();
     expect(card.queryByText('$240')).toBeNull();
     expect(card.queryByText('$480')).toBeNull();
