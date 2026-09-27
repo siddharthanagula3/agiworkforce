@@ -314,12 +314,13 @@ const SUBSCRIPTION_QUERY = `select
 
 const TOP_UP_QUERY = `select
     coalesce(s.plan_tier, $5) as plan_tier,
-    coalesce(sum(t.amount_cents), 0) as amount_cents,
-    coalesce(sum(t.amount_cents) filter (
+    coalesce(sum(coalesce((t.metadata ->> 'charged_cents')::bigint, t.amount_cents)), 0)
+      as amount_cents,
+    coalesce(sum(coalesce((t.metadata ->> 'charged_cents')::bigint, t.amount_cents)) filter (
       where t.metadata ->> 'store' = $3
          or (t.metadata ->> 'store' is null and s.apple_original_transaction_id is not null)
     ), 0) as apple_cents,
-    coalesce(sum(t.amount_cents) filter (
+    coalesce(sum(coalesce((t.metadata ->> 'charged_cents')::bigint, t.amount_cents)) filter (
       where t.metadata ->> 'store' = $4
          or (t.metadata ->> 'store' is null and s.google_purchase_token is not null)
     ), 0) as google_cents
