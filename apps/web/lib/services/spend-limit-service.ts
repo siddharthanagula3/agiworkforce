@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { creditsFromCents, creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
 
 import { logger } from '@/lib/logger';
 import { dispatchSpendAlertIfDue } from '@/lib/services/spend-alert-service';
@@ -18,10 +19,10 @@ export interface SpendLimit {
 
 export interface SpendState {
   configured: boolean;
-  monthlyCapCents: number | null;
+  monthlyCapCredits: number | null;
   enforcement: SpendEnforcement;
   alertThresholdPct: number;
-  spentCents: number;
+  spentCredits: number;
   /** null when uncapped, so a caller cannot divide by a cap that is not there. */
   usedPct: number | null;
   overCap: boolean;
@@ -71,7 +72,7 @@ interface LimitAndSpendRow {
   monthly_cap_cents: number | null;
   enforcement: SpendEnforcement | null;
   alert_threshold_pct: number | null;
-  spent_cents: string | number | null;
+  spent_microusd: string | number | null;
 }
 
 function toNumber(value: string | number | null | undefined): number {
@@ -97,12 +98,12 @@ export async function readSpendState(
             l.enforcement,
             l.alert_threshold_pct,
             coalesce((
-              select sum(coalesce(m.actual_cost_cents, 0))
+              select sum(coalesce(m.actual_cost_microusd, 0))
                 from public.managed_usage_requests m
                where m.organization_id = $1
                  and m.status = 'completed'
                  and m.created_at >= date_trunc('month', now())
-            ), 0) as spent_cents
+            ), 0) as spent_microusd
        from public.organization_spend_limits l
       where l.organization_id = $1
       limit 1`,
@@ -112,26 +113,27 @@ export async function readSpendState(
   if (!row || row.monthly_cap_cents === null) {
     return {
       configured: false,
-      monthlyCapCents: null,
+      monthlyCapCredits: null,
       enforcement: 'off',
       alertThresholdPct: 80,
-      spentCents: 0,
+      spentCredits: 0,
       usedPct: null,
       overCap: false,
       overThreshold: false,
     };
   }
 
-  const cap = row.monthly_cap_cents;
-  const spent = toNumber(row.spent_cents);
+  const capCredits = creditsFromCents(row.monthly_cap_cents);
+  const cap = microusdFromCredits(capCredits);
+  const spent = toNumber(row.spent_microusd);
   const threshold = row.alert_threshold_pct ?? 80;
 
   return {
     configured: true,
-    monthlyCapCents: cap,
+    monthlyCapCredits: capCredits,
     enforcement: row.enforcement ?? 'off',
     alertThresholdPct: threshold,
-    spentCents: spent,
+    spentCredits: creditsFromMicrousd(spent),
     usedPct: Math.round((spent / cap) * 100),
     overCap: spent >= cap,
     overThreshold: spent >= (cap * threshold) / 100,
