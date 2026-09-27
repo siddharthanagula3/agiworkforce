@@ -196,6 +196,38 @@ describe('BillingSection', () => {
     expect(screen.getByText('$25/mo per seat')).toBeTruthy();
   });
 
+  it('keeps a yearly Pro subscriber on what they bought and says Pro is now sold monthly', async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes('/api/billing/downgrade-preview')
+        ? ({
+            ok: true,
+            json: async () => ({
+              plan: 'pro',
+              status: 'active',
+              price: { amountCents: 20_000, currency: 'usd', interval: 'yearly' },
+              periodEnd: '2027-01-15T00:00:00.000Z',
+              trialStart: null,
+              trialEnd: null,
+              cancelAt: null,
+              scheduledChange: null,
+              downgradeTargets: [],
+              downgradeBlock: null,
+            }),
+          } as Response)
+        : ({ ok: true, json: async () => ({}) } as Response),
+    );
+
+    render(<BillingSection />);
+
+    expect(await screen.findByText('$200/year')).toBeTruthy();
+    expect(screen.queryByText('$20/mo')).toBeNull();
+    expect(
+      screen.getByText(
+        'Pro is now sold with monthly billing only. Your plan stays on yearly billing at its current price until you change or cancel it.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('labels an operator-provisioned plan without inventing Stripe controls', () => {
     mockSubscription.subscription_source = 'manual';
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);

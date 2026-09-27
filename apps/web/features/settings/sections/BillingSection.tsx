@@ -11,6 +11,7 @@ import {
   formatBillingDate,
   formatBillingDateFromSeconds,
   formatBillingMoney,
+  formatRecurringMoney,
   formatUsdAmount,
 } from '@/features/billing/lib/billing-format';
 import {
@@ -307,11 +308,14 @@ export function BillingSection() {
   const planLabel = isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : undefined;
   const displayPlanLabel = planLabel ?? subscription?.display_name ?? '';
   const listPriceUsd = getPlanPriceUsd(tier, 'monthly');
+  const yearlyPrice = planState?.price?.interval === 'yearly' ? planState.price : null;
   const planPriceLabel = isContractPricedPlan(tier)
     ? 'Custom, set by your contract'
-    : listPriceUsd !== null && listPriceUsd > 0
-      ? `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
-      : null;
+    : yearlyPrice
+      ? formatRecurringMoney(yearlyPrice.amountCents, yearlyPrice.currency, yearlyPrice.interval)
+      : listPriceUsd !== null && listPriceUsd > 0
+        ? `${formatUsdAmount(listPriceUsd)}/mo${isPerSeatBillingPlan(tier) ? ' per seat' : ''}`
+        : null;
 
   const isFreeTier = isFreeBillingPlanTier(tier);
 

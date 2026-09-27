@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { Button } from '@agiworkforce/ui';
-import { getBillingPlanPricing } from '@agiworkforce/types';
+import { getBillingPlanPricing, isGrandfatheredBillingInterval } from '@agiworkforce/types';
 import type { PlanChangeState } from '../lib/billing-account-types';
 import {
   formatBillingDate,
@@ -220,6 +220,21 @@ export function BillingPlanNotices({
           .
         </p>
         <p>You keep {planLabel} and its credits until then.</p>
+      </Notice>,
+    );
+  }
+
+  const retiredCadence =
+    planState?.price && isGrandfatheredBillingInterval(planState.plan, planState.price.interval)
+      ? planState.price.interval
+      : null;
+  if (retiredCadence && !endingSoon && !scheduled) {
+    notices.push(
+      <Notice key="retired-cadence" tone="neutral">
+        <p>
+          {planLabel} is now sold with monthly billing only. Your plan stays on {retiredCadence}{' '}
+          billing at its current price until you change or cancel it.
+        </p>
       </Notice>,
     );
   }
