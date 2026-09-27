@@ -5,9 +5,11 @@ import type {
   ManagedCloudSchedulesClient,
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
+import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import {
   describeScheduleFailure,
   isRecoverableScheduleFailure,
+  scheduleApprovalDetail,
   scheduleCadence,
   scheduleRunDetail,
   scheduleRunLabel,
@@ -26,7 +28,13 @@ const SCHEDULE_RUNS_PAGE_LIMIT = 20;
 
 export type ScheduleEnablementClient = Pick<ManagedCloudSchedulesClient, 'setScheduleEnabled'>;
 export type ScheduleRunNowClient = Pick<ManagedCloudSchedulesClient, 'runNow'>;
-export type ScheduleRunHistoryClient = Pick<ManagedCloudSchedulesClient, 'listRuns'>;
+export type ScheduleApprovalClient = Pick<ManagedCloudSchedulesClient, 'resolveRunApproval'>;
+export type ScheduleRunHistoryClient = Pick<ManagedCloudSchedulesClient, 'listRuns'> &
+  ScheduleApprovalClient;
+
+interface ScheduleRunQuickPickItem extends vscode.QuickPickItem {
+  run: ManagedCloudScheduleRun;
+}
 
 export interface ScheduleActionHost {
   onChanged: () => void;
@@ -48,10 +56,11 @@ export function scheduleRunNowConsequence(task: ManagedCloudScheduleTask): strin
 
 export function scheduleRunQuickPickItems(
   runs: readonly ManagedCloudScheduleRun[],
-): vscode.QuickPickItem[] {
+): ScheduleRunQuickPickItem[] {
   return runs.map((run) => ({
     label: `$(${scheduleRunStatusIcon(run.status)}) ${scheduleRunLabel(run)}`,
     detail: scheduleRunDetail(run),
+    run,
   }));
 }
 
@@ -123,6 +132,44 @@ export async function runScheduleNowInteractively(
   );
 }
 
+export async function resolveScheduleApprovalInteractively(
+  client: ScheduleApprovalClient,
+  task: ManagedCloudScheduleTask,
+  run: ManagedCloudScheduleRun,
+  host: ScheduleActionHost,
+): Promise<void> {
+  const pending = run.pendingApproval;
+  if (!pending) return;
+  const answer = await vscode.window.showWarningMessage(
+    `"${scheduleTitle(task)}" is waiting for your approval`,
+    { modal: true, detail: scheduleApprovalDetail(pending) },
+    TOOL_APPROVAL_ACTION_LABELS.approve,
+    TOOL_APPROVAL_ACTION_LABELS.deny,
+  );
+  if (
+    answer !== TOOL_APPROVAL_ACTION_LABELS.approve &&
+    answer !== TOOL_APPROVAL_ACTION_LABELS.deny
+  ) {
+    return;
+  }
+  const decision = answer === TOOL_APPROVAL_ACTION_LABELS.approve ? 'approved' : 'rejected';
+  await withScheduleRetry(
+    decision === 'approved'
+      ? `AGI Workforce: approving the step "${scheduleTitle(task)}" is waiting on…`
+      : `AGI Workforce: denying the step "${scheduleTitle(task)}" is waiting on…`,
+    async () => {
+      const resolved = await client.resolveRunApproval(task.id, run.id, {
+        decision,
+        toolCallIds: pending.toolCalls.map((call) => call.id),
+      });
+      void vscode.window.showInformationMessage(
+        `AGI Workforce: ${scheduleRunLabel(resolved).toLowerCase()}.`,
+      );
+    },
+    host,
+  );
+}
+
 export async function showScheduleRuns(
   client: ScheduleRunHistoryClient,
   task: ManagedCloudScheduleTask,
@@ -154,8 +201,12 @@ export async function showScheduleRuns(
     return;
   }
 
-  await vscode.window.showQuickPick(scheduleRunQuickPickItems(runs), {
+  const picked = await vscode.window.showQuickPick(scheduleRunQuickPickItems(runs), {
     title: `Runs of "${scheduleTitle(task)}"`,
-    placeHolder: 'Newest first. Editing a schedule happens on the web.',
+    placeHolder:
+      'Newest first. Pick a run waiting for approval to approve or deny it. Editing a schedule happens on the web.',
   });
+  if (picked?.run.status === 'awaiting_approval') {
+    await resolveScheduleApprovalInteractively(client, task, picked.run, host);
+  }
 }
