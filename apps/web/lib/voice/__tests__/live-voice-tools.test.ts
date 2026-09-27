@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelMetadata } from '@agiworkforce/types';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 
 vi.mock('server-only', () => ({}));
 
@@ -18,6 +19,7 @@ const { appendWebSearchTool } =
 const { resolveCodeExecutionTools } = await import('@/lib/e2b/execution-tools');
 
 const BACKEND_MODEL = getModelMetadataById(getRoutingSlotModel('voice_live_backend'))!;
+const POLICY = WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY;
 
 function model(overrides: Partial<ModelMetadata['capabilities']>): ModelMetadata {
   return {
@@ -34,7 +36,7 @@ describe('live voice delegation tools', () => {
    * `container` on the chat path: the toggle was lit and the turn died.
    */
   it('resolves search through the same resolver the chat completions route uses', () => {
-    expect(resolveLiveVoiceDelegationTools(BACKEND_MODEL)).toEqual(
+    expect(resolveLiveVoiceDelegationTools(BACKEND_MODEL, POLICY).tools).toEqual(
       appendWebSearchTool(
         String(BACKEND_MODEL.provider).toLowerCase(),
         undefined,
@@ -46,7 +48,7 @@ describe('live voice delegation tools', () => {
   it('adds the provider-hosted interpreter when the model has code execution', () => {
     const capable = model({ codeExecution: true });
 
-    expect(resolveLiveVoiceDelegationTools(capable)).toEqual([
+    expect(resolveLiveVoiceDelegationTools(capable, POLICY).tools).toEqual([
       ...(appendWebSearchTool(
         String(capable.provider).toLowerCase(),
         undefined,
@@ -57,11 +59,11 @@ describe('live voice delegation tools', () => {
   });
 
   it('offers nothing to a model the catalog says cannot call tools', () => {
-    expect(resolveLiveVoiceDelegationTools(model({ tools: false }))).toEqual([]);
+    expect(resolveLiveVoiceDelegationTools(model({ tools: false }), POLICY).tools).toEqual([]);
   });
 
   it('offers no search to a model the catalog says cannot search', () => {
-    expect(resolveLiveVoiceDelegationTools(model({ search: false }))).toEqual([]);
+    expect(resolveLiveVoiceDelegationTools(model({ search: false }), POLICY).tools).toEqual([]);
   });
 
   /**
@@ -92,7 +94,8 @@ describe('live voice delegation tools', () => {
    * hands back for a caller to run, and nothing in this path is listening.
    */
   it('offers only provider-hosted tools, never a function the delegation would hand back', () => {
-    for (const tool of resolveLiveVoiceDelegationTools(model({ codeExecution: true }))) {
+    for (const tool of resolveLiveVoiceDelegationTools(model({ codeExecution: true }), POLICY)
+      .tools) {
       const record = tool as Record<string, unknown>;
       expect(record['type']).not.toBe('function');
       expect(record['function']).toBeUndefined();
@@ -130,7 +133,9 @@ describe('live voice delegation tools', () => {
   });
 
   it('describes the tools it actually offered, with a label the voice UI can speak', () => {
-    const offered = describeDelegationTools(resolveLiveVoiceDelegationTools(BACKEND_MODEL));
+    const offered = describeDelegationTools(
+      resolveLiveVoiceDelegationTools(BACKEND_MODEL, POLICY).tools,
+    );
     expect(offered.length).toBeGreaterThan(0);
     for (const descriptor of describeLiveVoiceTools(offered)) {
       expect(descriptor.label.length).toBeGreaterThan(0);
