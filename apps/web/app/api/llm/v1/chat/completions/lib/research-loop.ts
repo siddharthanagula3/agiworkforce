@@ -1820,6 +1820,7 @@ export async function* runResearchLoop(
             userId: _billing.userId,
             organizationId: processed.organizationId ?? null,
             admission: searchCharge.admission,
+            billableCalls: outcome.billableCalls,
             answered: outcome.ok,
             turnRef: turnId,
             callOrdinal: searchOrdinal,

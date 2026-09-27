@@ -253,6 +253,7 @@ import {
   webSearchResultsToFetchedSources,
   resolveRoutingRedirectUrls,
   isBareDomainTitle,
+  type WebSearchSpend,
 } from '@/lib/web-search/web-search-tool';
 import { normalizeSourceUrlKey } from '@/lib/web-search/source-url-key';
 import { readTurnToolHistory } from './turn-tool-history';
@@ -1827,6 +1828,7 @@ async function runMcpTool(
     planTier?: string | null;
     webSearchMaxResults?: number;
     surface?: string | null;
+    onWebSearchSpend?: (spend: WebSearchSpend) => void;
     sourcePositionFor?: (url: string) => number | undefined;
     clientTimeZone?: string;
     signal?: AbortSignal;
@@ -1999,6 +2001,10 @@ async function runMcpTool(
     const outcome = await executeWebSearch(toolCall.args, {
       maxResults: executionContext?.webSearchMaxResults,
       ...(executionContext?.signal ? { signal: executionContext.signal } : {}),
+    });
+    executionContext?.onWebSearchSpend?.({
+      billableCalls: outcome.billableCalls,
+      answered: outcome.ok,
     });
     // Ranked before anything is numbered, because the number a source gets is
     // the order the reader sees: the primary, dated account has to be [1], not
@@ -3281,6 +3287,8 @@ export async function* runToolLoop(
   // step from what the stream reports rather than from a tool call we made.
   const nativeSearchCap = resolveNativeSearchMaxUses(processed.researchMode === true);
   let nativeSearchUses = 0;
+  let nativeSearchSpendSettled = false;
+  const nativeSearchSettlementRef = Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0));
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   const executionRequirement =
@@ -3546,7 +3554,7 @@ export async function* runToolLoop(
   async function settleSearchCall(
     callOrdinal: number,
     admission: SearchAdmission,
-    answered: boolean,
+    spend: WebSearchSpend,
   ): Promise<void> {
     const userId = options.userId;
     if (!userId) return;
@@ -3554,7 +3562,8 @@ export async function* runToolLoop(
       userId,
       organizationId: processed.organizationId ?? null,
       admission,
-      answered,
+      billableCalls: spend.billableCalls,
+      answered: spend.answered,
       turnRef: turnId,
       callOrdinal,
       surface: processed.chatSurface,
@@ -3570,8 +3579,9 @@ export async function* runToolLoop(
    */
   async function recordGroundingSpend(delivered: boolean): Promise<void> {
     const userId = options.userId;
-    if (nativeSearchUses <= 0 || !userId) return;
+    if (nativeSearchUses <= 0 || !userId || nativeSearchSpendSettled) return;
     if (processed.provider.toLowerCase() !== GOOGLE_GROUNDING_PROVIDER) return;
+    nativeSearchSpendSettled = true;
     try {
       const pool = await reserveGroundingPoolUses(GOOGLE_GROUNDING_PROVIDER, nativeSearchUses);
       // The model runs native grounding itself, so it can only be priced after
@@ -3592,7 +3602,7 @@ export async function* runToolLoop(
               organizationId: processed.organizationId ?? null,
               planTier: processed.subscriptionTier ?? null,
               requestId: processed.requestId,
-              callRef: 0,
+              callRef: nativeSearchSettlementRef,
               feature: GOOGLE_GROUNDING_FEATURE,
               provider: GOOGLE_GROUNDING_PROVIDER,
               chargeMicrousd: googleGroundingChargeMicrousd(responseModel, nativeSearchUses),
@@ -3610,6 +3620,7 @@ export async function* runToolLoop(
         providerId: GOOGLE_GROUNDING_PROVIDER,
         model: responseModel,
         turnRef: turnId,
+        settlementRef: nativeSearchSettlementRef,
         billableCalls: pool.billableCalls,
         delivered,
         surface: processed.chatSurface,
@@ -3624,9 +3635,7 @@ export async function* runToolLoop(
     reason: AgentEventStopReason = 'end-turn',
     stoppedShort?: Extract<AgentTaskState, 'partial' | 'timed_out'>,
   ): AsyncGenerator<Uint8Array> {
-    if (reason !== 'tool-use') {
-      await recordGroundingSpend(reason !== 'error' && reason !== 'cancelled');
-    }
+    await recordGroundingSpend(reason !== 'error' && reason !== 'cancelled');
     for (const line of await harvestGeneratedFilesEvents()) {
       yield encoder.encode(line);
     }
@@ -3863,9 +3872,9 @@ export async function* runToolLoop(
           }
           searchAdmission = admission.admission;
         }
-        let result: ToolLoopToolResult | undefined;
+        let searchSpend: WebSearchSpend = { billableCalls: 0, answered: false };
         try {
-          result = await runMcpTool(
+          return await runMcpTool(
             tc,
             resolveE2BExecutor,
             availableTools,
@@ -3879,6 +3888,9 @@ export async function* runToolLoop(
               planTier: processed.subscriptionTier ?? null,
               webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
               surface: processed.chatSurface,
+              onWebSearchSpend: (spend) => {
+                searchSpend = spend;
+              },
               sourcePositionFor,
               loadSkillInstallOverrides,
               ...(processed.chatRequest?.client_timezone
@@ -3890,11 +3902,9 @@ export async function* runToolLoop(
               ...(resumeInput?.requestState ? { requestState: resumeInput.requestState } : {}),
             },
           );
-          return result;
         } finally {
-          if (searchAdmission) {
-            await settleSearchCall(searchCallOrdinal, searchAdmission, result?.isError === false);
-          }
+          if (searchAdmission)
+            await settleSearchCall(searchCallOrdinal, searchAdmission, searchSpend);
         }
       };
       const execute = () =>
@@ -4230,6 +4240,7 @@ export async function* runToolLoop(
       inputEvents.push(pausedEmitted.envelope);
       inputChunks.push(encoder.encode(pausedEmitted.sse));
 
+      await recordGroundingSpend(true);
       await options.onInputCheckpoint?.({
         sessionId,
         turnId,
@@ -4666,6 +4677,7 @@ export async function* runToolLoop(
         const pausedEmitted = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
         pauseEvents.push(pausedEmitted.envelope);
         pauseChunks.push(encoder.encode(pausedEmitted.sse));
+        await recordGroundingSpend(true);
         await options.onPauseCheckpoint({
           sessionId,
           turnId,
@@ -4687,6 +4699,7 @@ export async function* runToolLoop(
           for (const line of await harvestGeneratedFilesEvents()) {
             yield encoder.encode(line);
           }
+          await recordGroundingSpend(true);
           await options.onInvocationCheckpoint({
             sessionId,
             turnId,
@@ -5502,6 +5515,7 @@ export async function* runToolLoop(
           deviceEvents.push(devicePaused.envelope);
           deviceChunks.push(encoder.encode(devicePaused.sse));
 
+          await recordGroundingSpend(true);
           await options.onDeviceCheckpoint({
             sessionId,
             turnId,
@@ -5574,6 +5588,7 @@ export async function* runToolLoop(
         approvalEvents.push(pausedEmitted.envelope);
         approvalChunks.push(encoder.encode(pausedEmitted.sse));
 
+        await recordGroundingSpend(true);
         await options.onApprovalCheckpoint?.({
           sessionId,
           turnId,
@@ -5640,6 +5655,7 @@ export async function* runToolLoop(
         { maxSteps, completedSteps: step, provider: processed.provider },
         '[tool-loop] step budget reached without terminal stop -- pausing for a step-budget decision',
       );
+      await recordGroundingSpend(true);
       await options.onStepBudgetCheckpoint({
         sessionId,
         turnId,
