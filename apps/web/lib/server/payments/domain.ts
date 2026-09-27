@@ -68,6 +68,70 @@ export interface NormalizedPurchase {
   environment: NormalizedEnvironment;
 }
 
+export type NormalizedPaymentStatus =
+  | 'succeeded'
+  | 'processing'
+  | 'requires_action'
+  | 'requires_payment_method'
+  | 'requires_confirmation'
+  | 'requires_capture'
+  | 'canceled'
+  | 'unknown';
+
+export interface NormalizedPayment {
+  reference: string;
+  status: NormalizedPaymentStatus;
+  amountReceived: NormalizedMoney | null;
+  metadata: Readonly<Record<string, string>>;
+  failureCode: string | null;
+  declineCode: string | null;
+}
+
+export interface NormalizedCard {
+  reference: string;
+  brand: string;
+  last4: string;
+}
+
+export interface NormalizedBillingInstrument {
+  currency: string | null;
+  card: NormalizedCard | null;
+  billingEmail: string | null;
+}
+
+export interface NormalizedTaxCalculation {
+  reference: string;
+  total: NormalizedMoney;
+  taxMinorUnits: number;
+  country: string | null;
+}
+
+export type TaxCalculationResult =
+  | { outcome: 'calculated'; calculation: NormalizedTaxCalculation }
+  | { outcome: 'location_missing' };
+
+export interface OffSessionChargeInput {
+  customerReference: string;
+  paymentMethodReference: string;
+  amount: NormalizedMoney;
+  description: string;
+  metadata: Readonly<Record<string, string>>;
+  receiptEmail: string | null;
+  taxCalculationReference: string;
+  idempotencyKey: string;
+}
+
+export type OffSessionChargeResult =
+  | { outcome: 'created'; payment: NormalizedPayment }
+  | {
+      outcome: 'declined';
+      payment: NormalizedPayment | null;
+      failureCode: string | null;
+      declineCode: string | null;
+    }
+  | { outcome: 'rejected'; code: string | null; message: string }
+  | { outcome: 'unknown'; error: unknown };
+
 export interface PurchaseVerificationInput {
   reference: string;
   ownerReference?: string | null;
