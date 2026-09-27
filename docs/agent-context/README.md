@@ -9,12 +9,12 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 ## Read Order
 
 1. Root `AGENTS.md` - canonical operating rules for all coding agents and the entry point before this folder.
-2. `../product/definition.md` - product definition, v1 target, current position, parity baseline, P0 gaps, docs rule, and verification rule.
+2. `../product/definition.md` - product definition, v1 target, current position, parity baseline, docs rule, and verification rule.
 3. `../product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
 4. `../../audit/prior-audits/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
 5. `../architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and developer-surface model-selector rules.
 6. `repo-map.json` - where product and platform code lives.
-7. `known-flaws.md` - the register of open defects by surface, so agents do not rediscover one as new.
+7. `../../audit/registers/known-flaws.md` - the register of open defects by surface, so agents do not rediscover one as new.
 8. `commands.json` - exact commands by surface.
 9. Nearest path-scoped `AGENTS.md` - local surface rules before editing.
 10. `risk-map.json` - high-risk areas and required checks.
@@ -30,7 +30,7 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 ## Rules
 
 - Treat `AGENTS.md` as canonical. Tool-specific files such as `CLAUDE.md` must point back to it.
-- If a bug is already a row in `known-flaws.md`, update that row instead of creating a duplicate finding. A fixed row is deleted in the commit that fixes it, never annotated and left behind.
+- If a bug is already a row in `audit/registers/known-flaws.md`, update that row instead of creating a duplicate finding. A fixed row is deleted in the commit that fixes it, never annotated and left behind.
 - If a source-of-truth conflict appears, prefer `docs/product/definition.md`, `docs/decisions/README.md`, `PLAN.md`, and this folder over older launch plans.
 - Keep JSON files parseable without comments.
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.

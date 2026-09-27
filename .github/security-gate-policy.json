@@ -94,7 +94,7 @@
       "step": "Dependency advisories (Rust), non-blocking warning-policy debt",
       "reason": "Unmaintained, unsound, and yanked warnings on transitive crates with no upstream replacement. RUSTSEC vulnerabilities are still blocking in the step above.",
       "owner": "Platform lead",
-      "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (docs/agent-context/known-flaws.md)"
+      "tracking": "RUST-DEPENDENCY-ADVISORIES-01 (audit/registers/known-flaws.md)"
     },
     {
       "id": "semgrep-accepted-findings",

@@ -52,13 +52,3 @@ mentions, so pushes and pull requests never open a review run.
 - Pre-existing repo state: `check:hardcoded-endpoints` currently fails on the
   uncommitted working tree (real advisory finding, evidence in scan output);
   unrelated to Guardian changes.
-
-## Blockers requiring external action
-
-- GitHub App registration/installation and `GITHUB_WEBHOOK_SECRET` /
-  `GITHUB_APP_*` production credentials are operator-owned; the in-repo
-  interfaces are fixture-tested. The existing `/api/github/webhook` route
-  documents its env expectations in `apps/web/lib/github-app.ts`.
-- Branch-protection / required-check changes (making
-  "AGI Guardian / Final Policy" required) are repository-administration
-  actions; recommended only after shadow-mode precision review.

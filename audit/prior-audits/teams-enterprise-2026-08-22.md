@@ -5,7 +5,7 @@ Owner: Enterprise/platform lead
 Last updated: 2026-08-22
 
 Companion read: `AGENTS.md`, `docs/product/definition.md`,
-`docs/agent-context/known-flaws.md`, `PLAN.md`.
+`audit/registers/known-flaws.md`, `PLAN.md`.
 
 This plan governs Teams and Enterprise work only. Every status below is cited to
 a migration, route, or file in the working tree at commit `0d4e6986a`. Where the
@@ -78,7 +78,7 @@ WorkspaceMenuItems.tsx`), Desktop (`features/v3/WorkspaceSwitcher.tsx`), and
   configured.
 - **Self-serve Team checkout**: seat selector, per-seat pricing, and checkout
   body are catalog-derived and working; live Stripe Team Price IDs do not exist
-  (`docs/work/founder-assistance.md` item 5). Human action, not a code gap.
+  (`audit/decisions/founder-actions.md` item 5). Human action, not a code gap.
 - **Administration is a settings section**, `features/settings/sections/
 TeamSection.tsx` (1093 lines) plus `OrganizationSharingSection.tsx` (446).
   `/admin` is the internal operator console gated on Clerk `publicMetadata`.
@@ -188,7 +188,7 @@ Each runs as a workflow of four to five agents. Waves 1–3 are load-bearing;
 ### Wave 1: Make the policy plane real (keystone), LANDED 2026-08-22
 
 Shipped in this pass. Open gaps are ORGPOLICY-01/02/03 in
-`docs/agent-context/known-flaws.md`; read those before extending this wave.
+`audit/registers/known-flaws.md`; read those before extending this wave.
 
 - `lib/services/organization-policy-evaluator.ts`, pure, total evaluator.
 - `lib/services/organization-policy-service.ts`, read, effective-read, whole-row
@@ -412,15 +412,3 @@ policy denial holds identically on every one.
 | External sharing control           | Both                       | SHIPPED, enforced on both paths            | 3    |
 | Policy across Local + BYOK         | Neither                    | ABSENT                                     | 1    |
 | Trust-transition governance        | Neither                    | PARTIAL, consent without policy            | 1    |
-
-## Blocked By Human
-
-Both are recorded in `docs/work/founder-assistance.md`; repeated here because they gate
-wave exits.
-
-1. **Stripe**: Wave 6 cannot complete self-serve Team checkout until the live
-   Team product and Price IDs exist (`docs/work/founder-assistance.md` item 5). Everything
-   else in Wave 6 proceeds without it.
-2. **Clerk**: Wave 5's live SSO verification needs a paid Clerk plan with
-   enterprise connections enabled. Until then SSO stays
-   implemented-but-unverified and must be described that way.

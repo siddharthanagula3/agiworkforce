@@ -59,5 +59,5 @@ the process, not the rules.
 - Surface-specific runbooks: those live with the surface, or in
   `docs/runbooks/` when they cross surfaces.
 - Historical research: dated findings go in `docs/research/`, durable defects
-  in `docs/agent-context/known-flaws.md`. Root `audit/` is the live evidence
+  in `audit/registers/known-flaws.md`. Root `audit/` is the live evidence
   ledger and triage root, not historical research or proof of completion.

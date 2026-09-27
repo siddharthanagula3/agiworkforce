@@ -3,7 +3,7 @@ Owner: Explicitly bound launch coordinator only
 Last updated: 2026-09-21
 
 This goal applies only to the owner-authorized launch coordinator. Workers retain their bounded assignments.
-Current evidence lives beside this file; start with [PROGRESS.md](PROGRESS.md), not a new audit.
+Current evidence lives in `audit/prior-audits/website-launch/`; start with [progress.md](../../../audit/prior-audits/website-launch/progress.md), not a new audit.
 
 ## Owner scope amendment: one surface at a time
 
@@ -633,14 +633,14 @@ Keep one authoritative working ledger with links to detailed evidence. Reuse exi
 
 At minimum, maintain:
 
-- `LAUNCH_PLAN.md`: scope, priorities, user outcomes, decisions, and quick wins.
-- `QA_COVERAGE.json` or the existing equivalent: cases, attempts, evidence reuse, and invalidation.
-- `QA_ISSUES.md`: consolidated defects, causes, fixes, and verification.
+- `audit/prior-audits/website-launch/launch-plan.md`: scope, priorities, user outcomes, decisions, and quick wins.
+- `audit/prior-audits/website-launch/qa-coverage.json` or the existing equivalent: cases, attempts, evidence reuse, and invalidation.
+- `audit/prior-audits/website-launch/qa-issues.md`: consolidated defects, causes, fixes, and verification.
 - `REFERENCE_INDEX.md`: company posts/docs and their relevant behaviors.
-- `DEMO_CHAT_FINDINGS.md`: minimized historical examples and resulting improvements.
-- `JEV_ARCHITECTURE.md`: actual integration points, contracts, safeguards, pilot, and measurements.
-- `PRODUCTION_REMAINING.md`: exact release and production-verification work.
-- `PROGRESS.md`: completed work, current source state, blockers, and next actions.
+- The demo dataset inventory: row 375 of `audit/live-check/codex-live-verification-queue.md` (the dataset is unavailable).
+- `docs/specs/jev-auto-routing/jev-architecture.md`: actual integration points, contracts, safeguards, pilot, and measurements.
+- `audit/prior-audits/website-launch/production-remaining.md`: exact release and production-verification work.
+- `audit/prior-audits/website-launch/progress.md`: completed work, current source state, blockers, and next actions.
 
 Preserve historical audit artifacts and original demo content.
 

@@ -284,7 +284,7 @@ drill that can corrupt one.
 
 `AGI_RESTORE_DRILL_MAX_SECONDS` (600 in CI) fails a run that took longer than
 its budget. That number is a regression guard on a container-sized database,
-not a recovery time objective for production: see [Open gaps](#open-gaps).
+not a recovery time objective for production: see `audit/blockers/31-database-backup-restore-open-gaps.md`.
 
 ## One-day host-swap procedure
 
@@ -375,22 +375,8 @@ reconciliation rather than by a delete notification; the "Deletes ARE
 replicated" note below says how, and the erasure replay above says what a
 restore does to it.
 
-## Open gaps
+## Replication scope
 
-- No RPO/RTO has been published to customers. The only recovery time this
-  repository has measured is the logical drill's, on a container-sized
-  database in CI; that number says nothing about an in-place production
-  restore. The Neon branch drill proves recent production data is recoverable,
-  but it does not measure the outage window or reconnection time of an in-place
-  restore. Publishing either objective requires a timed incident rehearsal.
-- **Object versioning and the backup bucket are not provisioned.** The
-  replication code path is complete and runs hourly, but it replicates nothing
-  until the five `AGI_STORAGE_BACKUP_*` variables are set, and object
-  versioning has to be enabled on both buckets in the storage provider's
-  console or API. Both are founder actions; no further code is needed. Until
-  the variables are set the cron logs an error and answers 503 naming them, so
-  an unconfigured backup shows up as a failing scheduled job rather than a
-  silent success.
 - Deletes ARE replicated. `object_backup_replicas` records every key the sweep
   copied, and each run asks the primary about the oldest-verified tracked keys
   and deletes the backup copy of any key the primary no longer holds, which
@@ -404,18 +390,6 @@ restore does to it.
   is built per request and streamed, so neither is a stored object. Adding a
   third class is a row in `BACKUP_SOURCES` in
   `apps/web/app/api/cron/replicate-object-backups/route.ts`.
-- The purge cron synchronizes the erasure ledger after each sweep. The weekly
-  logical-restore CI job does not yet assert that replay re-arms a subject
-  erased before the recovery point; the unit coverage in
-  `apps/web/lib/server/erasure-tombstones.test.ts` proves the replay logic, while
-  the live restore drill remains the required promotion evidence.
-- No third-party uptime monitor calls `/api/health`, so an outage that
-  triggers a restore may be detected only by `docs/runbooks/incident-response.md`'s
-  existing daily cron, not sooner.
-- No production-shaped host other than Neon has been rehearsed. Both adapters
-  are proven against local Postgres 17 and the contract suite runs on every
-  host it is pointed at, but a managed host's TLS, pooling and connection
-  ceiling are unmeasured until a real target exists.
 
 Related: section 3 of `docs/security/security.md` for what a restore does to
 encrypted columns, `docs/runbooks/incident-response.md` for what paged this in

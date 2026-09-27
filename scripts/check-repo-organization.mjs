@@ -10,7 +10,6 @@ const errors = [];
 const warnings = [];
 
 const allowedRootFiles = new Set([
-  'ACTIVE_ISSUES.md',
   '.git',
   '.agi-guardian.yml',
   '.claudeignore',

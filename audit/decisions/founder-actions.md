@@ -1,13 +1,14 @@
-# Founder assistance
+# Founder actions
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-16
+Last updated: 2026-09-27
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
-here; it lives in `ACTIVE_ISSUES.md`. An entry is deleted the moment the action
-is done and the dependent behaviour is verified live.
+here; it lives elsewhere in `audit/` (see `audit/README.md`). An entry is
+deleted the moment the action is done and the dependent behaviour is verified
+live.
 
 Impact: RELEASE-BLOCKING (a surface cannot ship publicly) · FEATURE-BLOCKING
 (one capability stays dark) · EXTERNAL-APPROVAL (waiting on a third party) ·
@@ -15,7 +16,7 @@ NON-BLOCKING.
 
 The founder's decisions of 2026-09-15 live in
 `docs/decisions/2026-09-15-founder-decisions.md`; the items they resolved were
-removed here and their engineering is tracked in `ACTIVE_ISSUES.md` (AGI-35).
+removed here and their engineering is tracked in `audit/prior-audits/active-issues-register.md` (AGI-35).
 
 ## [Deploy] Release the production deploy queue (F1, F2)
 
@@ -140,7 +141,7 @@ The founder chose full external scope on 2026-09-16. Contracts and budget are fo
 **Where** Vendor contracts.
 **Needed input** Quotes and budget approval.
 **How to verify completion** Contracts signed; kickoff dates on the programme plan.
-**What remains after founder action** Waves 4 to 6 of `docs/work/enterprise-completion-plan-2026-09-16.md`.
+**What remains after founder action** The certification, pen-test, paging, analytics, customer-managed-key and EU-hosting engineering listed in `audit/prior-audits/enterprise-build-checklist-audit-2026-09-16.md` and the enterprise sections of `audit/partial/` and `audit/missing/`.
 **Impact** RELEASE-BLOCKING for enterprise claims (§128)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -178,11 +179,30 @@ ids for every plan; one live checkout provisions once; zero contradicting
 active prices.
 
 **What remains after founder action** Nothing; checkout, webhook and ledger code ship and are tested.
+**Also gates** Self-serve Team checkout (Wave 6 of `audit/prior-audits/teams-enterprise-2026-08-22.md`) cannot complete until the live Team product and price ids exist; the rest of that wave proceeds without them.
 **Impact** RELEASE-BLOCKING
 **What remains after founder action** Until the cutover, `/api/cron/reconcile-credits` answers 500 once a day because six stored subscription ids are unknown to the live Stripe account ("refusing to guess its terminal state", production log 2026-09-10 00:30 UTC); the queue itself processes fine.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 Decided 2026-09-15 (D-2026-09-15-17): preparation proceeds now; the cutover waits for green release-blocking billing, database and QA checks, the code catalogue is canonical, contradictory prices are retired, and the cutover is verified with one real low-value checkout, provisioning and a refund.
+
+## [Enterprise / SSO] Paid Clerk plan with enterprise connections
+
+**Why founder assistance is required**
+Enterprise SSO connections (SAML and OIDC) are a paid Clerk feature, so the
+plan upgrade is a billing decision on the founder's account.
+**Exact action** Upgrade the production Clerk instance to a plan that includes
+enterprise connections, and enable them.
+**Where** Clerk Dashboard, production instance.
+**Needed input** The plan choice and payment.
+**How to verify completion** An enterprise connection can be created on the
+production instance, and one live SSO sign-in succeeds against a test IdP (see
+the QA tenant item above).
+**What remains after founder action** The live SSO verification in Wave 5 of
+`audit/prior-audits/teams-enterprise-2026-08-22.md`. Until then SSO stays
+implemented but unverified, and every claim must describe it that way.
+**Impact** FEATURE-BLOCKING (enterprise SSO cannot be verified or claimed)
+**Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Mobile] Store submission accounts, products, listing facts
 

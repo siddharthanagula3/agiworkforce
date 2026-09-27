@@ -175,8 +175,8 @@ until their feature is marked implemented in the registry.
 
 The task-family stage exists in TypeScript only. The Rust resolver
 (`crates/agiworkforce-model-registry/src/lib.rs`) has already diverged from this
-one, and which of the two is canonical is design-doc open question **OQ-1**,
-still undecided. Rust adoption of the task-family stage follows OQ-1; do not
+one, and which of the two is canonical is open question **OQ-1**
+(`audit/decisions/open-questions.md`), still undecided. Rust adoption of the task-family stage follows OQ-1; do not
 port it before that question is answered, because doing so doubles the
 divergence surface. The stage's curated policy
 (`auto.taskFamilies` in `packages/ai/model-registry/catalog/routing-policies.json`)

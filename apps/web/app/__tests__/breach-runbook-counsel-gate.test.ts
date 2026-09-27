@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const RUNBOOK_PATH = path.join(REPO_ROOT, 'docs/runbooks/personal-data-breach.md');
-const FOUNDER_TRACKER = 'docs/work/founder-assistance.md';
+const FOUNDER_TRACKER = 'audit/decisions/founder-actions.md';
 const FOUNDER_TRACKER_PATH = path.join(REPO_ROOT, FOUNDER_TRACKER);
 
 const RUNBOOK = readFileSync(RUNBOOK_PATH, 'utf8');

@@ -658,7 +658,7 @@ jobs:
       - name: Dependency advisories (Rust), non-blocking warning-policy debt
         # Unmaintained/unsound/yanked warnings on transitive deps we cannot move
         # past upstream, tracked as RUST-DEPENDENCY-ADVISORIES-01 in
-        # docs/agent-context/known-flaws.md. Reported, never blocking.
+        # audit/registers/known-flaws.md. Reported, never blocking.
         run: cargo deny check advisories
         continue-on-error: true
         env:

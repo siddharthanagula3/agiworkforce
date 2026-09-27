@@ -1713,26 +1713,6 @@ Agents must not:
 - Treat BYOK as equivalent to Local privacy.
 - Claim Managed Cloud is public before gates are met.
 
-## 25. Open Questions And Tracked Gaps
-
-These are not blockers to writing the PRD, but they must be answered before
-later implementation phases claim release readiness:
-
-1. Exact Mobile local runtime/model pack shipping mechanism.
-2. Exact VS Code BYOK setup timing after the released CLI path.
-3. Exact App Store privacy nutrition labels after final Mobile data audit.
-4. Exact Cloud invite-code backend and abuse limits.
-5. Exact provider retention metadata schema.
-6. Exact local file storage/encryption behavior per platform.
-7. Exact memory import prompt and import parser.
-8. Exact artifact renderer and generated-file retention defaults.
-9. Exact Desktop native host protocol for Chrome/Mobile/CLI bridges.
-10. Exact billing/usage ledger before Cloud public launch.
-11. Exact visual artifact/design workspace scope, renderer, export formats, and
-    release surface.
-
-Until resolved, these stay as tracked gaps rather than hidden assumptions.
-
 ## 26. Glossary
 
 | Term                    | Meaning                                                                                                                              |

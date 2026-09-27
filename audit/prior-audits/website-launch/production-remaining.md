@@ -75,7 +75,7 @@ Last updated: 2026-09-22
   inference with `provider_credentials_rejected`; OpenRouter's read-only
   current-key endpoint returned 401 for the same local key. This QA account is
   paid, so it is not a Free-plan launch test. See the current
-  `WEB-FREE-ROUTER-EMPTY-2026-09-22` entry in `ACTIVE_ISSUES.md`. Replace and
+  `WEB-FREE-ROUTER-EMPTY-2026-09-22` entry in `audit/prior-audits/active-issues-register.md`. Replace and
   verify the local provider credential before repeating the live Free route;
   do not infer that production uses the same key.
 
@@ -94,7 +94,7 @@ full replay. No production action is authorized by this document. Preserve histo
 
 Membership authorization database prerequisite completed: migration0272 applied to production on 2026-09-20, followed by canonical checksum verification and inactive-member permission checks. Local PostgreSQL reproduces the prior suspended-member permission leak and passes the new canonical probe. Deploy the matching canonical resolver/permission changes together; do not roll back this security correction without explicit review of restored inactive-member access. The database change is verified; application behavior on the deployed release still needs production smoke testing.
 
-Production migration recovery and verification evidence: [deployment handoff](../../work/deployment-handoff-2026-09-19.md). That September 20 handoff records an object-storage backup release gap; its current state was not reverified in this read-only pass.
+Production migration recovery and verification evidence: [deployment handoff](../deployment-handoff-2026-09-19.md). That September 20 handoff records an object-storage backup release gap; its current state was not reverified in this read-only pass.
 
 Browser-first discovery added production-facing prerequisites without authorizing a deployment:
 

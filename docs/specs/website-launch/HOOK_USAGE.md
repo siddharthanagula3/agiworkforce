@@ -14,7 +14,7 @@ No global config, model, permission, sandbox or compaction setting was changed.
 
 [AGENT_GOAL.md](AGENT_GOAL.md) preserves the master launch objective.
 [CONTINUE_GOAL.md](CONTINUE_GOAL.md) is the compact continuation context.
-[PROGRESS.md](PROGRESS.md) remains the checkpoint. The existing coverage, issue and plan files
+[progress.md](../../../audit/prior-audits/website-launch/progress.md) remains the checkpoint. The existing coverage, issue and plan files
 remain authoritative; the run state is only control metadata and evidence references.
 
 [hooks.json](../../../.codex/hooks.json) registers one synchronous command handler each for
@@ -102,7 +102,7 @@ provider spend. Existing task/provider limits remain authoritative. No dollar bu
 After two continuations with no changed relevant implementation/evidence, the message requires
 replanning. If the next boundary still has no substantive change, it checkpoints. Plan prose,
 timestamps and Stop message changes are not progress. The hook does not test or repair anything.
-New useful verification must be recorded in QA_COVERAGE with artifact hashes and assertions;
+New useful verification must be recorded in `audit/prior-audits/website-launch/qa-coverage.json` with artifact hashes and assertions;
 implementation dependencies are fingerprinted separately. Repeated screenshots alone do not
 establish new behavior. The script checks small explicitly referenced files, never the repo tree.
 
@@ -129,4 +129,4 @@ retries it; after the handoff window the coordinator waits for owner confirmatio
 Fixtures cover scope binding, activation, interruption, user redirection, login wait/expiry,
 independent work despite blockers, completion evidence, missing/malformed state/ledger,
 no-progress replanning, finite limits, selective invalidation, and concurrent duplicate delivery.
-See PROGRESS.md for actual results and the separate trust/runtime verification status.
+See `audit/prior-audits/website-launch/progress.md` for actual results and the separate trust/runtime verification status.

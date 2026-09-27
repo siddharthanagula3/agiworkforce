@@ -670,7 +670,7 @@ work superseded; mirrors the same corrections in
   `apps/desktop/src/features/settings/VoiceSettings.tsx`) and reads "Not
   available in this build" while the probe is false, pinned by
   `VoiceSettings.test.tsx`. The underlying capability is still unbuilt.
-  `DESKTOP-SYSTEM-DICTATION-UNWIRED-01` in `docs/agent-context/known-flaws.md`
+  `DESKTOP-SYSTEM-DICTATION-UNWIRED-01` in `audit/registers/known-flaws.md`
   stays open, but the UI does not advertise it.
 - CLI voice is present, not absent: `apps/cli/src/voice.rs` (`cpal` capture,
   Whisper API/local binary, Local-mode egress gate) is reached from both
@@ -809,6 +809,6 @@ recorded before comparing outputs, so the standard cannot move after a result.
 - `docs/research/competitor-capability-session-architecture-2026-07-15.md`
 - `audit/prior-audits/parity-implementation-matrix.md`
 - `docs/architecture/trust-boundaries.md`
-- `docs/agent-context/known-flaws.md`
+- `audit/registers/known-flaws.md`
 - `packages/ai/model-registry/catalog/harnesses.json`
 - `packages/contracts/types/src/sessions/taxonomy.ts`

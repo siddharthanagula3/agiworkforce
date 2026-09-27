@@ -10,7 +10,7 @@ sections 1 to 5, and section 6 records reviews that are closed. Root `SECURITY.m
 holds the vulnerability reporting policy and points here. Three documents stay
 outside this file on purpose: `apps/extension/docs/threat-model.md` is owned by
 the extension surface, `docs/runbooks/incident-response.md` is an operational
-procedure, and `docs/compliance/dpdp-audit-log.md` is regulation-specific.
+procedure, and `audit/prior-audits/dpdp-audit-log-2026-08-22.md` is regulation-specific.
 
 | Section | Subject                              | Owner                              |
 | ------- | ------------------------------------ | ---------------------------------- |

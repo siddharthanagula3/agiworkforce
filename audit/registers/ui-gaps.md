@@ -5842,7 +5842,7 @@ apps/desktop/src/features/artifacts/publishAdapter.ts:14-17 ('This adapter only 
 
 **Suggested fix**
 
-Once managed publishing is proven, add a Sites destination listing published artifacts with status, URL, last-deploy time and a Create flow; until then, keep it out of nav rather than shipping a stub. Track it as an explicit gap in docs/agent-context/known-flaws.md rather than an implied capability.
+Once managed publishing is proven, add a Sites destination listing published artifacts with status, URL, last-deploy time and a Create flow; until then, keep it out of nav rather than shipping a stub. Track it as an explicit gap in audit/registers/known-flaws.md rather than an implied capability.
 
 **Reference screenshot(s)**
 
@@ -5995,7 +5995,7 @@ Build the underlying location-context and training-opt-in pipelines, then re-add
 
 **Gap**
 
-Needs a founder decision, 2026-08-21. Buildable, projects, instructions and knowledge files all exist, but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in docs/work/founder-assistance.md rather than shipped unilaterally.
+Needs a founder decision, 2026-08-21. Buildable, projects, instructions and knowledge files all exist, but it means creating a row in a real account at signup the user did not ask for, and writes to production per signup. Recorded in audit/decisions/founder-actions.md rather than shipped unilaterally.
 
 **Evidence**
 
@@ -6317,7 +6317,7 @@ Add web settings sections for Storage (per-type usage + clear), Safety and Paren
 
 **Gap**
 
-CODE CLAIM IS STALE, verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering, recorded in docs/work/founder-assistance.md.
+CODE CLAIM IS STALE, verified against production 2026-08-21. Installing works and matters: installWebPlugin runs and listEnabledPluginIdsForUser gates real skill availability in the request-processor, tool-loop and /api/skills; production holds 1 real installation. What is true is that plugin_registry_entries has only 4 rows, so the catalogue LOOKS like a dead preview. Content gap, not engineering, recorded in audit/decisions/founder-actions.md.
 
 **Evidence**
 
@@ -6455,7 +6455,7 @@ Add a Settings > Storage page (web) showing total uploaded-attachment storage vs
 
 **Gap**
 
-Self-serve one-time credit purchase ships via startTopUpCheckout, wired to BillingSection.tsx and a real Stripe Checkout session (WEB-05/WEB-06, apps/web/features/billing/services/stripe-payments.ts:240-258). The remaining gap is narrower: automatic recharge, charging a saved card on its own once the balance runs low. That has no server-side counterpart and is recorded in docs/work/founder-assistance.md as needing a product decision, since it is a standing authorisation to charge a card while the user is absent.
+Self-serve one-time credit purchase ships via startTopUpCheckout, wired to BillingSection.tsx and a real Stripe Checkout session (WEB-05/WEB-06, apps/web/features/billing/services/stripe-payments.ts:240-258). The remaining gap is narrower: automatic recharge, charging a saved card on its own once the balance runs low. That has no server-side counterpart and is recorded in audit/decisions/founder-actions.md as needing a product decision, since it is a standing authorisation to charge a card while the user is absent.
 
 **Evidence**
 

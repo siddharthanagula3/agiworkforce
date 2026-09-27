@@ -14,12 +14,12 @@ This file holds product findings and the plan to close them. It does not hold
 row identity for anything another register already owns. Four registers stay
 authoritative for their own rows because code, tests and CI cite their IDs:
 
-| Register                              | Holds                                    | Enforced by                                 |
-| ------------------------------------- | ---------------------------------------- | ------------------------------------------- |
-| `ACTIVE_ISSUES.md`                    | `AGI-*` root causes and the defect plan  | `check:doc-registry`, `check:doc-freshness` |
-| `docs/agent-context/known-flaws.md`   | one row per open defect, cited by ID     | PR template, `ci.yml`, tests                |
-| `audit/registers/ui-gaps.csv`         | `GAP-*` reference-parity rows, monotonic | `check:ui-gaps`                             |
-| `audit/registers/capability-gaps.csv` | `CAP-*` capability backlog               | `check:capability-gaps`                     |
+| Register                                       | Holds                                    | Enforced by                                 |
+| ---------------------------------------------- | ---------------------------------------- | ------------------------------------------- |
+| `audit/prior-audits/active-issues-register.md` | `AGI-*` root causes and the defect plan  | `check:doc-registry`, `check:doc-freshness` |
+| `audit/registers/known-flaws.md`               | one row per open defect, cited by ID     | PR template, `ci.yml`, tests                |
+| `audit/registers/ui-gaps.csv`                  | `GAP-*` reference-parity rows, monotonic | `check:ui-gaps`                             |
+| `audit/registers/capability-gaps.csv`          | `CAP-*` capability backlog               | `check:capability-gaps`                     |
 
 An ID from one of those registers in this file is a pointer. The row it names
 is authoritative and its evidence must be re-read before acting. A finding
@@ -1525,11 +1525,11 @@ What the existing registers hold, and what to do with them.
 
 **`known-flaws.md` rows to delete or repoint**, with the evidence in this file: `DESKTOP-SINGLE-INSTANCE-MISSING-01`, `DESKTOP-SETTINGS-SYNC-GAP-01`, `DESKTOP-SHORTCUTS-DEFAULTS-DUPLICATE-AND-DISCONNECTED-01`, `DESKTOP-MEMORY-DECAY-BRIDGE-HARDCODED-01`, `DESKTOP-NOTIFICATIONS-SETTINGS-IGNORED-AND-CENTER-UNREACHABLE-01` (fixed), `CONNECTOR-PERMISSIONS-CLIENT-ONLY-01` (stale: permissions persist to `connector_tool_permissions` and the tool loop reads them at `apps/web/app/api/llm/v1/chat/completions/route.ts`), `DESKTOP-ICON-BUTTON-ARIA-LABEL-GAP-01` (repoint to `PG-SHARED-09`), `DESKTOP-REGENERATE-NO-COMPLETION-01` (narrow to Local mode), `CONN-ROUTE-ORG-CONNECTOR-POLICY-CHECKED-01` (repoint to `apps/web/app/api/connectors/route.ts`).
 
-**`ACTIVE_ISSUES.md` rows that are user-visible and still open**: `AGI-3`, `AGI-16`, `AGI-17`, `AGI-20`, `AGI-23`, `AGI-29`, `AGI-30`, `AGI-34`; the rest are internal, code-fixed awaiting live validation, or blocked on decisions. Two of its "Needs live validation" notes are user-visible and belong on the launch list: the public pages that claimed things the code does not do, and every published release predating its own signing.
+**`audit/prior-audits/active-issues-register.md` rows that are user-visible and still open**: `AGI-3`, `AGI-16`, `AGI-17`, `AGI-20`, `AGI-23`, `AGI-29`, `AGI-30`, `AGI-34`; the rest are internal, code-fixed awaiting live validation, or blocked on decisions. Two of its "Needs live validation" notes are user-visible and belong on the launch list: the public pages that claimed things the code does not do, and every published release predating its own signing.
 
 **`audit/baselines/raw-error-to-user.json` is stale in its premise.** It reports zero because the scanner does not see template-literal interpolation; `PG-CHAT-06`, `PG-MOB-06`, `PG-CHROME-06` and `PG-CHROME-09` are raw strings it cannot see. Extend the scanner before trusting the ratchet.
 
-**Documents folded into this file.** `docs/development/ui-truth-map.md` (2026-09-05 route classification) is deleted with this commit; its still-true content is the route inventory in section 0 and `PG-WEB-05`, `PG-WEB-13` to `PG-WEB-16`. Every "fix in flight" deep link it listed now has an e2e spec (`apps/web/e2e/settings-deep-links.spec.ts`). `audit/prior-audits/chat-parity-gap-matrix-2026-09-04.md` stays as dated research because a skill pins it; its two still-open rows are `PG-SHARED-14` and the vendor-branch capability flag (`supportsCodeExecution` has zero matches repo-wide). The 2026-08-30 chat UI parity measurement, superseded by `docs/research/leader-ui-measurements-2026-09-04.md`, was deleted on 2026-09-27 after a code check found all six of its gaps fixed or obsolete; it remains in git history. `docs/work/restructure-execution-queue.md` and `audit/prior-audits/release-readiness-2026-08-25.md` are self-licensed for deletion by `docs/work/README.md` once their branch and phase close.
+**Documents folded into this file.** `docs/development/ui-truth-map.md` (2026-09-05 route classification) is deleted with this commit; its still-true content is the route inventory in section 0 and `PG-WEB-05`, `PG-WEB-13` to `PG-WEB-16`. Every "fix in flight" deep link it listed now has an e2e spec (`apps/web/e2e/settings-deep-links.spec.ts`). `audit/prior-audits/chat-parity-gap-matrix-2026-09-04.md` stays as dated research because a skill pins it; its two still-open rows are `PG-SHARED-14` and the vendor-branch capability flag (`supportsCodeExecution` has zero matches repo-wide). The 2026-08-30 chat UI parity measurement, superseded by `docs/research/leader-ui-measurements-2026-09-04.md`, was deleted on 2026-09-27 after a code check found all six of its gaps fixed or obsolete; it remains in git history. `audit/prior-audits/release-readiness-2026-08-25.md` is self-licensed for deletion by `docs/work/README.md` once their branch and phase close.
 
 ## 12. Cross-surface feature and state matrix
 
@@ -1585,7 +1585,7 @@ verification lines pass, not when its code lands.
 
 **Phase 6, microinteractions and final polish.** 27. `PG-CHAT-08`, `PG-SHARED-10`, `PG-SHARED-12`, `PG-WEB-13`, `PG-WEB-17`, `PG-WEB-19`, `PG-WEB-20`, `PG-DESK-17`, `PG-DESK-DEAD`, `PG-CHROME-02`, `PG-CHROME-11`, `PG-MOB-13`, `PG-CLI-08`, `PG-CLI-13` to `PG-CLI-15`. 28. Register hygiene from section 11: flip the fixed `GAP-*` rows, re-status the 47 declined rows, delete or repoint the nine known-flaws rows.
 
-**Before public launch**, in addition to Phase 0 and Phase 1: the Chrome extension `CHROME-SURFACE-LOST-TURN-01` and `EXT-CRX-KEY-MISSING-BLOCKS-CLERK-SYNC-01`, the CLI npm publication (`PG-CLI-02`), `AGI-34` confirmed on a deployment, and the two live-validation notes in `ACTIVE_ISSUES.md` that are user-visible.
+**Before public launch**, in addition to Phase 0 and Phase 1: the Chrome extension `CHROME-SURFACE-LOST-TURN-01` and `EXT-CRX-KEY-MISSING-BLOCKS-CLERK-SYNC-01`, the CLI npm publication (`PG-CLI-02`), `AGI-34` confirmed on a deployment, and the two live-validation notes in `audit/prior-audits/active-issues-register.md` that are user-visible.
 
 ## 14. What still needs runtime verification
 

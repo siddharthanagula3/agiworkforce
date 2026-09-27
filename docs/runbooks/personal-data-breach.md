@@ -284,7 +284,7 @@ an open item; until it is closed, do not promise an affected person an email.
 - **Post-incident review within 5 working days.** Written, blameless, with dated
   owners on every action. An incident that produces no change to the system
   produces the same incident again.
-- **Record durable defects** in `docs/agent-context/known-flaws.md`, not only in
+- **Record durable defects** in `audit/registers/known-flaws.md`, not only in
   the incident document.
 - **Update this runbook** with what it failed to tell you at 2am.
 - **Retain the incident record.** The Board may ask later, and an incident you
@@ -294,17 +294,7 @@ an open item; until it is closed, do not promise an affected person an email.
 
 ## Open gaps
 
-These are the parts of this runbook that describe an intention rather than a
-capability. They are listed here rather than written into the procedure as if
-they worked. Each is tracked in `DPDP_PROGRESS.md`.
-
-| Gap                                                                                                                                                                                                                                              | Consequence during an incident                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **No designated incident commander or on-call rota.** The founder owns every incident by default.                                                                                                                                                | The clock runs while someone works out who is responsible.                                                                                                                                                     |
-| **No mass-notification path.** Nothing can email an arbitrary list of affected users; the wired email provider serves support escalation and scheduled-task notifications only.                                                                  | Individual intimation under §5 is manual, which does not scale past a small breach.                                                                                                                            |
-| **No breach-notice page or in-product banner exists.**                                                                                                                                                                                           | The delivery method §5 assumes has to be built during the incident.                                                                                                                                            |
-| **Vendor log retention is not set by us.** Vercel and Neon retain on their own schedules.                                                                                                                                                        | Evidence may expire before the investigation reaches it.                                                                                                                                                       |
-| **A gateway does not tell us which upstream provider served a request.** Cheaper Inference and Experiential Labs each pick a serving host per request from their own supply, and nothing in our logs records which one it was.                   | §3's "third parties involved" stops at the gateway. For a request that a gateway carried, the answer is the gateway plus "one of its upstream hosts", and closing that gap needs the operator of that gateway. |
-| **`/subprocessors` coverage is guarded only for model routes.** `scripts/check-subprocessor-coverage.mjs` enumerates the registry and fails when a provider admitted for managed traffic is unpublished; every other recipient is found by hand. | §3 can be answered from the published page for inference, and for email, storage, geocoding, search and store APIs it is still only as complete as the last manual review.                                     |
-| **No Data Protection Officer, and no Indian point of contact.**                                                                                                                                                                                  | If AGI is ever notified as a Significant Data Fiduciary, a named India-based DPO becomes mandatory and does not exist.                                                                                         |
-| **This runbook has not been reviewed by counsel.** Tracked as a founder action in `docs/work/founder-assistance.md`; `Legal review: pending-counsel` in the header is the live status.                                                           | The §4 and §5 templates are drafted from the statute by an engineer, so both carry a pre-send notice until counsel signs off. Sending is still not delayed for review, the clock does not pause.               |
+The capabilities this runbook describes but does not have yet are tracked in
+`audit/blockers/37-personal-data-breach-open-gaps.md`; among them, this runbook
+has not been reviewed by counsel, a founder action in
+`audit/decisions/founder-actions.md`.

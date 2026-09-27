@@ -101,6 +101,7 @@ for (const file of listFilesRecursive('tasks/team-status')) {
 const allowedLiveNonMarkdownPrefixes = [
   'audit/ledger/',
   'audit/prior-audits/evidence/',
+  'audit/prior-audits/website-launch/',
   'docs/agent-context/',
   'docs/research/evidence/',
   'apps/desktop/docs/qa/',

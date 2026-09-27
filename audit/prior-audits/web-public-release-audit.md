@@ -13,10 +13,10 @@ a shared package changes what the website renders.
 
 This file holds the audit's findings, the state of each, and the order in which
 the remaining work should happen. Root causes that need engineering beyond this
-pass are also pointed to from `ACTIVE_ISSUES.md`, which remains the entry point
+pass are also pointed to from `audit/prior-audits/active-issues-register.md`, which remains the entry point
 for all unresolved work; this file does not duplicate the registers named there.
 A finding closed here is deleted from this file in the commit that closes it,
-the same rule `ACTIVE_ISSUES.md` follows.
+the same rule `audit/prior-audits/active-issues-register.md` follows.
 
 The new-chat empty state is an intentional product decision: greeting, composer,
 sidebar, nothing else. Nothing in this audit treats its emptiness as a gap, and
@@ -27,7 +27,7 @@ nothing in this pass added a suggestion, card, chip, tile or template to it.
 **Release status: NOT READY for broad public launch.** This audit has no open
 P1 or P2 Web UI rows, but its local fixes are not the same as a deployed,
 signed-in Free-user journey. The production follow-up in
-`docs/specs/website-launch/PRODUCTION_REMAINING.md` owns the current release
+`audit/prior-audits/website-launch/production-remaining.md` owns the current release
 gate.
 
 The frontend condition is narrow. The website is coherent, honest about what it
@@ -956,7 +956,7 @@ published support product. The AI/live-handoff widget stays unmounted and out
 of the public root bundle until its complete release gate is met. The shared
 account menu adds a canonical, translated Email support item; Free through Max
 promise no response time. Whether a person monitors the mailbox is explicitly
-tracked in `docs/work/founder-assistance.md` and is not claimed from code.
+tracked in `audit/decisions/founder-actions.md` and is not claimed from code.
 Verification steps: the authenticated `support-entry.spec.ts` run against
 `localhost:3100/chat` passed: the first click opened the account menu, the
 second activated the canonical mailto, and no `[data-support-widget]` existed.
@@ -1328,7 +1328,7 @@ Grouped by root cause; each phase can start when the one before it has a
 reviewer, not when it is finished.
 
 - **Phase 0, security, data, destructive.** Nothing found at P0 in the frontend.
-  The production blockers in `ACTIVE_ISSUES.md` (`LIVE-8`, unapplied
+  The production blockers in `audit/prior-audits/active-issues-register.md` (`LIVE-8`, unapplied
   migrations, Stripe live mode, provider credit) gate the launch and are not
   frontend work.
 - **Phase 1, broken core workflows.** No open frontend finding.
@@ -1414,6 +1414,6 @@ durable opening, first chunk, next-frame paint and completion; it is localhost
 development evidence, not a production latency or capacity claim. What a user
 would still feel includes the remaining marketing-system duplication
 (WEB-082), the open P3 interaction and long-thread work, and the production
-blockers owned by `ACTIVE_ISSUES.md`. Support is intentionally email-first for
+blockers owned by `audit/prior-audits/active-issues-register.md`. Support is intentionally email-first for
 Web v1, with inbox monitoring tracked as an external launch gate. None of them
 adds anything to the new-chat screen, which stays a greeting and a composer.

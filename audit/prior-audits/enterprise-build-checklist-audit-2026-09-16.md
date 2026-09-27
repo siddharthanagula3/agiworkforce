@@ -6,8 +6,8 @@ Owner: Repository maintainers
 Superseded for current implementation status and sequencing by the September
 21 product rebaseline. The 2,097 judgments below are preserved as frozen audit
 evidence; their Partial/Missing labels are not a current queue and must be
-re-verified against code before remediation. Use `ACTIVE_ISSUES.md`,
-`docs/agent-context/known-flaws.md`, `audit/prior-audits/parity-implementation-matrix.md`, and
+re-verified against code before remediation. Use `audit/prior-audits/active-issues-register.md`,
+`audit/registers/known-flaws.md`, `audit/prior-audits/parity-implementation-matrix.md`, and
 the active surface release audit instead.
 
 Every item verified three times: code audit, independent re-check, and a ships-and-runs check (production env names, CI gating, releases, live site). `[x]` done · `[ ]` not done (🟡 partial, 🔴 missing, ⚪ external/N/A) · _(revised)_ changed by a later check · ⛔ **not live**: built on main but in no release or deployment users run.
@@ -2700,7 +2700,7 @@ _§54: 8 of 13 done._
       <br>⛔ Deploy risk: apps/web/app/api/auth/device/token/route.ts:143-145 inserts device_refresh_tokens.organization_id from 0187 (header line 3: NOT YET APPLIED); token redemption fails if unapplied
 - [x] Desktop callbacks
       <br>_`apps/desktop/src/services/desktopNativeSignIn.ts` redeems through `apps/web/app/api/auth/device/token/route.ts`; the former desktop-token callback was removed on 2026-09-23._
-      <br>Current migration state and drift are tracked in `ACTIVE_ISSUES.md`; the historical claim that migration 0187 was unapplied is no longer current.
+      <br>Current migration state and drift are tracked in `audit/prior-audits/active-issues-register.md`; the historical claim that migration 0187 was unapplied is no longer current.
 - [x] Mobile callbacks _(revised)_ ⛔ **not live**
       <br>_apps/mobile/app/(auth)/login.tsx:6-7 uses Clerk native AuthView (@clerk/expo/native), which completes OAuth/SSO callbacks in-app; apps/mobile/app/_layout.tsx:640-654 routes auth deep links (reset-password)._
       <br>⛔ Release check: The mobile app has never been released (release-mobile.yml never run; no App Store or Google Play listing).
@@ -4970,7 +4970,7 @@ _§115: 12 of 18 done._
 - [x] Release notes
       <br>_CHANGELOG.md entries are all Unreleased; per-release notes are generated into the GitHub release body at release-desktop.yml:242-261 and published by release-cli.yml:373_
 - [x] Known issues
-      <br>_`/Users/siddhartha/Desktop/agiworkforce/ACTIVE_ISSUES.md`_
+      <br>_`audit/prior-audits/active-issues-register.md`_
 - [ ] Migration notes - 🟡 Partial
       <br>_DB migration files exist (`apps/web/db/neon/*.sql`) but no separate human migration-notes doc found_
 - [ ] Beta _(revised)_ - 🟡 Partial
@@ -4978,7 +4978,7 @@ _§115: 12 of 18 done._
 - [ ] Stable _(revised)_ - 🟡 Partial
       <br>_Only two stable releases exist, CLI v1.0.0 and Tauri desktop v1.2.0 (May 2026); `release-cli.yml` and `release-desktop.yml` last runs failed._
 - [ ] Deprecation - 🟡 Partial
-      <br>_`audit/prior-audits/qa-execution-ledger.md`, `docs/compliance/dpdp-audit-log.md` mention deprecation ad hoc; no formal deprecation policy doc_
+      <br>_`audit/prior-audits/qa-execution-ledger.md`, `audit/prior-audits/dpdp-audit-log-2026-08-22.md` mention deprecation ad hoc; no formal deprecation policy doc_
 - [ ] Minimum client version _(revised)_ ⛔ **not live** - 🟡 Partial
       <br>_apps/extension-vscode/src/integrations/localRuntimeClient.ts:52 MINIMUM_SUPPORTED_CLI_VERSION enforced at runtime; no minimum client version for web/mobile/desktop against the backend_
       <br>⛔ Release check: The VS Code extension has never been published (Marketplace and Open VSX return nothing; release workflow never run).

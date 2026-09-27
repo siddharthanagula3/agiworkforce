@@ -201,16 +201,9 @@ rather than assumed.
 
 ## Known gaps, stated rather than covered
 
-- No declared RPO or RTO commitment, for the reasons above.
-- The scheduled restore test is the host-neutral one, against a fresh container.
-  Neon point-in-time recovery on the real project has no scheduled test and no
-  dated evidence.
-- No second region and no second provider for serving. A provider-wide outage
-  is an outage, and the trust ledger says so.
-- No 24/7 on-call rotation. Response is best effort during working hours, as
-  /status states.
-- Object replication is bounded per run, so a large burst is not covered within
-  the hour it was written.
+This plan does not yet cover everything: there is no declared RPO or RTO, no
+second region or provider, and no 24/7 rotation. Each gap is tracked in
+`audit/blockers/34-business-continuity-open-gaps.md`.
 
 ## When this page must be re-read
 

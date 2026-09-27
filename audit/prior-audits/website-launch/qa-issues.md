@@ -4,7 +4,7 @@ Status: In progress
 Owner: Website launch preparation
 Last updated: 2026-09-19
 
-This working queue links canonical defect IDs where known; it does not replace ACTIVE_ISSUES.md.
+This working queue links canonical defect IDs where known; it does not replace audit/prior-audits/active-issues-register.md.
 
 ## ENV-DB: local demo runtime unavailable
 
@@ -412,15 +412,15 @@ The Browser sweep is broad partial discovery, not complete website requirement c
 particular, the changelog allegation and the deprovisioning-unavailable interpretation are withdrawn
 based on current source. Model eligibility, connector indexing and process-exit root causes still
 require qualification. Preserve original observations and do not count this correction as a product
-repair. The phased implementation plan and acceptance gates are in `LAUNCH_PLAN.md`.
+repair. The phased implementation plan and acceptance gates are in `launch-plan.md`.
 
 ## Additional cohort verification, 2026-09-19
 
-`WEB-DRAFT-NAVIGATION-LOSS-2026-09-19` is a confirmed local P1 draft-loss case: enter an unsent new-chat draft, open Projects, then use Browser Back. The composer returns empty. Reproduced twice; canonical diagnosis and repair plan are in `ACTIVE_ISSUES.md`, with the defect registered in `docs/agent-context/known-flaws.md`. No repair attempted during QA. Search shortcut, zero-results guidance, Escape dismissal and return focus passed in the same session; retain those scoped passes. Evidence: local audit artifact `browser-draft-search.json` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)).
+`WEB-DRAFT-NAVIGATION-LOSS-2026-09-19` is a confirmed local P1 draft-loss case: enter an unsent new-chat draft, open Projects, then use Browser Back. The composer returns empty. Reproduced twice; canonical diagnosis and repair plan are in `audit/prior-audits/active-issues-register.md`, with the defect registered in `audit/registers/known-flaws.md`. No repair attempted during QA. Search shortcut, zero-results guidance, Escape dismissal and return focus passed in the same session; retain those scoped passes. Evidence: local audit artifact `browser-draft-search.json` (path and fingerprint in [qa-coverage.json](qa-coverage.json)).
 
-`WEB-DRAFT-CLEAR-RESTORE-2026-09-19` is a confirmed local P2: clearing a reloaded unsent draft restores the text with a false send-failure message. Reproduced twice without sending; canonical diagnosis and plan are in `ACTIVE_ISSUES.md`. Evidence and scoped composer passes: local audit artifact `browser-composer.json` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)).
+`WEB-DRAFT-CLEAR-RESTORE-2026-09-19` is a confirmed local P2: clearing a reloaded unsent draft restores the text with a false send-failure message. Reproduced twice without sending; canonical diagnosis and plan are in `audit/prior-audits/active-issues-register.md`. Evidence and scoped composer passes: local audit artifact `browser-composer.json` (path and fingerprint in [qa-coverage.json](qa-coverage.json)).
 
-`WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19` (P3) originally found that invalid diagrams rendered a useful fallback but left body-level error nodes in the accessibility tree after New Chat. It is now closed with current component, rerender, unmount and Browser navigation evidence in PROGRESS.md. `QA-ERASURE-HARNESS-BOUNDARY-2026-09-19` was already repaired on 2026-09-20 by commit `053729ff8`: the live erasure harness now reaches PostgreSQL through `@agiworkforce/data-layer`. Current boundary output no longer reports that file; a separate Command Palette identity-SDK violation remains and is not conflated with this closure.
+`WEB-MERMAID-ERROR-DOM-LEAK-2026-09-19` (P3) originally found that invalid diagrams rendered a useful fallback but left body-level error nodes in the accessibility tree after New Chat. It is now closed with current component, rerender, unmount and Browser navigation evidence in progress.md. `QA-ERASURE-HARNESS-BOUNDARY-2026-09-19` was already repaired on 2026-09-20 by commit `053729ff8`: the live erasure harness now reaches PostgreSQL through `@agiworkforce/data-layer`. Current boundary output no longer reports that file; a separate Command Palette identity-SDK violation remains and is not conflated with this closure.
 
 ## Free quota speech experiment qualification, 2026-09-19
 
@@ -446,10 +446,10 @@ hide the unresolved speech quality gap. No production code was changed in this m
 The browser-only pack batch is recorded in evidence/qwen-free-quota.json#qaPackBrowserBatch.
 It originally found WEB-MARKDOWN-TABLE-ALIGN-2026-09-19,
 WEB-INERT-CODE-ARTIFACT-2026-09-19 and WEB-FREE-MEDIA-LIBRARY-2026-09-19; all three are now
-closed with current evidence in PROGRESS.md and no longer appear in the open registers. Existing
+closed with current evidence in progress.md and no longer appear in the open registers. Existing
 draft-clear restoration and narrow composer overlap observations were reused rather than
 duplicated. The free-pool label rehydration observation is also closed with current persistence,
-reload and Browser evidence in PROGRESS.md. MD09's200-versus240-character output is a
+reload and Browser evidence in progress.md. MD09's200-versus240-character output is a
 model-content miss, not a renderer defect. Isolated reloads passed; earlier combined-navigation
 ambiguity is not a confirmed redirect bug. Speech, embeddings and ranking are excluded by the
 owner's latest instruction.

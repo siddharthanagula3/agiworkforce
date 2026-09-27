@@ -4,7 +4,7 @@ Status: Discovery; product pilot not executed
 Owner: Website launch preparation
 Last updated: 2026-09-21
 
-Canonical existing proposal: [Jev Auto routing](../jev-auto-routing/spec.md).
+Canonical existing proposal: [Jev Auto routing](spec.md).
 It is proposed architecture, not implemented product behavior. The former mandatory
 coding-agent Jev helper was removed on 2026-09-23 and remains separate from this proposal.
 This task retains explicit Luna selection and does not authorize a production routing change.

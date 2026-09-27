@@ -70,15 +70,15 @@ history, but correct interpretation before scheduling repairs:
 
 Reuse these owners; create no second task ledger:
 
-- `QA_COVERAGE.json`: scenarios, requirement references, conditions, attempts, evidence validity,
+- `qa-coverage.json`: scenarios, requirement references, conditions, attempts, evidence validity,
   execution versus reuse, and outstanding assertions.
-- `QA_ISSUES.md`: defect reproduction, confidence, cause, related cases, repair attempts and acceptance.
-- `LAUNCH_PLAN.md`: this dependency order and work-package acceptance criteria.
-- `PROGRESS.md`: compact checkpoint and exact next action.
-- `PRODUCTION_REMAINING.md`: only assertions needing the release environment.
-- local audit artifact `items.jsonl` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)) and `decisions.jsonl`: original requirement IDs, source lines,
+- `qa-issues.md`: defect reproduction, confidence, cause, related cases, repair attempts and acceptance.
+- `launch-plan.md`: this dependency order and work-package acceptance criteria.
+- `progress.md`: compact checkpoint and exact next action.
+- `production-remaining.md`: only assertions needing the release environment.
+- local audit artifact `items.jsonl` (path and fingerprint in [qa-coverage.json](qa-coverage.json)) and `decisions.jsonl`: original requirement IDs, source lines,
   wording and historical decisions. `CORRECTIONS.md` preserves audit limitations and security findings.
-- `ACTIVE_ISSUES.md` and `docs/agent-context/known-flaws.md`: canonical unresolved defect ownership.
+- `audit/prior-audits/active-issues-register.md` and `audit/registers/known-flaws.md`: canonical unresolved defect ownership.
   Link or update existing IDs rather than create duplicates.
 
 ## Planned sequence

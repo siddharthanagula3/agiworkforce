@@ -27,7 +27,7 @@ Use a specific template when it fits better:
 - [ ] `AGENTS.md`
 - [ ] `docs/agent-context/repo-map.json`
 - [ ] `docs/agent-context/risk-map.json`
-- [ ] `docs/agent-context/known-flaws.md`
+- [ ] `audit/registers/known-flaws.md`
 - [ ] Relevant owner README(s)
 
 ## Verification

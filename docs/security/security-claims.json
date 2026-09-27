@@ -1874,7 +1874,7 @@
       "sentence": "Candidate migration `0292` retires both only if every value is NULL; it has passed a rolled-back local rehearsal but is not applied to production.",
       "implementation": [
         "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
-        "ACTIVE_ISSUES.md"
+        "audit/prior-audits/active-issues-register.md"
       ],
       "why": "historical-record"
     },

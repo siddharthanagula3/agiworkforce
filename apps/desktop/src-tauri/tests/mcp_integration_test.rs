@@ -301,7 +301,7 @@ mod mcp_integration_tests {
     #[ignore = "spawns a real npx @modelcontextprotocol/server-everything process; run with --ignored"]
     // llm-guardrail-allow: not CI-run-by-default because it spawns a real network-installed
     // npx process (@modelcontextprotocol/server-everything), this test was run manually and passed
-    // (see docs/agent-context/known-flaws.md DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01), matching
+    // (see audit/registers/known-flaws.md DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01), matching
     // the pre-existing ignored-test pattern already used by this file's other real-MCP-server tests.
     async fn dotfile_mcp_server_actually_connects_and_exposes_real_tools() {
         use agiworkforce_desktop::core::mcp::client::McpClient;
