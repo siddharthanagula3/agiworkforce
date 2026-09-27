@@ -5,6 +5,7 @@
 //! ```text
 //! ┌─ Theme ───────────────────────────────────────────────────────────────┐
 //! │                                                                      │
+//! │   Auto                 Match the terminal background                 │
 //! │●  Dark                 Neutral dark background                       │
 //! │   Light                Light background for bright terminals         │
 //! │   Ansi                 Pure 16-color ANSI compatible                 │
@@ -25,14 +26,16 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
 use crate::tui::terminal_palette::{
-    ui_accent, ui_brand, ui_cloud, ui_muted, ui_on_light, ui_success, ui_warning,
+    terminal_is_light, ui_accent, ui_brand, ui_cloud, ui_muted, ui_on_light, ui_success,
+    ui_surface_elevated, ui_warning,
 };
 
 // ---------------------------------------------------------------------------
 // Theme definitions
 // ---------------------------------------------------------------------------
 
-/// The six canonical themes exposed by the picker.
+/// The themes exposed by the picker. `Auto` resolves to Dark or Light from the
+/// terminal background; the others map one to one onto a palette index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeChoice {
     Dark,
@@ -41,10 +44,12 @@ pub enum ThemeChoice {
     HighContrastDark,
     HighContrastLight,
     Colorblind,
+    Auto,
 }
 
 impl ThemeChoice {
     pub const ALL: &'static [ThemeChoice] = &[
+        ThemeChoice::Auto,
         ThemeChoice::Dark,
         ThemeChoice::Light,
         ThemeChoice::Ansi,
@@ -62,6 +67,7 @@ impl ThemeChoice {
             ThemeChoice::HighContrastDark => "High Contrast Dark",
             ThemeChoice::HighContrastLight => "High Contrast Light",
             ThemeChoice::Colorblind => "Colorblind",
+            ThemeChoice::Auto => "Auto",
         }
     }
 
@@ -74,6 +80,7 @@ impl ThemeChoice {
             ThemeChoice::HighContrastDark => "Maximum contrast for dark terminals",
             ThemeChoice::HighContrastLight => "Maximum contrast for light terminals",
             ThemeChoice::Colorblind => "Deuteranopia-friendly status colours",
+            ThemeChoice::Auto => "Match the terminal background",
         }
     }
 
@@ -92,6 +99,7 @@ impl ThemeChoice {
             "solarized-dark" | "solarized_dark" | "solarizeddark" => Some(ThemeChoice::Dark),
             "solarized-light" | "solarized_light" | "solarizedlight" => Some(ThemeChoice::Light),
             "colorblind" | "colour-blind" | "color-blind" => Some(ThemeChoice::Colorblind),
+            "auto" => Some(ThemeChoice::Auto),
             _ => None,
         }
     }
@@ -106,6 +114,17 @@ impl ThemeChoice {
             ThemeChoice::HighContrastDark => "high-contrast-dark",
             ThemeChoice::HighContrastLight => "high-contrast-light",
             ThemeChoice::Colorblind => "colorblind",
+            ThemeChoice::Auto => "auto",
+        }
+    }
+
+    /// The concrete theme to paint with: `Auto` becomes Light on a light
+    /// terminal background and Dark otherwise.
+    pub fn applied(self) -> ThemeChoice {
+        match self {
+            ThemeChoice::Auto if terminal_is_light() => ThemeChoice::Light,
+            ThemeChoice::Auto => ThemeChoice::Dark,
+            choice => choice,
         }
     }
 
@@ -126,6 +145,7 @@ impl ThemeChoice {
             ThemeChoice::HighContrastDark => ui_accent(),
             ThemeChoice::HighContrastLight => ui_success(),
             ThemeChoice::Colorblind => ui_cloud(),
+            ThemeChoice::Auto => ui_accent(),
         }
     }
 }
@@ -248,8 +268,8 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
         return;
     }
 
-    // border(2) + blank(1) + rows(6) + blank(1) + "Preview:" label(1) + code(3) + blank(1)
-    let popup_height: u16 = 15;
+    // border(2) + blank(1) + rows + blank(1) + "Preview:" label(1) + code(3) + blank(1)
+    let popup_height: u16 = 6 + ThemeChoice::ALL.len() as u16 + PREVIEW_LINES.len() as u16;
     let popup_width: u16 = 72.min(area.width.saturating_sub(4));
 
     let popup_area = Rect {
@@ -264,6 +284,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(ui_muted()))
+        .style(Style::default().bg(ui_surface_elevated()))
         .title(" Theme ");
     frame.render_widget(block, popup_area);
 
@@ -277,7 +298,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &ThemePickerState) 
     // Layout: blank | rows | blank | preview-label | code-lines | blank
     let constraints = [
         Constraint::Length(1),                             // top blank
-        Constraint::Length(ThemeChoice::ALL.len() as u16), // 6 theme rows
+        Constraint::Length(ThemeChoice::ALL.len() as u16), // theme rows
         Constraint::Length(1),                             // blank
         Constraint::Length(1),                             // "Preview:" label
         Constraint::Length(PREVIEW_LINES.len() as u16),    // 3 code lines
@@ -385,6 +406,7 @@ mod tests {
         assert_eq!(
             slugs,
             vec![
+                "auto",
                 "dark",
                 "light",
                 "ansi",

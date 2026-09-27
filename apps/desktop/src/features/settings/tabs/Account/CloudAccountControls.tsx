@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
-  CLOUD_ACCOUNT_SETTINGS_PATH,
   CLOUD_API_KEY_SCOPES,
-  CloudStepUpRequiredError,
+  cloudWebActionFor,
   createCloudApiKey,
   fetchCloudActiveSessions,
   listCloudApiKeys,
@@ -14,9 +13,10 @@ import {
   type CloudAccountSession,
   type CloudApiKey,
   type CloudApiKeyScope,
+  type CloudWebAction,
 } from '../../../../api/cloudAccountSettings';
-import { openDesktopCloudAccountWindow } from '../../../../services/desktopCloudAccountWindow';
 import { useAccountStore, useAuthStore } from '../../../../stores/auth';
+import { CloudWebActionNotice } from '../../cloud/CloudWebActionNotice';
 import {
   PRIMARY_BUTTON,
   SECONDARY_BUTTON,
@@ -27,37 +27,6 @@ import {
 } from '../../cloud/sectionChrome';
 
 const DELETE_CONFIRMATION = 'DELETE';
-
-function FinishOnWebNotice({ message }: { message: string }) {
-  const [opening, setOpening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const openAccountSettings = () => {
-    setOpening(true);
-    setError(null);
-    void openDesktopCloudAccountWindow(CLOUD_ACCOUNT_SETTINGS_PATH, 'AGI Cloud account')
-      .catch((caught: unknown) => {
-        setError(caught instanceof Error ? caught.message : 'Could not open account settings.');
-      })
-      .finally(() => setOpening(false));
-  };
-
-  return (
-    <div role="alert" className="rounded-lg border border-border bg-card/40 p-4">
-      <p className="text-xs leading-5 text-foreground">{message}</p>
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
-      <button
-        type="button"
-        className={`mt-3 ${SMALL_BUTTON}`}
-        disabled={opening}
-        aria-busy={opening || undefined}
-        onClick={openAccountSettings}
-      >
-        {opening ? 'Opening…' : 'Open account settings'}
-      </button>
-    </div>
-  );
-}
 
 function AccountIdentifierRow() {
   const accountId = useAccountStore((state) => state.account.id);
@@ -111,7 +80,7 @@ function ActiveSessionsSection() {
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -126,7 +95,12 @@ function ActiveSessionsSection() {
       }
     } catch (caught) {
       if (generation.current === current) {
-        setError(caught instanceof Error ? caught.message : 'Could not load your active sessions.');
+        const action = cloudWebActionFor(caught);
+        if (action) setWebAction(action);
+        else
+          setError(
+            caught instanceof Error ? caught.message : 'Could not load your active sessions.',
+          );
       }
     } finally {
       if (generation.current === current) setLoading(false);
@@ -159,13 +133,14 @@ function ActiveSessionsSection() {
     setRevokingAll(true);
     setError(null);
     setNotice(null);
-    setFinishOnWeb(null);
+    setWebAction(null);
     try {
       await revokeAllCloudSessions();
       setSessions([]);
       await signOut();
     } catch (caught) {
-      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
       else
         setError(
           caught instanceof Error ? caught.message : 'Could not log out of your other devices.',
@@ -194,7 +169,7 @@ function ActiveSessionsSection() {
 
       {loading ? <SectionLoading label="Loading active sessions…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
-      {finishOnWeb ? <FinishOnWebNotice message={finishOnWeb} /> : null}
+      {webAction ? <CloudWebActionNotice action={webAction} /> : null}
       {notice ? (
         <p role="status" className="text-xs text-muted-foreground">
           {notice}
@@ -284,7 +259,7 @@ function ApiKeysSection() {
   const [scopes, setScopes] = useState<CloudApiKeyScope[]>(['models:read', 'inference:write']);
   const [issuedKey, setIssuedKey] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
-  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
   const generation = useRef(0);
 
   const load = useCallback(async () => {
@@ -296,7 +271,9 @@ function ApiKeysSection() {
       if (generation.current === current) setKeys(next);
     } catch (caught) {
       if (generation.current === current) {
-        setError(caught instanceof Error ? caught.message : 'Could not load your API keys.');
+        const action = cloudWebActionFor(caught);
+        if (action) setWebAction(action);
+        else setError(caught instanceof Error ? caught.message : 'Could not load your API keys.');
       }
     } finally {
       if (generation.current === current) setLoading(false);
@@ -320,14 +297,15 @@ function ApiKeysSection() {
     setCreating(true);
     setError(null);
     setIssuedKey(null);
-    setFinishOnWeb(null);
+    setWebAction(null);
     try {
       const created = await createCloudApiKey(name.trim(), scopes);
       setKeys((current) => [created.apiKey, ...(current ?? [])]);
       setIssuedKey(created.fullKey);
       setName('');
     } catch (caught) {
-      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
       else setError(caught instanceof Error ? caught.message : 'Could not create the API key.');
     } finally {
       setCreating(false);
@@ -361,7 +339,7 @@ function ApiKeysSection() {
 
       {loading ? <SectionLoading label="Loading API keys…" /> : null}
       {error ? <SectionError message={error} onRetry={() => void load()} /> : null}
-      {finishOnWeb ? <FinishOnWebNotice message={finishOnWeb} /> : null}
+      {webAction ? <CloudWebActionNotice action={webAction} /> : null}
 
       {issuedKey ? (
         <div role="status" className="rounded-lg border border-border bg-card/40 p-4">
@@ -454,12 +432,12 @@ function DangerZone() {
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-  const [finishOnWeb, setFinishOnWeb] = useState<string | null>(null);
+  const [webAction, setWebAction] = useState<CloudWebAction | null>(null);
 
   const handleDelete = async () => {
     setDeleting(true);
     setError(null);
-    setFinishOnWeb(null);
+    setWebAction(null);
     try {
       const outcome = await requestCloudAccountDeletion();
       setResult(
@@ -468,7 +446,8 @@ function DangerZone() {
       );
       setConfirmation('');
     } catch (caught) {
-      if (caught instanceof CloudStepUpRequiredError) setFinishOnWeb(caught.message);
+      const action = cloudWebActionFor(caught);
+      if (action) setWebAction(action);
       else
         setError(caught instanceof Error ? caught.message : 'Could not delete your Cloud account.');
     } finally {
@@ -497,9 +476,9 @@ function DangerZone() {
           {result}
         </p>
       ) : null}
-      {finishOnWeb ? (
+      {webAction ? (
         <div className="mt-3">
-          <FinishOnWebNotice message={finishOnWeb} />
+          <CloudWebActionNotice action={webAction} />
         </div>
       ) : null}
       <label className="mt-4 block text-xs text-muted-foreground" htmlFor="cloud-delete-confirm">

@@ -651,6 +651,12 @@
 
 /* ── Motion ───────────────────────────────────────────────────────── */
 
+@media (max-width: 1279px) {
+  .root[data-composer-route='true'] {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .launcher,
   .panel {
