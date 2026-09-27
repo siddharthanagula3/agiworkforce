@@ -648,6 +648,7 @@ export interface ToolLoopOptions {
   approvalMode?: ApprovalMode;
   /** No human can answer an approval prompt on this run (e.g. a scheduled cron). */
   unattended?: boolean;
+  unattendedEscalationPauses?: boolean;
   mcpTools?: WebMcpToolDef[];
   resume?: ResumeApproval;
   eventSessionId?: string;
@@ -2525,7 +2526,8 @@ function recordProviderStepFailure(input: {
  * Private data is a sensitive source in its own right: memory facts,
  * attachments and earlier turns are all in the model's hands when an injected
  * page asks it to egress. This is one leg of the lethal-trifecta gate, and on
- * an unattended run the gate has nobody to ask, so its answer is allow or deny.
+ * an unattended run that cannot pause the gate has nobody to ask, so its answer
+ * is allow or deny.
  *
  * Every signal here except `sensitiveContextPresent` is read off the shape of
  * the conversation, which is why a scheduled run defeated it: built as exactly
@@ -2693,6 +2695,10 @@ export async function* runToolLoop(
   const startedAt = now();
   const approvalMode = options.approvalMode ?? 'manual';
   const unattended = options.unattended === true;
+  const unattendedEscalationPauses =
+    unattended &&
+    options.unattendedEscalationPauses === true &&
+    options.onApprovalCheckpoint !== undefined;
   const skillInstallOverridesUserId = options.userId;
   let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
   const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
@@ -2874,6 +2880,7 @@ export async function* runToolLoop(
         approvalMode,
         toolApprovalPolicy,
         unattended,
+        unattendedEscalationPauses,
         deviceHostPresent: deviceHost !== undefined,
         untrustedContentInContext,
         sensitiveSourceAvailable,
