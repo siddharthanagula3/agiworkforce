@@ -350,7 +350,6 @@ export default function PricingPage() {
 
   const [audience, setAudience] = useState<'individual' | 'business'>('individual');
   const [maxVariant, setMaxVariant] = useState<'max' | 'max_15x'>('max');
-  const [annual, setAnnual] = useState(false);
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
@@ -361,9 +360,8 @@ export default function PricingPage() {
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
-  // Team billing cadence is independent of the individual-plan `annual` toggle
-  // (different section, different product). Defaults to monthly and only becomes
-  // yearly when the yearly Team Price is actually configured and checkout-ready.
+  // Team is the only plan sold yearly. Its cadence defaults to monthly and only
+  // becomes yearly when the yearly Team Price is configured and checkout-ready.
   const [teamAnnual, setTeamAnnual] = useState(false);
 
   // Team CTAs across marketing, billing, chat upgrades, and Team settings all
@@ -430,12 +428,8 @@ export default function PricingPage() {
   const basic = BILLING_PLAN_PRICING.basic;
   const team = BILLING_PLAN_PRICING.team;
 
-  const proSavingsPct = annualSavingsPct(pro);
-
   const localizedPlans = localizedPricing?.plans;
-  const proPrice = annual
-    ? formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12)
-    : formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd);
+  const proPrice = formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd);
   const basicPrice = formatLocalizedAmount(localizedPlans?.basic.monthly, basic.monthlyPriceUsd);
   const maxPrice = formatLocalizedAmount(localizedPlans?.max.monthly, max.monthlyPriceUsd);
   const max15xPrice = formatLocalizedAmount(
@@ -484,15 +478,12 @@ export default function PricingPage() {
     !CHECKOUT_ENABLED ||
     (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
 
+  function selectedInterval(plan: CheckoutPlan): BillingInterval {
+    return isPerSeatBillingPlan(plan) ? teamInterval : 'monthly';
+  }
+
   function selectedPriceEntry(plan: CheckoutPlan) {
-    const interval: BillingInterval = isProPlanTier(plan)
-      ? annual
-        ? 'yearly'
-        : 'monthly'
-      : isPerSeatBillingPlan(plan)
-        ? teamInterval
-        : 'monthly';
-    return localizedPlans?.[plan][interval];
+    return localizedPlans?.[plan][selectedInterval(plan)];
   }
 
   function isPlanCheckoutReady(plan: CheckoutPlan): boolean {
@@ -657,8 +648,7 @@ export default function PricingPage() {
       // Team stays on the dialog: its price depends on a seat count and interval
       // chosen here, which /upgrade/[plan] has no picker for.
       if (!isPerSeatBillingPlan(plan)) {
-        const yearly = isProPlanTier(plan) && annual;
-        router.push(`/upgrade/${plan}${yearly ? '?interval=yearly' : ''}`);
+        router.push(`/upgrade/${plan}`);
         return;
       }
       setUpgradeConfirm({
@@ -671,13 +661,7 @@ export default function PricingPage() {
 
     setWaitlistRequest({
       plan,
-      billingInterval: isProPlanTier(plan)
-        ? annual
-          ? 'yearly'
-          : 'monthly'
-        : isPerSeatBillingPlan(plan)
-          ? teamInterval
-          : 'monthly',
+      billingInterval: selectedInterval(plan),
       ...(isPerSeatBillingPlan(plan) ? { seats: teamSeats } : {}),
     });
   }
@@ -692,11 +676,7 @@ export default function PricingPage() {
       if (isBasicPlanTier(request.plan)) {
         await upgradeToBasicPlan({ userId, userEmail });
       } else if (isProPlanTier(request.plan)) {
-        await upgradeToProPlan({
-          userId,
-          userEmail,
-          billingPeriod: request.billingInterval,
-        });
+        await upgradeToProPlan({ userId, userEmail });
       } else if (isMaxPlanTier(request.plan)) {
         await upgradeToMaxPlan({ userId, userEmail });
       } else if (isMax15xPlanTier(request.plan)) {
@@ -870,7 +850,7 @@ export default function PricingPage() {
       planId: 'basic',
       label: basic.label,
       price: `${basicPrice}/mo`,
-      billingInterval: t('monthly'),
+      billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('basic'),
       ...managedPlanCapabilities('basic'),
       bestFor: t('compareBasicBestFor'),
@@ -878,10 +858,8 @@ export default function PricingPage() {
     {
       planId: 'pro',
       label: pro.label,
-      price: `${formatLocalizedAmount(localizedPlans?.pro.monthly, pro.monthlyPriceUsd)}/mo`,
-      billingInterval: t('compareProInterval', {
-        yearly: formatLocalizedAmount(localizedPlans?.pro.yearly, pro.yearlyPriceUsd, 12),
-      }),
+      price: `${proPrice}/mo`,
+      billingInterval: t('monthlyOnly'),
       usageCapacity: usageCapacityCopy('pro', 'basic'),
       ...managedPlanCapabilities('pro'),
       bestFor: t('compareProBestFor'),
@@ -1001,39 +979,6 @@ export default function PricingPage() {
               {t('audienceBusiness')}
             </button>
           </div>
-
-          {audience === 'individual' ? (
-            <div
-              className="agi-tier-toggle"
-              role="group"
-              aria-label={t('billingCadenceLabel')}
-              style={{ marginBottom: 0 }}
-            >
-              <button
-                type="button"
-                aria-pressed={!annual}
-                onClick={() => setAnnual(false)}
-                className={
-                  annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                }
-              >
-                {t('monthly')}
-              </button>
-              <button
-                type="button"
-                aria-pressed={annual}
-                onClick={() => setAnnual(true)}
-                className={
-                  annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
-                }
-              >
-                {t('annual')}{' '}
-                <span className="agi-tier-toggle-save">
-                  {t('annualSave', { pct: proSavingsPct })}
-                </span>
-              </button>
-            </div>
-          ) : null}
         </div>
 
         <section
@@ -1296,11 +1241,7 @@ export default function PricingPage() {
               <h3 className="agi-tier-name">{pro.label}</h3>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">{proPrice}</span>
-                <span className="agi-tier-price-sub">
-                  {annual && proSavingsPct > 0
-                    ? t('perMonthBilledAnnually')
-                    : t('perMonthBilledMonthly')}
-                </span>
+                <span className="agi-tier-price-sub">{t('perMonthBilledMonthly')}</span>
               </p>
               <p className="agi-tier-body">{t('proTierBody')}</p>
               <ul className="agi-tier-features">

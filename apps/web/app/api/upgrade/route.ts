@@ -25,7 +25,7 @@ import {
 import { verifyUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
-  assertSameCheckoutBillingInterval,
+  assertUpgradeBillingInterval,
   classifyPlanChange,
   currentSeatsFromStripeItem,
   isUpgrade,
@@ -204,7 +204,7 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    assertSameCheckoutBillingInterval(stripeItem.price.recurring, billingInterval);
+    assertUpgradeBillingInterval(stripeItem.price.recurring, billingInterval, targetPlan);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Billing cadence could not be verified';

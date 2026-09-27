@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MODEL_POLICY_UNAVAILABLE } from '@agiworkforce/routing';
 
 import { logger } from '@/lib/logger';
 import { recordCapabilityDenial } from '@/lib/observability/denials';
@@ -36,22 +37,6 @@ function notePolicyRefusal(organizationId: string, request?: WorkspaceScopedRequ
 }
 
 /**
- * Resolves the caller's active workspace and asks the model evaluator.
- *
- * Answers `ungoverned`: which allows, in three cases: the caller is in
- * personal scope and has no workspace to be governed by, the workspace has no
- * policy row, or the policy could not be read. The third is the one worth
- * stating: a database fault is an infrastructure problem, not an
- * administrator's decision, and turning it into a denial would make every
- * member's chat stop working the moment the policy table is briefly
- * unreachable. That is the same trade the managed-compute gate already makes.
- *
- * The opposite choice is defensible for a hard security boundary, but model
- * governance is a deployment control over which approved tool staff use, not a
- * containment barrier, the tenancy layer is what stops cross-workspace access,
- * and it fails closed.
- */
-/**
  * The form for a caller that has ALREADY resolved the active workspace.
  *
  * The chat path resolves it once for the scoped database handle, including the
@@ -79,11 +64,8 @@ export async function evaluateModelAccessForOrganization(
     }
     return decision;
   } catch (error) {
-    logger.error(
-      { error, organizationId },
-      '[model-policy] policy read failed; request ungoverned',
-    );
-    return UNGOVERNED;
+    logger.error({ error, organizationId }, '[model-policy] policy read failed; request refused');
+    return MODEL_POLICY_UNAVAILABLE;
   }
 }
 
@@ -97,8 +79,8 @@ export async function evaluateActiveWorkspaceModelAccess(
   try {
     organizationId = await resolveActiveOrganizationId(db, userId, request);
   } catch (error) {
-    logger.error({ error, userId }, '[model-policy] workspace unresolved; request ungoverned');
-    return UNGOVERNED;
+    logger.error({ error, userId }, '[model-policy] workspace unresolved; request refused');
+    return MODEL_POLICY_UNAVAILABLE;
   }
 
   if (!organizationId) return UNGOVERNED;
@@ -118,9 +100,9 @@ export async function evaluateActiveWorkspaceModelAccess(
   } catch (error) {
     logger.error(
       { error, userId, organizationId },
-      '[model-policy] policy read failed; request ungoverned',
+      '[model-policy] policy read failed; request refused',
     );
-    return UNGOVERNED;
+    return MODEL_POLICY_UNAVAILABLE;
   }
 }
 
@@ -129,9 +111,9 @@ export async function evaluateActiveWorkspaceModelAccess(
  *
  * Acquiring the adapter can itself throw when the database is unconfigured or
  * unreachable, and that throw happens BEFORE the gate below gets a chance to
- * treat it as ungoverned. Leaving `getNeonDb()` at the call site turns a
- * missing connection string into a 500 on every chat turn, which is how this
- * exact mistake was shipped once already in the managed-compute gate.
+ * refuse it. Leaving `getNeonDb()` at the call site turns a missing connection
+ * string into a 500 on every chat turn, which is how this exact mistake was
+ * shipped once already in the managed-compute gate.
  */
 export async function evaluateModelAccessForRequest(
   userId: string,
@@ -142,8 +124,8 @@ export async function evaluateModelAccessForRequest(
   try {
     db = getNeonDb();
   } catch (error) {
-    logger.error({ error, userId }, '[model-policy] database unavailable; request ungoverned');
-    return UNGOVERNED;
+    logger.error({ error, userId }, '[model-policy] database unavailable; request refused');
+    return MODEL_POLICY_UNAVAILABLE;
   }
   return evaluateActiveWorkspaceModelAccess(db, userId, ask, request);
 }

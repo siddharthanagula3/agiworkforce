@@ -6,6 +6,14 @@ export interface Release {
 
 export const RELEASES: readonly Release[] = [
   {
+    date: '2026-09-27',
+    headline: 'Individual plans are now billed monthly',
+    body: [
+      'Basic, Pro, Max 5x and Max 20x are sold with monthly billing only; Team keeps its yearly option.',
+      'Existing yearly Pro subscriptions keep their price and keep renewing yearly.',
+    ],
+  },
+  {
     date: '2026-09-20',
     headline: 'Deletion, holds and connector revocation · corrected',
     body: [

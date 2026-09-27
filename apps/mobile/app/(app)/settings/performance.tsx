@@ -501,7 +501,7 @@ export default function PerformanceScreen() {
                   }}
                   accessibilityLabel={`Device tier: ${tierInfo.label}`}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: c.white }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: c.accentText }}>
                     {tierInfo.label}
                   </Text>
                 </View>
@@ -759,13 +759,15 @@ export default function PerformanceScreen() {
           >
             {isBenchmarking ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator size="small" color="#fff" />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>
+                <ActivityIndicator size="small" color={c.textSecondary} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: c.textSecondary }}>
                   Benchmarking…
                 </Text>
               </View>
             ) : (
-              <Text style={{ fontSize: 14, fontWeight: '600', color: '#fff' }}>Run Benchmark</Text>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: c.accentText }}>
+                Run Benchmark
+              </Text>
             )}
           </Pressable>
         </Card>

@@ -18,12 +18,12 @@ function readDetail(approval: ApprovalRequest, key: string): string | null {
 
 function riskClasses(risk: ApprovalRequest['riskLevel']): string {
   if (risk === 'high') {
-    return 'border-destructive/40 bg-destructive/10 text-destructive';
+    return 'border-danger-fill/40 bg-danger-fill/10 text-danger-text';
   }
   if (risk === 'medium') {
-    return 'border-warning/40 bg-warning/10 text-warning';
+    return 'border-warning-fill/40 bg-warning-fill/10 text-warning-text';
   }
-  return 'border-success/40 bg-success/10 text-success';
+  return 'border-success-fill/40 bg-success-fill/10 text-success-text';
 }
 
 function formatArguments(approval: ApprovalRequest): string {

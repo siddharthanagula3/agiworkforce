@@ -747,7 +747,7 @@ export function SchedulesPage({
             </h2>
             <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
               {canCreateSchedules
-                ? 'Create a self-contained Managed Cloud text task and choose exactly when it can run.'
+                ? 'Create a self-contained Managed Cloud task and choose exactly when it can run.'
                 : 'Upgrade to automate unattended work from this account.'}
             </p>
             {canCreateSchedules && (
@@ -953,8 +953,8 @@ export function SchedulesPage({
           <DialogHeader className="shrink-0">
             <DialogTitle>{editing ? 'Edit Schedule' : 'Create Schedule'}</DialogTitle>
             <DialogDescription>
-              Configure a text-only Managed Cloud task. The server validates timing again before
-              saving. {SCHEDULE_RELIABILITY_NOTE}
+              Configure a Managed Cloud task that returns text. The server validates timing again
+              before saving. {SCHEDULE_RELIABILITY_NOTE}
             </DialogDescription>
           </DialogHeader>
           <ScheduleForm

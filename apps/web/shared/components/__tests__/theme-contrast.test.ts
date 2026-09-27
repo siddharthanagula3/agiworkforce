@@ -9,6 +9,7 @@ import {
   agiBrandScale,
   agiChatCssVars,
   agiElevation,
+  agiExtensionCssVars,
   agiRadii,
   agiRadiiVar,
   agiShadows,
@@ -49,6 +50,51 @@ function contrastRatio(hex1: string, hex2: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+function channels(colour: string): [number, number, number, number] {
+  const rgba = colour.match(/^rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)$/);
+  if (rgba) {
+    return [
+      Number(rgba[1]),
+      Number(rgba[2]),
+      Number(rgba[3]),
+      rgba[4] === undefined ? 1 : Number(rgba[4]),
+    ];
+  }
+  const [r = 0, g = 0, b = 0] = hexToSRGB(colour).map((c) => Math.round(c * 255));
+  return [r, g, b, 1];
+}
+
+function over(colour: string, ground: string): string {
+  const [r, g, b, alpha] = channels(colour);
+  const [gr, gg, gb] = channels(ground);
+  const blend = (top: number, below: number): string =>
+    Math.round(top * alpha + below * (1 - alpha))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${blend(r, gr)}${blend(g, gg)}${blend(b, gb)}`;
+}
+
+function tint(fill: string, share: number, ground: string): string {
+  const [r, g, b] = channels(fill);
+  return over(`rgba(${r}, ${g}, ${b}, ${share})`, ground);
+}
+
+function legibility(text: string, ground: string): number {
+  return contrastRatio(over(text, ground), ground);
+}
+
+function braceBody(source: string, opener: string): string {
+  const start = source.indexOf(opener);
+  if (start === -1) throw new Error(`no block opens with ${opener}`);
+  const open = source.indexOf('{', start + opener.length - 1);
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}' && --depth === 0) return source.slice(open + 1, i);
+  }
+  throw new Error(`unbalanced block after ${opener}`);
+}
+
 function hslToHex(h: number, s: number, l: number): string {
   const sn = s / 100;
   const ln = l / 100;
@@ -78,17 +124,7 @@ const foundationCss = readFileSync(
   'utf8',
 );
 
-const foundationBlock = (selector: string): string => {
-  const start = foundationCss.indexOf(`${selector} {`);
-  if (start === -1) throw new Error(`foundation.css has no ${selector} block`);
-  const open = foundationCss.indexOf('{', start);
-  let depth = 0;
-  for (let i = open; i < foundationCss.length; i++) {
-    if (foundationCss[i] === '{') depth++;
-    else if (foundationCss[i] === '}' && --depth === 0) return foundationCss.slice(open + 1, i);
-  }
-  throw new Error(`unbalanced ${selector} block`);
-};
+const foundationBlock = (selector: string): string => braceBody(foundationCss, `${selector} {`);
 
 const foundationLight = foundationBlock(':root');
 const foundationDark = foundationBlock('.dark');
@@ -669,6 +705,7 @@ describe('the two emitters of the --chat-* contract agree', () => {
     '--chat-text-secondary': agiChatCssVars.light['--chat-text-secondary'],
     '--chat-text-muted': agiChatCssVars.light['--chat-text-muted'],
     '--chat-text-placeholder': agiChatCssVars.light['--chat-text-placeholder'],
+    '--chat-badge-neutral': agiChatCssVars.light['--chat-badge-neutral'],
     '--chat-loading-placeholder': agiChatCssVars.light['--chat-loading-placeholder'],
     '--chat-loading-indicator': agiChatCssVars.light['--chat-loading-indicator'],
   };
@@ -897,6 +934,28 @@ describe('foundation layer', () => {
       });
     }
 
+    for (const status of ['--danger', '--warning', '--success', '--info']) {
+      it(`${themeName} ${status}-text meets AA on every surface and on its own 10 percent fill tint`, () => {
+        const text = resolveToken(block, `${status}-text`);
+        const fill = resolveToken(block, `${status}-fill`);
+        for (const surface of [
+          '--surface-page',
+          '--surface-subtle',
+          '--surface-elevated',
+          '--surface-hover',
+        ]) {
+          expect(contrastRatio(text, resolveToken(block, surface))).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        }
+        for (const surface of ['--surface-page', '--surface-subtle', '--surface-elevated']) {
+          expect(
+            contrastRatio(text, tint(fill, 0.1, resolveToken(block, surface))),
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      });
+    }
+
     it(`${themeName} --rule-strong and --focus-ring clear 3:1 for a control boundary`, () => {
       const page = resolveToken(block, '--surface-page');
       expect(contrastRatio(resolveToken(block, '--rule-strong'), page)).toBeGreaterThanOrEqual(
@@ -1043,4 +1102,303 @@ describe('the chat focus ring is a visible control boundary (>= 3:1) in both the
       contrastRatio(colorToken(web.dark, '--focus-ring'), CHAT_BG_DARK),
     ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
   });
+});
+
+describe('status colour has no role-less legacy token', () => {
+  it('declares no bare success or warning colour that could paint a word with a fill', () => {
+    for (const name of ['--color-success', '--color-warning']) {
+      expect(globalsCss, `${name} is back in the Tailwind theme`).not.toMatch(
+        new RegExp(`^\\s*${name}:`, 'm'),
+      );
+    }
+    for (const block of [webBase.light, webBase.dark]) {
+      expect(block).not.toMatch(/^\s*--(success|warning)(-foreground)?:/m);
+    }
+  });
+});
+
+describe('chat status text roles clear AA on every chat surface and on their own tints', () => {
+  const coolLight = braceBody(chatCss, "html:not(.dark)[data-chat-theme='cool'] {");
+  const SURFACES = [
+    '--chat-bg',
+    '--chat-surface-elevated',
+    '--chat-surface-overlay',
+    '--chat-surface-hover',
+    '--chat-sidebar-bg',
+    '--chat-input-bg',
+    '--chat-code-bg',
+    '--chat-user-bubble-bg',
+  ];
+  const grounds = {
+    light: [
+      ...SURFACES.map((name) => colorToken(chat.light, name)),
+      ...SURFACES.map((name) => colorToken(coolLight, name)),
+      ...['--chat-bg-elevated', '--chat-sidebar-bg', '--chat-input-bg', '--chat-code-bg'].map(
+        (name) => colorToken(webBase.light, name),
+      ),
+    ],
+    dark: SURFACES.map((name) => colorToken(chat.dark, name)),
+  };
+
+  for (const [theme, block] of [
+    ['light', chat.light],
+    ['dark', chat.dark],
+  ] as const) {
+    for (const [text, fill, shares] of [
+      ['--chat-success-text', '--chat-success', [0.1, 0.16]],
+      ['--chat-info-text', '--chat-info', [0.12, 0.15]],
+    ] as const) {
+      it(`${theme}: ${text} >= 4.5:1 on every surface and on a ${fill} tint`, () => {
+        const colour = colorToken(block, text);
+        const fillColour = colorToken(block, fill);
+        for (const ground of grounds[theme]) {
+          expect(contrastRatio(colour, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+          for (const share of shares) {
+            expect(contrastRatio(colour, tint(fillColour, share, ground))).toBeGreaterThanOrEqual(
+              WCAG_AA_NORMAL,
+            );
+          }
+        }
+      });
+    }
+
+    it(`${theme}: --chat-badge-neutral >= 4.5:1 on --chat-surface-hover`, () => {
+      expect(
+        contrastRatio(
+          colorToken(block, '--chat-badge-neutral'),
+          colorToken(block, '--chat-surface-hover'),
+        ),
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+    });
+  }
+});
+
+describe('the Chrome extension map separates fill, text and on-fill roles', () => {
+  const STATES = ['danger', 'success', 'warning', 'info'] as const;
+
+  for (const mode of ['light', 'dark'] as const) {
+    const vars = agiExtensionCssVars[mode];
+    const surfaces = [
+      vars['--agi-ext-bg'],
+      vars['--agi-ext-surface'],
+      vars['--agi-ext-overlay'],
+      vars['--agi-ext-hover'],
+    ];
+    const tintGrounds = [
+      vars['--agi-ext-bg'],
+      vars['--agi-ext-surface'],
+      vars['--agi-ext-overlay'],
+    ];
+    const stateTints: Record<(typeof STATES)[number], string[]> = {
+      danger: [
+        vars['--agi-ext-danger-bg'],
+        `rgba(${channels(agiPalette[mode].state.warning).slice(0, 3).join(', ')}, 0.1)`,
+      ],
+      success: [vars['--agi-ext-success-bg']],
+      warning: [vars['--agi-ext-warning-bg']],
+      info: [],
+    };
+
+    it(`${mode}: --agi-ext-accent-text >= 4.5:1 on every surface and on accent tints up to 20 percent`, () => {
+      for (const ground of surfaces) {
+        expect(contrastRatio(vars['--agi-ext-accent-text'], ground)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      }
+      for (const ground of tintGrounds) {
+        for (const share of [0.08, 0.12, 0.2]) {
+          expect(
+            contrastRatio(
+              vars['--agi-ext-accent-text'],
+              tint(vars['--agi-ext-accent'], share, ground),
+            ),
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      }
+    });
+
+    it(`${mode}: accent and danger labels >= 4.5:1 on their fills at rest and on hover`, () => {
+      for (const fill of [vars['--agi-ext-accent'], vars['--agi-ext-accent-hover']]) {
+        expect(contrastRatio(vars['--agi-ext-on-accent'], fill)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      }
+      for (const fill of [vars['--agi-ext-danger'], vars['--agi-ext-danger-hover']]) {
+        expect(contrastRatio(vars['--agi-ext-on-danger'], fill)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      }
+    });
+
+    for (const state of STATES) {
+      it(`${mode}: --agi-ext-${state}-text >= 4.5:1 on every surface and on its tints`, () => {
+        const text = vars[`--agi-ext-${state}-text`];
+        for (const ground of surfaces) {
+          expect(contrastRatio(text, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+        for (const ground of tintGrounds) {
+          for (const share of [0.08, 0.1, 0.12]) {
+            expect(
+              contrastRatio(text, tint(agiPalette[mode].state[state], share, ground)),
+            ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+          }
+          for (const layer of stateTints[state]) {
+            expect(contrastRatio(text, over(layer, ground))).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+          }
+        }
+      });
+    }
+
+    it(`${mode}: --agi-ext-text-placeholder >= 4.5:1 on the grounds a field sits on`, () => {
+      for (const ground of tintGrounds) {
+        expect(contrastRatio(vars['--agi-ext-text-placeholder'], ground)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      }
+    });
+
+    it(`${mode}: --agi-ext-focus is a visible control boundary (>= 3:1)`, () => {
+      expect(contrastRatio(vars['--agi-ext-focus'], vars['--agi-ext-bg'])).toBeGreaterThanOrEqual(
+        WCAG_AA_LARGE,
+      );
+    });
+  }
+});
+
+describe('the mobile palette clears AA in every theme', () => {
+  // Mobile keeps its own palette in its own app, so this reads the source
+  // rather than importing across the app boundary check:boundaries enforces.
+  const tokensTs = readFileSync(resolve(repoRoot, 'apps/mobile/src/ui/theme/tokens.ts'), 'utf8');
+  const entries = (body: string): Record<string, string> =>
+    Object.fromEntries(
+      [...body.matchAll(/^\s*([A-Za-z0-9]+): '([^']+)',$/gm)].map((m) => [m[1]!, m[2]!]),
+    );
+  const native = braceBody(tokensTs, 'const mobileNativeColors = {');
+  const light = entries(braceBody(native, 'light: {'));
+  const dark = entries(braceBody(native, 'dark: {'));
+  const palettes: Record<string, Record<string, string>> = {
+    light,
+    dark,
+    'high-contrast light': {
+      ...light,
+      ...entries(braceBody(tokensTs, 'export const highContrastLightColors: ColorScheme = {')),
+    },
+    'high-contrast dark': {
+      ...dark,
+      ...entries(braceBody(tokensTs, 'export const highContrastColors: ColorScheme = {')),
+    },
+  };
+  const accentNames = [
+    ...(tokensTs.match(/export type AccentToken = ([^;]+);/)?.[1] ?? '').matchAll(/'([a-z]+)'/g),
+  ].map((m) => m[1]!);
+  const swatches: Record<string, { light: string; dark: string }> = Object.fromEntries(
+    [
+      ...tokensTs.matchAll(
+        /^\s*([a-z]+): \{ light: '(#[0-9a-f]{6})', dark: '(#[0-9a-f]{6})' \},$/gm,
+      ),
+    ].map((m) => [m[1]!, { light: m[2]!, dark: m[3]! }]),
+  );
+
+  const SURFACES = [
+    'background',
+    'surfaceBase',
+    'surfaceElevated',
+    'surfaceOverlay',
+    'surfaceHover',
+  ];
+  const TINT_BASES = ['background', 'surfaceBase', 'surfaceElevated'];
+  const TEXTS = ['textPrimary', 'textSecondary', 'textMuted'];
+  const STATUS_TINTS: Record<string, string> = {
+    agentSuccess: 'successSurface',
+    agentWarning: 'warningSurface',
+    agentError: 'dangerSurface',
+    agentActive: 'accentSurface',
+    agentThinking: 'purpleSurface',
+    purple: 'purpleSurface',
+  };
+  const STATUS_FILLS = ['agentSuccess', 'agentWarning', 'agentError'];
+
+  it('reads every palette, variant and accent swatch from the source', () => {
+    for (const palette of Object.values(palettes)) {
+      for (const name of [...SURFACES, ...TEXTS, ...Object.keys(STATUS_TINTS), 'accentText']) {
+        expect(palette[name], `${name} not parsed`).toBeDefined();
+      }
+    }
+    expect(accentNames.length).toBeGreaterThan(1);
+    for (const name of accentNames.filter((accent) => accent !== 'neutral')) {
+      expect(swatches[name], `${name} swatch not parsed`).toBeDefined();
+    }
+  });
+
+  for (const [name, palette] of Object.entries(palettes)) {
+    const colour = (key: string): string => palette[key]!;
+
+    it(`${name}: text roles >= 4.5:1 on every surface`, () => {
+      for (const text of TEXTS) {
+        for (const surface of SURFACES) {
+          expect(
+            legibility(colour(text), colour(surface)),
+            `${text} on ${surface}`,
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      }
+    });
+
+    it(`${name}: status colours >= 4.5:1 as text on every surface and on their own tint`, () => {
+      for (const [status, tintName] of Object.entries(STATUS_TINTS)) {
+        for (const surface of SURFACES) {
+          expect(
+            contrastRatio(colour(status), colour(surface)),
+            `${status} on ${surface}`,
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+        for (const base of TINT_BASES) {
+          expect(
+            contrastRatio(colour(status), over(colour(tintName), colour(base))),
+            `${status} on ${tintName} over ${base}`,
+          ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+      }
+    });
+
+    it(`${name}: accentText >= 4.5:1 on the accent and on every status fill`, () => {
+      for (const fill of ['teal', 'terraCotta', ...STATUS_FILLS]) {
+        expect(
+          contrastRatio(colour('accentText'), colour(fill)),
+          `accentText on ${fill}`,
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+      }
+    });
+  }
+
+  for (const mode of ['light', 'dark'] as const) {
+    const palette = palettes[mode]!;
+
+    for (const accent of accentNames.filter((name) => name !== 'neutral')) {
+      it(`${mode}/${accent}: the swatch reads as text and carries accentText as a fill`, () => {
+        const swatch = swatches[accent]![mode];
+        const grounds = [
+          ...SURFACES.map((surface) => palette[surface]!),
+          ...TINT_BASES.map((base) => over(palette['accentSurface']!, palette[base]!)),
+        ];
+        for (const ground of grounds) {
+          expect(contrastRatio(swatch, ground)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL);
+        }
+        expect(contrastRatio(palette['accentText']!, swatch)).toBeGreaterThanOrEqual(
+          WCAG_AA_NORMAL,
+        );
+      });
+    }
+
+    it(`${mode}: voice sheet text >= 4.5:1`, () => {
+      for (const sheet of ['voiceSheetSurface', 'voiceOverlaySurface']) {
+        const ground = over(palette[sheet]!, '#ffffff');
+        for (const text of ['voiceTextMuted', 'voiceTextSubtle']) {
+          expect(legibility(palette[text]!, ground), `${text} on ${sheet}`).toBeGreaterThanOrEqual(
+            WCAG_AA_NORMAL,
+          );
+        }
+      }
+    });
+  }
 });

@@ -5,6 +5,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../price-tier-mapping', () => ({
   getAllRegisteredPriceIds: vi.fn(() => []),
+  isGrandfatheredPriceId: vi.fn(() => false),
 }));
 
 vi.mock('../pricing', () => ({

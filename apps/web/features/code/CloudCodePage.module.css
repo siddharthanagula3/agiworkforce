@@ -1560,7 +1560,7 @@ svg + .menuRowLabel {
 }
 
 .terminalPrompt {
-  color: var(--chat-success);
+  color: var(--chat-success-text);
   user-select: none;
 }
 

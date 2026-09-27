@@ -177,12 +177,20 @@ async function runSearch(
 
   const { useChatMessageStore } =
     require('@/stores/chat/chatMessageStore') as typeof import('@/stores/chat/chatMessageStore');
+  const { isHistoryVisibleConversation } =
+    require('@/src/features/chat/utils/conversationMode') as typeof import('@/src/features/chat/utils/conversationMode');
   /* eslint-enable @typescript-eslint/no-require-imports */
   const msgState = useChatMessageStore.getState();
   const lower = trimmed.toLowerCase();
   const results: ConversationSearchResult[] = [];
+  const hidden = new Set(
+    msgState.conversations
+      .filter((conv) => !isHistoryVisibleConversation(conv))
+      .map((conv) => conv.id),
+  );
 
   for (const [convId, msgs] of Object.entries(msgState.messages)) {
+    if (hidden.has(convId)) continue;
     for (const msg of msgs) {
       if ((msg.content ?? '').toLowerCase().includes(lower)) {
         const { snippet, matchStart, matchLength } = buildSnippet(msg.content ?? '', trimmed);
@@ -199,6 +207,7 @@ async function runSearch(
   }
 
   for (const conv of msgState.conversations) {
+    if (hidden.has(conv.id)) continue;
     const idx = conv.title.toLowerCase().indexOf(lower);
     if (idx !== -1 && !results.some((r) => r.conversationId === conv.id)) {
       results.push({

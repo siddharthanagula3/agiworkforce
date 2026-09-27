@@ -155,19 +155,11 @@ export function getStripeConfig() {
   };
 }
 
-export async function upgradeToProPlan(data: {
-  userId: string;
-  userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
+export async function upgradeToProPlan(data: { userId: string; userEmail: string }): Promise<void> {
   return upgradeToPlan({ ...data, plan: 'pro' });
 }
 
-export async function upgradeToMaxPlan(data: {
-  userId: string;
-  userEmail: string;
-  billingPeriod?: 'monthly' | 'yearly';
-}): Promise<void> {
+export async function upgradeToMaxPlan(data: { userId: string; userEmail: string }): Promise<void> {
   return upgradeToPlan({ ...data, plan: 'max' });
 }
 
@@ -298,6 +290,7 @@ export interface UpgradeChargeBreakdown {
   /** Signed as Stripe signs it: positive is owed and adds to what is taken. */
   appliedBalanceCents: number;
   totalDueTodayCents: number;
+  creditToBalanceCents: number;
   renewsAt: string | null;
 }
 
@@ -318,6 +311,7 @@ export interface UpgradePreviewResult {
   charge: UpgradeChargeBreakdown | null;
   promotion: UpgradePromotionSummary | null;
   replacesScheduledChange: boolean;
+  grandfatheredNotice: string | null;
 }
 
 function parsePromotion(value: unknown): UpgradePromotionSummary | null {
@@ -372,6 +366,8 @@ function parseChargeBreakdown(value: unknown): UpgradeChargeBreakdown | null {
     totalCents,
     appliedBalanceCents,
     totalDueTodayCents: raw['totalDueTodayCents'],
+    creditToBalanceCents:
+      typeof raw['creditToBalanceCents'] === 'number' ? raw['creditToBalanceCents'] : 0,
     renewsAt: typeof raw['renewsAt'] === 'string' ? raw['renewsAt'] : null,
   };
 }
@@ -410,6 +406,7 @@ export async function previewUpgrade(data: {
     charge?: unknown;
     promotion?: unknown;
     replacesScheduledChange?: unknown;
+    grandfatheredNotice?: unknown;
     error?: unknown;
     checkout?: {
       amountDueNowCents?: unknown;
@@ -447,6 +444,10 @@ export async function previewUpgrade(data: {
     charge: parseChargeBreakdown(result.charge),
     promotion: parsePromotion(result.promotion),
     replacesScheduledChange: result.replacesScheduledChange === true,
+    grandfatheredNotice:
+      typeof result.grandfatheredNotice === 'string' && result.grandfatheredNotice
+        ? result.grandfatheredNotice
+        : null,
   };
 }
 

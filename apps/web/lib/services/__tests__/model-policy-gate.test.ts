@@ -86,27 +86,25 @@ describe('evaluateActiveWorkspaceModelAccess', () => {
     expect(decision.code).toBe('model_blocked');
   });
 
-  it('does not turn a policy read failure into a denial', async () => {
-    // A database fault is an infrastructure problem, not an administrator's
-    // decision. Denying here would stop every member chatting the moment the
-    // policy table is briefly unreachable.
+  it('refuses when the workspace policy cannot be read', async () => {
     const h = harness({ policyThrows: true });
     const decision = await evaluateActiveWorkspaceModelAccess(h.db, 'user-1', {
       provider: 'openai',
       modelId: MODEL,
     });
 
-    expect(decision.allowed).toBe(true);
-    expect(decision.code).toBe('ungoverned');
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('policy_unavailable');
   });
 
-  it('does not turn an unresolvable workspace into a denial', async () => {
+  it('refuses when the active workspace cannot be resolved', async () => {
     const h = harness({ workspaceThrows: true });
     const decision = await evaluateActiveWorkspaceModelAccess(h.db, 'user-1', {
       provider: 'openai',
       modelId: MODEL,
     });
-    expect(decision.allowed).toBe(true);
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('policy_unavailable');
   });
 
   it('binds the resolved organization, never a caller-supplied one', async () => {
@@ -124,10 +122,7 @@ describe('evaluateActiveWorkspaceModelAccess', () => {
 });
 
 describe('evaluateModelAccessForRequest', () => {
-  it('does not throw when the database is unconfigured', async () => {
-    // Acquiring the adapter throws BEFORE the gate can treat it as ungoverned,
-    // which is how this exact bug reached production once already in the
-    // managed-compute gate.
+  it('refuses rather than throws when the database is unconfigured', async () => {
     mockGetNeonDb.mockImplementation(() => {
       throw new Error('AGI_DATABASE_URL is not set');
     });
@@ -137,8 +132,8 @@ describe('evaluateModelAccessForRequest', () => {
       modelId: MODEL,
     });
 
-    expect(decision.allowed).toBe(true);
-    expect(decision.code).toBe('ungoverned');
+    expect(decision.allowed).toBe(false);
+    expect(decision.code).toBe('policy_unavailable');
   });
 
   it('evaluates normally when the database is available', async () => {

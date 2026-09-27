@@ -7,7 +7,7 @@ import {
   getHostBridge,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { Spinner } from '@agiworkforce/ui';
+import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
@@ -20,6 +20,8 @@ const HOW_TO_PAIR =
   'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. The code works once and expires in a few minutes.';
 const PAIR_FAILED = 'Pairing could not start.';
 const STOP_FAILED = 'Remote Control could not be stopped.';
+const DISCONNECT_CONSEQUENCE =
+  'The phone is disconnected from this computer and can no longer follow or steer its sessions. To connect it again, pair it with a new code.';
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
@@ -78,6 +80,7 @@ export function RemoteControlSection() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
+  const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
     if (!host) return undefined;
@@ -209,12 +212,22 @@ export function RemoteControlSection() {
             type="button"
             className={BUTTON_CLASS}
             disabled={busy}
-            onClick={() => void onStop()}
+            onClick={() =>
+              status === 'connected'
+                ? confirm({
+                    title: `Disconnect ${state?.phoneName ?? 'your phone'}?`,
+                    description: DISCONNECT_CONSEQUENCE,
+                    confirmLabel: 'Disconnect phone',
+                    onConfirm: onStop,
+                  })
+                : void onStop()
+            }
           >
             {status === 'connected' ? 'Disconnect phone' : 'Cancel pairing'}
           </button>
         )}
       </div>
+      {dialog}
     </section>
   );
 }

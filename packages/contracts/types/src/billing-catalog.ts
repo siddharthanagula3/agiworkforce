@@ -2,6 +2,11 @@ export type BillingPlanTier =
   'local-only' | 'byok' | 'free' | 'basic' | 'pro' | 'max' | 'max_15x' | 'team' | 'enterprise';
 export type BillingInterval = 'monthly' | 'yearly';
 
+export const BILLING_INTERVALS = [
+  'monthly',
+  'yearly',
+] as const satisfies readonly BillingInterval[];
+
 export const SELF_SERVE_PAID_PLAN_TIERS = [
   'basic',
   'pro',
@@ -87,28 +92,24 @@ export const BILLING_PLAN_PRICING = {
     id: 'basic',
     label: 'Basic',
     monthlyPriceUsd: 7,
-    yearlyPriceUsd: 0,
     monthlyPriceInr: 399,
   },
   pro: {
     id: 'pro',
     label: 'Pro',
     monthlyPriceUsd: 20,
-    yearlyPriceUsd: 200,
     monthlyPriceInr: 1999,
   },
   max: {
     id: 'max',
     label: 'Max 5x',
     monthlyPriceUsd: 100,
-    yearlyPriceUsd: 0,
     monthlyPriceInr: 9999,
   },
   max_15x: {
     id: 'max_15x',
     label: 'Max 20x',
     monthlyPriceUsd: 200,
-    yearlyPriceUsd: 0,
     monthlyPriceInr: 24999,
   },
   team: {
@@ -124,7 +125,8 @@ export const BILLING_PLAN_PRICING = {
     label: 'Enterprise',
     contractPriced: true,
   },
-} satisfies Record<BillingPlanTier, BillingPlanPricing>;
+} satisfies Record<BillingPlanTier, BillingPlanPricing> &
+  Record<SelfServeIndividualPlanTier, { yearlyPriceUsd?: never }>;
 
 export type BillingSurface = 'web' | 'desktop' | 'mobile';
 
@@ -676,21 +678,42 @@ export function getPlanPriceCents(
   return usd === null ? null : Math.round(usd * 100);
 }
 
+export function billingIntervalsForPlan(plan: string | null | undefined): BillingInterval[] {
+  return BILLING_INTERVALS.filter((interval) => getPlanPriceUsd(plan, interval) !== null);
+}
+
+export function planOffersBillingInterval(
+  plan: string | null | undefined,
+  interval: BillingInterval,
+): boolean {
+  return getPlanPriceUsd(plan, interval) !== null;
+}
+
 export type PublishedPricePlanTier = Exclude<BillingPlanTier, 'enterprise'>;
+
+export function getPublishedMonthlyPriceUsd(plan: PublishedPricePlanTier): number {
+  return BILLING_PLAN_PRICING[plan].monthlyPriceUsd;
+}
 
 export function getPublishedPlanPriceUsd(
   plan: PublishedPricePlanTier,
-  interval: BillingInterval = 'monthly',
-): number {
-  const pricing = BILLING_PLAN_PRICING[plan];
-  return interval === 'yearly' ? pricing.yearlyPriceUsd : pricing.monthlyPriceUsd;
+  interval: BillingInterval,
+): number | null {
+  return interval === 'monthly'
+    ? getPublishedMonthlyPriceUsd(plan)
+    : getPlanPriceUsd(plan, interval);
+}
+
+export function getPublishedMonthlyPriceCents(plan: PublishedPricePlanTier): number {
+  return Math.round(getPublishedMonthlyPriceUsd(plan) * 100);
 }
 
 export function getPublishedPlanPriceCents(
   plan: PublishedPricePlanTier,
-  interval: BillingInterval = 'monthly',
-): number {
-  return Math.round(getPublishedPlanPriceUsd(plan, interval) * 100);
+  interval: BillingInterval,
+): number | null {
+  const usd = getPublishedPlanPriceUsd(plan, interval);
+  return usd === null ? null : Math.round(usd * 100);
 }
 
 export function getPlanPriceInr(plan: string | null | undefined): number | null {

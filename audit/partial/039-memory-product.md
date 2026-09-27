@@ -368,16 +368,13 @@ Code: `apps/web/features/chat/components/messages/MessageBubble.tsx:2730-2733`, 
 
 - Done when: In a temporary chat nothing is read from or saved to memory, and the temporary chat is never used later as past-chat context.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Temporary mode stops memory reads and learning, but later chats' past-chat recall still draws on temporary chats: the cached-message pool has no temporary filter and /api/search does not exclude temporary conversations. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:31-32`, `apps/mobile/stores/chat/chatExecutionStore.ts:1368-1370`, `apps/mobile/src/features/memory/services/consolidation.ts:30-35`
 
 ## S39.29: Sensitive-Memory controls.
 

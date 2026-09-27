@@ -4,31 +4,76 @@
 use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use std::sync::OnceLock;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex, OnceLock};
 use syntect::easy::HighlightLines;
-use syntect::highlighting::{Theme, ThemeSet};
+use syntect::highlighting::{
+    Color as SyntectColor, ScopeSelectors, StyleModifier, Theme, ThemeItem, ThemeSettings,
+};
 use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 
 use crate::terminal_text::sanitize_terminal_text;
-use crate::tui::terminal_palette::{rgb_color, ui_accent, ui_muted, ui_success};
+use crate::tui::terminal_palette::{
+    best_color, palette_version, syntax_palette, ui_accent, ui_muted, ui_success, SyntaxPalette,
+};
 use crate::tui::{display_width, pad_to_cols, truncate_cols};
 
 static SYNTAX_SET: OnceLock<SyntaxSet> = OnceLock::new();
-static THEME: OnceLock<Theme> = OnceLock::new();
+static THEME: Mutex<Option<(u64, Arc<Theme>)>> = Mutex::new(None);
+
+const TERMINAL_FOREGROUND: SyntectColor = SyntectColor {
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 0,
+};
 
 fn syntax_set() -> &'static SyntaxSet {
     SYNTAX_SET.get_or_init(two_face::syntax::extra_newlines)
 }
 
-fn theme() -> &'static Theme {
-    THEME.get_or_init(|| {
-        let ts = ThemeSet::load_defaults();
-        ts.themes
-            .get("base16-ocean.dark")
-            .cloned()
-            .unwrap_or_else(|| ts.themes.values().next().unwrap().clone())
-    })
+fn theme() -> Arc<Theme> {
+    let version = palette_version();
+    let mut cached = THEME
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some((built_for, theme)) = cached.as_ref() {
+        if *built_for == version {
+            return Arc::clone(theme);
+        }
+    }
+    let theme = Arc::new(code_theme(syntax_palette()));
+    *cached = Some((version, Arc::clone(&theme)));
+    theme
+}
+
+fn code_theme(palette: SyntaxPalette) -> Theme {
+    let rule = |selectors: &str, (r, g, b): (u8, u8, u8)| ThemeItem {
+        scope: ScopeSelectors::from_str(selectors).unwrap_or_default(),
+        style: StyleModifier {
+            foreground: Some(SyntectColor { r, g, b, a: 0xff }),
+            ..StyleModifier::default()
+        },
+    };
+    Theme {
+        settings: ThemeSettings {
+            foreground: Some(TERMINAL_FOREGROUND),
+            ..ThemeSettings::default()
+        },
+        scopes: vec![
+            rule("comment", palette.comment),
+            rule("string", palette.string),
+            rule(
+                "constant.numeric, constant.language, constant.character",
+                palette.constant,
+            ),
+            rule("keyword, storage", palette.keyword),
+            rule("entity.name.function, support.function", palette.function),
+            rule("invalid", palette.invalid),
+        ],
+        ..Theme::default()
+    }
 }
 
 /// Render markdown text into styled ratatui Lines with syntax highlighting.
@@ -356,7 +401,7 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
             .unwrap_or_else(|| ss.find_syntax_plain_text())
     };
 
-    let mut h = HighlightLines::new(syntax, th);
+    let mut h = HighlightLines::new(syntax, &th);
     let mut result = Vec::new();
 
     for line_text in LinesWithEndings::from(code) {
@@ -366,21 +411,12 @@ fn highlight_code(code: &str, lang: &str) -> Vec<Line<'static>> {
                 spans.push(Span::styled("    │ ", Style::default().fg(ui_muted())));
 
                 for (style, text) in ranges {
-                    let fg =
-                        rgb_color((style.foreground.r, style.foreground.g, style.foreground.b));
-                    let mut ratatui_style = Style::default().fg(fg);
-                    if style
-                        .font_style
-                        .contains(syntect::highlighting::FontStyle::BOLD)
-                    {
-                        ratatui_style = ratatui_style.add_modifier(Modifier::BOLD);
-                    }
-                    if style
-                        .font_style
-                        .contains(syntect::highlighting::FontStyle::ITALIC)
-                    {
-                        ratatui_style = ratatui_style.add_modifier(Modifier::ITALIC);
-                    }
+                    let fg = style.foreground;
+                    let ratatui_style = if fg == TERMINAL_FOREGROUND {
+                        Style::default()
+                    } else {
+                        Style::default().fg(best_color((fg.r, fg.g, fg.b)))
+                    };
                     spans.push(Span::styled(
                         text.trim_end_matches('\n').to_string(),
                         ratatui_style,

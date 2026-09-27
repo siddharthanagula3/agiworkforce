@@ -1264,8 +1264,8 @@
   gap: 12px;
 }
 /* Compact variant of the selector for use inside the header row. The standalone
-   `.agi-tier-toggle` (still used for the monthly/annual switch above the grid)
-   keeps its own larger sizing and bottom margin. */
+   `.agi-tier-toggle` (still used for the audience switch above the grid and the
+   Team billing cadence) keeps its own larger sizing and bottom margin. */
 [data-design='agi'] .agi-tier-head .agi-tier-toggle {
   margin-bottom: 0;
   padding: 3px;

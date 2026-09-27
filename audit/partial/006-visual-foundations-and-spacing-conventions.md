@@ -18,48 +18,6 @@ nothing is left.
 
 Code: `apps/cli/src/tui/terminal_palette.rs:253-255`
 
-## S6.03: Text and muted-text colors.
-
-- Done when: Primary and muted text use named text tokens that meet 4.5:1 on every surface they land on, without opacity dilution.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile's own palette (tokens.ts) is not covered by the contrast test, and the caption text variant dilutes the fg token with /60 opacity. | states |
-| chrome | partial | The composer placeholder dilutes the muted token with opacity 0.78, measuring 4.28:1 on the light panel; drop the opacity and use a placeholder role. | states |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:15-15`, `apps/mobile/components/ui/text.tsx:11-11`, `packages/ui/design-tokens/src/index.ts:487-487`, `apps/extension/src/side_panel.ts:2091-2091`
-
-## S6.05: Accent and selection colors.
-
-- Done when: Accent and selection colours have separate fill, text and on-fill roles that each meet contrast on the backgrounds they are drawn on.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | With the Green accent chosen in light mode, white accentText sits on #0f8f6f at 4.05:1 on accent buttons; give each accent swatch its own on-fill colour. | states |
-| chrome | partial | One accent value serves fill and text: terra-cotta links, inline code and badges measure 2.95:1 on the light panel, and white on-accent text 3.11:1; add text and on-fill accent roles. | states |
-
-Code: `apps/mobile/src/ui/theme/tokens.ts:223-223`, `apps/mobile/src/ui/theme/useTheme.ts:47-47`, `apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx:188-188`, `packages/ui/design-tokens/src/index.ts:490-490`
-
-## S6.06: Success, warning, error, and information colors.
-
-- Done when: Success, warning, error and info each have text and fill roles, and status text meets 4.5:1 on its background in both themes.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Foundation status roles are correct, but the older --success/--warning tokens still colour 12px text (e.g. the project capacity banner) at about 2.0:1 in light mode, and FormField success text uses raw green-600 (3.1:1). | states |
-| desktop | partial | Foundation status roles are correct, but the older --success/--warning tokens still colour 12px text (e.g. the project capacity banner) at about 2.0:1 in light mode, and FormField success text uses raw green-600 (3.1:1). | states |
-| mobile | partial | In light mode agentSuccess (#10a37f) and agentWarning (#d97706) are used as text at 3.2:1; add text-role status colours and cover the mobile palette in a contrast test. | states |
-| cli | partial | TUI code blocks are coloured with syntect RGB (base16-ocean.dark) for every theme and colour level, so NO_COLOR and 16-colour terminals still receive truecolor escapes. | states |
-| chrome | partial | Status tokens have one value for fill and text; in the light theme warning (#d97706) and success (#16a34a) text measure 3.0-3.1:1; add text-role status tokens. | states |
-
-Code: `packages/ui/design-tokens/src/foundation.css:160-166`, `apps/web/app/globals.css:523-523`, `apps/web/app/chat/projects/[id]/page.tsx:1020-1026`, `packages/ui/ui/src/primitives/FormField.tsx:169-169`
-
 ## S6.08: Heading scale.
 
 - Done when: Headings use one defined heading scale (named levels pairing size, weight and line-height) applied across the surface.
@@ -94,7 +52,7 @@ Code: `apps/mobile/components/ui/text.tsx:8-8`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Metadata text is set ad hoc at 10-11px in about 175 places, below the 12px floor web enforces; the caption variant also dilutes text with /60 opacity. | ui |
+| mobile | partial | The caption variant no longer dilutes text, but metadata text is still set ad hoc at 10-11px in about 175 places, below the 12px floor web enforces. | ui |
 | vscode | partial | Metadata is hard-coded at 9-11px (e.g. 10px badges, 10.5px labels) with no caption role and below a 12px floor. | ui |
 | chrome | partial | Metadata sizes are per-rule literals at 10-11px (e.g. the 10px model badge) with no caption role. | ui |
 
@@ -303,7 +261,7 @@ Code: `apps/cli/src/tui/tui_app.rs:316-322`, `apps/cli/src/tui/markdown_renderer
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | No high-contrast theme: the Colorblind palette re-hues status colours but keeps the mid-grey muted text; NO_COLOR is honoured except by TUI code highlighting. | ui |
+| cli | partial | TUI code highlighting now honours NO_COLOR, but there is no high-contrast theme: the Colorblind palette re-hues status colours and keeps the mid-grey muted text. | ui |
 
 Code: `apps/cli/src/tui/terminal_palette.rs:172-177`
 

@@ -46,7 +46,7 @@ const PRORATED_PREVIEW = {
 };
 
 function renderPanel() {
-  render(<UpgradeOrderPanel plan="max" billingInterval="monthly" returnPath="/upgrade/max" />);
+  render(<UpgradeOrderPanel plan="max" returnPath="/upgrade/max" />);
 }
 
 describe('UpgradeOrderPanel', () => {
@@ -217,12 +217,12 @@ describe('UpgradeOrderPanel', () => {
     );
   });
 
-  it('states the yearly interval next to a yearly price', async () => {
-    render(<UpgradeOrderPanel plan="max" billingInterval="yearly" returnPath="/upgrade/max" />);
+  it('states the monthly cadence every individual plan is sold with', async () => {
+    renderPanel();
 
     const notice = await screen.findByText(/auto renew/i);
-    expect(notice).toHaveTextContent(/\/year \+ tax/);
-    expect(notice).not.toHaveTextContent('/month');
+    expect(notice).toHaveTextContent(/\/month \+ tax/);
+    expect(notice).not.toHaveTextContent('/year');
   });
 
   it('returns from the portal to the order screen it was opened from', async () => {
@@ -247,9 +247,7 @@ describe('UpgradeOrderPanel', () => {
     });
 
     it('does not call the plan price a total, because tax is added at checkout', async () => {
-      render(
-        <UpgradeOrderPanel plan="basic" billingInterval="monthly" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       expect(await screen.findByText('$7.00')).toBeVisible();
       expect(screen.getByRole('definition')).toHaveTextContent('$7.00');
@@ -262,9 +260,7 @@ describe('UpgradeOrderPanel', () => {
     it('hides the payment method section instead of offering a dead Add button', async () => {
       // A free account has no Stripe customer, so opening the portal to add a
       // card errors. Checkout collects the card on its own page.
-      render(
-        <UpgradeOrderPanel plan="basic" billingInterval="monthly" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       await screen.findByText('$7.00');
       expect(screen.queryByRole('region', { name: 'Payment method' })).toBeNull();
@@ -272,9 +268,7 @@ describe('UpgradeOrderPanel', () => {
     });
 
     it('sends the user to checkout rather than trying to charge a card it has not got', async () => {
-      render(
-        <UpgradeOrderPanel plan="basic" billingInterval="monthly" returnPath="/upgrade/basic" />,
-      );
+      render(<UpgradeOrderPanel plan="basic" returnPath="/upgrade/basic" />);
 
       const subscribe = await screen.findByRole('button', { name: /subscribe to/i });
       fireEvent.click(screen.getByRole('checkbox'));
