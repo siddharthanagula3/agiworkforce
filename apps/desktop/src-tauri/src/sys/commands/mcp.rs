@@ -739,7 +739,7 @@ pub async fn mcp_connect_server(
 
     state
         .client
-        .connect_server(name.clone(), server_config)
+        .sign_in_and_connect(name.clone(), server_config)
         .await
         .map_err(|e| format!("Failed to connect: {}", e))?;
 

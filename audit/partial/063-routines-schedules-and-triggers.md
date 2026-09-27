@@ -68,31 +68,25 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 
 - Done when: The user chooses which sources (project files, instructions, docs, web) a routine run may read.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The form now says truthfully that runs use memory, web search, code and Always-allow connectors (ScheduleForm.tsx:118-123), and runs no longer fail on the context manifest now that 0284 is applied. Still open: there is no source picker; sources come only from creating the schedule inside a project. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/chat/projects/[id]/page.tsx:1247-1247`, `apps/web/features/schedules/components/SchedulesPage.tsx:669-669`, `apps/web/lib/services/scheduled-agent-executor.ts:588-588`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.08: Connector selection.
 
 - Done when: Per routine, the user chooses which connectors/tools the run may use.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | The form now says truthfully that a run may use every connector tool saved as Always allow (ScheduleForm.tsx:118-123). Still open: there is no per-routine connector picker. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/schedules/components/ScheduleForm.tsx:112-112`, `apps/web/lib/services/scheduled-agent-executor.ts:222-222`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
 
 ## S63.10: Model/effort selection.
 
@@ -161,16 +155,15 @@ Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-4
 
 - Done when: Event triggers can be narrowed (event types, account, field conditions, repeat suppression) so only matching events start the routine.
 - Wave: 3
-- Already works on: web
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| desktop | partial | Event types, account and repeat suppression are settable, and runs no longer fail on the context manifest now that 0284 is applied. Still open: the server's field conditions have no UI. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Only a glob filter for file-watcher triggers, set by hand in triggers.json; webhook and cron triggers take no filters. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:311-311`, `apps/web/features/schedules/components/ScheduleTriggersPanel.tsx:327-327`, `apps/web/lib/triggers/trigger-service.ts:141-141`, `apps/web/lib/services/scheduled-agent-executor.ts:593-593`
+Code: `apps/cli/src/features/hooks/hooks.rs:484-484`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.17: Webhook trigger.
 
