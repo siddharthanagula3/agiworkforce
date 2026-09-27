@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { managedUsageComparisonLabel, managedUsageMultiplier } from '../billing/managed-usage-caps';
+import {
+  BILLING_PLAN_PRICING,
+  managedUsageComparisonLabel,
+  managedUsageMultiplier,
+  managedUsageMultipliers,
+} from '@agiworkforce/types';
 
 const webRoot = resolve(import.meta.dirname, '../..');
 
@@ -19,16 +24,32 @@ describe('published usage multipliers are derived, not asserted', () => {
   it('computes the multipliers from the governing usage table', () => {
     expect(managedUsageMultiplier('pro', 'basic')).toBe(5);
     expect(managedUsageMultiplier('max', 'pro')).toBe(5);
-    expect(managedUsageMultiplier('max_15x', 'pro')).toBe(15);
+    expect(managedUsageMultiplier('max_15x', 'pro')).toBeNull();
+    expect(managedUsageMultipliers('max_15x', 'pro')).toEqual({
+      fiveHour: 20,
+      weekly: 10,
+      monthly: 10,
+    });
     expect(managedUsageMultiplier('team', 'pro')).toBe(1);
     expect(managedUsageMultiplier('enterprise', 'pro')).toBeNull();
   });
 
+  it('names each Max plan for what its five-hour window gives over Pro', () => {
+    for (const tier of ['max', 'max_15x'] as const) {
+      const factor = managedUsageMultipliers(tier, 'pro')?.fiveHour;
+      expect(BILLING_PLAN_PRICING[tier].label).toBe(`Max ${factor}x`);
+    }
+  });
+
   it('renders the settings badge from that table rather than a typed string', () => {
-    const source = stripComments(read('features/settings/sections/BillingSection.tsx'));
-    expect(source).toContain('managedUsageComparisonLabel');
-    for (const [, multiplier] of source.matchAll(MULTIPLIER_CLAIM)) {
-      throw new Error(`BillingSection publishes a hand-typed "${multiplier}x" usage claim`);
+    const section = stripComments(read('features/settings/sections/BillingSection.tsx'));
+    const display = stripComments(read('features/billing/lib/plan-display.ts'));
+    expect(section).toContain('planUsageComparisonLabel');
+    expect(display).toContain('managedUsageComparisonLabel');
+    for (const source of [section, display]) {
+      for (const [, multiplier] of source.matchAll(MULTIPLIER_CLAIM)) {
+        throw new Error(`the billing settings publish a hand-typed "${multiplier}x" usage claim`);
+      }
     }
   });
 
@@ -48,10 +69,10 @@ describe('published usage multipliers are derived, not asserted', () => {
 
     const derived = new Set(
       [
-        managedUsageMultiplier('pro', 'basic'),
-        managedUsageMultiplier('max', 'pro'),
-        managedUsageMultiplier('max_15x', 'pro'),
-      ].filter((value): value is number => value !== null),
+        managedUsageMultipliers('pro', 'basic'),
+        managedUsageMultipliers('max', 'pro'),
+        managedUsageMultipliers('max_15x', 'pro'),
+      ].flatMap((windows) => (windows ? Object.values(windows) : [])),
     );
 
     for (const claim of published) {
@@ -61,6 +82,9 @@ describe('published usage multipliers are derived, not asserted', () => {
 
   it('refuses to publish a comparison the table cannot support', () => {
     expect(managedUsageComparisonLabel('pro', 'basic', 'Basic')).toBe('5x more usage than Basic');
+    expect(managedUsageComparisonLabel('max_15x', 'pro', 'Pro')).toBe(
+      '20x Pro per 5 hours, 10x per week',
+    );
     expect(managedUsageComparisonLabel('team', 'pro', 'Pro')).toBe('Same usage as Pro');
     expect(managedUsageComparisonLabel('enterprise', 'pro', 'Pro')).toBeNull();
   });

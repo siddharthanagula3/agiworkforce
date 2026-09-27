@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MANAGED_USAGE_LIMITS } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -763,10 +764,13 @@ describe('/changelog, desktop signing is a pipeline and is dated as one', () => 
 
 describe('/contact-sales, capacity matches the pool Enterprise is actually given', () => {
   it('reads Enterprise off the same shared managed pool as every other plan', () => {
-    const caps = collapsed('lib/billing/managed-usage-caps.ts');
-    expect(caps).toMatch(
-      /enterprise: \{ monthlyUnits: 0, weeklyUnits: 0, fiveHourUnits: 0, dailyUnits: 0, unlimited: true, \}/u,
-    );
+    expect(MANAGED_USAGE_LIMITS.enterprise).toEqual({
+      monthlyCredits: 0,
+      weeklyCredits: 0,
+      fiveHourCredits: 0,
+      dailyCredits: 0,
+      unlimited: true,
+    });
     expect(collapsed('app/faq/page.tsx')).toMatch(/What is NOT built: dedicated capacity/u);
   });
 
