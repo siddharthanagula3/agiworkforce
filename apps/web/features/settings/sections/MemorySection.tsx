@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { MemoryEditor, useMemoryStore, selectMemoryCount } from '@agiworkforce/unified-chat';
 import { Switch, useConfirmAction } from '@agiworkforce/ui';
 
+import { MemoryConflicts } from '@/features/settings/components/MemoryConflicts';
 import { MemoryExclusions } from '@/features/settings/components/MemoryExclusions';
 import {
   ImportMemoryDialog,
@@ -379,6 +380,8 @@ export function MemorySection() {
           conversationHref={conversationHref}
         />
       </section>
+
+      <MemoryConflicts />
 
       <ImportMemoryDialog
         open={importDialog.isOpen}
