@@ -217,6 +217,11 @@ function forgetPairingSecret(): void {
   rememberedPairing = null;
 }
 
+function detachSignalingClient(): void {
+  signalingClient?.close();
+  signalingClient = null;
+}
+
 function isDispatchCompanionEnabled(): boolean {
   return FEATURES.dispatch && FEATURES.companion;
 }
@@ -866,6 +871,7 @@ export const useConnectionStore = create<ConnectionState>()(
       connect: (rawCode: string) => {
         if (!isDispatchCompanionEnabled()) {
           invalidateConnectionAttempt();
+          detachSignalingClient();
           get().disconnect();
           return;
         }
@@ -875,6 +881,7 @@ export const useConnectionStore = create<ConnectionState>()(
         const isReconnect =
           currentState.status === 'stale' || currentState.status === 'reconnecting';
         if (currentState.status === 'connecting' || currentState.status === 'connected') {
+          detachSignalingClient();
           get().disconnect();
         }
 
@@ -1213,7 +1220,7 @@ export const useConnectionStore = create<ConnectionState>()(
         clearConnectWatchdog();
         forgetPairingSecret();
         if (signalingClient) {
-          signalingClient.close();
+          signalingClient.close({ endPairing: true });
           signalingClient = null;
         }
         cleanupPeerConnection();
