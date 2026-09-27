@@ -102,6 +102,9 @@ export function publicVideoJobStatus(job: VideoGenerationJob): PublicVideoJobSta
   };
 }
 
+const VIDEO_CANCELLED_UNDELIVERED =
+  'Video generation was cancelled, so the result was not delivered or charged.';
+
 class VideoAssetCompensationError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -469,6 +472,16 @@ async function reconcileVideoGenerationJobCore(
     }
   }
 
+  if (claimed.cancelRequestedAt && claimed.provider !== 'runway') {
+    return finishFailed(
+      db,
+      claimed,
+      claimToken,
+      VIDEO_CANCELLED_UNDELIVERED,
+      claimed.estimatedCostCents,
+    );
+  }
+
   let persistedAsset: PersistedVideoAsset | undefined;
   let completedProviderCostCents: number | undefined;
   try {
@@ -520,7 +533,7 @@ async function reconcileVideoGenerationJobCore(
         db,
         claimed,
         claimToken,
-        'The video finished after it was cancelled, so it was not delivered or charged.',
+        VIDEO_CANCELLED_UNDELIVERED,
         completedProviderCostCents,
       );
     }
