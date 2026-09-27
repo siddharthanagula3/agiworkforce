@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BILLING_PLAN_PRICING, type BillingPlanTier } from '../billing-catalog';
+import {
+  BILLING_PLAN_PRICING,
+  type BillingPlanPricing,
+  type BillingPlanTier,
+} from '../billing-catalog';
 import { usdFromCredits } from '../credits';
 import {
   MANAGED_USAGE_LIMITS,
@@ -10,7 +14,7 @@ import {
 const PLAN_COST_CEILING_OF_PRICE = 0.5;
 
 const pricedTiers = (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).filter((tier) => {
-  const pricing: { monthlyPriceUsd?: number } = BILLING_PLAN_PRICING[tier];
+  const pricing: BillingPlanPricing = BILLING_PLAN_PRICING[tier];
   return (pricing.monthlyPriceUsd ?? 0) > 0;
 });
 
@@ -18,7 +22,7 @@ describe('plan economics', () => {
   it('prices every paid plan so its full monthly allowance costs at most half its price', () => {
     expect(pricedTiers.length).toBeGreaterThan(0);
     for (const tier of pricedTiers) {
-      const pricing: { monthlyPriceUsd?: number } = BILLING_PLAN_PRICING[tier];
+      const pricing: BillingPlanPricing = BILLING_PLAN_PRICING[tier];
       const worstCaseUsd = usdFromCredits(MANAGED_USAGE_LIMITS[tier].monthlyCredits);
       expect(worstCaseUsd).toBeLessThanOrEqual(
         (pricing.monthlyPriceUsd ?? 0) * PLAN_COST_CEILING_OF_PRICE,
