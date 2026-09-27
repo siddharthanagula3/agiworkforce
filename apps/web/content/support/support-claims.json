@@ -530,15 +530,22 @@
       "doc": "temporary-chats",
       "section": "What a temporary chat does",
       "kind": "prose",
-      "sentence": "A temporary chat stays out of your history, your memory and your Library.",
+      "sentence": "A temporary chat stays out of your history, your search results, your memory and your Library.",
       "implementation": [
-        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_PRIVACY_EXPLANATION"
+        "apps/web/lib/temporary-chat-policy.ts#TEMPORARY_CHAT_PRIVACY_EXPLANATION",
+        "apps/web/app/api/search/route.ts",
+        "apps/web/lib/services/retrieval-search-service.ts"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.memory.test.ts",
           "name": "does not load or inject account memory for Temporary Chats"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/app/api/search/route.ts",
+          "text": "coalesce(c.is_temporary, false) = false"
         }
       ]
     },
@@ -562,8 +569,12 @@
       "doc": "temporary-chats",
       "section": "What a temporary chat does",
       "kind": "prose",
-      "sentence": "The conversation record itself, and any file you attach, are held for up to 30 days and then removed, which is what keeps an in-flight chat working and an attachment readable while you are still in it.",
-      "implementation": ["apps/web/app/api/cron/purge-temporary-chats/route.ts"],
+      "sentence": "The conversation record itself, including any research report and the log that lets an interrupted reply resume, and any file you attach, are held for up to 30 days and then removed, which is what keeps an in-flight chat working and an attachment readable while you are still in it.",
+      "implementation": [
+        "apps/web/app/api/cron/purge-temporary-chats/route.ts",
+        "apps/web/db/neon/0061_cloud_agent_runs.sql",
+        "apps/web/db/neon/0094_research_reports.sql"
+      ],
       "proof": [
         {
           "kind": "test",
