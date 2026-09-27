@@ -15,7 +15,7 @@ use std::pin::Pin;
 /// still receive the full set via Ollama's compact structured `tools` field
 /// below, which this cap does not touch.
 ///
-/// Confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
+/// Confirmed empirically (2026-07-11, audit/registers/known-flaws.md): a
 /// realistic 111-tool catalog in this injected format measured 88.7s of
 /// prompt-eval ALONE on an idle, warm Ollama instance, already at the
 /// streaming timeout's edge before the model generated a single token. 111

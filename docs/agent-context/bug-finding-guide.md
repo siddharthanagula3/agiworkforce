@@ -7,13 +7,13 @@ Last updated: 2026-05-20
 ## Workflow
 
 1. Identify the surface or boundary from `repo-map.json`.
-2. Check `known-flaws.md` before calling an issue new.
+2. Check `audit/registers/known-flaws.md` before calling an issue new.
 3. Check `risk-map.json` for required review focus and verification commands.
 4. Search code with `rg`; avoid relying on stale plans.
 5. Reproduce with the smallest command from `commands.json`.
 6. Fix the narrowest owner area first; do not refactor unrelated surfaces.
 7. Add or update tests near the owner area.
-8. Update `known-flaws.md` when a known issue is fixed, reclassified, or duplicated.
+8. Update `audit/registers/known-flaws.md` when a known issue is fixed, reclassified, or duplicated.
 
 ## High-Signal Search Patterns
 

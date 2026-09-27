@@ -153,7 +153,7 @@ paths containing brackets should be shell-quoted when rerunning.
 ### Follow-up failure audit, 2026-09-06
 
 Five additional findings are recorded in
-[the known-flaw ledger](../agent-context/known-flaws.md#2026-09-06-web-workflow-audit-nine-open-correctness-findings):
+[the known-flaw ledger](../registers/known-flaws.md#2026-09-06-web-workflow-audit-nine-open-correctness-findings):
 misleading Memory state after rejected saves, browser push revocation skipped
 on transport failure, out-of-order capability saves, unusable private-media
 export references, and stale client memory status. As of September 6 this brought the audit's
@@ -424,12 +424,12 @@ still had minutes of budget.
 
 #### Register delta
 
-The web section of `docs/agent-context/known-flaws.md` no longer holds a row:
+The web section of `audit/registers/known-flaws.md` no longer holds a row:
 WEB-SEO-PROBE-404-01 closed when the Chrome extension's NLWeb endpoint probe
 was removed in the 2026-09-14 public-release audit. The three routing-preference and
 non-streaming rows this section used to list were closed: the us_only overlay
 is threaded into the resolver as of the 2026-09-08 stabilization pass
-(ACTIVE_ISSUES.md AGI-8). The rows closed in these waves were removed in or
+(audit/prior-audits/active-issues-register.md AGI-8). The rows closed in these waves were removed in or
 beside their fixing commits.
 
 #### Verification actually performed
@@ -615,7 +615,7 @@ taken with it:
 
 ## 2026-08-05 Class-1 Closure Status (autonomous pass, fastest-first)
 
-Per-item detail and evidence live in `docs/agent-context/known-flaws.md`
+Per-item detail and evidence live in `audit/registers/known-flaws.md`
 (dated 2026-08-05 sections); this records surface status only. Every closure
 was independently verified (build + tests + code-read; web additionally driven
 live via Playwright).
@@ -740,7 +740,7 @@ Decided by the founder on 2026-08-05:
 | One chat, not split file-chat vs normal-chat     | W, D, M                | The same conversation accepts normal prompts, selected files, reference files, images, project context, tools, artifacts, and generated files. File-focused work is a conversation state, not a separate product.                                                                        | `apps/web/features/chat`, `apps/desktop/src/features/v3`, `packages/ui/unified-chat`                      |
 | Local/BYOK/Managed are separate trust boundaries | All                    | Local never silently routes to BYOK/Managed. Local to BYOK is explicit fork with selection, scan, preview, label, and consent. Managed Free is enabled after sign-in; paid-only routes require an existing paid entitlement and new paid acquisition remains waitlist/access-code gated. | `packages/contracts/types/src/suite-contracts.ts`, `apps/cli/src/agent/mod.rs`, `apps/mobile/stores/chat` |
 | Model IDs are catalog-owned                      | All                    | UI selectors, tests, route defaults, provider adapters, and docs read from `packages/contracts/types/src/models.json` and capability metadata. No invented/hardcoded current model IDs.                                                                                                  | `packages/contracts/types/src/models.json`, `packages/contracts/types/src/model-catalog.ts`               |
-| Feature completion requires an end-to-end path   | All                    | A feature is not complete unless user action reaches service/runtime, returns a visible result, persists when required, and has test/visual verification.                                                                                                                                | `docs/agent-context/commands.json`, `docs/agent-context/known-flaws.md`                                   |
+| Feature completion requires an end-to-end path   | All                    | A feature is not complete unless user action reaches service/runtime, returns a visible result, persists when required, and has test/visual verification.                                                                                                                                | `docs/agent-context/commands.json`, `audit/registers/known-flaws.md`                                      |
 
 ## Chat Shell And Empty State
 

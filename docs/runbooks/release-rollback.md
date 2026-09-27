@@ -124,13 +124,3 @@ is a recorded gap in `scripts/check-client-handshake-coverage.mjs`, so a
 forced update stops a broken build from being used without telling its reader
 why. Prefer a version disable, which the server answers as an ordinary
 capability refusal carrying its sentence, until that gap is closed.
-
-## Open gaps
-
-- **The rollback target is Vercel's, not the repository's.** If the last healthy
-  production deployment has been pruned by the platform, there is nothing to
-  roll back to and the script refuses rather than picking something arbitrary.
-  Fixing forward is then the only path.
-- **The audit write is best effort when the database is the outage.** With
-  `AGI_DATABASE_URL` unreachable the rollback still happens and the script warns
-  that the trail was not written. The workflow run log is then the only record.

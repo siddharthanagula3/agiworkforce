@@ -776,7 +776,7 @@ deletion` / `Scheduling…`; the destructive-data detail remains explicit.
   its full predecessor is `/tmp/agi-public-claims-audit-final-refresh-2.json`,
   SHA-256
   `fe308995524ccc1acfc4b28fecc228531840efaa9352a6e6d818c5ec329a721d`.
-  `docs/specs/website-launch/evidence/public-claims.json` preserves both results
+  `audit/prior-audits/website-launch/evidence/public-claims.json` preserves both results
   and their limits: source-claim reconciliation does not prove production
   deployment, provider execution, or browser behavior.
 

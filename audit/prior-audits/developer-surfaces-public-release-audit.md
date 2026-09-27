@@ -309,7 +309,7 @@ MEASURED, debug build (`target/debug/agi`, unoptimized), Linux x64, 4 vCPU:
 The fake provider ran locally, so T2 to T6 (backend request, route, dispatch,
 provider first token, AGI receive) collapse to the server's 2,000 ms hold and
 are not a statement about `agiworkforce.com`. The managed-cloud route was not
-exercised: no account credential is available in this environment. ACTIVE_ISSUES
+exercised: no account credential is available in this environment. the active issues register
 records 2.1 s to answer "hi" on the free router over the durable transport on
 `:3100` (2026-09-10); that number is the backend's, not this audit's.
 
@@ -367,7 +367,7 @@ CLI (OBSERVED 2026-09-14):
 
 - `npm view @agiworkforce/cli` returns 404: the package the README and `agi update --install` point at does not exist on the registry.
 - `agi update --check` against the production feed: running 1.7.1, newest published 1.0.0 (2026-05-03), and the README states no published release carries the signed checksum manifest the installer requires. `agi update --install` therefore cannot succeed on any current release.
-- `release-cli.yml` builds six targets (macOS arm64/x64, Linux x64/arm64, Windows arm64/x64) with Sigstore-signed checksums; none of them has been cut since 1.0.0 (READ, `release-cli.yml:108-136`; ACTIVE_ISSUES row `v-cli-1.0.0`).
+- `release-cli.yml` builds six targets (macOS arm64/x64, Linux x64/arm64, Windows arm64/x64) with Sigstore-signed checksums; none of them has been cut since 1.0.0 (READ, `release-cli.yml:108-136`; the active issues register row `v-cli-1.0.0`).
 - `apps/cli/npm/package.json` declares `engines.node >= 24`; this environment's Node 22 ran the extension toolchain but the npm shim would refuse to install.
 - License is "Proprietary" in both manifests; `LICENSE` ships in the VSIX; `THIRD_PARTY_LICENSES.md` exists at the root. UNVERIFIED whether the npm tarball carries a license text.
 
@@ -422,7 +422,7 @@ Evidence: `npm view @agiworkforce/cli` 404 (OBSERVED); `agi update --check` repo
 Reproduction: run the commands above.
 Expected: a 1.7.1 release with `SHA256SUMS` and Sigstore bundle, an npm package, a Marketplace listing.
 Actual: none of the three exists.
-Root Cause: Verified. Release workflows exist and have not been run since 1.0.0 (ACTIVE_ISSUES `v-cli-1.0.0` row).
+Root Cause: Verified. Release workflows exist and have not been run since 1.0.0 (the active issues register `v-cli-1.0.0` row).
 Code/Data Safety Impact: users who follow the docs cannot install; those who build from source get a binary with the findings below.
 Recommended Correction: cut a CLI release from current main after the P1/P2 CLI findings, publish the npm shim, and publish the VSIX once `DEV-001`, `DEV-002` and `DEV-023` are closed. Keep `agi update --install` refusing unsigned archives.
 Shared Impact: both surfaces.

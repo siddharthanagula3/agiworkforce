@@ -8,8 +8,8 @@ Last updated: 2026-09-22
 This is the preserved task list from the August 25 release-execution session.
 It no longer supersedes current control documents. The September 21 rebaseline
 made Web the active release surface and established separate Account Cloud and
-Host Developer continuity domains. Use `docs/specs/website-launch/PROGRESS.md`,
-`audit/prior-audits/web-public-release-audit.md`, `ACTIVE_ISSUES.md`, and
+Host Developer continuity domains. Use `audit/prior-audits/website-launch/progress.md`,
+`audit/prior-audits/web-public-release-audit.md`, `audit/prior-audits/active-issues-register.md`, and
 `audit/prior-audits/parity-implementation-matrix.md` for current status. Counts, blockers,
 branch state, and sequencing below remain dated evidence only.
 
@@ -51,7 +51,7 @@ F3 was rejected and superseded by the W1-01 commit above. The patch files lived
 in local `CLAUDE-SECURITY-20260826-*/patches/` scan directories, which were
 never committed and have been removed; every FIXED row above cites the commit
 that carries the change instead. W2-02 survived re-verification against current
-source on 2026-09-08 and is now `AGI-22` in `ACTIVE_ISSUES.md`.
+source on 2026-09-08 and is now `AGI-22` in `audit/prior-audits/active-issues-register.md`.
 
 ---
 
@@ -91,7 +91,7 @@ wire it in, or cut it for release. None is currently reachable by users.
 ## Open launch items folded in from the remediation register (2026-09-07)
 
 The remediation register and the audit remediation ledger were merged into
-`docs/agent-context/known-flaws.md` and deleted. That register is a code-defect
+`audit/registers/known-flaws.md` and deleted. That register is a code-defect
 register, so the launch-readiness items those two files carried, the ones whose
 blocking fact lives in a dashboard, an account or a store console rather than in
 this repository, land here instead. Ids are the originals so older citations
@@ -147,16 +147,16 @@ dropped rather than copied.
 
 ### Compliance
 
-| ID      | Action                                                                                                                                              | Owner   | How to confirm                                                                                 |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| DPDP-04 | Decide the verifiable parental consent mechanism. Web has no age gate and the mobile one is self-declared and clearable by the child.               | Founder | A written decision names the mechanism, and the gate cannot be cleared by the child alone.     |
-| DPDP-22 | Determine Significant Data Fiduciary status. If notified, a named India data protection officer, a DPIA and an independent audit are all required.  | Founder | A written determination exists, with the officer named and an audit plan if the answer is yes. |
-| DPDP-23 | Name an individual Grievance Officer, confirm the notice address, and create the privacy and grievance mailboxes.                                   | Founder | The published notice names a person and mail to both addresses is delivered.                   |
-| DPDP-26 | Have counsel review the breach-notification templates, which are engineer-drafted from statute. The steps are in `docs/work/founder-assistance.md`. | Founder | The runbook header names the reviewing counsel and the pre-send notices are gone.              |
-| DPDP-32 | Verify enterprise single sign-on against a live SAML instance and a live OIDC instance. It is marketed and has never been tested against either.    | Founder | A sign-in completes against a real identity provider for each protocol.                        |
-| DPDP-48 | Decide the commercial-tier dispute-resolution stance. Without one, consumer arbitration terms apply to every paying tier.                           | Founder | The terms state the commercial stance, or a signed master agreement covers it.                 |
-| DPDP-50 | Decide whether the single worldwide Terms and Privacy under Texas law need EEA, UK and Switzerland variants.                                        | Founder | Either a written decision that one document suffices, or the variants are published.           |
-| DPDP-53 | Name an incident commander and an on-call rota for data-breach response. The founder is the default for every incident today.                       | Founder | `docs/runbooks/incident-response.md` names a commander and a rota with at least two people.    |
+| ID      | Action                                                                                                                                                 | Owner   | How to confirm                                                                                 |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------- | ---------------------------------------------------------------------------------------------- |
+| DPDP-04 | Decide the verifiable parental consent mechanism. Web has no age gate and the mobile one is self-declared and clearable by the child.                  | Founder | A written decision names the mechanism, and the gate cannot be cleared by the child alone.     |
+| DPDP-22 | Determine Significant Data Fiduciary status. If notified, a named India data protection officer, a DPIA and an independent audit are all required.     | Founder | A written determination exists, with the officer named and an audit plan if the answer is yes. |
+| DPDP-23 | Name an individual Grievance Officer, confirm the notice address, and create the privacy and grievance mailboxes.                                      | Founder | The published notice names a person and mail to both addresses is delivered.                   |
+| DPDP-26 | Have counsel review the breach-notification templates, which are engineer-drafted from statute. The steps are in `audit/decisions/founder-actions.md`. | Founder | The runbook header names the reviewing counsel and the pre-send notices are gone.              |
+| DPDP-32 | Verify enterprise single sign-on against a live SAML instance and a live OIDC instance. It is marketed and has never been tested against either.       | Founder | A sign-in completes against a real identity provider for each protocol.                        |
+| DPDP-48 | Decide the commercial-tier dispute-resolution stance. Without one, consumer arbitration terms apply to every paying tier.                              | Founder | The terms state the commercial stance, or a signed master agreement covers it.                 |
+| DPDP-50 | Decide whether the single worldwide Terms and Privacy under Texas law need EEA, UK and Switzerland variants.                                           | Founder | Either a written decision that one document suffices, or the variants are published.           |
+| DPDP-53 | Name an incident commander and an on-call rota for data-breach response. The founder is the default for every incident today.                          | Founder | `docs/runbooks/incident-response.md` names a commander and a rota with at least two people.    |
 
 ---
 

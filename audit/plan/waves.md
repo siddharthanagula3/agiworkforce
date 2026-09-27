@@ -44,6 +44,14 @@ ledger cells are updated.
 - [27-vscode-memory-switch-incomplete.md](../blockers/27-vscode-memory-switch-incomplete.md)
 - [28-desktop-sign-in-host-allowlist.md](../blockers/28-desktop-sign-in-host-allowlist.md)
 - [29-connector-token-refresh-race.md](../blockers/29-connector-token-refresh-race.md)
+- [30-product-definition-p0-gaps.md](../blockers/30-product-definition-p0-gaps.md)
+- [31-database-backup-restore-open-gaps.md](../blockers/31-database-backup-restore-open-gaps.md)
+- [32-incident-response-open-gaps.md](../blockers/32-incident-response-open-gaps.md)
+- [33-release-rollback-open-gaps.md](../blockers/33-release-rollback-open-gaps.md)
+- [34-business-continuity-open-gaps.md](../blockers/34-business-continuity-open-gaps.md)
+- [35-chrome-web-store-release-blockers.md](../blockers/35-chrome-web-store-release-blockers.md)
+- [36-android-store-screenshots.md](../blockers/36-android-store-screenshots.md)
+- [37-personal-data-breach-open-gaps.md](../blockers/37-personal-data-breach-open-gaps.md)
 
 ## Wave 1: apply the pending production migrations (0274 to 0294), then re-check
 

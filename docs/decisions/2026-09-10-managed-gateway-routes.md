@@ -45,7 +45,7 @@ when the founder decides.
   Settings → Capabilities states that even the permissive mode asks before
   anything that "writes, deletes, runs code, or can move data outside AGI,
   including web search and page fetches"; that gate was deliberately extended
-  to web search on 2026-09-08 (`ACTIVE_ISSUES.md`, closed browser item). The
+  to web search on 2026-09-08 (`audit/prior-audits/active-issues-register.md`, closed browser item). The
   AGI Work banner under a paused approval reads "Automatic approval is on",
   which contradicts the policy and is fixed as copy regardless of this decision.
 - Current implementation: `apps/web/shared/types/toolApprovalPolicy.ts` and

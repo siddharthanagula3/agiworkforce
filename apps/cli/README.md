@@ -307,7 +307,7 @@ agi hooks remove PreToolUse 1
 - TUI: ratatui + crossterm. The live module set is guarded by the repository
   module-reachability check.
 - Sandboxing: Linux (bubblewrap), macOS (Seatbelt) shipped; Windows + Linux
-  Landlock are enum stubs (Phase 2).
+  Landlock are enum stubs.
 - MCP: 3 transports shipped (stdio, SSE, Streamable HTTP with optional OAuth).
 - Hooks: 32 events shipped (`apps/cli/src/features/hooks/hooks.rs`); aligned
   with the Sprint B5 canonical vocabulary (Claude Code aliases like
@@ -315,18 +315,6 @@ agi hooks remove PreToolUse 1
 - Catalog-driven provider routes through AGI-owned adapters and user-defined
   endpoints registered through `~/.agiworkforce/config.toml`.
 - Models loaded from `models.json` (no hardcoded model IDs anywhere).
-
-## Roadmap
-
-- **Phase 0 (Sprint A, complete)**, Decommissioned dead modules, shipped real
-  `init`.
-- **Phase 1 (Sprint B, complete)**, MCP SSE + HTTP + OAuth, plugin manifest
-  discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
-  hook event vocabulary canonicalized (now 32 events), provider adapter
-  support, and user-defined custom endpoints.
-- **Phase 2 (next)**, Routing strategy resurrection (the differentiator),
-  hot reload, `--from-pr`, OS keychain (sprint1-vault-rewire), Linux Landlock +
-  Windows sandbox, OpenTelemetry minimal.
 
 ## License
 

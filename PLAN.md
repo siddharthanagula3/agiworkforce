@@ -13,9 +13,8 @@ now carries the package/crate ownership it defined.
 > time: Web first; Mobile and Desktop next; Chrome after those; CLI and VS Code
 > last. Shared contract/package repairs are allowed when they are required by
 > the active platform and make the later surfaces inherit the correction.
-> Current execution lives in `docs/specs/website-launch/PROGRESS.md` and
-> `audit/prior-audits/web-public-release-audit.md`. The older queue in
-> `docs/work/restructure-execution-queue.md` is a historical checkpoint.
+> Every open item lives in `audit/`; the execution order is
+> `audit/plan/waves.md`, and `audit/README.md` explains the layout.
 
 ## Objective
 
@@ -96,10 +95,9 @@ consumer.
 
 ## Execution queue
 
-The current Web queue, resume point, and evidence commands live in
-[`docs/specs/website-launch/PROGRESS.md`](docs/specs/website-launch/PROGRESS.md)
-and [`audit/prior-audits/web-public-release-audit.md`](audit/prior-audits/web-public-release-audit.md). The dated
-restructure queue is retained only as historical evidence.
+The execution order for all open work is
+[`audit/plan/waves.md`](audit/plan/waves.md). Every open item it counts lives
+under `audit/`; [`audit/README.md`](audit/README.md) explains the layout.
 
 ## Completion Gate
 

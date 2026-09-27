@@ -5,12 +5,13 @@ Owner: Website launch preparation
 Last updated: 2026-09-23
 
 This is the entry point for current work. Historical audit artifacts remain immutable. Their local paths and fingerprints are
-recorded in [QA_COVERAGE.json](QA_COVERAGE.json); they are not tracked documentation links.
+recorded in [qa-coverage.json](qa-coverage.json); they are not tracked documentation links.
 
-Read [LAUNCH_PLAN.md](LAUNCH_PLAN.md), [QA_COVERAGE.json](QA_COVERAGE.json),
-[QA_ISSUES.md](QA_ISSUES.md), [REFERENCE_INDEX.md](REFERENCE_INDEX.md),
-[DEMO_CHAT_FINDINGS.md](DEMO_CHAT_FINDINGS.md), [JEV_ARCHITECTURE.md](JEV_ARCHITECTURE.md),
-and [PRODUCTION_REMAINING.md](PRODUCTION_REMAINING.md) before continuing.
+Read [launch-plan.md](launch-plan.md), [qa-coverage.json](qa-coverage.json),
+[qa-issues.md](qa-issues.md), [REFERENCE_INDEX.md](../../../docs/specs/website-launch/REFERENCE_INDEX.md),
+[jev-architecture.md](../../../docs/specs/jev-auto-routing/jev-architecture.md),
+and [production-remaining.md](production-remaining.md) before continuing. The demo dataset
+inventory is row 375 of `audit/live-check/codex-live-verification-queue.md`.
 
 ## Current state
 
@@ -21,10 +22,10 @@ overlay covers only the historical unverified cohort. Consequently zero
 partial rows currently have a proved completion decision and the completed
 total is unknown. The worktree ancestry, broad validation results, persistent
 web failures and concrete resolution sequence are maintained in
-[ACTIVE_ISSUES.md](../../../ACTIVE_ISSUES.md#checklist-reaudit-2026-09-23).
+[audit/prior-audits/active-issues-register.md](../active-issues-register.md#checklist-reaudit-2026-09-23).
 This does not change the historical counts or grant launch approval.
 
-Source identity and preexisting dirty file hashes: [source-baseline.json](source-baseline.json).
+Source identity and preexisting dirty file hashes: [source-baseline.json](../../../docs/specs/website-launch/source-baseline.json).
 No existing changes discarded. Production migrations 0249–0273 applied on 2026-09-20
 with snapshot, local database archive and production-clone rehearsal; 273 applied,
 zero pending and zero drift. Application changes and migration evidence pushed to main at833c6d336 with all
@@ -43,7 +44,7 @@ No private demo data supplied. Product conversation routing unchanged.
 All 13 read-only post-migration checks passed on production and the rehearsal
 clone. Active/suspended membership and custody deletion behavior also passed in
 a rolled-back clone transaction. Recovery identifiers and evidence are recorded
-in [the deployment handoff](../../work/deployment-handoff-2026-09-19.md).
+in [the deployment handoff](../deployment-handoff-2026-09-19.md).
 The object-storage backup release gap and historical GLOBAL NO-GO remain.
 
 ## Current runtime checkpoint
@@ -459,7 +460,7 @@ Pricing/Help/Support/Contact/Security/Status, and the Enterprise overview, membe
 policy, models, connectors, Code, MCP, sharing, audit, data, usage and billing surfaces. Desktop,
 tablet and phone-sized layouts were inspected. No application source was changed during discovery.
 
-Seventeen confirmed findings are recorded in `QA_ISSUES.md#browser-first-discovery-pass-2026-09-19`.
+Seventeen confirmed findings are recorded in `qa-issues.md#browser-first-discovery-pass-2026-09-19`.
 The highest-priority set is: the Turbopack/esbuild process deadlocked twice during ordinary
 navigation; the Enterprise audit trail rejects the signed-in owner as unauthenticated; workspace
 policy, identity and overview disagree about what is enforced; public Enterprise pricing overstates
@@ -477,7 +478,7 @@ avoid unchanged replay.
 
 ## Planning-only checkpoint, 2026-09-19
 
-The owner requested a plan before further work. `LAUNCH_PLAN.md` now defines evidence reconciliation,
+The owner requested a plan before further work. `launch-plan.md` now defines evidence reconciliation,
 website requirement accounting, runtime/schema readiness, remaining discovery, security and data
 integrity, chat/latency, responsive UI, commercial/integration correctness and targeted acceptance.
 No application source, service, schema, account or production setting was changed during planning.
@@ -503,14 +504,14 @@ unverified. This is an incomplete verification checkpoint, not completion of the
 audit or launch approval. Frozen original decisions and GLOBAL NO-GO are preserved.
 
 Checkpoint, row evidence and accounting:
-local audit artifact `CURRENT_VERIFICATION.md` (path and fingerprint in [QA_COVERAGE.json](QA_COVERAGE.json)), `current-verification.jsonl`
+local audit artifact `CURRENT_VERIFICATION.md` (path and fingerprint in [qa-coverage.json](qa-coverage.json)), `current-verification.jsonl`
 and `current-verification-state.json`. The directory is locally excluded from Git;
 artifacts are saved on disk, not committed. No exclusion was changed.
 
 New confirmed local defects: draft loss after Projects/Back, a false send-failure
 restoration when clearing a reloaded draft, and orphan Mermaid diagnostic nodes
 remaining in accessibility after navigation. Canonical IDs/repair actions are in
-`ACTIVE_ISSUES.md` and `known-flaws.md`; QA_ISSUES points to them. Main-branch
+`audit/prior-audits/active-issues-register.md` and `known-flaws.md`; qa-issues.md points to them. Main-branch
 protection is absent in read-only live GitHub inspection, and the pre-existing live
 erasure test's direct pg import fails the package-boundary guard. No repairs or
 production mutations were performed.

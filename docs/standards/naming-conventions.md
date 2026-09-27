@@ -60,7 +60,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Use `CHANGELOG.md` for completed work.
 - Do not add `TASKS.md`, `FIXME.md`, or `AUDIT_LOG.md` at root.
 - Use inline `TODO(<owner-or-area>):` comments only for small local follow-up notes that are next to the affected code.
-- Put durable findings in `docs/agent-context/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28, do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/registers/capability-gaps.csv`.)
+- Put durable findings in `audit/registers/known-flaws.md` or `docs/security/`. (The former `reports/`, `tasks/`, and `docs/archive/` root directories were removed repo-wide on 2026-06-28, do not cite them as existing or route new work there without a current decision doc. The root `audit/` directory remains live as the evidence-ledger root, e.g. `audit/registers/capability-gaps.csv`.)
 
 ## Directory Names
 
@@ -72,6 +72,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Deployable services live in `services/<service-name>`.
 - Neon migrations live in `apps/web/db/neon`.
 - Do not create cross-app imports; move shared code into `packages/` or `crates/`.
+- Product code is organised by domain first. Each app has one feature root: `apps/web/features/`, `apps/desktop/src/features/` and `apps/mobile/src/features/`, one directory per product domain.
 - Mobile root `hooks/` and `lib/` are frozen compatibility roots unless a repo guardrail explicitly allowlists the file. Feature-owned Mobile code belongs under `apps/mobile/src/features/<domain>/`; platform, storage, integration, and UI primitives belong under the matching `apps/mobile/src/*` layer.
 
 ## File Names
@@ -79,7 +80,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Markdown docs: lowercase kebab-case, except root all-caps convention files such as `README.md`, `CHANGELOG.md`, `AGENTS.md`, `CODEOWNERS`.
 - Active plan docs: `docs/plans/<topic>.md`.
 - There is no archive directory and one must not be created. Historical material lives in git history.
-- Durable findings belong in `docs/agent-context/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
+- Durable findings belong in `audit/registers/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
 - Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.
 - TypeScript/React source files should follow the local app's existing convention; new domain feature files should prefer kebab-case filenames and PascalCase exported React components.

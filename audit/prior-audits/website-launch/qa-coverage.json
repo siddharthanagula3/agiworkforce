@@ -151,7 +151,7 @@
           "Cleared instructions, saved, reloaded and reopened; Instructions empty"
         ],
         "artifacts": {
-          "docs/specs/website-launch/evidence/project-instructions.json": "d899060e3c5d2aa8b56175f47cdaa365f46fdd1ad5d1ad0a9d8ee3119dbfcf63"
+          "audit/prior-audits/website-launch/evidence/project-instructions.json": "d899060e3c5d2aa8b56175f47cdaa365f46fdd1ad5d1ad0a9d8ee3119dbfcf63"
         },
         "dependencies": {
           "apps/web/features/projects/components/ProjectSettingsDialog.tsx": "4941c3318101afe0f0ada9b01b6a65e31bbca7c1bb9e6019c50b9de317cfb00b"
@@ -215,7 +215,7 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "Two earlier Browser navigation runs lost Next dev and showed an esbuild fatal-deadlock signature before ERR_CONNECTION_REFUSED. QA_ISSUES.md records the symptom but not a full stack, exact route sequence, or parent-process exit cause.",
+      "evidence": "Two earlier Browser navigation runs lost Next dev and showed an esbuild fatal-deadlock signature before ERR_CONNECTION_REFUSED. qa-issues.md records the symptom but not a full stack, exact route sequence, or parent-process exit cause.",
       "progress": "Current signed-out localhost runtime survived /pricing, /enterprise, /help, /web, and /chat navigation; the same Next PID and esbuild child remained alive and /status returned 200. Root cause and signed-in route stability remain unverified; no source repair claimed."
     },
     {
@@ -255,7 +255,7 @@
       "boundary": "local",
       "actionable": false,
       "dependencies": [],
-      "evidence": "PROGRESS.md#2026-09-22-hosted-status-signal-scope; original failure remains in QA_ISSUES.md. The local /status AX tree displayed Hosted checks, Chat routing, and the explicit inference limitation above the detailed rows.",
+      "evidence": "progress.md#2026-09-22-hosted-status-signal-scope; original failure remains in qa-issues.md. The local /status AX tree displayed Hosted checks, Chat routing, and the explicit inference limitation above the detailed rows.",
       "limitations": "No active inference probe was added. Usable Free-chat inference, production status and deployment remain separate unverified gates."
     },
     {
@@ -275,7 +275,7 @@
       "boundary": "local",
       "actionable": true,
       "dependencies": [],
-      "evidence": "Usage shows spend/turns with zero tokens and raw identities; provenance requires investigation. Active manual Enterprise subscription and no recorded contract may coexist, so billing integrity failure is not established. See planning qualifications in LAUNCH_PLAN.md.",
+      "evidence": "Usage shows spend/turns with zero tokens and raw identities; provenance requires investigation. Active manual Enterprise subscription and no recorded contract may coexist, so billing integrity failure is not established. See planning qualifications in launch-plan.md.",
       "progress": "confirmed against current local records; no billing mutation"
     },
     {
@@ -305,7 +305,7 @@
       "boundary": "local",
       "actionable": false,
       "dependencies": [],
-      "evidence": "JEV_ARCHITECTURE.md: eligibility evaluated and product pilot deferred; no product integration or benefit claimed."
+      "evidence": "docs/specs/jev-auto-routing/jev-architecture.md: eligibility evaluated and product pilot deferred; no product integration or benefit claimed."
     },
     {
       "id": "AFFECTED-VALIDATION",
@@ -359,7 +359,7 @@
       "actionable": false,
       "boundary": "localhost browser with remote free-quota inference",
       "evidence": "evidence/qwen-free-quota.json#browserCapabilityExperiments",
-      "limitations": "Four historical browser submissions. Speech/embedding/ranking remain disabled. The angle-text and free-route provenance findings discovered by this run are closed with current evidence in PROGRESS.md.",
+      "limitations": "Four historical browser submissions. Speech/embedding/ranking remain disabled. The angle-text and free-route provenance findings discovered by this run are closed with current evidence in progress.md.",
       "progress": "Free-route lane now persists through both assistant-turn writers and rehydrates after reload without labeling messages that carry no explicit lane evidence."
     },
     {
@@ -395,7 +395,7 @@
       "status": "passed",
       "actionable": false,
       "boundary": "local shared renderer tests and localhost wide/mobile browser geometry",
-      "evidence": "PROGRESS.md#2026-09-21-markdown-table-alignment-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "evidence": "progress.md#2026-09-21-markdown-table-alignment-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
       "packStatus": "PASS",
       "limitations": "Current local candidate only; not proof of deployment or every provider-generated table."
     },
@@ -432,7 +432,7 @@
       "status": "passed",
       "actionable": false,
       "boundary": "local artifact/render tests and authenticated localhost Free-model browser check with reload",
-      "evidence": "PROGRESS.md#2026-09-22-inert-html-code-and-explicit-artifact-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "evidence": "progress.md#2026-09-22-inert-html-code-and-explicit-artifact-closure; original failure: evidence/qwen-free-quota.json#qaPackBrowserBatch",
       "packStatus": "PASS",
       "limitations": "The specific inert-fence and explicit-artifact flows passed locally; this does not prove all generated HTML safe or production deployment."
     },
@@ -487,7 +487,7 @@
       "status": "passed",
       "actionable": false,
       "boundary": "localhost synthetic private-media ingestion plus route/catalog/persistence tests; no additional provider generation",
-      "evidence": "PROGRESS.md#2026-09-22-free-generated-media-library-closure; historical failure remains in evidence/qwen-free-quota.json#qaPackBrowserBatch",
+      "evidence": "progress.md#2026-09-22-free-generated-media-library-closure; historical failure remains in evidence/qwen-free-quota.json#qaPackBrowserBatch",
       "packStatus": "PASS"
     },
     {
@@ -778,14 +778,14 @@
   ],
   "ownerExpansion": {
     "date": "2026-09-19",
-    "inventory": "QA_ISSUES.md#expanded-owner-requested-inventory-2026-09-19",
+    "inventory": "qa-issues.md#expanded-owner-requested-inventory-2026-09-19",
     "enterprise": "Local existing-demo login, contract UI, domain rejection and inactive membership authorization verified; see evidence/plan-limits.json. New signup, live SSO and metered contract remain unverified.",
     "repairAttemptsPerIssue": 3,
     "generation": "cheap Luna only; no image/video generation",
     "hookScope": "Existing bound scope and continuation limits unchanged; expansion is explicit owner authorization, not completion evidence.",
     "planningCheckpoint": {
       "date": "2026-09-19",
-      "plan": "LAUNCH_PLAN.md",
+      "plan": "launch-plan.md",
       "mode": "planning only; no application repairs this turn",
       "coverage": "Broad partial discovery; exhaustive website requirement mapping and explicit missing-workflow dispositions remain required.",
       "corrections": "Withdrawn stale changelog and deprovisioning-unavailable allegations; qualified billing, usage, status and Enterprise claim conclusions."

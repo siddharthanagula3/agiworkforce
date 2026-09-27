@@ -70,8 +70,8 @@ Named, because the next incident depends on knowing which defences held.
 
 ## Follow-ups
 
-Every row lands in `ACTIVE_ISSUES.md` with the same owner and date before this
-postmortem is finished, or in `docs/agent-context/known-flaws.md` when it is a
+Every row lands in `audit/prior-audits/active-issues-register.md` with the same owner and date before this
+postmortem is finished, or in `audit/registers/known-flaws.md` when it is a
 known behaviour rather than work in flight. A follow-up that exists only here
 is a follow-up nobody owns.
 

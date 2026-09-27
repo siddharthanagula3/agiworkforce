@@ -789,7 +789,6 @@ const workspaceFilterFiles = [
   'apps/web/scripts/build-with-chat.sh',
   'scripts/verify-surfaces.sh',
   'scripts/launch-verify.sh',
-  'docs/specs/domain-first-reorg.md',
   'docs/surfaces/web.md',
 ].filter(exists);
 
@@ -864,9 +863,9 @@ if (exists('docs/standards/cli-command-surface.md')) {
 }
 
 requireIncludes('apps/web/features/index.ts', 'canonical Web product-domain root');
-requireIncludes('docs/specs/domain-first-reorg.md', '`apps/web/features/`');
-requireIncludes('docs/specs/domain-first-reorg.md', '`apps/mobile/src/features');
-requireIncludes('docs/specs/domain-first-reorg.md', '`apps/desktop/src/features');
+requireIncludes('docs/standards/naming-conventions.md', '`apps/web/features/`');
+requireIncludes('docs/standards/naming-conventions.md', '`apps/mobile/src/features');
+requireIncludes('docs/standards/naming-conventions.md', '`apps/desktop/src/features');
 requireIncludes('docs/architecture/desktop.md', 'Retired chat folder');
 requireIncludes('docs/architecture/desktop.md', 'apps/desktop/src/features/chat/');
 requireIncludes('docs/standards/cli-command-surface.md', 'Shared Claude-parity fallback');

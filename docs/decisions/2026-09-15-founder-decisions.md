@@ -25,7 +25,7 @@ provider and model abstractions so a provider is replaceable without a
 redesign; prefer the AGI Workforce account, subscription, entitlements,
 sessions, memory, projects, tools and cross-device identity over another AI
 company's consumer subscription. A decision the leaders' common behaviour
-answers is made autonomously and documented; `docs/work/founder-assistance.md`
+answers is made autonomously and documented; `audit/decisions/founder-actions.md`
 holds only credentials, money, legal approval, signatures, external accounts,
 irreversible production actions, and product choices without a useful leader
 precedent.

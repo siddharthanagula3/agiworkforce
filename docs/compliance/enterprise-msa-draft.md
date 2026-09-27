@@ -326,7 +326,7 @@ this draft.
 | M-4 | Confirm the IP indemnification scope and exclusions in section 12.2 match AGI's actual risk tolerance.                                                                                                                                        | Section 12   |
 | M-5 | Decide arbitration versus court jurisdiction for enterprise counterparties.                                                                                                                                                                   | Section 14   |
 | M-6 | Confirm whether a customer requiring data residency outside the United States should be a hard no (as drafted) or whether any accommodation exists; if the latter, this MSA needs a section 9.2 rewrite before it is used with that customer. | Section 9.2  |
-| M-7 | If an Indian counterparty is expected, confirm whether this MSA needs a DPDP-specific annex analogous to the one flagged for the DPA in `docs/compliance/dpdp-audit-log.md` §5, item L-10.                                                    | Section 7    |
+| M-7 | If an Indian counterparty is expected, confirm whether this MSA needs a DPDP-specific annex analogous to the one flagged for the DPA in `audit/prior-audits/dpdp-audit-log-2026-08-22.md` §5, item L-10.                                      | Section 7    |
 
 This draft has not been sent to any customer and creates no obligation until
 signed.

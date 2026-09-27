@@ -9,7 +9,7 @@
 # --allow unmaintained --allow unsound --allow notice` both block the merge;
 # a third step runs the full `cargo deny check advisories` as a non-blocking
 # report for the maintenance classes tracked under
-# RUST-DEPENDENCY-ADVISORIES-01 in docs/agent-context/known-flaws.md.
+# RUST-DEPENDENCY-ADVISORIES-01 in audit/registers/known-flaws.md.
 
 [graph]
 # No target-triple pruning: the workspace ships macOS, Linux, and Windows

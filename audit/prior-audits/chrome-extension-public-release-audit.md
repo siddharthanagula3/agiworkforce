@@ -499,7 +499,7 @@ Evidence: the keepalive port's `onDisconnect` aborts every stream for the client
 
 Severity: P3
 Surface: Shared
-Evidence: `ACTIVE_ISSUES.md` records a landing-page privacy claim already corrected; the listing short description says the panel "reads the page you are on", which matches the explicit-attach model only if read as "on request".
+Evidence: `audit/prior-audits/active-issues-register.md` records a landing-page privacy claim already corrected; the listing short description says the panel "reads the page you are on", which matches the explicit-attach model only if read as "on request".
 
 ### 9.2 Verified not a defect
 

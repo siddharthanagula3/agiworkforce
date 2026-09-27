@@ -13,10 +13,10 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-LEDGER = 'docs/specs/website-launch/QA_COVERAGE.json'
+LEDGER = 'audit/prior-audits/website-launch/qa-coverage.json'
 GOAL = 'docs/specs/website-launch/AGENT_GOAL.md'
 CONTINUE = 'docs/specs/website-launch/CONTINUE_GOAL.md'
-PROGRESS = 'docs/specs/website-launch/PROGRESS.md'
+PROGRESS = 'audit/prior-audits/website-launch/progress.md'
 STATES = {'ACTIVE', 'WAITING_FOR_USER', 'BLOCKED', 'CHECKPOINT_REQUIRED',
           'PAUSED_BY_USER', 'LOCAL_SCOPE_VERIFIED', 'HOOK_ERROR'}
 MAX_BYTES = 2_000_000

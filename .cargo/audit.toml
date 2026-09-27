@@ -70,7 +70,7 @@ ignore = [
     # every run in its visible history, the newest release carries only Linux
     # artifacts, and production /api/download answers 503 for windows and mac.
     # The feature set that workflow builds did not compile until 2026-08-24.
-    # See DISTRIBUTION-01 in docs/agent-context/known-flaws.md.
+    # See DISTRIBUTION-01 in audit/registers/known-flaws.md.
     #
     # One entry remains, and it is a maintenance warning rather than a
     # vulnerability:

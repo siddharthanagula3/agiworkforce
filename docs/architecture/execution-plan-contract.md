@@ -11,7 +11,8 @@ was worth making. It also fixes the staged rollout and the gates.
 
 This document changes no code. Every statement about current behaviour is
 anchored to a file and, where useful, a line. Everything not proven by a repo
-file is in "Open Questions" and is marked unknown, it is never asserted.
+file is an open question in `audit/decisions/open-questions.md` and is marked
+unknown, it is never asserted.
 
 IMPLEMENTATION STATUS (2026-08-16). The original slice was docs-only; parts of
 the rollout have since shipped, so read §5 against this list before building
@@ -101,7 +102,7 @@ resolver implementations:
 `fallbackToAutoForCapabilityMismatch`; the Rust request carries none of those.
 `UnavailableAutoRoute` in TS has eight codes, the Rust `UnavailableCode` has
 six. Any `ExecutionPlan` work must either land in both or explicitly nominate
-one as canonical, see Open Question OQ-1.
+one as canonical, see OQ-1 in `audit/decisions/open-questions.md`.
 
 ### 2.2 Retained Tauri router
 
@@ -441,45 +442,6 @@ parallel nice-to-have.
   `apps/cli/src/routing/mod.rs` must be removed in the same change.
 - Not a CPST for local or BYOK execution in the first slice, those surfaces
   have no per-request ledger.
-
-## 8. Open Questions
-
-Each of these is genuinely undecided. None should be resolved by assumption.
-
-- **OQ-1, Which resolver is canonical?** `packages/ai/routing/src/auto.ts` and
-  `crates/agiworkforce-model-registry/src/lib.rs` have already diverged (budget
-  and capability fields, and eight vs six unavailable codes). Adding
-  `ExecutionPlan` to both doubles the divergence surface. Options: designate one
-  canonical and have the other call it; generate both from the schema; or accept
-  the divergence with a conformance test. Undecided.
-- **OQ-2, What identifies a model snapshot?** `generated/registry.json` exposes
-  only `schemaVersion: 1`; there is no content hash, no `generatedAt`, and every
-  first-party adapter package is `0.0.1`. Without one of those, `modelSnapshot`
-  and `harnessVersion` cannot be pinned. Requires a `compile.mjs` change.
-- **OQ-3, Service-tier vocabulary.** The repo already has
-  `ServiceTier { Fast, Flex }` (protocol config), `'auto' | 'default' | 'flex'`
-  (OpenAI adapter), and a per-endpoint Anthropic gate. `standard/flex/priority/batch`
-  collides with `Fast`. Which vocabulary wins, and who migrates, is undecided.
-  Whether any provider we use exposes a batch or priority tier at all is
-  **not verified in this repo** and must be confirmed from official provider
-  documentation before the field is authored.
-- **OQ-4, Who runs the verifier?** No verifier seam exists. Candidates include
-  the web tool loop (`apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts`)
-  and the retained Tauri router path, but neither has been designed for it. Until this
-  is answered `verifierResult` is always `skipped`.
-- **OQ-5, Approval-policy coverage.** Which surfaces already render an approval
-  prompt for destructive/expensive actions was not verified while writing this
-  document. Unknown.
-- **OQ-6, Task identity across requests.** CPST's denominator counts tasks, but
-  nothing in the ledger groups requests into a task. `managed_usage_request_extensions`
-  groups provider steps within one billed request, which is narrower. A task
-  identifier is required and its owner is undecided.
-- **OQ-7 to The 2026-09-01 Sonnet 5 step-up.** Unverified against any repo file
-  (§1). Until a curation update lands, no planning number should depend on it.
-- **OQ-8, Non-managed surfaces.** Retained Tauri BYOK/local, CLI, mobile, and the
-  extensions have no per-request cost ledger. Whether CPST extends there, and at
-  what privacy cost, is undecided, local execution telemetry touches the
-  local-first trust boundary and cannot be added by default.
 
 ## 9. Verification For This Document
 

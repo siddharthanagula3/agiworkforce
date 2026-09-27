@@ -441,7 +441,7 @@ export default function CloudUsageScreen() {
                     this stack (nativewind 4.2.3 + react-native-css-interop
                     0.2.3), which stacked the icon above "Refresh" instead of
                     beside it. Same class as MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-                    (docs/agent-context/known-flaws.md), using `children` as a
+                    (audit/registers/known-flaws.md), using `children` as a
                     function instead routes pressed state through a plain
                     object-literal-style View, which renders correctly.
                   */}

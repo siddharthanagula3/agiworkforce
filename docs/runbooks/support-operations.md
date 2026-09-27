@@ -223,7 +223,7 @@ Stated so nobody promises it:
 - A per-customer status feed or incident subscription. `/status` is the same
   page for everyone.
 - A published list of known issues. Current defects are tracked for engineers in
-  `docs/agent-context/known-flaws.md`, which is not written for customers and is
+  `audit/registers/known-flaws.md`, which is not written for customers and is
   not to be quoted to them.
 - An evidence standard for restoring access to an account that has lost every
   sign-in factor (section 5).

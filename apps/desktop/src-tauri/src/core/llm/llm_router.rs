@@ -27,7 +27,7 @@ use crate::core::llm::{
 /// Streaming connection timeout: 90s base covers model load + reasoning
 /// models (60-90s) for typical prompts. Large prompts need additional
 /// prompt-eval headroom that scales with size instead of a flat ceiling.
-/// confirmed empirically (2026-07-11, docs/agent-context/known-flaws.md): a
+/// confirmed empirically (2026-07-11, audit/registers/known-flaws.md): a
 /// realistic 111-tool catalog injected into a small local model's system
 /// prompt (the path non-tool-native Ollama models take, see
 /// `prompt_tool_injection.rs`) measured 88.7s of prompt-eval ALONE on an

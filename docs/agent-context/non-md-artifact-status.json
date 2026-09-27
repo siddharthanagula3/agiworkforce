@@ -58,6 +58,12 @@
       "reason": "Screenshot corpus from the 2026-09-01 live parity audit, referenced by the frontend transition workstream; superseded and deletable once the post-transition browser re-measure is appended to docs/research/leader-ui-measurements-2026-09-04.md."
     },
     {
+      "path": "audit/prior-audits/website-launch/**",
+      "status": "live-evidence",
+      "owner": "Website launch preparation",
+      "reason": "The website launch QA ledger (qa-coverage.json) and its evidence JSON, read by the .codex/hooks/launch.py continuation hook; delete with the rest of the website-launch prior audit once its open cases are split into audit/live-check/ and audit/blockers/."
+    },
+    {
       "path": "docs/security/security-claims.json",
       "status": "machine-contract",
       "owner": "Security lead",

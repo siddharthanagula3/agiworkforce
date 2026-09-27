@@ -32,10 +32,9 @@ is already prebuilt with CocoaPods installed. Nothing to do.
 If `apps/mobile/ios` is ever missing, regenerate it with `npx expo prebuild -p ios`
 (do **not** pass `--clean`; it discards the AGIShareExtension target).
 
-### Android: required, not yet done
+### Android
 
-The SDK and the `android-34` ARM64 system image are installed, but **no AVD exists**, which
-is why no Android screenshot has ever been captured. Create the phone AVD:
+The SDK and the `android-34` ARM64 system image are installed. Create the phone AVD:
 
 ```bash
 avdmanager create avd -n pixel_8_api_34 \

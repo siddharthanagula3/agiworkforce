@@ -452,38 +452,6 @@ Services:
   billing/usage scaffolding. Paid upgrade entry remains waitlist/access-code
   gated; capacity-specific access requests remain separate.
 
-## P0 Gap List
-
-These are the highest-risk gaps before calling v1 competitive.
-
-1. Desktop AGI Work subpanels need demo-path verification, and AGI Code must be
-   mounted into the V3 shell or clearly gated before demo.
-2. Desktop settings must match the locked IA: General, Account, Privacy,
-   Billing, Usage, Capabilities, Connectors, AGI Code, AGI in Chrome,
-   Extensions, Developer.
-3. One-chat flow must support normal chat plus selected files/reference files without forcing users into separate chat experiences.
-4. Local to BYOK fork flow must be end-to-end on every surface where it appears: context selection, secret scan, payload preview, provider label, consent, and preserved Local original.
-5. Model selection must use catalog/provider capability metadata everywhere; remove scattered hardcoded current-model assumptions.
-6. Memory must support view/manage, reference-chat search, generated memory from history, and import prompt/workflow from other AI providers.
-7. Connectors/apps/plugins must support directory, categories, search, OAuth/custom MCP, per-tool permissions, per-conversation loading, and admin controls.
-8. Artifacts must support creation, side panel, source/preview switch, versions/history, copy/download/export, multi-artifact selection, error-fix loop, publish/share controls, and AI-powered/MCP-backed artifact gating.
-9. Global search must cover chats, projects, artifacts, files, connectors, settings, and developer sessions where allowed.
-10. Web, Mobile Cloud, Desktop Cloud, and provenance-eligible Chrome Managed
-    Cloud must converge inside the account domain. Desktop Code, CLI, and VS
-    Code must converge inside the host-owned developer domain. Crossing between
-    those domains requires an explicit handoff.
-11. Managed Free is public alpha and enabled after sign-in (founder decision,
-    2026-06-27). Paid upgrades remain waitlist/access-code gated. Metering,
-    billing, abuse, retention, deletion, and provider-term controls must keep
-    pace with Free usage and gate paid launch. The
-    `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response
-    kill-switch.
-12. All six surfaces need screenshot/e2e-style UI verification for the launch-critical flows, not only typecheck/build.
-13. Visual artifact/design workspace parity is not yet specified in code:
-    canvas, artboards, layers/assets/files, properties panel, prototype/deck
-    preview, versioning, export, and trust labels must be designed before
-    claiming parity with local reference design-workspace patterns.
-
 ## Documentation Rule
 
 Agents should read current truth in this order:
@@ -494,7 +462,7 @@ Agents should read current truth in this order:
 4. `audit/prior-audits/parity-implementation-matrix.md`
 5. `docs/architecture/byok-provider-strategy.md` when touching model/provider/BYOK work
 6. `docs/agent-context/repo-map.json`
-7. `docs/agent-context/known-flaws.md`
+7. `audit/registers/known-flaws.md`
 8. `docs/agent-context/commands.json`
 9. nearest path-scoped `AGENTS.md`
 10. `docs/decisions/README.md` when a decision conflict appears
@@ -504,7 +472,7 @@ Everything else is supporting context, evidence, or historical material unless a
 
 Treat these as evidence or working notes, not source of truth:
 
-- `docs/agent-context/known-flaws.md` findings not yet promoted into a current doc
+- `audit/registers/known-flaws.md` findings not yet promoted into a current doc
 - `docs/research/**` dated research summaries
 - local screenshot/reference corpora
 - generated parity reports
@@ -531,7 +499,7 @@ For every feature claim:
 - run the smallest surface check from `docs/agent-context/commands.json`,
 - run targeted tests for changed behavior,
 - run visual or e2e checks for launch-critical UI,
-- record unresolved risks in `docs/agent-context/known-flaws.md` or the active plan.
+- record unresolved risks in `audit/registers/known-flaws.md` or the active plan.
 
 Do not reuse any prior green baseline as current evidence. Re-run
 `pnpm check:llm-operability`, the relevant tier, surface, and native commands

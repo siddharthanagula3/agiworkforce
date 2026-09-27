@@ -11,7 +11,7 @@ This is the conflict-resolution index for current product and architecture decis
 
 Current sources of truth:
 
-- `docs/product/definition.md` - single product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
+- `docs/product/definition.md` - single product definition, v1 target, current repo position, parity baseline, docs rule, and verification rule.
 - `docs/product/requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
 - `audit/prior-audits/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
 - `docs/architecture/byok-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and developer-surface model-selector rules.
@@ -20,7 +20,7 @@ Current sources of truth:
 - `docs/product/commercial.md` - Local/BYOK/Managed launch posture, waitlist, payment, and enterprise gates.
 - `docs/development/agent-operability.md` - repo/docs/agent workflow rules.
 - `PLAN.md` - active transition plan.
-- `docs/work/restructure-execution-queue.md` - the dated execution queue (root `TODO.md` was retired in commit `906fe5cda`).
+- `audit/plan/waves.md` - the execution order for all open work (root `TODO.md` was retired in commit `906fe5cda`).
 - `ARCHITECTURE.md` - the compact repository map.
 
 Archived source material:
@@ -170,7 +170,7 @@ Archived source material:
     monitoring remains a founder-operated Web launch gate.
     Evidence: `apps/web/shared/components/layout/AccountMenuItems.tsx`,
     `apps/web/e2e/support-entry.spec.ts`, `docs/runbooks/support-operations.md`
-    and `docs/work/founder-assistance.md`.
+    and `audit/decisions/founder-actions.md`.
 
 27. Web v1 retains the provider-first-chunk peek on direct adapter responses.
     It preserves provider HTTP status and lets managed failover rotate before

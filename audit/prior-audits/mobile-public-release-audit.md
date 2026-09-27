@@ -18,7 +18,7 @@ This is the one canonical mobile release audit. It lives in `docs/work/`
 because that is the row `AGENTS.md` §11 assigns to release readiness, and
 because `scripts/check-repo-organization.mjs` refuses unregistered root files
 and records why earlier root-level audit artifacts were deleted. Rows that
-become code-cited defects move to `docs/agent-context/known-flaws.md`; product
+become code-cited defects move to `audit/registers/known-flaws.md`; product
 scope moves to `audit/registers/capability-gaps.csv`. A finding closed here is deleted,
 not archived; git carries the history.
 
@@ -274,7 +274,7 @@ feature was removed, not promises that it exists.
 
 The Apple Health connector was removed in July 2026 (STB-21) because its
 backing `GET /api/health-context` service never existed. The commit named in
-`docs/compliance/dpdp-audit-log.md` (`93ca123df`) is not present in this
+`audit/prior-audits/dpdp-audit-log-2026-08-22.md` (`93ca123df`) is not present in this
 clone, so the rationale is doc-sourced. The founder's 2026-08-01 decision
 keeps an Apple Health vertical (MS-1) as an approved, externally gated build.
 

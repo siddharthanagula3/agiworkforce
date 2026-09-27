@@ -252,6 +252,6 @@ capitalized token in the subject, filenames included. Put those in the body.
 Lockfiles are never hand-edited, change the manifest and run the package
 manager. New root files must be registered in `scripts/check-repo-organization.mjs`.
 
-`ACTIVE_ISSUES.md` is the entry point for unresolved work: root causes, plan and
-live-validation gaps. Defect rows stay in `docs/agent-context/known-flaws.md`,
+Unresolved work lives in `audit/` (see `audit/README.md`): blockers, gaps, plan
+and live-validation queue. Defect rows are in `audit/registers/known-flaws.md`,
 cited by ID from CI and tests: update a row, never duplicate it, delete when fixed.
