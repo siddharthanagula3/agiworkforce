@@ -132,17 +132,17 @@ export const BROWSER_TOOLS_PANEL_CSS = `
   .sp-bt-tag[data-level='error'],
   .sp-bt-tag[data-outcome='bad'] {
     background: var(--agi-ext-danger-bg);
-    color: var(--agi-ext-danger);
+    color: var(--agi-ext-danger-text);
   }
 
   .sp-bt-tag[data-level='warning'] {
     background: var(--agi-ext-warning-bg);
-    color: var(--agi-ext-warning);
+    color: var(--agi-ext-warning-text);
   }
 
   .sp-bt-tag[data-outcome='good'] {
     background: var(--agi-ext-success-bg);
-    color: var(--agi-ext-success);
+    color: var(--agi-ext-success-text);
   }
 
   .sp-bt-empty {
@@ -158,7 +158,7 @@ export const BROWSER_TOOLS_PANEL_CSS = `
     padding: 2px 0;
     border: none;
     background: none;
-    color: var(--agi-ext-accent);
+    color: var(--agi-ext-accent-text);
     font-size: 11px;
     cursor: pointer;
     text-decoration: underline;

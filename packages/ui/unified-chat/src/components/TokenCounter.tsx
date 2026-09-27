@@ -33,21 +33,21 @@ function getUsageStatus(
   const budgetPercentage = budget && budget > 0 ? (current / budget) * 100 : 0;
 
   let status: UsageStatus = 'safe';
-  let statusColor = 'text-success';
-  let barColor = 'bg-success';
+  let statusColor = 'text-success-text';
+  let barColor = 'bg-success-fill';
 
   if (budget && current >= budget) {
     status = 'over-budget';
-    statusColor = 'text-danger';
-    barColor = 'bg-destructive';
+    statusColor = 'text-danger-text';
+    barColor = 'bg-danger-fill';
   } else if (percentage >= 90) {
     status = 'danger';
-    statusColor = 'text-danger';
-    barColor = 'bg-destructive';
+    statusColor = 'text-danger-text';
+    barColor = 'bg-danger-fill';
   } else if (percentage >= 70 || (budget && budgetPercentage >= 80)) {
     status = 'warning';
-    statusColor = 'text-warning';
-    barColor = 'bg-warning';
+    statusColor = 'text-warning-text';
+    barColor = 'bg-warning-fill';
   }
 
   return {
@@ -89,8 +89,8 @@ export const TokenCounter = ({
             className={cn(
               'flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors',
               'bg-muted/50 hover:bg-muted',
-              showDanger && 'ring-1 ring-destructive/50',
-              showWarning && 'ring-1 ring-warning/50',
+              showDanger && 'ring-1 ring-danger-fill/50',
+              showWarning && 'ring-1 ring-warning-fill/50',
             )}
           >
             <Activity className={cn('h-3.5 w-3.5', statusColor)} />
@@ -101,8 +101,8 @@ export const TokenCounter = ({
               <span
                 className={cn(
                   'ml-0.5 rounded-compact px-1 py-0.5 text-caption font-semibold',
-                  showWarning && 'bg-warning/20 text-warning',
-                  showDanger && 'bg-destructive/20 text-danger',
+                  showWarning && 'bg-warning-fill/10 text-warning-text',
+                  showDanger && 'bg-danger-fill/10 text-danger-text',
                 )}
               >
                 {percentage.toFixed(0)}%
@@ -114,7 +114,7 @@ export const TokenCounter = ({
           <button
             type="button"
             onClick={onCompact}
-            className="flex items-center gap-1 rounded-md bg-destructive/15 px-1.5 py-1 text-xs font-medium text-danger transition-colors hover:bg-destructive/25"
+            className="flex items-center gap-1 rounded-md border border-danger-fill/40 px-1.5 py-1 text-xs font-medium text-danger-text transition-colors hover:bg-danger-fill/10"
             title="Compact context to free up space"
           >
             <Scissors className="h-3 w-3" />
@@ -165,7 +165,7 @@ export const TokenCounter = ({
           )}
           {budgetLimit && budgetRemaining !== null && budgetRemaining > 0 && (
             <div
-              className="absolute top-0 h-full border-r-2 border-warning"
+              className="absolute top-0 h-full border-r-2 border-warning-fill"
               style={{ left: `${budgetPercentage}%` }}
             />
           )}
@@ -200,14 +200,14 @@ export const TokenCounter = ({
                   <span className="w-2 h-2 rounded-full bg-blue-500" />
                   <span>Input tokens</span>
                 </div>
-                <div className="text-sm font-medium text-blue-400">{formatTokens(inputTokens)}</div>
+                <div className="text-sm font-medium text-info-text">{formatTokens(inputTokens)}</div>
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <span className="w-2 h-2 rounded-full bg-green-500" />
                   <span>Output tokens</span>
                 </div>
-                <div className="text-sm font-medium text-green-400">
+                <div className="text-sm font-medium text-success-text">
                   {formatTokens(outputTokens)}
                 </div>
               </div>
@@ -231,7 +231,7 @@ export const TokenCounter = ({
               <div
                 className={cn(
                   'text-sm font-medium',
-                  budgetRemaining <= 0 ? 'text-danger' : 'text-foreground',
+                  budgetRemaining <= 0 ? 'text-danger-text' : 'text-foreground',
                 )}
               >
                 {formatTokens(Math.max(0, budgetRemaining))}
@@ -240,15 +240,15 @@ export const TokenCounter = ({
           )}
 
           {status === 'warning' && (
-            <div className="col-span-2 rounded-md bg-warning/10 px-2 py-1.5">
-              <div className="flex items-center gap-2 text-xs text-warning">
+            <div className="col-span-2 rounded-md bg-warning-fill/10 px-2 py-1.5">
+              <div className="flex items-center gap-2 text-xs text-warning-text">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Context window over 80% full</span>
                 {onCompact && (
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded-compact bg-warning/20 px-1.5 py-0.5 text-caption font-medium transition-colors hover:bg-warning/30"
+                    className="ml-auto flex items-center gap-1 rounded-compact border border-warning-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-warning-fill"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact
@@ -259,15 +259,15 @@ export const TokenCounter = ({
           )}
 
           {status === 'danger' && (
-            <div className="col-span-2 rounded-md bg-destructive/10 px-2 py-1.5">
-              <div className="flex items-center gap-2 text-xs text-danger">
+            <div className="col-span-2 rounded-md bg-danger-fill/10 px-2 py-1.5">
+              <div className="flex items-center gap-2 text-xs text-danger-text">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Approaching context limit</span>
                 {onCompact && (
                   <button
                     type="button"
                     onClick={onCompact}
-                    className="ml-auto flex items-center gap-1 rounded-compact bg-destructive/20 px-1.5 py-0.5 text-caption font-medium transition-colors hover:bg-destructive/30"
+                    className="ml-auto flex items-center gap-1 rounded-compact border border-danger-fill/40 px-1.5 py-0.5 text-caption font-medium transition-colors hover:border-danger-fill"
                   >
                     <Scissors className="h-2.5 w-2.5" />
                     Compact now
@@ -278,8 +278,8 @@ export const TokenCounter = ({
           )}
 
           {status === 'over-budget' && (
-            <div className="col-span-2 rounded-md bg-destructive/10 px-2 py-1.5">
-              <div className="flex items-center gap-2 text-xs text-danger">
+            <div className="col-span-2 rounded-md bg-danger-fill/10 px-2 py-1.5">
+              <div className="flex items-center gap-2 text-xs text-danger-text">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>Budget limit exceeded</span>
               </div>
