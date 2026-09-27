@@ -385,14 +385,11 @@ Code: `apps/web/lib/server/service-principals/route-access.ts:35-41`, `apps/web/
 
 - Done when: An administrator can see the effective policy for a member or request and why an action was allowed or refused.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | An effective-policy endpoint resolves a member's merged controls and overrides, but no screen or client calls it, and administrators cannot look up another member's effective policy or trace why a request was denied. | ui |
-| desktop | partial | An effective-policy endpoint resolves a member's merged controls and overrides, but no screen or client calls it, and administrators cannot look up another member's effective policy or trace why a request was denied. | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/settings/organization/policy/effective/route.ts:16-40`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:93-105`
 
 ## S87.40: Administrative API access.
 
