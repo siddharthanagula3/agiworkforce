@@ -288,6 +288,7 @@ async function grantVerifiedMobileIapPurchase(input: {
         JSON.stringify({
           ...purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
           charged_cents: intendedAmountCents(input.verified.product),
+          charged_currency: 'usd',
         }),
       ]);
       await tx.execute(

@@ -202,6 +202,7 @@ export async function handleCreditTopUp(
     userId,
     creditAmountCents,
     chargedCents,
+    chargedCurrency: session.currency,
     receiptId: session.id,
     purchaseCountry: session.customer_details?.address?.country ?? null,
   });
@@ -231,6 +232,7 @@ export async function grantCreditTopUp(
     userId: string;
     creditAmountCents: number;
     chargedCents: number;
+    chargedCurrency: string;
     receiptId: string;
     purchaseCountry?: string | null;
   },
@@ -293,6 +295,7 @@ export async function grantCreditTopUp(
       JSON.stringify({
         ...purchasedCreditMetadata(grant.purchaseCountry, new Date()),
         charged_cents: grant.chargedCents,
+        charged_currency: grant.chargedCurrency.toLowerCase(),
       }),
     ]);
 

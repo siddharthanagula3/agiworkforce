@@ -327,6 +327,7 @@ const TOP_UP_QUERY = `select
   from public.credit_transactions t
   left join public.subscriptions s on s.user_id = t.user_id
   where t.transaction_type = 'purchase'
+    and coalesce(t.metadata ->> 'charged_currency', 'usd') = 'usd'
     and t.created_at >= $1
     and t.created_at < $2
   group by 1`;

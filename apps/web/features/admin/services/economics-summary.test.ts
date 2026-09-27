@@ -139,6 +139,19 @@ describe('readEconomicsSummary', () => {
     expect(topUpSql).not.toMatch(/sum\(t\.amount_cents\)/);
   });
 
+  it('keeps a price charged in another currency out of the USD revenue figure', async () => {
+    const { db, query } = harness({ cost: [costRow()] });
+
+    await readEconomicsSummary({ from: FROM, to: TO, groupBy: 'total', db });
+
+    const topUpSql = query.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes('credit_transactions'));
+    expect(topUpSql).toMatch(
+      /where t\.transaction_type = 'purchase'\s+and coalesce\(t\.metadata ->> 'charged_currency', 'usd'\) = 'usd'/,
+    );
+  });
+
   it('estimates the Apple commission from the store-billed subscriptions', async () => {
     const { db } = harness({
       cost: [costRow()],

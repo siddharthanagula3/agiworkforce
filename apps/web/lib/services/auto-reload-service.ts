@@ -760,6 +760,7 @@ export async function settleAutoReloadPayment(
       userId: purchase.userId,
       creditAmountCents: purchase.creditAmountCents,
       chargedCents: purchase.chargedCents,
+      chargedCurrency: RELOAD_CURRENCY,
       receiptId: payment.reference,
       purchaseCountry: payment.metadata['billing_country'] ?? null,
     });
