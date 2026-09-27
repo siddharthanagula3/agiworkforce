@@ -107,9 +107,7 @@ function balanceLines(summary: AccountUsageSummary): string[] {
     bonus === null
       ? 'Bonus credits: could not be read'
       : `Bonus credits: ${credits(bonus.remaining)}${
-          bonus.next_expiry_at
-            ? `, ${credits(bonus.next_expiry_credits)} expire ${bonus.next_expiry_at}`
-            : ''
+          bonus.next_expiry_at ? `, next expiry ${bonus.next_expiry_at}` : ''
         }`,
     balances.purchased.remaining === null
       ? 'Purchased credits: could not be read'

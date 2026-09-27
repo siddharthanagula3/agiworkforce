@@ -408,7 +408,7 @@ function bonusRow(bonus: AccountCredits['bonus']): { value: string; detail: stri
   return {
     value: formatCreditAmount(bonus.remaining),
     detail: bonus.next_expiry_at
-      ? `${formatCreditAmount(bonus.next_expiry_credits)} expire ${formatAbsolute(bonus.next_expiry_at)}`
+      ? `Next expiry ${formatAbsolute(bonus.next_expiry_at)}`
       : 'No expiry date recorded.',
   };
 }
