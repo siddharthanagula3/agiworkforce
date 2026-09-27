@@ -79,7 +79,7 @@ Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| platform | partial | Hosted web search and code interpreter now attach to voice only when the approval policy allows them (live-voice-tools.ts:209-235). Product, file and connector tools still cannot be called from voice. | handler |
+| platform | partial | Voice now offers connector tools, operator MCP tools, url_fetch and create_office_file through the chat gate (live-voice-tool-runner.ts). Still open: the sandbox file tools and E2B code execution, which wait on a single-call executor from the tool loop. | handler |
 
 Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live-voice-tools.ts:68-78`
 
