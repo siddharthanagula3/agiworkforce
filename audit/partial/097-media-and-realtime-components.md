@@ -72,17 +72,6 @@ Code: `apps/web/app/api/voice/live/sessions/route.ts:337-340`
 
 Code: `apps/web/features/chat/lib/live-voice-session.ts:668-676`
 
-## S97.24: Voice-to-tool bridge.
-
-- Done when: Voice turns can call product tools and return the results into the spoken conversation, under the user's approval policy.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Voice now offers connector tools, operator MCP tools, url_fetch and create_office_file through the chat gate (live-voice-tool-runner.ts). Still open: the sandbox file tools and E2B code execution, which wait on a single-call executor from the tool loop. | handler |
-
-Code: `apps/web/lib/voice/live-voice-tools.ts:194-203`, `apps/web/lib/voice/live-voice-tools.ts:68-78`
-
 ## S97.26: Visual-frame ingestion.
 
 - Done when: Camera or screen frames are captured and delivered to the realtime model during a voice session.
