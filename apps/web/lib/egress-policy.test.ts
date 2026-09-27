@@ -333,7 +333,7 @@ describe('validateEgressUrl · search provider hosts are derived, not typed in',
       delivery: 'indexed' as const,
       host: 'search.test',
       isConfigured: () => true,
-      search: async () => ({ ok: true as const, items: [] }),
+      search: async () => ({ ok: true as const, items: [], billableCalls: 0 }),
     };
     expect(() => validateEgressUrl('https://search.test/q')).toThrow(EgressPolicyError);
     registerWebSearchProvider(provider);
