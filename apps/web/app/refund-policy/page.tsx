@@ -13,6 +13,10 @@ import {
 } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { CONTACT_EMAIL, POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
+import {
+  WITHDRAWAL_CONSENT_STATEMENT,
+  WITHDRAWAL_CONSENT_VERSION,
+} from '@/lib/billing/withdrawal-consent';
 import { RefundRequestForm } from './RefundRequestForm';
 
 export const metadata = buildMetadata({
@@ -94,14 +98,20 @@ export default function RefundPolicyPage() {
             <Prose>
               <strong>EU, EEA and UK:</strong> if you live there, you may withdraw from a plan
               payment or a credit purchase within 14 days of paying, without giving a reason, by
-              requesting a refund below. The refund is prorated by the credits you have used: for a
-              plan payment you get back the share of the period&rsquo;s plan credits you have not
-              used, and for a credit purchase the share of those credits you have not spent. It goes
-              to the card you paid with as soon as you confirm, and in any case within 14 days of
-              your request. A withdrawn plan ends that day, and the unused credits from a withdrawn
-              payment leave your balance. We go by the country of the payment&rsquo;s billing
-              address, or of your billing details when the payment has none. A statutory right that
-              applies where you live applies alongside this page, and nothing here reduces it.
+              requesting a refund below. Before you pay, checkout asks you to confirm: &ldquo;
+              {WITHDRAWAL_CONSENT_STATEMENT}&rdquo; (wording of {WITHDRAWAL_CONSENT_VERSION}).
+            </Prose>
+            <Prose>
+              When you confirmed it, the refund is prorated by the credits you have used: for a plan
+              payment you get back the share of the period&rsquo;s plan credits you have not used,
+              and for a credit purchase the share of those credits you have not spent. When we hold
+              no record that you confirmed it, for example for a purchase made before checkout
+              asked, you get the whole payment back. The refund goes to the card you paid with as
+              soon as you confirm, and in any case within 14 days of your request. A withdrawn plan
+              ends that day, and the unused credits from a withdrawn payment leave your balance. We
+              go by the country of the payment&rsquo;s billing address, or of your billing details
+              when the payment has none. A statutory right that applies where you live applies
+              alongside this page, and nothing here reduces it.
             </Prose>
           </Stack>
         </Section>
@@ -112,10 +122,10 @@ export default function RefundPolicyPage() {
               How to request.
             </h2>
             <Prose>
-              Signed in, choose the payment and the reason below. A 14-day withdrawal, prorated by
-              use, and an unused payment inside the 7-day window on an account&rsquo;s first such
-              refund, are refunded as soon as you confirm. Anything else waits for a person, who
-              answers within the support response target for your plan, published at{' '}
+              Signed in, choose the payment and the reason below. A 14-day withdrawal, and an unused
+              payment inside the 7-day window on an account&rsquo;s first such refund, are refunded
+              as soon as you confirm. Anything else waits for a person, who answers within the
+              support response target for your plan, published at{' '}
               <Link href="/sla" className="agi-ds-link">
                 /sla
               </Link>

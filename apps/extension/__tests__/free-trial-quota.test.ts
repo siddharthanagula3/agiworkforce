@@ -15,6 +15,7 @@ import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canAccessModelForSubscriptionTier,
+  classifyManagedQuotaErrorCode,
   getDefaultModelFor,
   getRoutingSlotModel,
   INTERACTIVE_CARD_REQUEST_KEY,
@@ -94,6 +95,7 @@ import {
   MANAGED_APPROVAL_ENDPOINT,
   MANAGED_MODELS_ENDPOINT,
   MANAGED_USAGE_ENDPOINT,
+  MANAGED_USAGE_HISTORY_ENDPOINT,
   MANAGED_CHAT_MAX_INPUT_CHARS,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
@@ -101,6 +103,8 @@ import {
   getAuthToken,
   clearAuthToken,
   getManagedModelAccess,
+  getManagedUsageHistory,
+  parseQuotaWarningHeader,
   streamFreeChat,
   streamManagedChatApproval,
   createMultimodalUserContent,
@@ -285,15 +289,35 @@ describe('getManagedModelAccess', () => {
           weekly_reset_at: '2026-07-31T20:00:00.000Z',
           flagship_weekly_usage_percentage: 5,
           flagship_weekly_reset_at: '2026-07-31T20:00:00.000Z',
+          credits: {
+            monthly: {
+              allowance: 2_000,
+              used: 740,
+              remaining: 1_260,
+              reset_at: '2026-08-01T00:00:00.000Z',
+            },
+            weekly: { allowance: 500, used: 105, remaining: 395, reset_at: null },
+            five_hour: { allowance: 50, used: 6, remaining: 44, reset_at: null },
+            flagship_weekly: null,
+            purchased: { remaining: 1_200, overage_enabled: true },
+          },
         }),
       );
 
     await expect(getManagedModelAccess('session-token')).resolves.toMatchObject({
       subscriptionTier: 'team',
       subscriptionStatus: 'active',
-      usagePercentage: 37,
-      usageResetAt: '2026-08-01T00:00:00.000Z',
-      hasUsageRemaining: true,
+      usage: {
+        plan_tier: 'team',
+        usage_percentage: 37,
+        usage_reset_at: '2026-08-01T00:00:00.000Z',
+        has_usage_remaining: true,
+        credits: {
+          monthly: { allowance: 2_000, used: 740, remaining: 1_260 },
+          flagship_weekly: null,
+          purchased: { remaining: 1_200, overage_enabled: true },
+        },
+      },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -394,6 +418,120 @@ describe('getManagedModelAccess', () => {
 
     await expect(getManagedModelAccess('token', controller.signal)).rejects.toBe(abort);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('getManagedUsageHistory', () => {
+  function historyResponse(body: unknown, status = 200): Response {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: vi.fn().mockResolvedValue(body),
+    } as unknown as Response;
+  }
+
+  const HISTORY = {
+    userId: 'user_1',
+    from: '2026-08-28T00:00:00.000Z',
+    to: '2026-09-27T00:00:00.000Z',
+    granularity: 'day',
+    totals: { requests: 42, inputTokens: 90_000, outputTokens: 12_000, credits: 318.4 },
+    periods: [{ start: '2026-09-26T00:00:00.000Z', requests: 42, credits: 318.4 }],
+    byWorkload: [
+      {
+        key: 'chat',
+        label: null,
+        requests: 40,
+        inputTokens: 80_000,
+        outputTokens: 10_000,
+        credits: 300,
+      },
+      {
+        key: 'browser',
+        label: null,
+        requests: 2,
+        inputTokens: 10_000,
+        outputTokens: 2_000,
+        credits: 18.4,
+      },
+    ],
+    byModel: [
+      {
+        key: 'fixture-model-a',
+        label: null,
+        requests: 30,
+        inputTokens: 70_000,
+        outputTokens: 9_000,
+        credits: 250.25,
+      },
+      {
+        key: 'fixture-model-b',
+        label: null,
+        requests: 12,
+        inputTokens: 20_000,
+        outputTokens: 3_000,
+        credits: 68.15,
+      },
+    ],
+    byProject: [],
+    freshness: { asOf: '2026-09-27T00:00:00.000Z', latestActivityAt: null, unsettledRequests: 0 },
+  };
+
+  it('reads settled spend per model in credits from the account history owner', async () => {
+    fetchMock.mockResolvedValueOnce(historyResponse(HISTORY));
+
+    await expect(getManagedUsageHistory('session-token')).resolves.toEqual({
+      from: HISTORY.from,
+      to: HISTORY.to,
+      byModel: [
+        { modelId: 'fixture-model-a', requests: 30, credits: 250.25 },
+        { modelId: 'fixture-model-b', requests: 12, credits: 68.15 },
+      ],
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      MANAGED_USAGE_HISTORY_ENDPOINT,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Authorization: 'Bearer session-token',
+          'X-Requested-With': 'XMLHttpRequest',
+        }),
+      }),
+    );
+  });
+
+  it('never shows a negative spend', async () => {
+    fetchMock.mockResolvedValueOnce(
+      historyResponse({
+        ...HISTORY,
+        byModel: [{ key: 'fixture-model-a', label: null, requests: 1, credits: -0.5 }],
+      }),
+    );
+
+    const history = await getManagedUsageHistory('session-token');
+    expect(history.byModel).toEqual([{ modelId: 'fixture-model-a', requests: 1, credits: 0 }]);
+  });
+
+  it('fails instead of showing a partial or invented history', async () => {
+    await expect(getManagedUsageHistory('  ')).rejects.toThrow('Authentication is required');
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fetchMock.mockResolvedValueOnce(historyResponse({}, 503));
+    await expect(getManagedUsageHistory('token')).rejects.toThrow('(503)');
+
+    fetchMock.mockResolvedValueOnce(historyResponse({ ...HISTORY, byModel: undefined }));
+    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
+
+    fetchMock.mockResolvedValueOnce(
+      historyResponse({
+        ...HISTORY,
+        byModel: [...HISTORY.byModel, { key: 'fixture-model-c', requests: 1, credits: '2' }],
+      }),
+    );
+    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
+
+    fetchMock.mockResolvedValueOnce(historyResponse([HISTORY]));
+    await expect(getManagedUsageHistory('token')).rejects.toThrow('Invalid usage history response');
   });
 });
 
@@ -550,6 +688,176 @@ describe('streamFreeChat, auth and quota errors', () => {
     );
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'plan_required' });
+  });
+});
+
+describe('streamFreeChat, plan-limit refusals', () => {
+  it('carries the refusing limit and its recovery link to the panel', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        429,
+        JSON.stringify({
+          error: {
+            message: 'You have used your 50 credits for this 5-hour window.',
+            type: 'insufficient_quota',
+            code: 'rolling_five_hour_limit_reached',
+            resets_at: '2026-09-27T14:00:00.000Z',
+            recovery: { action: 'top_up', href: '/settings/billing' },
+          },
+        }),
+      ),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(chunks).toEqual([
+      {
+        type: 'error',
+        code: 'quota_exceeded',
+        message: 'You have used your 50 credits for this 5-hour window.',
+        quota: {
+          code: 'rolling_five_hour_limit_reached',
+          recovery: { action: 'top_up', href: '/settings/billing' },
+        },
+      },
+    ]);
+  });
+
+  it('states the account limit when a credit refusal carries no sentence', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(
+        402,
+        JSON.stringify({ error: { type: 'insufficient_quota', code: 'monthly_limit_exceeded' } }),
+      ),
+    );
+
+    const [failure] = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(failure).toMatchObject({
+      type: 'error',
+      code: 'quota_exceeded',
+      quota: { code: 'monthly_limit_exceeded' },
+    });
+    expect(failure).not.toHaveProperty('quota.recovery');
+    expect(failure?.type === 'error' ? failure.message : '').toContain(
+      'the usage limit on your account',
+    );
+  });
+
+  it('treats a model or capability the plan excludes as a plan gate', async () => {
+    const reason = classifyManagedQuotaErrorCode('free_trial_model_only')?.reason;
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(403, JSON.stringify({ error: { code: 'free_trial_model_only' } })),
+    );
+
+    const [failure] = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(failure).toEqual({
+      type: 'error',
+      code: 'plan_required',
+      message: reason,
+      quota: { code: 'free_trial_model_only' },
+    });
+  });
+
+  it('drops a recovery link that could leave AGI Workforce or name an unknown action', async () => {
+    for (const recovery of [
+      { action: 'top_up', href: 'https://example.invalid/settings/billing' },
+      { action: 'top_up', href: '//example.invalid/settings/billing' },
+      { action: 'refund', href: '/settings/billing' },
+    ]) {
+      fetchMock.mockResolvedValueOnce(
+        makeErrorResponse(
+          429,
+          JSON.stringify({ error: { code: 'rolling_weekly_limit_reached', recovery } }),
+        ),
+      );
+
+      const [failure] = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+      expect(failure, JSON.stringify(recovery)).toMatchObject({
+        type: 'error',
+        code: 'quota_exceeded',
+        quota: { code: 'rolling_weekly_limit_reached' },
+      });
+      expect(failure, JSON.stringify(recovery)).not.toHaveProperty('quota.recovery');
+    }
+  });
+
+  it('keeps request-rate throttling out of the plan-limit path', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeErrorResponse(429, JSON.stringify({ error: { code: 'rate_limit_exceeded' } })),
+    );
+
+    const [failure] = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(failure).toMatchObject({ type: 'error', code: 'rate_limited' });
+    expect(failure).not.toHaveProperty('quota');
+  });
+
+  it('reads a plan limit that arrives on the stream the same way', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          error: {
+            message: 'You have used your weekly capacity for the most capable models.',
+            code: 'flagship_weekly_limit_reached',
+            recovery: { action: 'upgrade', href: '/pricing' },
+          },
+        }),
+      ]),
+    );
+
+    const [failure] = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(failure).toMatchObject({
+      type: 'error',
+      code: 'quota_exceeded',
+      message: 'You have used your weekly capacity for the most capable models.',
+      quota: {
+        code: 'flagship_weekly_limit_reached',
+        recovery: { action: 'upgrade', href: '/pricing' },
+      },
+    });
+  });
+});
+
+describe('quota warning header', () => {
+  it('reads the scope and share used from x-quota-warning', () => {
+    expect(parseQuotaWarningHeader('scope=rolling_weekly; used_percent=82')).toEqual({
+      scope: 'rolling_weekly',
+      usedPercent: 82,
+    });
+    expect(parseQuotaWarningHeader('used_percent=140;scope=billing_period')).toEqual({
+      scope: 'billing_period',
+      usedPercent: 100,
+    });
+  });
+
+  it('ignores a header it cannot state honestly', () => {
+    expect(parseQuotaWarningHeader(null)).toBeNull();
+    expect(parseQuotaWarningHeader('')).toBeNull();
+    expect(parseQuotaWarningHeader('scope=daily; used_percent=90')).toBeNull();
+    expect(parseQuotaWarningHeader('scope=rolling_weekly; used_percent=soon')).toBeNull();
+    expect(parseQuotaWarningHeader('scope=rolling_weekly')).toBeNull();
+  });
+
+  it('hands the warning to the panel before the reply streams', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse(
+        [JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] })],
+        200,
+        { 'x-quota-warning': 'scope=rolling_five_hour; used_percent=91' },
+      ),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
+
+    expect(chunks[0]).toEqual({
+      type: 'quota-warning',
+      warning: { scope: 'rolling_five_hour', usedPercent: 91 },
+    });
+    expect(chunks.map((chunk) => chunk.type)).toEqual(['quota-warning', 'text', 'done']);
   });
 });
 

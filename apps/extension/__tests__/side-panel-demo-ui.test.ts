@@ -192,12 +192,16 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).toContain(
       "canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')",
     );
-    expect(source).toContain('access.hasUsageRemaining === false');
+    expect(source).toContain(
+      'usage.has_usage_remaining === false && purchased?.spendable !== true',
+    );
     expect(source).toContain("t('spGateUsageLimit')");
   });
 
   it('shows canonical account usage and truthful Web handoffs for cloud connectors and teams', () => {
-    expect(source).toContain('access.usagePercentage');
+    expect(source).toContain('const usage = access.usage;');
+    expect(source).toContain('usageWindowViews(usage)');
+    expect(source).toContain('purchasedCreditsView(usage)');
     expect(source).toContain('Manage usage');
     expect(source).toContain('Connect apps');
     expect(source).toContain('Cloud connectors open on Web');

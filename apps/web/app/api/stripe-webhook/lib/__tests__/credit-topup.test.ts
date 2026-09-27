@@ -152,7 +152,7 @@ describe('credit top-up settlement', () => {
     const db = database();
     db.query.mockImplementation(async (sql: string): Promise<Array<Record<string, unknown>>> => {
       if (sql.includes('from profiles')) return [{ id: 'user_123' }];
-      if (sql.includes('sum(-amount_cents)')) return [{ revoked_cents: 0 }];
+      if (sql.includes('sum(-amount_microusd)')) return [{ revoked: 0 }];
       return [];
     });
 
@@ -179,9 +179,9 @@ describe('credit top-up settlement', () => {
       } as unknown as Stripe.Event,
     );
 
-    expect(db.execute).toHaveBeenCalledWith('select handle_top_up_refund($1, $2, $3)', [
+    expect(db.execute).toHaveBeenCalledWith('select handle_top_up_refund_microusd($1, $2, $3)', [
       'user_123',
-      1_000,
+      10_000_000,
       'Refund for charge ch_topup_123',
     ]);
     expect(db.execute).not.toHaveBeenCalledWith(

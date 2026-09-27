@@ -16,6 +16,10 @@ import {
 import { getOptionalEnv } from '@shared/utils/env';
 import { resolveCheckoutReturnOrigin } from '@/lib/server/checkout-return-origin';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
+import {
+  withdrawalConsentMessage,
+  withdrawalConsentMetadata,
+} from '@/lib/billing/withdrawal-consent';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -176,6 +180,7 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
     credit_amount_cents: String(quote.budgetCents),
     top_up_units: String(topUpUnits),
     auto_reload: 'false',
+    ...withdrawalConsentMetadata(),
   };
   const appUrl = resolveCheckoutReturnOrigin(request);
   const session = await getStripeClient().checkout.sessions.create(
@@ -205,6 +210,8 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
       cancel_url: `${appUrl}/settings/billing?topup=cancelled`,
       metadata,
       payment_intent_data: { metadata },
+      consent_collection: { terms_of_service: 'required' },
+      custom_text: { terms_of_service_acceptance: { message: withdrawalConsentMessage() } },
       ...buildCheckoutTaxParams({ hasExistingCustomer: true }),
     },
     {

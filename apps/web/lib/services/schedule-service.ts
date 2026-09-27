@@ -231,6 +231,7 @@ interface RunRow extends Record<string, unknown> {
   idempotency_key: string;
   lease_expires_at: string | null;
   attempt_count: number;
+  credits_used_microusd?: number | string | null;
 }
 
 type ClaimRow = TaskRow & {
@@ -330,6 +331,14 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     idempotencyKey: row.idempotency_key,
     leaseExpiresAt: row.lease_expires_at,
     attemptCount: row.attempt_count,
+    ...(row.credits_used_microusd === undefined
+      ? {}
+      : {
+          creditsUsed:
+            row.credits_used_microusd === null
+              ? null
+              : creditsFromMicrousd(Number(row.credits_used_microusd)),
+        }),
   };
 }
 
@@ -382,16 +391,14 @@ async function readCreditsUsedMicrousd(
   db: DatabaseAdapter,
   userId: string,
   taskId: string,
-  runId?: string,
 ): Promise<number> {
   const [row] = await db.query<{ used: number | string | null }>(
     `select coalesce(sum(actual_cost_microusd), 0) as used
        from public.managed_usage_requests
       where user_id = $1
         and scheduled_task_id = $2
-        and ($3::uuid is null or scheduled_task_run_id = $3::uuid)
         and status = 'completed'`,
-    [userId, taskId, runId ?? null],
+    [userId, taskId],
   );
   const used = Number(row?.used ?? 0);
   return Number.isFinite(used) ? used : 0;
@@ -723,7 +730,7 @@ export async function listSchedules(
   const rows = page.projectId
     ? await db.query<TaskRow>(
         `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
-         where task.user_id = $1 and task.project_id = $2
+         where user_id = $1 and project_id = $2
          order by task.created_at desc, task.id desc
          limit $3 offset $4`,
         [
@@ -735,7 +742,7 @@ export async function listSchedules(
       )
     : await db.query<TaskRow>(
         `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
-         where task.user_id = $1
+         where user_id = $1
          order by task.created_at desc, task.id desc
          limit $2 offset $3`,
         [userId, clampInteger(page.limit, 1, MAX_PAGE_SIZE), clampInteger(page.offset, 0, 10_000)],
@@ -757,19 +764,28 @@ export async function getSchedule(
   return mapScheduleTask(row);
 }
 
+async function lockSchedule(
+  db: DatabaseAdapter,
+  userId: string,
+  taskId: string,
+): Promise<{ task: ScheduleTask; creditsUsedMicrousd: number }> {
+  const [row] = await db.query<TaskRow>(
+    `select task.*, ${CREDITS_USED_SQL} from scheduled_tasks task
+     where id = $1 and user_id = $2
+     for update of task`,
+    [taskId, userId],
+  );
+  if (!row) throw new ScheduleNotFoundError();
+  const used = Number(row.credits_used_microusd ?? 0);
+  return { task: mapScheduleTask(row), creditsUsedMicrousd: Number.isFinite(used) ? used : 0 };
+}
+
 async function getScheduleForUpdate(
   db: DatabaseAdapter,
   userId: string,
   taskId: string,
 ): Promise<ScheduleTask> {
-  const [row] = await db.query<TaskRow>(
-    `select * from scheduled_tasks
-     where id = $1 and user_id = $2
-     for update`,
-    [taskId, userId],
-  );
-  if (!row) throw new ScheduleNotFoundError();
-  return mapScheduleTask(row);
+  return (await lockSchedule(db, userId, taskId)).task;
 }
 
 export async function createSchedule(
@@ -879,7 +895,7 @@ export async function updateSchedule(
   options: { planTier: string; now?: Date },
 ): Promise<ScheduleTask> {
   return db.transaction(async (tx) => {
-    const current = await getScheduleForUpdate(tx, userId, taskId);
+    const { task: current, creditsUsedMicrousd } = await lockSchedule(tx, userId, taskId);
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be edited');
     }
@@ -934,7 +950,6 @@ export async function updateSchedule(
     if (definition.projectId && definition.projectId !== (current.projectId ?? null)) {
       await assertProjectOwnership(tx, userId, definition.projectId);
     }
-    const creditsUsedMicrousd = await readCreditsUsedMicrousd(tx, userId, taskId);
     const capReached = isCreditCapReached(definition.creditCapMicrousd, creditsUsedMicrousd);
     if (definition.isEnabled && capReached && definition.creditCapMicrousd !== null) {
       throw new ScheduleConflictError(
@@ -1006,12 +1021,11 @@ export async function setScheduleEnabled(
   options: { now?: Date } = {},
 ): Promise<ScheduleTask> {
   return db.transaction(async (tx) => {
-    const current = await getScheduleForUpdate(tx, userId, taskId);
+    const { task: current, creditsUsedMicrousd } = await lockSchedule(tx, userId, taskId);
     if (current.status === 'completed' || current.status === 'expired') {
       throw new ScheduleConflictError('A terminal schedule cannot be enabled');
     }
     const now = options.now ?? new Date();
-    const creditsUsedMicrousd = await readCreditsUsedMicrousd(tx, userId, taskId);
     let nextExecutionAt: string | null = null;
     if (enabled) {
       if (current.maxExecutions !== null && current.executionCount >= current.maxExecutions) {
@@ -1196,7 +1210,13 @@ export async function listScheduleRuns(
        order by run.started_at desc, run.id desc
        limit $3 offset $4
      )
-     select owner.id as owner_task_id, paged_runs.*
+     select owner.id as owner_task_id, paged_runs.*,
+            (select sum(charge.actual_cost_microusd)
+               from public.managed_usage_requests charge
+              where charge.user_id = $2
+                and charge.scheduled_task_id = $1
+                and charge.scheduled_task_run_id = paged_runs.id
+                and charge.status = 'completed') as credits_used_microusd
      from owner
      left join paged_runs on true`,
     [taskId, userId, limit, offset],
@@ -1384,18 +1404,12 @@ export async function finalizeScheduleRun(
   const durationMs = Math.max(0, outcome.completedAt.getTime() - startedAt.getTime());
 
   return db.transaction(async (tx) => {
-    const currentTask = await getScheduleForUpdate(tx, claim.task.userId, claim.task.id);
-    const runCreditsMicrousd = await readCreditsUsedMicrousd(
+    const { task: currentTask, creditsUsedMicrousd } = await lockSchedule(
       tx,
       claim.task.userId,
       claim.task.id,
-      claim.runId,
     );
-    const creditsUsedMicrousd = await readCreditsUsedMicrousd(tx, claim.task.userId, claim.task.id);
-    const result =
-      runCreditsMicrousd > 0
-        ? { ...(outcome.result ?? {}), credits: creditsFromMicrousd(runCreditsMicrousd) }
-        : (outcome.result ?? null);
+    const result = outcome.result ?? null;
     const [runRow] = await tx.query<RunRow>(
       `update scheduled_task_runs
        set status = $1,
