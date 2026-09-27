@@ -82,13 +82,7 @@ const WORKSPACE_SCOPE_ALLOWLIST = [
     match: /api\/cron\//,
     reason: 'cron sweeps run over every workspace by design',
   },
-  {
-    match: /lib\/services\/account-usage-history-service\.ts$/,
-    reason:
-      "personal usage history reads only the caller's own managed usage rows and joins " +
-      'user_projects only to label them; every caller passes the getUserScopedDb connection, ' +
-      'so row-level security limits the labels to projects visible in the active workspace',
-  },
+
   {
     match: /lib\/services\/cloud-agent-budget\.ts$/,
     reason:
