@@ -20,19 +20,20 @@ directories:
 files:
   - dist/**
   - electron/dist/**
-  - '!electron/dist/cli/**'
+  - '!electron/dist/bin/**'
+  - '!electron/dist/agi-input'
   - '!node_modules'
 
 # The macOS input helper is a separate Mach-O executable, so it must sit in
 # Contents/Resources rather than in the asar: electron-builder signs it there
 # with the app's identity and notarization covers it with the bundle.
 extraResources:
-  - from: electron/dist/agi-input
+  - from: electron/dist/bin/${arch}/agi-input
     to: agi-input
-  - from: electron/dist/cli/${arch}/agi
+  - from: electron/dist/bin/${arch}/agi
     to: agi-cli/agi
 
-beforePack: ./electron/bundleCli.mjs
+beforePack: ./electron/bundleBinaries.mjs
 
 mac:
   category: public.app-category.productivity
