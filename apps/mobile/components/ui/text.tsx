@@ -8,7 +8,7 @@ const variantClasses: Record<NonNullable<TextProps['variant']>, string> = {
   default: 'text-sm text-white',
   heading: 'text-xl font-semibold text-white',
   subheading: 'text-base font-medium text-white',
-  caption: 'text-xs text-white/60',
+  caption: 'text-xs text-white',
   mono: 'text-sm font-mono text-white',
 };
 

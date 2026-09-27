@@ -23,6 +23,17 @@ export async function persistFreeOfferingUser(input: {
 }): Promise<NextResponse | null> {
   const { userMessage } = input;
   if (!userMessage) return null;
+  const [conversation] = await input.db.query<{ is_temporary: boolean }>(
+    `select is_temporary
+       from web_conversations
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
+      limit 1`,
+    [input.conversationId, input.userId, input.organizationId],
+  );
+  if (conversation?.is_temporary) return null;
   const latestUser = input.messages.findLast((message) => message.role === 'user');
   if (!latestUser) {
     return NextResponse.json(

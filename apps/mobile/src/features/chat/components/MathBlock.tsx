@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
 import { Text } from '@/components/ui/text';
@@ -30,6 +29,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   const bg = isDark ? agiPalette.dark.surface.base : agiPalette.light.surface.base;
   const fg = isDark ? agiPalette.dark.text.primary : agiPalette.light.text.primary;
   const accentColor = isDark ? agiPalette.dark.accent.primary : agiPalette.light.accent.primary;
+  const errorColor = isDark ? agiPalette.dark.stateText.danger : agiPalette.light.stateText.danger;
 
   const latexEscaped = escapeHtml(latex);
 
@@ -44,7 +44,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   `;
 
   const errorHtml = (msg: string) =>
-    `<span style="color:${agiPalette.dark.state.danger};font-family:monospace;font-size:12px">${msg}</span>`;
+    `<span style="color:${errorColor};font-family:monospace;font-size:12px">${msg}</span>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -72,7 +72,7 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   .katex { color: ${fg}; }
   /* Teal accent on display-block border */
   ${display ? `#math-root { border-left: 2px solid ${accentColor}; padding-left: 14px; }` : ''}
-  .katex-error { color: ${agiPalette.dark.state.danger}; font-size: 12px; font-family: monospace; }
+  .katex-error { color: ${errorColor}; font-size: 12px; font-family: monospace; }
 </style>
 </head>
 <body>

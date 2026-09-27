@@ -2,7 +2,6 @@ import {
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
   isTopUpAmountUsd,
-  type BillingInterval,
   type BillingPlanTier,
 } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
@@ -78,7 +77,6 @@ async function openBillingUrl(
 
 export async function openCheckout(
   tierId: BillingPlanTier,
-  interval: BillingInterval = 'monthly',
   onClosed?: () => void | Promise<void>,
 ): Promise<string | null> {
   let request: ReturnType<typeof createManagedCloudRequestContext>;
@@ -98,7 +96,7 @@ export async function openCheckout(
         'Content-Type': 'application/json',
         'Idempotency-Key': `agi.checkout.desktop.${crypto.randomUUID()}`,
       },
-      body: JSON.stringify({ plan: tierId, billingInterval: interval }),
+      body: JSON.stringify({ plan: tierId, billingInterval: 'monthly' }),
     });
     request.assertBoundary();
 
@@ -235,6 +233,7 @@ export type UpgradePreview =
       recurringAmountCents: number;
       currency: string;
       previewToken: string;
+      grandfatheredNotice: string | null;
     }
   | {
       kind: 'checkout-required';
@@ -244,10 +243,7 @@ export type UpgradePreview =
       message: string;
     };
 
-export async function previewPlanUpgrade(
-  tierId: BillingPlanTier,
-  interval: BillingInterval = 'monthly',
-): Promise<UpgradePreview> {
+export async function previewPlanUpgrade(tierId: BillingPlanTier): Promise<UpgradePreview> {
   const request = createManagedCloudRequestContext('Cloud plan upgrade preview');
   const ownershipBlock = stripeBillingActionBlockReason('plan-change');
   if (ownershipBlock) throw new Error(ownershipBlock);
@@ -257,7 +253,7 @@ export async function previewPlanUpgrade(
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ plan: tierId, billingInterval: interval }),
+    body: JSON.stringify({ plan: tierId, billingInterval: 'monthly' }),
   });
   const payload = await readBillingPayload(response);
   request.assertBoundary();
@@ -292,6 +288,7 @@ export async function previewPlanUpgrade(
   const recurringAmount = payload['recurringAmountCents'];
   const currency = payload['currency'];
   const previewToken = payload['previewToken'];
+  const grandfatheredNotice = payload['grandfatheredNotice'];
   if (
     typeof amount !== 'number' ||
     typeof recurringAmount !== 'number' ||
@@ -307,13 +304,14 @@ export async function previewPlanUpgrade(
     recurringAmountCents: recurringAmount,
     currency,
     previewToken,
+    grandfatheredNotice:
+      typeof grandfatheredNotice === 'string' && grandfatheredNotice ? grandfatheredNotice : null,
   };
 }
 
 export async function applyPlanUpgrade(
   tierId: BillingPlanTier,
   previewToken: string,
-  interval: BillingInterval = 'monthly',
 ): Promise<{ kind: 'webhook-pending' } | { kind: 'payment-action-required'; paymentUrl: string }> {
   const request = createManagedCloudRequestContext('Cloud plan upgrade');
   const ownershipBlock = stripeBillingActionBlockReason('plan-change');
@@ -326,7 +324,7 @@ export async function applyPlanUpgrade(
     },
     body: JSON.stringify({
       plan: tierId,
-      billingInterval: interval,
+      billingInterval: 'monthly',
       previewToken,
     }),
   });

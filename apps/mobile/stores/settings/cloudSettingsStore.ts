@@ -76,7 +76,12 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
         set({ speechLanguage: language, settingsUpdatedAt: nowIso() }),
       setAutoListenEnabled: (enabled) =>
         set({ autoListenEnabled: enabled, settingsUpdatedAt: nowIso() }),
-      setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
+      setMemoryEnabled: (enabled) =>
+        set({
+          memoryEnabled: enabled,
+          memoryPolicyInitialized: true,
+          settingsUpdatedAt: nowIso(),
+        }),
       setReferencePastChats: (enabled) =>
         set({
           referencePastChats: enabled,
@@ -101,6 +106,11 @@ export const useCloudSettingsStore = create<CloudSettingsState>()(
       name: 'settings-store-cloud',
       storage: createJSONStorage(() => mmkvStorage),
       skipHydration: true,
+      version: 1,
+      migrate: (persisted, version) =>
+        version < 1
+          ? { ...(persisted as Partial<CloudSettingsState>), memoryPolicyInitialized: false }
+          : persisted,
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<CloudSettingsState>;
         return {

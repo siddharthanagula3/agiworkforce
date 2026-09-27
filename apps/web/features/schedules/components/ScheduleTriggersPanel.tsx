@@ -54,7 +54,7 @@ const SOURCES: ReadonlyArray<{
     accountLabel: 'Mailbox address',
     accountPlaceholder: 'you@example.com',
     eventTypes: GMAIL_TRIGGER_EVENT_TYPES,
-    note: 'Fires when the mailbox changes. Waits until the mailbox watch is registered for it.',
+    note: 'Runs once for each new email in this inbox. Use the address of the Gmail account connected in Connectors.',
   },
   {
     value: 'google_calendar',
@@ -84,6 +84,18 @@ const SOURCE_LABELS: Record<TriggerSource, string> = {
 
 const FIELD_CLASS = 'text-xs text-muted-foreground';
 
+function mailboxWatchNotice(trigger: EventTrigger): string | null {
+  if (trigger.source !== 'gmail') return null;
+  if (trigger.watchError) return trigger.watchError;
+  if (trigger.verificationStatus === 'pending') {
+    return 'The mailbox watch is not registered yet, so nothing fires.';
+  }
+  if (trigger.watchExpiresAt && Date.parse(trigger.watchExpiresAt) <= Date.now()) {
+    return 'The mailbox watch lapsed, so new mail no longer starts this task.';
+  }
+  return null;
+}
+
 export default function ScheduleTriggersPanel({
   scheduleId,
   scheduleName,
@@ -99,6 +111,7 @@ export default function ScheduleTriggersPanel({
   const [account, setAccount] = useState('');
   const [eventTypes, setEventTypes] = useState('');
   const [debounceSeconds, setDebounceSeconds] = useState('0');
+  const [watching, setWatching] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
 
   const selected = SOURCES.find((entry) => entry.value === source)!;
@@ -187,6 +200,26 @@ export default function ScheduleTriggersPanel({
       await load();
     } catch (toggleError) {
       setError(toUserMessage(toggleError, 'Could not change that trigger.'));
+    }
+  }
+
+  async function registerWatch(trigger: EventTrigger) {
+    setWatching(trigger.id);
+    setError(null);
+    try {
+      const response = await fetch(`/api/triggers/${trigger.id}/watch`, {
+        method: 'POST',
+        headers: await addCsrfHeaders({}),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message ?? `Request failed (${response.status})`);
+      }
+      await load();
+    } catch (watchError) {
+      setError(toUserMessage(watchError, 'Could not register the mailbox watch.'));
+    } finally {
+      setWatching(null);
     }
   }
 
@@ -355,44 +388,68 @@ export default function ScheduleTriggersPanel({
         </p>
       ) : (
         <ul className="mt-4 space-y-2">
-          {triggers.map((trigger) => (
-            <li
-              key={trigger.id}
-              className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"
-            >
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{trigger.name}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {SOURCE_LABELS[trigger.source]}
-                  {trigger.sourceAccount ? ` · ${trigger.sourceAccount}` : ''} ·{' '}
-                  {trigger.eventTypes.join(', ')}
-                  {trigger.debounceSeconds > 0
-                    ? ` · repeats ignored for ${trigger.debounceSeconds}s`
-                    : ''}
-                </p>
-                {trigger.verificationStatus === 'pending' ? (
-                  <p className="text-xs text-warning-text">
-                    Waiting until this account is verified; nothing fires until then.
+          {triggers.map((trigger) => {
+            const watchNotice = mailboxWatchNotice(trigger);
+            return (
+              <li
+                key={trigger.id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">{trigger.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {SOURCE_LABELS[trigger.source]}
+                    {trigger.sourceAccount ? ` · ${trigger.sourceAccount}` : ''} ·{' '}
+                    {trigger.eventTypes.join(', ')}
+                    {trigger.debounceSeconds > 0
+                      ? ` · repeats ignored for ${trigger.debounceSeconds}s`
+                      : ''}
                   </p>
-                ) : null}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Switch
-                  checked={trigger.isEnabled}
-                  onCheckedChange={(checked) => void setEnabled(trigger, checked)}
-                  aria-label={`${trigger.isEnabled ? 'Disable' : 'Enable'} ${trigger.name}`}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void remove(trigger)}
-                >
-                  Delete
-                </Button>
-              </div>
-            </li>
-          ))}
+                  {watchNotice ? (
+                    <p
+                      className={
+                        trigger.watchError ? 'text-xs text-danger' : 'text-xs text-warning-text'
+                      }
+                    >
+                      {watchNotice}
+                    </p>
+                  ) : trigger.verificationStatus === 'pending' ? (
+                    <p className="text-xs text-warning-text">
+                      Waiting until this account is verified; nothing fires until then.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {watchNotice && trigger.isEnabled ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={watching === trigger.id}
+                      aria-busy={watching === trigger.id}
+                      onClick={() => void registerWatch(trigger)}
+                    >
+                      {watching === trigger.id ? <Spinner size="sm" /> : null}
+                      Try again
+                    </Button>
+                  ) : null}
+                  <Switch
+                    checked={trigger.isEnabled}
+                    onCheckedChange={(checked) => void setEnabled(trigger, checked)}
+                    aria-label={`${trigger.isEnabled ? 'Disable' : 'Enable'} ${trigger.name}`}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void remove(trigger)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </details>

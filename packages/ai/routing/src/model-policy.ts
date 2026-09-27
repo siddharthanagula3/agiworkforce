@@ -45,7 +45,8 @@ export type ModelAccessCode =
   | 'model_blocked'
   | 'provider_blocked'
   | 'model_not_allowed'
-  | 'provider_not_allowed';
+  | 'provider_not_allowed'
+  | 'policy_unavailable';
 
 export interface ModelAccessDecision {
   allowed: boolean;
@@ -64,6 +65,13 @@ const UNGOVERNED: ModelAccessDecision = {
   code: 'ungoverned',
   reason: 'No workspace model policy applies to this request.',
 };
+
+export const MODEL_POLICY_UNAVAILABLE: ModelAccessDecision = Object.freeze({
+  allowed: false,
+  code: 'policy_unavailable',
+  reason:
+    'We could not confirm which models your workspace allows, so this request was stopped. Try again in a moment, and contact your workspace administrator if it keeps happening.',
+});
 
 function normalize(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase();

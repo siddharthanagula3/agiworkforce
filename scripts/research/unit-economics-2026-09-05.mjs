@@ -274,7 +274,7 @@ const PLATFORM_SHARE_MICROUSD = platformShareMicrousd(ASSUMED_ACTIVE_ACCOUNTS);
 function planPriceMicrousd(planTier, interval = 'monthly') {
   const pricing = BILLING_PLAN_PRICING[planTier];
   return interval === 'yearly'
-    ? (pricing.yearlyPriceUsd * MICROUSD_PER_USD) / MONTHS_PER_YEAR
+    ? ((pricing.yearlyPriceUsd ?? 0) * MICROUSD_PER_USD) / MONTHS_PER_YEAR
     : pricing.monthlyPriceUsd * MICROUSD_PER_USD;
 }
 

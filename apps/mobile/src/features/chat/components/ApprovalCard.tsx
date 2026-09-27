@@ -288,10 +288,8 @@ export function ApprovalCard({ approval, onApprove, onReject }: ApprovalCardProp
                 <View className="flex-row gap-2">
                   <Pressable
                     onPress={handleRejectPress}
-                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg"
-                    style={({ pressed }) => ({
-                      backgroundColor: pressed ? colors.dangerBorder : colors.agentError,
-                    })}
+                    className="flex-1 flex-row items-center justify-center gap-1.5 py-2.5 rounded-lg active:opacity-80"
+                    style={{ backgroundColor: colors.agentError }}
                     accessible={true}
                     accessibilityLabel="Confirm rejection"
                     accessibilityRole="button"

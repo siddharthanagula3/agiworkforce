@@ -173,6 +173,10 @@
     {
       "path": "/api/cron/allocate-infrastructure-costs",
       "schedule": "0 6 5 * *"
+    },
+    {
+      "path": "/api/cron/renew-gmail-watches",
+      "schedule": "52 6 * * *"
     }
   ]
 }

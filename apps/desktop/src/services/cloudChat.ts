@@ -50,6 +50,7 @@ export interface CloudMessage {
 }
 
 const readyConversationIds = new Set<string>();
+const temporaryConversationIds = new Set<string>();
 
 interface PendingConversationCreate {
   promise: Promise<CloudConversation>;
@@ -89,6 +90,7 @@ function coordinatorKey(
 export function resetCloudConversationCoordinator(): void {
   coordinatorGeneration += 1;
   readyConversationIds.clear();
+  temporaryConversationIds.clear();
   for (const pending of pendingConversationCreates.values()) {
     pending.controller.abort();
   }
@@ -188,6 +190,20 @@ function projectMessage(message: ManagedCloudMessage): CloudMessage {
   };
 }
 
+function rememberConversation(conversation: ManagedCloudConversation, accountId: string): void {
+  const key = coordinatorKey(conversation.id, accountId);
+  readyConversationIds.add(key);
+  if (conversation.isTemporary) temporaryConversationIds.add(key);
+  else temporaryConversationIds.delete(key);
+}
+
+export function isTemporaryCloudConversation(
+  conversationId: string,
+  boundary = captureCloudConversationBoundary(),
+): boolean {
+  return temporaryConversationIds.has(coordinatorKey(conversationId, boundary.accountId));
+}
+
 export function markCloudConversationReady(
   conversationId: string,
   boundary = captureCloudConversationBoundary(),
@@ -233,7 +249,7 @@ export async function ensureCloudConversation(
       pinned: false,
       starred: false,
       archived: false,
-      is_temporary: isTemporary,
+      is_temporary: temporaryConversationIds.has(key),
       created_at: now,
       updated_at: now,
       last_message_at: null,
@@ -265,7 +281,7 @@ export async function ensureCloudConversation(
     )
     .then((conversation) => {
       assertCloudConversationBoundary(boundary);
-      readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
+      rememberConversation(conversation, boundary.accountId);
       return projectConversation(conversation, 0);
     })
     .finally(() => {
@@ -298,7 +314,7 @@ export async function getCloudConversations(signal?: AbortSignal): Promise<Cloud
       nextOffset: page.nextOffset,
     });
     for (const conversation of page.conversations) {
-      readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
+      rememberConversation(conversation, boundary.accountId);
       result.push(projectConversation(conversation));
     }
     hasMore = page.hasMore;
@@ -333,6 +349,7 @@ export async function deleteCloudConversation(
   assertCloudConversationBoundary(boundary);
   const key = coordinatorKey(conversationId, boundary.accountId);
   readyConversationIds.delete(key);
+  temporaryConversationIds.delete(key);
   pendingConversationCreates.delete(key);
 }
 
@@ -357,7 +374,7 @@ export async function updateCloudConversation(
     ? await client.updateConversation(conversationId, updates, { signal })
     : await client.updateConversation(conversationId, updates);
   assertCloudConversationBoundary(boundary);
-  readyConversationIds.add(coordinatorKey(conversation.id, boundary.accountId));
+  rememberConversation(conversation, boundary.accountId);
   return projectConversation(conversation);
 }
 
@@ -392,7 +409,7 @@ export async function getCloudMessages(
       currentOffset: offset,
       reportedTotal: page.total,
     });
-    readyConversationIds.add(coordinatorKey(page.conversation.id, boundary.accountId));
+    rememberConversation(page.conversation, boundary.accountId);
     messages.push(...page.messages.map(projectMessage));
     hasMore = page.hasMore;
     if (!hasMore) break;

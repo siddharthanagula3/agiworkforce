@@ -78,7 +78,10 @@ export type ManagedUsageLimitTable = Readonly<Record<BillingPlanTier, ManagedUsa
 
 export const MANAGED_USAGE_LIMITS_BY_CATALOG_VERSION: Readonly<
   Record<number, ManagedUsageLimitTable>
-> = Object.freeze({ [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS });
+> = Object.freeze({
+  1: MANAGED_USAGE_LIMITS,
+  [BILLING_PLAN_CATALOG_VERSION]: MANAGED_USAGE_LIMITS,
+});
 
 export function resolvePlanCatalogVersion(value: unknown): number | null {
   const version = typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : value;

@@ -125,7 +125,7 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       planId: 'pro',
       label: BILLING_PLAN_PRICING.pro.label,
       price: `$${BILLING_PLAN_PRICING.pro.monthlyPriceUsd}/mo`,
-      billingInterval: `Monthly or annual ($${BILLING_PLAN_PRICING.pro.yearlyPriceUsd}/yr)`,
+      billingInterval: 'Monthly only',
       usageCapacity:
         managedUsageComparisonLabel('pro', 'basic', BILLING_PLAN_PRICING.basic.label) ?? '',
       bestFor: 'Professionals and small teams',

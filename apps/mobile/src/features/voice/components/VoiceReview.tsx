@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { View, TextInput, Pressable, StyleSheet } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -132,7 +131,7 @@ export function VoiceReview({
           accessibilityRole="button"
           accessibilityState={{ disabled: !editedText.trim() }}
         >
-          <Check size={22} color={colors.white} />
+          <Check size={22} color={colors.accentText} />
         </Pressable>
       </View>
     </Animated.View>

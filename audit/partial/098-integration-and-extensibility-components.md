@@ -6,17 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S98.05: Token refresh coordinator.
-
-- Done when: A coordinator refreshes expiring tokens once, even when several requests need the token at the same time.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Tokens refresh on use when near expiry, but with no lock or single-flight: parallel turns can refresh the same rotating refresh token twice and invalidate the grant. | handler |
-
-Code: `apps/web/lib/connectors/oauth-access.ts:88-92`, `apps/web/lib/connectors/oauth-access.ts:145-155`
-
 ## S98.07: Provider-specific connector adapters.
 
 - Done when: Provider-specific adapters implement connector behaviour for each supported provider.

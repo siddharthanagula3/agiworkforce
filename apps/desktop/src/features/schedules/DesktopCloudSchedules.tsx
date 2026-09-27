@@ -898,7 +898,7 @@ function AuthenticatedDesktopCloudSchedules({
                           <span
                             className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                               schedule.isEnabled
-                                ? 'bg-[var(--chat-success)]/10 text-[var(--chat-success)]'
+                                ? 'bg-[var(--chat-success)]/10 text-[var(--chat-success-text)]'
                                 : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]'
                             }`}
                           >
@@ -1050,10 +1050,10 @@ function AuthenticatedDesktopCloudSchedules({
                                 <span
                                   className={
                                     run.status === 'success'
-                                      ? 'font-medium text-[var(--chat-success)]'
+                                      ? 'font-medium text-[var(--chat-success-text)]'
                                       : run.status === 'running'
-                                        ? 'font-medium text-[var(--chat-info)]'
-                                        : 'font-medium text-[var(--chat-destructive)]'
+                                        ? 'font-medium text-[var(--chat-info-text)]'
+                                        : 'font-medium text-[var(--chat-destructive-text)]'
                                   }
                                 >
                                   {run.status}

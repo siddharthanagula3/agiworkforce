@@ -1,16 +1,22 @@
 import { z } from 'zod';
 import {
+  BILLING_INTERVALS,
   MAX_PURCHASABLE_SEATS,
   MIN_PURCHASABLE_SEATS,
   SELF_SERVE_PAID_PLAN_TIERS,
+  billingIntervalsForPlan,
+  getBillingPlanPricing,
   isPerSeatBillingPlan,
+  planOffersBillingInterval,
 } from '@agiworkforce/types';
 
 export const PlanTierSchema = z.enum(SELF_SERVE_PAID_PLAN_TIERS);
 
-export const BillingIntervalSchema = z.enum(['monthly', 'yearly']);
+export const BillingIntervalSchema = z.enum(BILLING_INTERVALS);
 
-const MONTHLY_ONLY_PLANS = new Set(['basic', 'max', 'max_15x']);
+export function unsoldBillingIntervalMessage(plan: string, interval: BillingInterval): string {
+  return `${getBillingPlanPricing(plan).label} is not sold with ${interval} billing. Choose ${billingIntervalsForPlan(plan).join(' or ')} billing.`;
+}
 
 export const CheckoutRequestSchema = z
   .object({
@@ -20,11 +26,11 @@ export const CheckoutRequestSchema = z
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.billingInterval === 'yearly' && MONTHLY_ONLY_PLANS.has(value.plan)) {
+    if (!planOffersBillingInterval(value.plan, value.billingInterval)) {
       context.addIssue({
         code: 'custom',
         path: ['billingInterval'],
-        message: `${value.plan} is available with monthly billing only`,
+        message: unsoldBillingIntervalMessage(value.plan, value.billingInterval),
       });
     }
 

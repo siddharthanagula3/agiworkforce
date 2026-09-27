@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-21
+Last updated: 2026-09-27
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -282,15 +282,19 @@ Billing and Usage must include plan, adjust plan, Stripe/payment link, invoices,
 
 Billing plan lock (founder decision, 2026-07-18):
 
-| Plan       | Public price                               | Public usage position | Projects  | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
-| ---------- | ------------------------------------------ | --------------------- | --------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
-| Free       | Free                                       | Small daily allowance | 1         | 1          | No                         | No               | No               | No              |
-| Basic      | $7/month; India ₹399/month                 | Base paid usage       | 5         | 5          | No                         | No               | No               | No              |
-| Pro        | $20/month or $200/year; India ₹1,999/month | 5x Basic              | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 5x     | $100/month; India ₹9,999/month             | 5x Pro                | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 15x    | $200/month; India ₹24,999/month            | 15x Pro               | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
-| Team       | $25/seat/month or $240/seat/year           | Same as Pro per seat  | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
-| Enterprise | Contract                                   | Contract              | Contract  | Contract   | Contract                   | Yes              | Yes              | Yes             |
+| Plan       | Public price                     | Public usage position | Projects  | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
+| ---------- | -------------------------------- | --------------------- | --------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
+| Free       | Free                             | Small daily allowance | 1         | 1          | No                         | No               | No               | No              |
+| Basic      | $7/month; India ₹399/month       | Base paid usage       | 5         | 5          | No                         | No               | No               | No              |
+| Pro        | $20/month; India ₹1,999/month    | 5x Basic              | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Max 5x     | $100/month; India ₹9,999/month   | 5x Pro                | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Max 15x    | $200/month; India ₹24,999/month  | 15x Pro               | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
+| Team       | $25/seat/month or $240/seat/year | Same as Pro per seat  | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
+| Enterprise | Contract                         | Contract              | Contract  | Contract   | Contract                   | Yes              | Yes              | Yes             |
+
+Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
+or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
+`docs/decisions/2026-09-27-founder-decisions.md`).
 
 Paid plan prices are configured on Web, but new paid subscriptions and upgrades
 remain waitlist/access-code gated. Existing paid entitlements resolve on Mobile

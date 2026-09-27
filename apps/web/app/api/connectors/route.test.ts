@@ -120,6 +120,8 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
   revokeConnectorOAuthGrant: vi.fn(),
   listRevocableConnectorTokens: vi.fn(async () => []),
   updateConnectorOAuthGrantTokens: vi.fn(),
+  ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
+  withLockedConnectorOAuthGrant: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-access', () => ({
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),

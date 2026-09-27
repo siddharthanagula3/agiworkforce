@@ -54,7 +54,7 @@ Plans are bought and managed on the web. The app has no purchase screen.
 • Local, Free. On-device models, no account required.
 • Free, Managed Cloud, in public alpha, with a usage ceiling.
 • Basic, $7/mo. Managed Cloud with a base monthly allowance.
-• Pro, $20/mo, or $200/yr.
+• Pro, $20/mo.
 • Max 5x, $100/mo.
 • Max 20x, $200/mo.
 • Team, $25 per seat/mo, or $240 per seat/yr. Central billing and seat management.
