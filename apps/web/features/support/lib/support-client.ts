@@ -559,7 +559,7 @@ export async function createHandoff(input: CreateHandoffInput): Promise<SupportH
   }
 
   if (response.status === 404 || response.status === 501) {
-    return handoffFailure('Handoff is not switched on for this site yet.');
+    return handoffFailure('Handoff is unavailable right now. Please email the team directly.');
   }
 
   const body = await readJson(response);

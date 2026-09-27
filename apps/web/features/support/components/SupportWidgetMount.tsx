@@ -3,14 +3,15 @@
 import { useCallback, useId, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion';
-import { isSupportWidgetVisible, resolveSupportSurface } from '../lib/route-visibility';
+import {
+  isSupportComposerRoute,
+  isSupportWidgetVisible,
+  resolveSupportSurface,
+} from '../lib/route-visibility';
+import { isSupportWidgetEnabled } from '../lib/widget-flag';
 import { SupportLauncher } from './SupportLauncher';
 import { SupportPanel } from './SupportPanel';
 import styles from './SupportWidget.module.css';
-
-export function isSupportWidgetEnabled(): boolean {
-  return process.env['NEXT_PUBLIC_SUPPORT_WIDGET_ENABLED'] === '1';
-}
 
 export function SupportWidgetMount() {
   const pathname = usePathname();
@@ -44,6 +45,7 @@ export function SupportWidgetMount() {
       data-surface={surface}
       {...(surface === 'marketing' ? { 'data-design': 'agi' } : {})}
       data-support-widget=""
+      data-composer-route={isSupportComposerRoute(pathname) ? 'true' : 'false'}
       data-reduced-motion={reducedMotion ? 'true' : 'false'}
     >
       {open ? <SupportPanel surface={surface} panelId={panelId} onClose={close} /> : null}

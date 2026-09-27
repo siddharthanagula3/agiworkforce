@@ -121,7 +121,7 @@ export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> =
   no_source: 'I could not point to a source for that, so I am not going to state it as fact.',
   unrecognized_response: 'I did not get a usable answer back, so I am not going to guess.',
   transport_error: 'I could not reach the support assistant just now.',
-  not_available: 'The support assistant is not switched on for this site yet.',
+  not_available: 'Automated answers are switched off right now, so a person needs to answer this.',
 };
 
 export const ABSTENTION_HEADING: Record<SupportAbstentionReason, string> = {
