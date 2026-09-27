@@ -1,4 +1,9 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  isStepUpCancelled,
+  readStepUpChallenge,
+  type StepUpSend,
+} from '@/features/auth/step-up-fetch';
 import { collectDiagnostics } from '@/lib/support/diagnostics/collect';
 import {
   SUPPORT_HISTORY_LIMIT,
@@ -306,20 +311,42 @@ export async function proposeAction(
   return { kind: 'error', message: 'I could not prepare that action.' };
 }
 
+export type SupportStepUpRunner = (
+  send: StepUpSend,
+  resourceId: string | null,
+) => Promise<Response>;
+
 export async function confirmAction(
   proposalId: string,
   confirmationToken: string,
+  withStepUp: SupportStepUpRunner | null,
 ): Promise<SupportActionOutcome> {
-  let response: Response;
-  try {
-    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-    response = await fetch('/api/support/actions/confirm', {
+  const send: StepUpSend = async (stepUpHeaders) =>
+    fetch('/api/support/actions/confirm', {
       method: 'POST',
-      headers,
+      headers: {
+        ...(await addCsrfHeaders({ 'Content-Type': 'application/json' })),
+        ...stepUpHeaders,
+      },
       body: JSON.stringify({ proposalId, confirmationToken }),
     });
-  } catch {
+
+  let response: Response;
+  try {
+    response = withStepUp ? await withStepUp(send, proposalId) : await send({});
+  } catch (error) {
+    if (isStepUpCancelled(error)) {
+      return { kind: 'denied', message: 'Nothing ran, because the confirmation was closed.' };
+    }
     return { kind: 'failed', message: 'I could not reach the support service, so nothing ran.' };
+  }
+
+  if (await readStepUpChallenge(response)) {
+    return {
+      kind: 'denied',
+      message:
+        'This change needs you to confirm it is you, which only the signed-in app can ask for. Ask me again from inside the app.',
+    };
   }
 
   const body = await readJson(response);

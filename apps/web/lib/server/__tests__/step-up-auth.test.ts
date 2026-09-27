@@ -65,16 +65,16 @@ describe('requireStepUp', () => {
       userId: USER,
       action: ACTION,
       resourceId: ORG,
-      method: 'totp',
+      method: 'second_factor',
     });
 
     const payload = await requireStepUp(requirement(requestWith(token)));
 
-    expect(payload.method).toBe('totp');
+    expect(payload.method).toBe('second_factor');
     expect(recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'step_up_satisfied',
-        detail: expect.objectContaining({ resourceId: ACTION, source: 'totp' }),
+        detail: expect.objectContaining({ resourceId: ACTION, source: 'second_factor' }),
       }),
     );
   });
@@ -84,7 +84,7 @@ describe('requireStepUp', () => {
       userId: USER,
       action: ACTION,
       resourceId: '22222222-2222-4222-8222-222222222222',
-      method: 'totp',
+      method: 'second_factor',
     });
 
     await expect(requireStepUp(requirement(requestWith(token)))).rejects.toSatisfy(
@@ -100,7 +100,7 @@ describe('requireStepUp', () => {
       userId: 'user_someone_else',
       action: ACTION,
       resourceId: ORG,
-      method: 'totp',
+      method: 'second_factor',
     });
 
     await expect(requireStepUp(requirement(requestWith(token)))).rejects.toSatisfy(
@@ -113,7 +113,7 @@ describe('requireStepUp', () => {
       userId: USER,
       action: 'account.delete',
       resourceId: ORG,
-      method: 'totp',
+      method: 'second_factor',
     });
 
     await expect(requireStepUp(requirement(requestWith(token)))).rejects.toSatisfy(
@@ -124,7 +124,7 @@ describe('requireStepUp', () => {
   it('refuses a proof once its freshness window has passed', async () => {
     const mintedAt = Date.UTC(2026, 8, 18, 12, 0, 0);
     const { token, expiresAt } = createStepUpGrant(
-      { userId: USER, action: ACTION, resourceId: ORG, method: 'totp' },
+      { userId: USER, action: ACTION, resourceId: ORG, method: 'second_factor' },
       mintedAt,
     );
     expect(expiresAt).toBe(mintedAt + 300_000);
@@ -153,7 +153,7 @@ describe('requireStepUp', () => {
       userId: USER,
       action: ACTION,
       resourceId: ORG,
-      method: 'totp',
+      method: 'second_factor',
     });
     const [payload, signature] = token.split('.');
     const decoded = JSON.parse(Buffer.from(payload!, 'base64url').toString('utf8')) as {
@@ -175,7 +175,7 @@ describe('requireStepUp', () => {
       userId: USER,
       action: ACTION,
       resourceId: ORG,
-      method: 'totp',
+      method: 'second_factor',
     });
 
     process.env['CSRF_SECRET'] = 'a-completely-different-secret-value-of-32';

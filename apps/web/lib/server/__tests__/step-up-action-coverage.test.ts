@@ -54,16 +54,7 @@ function callSites(): Map<string, string[]> {
  * to gate. An entry earns its place by naming a fact about the code; a new
  * unenforced action is a failure, never a new entry.
  */
-const UNENFORCED: Readonly<Record<string, string>> = {
-  'account.delete':
-    'deletion is reversible inside its grace window, and an account with no second factor must be able to delete itself',
-  'email.change':
-    'no server route changes the account email; the identity provider owns that flow in the browser',
-  'api_credential.reveal':
-    'nothing reads stored credential material back: api-keys are returned once at creation and masked afterwards',
-  'session.revoke_all':
-    'signing every other device out is protective, so app/api/settings/sessions/route.ts asks for no fresh factor: verifySecondFactor answers not_enrolled for an account without one, and an account being taken over is the account least able to produce a code',
-};
+const UNENFORCED: Readonly<Record<string, string>> = {};
 
 describe('the step-up registry and the routes that use it', () => {
   const sites = callSites();
@@ -135,7 +126,7 @@ describe('the step-up registry and the routes that use it', () => {
     expect(unlinkRoute).toContain('resourceId: identityId');
   });
 
-  it('has nothing to gate for api_credential.reveal because no route reads a secret back', () => {
+  it('reveals an API credential only at creation, and only behind api_credential.reveal', () => {
     const list = readFileSync(path.join(WEB_ROOT, 'app/api/settings/api-keys/route.ts'), 'utf8');
     const masked = list.slice(list.indexOf('function maskRow'), list.indexOf('async function'));
 
@@ -143,6 +134,15 @@ describe('the step-up registry and the routes that use it', () => {
     expect(masked).toContain('key_prefix');
     for (const secret of ['key_hash', 'full_key', 'secret']) {
       expect(masked, `maskRow returns ${secret}`).not.toContain(secret);
+    }
+    for (const route of [
+      'app/api/settings/api-keys/route.ts',
+      'app/api/settings/organization/admin-api-keys/route.ts',
+    ]) {
+      const source = readFileSync(path.join(WEB_ROOT, route), 'utf8');
+      expect(source, `${route} mints a secret without a fresh proof`).toContain(
+        "action: 'api_credential.reveal'",
+      );
     }
   });
 
@@ -154,9 +154,7 @@ describe('the step-up registry and the routes that use it', () => {
     expect(limiter.limit).toBeLessThanOrEqual(10);
 
     for (const route of [
-      'app/api/auth/step-up/route.ts',
       'app/api/settings/2fa/route.ts',
-      'app/api/settings/2fa/validate/route.ts',
       'app/api/settings/2fa/verify/route.ts',
       'app/api/settings/2fa/backup-codes/route.ts',
     ]) {
@@ -193,7 +191,7 @@ describe('the actions a route can reach are the actions a challenge can mint', (
       userId: 'user-1',
       action: 'identity.unlink',
       resourceId: 'identity-1',
-      method: 'totp',
+      method: 'second_factor',
     }).token;
 
     for (const action of STEP_UP_ACTION_IDS.filter((id) => id !== 'identity.unlink')) {

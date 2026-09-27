@@ -15,18 +15,13 @@ const STEP_UP_ERROR_REASON = 'step_up_required';
 
 export class StepUpRequiredError extends AppError {
   constructor(action: StepUpAction, cause: StepUpChallengeReason) {
-    super(
-      STEP_UP_ERROR_CODE,
-      'Confirm it is you with a second factor before completing this action.',
-      403,
-      {
-        reason: STEP_UP_ERROR_REASON,
-        action,
-        cause,
-        consequence: stepUpActionSpec(action).consequence,
-        freshnessSeconds: stepUpActionSpec(action).freshnessSeconds,
-      },
-    );
+    super(STEP_UP_ERROR_CODE, 'Confirm it is you before completing this action.', 403, {
+      reason: STEP_UP_ERROR_REASON,
+      action,
+      cause,
+      consequence: stepUpActionSpec(action).consequence,
+      freshnessSeconds: stepUpActionSpec(action).freshnessSeconds,
+    });
     this.name = 'StepUpRequiredError';
     Object.setPrototypeOf(this, StepUpRequiredError.prototype);
     this.asUserSafe();
@@ -54,8 +49,9 @@ export interface StepUpRequirement {
 }
 
 /**
- * Refuses the request unless the caller presents a proof of a second factor
- * verified within this action's freshness window. Every outcome is audited,
+ * Refuses the request unless the caller presents a proof that they verified
+ * themselves again within this action's freshness window, with their second
+ * factor when the account has one. Every outcome is audited,
  * including the refusal, because a failed run at an irreversible action matters.
  */
 export async function requireStepUp(requirement: StepUpRequirement): Promise<StepUpGrantPayload> {

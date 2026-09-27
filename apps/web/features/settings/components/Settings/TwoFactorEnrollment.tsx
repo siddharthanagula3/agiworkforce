@@ -24,7 +24,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 type Stage =
   | { name: 'idle' }
   /** /setup returned · the user is scanning and about to submit a code. */
-  | { name: 'enrolling'; secret: string; otpauthUrl: string; pendingBackupCodes: string[] }
+  | { name: 'enrolling'; secret: string; otpauthUrl: string }
   /** Server confirmed the change · these codes are visible exactly once. */
   | { name: 'backup-codes'; codes: string[]; reason: 'enabled' | 'regenerated' };
 
@@ -58,12 +58,15 @@ function describeSetupFailure(error: string | undefined, status: number | undefi
   return describeCodeFailure(error, status);
 }
 
-async function readRouteFailure(response: Response): Promise<string> {
+async function readRouteFailure(
+  response: Response,
+  describe: (error: string | undefined, status: number | undefined) => string = describeCodeFailure,
+): Promise<string> {
   const body = (await response.json().catch(() => null)) as {
     error?: string | { message?: string };
   } | null;
   const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
-  return describeCodeFailure(message, response.status);
+  return describe(message, response.status);
 }
 
 async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
@@ -138,34 +141,42 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
   const handleStartSetup = useCallback(async () => {
     setBusy(true);
     setActionError(null);
-    const { data, error, status: httpStatus } = await settingsService.setup2FA();
-    setBusy(false);
-    if (!data) {
-      setActionError(describeSetupFailure(error, httpStatus));
-      return;
+    try {
+      const response = await withStepUp((headers) =>
+        sendAuthorizedJson('/api/settings/2fa/setup', { method: 'POST', body: {} }, headers),
+      );
+      if (!response.ok) {
+        setActionError(await readRouteFailure(response, describeSetupFailure));
+        return;
+      }
+      const { secret, otpauth_url: otpauthUrl } = (await response.json()) as {
+        secret: string;
+        otpauth_url: string;
+      };
+      setCode('');
+      setStage({ name: 'enrolling', secret, otpauthUrl });
+    } catch (error) {
+      if (!isStepUpCancelled(error)) {
+        setActionError(toUserMessage(error, 'The request failed.'));
+      }
+    } finally {
+      setBusy(false);
     }
-    setCode('');
-    setStage({
-      name: 'enrolling',
-      secret: data.secret,
-      otpauthUrl: data.otpauthUrl,
-      pendingBackupCodes: data.backupCodes,
-    });
-  }, []);
+  }, [withStepUp]);
 
   const handleVerify = useCallback(async () => {
     if (stage.name !== 'enrolling') return;
     setBusy(true);
     setActionError(null);
-    const { success, error, status: httpStatus } = await settingsService.verify2FA(code.trim());
+    const { backupCodes, error, status: httpStatus } = await settingsService.verify2FA(code.trim());
     setBusy(false);
-    if (!success) {
+    if (!backupCodes) {
       setActionError(describeCodeFailure(error, httpStatus));
       return;
     }
     setCode('');
     setAcknowledged(false);
-    setStage({ name: 'backup-codes', codes: stage.pendingBackupCodes, reason: 'enabled' });
+    setStage({ name: 'backup-codes', codes: backupCodes, reason: 'enabled' });
     await refreshStatus();
   }, [stage, code, refreshStatus]);
 
@@ -271,8 +282,8 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
         </CardTitle>
         <CardDescription>
           {enabled
-            ? 'Two-factor authentication is on. A code from your authenticator app is required to turn it off or to replace your backup codes.'
-            : 'Add a time-based one-time code (TOTP) from an authenticator app as a second factor.'}
+            ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
+            : 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'}
         </CardDescription>
       </CardHeader>
 
@@ -310,8 +321,8 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
             <div>
               <h4 className="font-medium text-foreground">Save your backup codes</h4>
               <p className="text-sm text-muted-foreground">
-                These are shown once and stored only as hashes. Each code works a single time, and
-                any of them can be used in place of an authenticator code.
+                These are shown once. Each code works a single time, and any of them can be used in
+                place of an authenticator code.
               </p>
             </div>
             <ul
@@ -468,11 +479,19 @@ export function TwoFactorEnrollmentPanel({ onStatusChange }: TwoFactorEnrollment
         {stage.name === 'idle' && status !== null ? (
           <div className="space-y-3">
             {enabled ? (
-              <p className="text-sm text-muted-foreground">
-                {typeof status?.backupCodesRemaining === 'number'
-                  ? `${status.backupCodesRemaining} backup ${status.backupCodesRemaining === 1 ? 'code' : 'codes'} remaining.`
-                  : 'Backup code count is unavailable.'}
-              </p>
+              status?.backupCodesReady ? (
+                <p className="text-sm text-muted-foreground">
+                  Backup codes are set. Each one works once, at sign-in or when you confirm it is
+                  you.
+                </p>
+              ) : (
+                <Alert variant="warning">
+                  <AlertDescription>
+                    You have no backup codes. Generate a set so you can still sign in if you lose
+                    your authenticator app.
+                  </AlertDescription>
+                </Alert>
+              )
             ) : null}
             <div className="flex flex-wrap gap-2">
               {enabled ? (
