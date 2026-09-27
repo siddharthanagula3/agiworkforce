@@ -198,12 +198,12 @@ export default function CliPage() {
         <section className="agi-fl-section" aria-labelledby="agi-fl-cli-install-title">
           <p className="agi-fl-eyebrow">{SURFACE_STATUS.cli}</p>
           <h2 id="agi-fl-cli-install-title" className="agi-fl-h2">
-            The CLI is released.
+            Every install is verified.
           </h2>
           <p className="agi-fl-section-lede">
-            The agi binary ships as macOS, Linux, and Windows archives on the current release
-            channel. The download page tracks availability for every surface and platform in one
-            place.
+            The agi binary is built for macOS, Linux, and Windows. Its installer checks each
+            release&rsquo;s signature and checksum before it installs anything, and the download
+            page shows which platforms a signed release covers.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--secondary">
@@ -215,7 +215,7 @@ export default function CliPage() {
         <FinalCta
           eyebrow={SURFACE_STATUS.cli}
           title="An agent for your terminal."
-          body="The agi binary is released: resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
+          body="Resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, open by default."
           ctas={[
             { href: '/download#cli-downloads', label: 'Check availability' },
             { href: '/agi-code', label: 'Explore AGI Code' },
