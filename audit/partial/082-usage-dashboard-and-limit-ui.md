@@ -6,18 +6,6 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S82.01: Current plan.
-
-- Done when: Every signed-in surface shows the account's current plan, read from the server.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Seat members now receive their organization's plan from /api/me; VS Code still shows the raw tier key capitalised (for example Max_15x) instead of plan.display_name. |  |
-
-Code: `apps/extension-vscode/src/core/commandSetup.ts:2085-2090`, `apps/extension-vscode/src/core/commandSetup.ts:2051-2057`, `apps/extension-vscode/src/utils/api.ts:837-861`
-
 ## S82.04: Per-model usage.
 
 - Done when: Users can see usage broken down by model (at least the flagship-model cap and per-model spend).
@@ -137,27 +125,25 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:15-23`
 
 - Done when: Users can see how many credits remain (plan windows and purchased balance).
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The criterion includes the purchased balance; no mobile file reads credits.purchased or credit_balance_cents (0 hits), so only plan windows are shown. |  |
-| chrome | partial | Chrome shows remaining usage only as a percentage ('N% left'); the credit figures it already fetches from /api/usage are not shown. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:100-108`, `apps/mobile/services/usage.ts:45-49`, `apps/extension/src/side_panel.ts:8360-8386`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:102-122`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:100-108`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.14: Purchased versus included credits.
 
 - Done when: Users can tell purchased credits apart from the plan's included allowance.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode, api
+- Already works on: web, desktop, cli, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Show the purchased balance on mobile; it shows only the included allowance line although /api/usage returns the purchased credits too. | ui |
-| chrome | partial | Chrome fetches /api/usage but shows neither the included allowance nor the purchased balance. | ui |
 
-Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:210-216`, `apps/mobile/services/usage.ts:45-49`, `apps/extension/src/side_panel.ts:8360-8386`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:102-122`
+Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:210-216`, `apps/mobile/services/usage.ts:45-49`
 
 ## S82.15: Promotional credits.
 
@@ -184,18 +170,6 @@ Code: `apps/web/features/settings/sections/BillingSection.tsx:70-76`, `apps/web/
 | mobile | partial | Mobile states the 12-month carry rule only inside the Stripe top-up info block and never shows an expiry date. | ui |
 
 Code: `apps/web/features/settings/sections/BillingSection.tsx:984-989`, `apps/web/features/settings/sections/UsageSection.tsx:121-138`, `apps/web/db/neon/0111_credit_top_up_carry.sql:202-214`, `apps/mobile/src/features/settings/cloud-billing/index.tsx:391-395`
-
-## S82.17: Reset countdown.
-
-- Done when: Each usage window shows how long until it resets.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Chrome reads only usage_percentage and usage_reset_at; no window-level field is read anywhere in apps/extension/src (0 hits), so there is one countdown, not one per window. |  |
-
-Code: `apps/extension/src/side_panel.ts:8361-8370`, `apps/extension/src/features/cloud-bridge/freeTrialClient.ts:102-122`
 
 ## S82.18: Daily/weekly/monthly history.
 
@@ -238,74 +212,52 @@ Code: `apps/web/lib/services/managed-usage-request-service.ts:106-111`, `apps/cl
 
 - Done when: After a task finishes, the user sees what it actually cost.
 - Wave: 3
-- Already works on: web, desktop, api
+- Already works on: web, desktop, cli, vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Show the settled cost on mobile run details; the run payload already carries usage.costCents but mobile shows only calls and tokens. | ui |
-| cli | partial | CLI shows only a locally priced session estimate (/cost, /usage), never the billed cost of a turn or task. | ui |
-| vscode | partial | VS Code shows only a 'rough session estimate' labelled not an invoice; the billed cost is never shown. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:179-184`, `packages/contracts/cloud-contracts/src/cloud-agent-runs.ts:81-89`, `apps/cli/src/tui/tui_app.rs:3324-3332`, `apps/cli/src/usage_summary.rs:382-396`
+Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:179-184`, `packages/contracts/cloud-contracts/src/cloud-agent-runs.ts:81-89`
 
 ## S82.24: Budget warning.
 
 - Done when: Users are warned before they hit a usage limit.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Warn mobile users in chat before a limit; today only the Usage screen bar changes colour at 90%. | ui |
-| cli | partial | Surface the near-limit warning: the server sends X-Quota-Warning at 80%/95% on each chat response, but the CLI ignores it. | ui |
-| chrome | partial | Chrome shows only the remaining percentage; it neither reads X-Quota-Warning nor warns near a limit. | ui |
 | api | partial | Document X-Quota-Warning in the OpenAPI bundle; the server already sends it at 80%/95% but API callers are never told it exists. | ui |
 
 Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:75-79`, `apps/mobile/services/usage.ts:45-49`, `apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts:307-310`, `apps/web/lib/server/managed-usage-policy.ts:206-252`
-
-## S82.25: Budget-reached state.
-
-- Done when: When a limit is reached the user sees a clear blocked state explaining which limit and what they can do.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, api
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | The cited CliError::Paywall display is unreachable: stream.rs error_from_response -> classify_error_response returns Paywall only for kind:'paywall', and no route in apps/web emits it, so usage-limit refusals lose the server's message. |  |
-| chrome | partial | The server's rolling-limit 429 body has type invalid_request_error and code *_limit_reached with recovery hrefs, none of which contain the three strings Chrome matches, so Chrome misreports the block as service rate limiting. |  |
-
-Code: `apps/cli/src/usage_summary.rs:283-285`, `apps/cli/src/errors.rs:348-360`, `apps/cli/src/usage_summary.rs:146-170`, `apps/extension/src/side_panel.ts:8370-8384`
 
 ## S82.26: Alternative eligible model suggestion.
 
 - Done when: When a limit or plan blocks the chosen model, the user is offered an eligible alternative model.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile shows only the server reason text in the paywall sheet; it never proposes an eligible model. | ui |
-| cli | partial | CLI treats plan-limit refusals like provider rate limits and suggests a generic '--fallback-model'; it never names an eligible plan model. | ui |
-| vscode | partial | VS Code shows the server message with Upgrade/Manage billing actions; no eligible model is proposed. | ui |
-| chrome | partial | Chrome silently falls back to Auto when the selected model is not allowed; it never tells the user or proposes a model. | ui |
 | api | partial | Error bodies carry a recovery hint and the flagship message says 'choose a standard model', but no eligible model id is returned. | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/cli/src/errors.rs:530-541`, `apps/extension-vscode/src/core/cloudUtilityErrorActions.ts:72-91`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/web/lib/services/managed-usage-request-service.ts:392-416`
 
 ## S82.27: Wait-until-reset option.
 
 - Done when: At a limit, the user is offered waiting until the reset, with the reset time, as an alternative to paying.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Mobile's paywall shows the server reason ('wait for earlier usage to leave the window') but no reset time; reset times appear only on the Usage screen. | ui |
-| cli | partial | CLI renders plan-limit 429s as provider rate limiting with a generic wait hint, not the plan window reset time (which only /usage shows). | ui |
-| chrome | partial | has_usage_remaining turns false on the session or weekly window, but the reset Chrome prints is usage_reset_at (period end), so the waiting time offered is wrong for the common rolling-window block. |  |
 | api | partial | Limit errors carry a recovery hint and message but no reset timestamp; callers must poll /api/usage for reset times. | ui |
 
-Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:300-309`, `apps/cli/src/errors.rs:530-541`, `apps/cli/src/usage_summary.rs:338-356`
+Code: `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/mobile/src/features/settings/cloud-usage/index.tsx:300-309`, `apps/web/lib/services/managed-usage-request-service.ts:392-416`
 
 ## S82.29: Extra-usage purchase.
 
