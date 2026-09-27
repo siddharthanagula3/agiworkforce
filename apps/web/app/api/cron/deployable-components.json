@@ -228,6 +228,24 @@
       ]
     },
     {
+      "name": "expire-bonus-credits",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing across ticks; each account's expired bonus grants are closed in one transaction, so an interrupted run leaves the rest for the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: closes bonus credit grants 90 days after they were granted and takes their unspent credits off the balance."
+        }
+      ]
+    },
+    {
       "name": "expire-memories",
       "role": "cleanup",
       "version": "1.0.0",
@@ -282,6 +300,24 @@
       ]
     },
     {
+      "name": "expire-purchased-credits",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing across ticks; a reminder marks its purchase lot as reminded and an expiry closes its lot, so an interrupted run repeats neither on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: reminds and then expires purchased credits only where local law limits their lifetime."
+        }
+      ]
+    },
+    {
       "name": "expire-support-handoffs",
       "role": "cleanup",
       "version": "1.0.0",
@@ -296,6 +332,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "grant-referral-rewards",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A row lock on one converted referral while its reward is granted, capped or blocked; the referral leaves converted in the same transaction, so an interrupted run grants nothing twice.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: grants the referrer's bonus credits once a converted referral's refund and dispute hold has passed, within the monthly and yearly caps."
         }
       ]
     },
@@ -620,6 +674,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "remind-trials",
+      "role": "billing",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Nothing; each reminder is recorded as a notification keyed to its subscription, so a trial already reminded is skipped on the next tick.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-09-27",
+          "change": "Added: emails a trial two days before it converts to a paid plan, with a one-click cancel."
         }
       ]
     },

@@ -100,6 +100,20 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/drain-background-jobs',
     '/api/cron/replicate-object-backups',
   ]);
+  const BILLING_CADENCE_CRONS: ReadonlyMap<string, string> = new Map([
+    [
+      '/api/cron/run-auto-reloads',
+      'an auto-reload has to buy credits before the balance under its threshold runs out',
+    ],
+    [
+      '/api/cron/remind-trials',
+      'a trial reminder has to arrive two full days before the trial converts to a charge',
+    ],
+    [
+      '/api/cron/expire-code-trials',
+      'a code-granted trial has to end when its period does, not up to a day later',
+    ],
+  ]);
   const MONITORING_CRONS = new Set([
     '/api/cron/health-probe',
     '/api/cron/page-security-anomalies',
@@ -147,10 +161,21 @@ describe('cron routes and vercel.json schedules agree', () => {
       (cron) =>
         isSubDaily(cron.schedule) &&
         !PRODUCT_CADENCE_CRONS.has(cron.path) &&
+        !BILLING_CADENCE_CRONS.has(cron.path) &&
         !MONITORING_CRONS.has(cron.path),
     );
 
     expect(unexpected.map((cron) => `${cron.path} @ ${cron.schedule}`)).toEqual([]);
+  });
+
+  it('runs every billing cadence cron more than daily and states the promise it keeps', () => {
+    const scheduled = new Map(scheduledCrons().map((cron) => [cron.path, cron.schedule]));
+    for (const [path, promise] of BILLING_CADENCE_CRONS) {
+      const schedule = scheduled.get(path);
+      expect(schedule, path).toBeDefined();
+      expect(isSubDaily(schedule ?? ''), path).toBe(true);
+      expect(promise.length, path).toBeGreaterThan(20);
+    }
   });
 
   it('keeps monitoring crons at or above their stated minimum interval', () => {

@@ -61,37 +61,28 @@ function enforcedUnitBases(): readonly string[] {
   throw new Error('No migration defines provider_cost_events_unit_basis_check');
 }
 
+const RETIRED_CAPABILITIES = ['browser', 'code_compute', 'visual', 'work_compute'] as const;
+
 describe('usage attribution capabilities', () => {
-  it('enforces exactly the capabilities the ledger writes', () => {
-    expect([...enforcedCapabilities()].sort()).toEqual([...COGS_CAPABILITIES].sort());
+  it('enforces every capability the ledger writes and keeps only the retired ones its history holds', () => {
+    const enforced = [...enforcedCapabilities()].sort();
+    expect(enforced).toEqual(expect.arrayContaining([...COGS_CAPABILITIES]));
+    expect(enforced.filter((capability) => !COGS_CAPABILITIES.includes(capability as CogsCapability))).toEqual(
+      [...RETIRED_CAPABILITIES],
+    );
   });
 
   it('enforces exactly the unit bases the ledger writes', () => {
     expect([...enforcedUnitBases()].sort()).toEqual([...COGS_UNIT_BASES].sort());
   });
 
-  it('meters browser time as its own capability, not as generic computer use', () => {
+  it('meters sandbox minutes and database seconds each in its own unit', () => {
     const capabilities = enforcedCapabilities();
-    expect(capabilities).toContain('browser');
-    expect(capabilities).toContain('computer_use');
-
-    const browser = resolveCogsUnits('browser', { computeMinutes: 12 });
-    const computerUse = resolveCogsUnits('computer_use', { requests: 12 });
-    expect(browser).toEqual({ unitBasis: 'minute', units: 12 });
-    expect(computerUse).toEqual({ unitBasis: 'request', units: 12 });
-    expect(browser.unitBasis).not.toBe(computerUse.unitBasis);
-  });
-
-  it('meters compute per lane rather than folding it into one second count', () => {
-    const capabilities = enforcedCapabilities();
-    for (const capability of ['work_compute', 'code_compute', 'database', 'sandbox'] as const) {
+    for (const capability of ['database', 'sandbox'] as const) {
       expect(capabilities, capability).toContain(capability);
     }
-    expect(resolveCogsUnits('work_compute', { computeMinutes: 5 })).toEqual({
-      unitBasis: 'minute',
-      units: 5,
-    });
-    expect(resolveCogsUnits('code_compute', { computeMinutes: 5 })).toEqual({
+    expect(resolveCogsCapability({ operation: 'e2b_sandbox_compute' })).toBe('sandbox');
+    expect(resolveCogsUnits('sandbox', { sandboxMinutes: 5 })).toEqual({
       unitBasis: 'minute',
       units: 5,
     });
@@ -99,6 +90,16 @@ describe('usage attribution capabilities', () => {
       unitBasis: 'second',
       units: 90,
     });
+  });
+
+  it('meters the platform vendors per active account', () => {
+    for (const capability of ['hosting', 'auth', 'cache', 'observability'] as const) {
+      expect(enforcedCapabilities()).toContain(capability);
+      expect(resolveCogsUnits(capability, { activeUserMonths: 1 })).toEqual({
+        unitBasis: 'active_user_month',
+        units: 1,
+      });
+    }
   });
 
   it('meters a paid tool call per request, which is what 0169 added', () => {
