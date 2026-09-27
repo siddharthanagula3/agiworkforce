@@ -43,6 +43,11 @@
           "date": "2026-09-22",
           "digest": "0423a664d94b8c05",
           "note": "Re-baselines the copy fingerprint after the extractor began including semicolon-bearing JSX prose; this entry changes no published wording or effective date."
+        },
+        {
+          "date": "2026-09-27",
+          "digest": "364b3259e3db9d72",
+          "note": "Adds the referral program checks and their lawful basis, and states the erasure list at 100 user-scoped tables."
         }
       ]
     },
@@ -128,6 +133,11 @@
           "date": "2026-08-14",
           "digest": "3c80b8fc321b9d27",
           "note": "Targeted 2026-09-23 corrections align protected-route coverage, connector and built-in-tool logging limits, public Desktop release status, and the host-neutral restore drill with current code. The printed date remains the last full-page review; these targeted checks do not establish a new whole-page review."
+        },
+        {
+          "date": "2026-08-14",
+          "digest": "30c31f001ef6e8e3",
+          "note": "The erasure table count moves from 95 to 100 as the billing tables joined the list; no security commitment changed, so the date stays."
         }
       ]
     },
@@ -213,6 +223,11 @@
           "date": "2026-09-21",
           "digest": "dad1996e59ea6dd4",
           "note": "Records the targeted 2026-09-23 database route count update and its dated change record. The printed date remains the last whole-page review; this route measurement does not establish a new review of every Trust claim."
+        },
+        {
+          "date": "2026-09-21",
+          "digest": "723eea51e7af4969",
+          "note": "The erasure table count moves from 95 to 100 and the change record gains its 2026-09-27 entry; no commitment changed, so the date stays."
         }
       ]
     },
