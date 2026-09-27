@@ -23,6 +23,7 @@ import {
   formatCatalogPrice,
   type SelectablePaidPlan,
 } from '../lib/plan-display';
+import { formatBillingDate, formatBillingMoney } from '../lib/billing-format';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export interface UpgradeConfirmRequest {
@@ -38,21 +39,11 @@ interface UpgradeConfirmDialogProps {
 }
 
 function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
+  return formatBillingMoney(cents, currency);
 }
 
 function formatRenewalDate(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? ''
-    : new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }).format(date);
+  return formatBillingDate(iso) ?? '';
 }
 
 export function UpgradeConfirmDialog({
@@ -176,9 +167,7 @@ export function UpgradeConfirmDialog({
                 : amountDue
                   ? amountDue.charge
                     ? 'Review the charge before it goes to your saved card.'
-                    : // No itemized breakdown from the server, so the total has
-                      // to carry the explanation on its own.
-                      `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today, the prorated difference for the rest of your current billing period. Your renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord}.`
+                    : `You'll be charged ${formatMoney(amountDue.cents, amountDue.currency)} today. After that, ${planLabel} renews at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
                   : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
@@ -252,7 +241,7 @@ export function UpgradeConfirmDialog({
             <p className="mt-3 text-xs text-[color:var(--text-3)]">
               {amountDue.charge.renewsAt
                 ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}, then ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`
-                : `Renewal date stays the same, at ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax.`}
+                : `Then ${formatCatalogPrice(recurringUsd)}/${intervalWord} plus tax at each renewal.`}
             </p>
           </section>
         ) : null}
