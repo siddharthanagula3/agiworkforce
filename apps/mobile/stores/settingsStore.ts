@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
   isToolApprovalPolicy,
+  type PreferredLength,
+  type TechnicalLevel,
   type ToolApprovalPolicy,
 } from '@agiworkforce/types';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
@@ -36,6 +38,10 @@ export interface Personalization {
   enthusiasm: number;
   headersLists: number;
   emoji: number;
+  aboutYou?: string;
+  preferredLength?: PreferredLength;
+  technicalLevel?: TechnicalLevel;
+  responseLanguage?: string;
 }
 
 interface Capabilities {
