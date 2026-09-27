@@ -36,8 +36,14 @@ export interface ManagedUsageBonusCredits {
   next_expiry_at: string | null;
 }
 
+export interface ManagedUsagePurchaseExpiry {
+  expiring_credits: number;
+  next_expiry_at: string | null;
+}
+
 export interface AccountUsageCredits extends ManagedUsageCredits {
   bonus: ManagedUsageBonusCredits | null;
+  purchase_expiry: ManagedUsagePurchaseExpiry | null;
 }
 
 export interface AccountUsageSummary extends Omit<ManagedUsageSummaryResponse, 'credits'> {
@@ -145,6 +151,12 @@ export async function getManagedUsageSummary(
         },
         bonus: prepaid
           ? { remaining: prepaid.bonusCredits, next_expiry_at: prepaid.nextBonusExpiry }
+          : null,
+        purchase_expiry: prepaid
+          ? {
+              expiring_credits: prepaid.expiringPurchasedCredits,
+              next_expiry_at: prepaid.nextPurchaseExpiry,
+            }
           : null,
       }
     : null;

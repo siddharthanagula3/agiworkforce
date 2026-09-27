@@ -28,17 +28,6 @@ Code: `apps/web/app/api/checkout/route.ts:365-391`, `apps/web/app/api/checkout/r
 
 Code: `apps/web/app/api/mobile/iap/verify/route.ts:50-62`, `apps/web/lib/server/mobile-iap-store-verification.ts:399-411`, `apps/web/lib/server/mobile-iap-catalog.ts:62-69`, `apps/web/app/api/mobile/iap/catalog/route.ts:83-86`
 
-## S100.19: Refund/dispute workflow.
-
-- Done when: Refunds and disputes are processed end to end: issued, reflected in plan and credits, and reversed when a dispute is won.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | Handle dispute outcomes and in-app refunds: a won dispute (charge.dispute.closed) never restores the plan or the revoked credits, and refunds can only be issued from the Stripe dashboard. | handler |
-
-Code: `apps/web/app/api/stripe-webhook/lib/handlers.ts:297-310`, `apps/web/app/api/stripe-webhook/lib/handlers.ts:412-440`
-
 ## S100.20: Tax calculation integration.
 
 - Done when: Tax is calculated by an integrated tax engine for every charge, including tax IDs and reverse charge.
