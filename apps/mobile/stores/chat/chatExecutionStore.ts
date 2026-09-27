@@ -1413,7 +1413,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const turnMessageCount = userMessage ? 2 : 1;
     const branchPoint =
       regenerateAnchor ?? (branchParentId !== undefined ? userMessage : undefined);
-    if (branchPoint) {
+    const conversationIsTemporary =
+      useChatCloudMessageStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.temporary ===
+      true;
+    if (branchPoint && !conversationIsTemporary) {
       try {
         await writeCloudBranchPoint(
           conversationId,
