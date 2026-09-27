@@ -138,7 +138,9 @@ export function BillingSettings() {
             <Button onClick={openPlans}>Compare plans</Button>
           ) : null}
 
-          <CreditTopUp />
+          <CreditTopUp
+            {...(ownerPolicy.canStartStripePlanChange ? { onComparePlans: openPlans } : {})}
+          />
         </>
       )}
     </div>

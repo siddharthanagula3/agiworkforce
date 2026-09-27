@@ -3,17 +3,25 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   CENTS_PER_USD,
   DAILY_TOP_UP_LIMIT_USD,
+  MANAGED_USAGE_LIMITS,
   MAX_TOP_UP_AMOUNT_USD,
   MIN_TOP_UP_AMOUNT_USD,
+  PLAN_LABEL,
   TOP_UP_PRESET_AMOUNTS_USD,
   TOP_UP_UNITS_PER_USD,
   formatCredits,
+  getNextUpgradeTier,
+  getPlanPriceUsd,
+  isBasicPlanTier,
+  isFreeBillingPlanTier,
+  isProPlanTier,
+  normalizeBillingPlanTier,
   quoteTopUp,
 } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { cn } from '../../lib/utils';
 import { openTopUpCheckout } from '../../lib/stripeCheckout';
-import { useAuthStore } from '../../stores/auth';
+import { selectPlan, useAuthStore } from '../../stores/auth';
 
 type TopUpSelection = { kind: 'pack'; amountUsd: number } | { kind: 'other' };
 
@@ -25,11 +33,25 @@ function formatTopUpPrice(priceCents: number): string {
   }).format(priceCents / CENTS_PER_USD);
 }
 
-export function CreditTopUp() {
-  const { subscriptionSource, subscriptionStatus } = useAuthStore(
+function upgradeCreditsPerDollarPrompt(plan: string | null | undefined): string | null {
+  const current = normalizeBillingPlanTier(plan);
+  if (!isFreeBillingPlanTier(current) && !isBasicPlanTier(current) && !isProPlanTier(current)) {
+    return null;
+  }
+  const next = getNextUpgradeTier(current);
+  const price = next ? getPlanPriceUsd(next, 'monthly') : null;
+  if (!next || !price) return null;
+  const ratio = MANAGED_USAGE_LIMITS[next].monthlyCredits / price / TOP_UP_UNITS_PER_USD;
+  if (!Number.isFinite(ratio) || ratio <= 1) return null;
+  return `${PLAN_LABEL[next]} gives you ${ratio.toLocaleString(undefined, { maximumFractionDigits: 1 })}x more credits per dollar.`;
+}
+
+export function CreditTopUp({ onComparePlans }: { onComparePlans?: () => void }) {
+  const { subscriptionSource, subscriptionStatus, plan } = useAuthStore(
     useShallow((s) => ({
       subscriptionSource: s.subscriptionSource,
       subscriptionStatus: s.subscriptionStatus,
+      plan: selectPlan(s),
     })),
   );
   const [selection, setSelection] = useState<TopUpSelection>({
@@ -46,6 +68,7 @@ export function CreditTopUp() {
   if (!eligible) return null;
 
   const quote = quoteTopUp(selection.kind === 'pack' ? selection.amountUsd : Number(otherAmount));
+  const upgradePrompt = upgradeCreditsPerDollarPrompt(plan);
 
   const buy = async () => {
     if (opening || !quote) return;
@@ -70,6 +93,17 @@ export function CreditTopUp() {
           renewal date. Larger packs cost less per credit.
         </p>
       </div>
+
+      {upgradePrompt ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 px-3 py-2">
+          <p className="text-sm text-foreground">{upgradePrompt}</p>
+          {onComparePlans ? (
+            <Button variant="outline" size="sm" onClick={onComparePlans}>
+              Compare plans
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div role="group" aria-label="Credit packs" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {TOP_UP_PRESET_AMOUNTS_USD.map((amountUsd) => {

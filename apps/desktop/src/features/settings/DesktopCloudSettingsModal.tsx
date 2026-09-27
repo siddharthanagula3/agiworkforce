@@ -357,7 +357,7 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
           ) : null}
         </div>
       </div>
-      <CreditTopUp />
+      <CreditTopUp onComparePlans={onOpenPlans} />
     </div>
   );
 }
