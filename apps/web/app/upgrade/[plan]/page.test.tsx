@@ -31,11 +31,11 @@ describe('/upgrade/[plan] guards', () => {
     authMocks.auth.mockResolvedValue({ userId: 'user_1' });
   });
 
-  it('refuses Team rather than rendering an order screen that bills one seat', async () => {
+  it('sends Team to the pricing Team card, which opens on yearly billing with a seat picker', async () => {
     // Team is priced per seat, and the seat count and interval are chosen on
     // /pricing. This screen has no picker for either, so rendering it would
     // silently sell a single monthly seat.
-    await expect(open('team')).rejects.toThrow('REDIRECT:/pricing');
+    await expect(open('team')).rejects.toThrow('REDIRECT:/pricing#pricing-team-title');
   });
 
   it('404s a plan that is not on the individual upgrade ladder', async () => {

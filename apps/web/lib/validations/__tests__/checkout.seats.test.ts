@@ -58,11 +58,14 @@ describe('checkout seat validation', () => {
     expect(result.success && result.data.seats).toBe(5);
   });
 
-  it.each(['basic', 'pro', 'max', 'max_15x'])('refuses yearly for the individual plan %s', (plan) => {
-    const result = CheckoutRequestSchema.safeParse({ plan, billingInterval: 'yearly' });
-    expect(result.success).toBe(false);
-    expect(issuePaths(result)).toContain('billingInterval');
-  });
+  it.each(['basic', 'pro', 'max', 'max_15x'])(
+    'refuses yearly for the individual plan %s',
+    (plan) => {
+      const result = CheckoutRequestSchema.safeParse({ plan, billingInterval: 'yearly' });
+      expect(result.success).toBe(false);
+      expect(issuePaths(result)).toContain('billingInterval');
+    },
+  );
 
   it('names the cadence an individual plan is sold with when refusing yearly', () => {
     const result = UpgradeApplyRequestSchema.safeParse({

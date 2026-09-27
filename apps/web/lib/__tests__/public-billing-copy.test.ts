@@ -143,15 +143,20 @@ describe('public billing truth', () => {
       ) as Record<string, string>;
 
       expect(pricing['basicTierBody']).toMatch(/starting paid|plan inicial de pago/i);
-      expect(pricing['proTierBody']).toMatch(/five times basic|cinco veces el uso de basic/i);
-      expect(pricing['maxTierBody']).toMatch(/five times pro|cinco veces el uso de pro/i);
+      for (const key of ['proTierBody', 'maxTierBody', 'teamTierBody']) {
+        expect(
+          pricing[key],
+          `${locale}/pricing.json ${key} states a usage multiple the catalog computes`,
+        ).not.toMatch(/five times|cinco veces|pro-level|nivel pro|\d+x/i);
+      }
       expect(pricing['maxVariant15x']).toBe(`${topPlanOverPro?.fiveHour}x`);
       expect(pricing['compareSubheading']).toContain('{{topPlan}}');
       expect(pricing['compareSubheading']).not.toMatch(/Max \d+x/i);
       for (const key of [
         'usageMultiplierAll',
-        'usageMultiplierSplit',
-        'usageMultiplierSplitMonthly',
+        'usageMultiplierAllPerSeat',
+        'usageMultiplierSession',
+        'usageMultiplierWeekly',
       ]) {
         expect(pricing[key], `${locale}/pricing.json ${key} hard-codes a multiplier`).not.toMatch(
           /\d+x/,
@@ -171,7 +176,7 @@ describe('public billing truth', () => {
           pricing['teamFeature4'],
           pricing['teamCta'],
           pricing['compareTeamBilling'],
-          pricing['planCreditWindowsPerSeat'],
+          pricing['usageSameAsPerSeat'],
         ].join(' ');
 
         expect(teamCopy).toMatch(/per seat|por licencia/i);
@@ -180,9 +185,9 @@ describe('public billing truth', () => {
         expect(teamCopy).not.toMatch(/[$€₹]\s?\d/);
 
         expect(managedUsageMultiplier('team', 'pro')).toBe(1);
-        expect(pricing['teamTierBody']).toMatch(/Pro-level|nivel Pro/i);
-        expect(pricing['planCreditWindowsPerSeat']).toMatch(/for each seat|por asiento/i);
-        expect(pricing['planCreditWindowsPerSeat']).not.toMatch(/contracted|contratad/i);
+        expect(pricing['usageSameAsPerSeat']).toContain('{{baseline}}');
+        expect(pricing['usageSameAsPerSeat']).toMatch(/every seat|cada licencia/i);
+        expect(pricing['usageSameAsPerSeat']).not.toMatch(/contracted|contratad/i);
         expect(pricing['teamTierBody']).not.toMatch(
           /contracted (managed )?capacity|capacidad contratada/i,
         );

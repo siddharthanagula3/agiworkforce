@@ -244,9 +244,7 @@ export async function completeMcpAuthorization(input: {
   }
 
   const discoveryState = pending.discoveryState as
-    | NonNullable<McpOAuthProviderSeed['discoveryState']>
-    | null
-    | undefined;
+    NonNullable<McpOAuthProviderSeed['discoveryState']> | null | undefined;
 
   if (!discoveryState) {
     return {

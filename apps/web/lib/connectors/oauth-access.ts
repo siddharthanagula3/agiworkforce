@@ -153,7 +153,10 @@ async function refreshUnderLock(
     );
   } catch (error) {
     if (error instanceof ConnectorGrantLockTimeoutError) {
-      logger.warn({ connectorId }, '[connector-oauth] a concurrent refresh held the grant too long');
+      logger.warn(
+        { connectorId },
+        '[connector-oauth] a concurrent refresh held the grant too long',
+      );
       return REFRESH_FAILED;
     }
     if (error instanceof ConnectorGrantDecryptionError) {

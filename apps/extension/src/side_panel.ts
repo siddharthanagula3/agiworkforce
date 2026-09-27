@@ -8412,7 +8412,7 @@ function buildUI(): void {
     for (const view of planComparisonViews(currentPlan)) {
       const row = el('div', { class: 'sp-plan-compare-row' });
       row.appendChild(el('span', { class: 'sp-plan-compare-name' }, view.label));
-      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.credits));
+      row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.usage));
       row.appendChild(el('span', { class: 'sp-plan-compare-detail' }, view.features));
       planCompareListEl.appendChild(row);
     }

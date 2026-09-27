@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
@@ -66,7 +66,7 @@ describe('UpgradePlanDialog', () => {
     expect(onUpgrade.mock.calls).toEqual([['basic'], ['max'], ['pro']]);
   });
 
-  it('prices Team per seat and hands off to the seat control instead of sales', () => {
+  it('prices Team per seat on yearly billing and hands off to the seat control instead of sales', () => {
     render(
       <UpgradePlanDialog open onOpenChange={vi.fn()} currentTier="free" onUpgrade={vi.fn()} />,
     );
@@ -75,8 +75,13 @@ describe('UpgradePlanDialog', () => {
 
     expect(screen.queryByText('Custom')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Contact sales' })).toBeNull();
-    expect(screen.getByText('$25')).toBeTruthy();
-    expect(screen.getByText('USD / seat / month')).toBeTruthy();
+    const teamCard = within(
+      screen.getByRole('heading', { name: 'Team' }).closest<HTMLElement>('.rounded-2xl')!,
+    );
+    expect(teamCard.getByText('$20')).toBeTruthy();
+    expect(teamCard.getByText('USD / seat / month')).toBeTruthy();
+    expect(teamCard.getByText('Billed yearly, or $25 billed monthly')).toBeTruthy();
+    expect(teamCard.queryByText('$240')).toBeNull();
     expect(screen.getByRole('link', { name: 'Choose seats' })).toHaveAttribute(
       'href',
       '/pricing#pricing-team-title',

@@ -236,6 +236,14 @@ export function canUseBillingPlanCapability(
   return BILLING_PLAN_CAPABILITY_TIERS[capability].includes(plan);
 }
 
+export function billingPlanCapabilityPlanLabels(capability: BillingPlanCapability): string {
+  const labels = BILLING_PLAN_CAPABILITY_TIERS[capability].map(
+    (plan) => getBillingPlanPricing(plan).label,
+  );
+  if (labels.length <= 2) return labels.join(' and ');
+  return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
 export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapability, string>> =
   Object.freeze({
     managed_chat: 'Managed Cloud chat on web, desktop, mobile and Chrome',
@@ -718,6 +726,15 @@ export function getPublishedPlanPriceCents(
 ): number | null {
   const usd = getPublishedPlanPriceUsd(plan, interval);
   return usd === null ? null : Math.round(usd * 100);
+}
+
+export function getPublishedPlanPricePerMonthUsd(
+  plan: PublishedPricePlanTier,
+  interval: BillingInterval,
+): number | null {
+  const cents = getPublishedPlanPriceCents(plan, interval);
+  if (cents === null) return null;
+  return interval === 'yearly' ? Math.round(cents / 12) / 100 : cents / 100;
 }
 
 export function getPlanPriceInr(plan: string | null | undefined): number | null {
