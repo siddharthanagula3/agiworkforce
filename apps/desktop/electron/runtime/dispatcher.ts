@@ -675,7 +675,13 @@ function declareDeviceHost(): DesktopHostDeclaration {
   };
 }
 
-function describeDeviceForRegistry(): DeviceRegistryProfile {
+async function localModelsAvailable(): Promise<boolean> {
+  if (getPermissionState('local.inference', { kind: 'global' }) === 'denied') return false;
+  const servers = await listLocalServers();
+  return servers.some((server) => server.reachable && server.modelCount > 0);
+}
+
+async function describeDeviceForRegistry(): Promise<DeviceRegistryProfile> {
   const identity = deviceIdentity();
   return {
     installId: identity.deviceId,
@@ -687,7 +693,7 @@ function describeDeviceForRegistry(): DeviceRegistryProfile {
     capabilities: {
       browser: pairingState().paired,
       computerUse: computerUseAvailability().supported,
-      localModels: false,
+      localModels: await localModelsAvailable(),
       localMcp: false,
       remoteControl: remoteControlAvailable(),
     },

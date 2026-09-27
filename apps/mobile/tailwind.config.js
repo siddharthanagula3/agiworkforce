@@ -18,6 +18,10 @@ module.exports = {
           hover: `var(--agi-surface-hover, ${darkColors.surfaceHover})`,
         },
         white: `var(--agi-fg, ${darkColors.textPrimary})`,
+        fg: {
+          secondary: `var(--agi-fg-secondary, ${darkColors.textSecondary})`,
+          muted: `var(--agi-fg-muted, ${darkColors.textMuted})`,
+        },
         agent: agiBrandScale.agent,
       },
       borderRadius: {

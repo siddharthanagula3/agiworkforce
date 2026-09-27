@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
+import { ProjectMemoryPanel } from './ProjectMemoryPanel';
 import type { Project } from '@features/projects/stores/project-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { PROJECT_DESCRIPTION_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -270,6 +271,7 @@ export function ProjectSettingsDialog({
                   </span>
                 </span>
               </label>
+              <ProjectMemoryPanel projectId={project.id} projectName={project.name} />
             </div>
 
             {/* Knowledge Files */}

@@ -1,8 +1,17 @@
 import * as vscode from 'vscode';
 import {
+  parseCloudTaskHandoffQuery,
   parseLocalContextHandoffQuery,
+  VSCODE_CLOUD_TASK_HANDOFF_PATH,
   VSCODE_CONTEXT_HANDOFF_PATH,
+  type CloudTaskHandoff,
   type LocalContextHandoff,
+} from '@agiworkforce/types';
+
+export {
+  parseCloudTaskHandoffQuery,
+  VSCODE_CLOUD_TASK_HANDOFF_PATH,
+  type CloudTaskHandoff,
 } from '@agiworkforce/types';
 
 export interface ContextHandoffTarget {
@@ -19,45 +28,7 @@ export function readContextHandoffUri(uri: vscode.Uri): LocalContextHandoff | nu
   return parseLocalContextHandoffQuery(uri.query);
 }
 
-export const VSCODE_CLOUD_TASK_HANDOFF_PATH = '/cloud-task';
 export const PULL_CLOUD_TASK_COMMAND = 'agi-workforce.pullCloudTaskIntoWorkspace';
-
-const MAX_HANDOFF_FIELD_LENGTH = 4_000;
-const MAX_HANDOFF_PLAN_STEPS = 40;
-const BRANCH_NAME = /^[A-Za-z0-9._\-/]{1,255}$/;
-
-/**
- * A cloud task as the IDE continues it: what it was asked to do, the plan it
- * reached, and the branch its work is on. The plan travels with the goal on
- * purpose, a handoff that drops it makes the reader start the thinking again.
- */
-export interface CloudTaskHandoff {
-  runId: string;
-  goal: string;
-  plan: string[];
-  branch: string | null;
-}
-
-function field(params: URLSearchParams, name: string): string {
-  return (params.get(name) ?? '').slice(0, MAX_HANDOFF_FIELD_LENGTH).trim();
-}
-
-export function parseCloudTaskHandoffQuery(query: string): CloudTaskHandoff | null {
-  const params = new URLSearchParams(query);
-  const runId = field(params, 'runId');
-  if (runId === '' || runId.length > 200) return null;
-  const branch = field(params, 'branch');
-  return {
-    runId,
-    goal: field(params, 'goal'),
-    plan: params
-      .getAll('plan')
-      .map((step) => step.slice(0, MAX_HANDOFF_FIELD_LENGTH).trim())
-      .filter((step) => step !== '')
-      .slice(0, MAX_HANDOFF_PLAN_STEPS),
-    branch: branch !== '' && BRANCH_NAME.test(branch) ? branch : null,
-  };
-}
 
 export function buildCloudTaskHandoffDraft(handoff: CloudTaskHandoff): string {
   const lines = [`Continuing cloud task ${handoff.runId} here.`];
