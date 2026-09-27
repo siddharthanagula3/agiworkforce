@@ -33,11 +33,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const caller = await resolveWorkspaceApiCaller(request, ROUTE, 'GET');
   const query = readValidatedSearchParams(request, QuerySchema, 'Invalid member list query');
 
-  const page: WorkspaceMemberPage = await listWorkspaceMembers(
-    getNeonDb(),
-    caller.organizationId,
-    { limit: query.limit, afterId: query.afterId ?? null, email: query.email ?? null },
-  );
+  const page: WorkspaceMemberPage = await listWorkspaceMembers(getNeonDb(), caller.organizationId, {
+    limit: query.limit,
+    afterId: query.afterId ?? null,
+    email: query.email ?? null,
+  });
   return NextResponse.json(page);
 }
 

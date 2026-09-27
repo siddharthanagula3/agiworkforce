@@ -169,7 +169,10 @@ export function assertKeyMayAssignRole(
   }
 }
 
-function assertKeyMayActOn(administrator: MemberAdministrator, target: OrganizationMemberRow): void {
+function assertKeyMayActOn(
+  administrator: MemberAdministrator,
+  target: OrganizationMemberRow,
+): void {
   if (administrator.kind === 'service_principal' && !ROLES_A_KEY_MANAGES.has(target.role)) {
     throw createError
       .forbidden(
