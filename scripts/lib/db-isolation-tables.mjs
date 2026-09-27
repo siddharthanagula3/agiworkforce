@@ -26,6 +26,8 @@ export const USER_OWNED_TABLES = new Set([
   'bonus_credit_grants',
   'expiring_credit_purchases',
   'subscriptions',
+  'billing_refund_requests',
+  'billing_disputes',
   'user_settings',
   'conversation_tags',
   'conversation_branches',

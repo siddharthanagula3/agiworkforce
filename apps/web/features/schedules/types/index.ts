@@ -1,4 +1,8 @@
-import { getAutoRoutingProfiles, getModelMetadataById } from '@agiworkforce/types';
+import {
+  creditsFromCents,
+  getAutoRoutingProfiles,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleCondition,
   ManagedCloudScheduleDaypart,
@@ -83,6 +87,7 @@ export interface ScheduleDraft {
   isActive: boolean;
   expiresLocal: string;
   maxExecutions: string;
+  creditCap: string;
   projectId: string | null;
   recurrenceRule: string;
   daypartPreset: DaypartPreset;
@@ -108,6 +113,7 @@ export interface ScheduleMutation {
   isActive: boolean;
   expiresAt: string | null;
   maxExecutions: number | null;
+  creditCap: number | null;
   projectId: string | null;
   recurrenceRule: string | null;
   dayparts: ManagedCloudScheduleDaypart[] | null;
@@ -207,7 +213,7 @@ export interface ScheduleRunUsage {
   model: string | null;
   provider: string | null;
   totalTokens: number | null;
-  costCents: number | null;
+  credits: number | null;
 }
 
 export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
@@ -222,22 +228,18 @@ export function scheduleRunUsage(run: ScheduleRun): ScheduleRunUsage | null {
   const nonEmptyString = (value: unknown): string | null =>
     typeof value === 'string' && value.trim() ? value : null;
 
+  const legacyCostCents = finiteNumber(usageRecord?.['costCents']);
   const summary: ScheduleRunUsage = {
     model: nonEmptyString(result['model']),
     provider: nonEmptyString(result['provider']),
     totalTokens: finiteNumber(usageRecord?.['totalTokens']),
-    costCents: finiteNumber(usageRecord?.['costCents']),
+    credits:
+      finiteNumber(result['credits']) ??
+      (legacyCostCents === null ? null : creditsFromCents(legacyCostCents)),
   };
 
   const hasAnything = Object.values(summary).some((value) => value !== null);
   return hasAnything ? summary : null;
-}
-
-export function formatCostCents(costCents: number): string {
-  if (costCents === 0) return '$0.00';
-  const dollars = costCents / 100;
-  if (dollars < 0.01) return `<$0.01`;
-  return `$${dollars.toFixed(2)}`;
 }
 
 export function formatTokenCount(tokens: number): string {

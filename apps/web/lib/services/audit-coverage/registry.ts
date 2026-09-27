@@ -125,6 +125,7 @@ export interface RequiredRouteAuditEvents {
 }
 
 export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = [
+  { route: 'billing/refund-requests/route.ts', eventTypes: ['refund_requested'] },
   {
     route: 'code/sessions/[sessionId]/agent/cancel/route.ts',
     eventTypes: ['code_session_lifecycle_changed'],

@@ -3,8 +3,9 @@ import 'server-only';
 import {
   CREDITS_PER_CENT,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
-  MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
+  isFreeBillingPlanTier,
+  managedUsageLimitsForCatalogVersion,
   type BillingInterval,
   type BillingPlanTier,
   type ManagedUsageLimit,
@@ -26,39 +27,58 @@ export function toPublicUsagePercentage(used: number, limit: number): number {
   return Math.round((boundedUsed / limit) * 10_000) / 100;
 }
 
-function getLimit(plan: string | null | undefined): ManagedUsageLimit | null {
-  if (!plan) return null;
-  const normalized = plan.trim().toLowerCase() as BillingPlanTier;
-  return Object.prototype.hasOwnProperty.call(MANAGED_USAGE_LIMITS, normalized)
-    ? MANAGED_USAGE_LIMITS[normalized]
+export interface VersionedPlanTier {
+  tier: string | null | undefined;
+  catalogVersion: number | null | undefined;
+}
+
+export type PlanAllowanceSubject = string | null | undefined | VersionedPlanTier;
+
+function subjectTier(plan: PlanAllowanceSubject): string | null {
+  const tier = typeof plan === 'object' && plan !== null ? plan.tier : plan;
+  return tier ? tier.trim().toLowerCase() : null;
+}
+
+function getLimit(plan: PlanAllowanceSubject): ManagedUsageLimit | null {
+  const tier = subjectTier(plan);
+  if (!tier) return null;
+  const limits = managedUsageLimitsForCatalogVersion(
+    typeof plan === 'object' && plan !== null ? plan.catalogVersion : null,
+  );
+  return Object.prototype.hasOwnProperty.call(limits, tier)
+    ? limits[tier as BillingPlanTier]
     : null;
 }
 
-export function getPlanMonthlyUsageCredits(plan: string | null | undefined): number {
+function isFreeSubject(plan: PlanAllowanceSubject): boolean {
+  return isFreeBillingPlanTier(subjectTier(plan));
+}
+
+export function getPlanMonthlyUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.monthlyCredits ?? 0;
 }
 
-export function getPlanWeeklyUsageCredits(plan: string | null | undefined): number {
+export function getPlanWeeklyUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.weeklyCredits ?? 0;
 }
 
-export function getPlanDailyUsageCredits(plan: string | null | undefined): number {
+export function getPlanDailyUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.dailyCredits ?? 0;
 }
 
-export function getPlanFiveHourUsageCredits(plan: string | null | undefined): number {
+export function getPlanFiveHourUsageCredits(plan: PlanAllowanceSubject): number {
   return getLimit(plan)?.fiveHourCredits ?? 0;
 }
 
-export function getPlanMonthlyUsageBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanMonthlyUsageBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanMonthlyUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
-export function getPlanWeeklyUsageBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanWeeklyUsageBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanWeeklyUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
-export function getPlanFiveHourUsageBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanFiveHourUsageBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanFiveHourUsageCredits(plan) * MICROUSD_PER_CREDIT;
 }
 
@@ -70,43 +90,43 @@ function creditsToLedgerCents(credits: number): number {
   return credits / CREDITS_PER_CENT;
 }
 
-export function isPlanUsageUncapped(plan: string | null | undefined): boolean {
+export function isPlanUsageUncapped(plan: PlanAllowanceSubject): boolean {
   return getLimit(plan)?.unlimited === true;
 }
 
 export function getPlanUsageBudgetCents(
-  plan: string | null | undefined,
+  plan: PlanAllowanceSubject,
   _interval: BillingInterval = 'monthly',
 ): number {
   if (isPlanUsageUncapped(plan)) return MANAGED_USAGE_UNCAPPED_LEDGER_ALLOCATION_CENTS;
-  if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
+  if (isFreeSubject(plan)) return 0;
   return creditsToLedgerCents(getPlanMonthlyUsageCredits(plan));
 }
 
-export function getPlanWeeklyUsageBudgetCents(plan: string | null | undefined): number {
-  if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
+export function getPlanWeeklyUsageBudgetCents(plan: PlanAllowanceSubject): number {
+  if (isFreeSubject(plan)) return 0;
   return creditsToLedgerCents(getPlanWeeklyUsageCredits(plan));
 }
 
-export function getPlanSessionUsageBudgetCents(plan: string | null | undefined): number {
-  if (getLimit(plan) === MANAGED_USAGE_LIMITS.free) return 0;
+export function getPlanSessionUsageBudgetCents(plan: PlanAllowanceSubject): number {
+  if (isFreeSubject(plan)) return 0;
   return creditsToLedgerCents(getPlanFiveHourUsageCredits(plan));
 }
 
-export function getPlanFlagshipWeeklyUsageBudgetCents(plan: string | null | undefined): number {
+export function getPlanFlagshipWeeklyUsageBudgetCents(plan: PlanAllowanceSubject): number {
   return Math.round(getPlanWeeklyUsageBudgetCents(plan) * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO);
 }
 
-export function getPlanSessionUsageCapCents(plan: string | null | undefined): ManagedUsageCapCents {
+export function getPlanSessionUsageCapCents(plan: PlanAllowanceSubject): ManagedUsageCapCents {
   return isPlanUsageUncapped(plan) ? null : getPlanSessionUsageBudgetCents(plan);
 }
 
-export function getPlanWeeklyUsageCapCents(plan: string | null | undefined): ManagedUsageCapCents {
+export function getPlanWeeklyUsageCapCents(plan: PlanAllowanceSubject): ManagedUsageCapCents {
   return isPlanUsageUncapped(plan) ? null : getPlanWeeklyUsageBudgetCents(plan);
 }
 
 export function getPlanFlagshipWeeklyUsageCapCents(
-  plan: string | null | undefined,
+  plan: PlanAllowanceSubject,
 ): ManagedUsageCapCents {
   return isPlanUsageUncapped(plan) ? null : getPlanFlagshipWeeklyUsageBudgetCents(plan);
 }
@@ -124,38 +144,36 @@ function toCapMicrousd(cap: ManagedUsageCapCents): ManagedUsageCapMicrousd {
 }
 
 export function getPlanUsageBudgetMicrousd(
-  plan: string | null | undefined,
+  plan: PlanAllowanceSubject,
   interval: BillingInterval = 'monthly',
 ): number {
   return getPlanUsageBudgetCents(plan, interval) * MICROUSD_PER_LEDGER_CENT;
 }
 
-export function getPlanSessionUsageBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanSessionUsageBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanSessionUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
 }
 
-export function getPlanWeeklyUsagePaidBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanWeeklyUsagePaidBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanWeeklyUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
 }
 
-export function getPlanFlagshipWeeklyUsageBudgetMicrousd(plan: string | null | undefined): number {
+export function getPlanFlagshipWeeklyUsageBudgetMicrousd(plan: PlanAllowanceSubject): number {
   return getPlanFlagshipWeeklyUsageBudgetCents(plan) * MICROUSD_PER_LEDGER_CENT;
 }
 
 export function getPlanSessionUsageCapMicrousd(
-  plan: string | null | undefined,
+  plan: PlanAllowanceSubject,
 ): ManagedUsageCapMicrousd {
   return toCapMicrousd(getPlanSessionUsageCapCents(plan));
 }
 
-export function getPlanWeeklyUsageCapMicrousd(
-  plan: string | null | undefined,
-): ManagedUsageCapMicrousd {
+export function getPlanWeeklyUsageCapMicrousd(plan: PlanAllowanceSubject): ManagedUsageCapMicrousd {
   return toCapMicrousd(getPlanWeeklyUsageCapCents(plan));
 }
 
 export function getPlanFlagshipWeeklyUsageCapMicrousd(
-  plan: string | null | undefined,
+  plan: PlanAllowanceSubject,
 ): ManagedUsageCapMicrousd {
   return toCapMicrousd(getPlanFlagshipWeeklyUsageCapCents(plan));
 }
@@ -181,7 +199,7 @@ export function buildComputerUseSoftCapWarningHeader(input: {
 }
 
 export interface QuotaWarningInput {
-  planTier: string | null | undefined;
+  planTier: PlanAllowanceSubject;
   creditsUsedCents: number;
   creditsAllocatedCents: number;
   estimatedCostCents?: number;

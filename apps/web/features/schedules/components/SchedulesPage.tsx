@@ -963,6 +963,7 @@ export function SchedulesPage({
             submitError={submitError}
             saving={saving}
             isEdit={Boolean(editing)}
+            creditsUsed={editing?.creditsUsed ?? null}
             modelOptions={modelOptions}
             onChange={(patch) => {
               setDraft((current) => ({ ...current, ...patch }));

@@ -49,6 +49,7 @@ export interface SeatMemberLedgerProvisioning {
   subscriptionId: string;
   periodStart: Date;
   periodEnd: Date;
+  catalogVersion?: number | null;
 }
 
 export async function provisionSeatMemberCreditAccounts(
@@ -70,7 +71,10 @@ export async function provisionSeatMemberCreditAccounts(
   for (const row of rows) {
     const orgTier = normalizeBillingPlanTier(row.billing_plan_tier);
     if (!isSeatBearingBillingPlan(orgTier)) continue;
-    const budgetCents = getPlanUsageBudgetCents(orgTier, 'monthly');
+    const budgetCents = getPlanUsageBudgetCents(
+      { tier: orgTier, catalogVersion: input.catalogVersion },
+      'monthly',
+    );
     if (budgetCents <= 0) continue;
 
     try {
@@ -81,6 +85,7 @@ export async function provisionSeatMemberCreditAccounts(
         period.periodEnd,
         budgetCents,
         db,
+        input.catalogVersion,
       );
       provisioned += 1;
     } catch (error) {

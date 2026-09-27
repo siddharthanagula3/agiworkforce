@@ -144,17 +144,19 @@ export const NO_CAPABILITY_LIMIT_RESETS: CapabilityLimitResets = {
 
 function buildLimits(
   tier: string | null | undefined,
+  catalogVersion: number | null,
   resets: CapabilityLimitResets,
 ): CapabilityLimit[] {
   const policy = getTierPolicy(tier);
   const tierSource = `tier:${policy.tier}`;
   const usageSource = `managed-usage-caps:${policy.tier}`;
-  const uncapped = isPlanUsageUncapped(policy.tier);
+  const allowance = { tier: policy.tier, catalogVersion };
+  const uncapped = isPlanUsageUncapped(allowance);
   const limits: CapabilityLimit[] = [
     {
       id: 'managed_usage_billing_period_cents',
       capabilityId: 'canUseCloudModels',
-      limit: uncapped ? null : getPlanUsageBudgetCents(policy.tier),
+      limit: uncapped ? null : getPlanUsageBudgetCents(allowance),
       unit: 'usage_cents',
       window: 'billing_period',
       resetsAt: resets.billingPeriodEndsAt,
@@ -163,7 +165,7 @@ function buildLimits(
     {
       id: 'managed_usage_rolling_five_hour_cents',
       capabilityId: 'canUseCloudModels',
-      limit: uncapped ? null : getPlanSessionUsageBudgetCents(policy.tier),
+      limit: uncapped ? null : getPlanSessionUsageBudgetCents(allowance),
       unit: 'usage_cents',
       window: 'rolling_five_hour',
       resetsAt: resets.rollingFiveHourResetsAt,
@@ -172,7 +174,7 @@ function buildLimits(
     {
       id: 'managed_usage_rolling_weekly_cents',
       capabilityId: 'canUseCloudModels',
-      limit: uncapped ? null : getPlanWeeklyUsageBudgetCents(policy.tier),
+      limit: uncapped ? null : getPlanWeeklyUsageBudgetCents(allowance),
       unit: 'usage_cents',
       window: 'rolling_weekly',
       resetsAt: resets.rollingWeeklyResetsAt,
@@ -259,6 +261,7 @@ function buildLimits(
 export interface BuildMeCapabilityHandshakeInput {
   userId: string;
   tier: string | null | undefined;
+  catalogVersion?: number | null;
   surface: SyncedAppSurface;
   cloudExecutionDeploymentEnabled: boolean;
   /** Capabilities an operator has switched off, from the kill-switch gate. */
@@ -278,7 +281,11 @@ export function buildMeCapabilityHandshake(
     surface: buildSurfaceLayerGrant(input.surface),
     settings: buildSettingsLayerGrant(input.closedCapabilities ?? []),
   };
-  const limits = buildLimits(input.tier, input.resets ?? NO_CAPABILITY_LIMIT_RESETS);
+  const limits = buildLimits(
+    input.tier,
+    input.catalogVersion ?? null,
+    input.resets ?? NO_CAPABILITY_LIMIT_RESETS,
+  );
   return buildEffectiveCapabilityDocument({
     sessionId: input.userId,
     version: computeCapabilityDocumentVersion({
