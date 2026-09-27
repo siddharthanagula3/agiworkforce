@@ -380,7 +380,7 @@ export default function CompareScreen() {
                 onPress={handleOpenPickerA}
               />
               <View className="items-center justify-center">
-                <Text className="text-xs text-white/30 font-medium">vs</Text>
+                <Text className="text-xs text-fg-muted font-medium">vs</Text>
               </View>
               <ModelPill
                 slot="B"
@@ -401,7 +401,7 @@ export default function CompareScreen() {
               {/* Empty state */}
               {!lastPrompt && !stateA.isStreaming && !stateB.isStreaming && (
                 <View className="flex-1 items-center justify-center py-16 px-8">
-                  <Text className="text-white/20 text-center text-sm leading-5">
+                  <Text className="text-fg-muted text-center text-sm leading-5">
                     Type a prompt below to send to both models simultaneously and compare the
                     responses.
                   </Text>
@@ -490,7 +490,7 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
             {displayName}
           </Text>
           {provider && (
-            <Text className="text-[10px] text-white/40" numberOfLines={1}>
+            <Text className="text-[10px] text-fg-muted" numberOfLines={1}>
               {provider.name}
             </Text>
           )}
@@ -550,7 +550,7 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
       {state.isStreaming && (
         <View className="flex-row items-center gap-2 mb-3">
           <ActivityIndicator size="small" color={slotColor} />
-          <Text className="text-[12px] text-white/40">Generating...</Text>
+          <Text className="text-[12px] text-fg-muted">Generating...</Text>
         </View>
       )}
 
@@ -560,9 +560,9 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
           <Text className="text-[12px] text-red-400">{state.errorMessage}</Text>
         </View>
       ) : state.content ? (
-        <Text className="text-[13px] text-white/90 leading-5">{state.content}</Text>
+        <Text className="text-[13px] text-white leading-5">{state.content}</Text>
       ) : !state.isStreaming ? (
-        <Text className="text-[12px] text-white/30 italic">No response yet.</Text>
+        <Text className="text-[12px] text-fg-muted italic">No response yet.</Text>
       ) : null}
 
       {/* Stats footer */}
@@ -605,7 +605,7 @@ function StatChip({ icon, label, title }: StatChipProps) {
   return (
     <View className="flex-row items-center gap-1" accessibilityLabel={title}>
       {icon}
-      <Text className="text-[10px] text-white/40">{label}</Text>
+      <Text className="text-[10px] text-fg-muted">{label}</Text>
     </View>
   );
 }
