@@ -37,7 +37,6 @@ import {
   type CodeTurnRecord,
 } from '@agiworkforce/cloud-contracts';
 import { AgiMark } from '@shared/components/agi/AgiMark';
-import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { useGreeting } from '@features/chat/components/GreetingBanner/useGreeting';
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
@@ -84,6 +83,8 @@ import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
 import { CodeShareDialog } from './components/CodeShareDialog';
+import { CodePageFrame, CodePaneTools, type CodePaneControls } from './components/CodePanes';
+import { useCodePanes } from './hooks/use-code-panes';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -119,12 +120,17 @@ export interface CloudCodePageProps {
   api?: CloudCodeApi;
   /** The session in the URL. Absent on the surface root, which is the home. */
   sessionId?: string;
+  pane?: CodePaneControls;
 }
 
-export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePageProps) {
+export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCodePageProps) {
+  const paneRef = useRef(pane);
+  paneRef.current = pane;
   const [availability, setAvailability] = useState<CloudCodeAvailability | null>(null);
   const [runtimes, setRuntimes] = useState<CloudCodeRuntime[]>([]);
-  const [sessions, setSessions] = useState<CloudCodeSession[]>([]);
+  const [sessions, setSessions] = useState<CloudCodeSession[]>(
+    pane?.initialSession ? [pane.initialSession] : [],
+  );
   const [selectedId, setSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
@@ -194,7 +200,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   }, [router]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || paneRef.current) return;
     if (!new URLSearchParams(window.location.search).has(CODE_MISSING_SESSION_PARAM)) return;
     setRouteNotice(CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
@@ -221,6 +227,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
         : [next, ...current];
       return updated.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     });
+    paneRef.current?.onSessionChange(next);
   }, []);
 
   const loadChanges = useCallback(
@@ -346,6 +353,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           detailError instanceof CloudCodeApiError &&
           MISSING_SESSION_STATUSES.has(detailError.status)
         ) {
+          if (paneRef.current) {
+            paneRef.current.onClose();
+            return;
+          }
           setSelectedId(null);
           setRouteNotice(CODE_COPY.sessionNotFound);
           routerRef.current.replace(codeHomeAfterMissingSession());
@@ -401,7 +412,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   const transcript = useMemo(() => buildCodeTranscript(entries, turns), [entries, turns]);
 
   useEffect(() => {
-    if (typeof document === 'undefined') return;
+    if (typeof document === 'undefined' || paneRef.current) return;
     const title = selectedSession?.title.trim();
     document.title = title
       ? `${title}${DOCUMENT_TITLE_SEPARATOR}${CODE_COPY.surface}`
@@ -537,7 +548,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           localRootId: current.localRootId,
           localModelId: current.localModelId,
         }));
-        router.push(codeSessionPath(body.session.id));
+        if (paneRef.current) paneRef.current.onSessionOpened(body.session.id);
+        else router.push(codeSessionPath(body.session.id));
         return body.session;
       } catch (createError) {
         setError(friendlyError(createError));
@@ -732,6 +744,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
   );
 
   const openHome = useCallback(() => {
+    if (paneRef.current) {
+      paneRef.current.onClose();
+      return;
+    }
     setSelectedId(null);
     setTurns([]);
     setEntries([]);
@@ -844,6 +860,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     [router],
   );
 
+  const panes = useCodePanes({
+    enabled: !pane && !narrow,
+    primaryId: selectedId,
+    openPrimary: openSession,
+  });
+
   const railProps = {
     sessions: railSessions,
     hiddenSessionsExist,
@@ -853,8 +875,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     onFiltersChange: (patch: Partial<CodeSessionFilters>) =>
       setFilters((current) => ({ ...current, ...patch })),
     onNewSession: openHome,
-    onSelectSession: (id: string) => {
+    onSelectSession: (id: string, options?: { split: boolean }) => {
       setLocalSession(null);
+      if (panes.select(id, options?.split === true)) return;
       openSession(id);
     },
     localSection: local.supported ? (
@@ -996,17 +1019,31 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
     </div>
   ) : null;
 
+  const paneTools = pane ? (
+    <CodePaneTools onClose={pane.onClose} />
+  ) : panes.active ? (
+    <CodePaneTools
+      layout={panes.layout}
+      onToggleLayout={panes.toggleLayout}
+      onClose={panes.closePrimary}
+    />
+  ) : null;
+
   return (
-    <WebAppShell narrowHeaderSlot={narrowHeaderSlot} rail={false}>
+    <CodePageFrame pane={pane} narrowHeaderSlot={narrowHeaderSlot}>
       {confirmDialog}
-      <div className={styles['surface']}>
-        {!railCollapsed && (
+      <div
+        className={styles['surface']}
+        data-pane-layout={panes.active ? panes.layout : undefined}
+        data-pane-count={panes.active ? panes.panes.length + 1 : undefined}
+      >
+        {!railCollapsed && !pane && (
           <div className={`${styles['rail']} ${styles['railDocked']}`} data-sidebar-region="header">
             <CodeRail {...railProps} onCollapse={() => setRailCollapsed(true)} />
           </div>
         )}
 
-        {narrow && (
+        {narrow && !pane && (
           <Sheet open={railDrawerOpen} onOpenChange={setRailDrawerOpen}>
             <SheetContent
               side="left"
@@ -1027,7 +1064,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
           </Sheet>
         )}
 
-        <div className={styles['main']}>
+        <div
+          className={styles['main']}
+          data-pane-focused={panes.active ? String(panes.primaryFocused) : undefined}
+          onMouseDownCapture={panes.active ? panes.focusPrimary : undefined}
+          onFocusCapture={panes.active ? panes.focusPrimary : undefined}
+        >
           {localSession && localGroup ? (
             <LocalSessionPanel
               session={localSession}
@@ -1126,6 +1168,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
                           onOpenChange={setShareOpen}
                           onChangeVisibility={handleChangeSharing}
                         />
+                        {paneTools}
                       </div>
                     </>
                   )}
@@ -1289,7 +1332,23 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId }: CloudCodePagePr
             </>
           )}
         </div>
+        {panes.active &&
+          panes.panes.map((entry) => (
+            <CloudCodePage
+              key={entry.key}
+              api={api}
+              sessionId={entry.sessionId}
+              pane={{
+                focused: panes.isFocused(entry.key),
+                initialSession: sessions.find((session) => session.id === entry.sessionId) ?? null,
+                onFocus: () => panes.focus(entry.key),
+                onClose: () => panes.close(entry.key),
+                onSessionOpened: (id) => panes.replace(entry.key, id),
+                onSessionChange: replaceSession,
+              }}
+            />
+          ))}
       </div>
-    </WebAppShell>
+    </CodePageFrame>
   );
 }

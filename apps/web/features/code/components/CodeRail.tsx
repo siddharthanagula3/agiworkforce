@@ -163,7 +163,7 @@ export interface CodeRailProps {
   filters: CodeSessionFilters;
   onFiltersChange: (patch: Partial<CodeSessionFilters>) => void;
   onNewSession: () => void;
-  onSelectSession: (sessionId: string) => void;
+  onSelectSession: (sessionId: string, options?: { split: boolean }) => void;
   onCollapse?: () => void;
   /** The desktop shell's own sessions. Absent in a browser. */
   localSection?: React.ReactNode;
@@ -306,7 +306,9 @@ export function CodeRail({
                 selectedId === session.id ? styles['railRowActive'] : ''
               }`}
               aria-current={selectedId === session.id ? 'true' : undefined}
-              onClick={() => onSelectSession(session.id)}
+              onClick={(event) =>
+                onSelectSession(session.id, { split: event.metaKey || event.ctrlKey })
+              }
             >
               <span className={styles['railRowGlyph']}>
                 {cloudCodeSessionIsBusy(session) ? (
