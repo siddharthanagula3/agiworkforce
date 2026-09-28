@@ -2420,6 +2420,7 @@ async function runMcpTool(
       toolCall.args,
       undefined,
       cause,
+      executionContext?.signal,
     );
     const referenced =
       result.ok && result.overflow
