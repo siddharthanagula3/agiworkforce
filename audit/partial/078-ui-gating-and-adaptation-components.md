@@ -110,16 +110,12 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:1690-16
 
 - Done when: The surface detects whether a required device (paired desktop, phone) is available and says so before the user relies on it.
 - Wave: 3
-- Already works on: mobile, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The server offers device tools only when the desktop app declares itself, and Code tells users to use the desktop app, but the web app never detects whether a device is paired or reachable. | ui |
-| desktop | partial | The server offers device tools only when the desktop app declares itself, and Code tells users to use the desktop app, but the web app never detects whether a device is paired or reachable. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:2422-2430`, `apps/web/app/api/code/sessions/route.ts:132-135`
 
 ## S78.15: Required-runtime detection.
 
@@ -201,16 +197,14 @@ Code: `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 - Done when: When work fits another device or app better, the surface offers an action that continues it there.
 - Wave: 3
-- Already works on: vscode, chrome
+- Already works on: web, desktop, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Web tells users to use the desktop app for local code but has no action that hands the work to another device. | ui |
-| desktop | partial | Web tells users to use the desktop app for local code but has no action that hands the work to another device. | ui |
 | mobile | partial | The phone can pair with and drive the desktop app, but a blocked feature never offers to continue on the desktop. | ui |
 | cli | partial | The CLI can receive a selection handed off from Chrome, but never offers to continue its own work on another device. | ui |
 
-Code: `apps/web/app/api/code/sessions/route.ts:132-135`, `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
+Code: `apps/mobile/src/features/companion/components/ConnectionStateViews.tsx:69-71`, `apps/cli/src/context_handoff.rs:1-5`
 
 ## S78.25: Attachment-preservation choice after model change.
 
