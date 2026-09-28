@@ -14,10 +14,12 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The missing searches ('Welcome back\|Good (morning...)', 'greeting*Name', 'greet') could never match the mobile implementation, `Hi, ${displayName}` built from nickname/full name/Clerk first name in ChatEmptyState, which MessageList mounts for an empty conversation. |  |
+| mobile | partial | The web's time-of-day greeting helpers moved out of unified-chat into @agiworkforce/utils/greeting (01171618ee), so mobile can import them. What remains is ChatEmptyState using resolveGreetingHeadline in place of its own Hi, name. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+Code: `packages/platform/utils/src/greeting.ts:101-101`
 
 ## S12.03: Neutral greeting when personalization is disabled.
 
@@ -27,9 +29,9 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The done rests on 'mobile never personalizes' (R-e), which is false: ChatEmptyState greets by name, and no mobile setting turns that off, which is the same gap that makes web partial. |  |
+| mobile | partial | greetingHeadline without a name gives the neutral greeting and is now importable from @agiworkforce/utils/greeting. What remains is ChatEmptyState passing no name when personalization is off. | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:97-103`, `apps/mobile/app/(app)/(tabs)/chat.tsx:850-861`
+Code: `packages/platform/utils/src/greeting.ts:88-88`
 
 ## S12.04: Suggested prompts.
 

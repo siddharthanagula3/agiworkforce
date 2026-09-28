@@ -211,13 +211,16 @@ Code: `apps/cli/src/cloud/mod.rs:322-334`, `apps/web/app/api/memory/sync/route.t
 
 - Done when: In a temporary chat nothing is read from or saved to memory, and the temporary chat is never used later as past-chat context.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| mobile | partial | Mobile Cloud turns carry no conversation_id, so the server cannot tell that a chat is temporary. It loads memory, offers save_memory, honours standing approvals and files generated media in the Library. post-codex/chat-gates-temporary-mobile-conversation-id.patch sends the temporary conversation's id, so the server applies the same temporary-chat rules it applies on web. Until that lands, the S41.03 banner's promise is also untrue on mobile. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+Code: `apps/mobile/services/streaming.ts:186-186`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3167-3167`
 
 ## S39.29: Sensitive-Memory controls.
 

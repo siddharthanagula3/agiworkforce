@@ -58,13 +58,16 @@ nothing is left.
 
 - Done when: Nothing from a temporary chat is saved to memory.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
+| mobile | partial | Same root cause as S39.28: the server's save_memory tool runs in a mobile temporary chat because the turn names no conversation. Fixed by post-codex/chat-gates-temporary-mobile-conversation-id.patch. | handler |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
+
+Code: `apps/mobile/services/streaming.ts:186-186`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3167-3167`
 
 ## S41.06: Custom-instruction choice.
 
