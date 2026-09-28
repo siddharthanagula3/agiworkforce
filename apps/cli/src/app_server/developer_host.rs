@@ -19,21 +19,21 @@ use agiworkforce_protocol::developer_session::{
     HandoffLocalResource, HandoffRefusal, HandoffTurnState, HookAddParams, HookListResponse,
     HookRemoveParams, HostModelSummary, LocalModelListResponse, LocalModelProvider,
     LocalModelSummary, McpAddParams, McpLoginParams, McpLoginResponse, McpServerConfiguredStatus,
-    McpServerListResponse, McpServerParams, McpServerTestResponse, McpServerToolsResponse,
-    MemoryAddParams, MemoryAddResponse, ModelListParams, PendingApprovalSnapshot,
-    PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile, SettingsReadResponse,
-    SettingsWriteParams, SkillConsentParams, SkillConsentResponse, SkillInstallParams,
-    SkillListResponse, SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse,
-    SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse,
-    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadPlanNotification, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore,
-    ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse, ThreadStartParams, ThreadStatus,
-    ThreadSummary, ThreadWriterChangedNotification, ThreadWriterConflictData,
-    TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
-    TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
-    WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
+    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
+    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
+    PendingApprovalSnapshot, PermissionsListResponse, PermissionsRemoveParams, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPlanNotification,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
+    ThreadWriterConflictData, TurnEndedNotification, TurnFailure, TurnFailureCode,
+    TurnInterruptParams, TurnModelNotification, TurnStartParams, TurnStatus, TurnSteerParams,
+    TurnSummary, WorktreeCreateParams, WorktreeListResponse, WorktreeRemoveParams, WorktreeSummary,
 };
 use agiworkforce_protocol::protocol::{NetworkPolicyRuleAction, ReviewDecision};
 use agiworkforce_protocol::task_state::AgentTaskState;
@@ -430,6 +430,7 @@ impl CliDeveloperSessionHost {
             mcp_tools: self.load_integrations,
             installs: true,
             saved_permissions: true,
+            mcp_inspect: self.load_integrations,
         }
     }
 
@@ -3159,6 +3160,33 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<McpServerTestResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         surfaces::test_mcp_server(
+            &self.workspace_root,
+            &params.name,
+            std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),
+        )
+        .await
+    }
+
+    async fn inspect_mcp_server(
+        &self,
+        params: McpServerParams,
+    ) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let sessions: Vec<Arc<Mutex<AgentSession>>> =
+            self.sessions.lock().await.values().cloned().collect();
+        for session in sessions {
+            let Ok(mut agent) = session.try_lock() else {
+                continue;
+            };
+            if let Some(connection) = agent
+                .mcp_manager
+                .as_mut()
+                .and_then(|manager| manager.connection_mut(&params.name))
+            {
+                return Ok(surfaces::inspect_connection(&params.name, connection, true).await);
+            }
+        }
+        surfaces::inspect_mcp_server(
             &self.workspace_root,
             &params.name,
             std::time::Duration::from_secs(MCP_LOAD_TIMEOUT_SECONDS),

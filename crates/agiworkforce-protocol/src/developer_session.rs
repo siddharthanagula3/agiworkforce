@@ -96,6 +96,7 @@ pub mod method {
     pub const MCP_LOGIN: &str = "mcp/login";
     pub const MCP_TEST: &str = "mcp/test";
     pub const MCP_TOOLS: &str = "mcp/tools";
+    pub const MCP_INSPECT: &str = "mcp/inspect";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
     pub const HOOKS_LIST: &str = "hooks/list";
@@ -377,6 +378,8 @@ pub struct AppServerCapabilities {
     pub installs: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub saved_permissions: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_inspect: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2037,6 +2040,35 @@ pub struct McpResourceSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpServerInspectResponse {
+    pub name: String,
+    pub connected: bool,
+    pub live: bool,
+    pub responding: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub protocol_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub server_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub instructions: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub logs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]

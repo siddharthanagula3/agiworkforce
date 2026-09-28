@@ -186,6 +186,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session worktree list graph");
     agiworkforce_protocol::developer_session::WorktreeRemoveParams::export_all_to(dir)
         .expect("export developer-session worktree remove params graph");
+    agiworkforce_protocol::developer_session::McpServerInspectResponse::export_all_to(dir)
+        .expect("export developer-session mcp inspect graph");
     agiworkforce_protocol::developer_session::PermissionsListResponse::export_all_to(dir)
         .expect("export developer-session permissions list graph");
     agiworkforce_protocol::developer_session::PermissionsRemoveParams::export_all_to(dir)

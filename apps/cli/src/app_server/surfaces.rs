@@ -11,14 +11,14 @@ use agiworkforce_protocol::developer_session::{
     HookAddParams, HookConfigScope, HookListResponse, HookRemoveParams, HookSummary,
     InstructionFile, InstructionFileKind, LocalModelProvider, LocalServerHealth, LocalServerStatus,
     McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
-    McpResourceSummary, McpServerConfiguredStatus, McpServerListResponse, McpServerParams,
-    McpServerScope, McpServerSummary, McpServerTestResponse, McpServerToolsResponse,
-    McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope, PermissionsListResponse,
-    PluginInstallParams, PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary,
-    SavedPermission, SavedPermissionDecision, SavedPermissionKind, SettingsReadResponse,
-    SettingsWriteParams, SkillCatalogScope, SkillConsentResponse, SkillInstallParams,
-    SkillListResponse, SkillRemoveParams, SkillSummary, SlashCommandListResponse,
-    SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
+    McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
+    McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
+    McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
+    PermissionsListResponse, PluginInstallParams, PluginListResponse, PluginRemoveParams,
+    PluginScope, PluginSummary, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
+    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
+    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
 };
 use std::path::{Path, PathBuf};
 
@@ -640,6 +640,79 @@ pub async fn test_mcp_server(
         elapsed_ms: elapsed_ms(started),
         tool_count,
         error,
+    })
+}
+
+pub async fn inspect_connection(
+    name: &str,
+    connection: &mut crate::mcp::McpConnection,
+    live: bool,
+) -> McpServerInspectResponse {
+    let responding = connection.responding().await;
+    let negotiated = connection.negotiated();
+    let mut capabilities: Vec<String> = negotiated
+        .capabilities
+        .as_object()
+        .map(|advertised| advertised.keys().cloned().collect())
+        .unwrap_or_default();
+    capabilities.sort();
+    let protocol_version =
+        Some(negotiated.protocol_version.clone()).filter(|version| !version.is_empty());
+    let server_name = negotiated
+        .server_info
+        .as_ref()
+        .map(|info| info.name.clone());
+    let server_version = negotiated
+        .server_info
+        .as_ref()
+        .map(|info| info.version.clone());
+    let instructions = negotiated.instructions.clone();
+    McpServerInspectResponse {
+        name: name.to_string(),
+        connected: true,
+        live,
+        responding,
+        protocol_version,
+        server_name,
+        server_version,
+        capabilities,
+        instructions,
+        logs: connection.recent_logs(),
+        error: None,
+    }
+}
+
+pub async fn inspect_mcp_server(
+    workspace_root: &Path,
+    name: &str,
+    limit: std::time::Duration,
+) -> Result<McpServerInspectResponse, DeveloperSessionHostError> {
+    let server = startable_server(workspace_root, name)?;
+    let outcome = tokio::time::timeout(limit, async {
+        let mut connection =
+            crate::mcp::McpConnection::connect(&server.name, &server.config).await?;
+        let report = inspect_connection(&server.name, &mut connection, false).await;
+        let _ = connection.shutdown().await;
+        anyhow::Ok(report)
+    })
+    .await;
+    let error = match outcome {
+        Ok(Ok(report)) => return Ok(report),
+        Ok(Err(error)) => format!("{error:#}"),
+        Err(_) => format!("it did not answer within {} seconds", limit.as_secs()),
+    };
+    Ok(McpServerInspectResponse {
+        name: server.name,
+        connected: false,
+        live: false,
+        responding: false,
+        protocol_version: None,
+        server_name: None,
+        server_version: None,
+        capabilities: Vec::new(),
+        instructions: None,
+        logs: Vec::new(),
+        error: Some(error),
     })
 }
 
