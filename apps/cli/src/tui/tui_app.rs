@@ -4921,6 +4921,7 @@ pub async fn run(
         let Ok(release) = crate::update_check::fetch_latest_release().await else {
             return;
         };
+        crate::update_check::remember_latest_release(&release);
         if crate::update_check::compare_versions(
             crate::update_check::running_version(),
             &release.version,
@@ -4931,6 +4932,8 @@ pub async fn run(
                 release.version,
                 crate::update_check::running_version()
             ));
+        } else if let Some(lines) = crate::update_check::unseen_release_notes(&release) {
+            crate::tui::push_tui_notice(lines.join("\n"));
         }
     });
     let effective_provider_override = crate::models::plan_first_provider_override(
