@@ -99,6 +99,11 @@ build it, and the audit cell is recorded as not applicable by this decision.
 - **VS Code extras (S4.09, S4.13, S4.17, S4.23, S4.37, S4.38, S4.40).** Claude Code
   in VS Code has no projects, library, AGI Work, schedule creation, account
   connection, model catalog or billing; it hands those to the web.
+- **Dedicated artifact editors (S27.34, S27.39-41, S28.02, S28.09, S28.28, S28.30,
+  S29.01-04, S29.10-11, S30.01, S30.03, S30.18-19, S30.23, S30.26, S32.06,
+  S32.26-28, S32.30, S33.02, S33.05, S33.08-09, S33.13, S33.19).** ChatGPT
+  Canvas and Claude artifacts change files by prompt and have no spreadsheet,
+  slide, design, email-send or deployment editor.
 - **Periodic usage recap (S42.20).** Neither delivers one; Reflect builds a recap
   on demand.
 - **Search domain, source-type and per-answer source controls (S34.08, S34.09,
