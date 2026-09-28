@@ -152,6 +152,7 @@ pub mod usage_summary;
 
 // Phase-2 candidates, implementations exist but the user-facing surface is
 // not yet wired. Each carries an inline PHASE2 marker explaining the unblock.
+pub(crate) mod installs;
 #[allow(dead_code)]
 // PHASE2: registry.agiworkforce.com not deployed; rewires to plugin-manifest discovery (Sprint B6)
 pub mod marketplace;
@@ -1505,6 +1506,8 @@ enum PluginSubcommand {
         #[arg(long)]
         unsafe_allow_unsigned: bool,
     },
+    /// Remove a plugin you installed.
+    Remove { name: String },
     /// Sign a plugin directory with a publisher's Ed25519 key.
     Sign {
         /// Plugin directory containing its manifest.
@@ -3198,9 +3201,9 @@ async fn run_update_install(
 }
 
 async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
-    use crate::mcp::registry::{self, McpRegistry, TransportKind};
+    use crate::mcp::registry::McpRegistry;
 
-    let mut registry_file = McpRegistry::load()?;
+    let registry_file = McpRegistry::load()?;
     match action {
         McpSubcommand::Add {
             name,
@@ -3212,57 +3215,41 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             headers,
             force,
         } => {
-            let mut entry = match (command, url) {
-                (Some(command), None) => {
-                    registry::build_server_entry(TransportKind::Stdio, command, args)?
-                }
-                (None, Some(url)) => {
-                    let kind = match transport {
-                        RemoteMcpTransport::Http => TransportKind::Http,
-                        RemoteMcpTransport::Sse => TransportKind::Sse,
-                    };
-                    registry::build_server_entry(kind, url, &[])?
-                }
+            let target = match (command, url) {
+                (Some(command), None) => installs::McpServerTarget::Stdio {
+                    command: command.clone(),
+                    args: args.clone(),
+                },
+                (None, Some(url)) => installs::McpServerTarget::Remote {
+                    url: url.clone(),
+                    sse: matches!(transport, RemoteMcpTransport::Sse),
+                },
                 _ => anyhow::bail!(
                     "pass either --command <executable> for a stdio server or --url <url> for a remote one"
                 ),
             };
-            if !env.is_empty() {
-                let mut map = serde_json::Map::new();
-                for pair in env {
-                    let (key, value) = pair
-                        .split_once('=')
-                        .filter(|(key, _)| !key.trim().is_empty())
-                        .with_context(|| format!("--env takes KEY=VALUE, got {pair}"))?;
-                    map.insert(key.trim().to_string(), serde_json::json!(value));
-                }
-                entry["env"] = serde_json::Value::Object(map);
-            }
-            if !headers.is_empty() {
-                let mut map = serde_json::Map::new();
-                for header in headers {
-                    let (key, value) = header
-                        .split_once(':')
-                        .filter(|(key, _)| !key.trim().is_empty())
-                        .with_context(|| format!("--header takes \"Name: value\", got {header}"))?;
-                    map.insert(key.trim().to_string(), serde_json::json!(value.trim()));
-                }
-                entry["headers"] = serde_json::Value::Object(map);
-            }
-            registry_file.add(name, entry, *force)?;
-            registry_file.save()?;
-            #[cfg(unix)]
-            if !env.is_empty() || !headers.is_empty() {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(
-                    McpRegistry::default_path()?,
-                    std::fs::Permissions::from_mode(0o600),
-                )?;
-            }
+            let split_pairs = |pairs: &[String], separator: char, usage: &str| {
+                pairs
+                    .iter()
+                    .map(|pair| {
+                        pair.split_once(separator)
+                            .filter(|(key, _)| !key.trim().is_empty())
+                            .map(|(key, value)| (key.trim().to_string(), value.trim().to_string()))
+                            .with_context(|| format!("{usage}, got {pair}"))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            };
+            let path = installs::add_mcp_server(&installs::McpServerSpec {
+                name: name.clone(),
+                target,
+                env: split_pairs(env, '=', "--env takes KEY=VALUE")?,
+                headers: split_pairs(headers, ':', "--header takes \"Name: value\"")?,
+                overwrite: *force,
+            })?;
             println!(
                 "Registered MCP server '{}' in {}.",
                 terminal_text::sanitize_terminal_text(name),
-                McpRegistry::default_path()?.display()
+                path.display()
             );
             Ok(())
         }
@@ -3353,15 +3340,7 @@ async fn run_mcp_registry_command(action: &McpSubcommand) -> Result<()> {
             Ok(())
         }
         McpSubcommand::Remove { name } => {
-            let removed = registry_file
-                .list()
-                .into_iter()
-                .find(|row| &row.name == name);
-            let Some(removed) = removed else {
-                anyhow::bail!("no MCP server named '{name}' in the registry")
-            };
-            registry_file.remove(name);
-            registry_file.save()?;
+            let removed = installs::remove_mcp_server(name)?;
             println!(
                 "Removed MCP server '{}'. Re-add it with: agi mcp add {} {} {}",
                 terminal_text::sanitize_terminal_text(name),
@@ -4544,21 +4523,6 @@ pub async fn run_main() -> Result<()> {
                         unsafe_no_integrity,
                         unsafe_allow_unsigned,
                     } => {
-                        let pname =
-                            match plugins::derive_plugin_install_name(source, name.as_deref()) {
-                                Ok(name) => name,
-                                Err(error) => {
-                                    anyhow::bail!("Refusing install: {error}");
-                                }
-                            };
-                        let psrc = if is_git_plugin_source(source) {
-                            plugins::PluginSource::Git {
-                                url: source.clone(),
-                                branch: None,
-                            }
-                        } else {
-                            plugins::PluginSource::Local(std::path::PathBuf::from(source))
-                        };
                         // AUDIT-FIX: H-16, supply-chain integrity is required.
                         let pintegrity = match (integrity.as_deref(), *unsafe_no_integrity) {
                             (Some(s), _) if s.starts_with("sha256:") => {
@@ -4576,12 +4540,14 @@ pub async fn run_main() -> Result<()> {
                         let psignature =
                             plugins::PluginSignaturePolicy::configured(*unsafe_allow_unsigned)
                                 .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
-                        match mgr.install(plugins::PluginInstallRequest {
-                            source: psrc,
-                            name: pname,
-                            integrity: pintegrity,
-                            signature: psignature,
-                        }) {
+                        let outcome = installs::install_plugin(
+                            source,
+                            name.as_deref(),
+                            pintegrity,
+                            psignature,
+                        )
+                        .map_err(|error| anyhow::anyhow!("Refusing install: {error}"))?;
+                        match outcome {
                             plugins::PluginInstallOutcome::Installed {
                                 path,
                                 format,
@@ -4609,6 +4575,15 @@ pub async fn run_main() -> Result<()> {
                                 anyhow::bail!("Failed: {}", error)
                             }
                         }
+                    }
+                    PluginSubcommand::Remove { name } => {
+                        let removed = installs::remove_plugin(name)?;
+                        println!(
+                            "Removed plugin '{}' from {}.",
+                            terminal_text::sanitize_terminal_text(name),
+                            removed.display()
+                        );
+                        Ok(())
                     }
                     PluginSubcommand::Sign {
                         path,

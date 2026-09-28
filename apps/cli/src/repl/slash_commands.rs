@@ -198,6 +198,24 @@ pub(super) async fn handle_slash_command(
                 }
             }
         }
+        "/skills" if arg.starts_with("remove") => {
+            let name = arg.trim_start_matches("remove").trim();
+            if name.is_empty() {
+                output::print_warn("Usage: /skills remove <skill name>");
+            } else {
+                match std::env::current_dir()
+                    .map_err(anyhow::Error::from)
+                    .and_then(|root| crate::installs::remove_skill(&root, name))
+                {
+                    Ok(removed) => {
+                        output::print_info(&format!("Removed the skill {}.", removed.display()))
+                    }
+                    Err(error) => {
+                        output::print_warn(&format!("Could not remove '{name}': {error:#}"))
+                    }
+                }
+            }
+        }
         "/skills" => {
             let all = crate::skills::discover_skills();
             output::print_block(&crate::skills::format_skill_list(&all));
