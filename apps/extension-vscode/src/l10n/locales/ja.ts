@@ -380,6 +380,28 @@ const ja = {
   'webview.searchingSessions': 'セッションを検索しています…',
   'webview.noMatchingSessions': '「{query}」に一致するセッションはありません',
   'webview.archivedSessions': 'アーカイブ済みのセッション',
+  'messageActions.resendTitle': 'このメッセージを再送信しますか？',
+  'messageActions.resendDetail':
+    'このメッセージへの返信とそれ以降のすべてがこのセッションから削除され、その後メッセージがもう一度送信されます。ファイルは変更されません。',
+  'messageActions.resend': '再送信',
+  'messageActions.stopFirst': 'AGI Workforce: 先に現在の応答を停止してください。',
+  'messageActions.notFound':
+    'AGI Workforce: そのメッセージはこのセッションにありません。セッションを開き直してもう一度お試しください。',
+  'messageActions.needsUpdate':
+    'AGI Workforce: メッセージの再送信やそこからの分岐には AGI CLI の更新が必要です。',
+  'messageActions.branchTitle': '{title}（分岐）',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': '再送信',
+  'webview.resendMessageLabel': 'このメッセージを再送信',
+  'webview.branchFromMessage': '分岐',
+  'webview.branchFromMessageLabel':
+    'ここから新しいセッションを開始し、このメッセージを編集できる状態にします',
+  'localServers.running_other': '{provider} は実行中 · モデル {count} 個',
+  'localServers.runningEmpty': '{provider} は実行中ですが、モデルが読み込まれていません',
+  'localServers.notRunning': '{provider} は実行されていません。モデルを使うには起動してください。',
+  'localServers.unhealthy': '{provider} が応答しません: {reason}',
+  'localServers.blocked': '{provider} はブロックされています: {reason}',
+  'localServers.noReason': '理由は示されていません',
 };
 
 export default ja;

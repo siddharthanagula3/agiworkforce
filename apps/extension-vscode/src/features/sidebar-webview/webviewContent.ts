@@ -604,6 +604,10 @@ export function getWebviewContent(
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
     .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
+    .message-actions--user { justify-content: flex-end; }
+    .message.user:hover .message-actions--user,
+    .message-actions--user:focus-within { opacity: 1; }
+    .message.user[data-delivery-state] .message-actions--user { display: none; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -3928,6 +3932,47 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function userActionButton(action, iconClass, title, label, messageEl) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'message-action';
+      button.title = title;
+      button.setAttribute('aria-label', label);
+      var icon = document.createElement('span');
+      icon.className = 'codicon ' + iconClass;
+      icon.setAttribute('aria-hidden', 'true');
+      button.appendChild(icon);
+      button.addEventListener('click', function () {
+        var text = messageEl.getAttribute('data-text') || '';
+        var occurrence = 0;
+        var bubbles = messagesEl.querySelectorAll('.message.user[data-text]');
+        for (var i = 0; i < bubbles.length; i++) {
+          if (bubbles[i] === messageEl) break;
+          if (
+            !bubbles[i].hasAttribute('data-delivery-state') &&
+            bubbles[i].getAttribute('data-text') === text
+          ) {
+            occurrence++;
+          }
+        }
+        vscode.postMessage({
+          type: 'messageAction',
+          payload: { action: action, text: text, occurrence: occurrence },
+        });
+      });
+      return button;
+    }
+
+    function appendUserActions(messageEl, text) {
+      if (!messageEl || !text) return;
+      messageEl.setAttribute('data-text', text);
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--user';
+      row.appendChild(userActionButton('resend', 'codicon-redo', L10N.resendMessage, L10N.resendMessageLabel, messageEl));
+      row.appendChild(userActionButton('branch', 'codicon-repo-forked', L10N.branchFromMessage, L10N.branchFromMessageLabel, messageEl));
+      messageEl.appendChild(row);
+    }
+
     function prependAuthor(messageEl, label) {
       var author = document.createElement('span');
       author.className = 'visually-hidden';
@@ -4032,7 +4077,8 @@ export function getWebviewContent(
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
-          addMessage('user', historyMessage.text || '');
+          var userHistoryEl = addMessage('user', historyMessage.text || '');
+          appendUserActions(userHistoryEl, historyMessage.text || '');
         }
       }
       if (conversation.plan) upsertPlanCard(conversation.plan);
@@ -4550,6 +4596,7 @@ export function getWebviewContent(
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
       prependAuthor(userMessageEl, 'You said:');
       appendSentContext(userMessageEl);
+      appendUserActions(userMessageEl, text);
       if (isFollowUp) {
         userMessageEl.setAttribute('data-delivery-state', 'queued');
         appendQueuedControls(userMessageEl, clientMessageId, text);

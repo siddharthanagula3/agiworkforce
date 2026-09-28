@@ -434,6 +434,29 @@ const hi = {
   'webview.searchingSessions': 'सत्र खोजे जा रहे हैं…',
   'webview.noMatchingSessions': '"{query}" से कोई सत्र मेल नहीं खाता',
   'webview.archivedSessions': 'संग्रहीत सत्र',
+  'messageActions.resendTitle': 'यह संदेश फिर से भेजें?',
+  'messageActions.resendDetail':
+    'इसका जवाब और इसके बाद का सब कुछ इस सत्र से हटा दिया जाता है, फिर संदेश दोबारा भेजा जाता है। फ़ाइलें नहीं बदलतीं।',
+  'messageActions.resend': 'फिर से भेजें',
+  'messageActions.stopFirst': 'AGI Workforce: पहले चल रही प्रतिक्रिया रोकें।',
+  'messageActions.notFound':
+    'AGI Workforce: वह संदेश अब इस सत्र में नहीं है। सत्र फिर से खोलें और दोबारा कोशिश करें।',
+  'messageActions.needsUpdate':
+    'AGI Workforce: संदेश फिर से भेजने या उससे शाखा बनाने के लिए AGI CLI अपडेट करें।',
+  'messageActions.branchTitle': '{title} (शाखा)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'फिर से भेजें',
+  'webview.resendMessageLabel': 'यह संदेश फिर से भेजें',
+  'webview.branchFromMessage': 'शाखा बनाएँ',
+  'webview.branchFromMessageLabel': 'यहीं से नया सत्र शुरू करें, यह संदेश बदलने के लिए तैयार रहेगा',
+  'localServers.running_one': '{provider} चल रहा है · {count} मॉडल',
+  'localServers.running_other': '{provider} चल रहा है · {count} मॉडल',
+  'localServers.runningEmpty': '{provider} चल रहा है, पर कोई मॉडल लोड नहीं है',
+  'localServers.notRunning':
+    '{provider} नहीं चल रहा। इसके मॉडल इस्तेमाल करने के लिए इसे शुरू करें।',
+  'localServers.unhealthy': '{provider} जवाब नहीं दे रहा: {reason}',
+  'localServers.blocked': '{provider} अवरुद्ध है: {reason}',
+  'localServers.noReason': 'कोई कारण नहीं बताया गया',
 };
 
 export default hi;

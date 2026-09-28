@@ -474,6 +474,30 @@ const de = {
   'webview.searchingSessions': 'Sitzungen werden durchsucht…',
   'webview.noMatchingSessions': 'Keine Sitzung passt zu „{query}“',
   'webview.archivedSessions': 'Archivierte Sitzungen',
+  'messageActions.resendTitle': 'Diese Nachricht erneut senden?',
+  'messageActions.resendDetail':
+    'Die Antwort darauf und alles danach werden aus dieser Sitzung entfernt, dann wird die Nachricht erneut gesendet. Dateien bleiben unverändert.',
+  'messageActions.resend': 'Erneut senden',
+  'messageActions.stopFirst': 'AGI Workforce: Beenden Sie zuerst die laufende Antwort.',
+  'messageActions.notFound':
+    'AGI Workforce: Diese Nachricht ist nicht mehr in dieser Sitzung. Öffnen Sie die Sitzung erneut und versuchen Sie es noch einmal.',
+  'messageActions.needsUpdate':
+    'AGI Workforce: Aktualisieren Sie die AGI CLI, um eine Nachricht erneut zu senden oder davon abzuzweigen.',
+  'messageActions.branchTitle': '{title} (Abzweig)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'Erneut senden',
+  'webview.resendMessageLabel': 'Diese Nachricht erneut senden',
+  'webview.branchFromMessage': 'Abzweigen',
+  'webview.branchFromMessageLabel':
+    'Ab hier eine neue Sitzung starten, mit dieser Nachricht zum Bearbeiten',
+  'localServers.running_one': '{provider} läuft · {count} Modell',
+  'localServers.running_other': '{provider} läuft · {count} Modelle',
+  'localServers.runningEmpty': '{provider} läuft, aber es ist kein Modell geladen',
+  'localServers.notRunning':
+    '{provider} läuft nicht. Starten Sie es, um seine Modelle zu verwenden.',
+  'localServers.unhealthy': '{provider} antwortet nicht: {reason}',
+  'localServers.blocked': '{provider} ist blockiert: {reason}',
+  'localServers.noReason': 'kein Grund angegeben',
 };
 
 export default de;

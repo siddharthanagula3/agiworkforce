@@ -276,6 +276,7 @@ const threadReadResponseSchema = z.object({
       z.object({
         role: z.string().min(1).max(40),
         text: z.string().max(1_000_000),
+        index: z.number().int().nonnegative().optional(),
       }),
     )
     .max(10_000),
@@ -418,6 +419,18 @@ const localModelListResponseSchema = z.object({
     }),
   ),
   hostModels: z.array(hostModelSummarySchema).optional(),
+  localServers: z
+    .array(
+      z.object({
+        provider: z.enum(['ollama', 'lmstudio']),
+        health: z.enum(['running', 'not_running', 'unhealthy', 'blocked']),
+        modelCount: z.number().int().nonnegative(),
+        message: z.string().max(2_000).optional(),
+      }),
+    )
+    .max(20)
+    .optional()
+    .catch(undefined),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),

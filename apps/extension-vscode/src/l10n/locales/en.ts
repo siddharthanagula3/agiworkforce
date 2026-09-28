@@ -427,6 +427,28 @@ const en = {
   'webview.searchingSessions': 'Searching sessions…',
   'webview.noMatchingSessions': 'No sessions match "{query}"',
   'webview.archivedSessions': 'Archived sessions',
+  'messageActions.resendTitle': 'Resend this message?',
+  'messageActions.resendDetail':
+    'The reply to it and everything after it are removed from this session, then the message is sent again. Files are not changed.',
+  'messageActions.resend': 'Resend',
+  'messageActions.stopFirst': 'AGI Workforce: stop the current reply first.',
+  'messageActions.notFound':
+    'AGI Workforce: that message is no longer in this session. Reopen the session and try again.',
+  'messageActions.needsUpdate':
+    'AGI Workforce: update the AGI CLI to resend a message or branch from it.',
+  'messageActions.branchTitle': '{title} (branch)',
+  'messageActions.failed': 'AGI Workforce: {reason}',
+  'webview.resendMessage': 'Resend',
+  'webview.resendMessageLabel': 'Resend this message',
+  'webview.branchFromMessage': 'Branch',
+  'webview.branchFromMessageLabel': 'Start a new session from here with this message ready to edit',
+  'localServers.running_one': '{provider} is running · {count} model',
+  'localServers.running_other': '{provider} is running · {count} models',
+  'localServers.runningEmpty': '{provider} is running with no models loaded',
+  'localServers.notRunning': '{provider} is not running. Start it to use its models.',
+  'localServers.unhealthy': '{provider} is not responding: {reason}',
+  'localServers.blocked': '{provider} is blocked: {reason}',
+  'localServers.noReason': 'no reason was given',
 };
 
 export default en;
