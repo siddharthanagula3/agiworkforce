@@ -14,6 +14,7 @@ export const INTERACTIVE_CARDS_MAX_PER_MESSAGE = 4;
 
 export const KNOWN_INTERACTIVE_CARD_KINDS = [
   'clarify.v1',
+  'image.v1',
   'itinerary.v1',
   'map-search.v1',
   'mcp-app.v1',
@@ -34,6 +35,7 @@ export function isKnownInteractiveCardKind(kind: string): kind is KnownInteracti
  * motivated it.
  */
 export const LEADING_INTERACTIVE_CARD_KINDS: readonly KnownInteractiveCardKind[] = [
+  'image.v1',
   'itinerary.v1',
   'places.v1',
   'product-comparison.v1',
@@ -196,6 +198,32 @@ export const ITINERARY_MAX_STOPS = 12;
 export const ITINERARY_NOTE_MAX_LENGTH = 240;
 export const ITINERARY_TOOL_NAME = 'plan_itinerary';
 export const ITINERARY_STOPS_PER_ROUTE_LEG = 5;
+
+export const GENERATE_IMAGE_TOOL_NAME = 'generate_image';
+export const EDIT_IMAGE_TOOL_NAME = 'edit_image';
+
+export function isImageChatToolName(name: string): boolean {
+  return name === GENERATE_IMAGE_TOOL_NAME || name === EDIT_IMAGE_TOOL_NAME;
+}
+
+export const IMAGE_CARD_KIND = 'image.v1';
+export const IMAGE_CARD_MAX_IMAGES = 4;
+export const IMAGE_TOOL_PROMPT_MAX_LENGTH = 4000;
+
+export type ImageCardOperation = 'generate' | 'edit';
+
+export interface ImageCardImage {
+  assetId: string;
+  url: string;
+}
+
+export interface ImageCardBody {
+  operation: ImageCardOperation;
+  prompt: string;
+  images: ImageCardImage[];
+  aspectRatio?: string;
+  model?: string;
+}
 
 export const MAP_SEARCH_QUERY_MAX_LENGTH = 300;
 
@@ -363,6 +391,7 @@ export const INTERACTIVE_CARD_IDENTITY_GUARD: _AssertNoIdentityInModelInput = tr
 
 export type KnownInteractiveCard =
   | (InteractiveCardCommon & { recognized: true; kind: 'clarify.v1'; body: ClarifyCardBody })
+  | (InteractiveCardCommon & { recognized: true; kind: 'image.v1'; body: ImageCardBody })
   | (InteractiveCardCommon & { recognized: true; kind: 'itinerary.v1'; body: ItineraryCardBody })
   | (InteractiveCardCommon & {
       recognized: true;

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -14,6 +15,7 @@ import {
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { HelpSearch } from '@/features/support/components/HelpSearch';
 import { BYOK_SURFACES, MARKETING, SURFACE_STATUS } from '@/lib/marketing-constants';
+import { readTopicParam, resolveDocTopic } from '@/lib/support/doc-topics';
 import { supportCollectionIndex } from './collections';
 
 const HERO_FACTS = [
@@ -31,10 +33,14 @@ export const metadata = buildMetadata({
 export default async function HelpPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; topic?: string | string[] }>;
 }) {
-  const { q } = await searchParams;
-  const initialQuery = (Array.isArray(q) ? q[0] : q)?.slice(0, 200) ?? '';
+  const { q, topic: topicParam } = await searchParams;
+  const topic = readTopicParam(topicParam);
+  const topicPath = topic ? resolveDocTopic(topic) : null;
+  if (topicPath) redirect(topicPath);
+  const initialQuery =
+    (Array.isArray(q) ? q[0] : q)?.slice(0, 200) ?? topic?.replace(/-/g, ' ') ?? '';
   const { collections, articleCount } = supportCollectionIndex();
 
   return (

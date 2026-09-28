@@ -20,6 +20,7 @@ import {
   handleSaveShortcut,
   handleListShortcuts,
   handleDeleteShortcut,
+  handleUpdateShortcut,
   planShortcutReplay,
 } from './features/background/shortcuts';
 import { validateShortcutReplayTarget } from './features/shortcuts/origin';
@@ -3678,6 +3679,9 @@ async function handleMessageAsync(
     case 'DELETE_SHORTCUT':
       return handleDeleteShortcut(message as import('./types').DeleteShortcutMessage);
 
+    case 'UPDATE_SHORTCUT':
+      return handleUpdateShortcut(message as import('./types').UpdateShortcutMessage);
+
     case 'REPLAY_SHORTCUT':
       return handleReplayShortcut(message as import('./types').ReplayShortcutMessage);
 
@@ -4957,6 +4961,7 @@ async function handleChatMessage(
         attachments: message.attachments,
         fileAttachments: message.fileAttachments,
         extendedThinking: message.extendedThinking,
+        ...(message.workMode === 'agiwork' ? { workMode: 'agiwork' as const } : {}),
         currentModelKey: message.currentModelKey,
         previousTaskType: message.previousTaskType,
         conversationId: message.conversationId,

@@ -1,20 +1,23 @@
-
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
+const here = dirname(fileURLToPath(import.meta.url));
+const source = readFileSync(join(here, '../src/side_panel.ts'), 'utf8');
+const commandsSource = readFileSync(
+  join(here, '../src/features/side-panel/pageCommands.ts'),
   'utf8',
 );
 
 function registryBlock(): string {
-  const start = source.indexOf('const SLASH_COMMANDS: Record<string, SlashCommandMeta>');
+  const start = commandsSource.indexOf(
+    'export const SLASH_COMMANDS: Record<string, SlashCommandMeta>',
+  );
   expect(start).toBeGreaterThan(-1);
-  const end = source.indexOf('\n};', start);
+  const end = commandsSource.indexOf('\n};', start);
   expect(end).toBeGreaterThan(start);
-  return source.slice(start, end);
+  return commandsSource.slice(start, end);
 }
 
 function registryNames(): string[] {
@@ -36,8 +39,10 @@ describe('Chrome side-panel command list drives every command surface', () => {
   });
 
   it('builds autocomplete matches directly from the registry', () => {
-    expect(source).toContain('return Object.entries(SLASH_COMMANDS).filter(');
-    expect(source).toContain('slashMatches = matchSlashCommands(inputEl.value)');
+    expect(commandsSource).toContain(
+      'return [...Object.entries(SLASH_COMMANDS), ...saved].filter(',
+    );
+    expect(source).toContain('slashMatches = matchSlashCommands(inputEl.value, promptShortcuts)');
   });
 
   it('does not restore a second prompt-chip command registry', () => {
