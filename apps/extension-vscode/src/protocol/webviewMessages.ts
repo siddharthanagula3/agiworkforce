@@ -186,6 +186,11 @@ const runSlashCommand = z.object({
   payload: z.object({ name: z.string().min(1).max(120) }),
 });
 
+const reviewApprovalChange = z.object({
+  type: z.literal('reviewApprovalChange'),
+  payload: z.object({ requestId: z.string().min(1).max(200) }),
+});
+
 const rateAnswer = z.object({
   type: z.literal('rateAnswer'),
   payload: z.object({
@@ -300,6 +305,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   cancelQueuedMessage,
   openSuggestedProject,
   rateAnswer,
+  reviewApprovalChange,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

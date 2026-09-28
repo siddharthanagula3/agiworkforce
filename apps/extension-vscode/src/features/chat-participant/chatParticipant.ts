@@ -412,6 +412,10 @@ export function createChatHandler(
         else stream.markdown(renderPlanMarkdown(plan));
       } else if (event.type === 'tool_execution_end') {
         if (event.isError) stream.progress(`${event.name.replaceAll('_', ' ')} failed`);
+      } else if (event.type === 'source_list') {
+        for (const source of event.sources) {
+          if (/^https?:\/\//iu.test(source.url)) stream.reference(vscode.Uri.parse(source.url));
+        }
       } else if (event.type === 'approval_requested') {
         void (async () => {
           try {
