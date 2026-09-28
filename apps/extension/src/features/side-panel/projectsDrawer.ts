@@ -134,9 +134,14 @@ export const PROJECTS_DRAWER_CSS = `
   }
   .sp-drawer-project-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-drawer-project-btn:disabled { cursor: wait; opacity: 0.55; }
+  .sp-drawer-project-btn.is-danger {
+    color: var(--agi-ext-danger-text);
+    border-color: var(--agi-ext-danger-border);
+  }
   .sp-drawer-project-btn.is-danger:hover {
     color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
+    background: var(--agi-ext-danger-bg);
   }
   .sp-drawer-project-btn.is-confirm {
     color: var(--agi-ext-on-danger);
@@ -216,7 +221,7 @@ export function buildProjectsDrawerSection(
   const deps: ProjectsDrawerDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies };
 
   const sectionEl = el('div', { class: 'sp-drawer-section', id: 'sp-drawer-projects-section' });
-  sectionEl.appendChild(el('div', { class: 'sp-drawer-section-title' }, t('spProjectsTitle')));
+  sectionEl.appendChild(el('h3', { class: 'sp-drawer-section-title' }, t('spProjectsTitle')));
   sectionEl.appendChild(el('p', { class: 'sp-drawer-projects-help' }, t('spProjectsHelp')));
 
   const newBtn = el(

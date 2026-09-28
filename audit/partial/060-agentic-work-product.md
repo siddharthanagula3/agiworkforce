@@ -68,17 +68,16 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:172-180`, `a
 
 - Done when: The user can choose which tools the task may use before it runs.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | AGI Work forces web search, page fetch and code execution on for every run; only connectors can be switched off per chat, so built-in tools cannot be chosen. | ui |
-| desktop | partial | Same as web: built-in tools are forced on in AGI Work; only connectors can be switched off. | ui |
+| desktop | partial | the desktop managed composer (unified-chat ChatInput) has no AGI Work scope fields to send excludedTools; the server side is ready | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | partial | VS Code offers only permission modes (ask/auto/plan/bypass); it cannot enable or disable individual tools. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:774-788`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2975-2977`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:820-820`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:3550-3554`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:1037-1047`
 
 ## S60.07: Execution-location selection.
 
@@ -145,54 +144,50 @@ Code: `apps/cli/src/lib.rs:477-481`, `apps/cli/src/lib.rs:5020-5022`, `apps/cli/
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Research mode shows an editable plan (steps, deliverable) with Start research or Cancel before it runs; AGI Work shows its plan but starts executing right after writing it, with no approve, edit or reject step. | ui, handler |
-| desktop | partial | Research mode shows an editable plan (steps, deliverable) with Start research or Cancel before it runs; AGI Work shows its plan but starts executing right after writing it, with no approve, edit or reject step. | ui, handler |
+| web | partial | plan approve/edit/reject before execution needs a plan checkpoint and resume path in the tool loop like Research; not built | ui, handler |
+| desktop | partial | plan approve/edit/reject before execution needs a plan checkpoint and resume path in the tool loop like Research; not built | ui, handler |
 | mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
 | cli | partial | Plan mode blocks edits until approval, but /plan accept\|reject exist only in the --no-tui REPL; the TUI can only toggle plan mode off. | ui |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 | chrome | partial | Chrome run detail lists plan steps as journal lines only; no approve/reject, and Chrome cannot start AGI Work. | ui, handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4304-4311`, `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:329-344`, `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:502-527`, `apps/web/features/chat/components/research/ResearchPlan.tsx:290-310`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4719-4719`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`
 
 ## S60.14: Step list.
 
 - Done when: The task view lists its steps with an accurate per-step status.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Work history marks every plan step completed as soon as the plan is written (journal progress events are all status completed), even for failed or running runs; only the in-chat dock shows live status. | handler |
-| desktop | partial | Same as web: Work history plan statuses are all recorded as completed. | handler |
 | mobile | partial | Steps appear only as a chronological Activity log, not a step list with status. | ui |
 | cli | partial | update_plan/todo_write steps are saved to ~/.agiworkforce/plans and narrated in the REPL; the TUI has no step-list panel. | ui |
 | chrome | partial | Run detail is a flat journal of events; no step list with status. | ui |
 
-Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:329-344`, `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:502-527`, `apps/web/app/api/llm/v1/chat/completions/lib/agiwork-plan.ts:205-212`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`
+Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/cli/src/agent/mod.rs:1332-1341`, `apps/cli/src/agent/chat.rs:2197-2212`
 
 ## S60.16: Running-step indicator.
 
 - Done when: While a task runs, the view marks which step is currently executing.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Plan steps are not advanced as work proceeds: step 1 stays "in progress" until the run ends and then all flip at once; only tool rows show a live running state. | handler |
-| desktop | partial | Same as web: plan steps do not advance individually. | handler |
 | mobile | partial | Only the run state ("Running") and a log line appear; no current-step marker. | ui |
 | chrome | partial | Chrome shows the run state badge and a log; no current-step marker. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4304-4311`, `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:314-322`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3624-3633`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`
+Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:164-166`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
 
 ## S60.17: Parallel-work indicator.
 
 - Done when: When the agent works on several things at once, the view shows the parallel work.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The tool timeline can draw a "parallel" group, but nothing in the stream ever sets parallelGroup, so parallel work is never marked. | handler |
 | desktop | partial | Same as web: parallel group renderer is never fed. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | partial | Subagents can run, but the TUI has no subagent or parallel indicator (TranscriptCellKind::Subagent is never used). | ui |
@@ -205,10 +200,10 @@ Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:738-752`, `ap
 
 - Done when: The agent can pause a task to ask the user a clarifying question and continue with the answer.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | AGI Work forces web search on before the clarify tool is considered, and the clarify tool is never offered when web search is on, so an AGI Work run cannot ask a clarifying question; it can only pause for connector input fields. | handler |
 | desktop | partial | Same as web: the clarify tool is never offered on AGI Work turns. | handler |
 | mobile | partial | Mobile shows "Waiting for connector input" but cannot answer it ("answered where the task was started"); no clarifying questions. | ui |
 | cli | partial | The ask_user tool reads the answer with a plain stdin prompt, which works in the --no-tui REPL; the TUI has no overlay for it. | ui |
@@ -263,45 +258,37 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The detail panel shows the failing step and whether it is safe to run again, but the only recovery is re-running the whole task; no per-step retry. | ui, handler |
-| desktop | partial | Same as web: no per-step retry. | ui, handler |
+| web | partial | per-step retry needs a resume-from-step path in the tool loop; not built | ui, handler |
+| desktop | partial | per-step retry needs a resume-from-step path in the tool loop; not built | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:531-556`, `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:485-498`
+Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:603-603`
 
 ## S60.25: Restart task.
 
 - Done when: The user can restart a finished task with the same inputs.
 - Wave: 3
-- Already works on: vscode
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Re-run loads only the goal into a new chat; the constraints and deliverable parsed from the run are dropped, and the user must send it again. | handler |
-| desktop | partial | Same as web: re-run drops constraints and deliverable. | handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:485-498`, `apps/web/features/tasks/components/TasksPage.tsx:45-54`
 
 ## S60.26: Duplicate task.
 
 - Done when: The user can duplicate a task into a new editable task.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The closest action is Re-run, which copies only the goal text into a new chat draft; constraints and deliverable are lost and there is no Duplicate action. | handler |
-| desktop | partial | Same as web. | handler |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:485-498`, `apps/web/features/tasks/components/TasksPage.tsx:45-54`
 
 ## S60.28: Save as Skill.
 
@@ -323,15 +310,13 @@ Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
 - Done when: When a task ends the user sees a summary of the result.
 - Wave: 3
-- Already works on: mobile, cli, chrome
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The final answer lives only in the source chat; the Work history detail shows goal, plan, steps, outputs and cost but no outcome summary. | ui |
-| desktop | partial | Same as web. | ui |
 | vscode | partial | Cloud task detail shows steps and outputs but no result text (only "Open on web"); local chat answers show in the chat. | ui |
 
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:623-632`, `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:589-603`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:67-77`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:90-100`
+Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:67-77`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:90-100`
 
 ## S60.30: Generated deliverables.
 
@@ -350,30 +335,29 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A run that hits the step limit is labelled "Partially completed" with a generic line; nothing summarises which parts were done and which remain. | handler, ui |
-| desktop | partial | Same as web. | handler, ui |
 | mobile | partial | Only the "Partially completed" state label and log; no done-versus-remaining summary. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | Only the run state and last error; no done-versus-remaining summary. | ui |
 | chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:3639-3646`, `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:531-556`, `apps/mobile/src/features/tasks/runPresentation.ts:252-257`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:252-257`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 
 - Done when: The user can share a task (its plan, steps and results) with someone else.
 - Wave: 3
+- Already works on: web
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A task can only be shared by sharing its chat; the Work history run (plan, outputs, cost) has no share action. | ui |
-| desktop | partial | Same as web. | ui |
+| desktop | partial | desktop share needs the conversation's messages loaded; wire shareConversation in DesktopTasks after opening the conversation | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/hooks/use-share-conversation.ts:175-181`, `packages/ui/unified-chat/src/components/tasks/TasksPage.tsx:602-611`
+Code: `apps/desktop/src/features/v3/DesktopShellV3.tsx:477-477`

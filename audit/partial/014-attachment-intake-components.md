@@ -329,17 +329,15 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:778-779`, 
 
 - Done when: The composer explains whether and how long attached files are kept.
 - Wave: 3
-- Already works on: chrome
+- Already works on: web, desktop, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Explain in ordinary chats that attachments are saved to the Library and how long they are kept; today only the Temporary chat note mentions files ("stay out of your Library"). | ui |
-| desktop | partial | Explain in ordinary chats that attachments are saved to the Library and how long they are kept; today only the Temporary chat note mentions files. | ui |
 | mobile | partial | Say how long uploaded files are kept; the upload consent only says files leave the device for AGI Cloud. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/temporary-chat-policy.ts:14-17`, `apps/web/features/chat/components/Composer/ComposerPlusMenu.tsx:360-368`, `apps/mobile/stores/chat/chatExecutionStore.ts:1113-1121`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1113-1121`
 
 ## S14.35: Selected-model compatibility warning.
 

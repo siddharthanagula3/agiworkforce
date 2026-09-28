@@ -27,6 +27,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 type Granularity = AccountUsageHistoryResponse['granularity'];
 type HistoryRow = Pick<
@@ -916,6 +917,9 @@ export function UsageSection() {
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Your plan limits in credits, when each one resets, and where your credits went.
         </p>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <HelpArticleLink docId="usage-and-credits" label="How credits and limits work" />
+        </div>
       </div>
 
       {error && (

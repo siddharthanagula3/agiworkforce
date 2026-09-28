@@ -46,10 +46,11 @@ pub use spec::{Auth, Dialect, OpenAiOpts, ProviderSpec};
 pub use speech::{TranscriptionRequest, TranscriptionResponseFormat};
 pub use stop::GenerationStop;
 pub use stream::{
-    AnthropicThinking, ChatRequest, ToolChoice, build_anthropic_request_body,
-    build_gemini_request_body, build_ollama_request_body, build_openai_compat_request_body,
-    build_openai_responses_body, run_anthropic_stream, run_gemini_stream, run_ollama_stream,
-    run_openai_compat_stream, run_openai_responses_stream, stream_chat,
+    AGENT_RUN_ID_EVENT, AnthropicThinking, ChatRequest, FORWARDED_DELTA_EXTENSIONS, ToolChoice,
+    build_anthropic_request_body, build_gemini_request_body, build_ollama_request_body,
+    build_openai_compat_request_body, build_openai_responses_body, post_openai_compat_stream,
+    run_anthropic_stream, run_gemini_stream, run_ollama_stream, run_openai_compat_stream,
+    run_openai_responses_stream, stream_chat,
 };
 pub use watchdog::IdleWatchdog;
 pub use wire::{ContentBlock, Message, MessageContent, ToolCall, ToolDefinition};

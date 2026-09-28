@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import {
   parseCloudTaskHandoffQuery,
+  parseDeveloperSessionHandoffQuery,
   parseLocalContextHandoffQuery,
   VSCODE_CLOUD_TASK_HANDOFF_PATH,
+  VSCODE_DEVELOPER_SESSION_HANDOFF_PATH,
   VSCODE_CONTEXT_HANDOFF_PATH,
   type CloudTaskHandoff,
+  type DeveloperSessionHandoffLink,
   type LocalContextHandoff,
 } from '@agiworkforce/types';
 
+export { openDeveloperSessionLink, resumePendingDeveloperSession } from './developerSessionLink';
 export {
   parseCloudTaskHandoffQuery,
   VSCODE_CLOUD_TASK_HANDOFF_PATH,
@@ -120,7 +124,8 @@ interface GitRepositoryApi {
   state: {
     workingTreeChanges: Array<{ uri: vscode.Uri }>;
     indexChanges: Array<{ uri: vscode.Uri }>;
-    remotes: Array<{ fetchUrl?: string }>;
+    remotes: Array<{ name: string; fetchUrl?: string }>;
+    HEAD?: { name?: string; upstream?: { remote: string; name: string }; ahead?: number };
   };
   fetch: () => Promise<void>;
   checkout: (branch: string) => Promise<void>;
@@ -157,6 +162,38 @@ export async function workspaceGitHubRepositories(): Promise<string[]> {
     .filter((name): name is string => name !== null);
 }
 
+export interface WorkspaceCloudSource {
+  repository: string;
+  repositoryUrl: string;
+  branch: string | null;
+  upstream: string | null;
+  unpushedCommits: number;
+  dirtyPaths: string[];
+}
+
+export async function readWorkspaceCloudSource(): Promise<WorkspaceCloudSource | null> {
+  const repository = await workspaceGitRepository();
+  if (repository === null) return null;
+  const head = repository.state.HEAD;
+  const remotes = repository.state.remotes;
+  const preferred =
+    remotes.find((remote) => remote.name === head?.upstream?.remote) ??
+    remotes.find((remote) => remote.name === 'origin') ??
+    remotes[0];
+  const name = preferred?.fetchUrl ? githubRepositoryName(preferred.fetchUrl) : null;
+  if (name === null) return null;
+  return {
+    repository: name,
+    repositoryUrl: `https://github.com/${name}`,
+    branch: head?.name ?? null,
+    upstream: head?.upstream ? `${head.upstream.remote}/${head.upstream.name}` : null,
+    unpushedCommits: head?.ahead ?? 0,
+    dirtyPaths: [...repository.state.workingTreeChanges, ...repository.state.indexChanges].map(
+      (change) => vscode.workspace.asRelativePath(change.uri),
+    ),
+  };
+}
+
 /** The workspace's own git repository, through the editor's git extension. */
 export async function resolveGitCheckoutHost(): Promise<CloudResultPullHost> {
   return {
@@ -191,9 +228,21 @@ export async function handleContextHandoffUri(
   uri: vscode.Uri,
   target: ContextHandoffTarget | undefined,
   resolvePullHost?: () => Promise<CloudResultPullHost>,
+  openDeveloperSession?: (link: DeveloperSessionHandoffLink) => Promise<void>,
 ): Promise<boolean> {
   if (uri.path === VSCODE_CLOUD_TASK_HANDOFF_PATH) {
     return handleCloudTaskHandoffUri(uri, target, resolvePullHost);
+  }
+  if (uri.path === VSCODE_DEVELOPER_SESSION_HANDOFF_PATH && openDeveloperSession !== undefined) {
+    const link = parseDeveloperSessionHandoffQuery(uri.query);
+    if (link === null) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: that session link names no session or folder. Send it again from the desktop app.',
+      );
+      return false;
+    }
+    await openDeveloperSession(link);
+    return true;
   }
   if (uri.path !== VSCODE_CONTEXT_HANDOFF_PATH) {
     void vscode.window.showWarningMessage(
@@ -272,10 +321,11 @@ export async function continueCloudWorkHere(
 export function registerContextHandoffUriHandler(
   resolveTarget: () => ContextHandoffTarget | undefined,
   resolvePullHost: () => Promise<CloudResultPullHost> = resolveGitCheckoutHost,
+  openDeveloperSession?: (link: DeveloperSessionHandoffLink) => Promise<void>,
 ): vscode.Disposable {
   return vscode.window.registerUriHandler({
     handleUri: (uri) => {
-      void handleContextHandoffUri(uri, resolveTarget(), resolvePullHost);
+      void handleContextHandoffUri(uri, resolveTarget(), resolvePullHost, openDeveloperSession);
     },
   });
 }

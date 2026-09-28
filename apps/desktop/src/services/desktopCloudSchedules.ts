@@ -3,6 +3,7 @@ import {
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
+  type ManagedCloudScheduleShare,
   type ManagedCloudScheduleTask,
   type ManagedCloudSchedulesClient,
   type ManagedCloudSchedulesPageInput,
@@ -98,6 +99,18 @@ export const desktopCloudSchedules = {
   ): Promise<ManagedCloudScheduleRun> {
     return withSchedulesClient('Managed Cloud schedule run approval', (client) =>
       client.resolveRunApproval(scheduleId, runId, approval, signal),
+    );
+  },
+
+  shareSchedule(scheduleId: string, signal?: AbortSignal): Promise<ManagedCloudScheduleShare> {
+    return withSchedulesClient('Managed Cloud schedule share', (client) =>
+      client.shareSchedule(scheduleId, signal),
+    );
+  },
+
+  unshareSchedule(scheduleId: string, signal?: AbortSignal): Promise<void> {
+    return withSchedulesClient('Managed Cloud schedule unshare', (client) =>
+      client.unshareSchedule(scheduleId, signal),
     );
   },
 };

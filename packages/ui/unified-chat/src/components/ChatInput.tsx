@@ -289,6 +289,13 @@ export function ChatInput({
     if (canUseAgiWork && activeProjectId) setWorkMode('agiwork');
   }, [activeProjectId, canUseAgiWork]);
 
+  const pendingWorkMode = useChatStore((s) => s.pendingWorkMode);
+  useEffect(() => {
+    if (!pendingWorkMode) return;
+    setWorkMode(canUseAgiWork ? pendingWorkMode : 'chat');
+    useChatStore.getState().setPendingWorkMode(null);
+  }, [pendingWorkMode, canUseAgiWork]);
+
   const prevFolderLabelRef = useRef(currentFolderLabel);
   useEffect(() => {
     const prev = prevFolderLabelRef.current;
@@ -990,7 +997,7 @@ export function ChatInput({
           : t('placeholderEmpty', 'How can I help you today?');
 
   return (
-    <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
+    <div className={cn('relative mx-auto w-full max-w-3xl px-gutter-compact pb-2', className)}>
       <SlashCommandMenu
         show={slashMenuOpen}
         suggestions={slashSuggestions}

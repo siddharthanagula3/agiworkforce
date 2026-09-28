@@ -4,6 +4,11 @@ import { TOOL_APPROVAL_ACTION_LABELS } from './tool-approval-policy';
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
 
+export const CLOUD_CODE_LIMITS = {
+  title: 120,
+  task: 8000,
+} as const;
+
 /**
  * The verified E2B code-interpreter image the notebook surface runs cells on.
  * Shared by the (server-only) template catalogue and the client notebook UI,

@@ -23,6 +23,7 @@ import {
   type StyleSliderConfig as SliderConfig,
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
+import { api } from '@/services/api';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
 
@@ -328,6 +329,15 @@ export default function PersonalizationScreen() {
 
   const handleSave = useCallback(() => {
     draftDirtyRef.current = false;
+    const trimmedName = fullName.trim();
+    if (isCloud && trimmedName && trimmedName !== personalization.fullName.trim()) {
+      api.patch('/api/me', { display_name: trimmedName }).catch((error: unknown) => {
+        Alert.alert(
+          'Name not saved to your account',
+          error instanceof Error ? error.message : 'Try again from Personalization.',
+        );
+      });
+    }
     setPersonalization({
       fullName: fullName.trim(),
       nickname: nickname.trim(),
@@ -363,6 +373,8 @@ export default function PersonalizationScreen() {
     headersLists,
     emoji,
     setPersonalization,
+    isCloud,
+    personalization.fullName,
     goBack,
   ]);
 

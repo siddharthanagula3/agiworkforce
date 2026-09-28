@@ -60,6 +60,7 @@ import {
   conversationShareHref,
   projectDeleteConfirm,
   runSessionRowAction,
+  toggleConversationArchive,
 } from '@shared/components/layout/sidebar-session-actions';
 import {
   copyProjectLink,
@@ -323,11 +324,13 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     (id: string) => {
       const convo = conversations.find((c) => c.id === id);
       if (!convo) return;
-      void runSessionRowAction(convo.isArchived ? 'restore' : 'archive', () =>
-        updateConversation(id, { archived: !convo.isArchived }),
+      void toggleConversationArchive(
+        convo.isArchived ?? false,
+        (archived) => updateConversation(id, { archived }),
+        () => openShellSettings('archived'),
       );
     },
-    [conversations, updateConversation],
+    [conversations, openShellSettings, updateConversation],
   );
   const handleMarkUnreadSession = useCallback((id: string) => toggleUnread(id), [toggleUnread]);
   const handleShareSession = useCallback(

@@ -330,6 +330,13 @@ struct TuiApp {
     /// Byte offset of the `@` the open mention popup is completing.
     mention_anchor: Option<usize>,
     prompt_history: super::prompt_history::PromptHistory,
+    composer_undo: super::composer_edits::ComposerUndo,
+    pasted_texts: super::composer_edits::PastedTexts,
+    queued_prompts: Vec<String>,
+    side_answers: (
+        tokio::sync::mpsc::UnboundedSender<String>,
+        tokio::sync::mpsc::UnboundedReceiver<String>,
+    ),
 }
 
 /// Short-lived banner shown across the top of the chat area when the
@@ -495,6 +502,10 @@ impl TuiApp {
             mention_candidates: None,
             mention_anchor: None,
             prompt_history: super::prompt_history::PromptHistory::load(),
+            composer_undo: Default::default(),
+            pasted_texts: Default::default(),
+            queued_prompts: Vec::new(),
+            side_answers: tokio::sync::mpsc::unbounded_channel(),
         }
     }
 
@@ -579,7 +590,19 @@ impl TuiApp {
     fn mention_candidates(&mut self) -> Vec<crate::mentions::MentionCandidate> {
         if self.mention_candidates.is_none() {
             let root = self.workspace_root();
-            self.mention_candidates = Some(crate::mentions::workspace_file_candidates(&root));
+            let mut candidates: Vec<crate::mentions::MentionCandidate> =
+                crate::agents::discover_agents()
+                    .into_iter()
+                    .map(|agent| {
+                        crate::mentions::MentionCandidate::new(format!(
+                            "{}{}",
+                            crate::mentions::AGENT_MENTION_PREFIX,
+                            agent.name
+                        ))
+                    })
+                    .collect();
+            candidates.extend(crate::mentions::workspace_file_candidates(&root));
+            self.mention_candidates = Some(candidates);
         }
         self.mention_candidates.clone().unwrap_or_default()
     }
@@ -1258,11 +1281,27 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
 fn render_turn_frame(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     ctx: &FrameCtx,
+    draft: &str,
+    queued: usize,
 ) -> Result<()> {
     terminal.draw(|frame| {
-        draw_turn_chrome(frame, ctx);
+        draw_turn_chrome_with(frame, ctx, turn_composer_hint(draft, queued));
     })?;
     Ok(())
+}
+
+fn turn_composer_hint(draft: &str, queued: usize) -> String {
+    let queued = match queued {
+        0 => String::new(),
+        1 => " · 1 message queued".to_string(),
+        count => format!(" · {count} messages queued"),
+    };
+    match draft.lines().last() {
+        Some(line) if !draft.trim().is_empty() => {
+            format!("  › {line}  (Enter to queue, /btw to ask aside){queued}")
+        }
+        _ => format!("  … working, Esc or Ctrl-C to cancel · type to queue a message{queued}"),
+    }
 }
 
 /// Draws the header/chat/composer-hint/status chrome shared by the live
@@ -1271,6 +1310,14 @@ fn render_turn_frame(
 /// the same `terminal.draw` closure instead of replacing it. Returns the chat
 /// area (`chunks[1]`) so callers can composite additional content over it.
 fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
+    draw_turn_chrome_with(
+        frame,
+        ctx,
+        "  … working, Esc or Ctrl-C to cancel".to_string(),
+    )
+}
+
+fn draw_turn_chrome_with(frame: &mut ratatui::Frame, ctx: &FrameCtx, hint: String) -> Rect {
     let area = frame.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -1286,7 +1333,7 @@ fn draw_turn_chrome(frame: &mut ratatui::Frame, ctx: &FrameCtx) -> Rect {
     render_chat(frame, chunks[1], ctx);
 
     let hint = Paragraph::new(Line::from(Span::styled(
-        "  … working, Esc or Ctrl-C to cancel",
+        hint,
         Style::default().fg(crate::tui::terminal_palette::ui_muted()),
     )))
     .block(
@@ -2354,6 +2401,7 @@ enum InputAction {
     Redraw,
     ClearChat,
     CycleMode,
+    OpenEditor,
 }
 
 fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
@@ -2487,6 +2535,22 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         return InputAction::None;
     }
 
+    if super::composer_edits::is_undo_key(key) || super::composer_edits::is_redo_key(key) {
+        let restored = if super::composer_edits::is_undo_key(key) {
+            app.composer_undo.undo(&app.input, app.cursor)
+        } else {
+            app.composer_undo.redo(&app.input, app.cursor)
+        };
+        if let Some((input, cursor)) = restored {
+            app.input = input;
+            app.cursor = cursor.min(app.input.len());
+        }
+        return InputAction::None;
+    }
+    if super::composer_edits::is_external_editor_key(key) {
+        return InputAction::OpenEditor;
+    }
+
     match key.code {
         // Shift+Enter or Alt+Enter → insert newline (multiline composer)
         KeyCode::Enter
@@ -2499,13 +2563,15 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
 
         // Plain Enter → submit message (claude.ai / ChatGPT parity)
         KeyCode::Enter => {
-            let text = app.input.trim().to_string();
-            if text.is_empty() {
+            let text = app.pasted_texts.expand(app.input.trim());
+            if text.trim().is_empty() {
                 return InputAction::None;
             }
             app.input.clear();
             app.cursor = 0;
             app.scroll_offset = 0;
+            app.pasted_texts.clear();
+            app.composer_undo.reset();
             InputAction::SendMessage(text)
         }
 
@@ -2795,18 +2861,33 @@ fn rebuild_transcript_from_session(app: &mut TuiApp) {
         .session
         .messages
         .iter()
-        .filter_map(|message| {
-            let role = match message.role.as_str() {
-                "user" => ChatRole::User,
-                "assistant" => ChatRole::Assistant,
-                _ => return None,
-            };
-            let text = message.text_content();
-            (!text.trim().is_empty()).then_some(ChatMessage { role, text })
-        })
+        .filter_map(chat_message_from_session)
         .collect();
     app.tool_cells.clear();
     app.scroll_offset = 0;
+}
+
+fn append_session_messages_since(app: &mut TuiApp, first: usize) {
+    if app.session.messages.len() < first {
+        rebuild_transcript_from_session(app);
+        return;
+    }
+    let added: Vec<ChatMessage> = app.session.messages[first..]
+        .iter()
+        .filter_map(chat_message_from_session)
+        .collect();
+    app.chat_messages.extend(added);
+    app.scroll_offset = 0;
+}
+
+fn chat_message_from_session(message: &crate::models::Message) -> Option<ChatMessage> {
+    let role = match message.role.as_str() {
+        "user" => ChatRole::User,
+        "assistant" => ChatRole::Assistant,
+        _ => return None,
+    };
+    let text = message.text_content();
+    (!text.trim().is_empty()).then_some(ChatMessage { role, text })
 }
 
 fn open_command_popup(app: &mut TuiApp) {
@@ -2835,6 +2916,7 @@ fn open_command_popup(app: &mut TuiApp) {
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
         ("diff-review", "Review changed files hunk by hunk"),
+        ("dictate", "Dictate into the composer without sending"),
     ] {
         if !cmds.iter().any(|c| c.name == name) {
             cmds.push(PopupCmd::new(name, desc));
@@ -2850,6 +2932,11 @@ fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
     let root = app.workspace_root();
     let trusted = app.workspace_is_trusted();
     let expansion = crate::mentions::expand_mentions(text, &root, trusted);
+    let known_agents: Vec<String> = crate::agents::discover_agents()
+        .into_iter()
+        .map(|agent| agent.name)
+        .collect();
+    let agents = crate::mentions::mentioned_agents(text, &root, &known_agents);
 
     for image in &expansion.images {
         match app.stage_image_path(image) {
@@ -2864,12 +2951,29 @@ fn resolve_composer_mentions(app: &mut TuiApp, text: &str) -> String {
         }
     }
     for (path, reason) in &expansion.skipped {
+        if path
+            .strip_prefix(crate::mentions::AGENT_MENTION_PREFIX)
+            .is_some_and(|name| agents.iter().any(|agent| agent == name))
+        {
+            continue;
+        }
         app.chat_messages.push(ChatMessage {
             role: ChatRole::System,
             text: format!("{path} was not inlined: {reason}"),
         });
     }
-    expansion.prompt
+    if agents.is_empty() {
+        return expansion.prompt;
+    }
+    let named = agents
+        .iter()
+        .map(|agent| format!("\"{agent}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "{}\n\nThe user addressed this to the {named} agent. Run it with the agent tool (action \"run\", that name, and this request as the prompt) instead of answering directly.",
+        expansion.prompt
+    )
 }
 
 fn open_mention_popup(app: &mut TuiApp) {
@@ -2908,11 +3012,71 @@ fn handle_paste_text(app: &mut TuiApp, text: &str) {
     }
     // Clipboard content is untrusted here: an OSC 52 write from an earlier
     // turn can put escapes on the clipboard that would repaint the composer.
-    insert_str_at_cursor(
-        &mut app.input,
-        &mut app.cursor,
-        sanitize_terminal_text(text).as_ref(),
-    );
+    let text = sanitize_terminal_text(text);
+    let inserted = app
+        .pasted_texts
+        .collapse(&text)
+        .unwrap_or_else(|| text.into_owned());
+    insert_str_at_cursor(&mut app.input, &mut app.cursor, &inserted);
+}
+
+fn edit_turn_draft(input: &mut String, cursor: &mut usize, key: KeyEvent) -> Option<String> {
+    let control = key.modifiers.contains(KeyModifiers::CONTROL);
+    match key.code {
+        KeyCode::Enter
+            if key.modifiers.contains(KeyModifiers::SHIFT)
+                || key.modifiers.contains(KeyModifiers::ALT) =>
+        {
+            insert_char_at_cursor(input, cursor, '\n')
+        }
+        KeyCode::Enter => {
+            let draft = input.trim().to_string();
+            input.clear();
+            *cursor = 0;
+            return (!draft.is_empty()).then_some(draft);
+        }
+        KeyCode::Char('j') if control => insert_char_at_cursor(input, cursor, '\n'),
+        KeyCode::Char('u') if control => kill_to_line_start(input, cursor),
+        KeyCode::Char(_) if control => {}
+        KeyCode::Char(typed) => insert_char_at_cursor(input, cursor, typed),
+        KeyCode::Backspace => backspace_at_cursor(input, cursor),
+        KeyCode::Delete => delete_at_cursor(input, cursor),
+        KeyCode::Left => *cursor = previous_char_boundary(input, *cursor),
+        KeyCode::Right => *cursor = next_char_boundary(input, *cursor),
+        KeyCode::Home => *cursor = 0,
+        KeyCode::End => *cursor = input.len(),
+        _ => {}
+    }
+    None
+}
+
+fn start_side_query(
+    config: &crate::config::CliConfig,
+    query: crate::agent::SideQuery,
+    question: String,
+    answers: tokio::sync::mpsc::UnboundedSender<String>,
+) {
+    let config = config.clone();
+    tokio::spawn(async move {
+        let text = match query.ask(&config, &question, Box::new(|_| {})).await {
+            Ok(answer) => format!(
+                "btw: {}\n\n{}",
+                sanitize_terminal_text(&question),
+                sanitize_terminal_text(answer.trim())
+            ),
+            Err(error) => format!("btw failed: {error:#}"),
+        };
+        let _ = answers.send(text);
+    });
+}
+
+fn drain_side_answers(app: &mut TuiApp) {
+    while let Ok(text) = app.side_answers.1.try_recv() {
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::System,
+            text,
+        });
+    }
 }
 
 /// Delete from the cursor back to the start of its line, the readline `Ctrl-U`
@@ -3276,12 +3440,24 @@ enum SlashResult {
     RunLogout,
     /// Leave the TUI, run the interactive voice loop, then re-enter.
     RunVoice(String),
+    RunDictate(String),
     /// Generate an image on the account and stage its file as a chip.
     RunImage(String),
     /// Read the account's artifact index, or open one of its artifacts.
     RunArtifacts(String),
     RunTasks(String),
+    RunPersonalize(String),
+    RunBtw(String),
 }
+
+const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
+  @path            Inline a file, or list a folder with @dir/
+  @agent-<name>    Hand the message to one of your agents
+  /attach <image>  Attach an image file (png, jpg, gif, webp)
+  Ctrl+V           Attach the image on the clipboard
+  Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
+  /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
+  /attach list     Show what is staged · /attach remove [n|all]";
 
 fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
     let normalized = input_command.to_lowercase();
@@ -3369,6 +3545,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/artifacts" => SlashResult::RunArtifacts(arg.to_string()),
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
+        "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
         "/plan" => {
             let new_mode = if app.mode == InteractionMode::Plan {
@@ -3769,10 +3946,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/attach" => {
             let (action, rest) = arg.split_once(' ').unwrap_or((arg, ""));
             match action {
-                "" => SlashResult::SystemMessage(
-                    "Usage: /attach <image path> · /attach list · /attach remove [n|all]"
-                        .to_string(),
-                ),
+                "" => SlashResult::SystemMessage(ADD_CONTEXT_MENU.to_string()),
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
                     "No images staged for the next turn.".to_string()
                 } else {
@@ -3864,6 +4038,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // this used to print "Voice mode requires the REPL" over a complete
         // implementation. It does not require the REPL, it requires leaving the
         // alt-screen, which is exactly what RunLogin/RunAdvisor already do.
+        "/dictate" => SlashResult::RunDictate(if arg.is_empty() { "en" } else { arg }.to_string()),
+
         "/voice" | "/v" => {
             let lang = if arg.is_empty() { "en" } else { arg };
             if crate::voice_languages::is_valid_language(lang) {
@@ -3908,8 +4084,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             if arg.is_empty() {
                 SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
             } else {
-                // Send as a prompt but mark as side query
-                SlashResult::SendAsPrompt
+                SlashResult::RunBtw(arg.to_string())
             }
         }
 
@@ -4140,6 +4315,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
                 return SlashResult::SendPrompt(prompt);
             }
+            if let Some(loaded) =
+                crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg)
+            {
+                return match loaded {
+                    Ok(prompt) => SlashResult::SendPrompt(prompt),
+                    Err(reason) => SlashResult::SystemMessage(reason),
+                };
+            }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::SendMcpPrompt(input.to_string());
             }
@@ -4191,7 +4374,7 @@ fn format_advisor_tool_output(raw: &str) -> String {
 
 fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
     match cmd {
-        "/output-style" if !arg.trim().is_empty() => {
+        "/output-style" if crate::claude_parity::output_style_arg_persists(arg) => {
             let _ = app
                 .config
                 .persist_output_style_project(&app.session.output_style);
@@ -4567,17 +4750,43 @@ async fn run_event_loop(
             render(terminal, app)?;
         }
 
-        if event::poll(super::motion::FRAME_INTERVAL)? {
-            let action = match event::read()? {
-                Event::Key(key) => handle_key_event(app, key),
-                Event::Paste(text) => {
-                    handle_paste_text(app, &text);
-                    InputAction::None
-                }
-                _ => InputAction::None,
+        drain_side_answers(app);
+        let queued = (!app.is_loading && !app.queued_prompts.is_empty())
+            .then(|| std::mem::take(&mut app.queued_prompts).join("\n\n"));
+        if queued.is_some() || event::poll(super::motion::FRAME_INTERVAL)? {
+            let before = (app.input.clone(), app.cursor);
+            let action = match queued {
+                Some(text) => InputAction::SendMessage(text),
+                None => match event::read()? {
+                    Event::Key(key) => handle_key_event(app, key),
+                    Event::Paste(text) => {
+                        handle_paste_text(app, &text);
+                        InputAction::None
+                    }
+                    _ => InputAction::None,
+                },
             };
+            if !matches!(action, InputAction::SendMessage(_)) {
+                app.composer_undo.observe(before, &app.input);
+            }
 
             match action {
+                InputAction::OpenEditor => {
+                    let before = (app.input.clone(), app.cursor);
+                    restore_terminal(terminal)?;
+                    let edited = super::composer_edits::edit_in_external_editor(&app.input);
+                    *terminal = setup_terminal()?;
+                    match edited {
+                        Ok(text) => {
+                            app.input = sanitize_terminal_text(&text).into_owned();
+                            app.cursor = app.input.len();
+                            app.composer_undo.observe(before, &app.input);
+                        }
+                        Err(error) => {
+                            app.status_notice = Some((format!("{error:#}"), Instant::now()));
+                        }
+                    }
+                }
                 InputAction::Quit => {
                     let hcfg = app.session.hooks_config().clone();
                     crate::hooks::run_hooks(
@@ -4733,12 +4942,44 @@ async fn run_event_loop(
                                     }
                                 }
                             }
+                            SlashResult::RunDictate(lang) => {
+                                restore_terminal(terminal)?;
+                                let dictated = crate::voice::dictate(&app.session, &lang).await;
+                                *terminal = setup_terminal()?;
+                                match dictated {
+                                    Ok(Some(text)) => {
+                                        let before = (app.input.clone(), app.cursor);
+                                        insert_str_at_cursor(
+                                            &mut app.input,
+                                            &mut app.cursor,
+                                            sanitize_terminal_text(&text).as_ref(),
+                                        );
+                                        app.composer_undo.observe(before, &app.input);
+                                        app.status_notice = Some((
+                                            "dictation added to the composer, Enter to send"
+                                                .to_string(),
+                                            Instant::now(),
+                                        ));
+                                    }
+                                    Ok(None) => {
+                                        app.status_notice = Some((
+                                            "dictation cancelled".to_string(),
+                                            Instant::now(),
+                                        ));
+                                    }
+                                    Err(error) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: format!("Dictation failed: {error:#}"),
+                                    }),
+                                }
+                            }
                             SlashResult::RunVoice(lang) => {
                                 // Voice owns the terminal (it prints prompts and
                                 // reads audio state), so drop the alt-screen for
                                 // the duration and restore it after, the same
                                 // shape as RunLogin above.
                                 restore_terminal(terminal)?;
+                                let first_voice_message = app.session.messages.len();
                                 let result = crate::voice::run_voice_mode(
                                     &mut app.session,
                                     &app.config,
@@ -4747,6 +4988,7 @@ async fn run_event_loop(
                                 .await;
                                 *terminal = setup_terminal()?;
                                 app.sync_stats();
+                                append_session_messages_since(app, first_voice_message);
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: match result {
@@ -4798,6 +5040,36 @@ async fn run_event_loop(
                                     &argument,
                                 )
                                 .await;
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunBtw(question) => {
+                                match app.session.side_query(&app.config) {
+                                    Ok(query) => {
+                                        start_side_query(
+                                            &app.config,
+                                            query,
+                                            question,
+                                            app.side_answers.0.clone(),
+                                        );
+                                        app.status_notice = Some((
+                                            "answering the side question".to_string(),
+                                            Instant::now(),
+                                        ));
+                                    }
+                                    Err(error) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: format!("/btw {error:#}"),
+                                    }),
+                                }
+                            }
+                            SlashResult::RunPersonalize(argument) => {
+                                let text = match crate::cloud::personalization::run(&argument).await
+                                {
+                                    Ok(text) | Err(text) => text,
+                                };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -5137,6 +5409,10 @@ async fn send_message_with_prompt(
     let turn_context_percent = app.context_percent();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
+    let side_query = app
+        .session
+        .side_query(&app.config)
+        .map_err(|error| format!("{error:#}"));
 
     let result = {
         let callback = Box::new(move |chunk: &str| {
@@ -5212,19 +5488,55 @@ async fn send_message_with_prompt(
                     // honor a cancel keystroke. Poll non-blockingly; Esc or Ctrl-C
                     // aborts by breaking out, which drops `send_fut` and cancels the
                     // in-flight stream.
-                    if crossterm::event::poll(std::time::Duration::ZERO)? {
-                        if let crossterm::event::Event::Key(key) = crossterm::event::read()? {
-                            let cancel = key.code == crossterm::event::KeyCode::Esc
-                                || (key.code == crossterm::event::KeyCode::Char('c')
-                                    && key
-                                        .modifiers
-                                        .contains(crossterm::event::KeyModifiers::CONTROL));
-                            if cancel {
-                                app.status_notice =
-                                    Some(("interrupted the turn".to_string(), Instant::now()));
-                                break None;
+                    let mut cancelled = false;
+                    while !cancelled && crossterm::event::poll(std::time::Duration::ZERO)? {
+                        match crossterm::event::read()? {
+                            crossterm::event::Event::Key(key) => {
+                                cancelled = key.code == crossterm::event::KeyCode::Esc
+                                    || (key.code == crossterm::event::KeyCode::Char('c')
+                                        && key
+                                            .modifiers
+                                            .contains(crossterm::event::KeyModifiers::CONTROL));
+                                if cancelled {
+                                    break;
+                                }
+                                let Some(draft) = edit_turn_draft(&mut app.input, &mut app.cursor, key) else {
+                                    continue;
+                                };
+                                match draft.strip_prefix("/btw ").map(str::trim) {
+                                    Some(question) if !question.is_empty() => match &side_query {
+                                        Ok(query) => start_side_query(
+                                            &config_clone,
+                                            query.clone(),
+                                            question.to_string(),
+                                            app.side_answers.0.clone(),
+                                        ),
+                                        Err(reason) => app.chat_messages.push(ChatMessage {
+                                            role: ChatRole::System,
+                                            text: format!("/btw {reason}"),
+                                        }),
+                                    },
+                                    _ => app.queued_prompts.push(draft),
+                                }
                             }
+                            crossterm::event::Event::Paste(text) => insert_str_at_cursor(
+                                &mut app.input,
+                                &mut app.cursor,
+                                sanitize_terminal_text(&text).as_ref(),
+                            ),
+                            _ => {}
                         }
+                    }
+                    if cancelled {
+                        app.status_notice =
+                            Some(("interrupted the turn".to_string(), Instant::now()));
+                        break None;
+                    }
+                    while let Ok(text) = app.side_answers.1.try_recv() {
+                        app.chat_messages.push(ChatMessage {
+                            role: ChatRole::System,
+                            text,
+                        });
                     }
 
                     // Live redraw. Pull the latest streamed text into a disjoint
@@ -5260,7 +5572,7 @@ async fn send_message_with_prompt(
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
                     };
-                    render_turn_frame(terminal, &ctx)?;
+                    render_turn_frame(terminal, &ctx, &app.input, app.queued_prompts.len())?;
 
                     // MCP servers may also elicit input MID-turn: the engine's
                     // read-loop parks awaiting the response, so the queue must
@@ -6850,6 +7162,7 @@ mod tests {
             "context",
             "tasks",
             "task",
+            "personalize",
             "fast",
             "new",
             "models",

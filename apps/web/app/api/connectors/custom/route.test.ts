@@ -57,6 +57,25 @@ vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
 }));
 vi.mock('@/lib/connectors/mcp-discovery', () => ({
   mcpServerPublishesProtectedResource: vi.fn(async () => false),
+  refreshDiscoveredGrant: vi.fn(),
+}));
+vi.mock('@/lib/connectors/oauth-store', () => ({
+  ConnectorGrantDecryptionError: class extends Error {},
+  ConnectorGrantLockTimeoutError: class extends Error {},
+  createPendingAuthorization: vi.fn(),
+  getConnectorOAuthGrant: vi.fn(async () => null),
+  getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
+  listRevocableConnectorTokens: vi.fn(async () => []),
+  revokeConnectorOAuthGrant: vi.fn(async () => true),
+  upsertConnectorOAuthGrant: vi.fn(),
+  withLockedConnectorOAuthGrant: vi.fn(),
+}));
+vi.mock('@/lib/connectors/oauth-access', () => ({
+  disconnectConnectorOAuthGrant: vi.fn(async () => true),
+  resolveConnectorAccessToken: vi.fn(async () => ({ status: 'not-connected' })),
+}));
+vi.mock('@/lib/connectors/mcp-client-metadata', () => ({
+  resolveClientRedirectUri: vi.fn(() => null),
 }));
 vi.mock('@/lib/connectors/mcp-runtime-cache', () => ({
   getMcpStatelessRuntime: vi.fn(async () => ({})),
@@ -191,7 +210,7 @@ describe('GET /api/connectors/custom directory linkage', () => {
     };
 
     expect(mocks.directoryByUrl).toHaveBeenCalledWith(ROW.url);
-    expect(body.connectors).toEqual([{ ...ROW, directoryId: 'io.sentry/mcp' }]);
+    expect(body.connectors).toEqual([{ ...ROW, signedIn: false, directoryId: 'io.sentry/mcp' }]);
   });
 
   it('leaves a hand-entered endpoint unlinked', async () => {
@@ -201,7 +220,7 @@ describe('GET /api/connectors/custom directory linkage', () => {
       connectors: { directoryId?: string }[];
     };
 
-    expect(body.connectors).toEqual([ROW]);
+    expect(body.connectors).toEqual([{ ...ROW, signedIn: false }]);
     expect(body.connectors[0]).not.toHaveProperty('directoryId');
   });
 });
