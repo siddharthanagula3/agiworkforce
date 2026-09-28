@@ -3024,6 +3024,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
           if (searchResultsBlock?.content && Array.isArray(searchResultsBlock.content)) {
+            const receivedAt = new Date().toISOString();
             const results = (searchResultsBlock.content as Record<string, unknown>[])
               .filter((r) => r['type'] === 'web_search_result' && r['url'])
               .map((r) => ({
@@ -3033,6 +3034,10 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 ...(typeof r['page_age'] === 'string' && r['page_age']
                   ? { publishedDate: r['page_age'] }
                   : {}),
+                retrievedAt:
+                  typeof r['retrieved_at'] === 'string' && r['retrieved_at']
+                    ? r['retrieved_at']
+                    : receivedAt,
               }));
             if (results.length > 0) {
               const spans = readCitationSpans(searchResultsBlock.citation_spans);
