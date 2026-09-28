@@ -64,6 +64,7 @@ function toLibraryItem(row: LibraryAssetRow): LibraryItem {
     prompt: row.prompt,
     created_at: row.createdAt,
     updated_at: row.updatedAt,
+    conversation_id: row.conversationId,
   };
 }
 

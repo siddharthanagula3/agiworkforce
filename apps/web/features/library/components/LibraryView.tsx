@@ -190,6 +190,8 @@ export function LibraryView() {
           () => toast.error('That file could not be attached. Download it and attach it instead.'),
         );
       },
+      openConversation: (conversationId) =>
+        router.push(`/chat/${encodeURIComponent(conversationId)}`),
       addToChat: async (item) => {
         await stageLibraryItemForNewChat(item, { workMode: 'chat' });
         router.push(NEW_CHAT_PATH);

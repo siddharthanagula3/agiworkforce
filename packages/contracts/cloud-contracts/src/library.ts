@@ -75,6 +75,7 @@ export const LibraryItemSchema = z.object({
   prompt: z.string().nullable(),
   created_at: z.string(),
   updated_at: z.string().optional(),
+  conversation_id: z.string().nullable().optional(),
 });
 export type LibraryItem = z.infer<typeof LibraryItemSchema>;
 
