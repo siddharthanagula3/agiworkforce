@@ -181,7 +181,11 @@ function send(run: DispatchRun, update: DispatchUpdate): void {
     requestId: run.requestId,
     ...(run.conversationId ? { conversationId: run.conversationId } : {}),
     ...update,
-  }).catch(() => undefined);
+  })
+    .then((receipt) => {
+      if (!receipt.accepted) finish(run);
+    })
+    .catch(() => undefined);
 }
 
 function refresh(run: DispatchRun): void {
