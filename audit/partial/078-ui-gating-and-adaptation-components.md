@@ -10,7 +10,7 @@ nothing is left.
 
 - Done when: One resolver combines model, plan, surface and operator switches to say whether each feature is available here, and the surface's controls read it.
 - Wave: 3
-- Already works on: mobile
+- Already works on: mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -18,7 +18,6 @@ nothing is left.
 | desktop | partial | partials/platform 3e5bc8cefb, 73b0a361d8, 2fa001551f: Research now follows D-2026-09-28-11. The Pro tier policy allows it, the document grants it to every paid plan, and the composer toggle reads the canUseDeepResearch decision, with the upgrade title for a plan denial and the shared denial sentence for an operator switch, which the document now names temporarily_unavailable. Still open: video generation and AGI Work are gated by the billing capability table, because the capability vocabulary has no id for either | ui |
 | cli | partial | Commands and indicators are now gated per model and privacy mode, but there is still no single feature resolver, and the CLI reads operator kill switches only indirectly through the managed model list. | handler |
 | vscode | missing | Not built on this surface. |  |
-| chrome | missing | Not built on this surface. |  |
 
 Code: `packages/contracts/types/src/model-catalog.ts:1217-1217`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:1398-1398`, `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:4996-4996`, `apps/web/lib/services/capability-handshake-service.ts:134-134`
 

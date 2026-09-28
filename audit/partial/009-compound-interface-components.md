@@ -177,14 +177,13 @@ Code: `apps/mobile/src/features/tasks/CloudTasksScreen.tsx:448-458`
 
 - Done when: A guided setup runs as ordered steps that collect the user's choices (name, model, sign-in) and saves them when it finishes.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | The intro and the Get Started walkthrough explain steps and link to commands but collect no choices; add steps that sign in, pick a model and set autonomy inside the flow. | handler |
-| chrome | partial | The five-step overlay is an informational tour; add steps that actually configure the extension (sign-in, site permissions, model) and save them. | handler |
 
-Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`, `apps/extension/src/side_panel.ts:5553-5553`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2283-2283`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2703-2703`, `apps/extension-vscode/package.json:673-673`
 
 ## S9.24: Split-pane container.
 
@@ -331,11 +330,10 @@ Code: `apps/mobile/app/(app)/notifications/index.tsx:93-93`, `apps/mobile/app/(a
 
 - Done when: A keyboard shortcut opens a searchable list of commands and destinations; typing filters it and Enter runs the choice.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Only a composer slash list (/image, /voice, /compare, /export); add a searchable palette for destinations and settings, reachable from a hardware keyboard. | ui |
-| chrome | partial | Only the composer "/" slash menu; add a shortcut-opened palette for views, history and settings. | ui |
 
-Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`, `apps/extension/src/side_panel.ts:9668-9668`, `apps/extension/src/side_panel.ts:9675-9675`
+Code: `apps/mobile/src/features/chat/components/CommandPalette.tsx:9-9`, `apps/mobile/src/features/chat/components/ChatInput.tsx:784-784`

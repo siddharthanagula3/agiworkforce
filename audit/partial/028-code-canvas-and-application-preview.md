@@ -176,18 +176,6 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
 
-## S28.24: Download source.
-
-- Done when: The user can download the app's source code.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| chrome | partial | Saving the source as a file needs the same derived artifact block (S26.30), waiting on the @agiworkforce/artifacts dependency. | ui |
-
-Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:210-210`
-
 ## S28.25: Export project archive.
 
 - Done when: The user can export a whole multi-file project as an archive (e.g. zip).
