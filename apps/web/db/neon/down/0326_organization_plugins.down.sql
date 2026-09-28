@@ -1,4 +1,4 @@
--- Reversal of 0324 : workspaces no longer publish plugins to their members.
+-- Reversal of 0326 : workspaces no longer publish plugins to their members.
 --
 -- WHAT THIS COSTS: every workspace plugin, its files and each member's own
 -- settings for it are deleted, so members lose the skills those plugins gave
@@ -23,6 +23,6 @@ drop table if exists public.organization_plugin_files;
 drop table if exists public.organization_plugins;
 
 delete from public.schema_migrations
- where filename = '0324_organization_plugins.sql';
+ where filename = '0326_organization_plugins.sql';
 
 commit;

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0326: submit a plugin to the community directory for review
+-- Migration 0328: submit a plugin to the community directory for review
 --
 -- Why    : only platform administrators could publish a plugin, so a
 --          developer could install their own plugin privately but never list
