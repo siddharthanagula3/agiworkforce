@@ -99,6 +99,12 @@ import {
 } from '@/lib/services/memory-commands';
 import { isMemoryTool, memoryToolDefinitions } from '@/lib/server/tools/memory-tools';
 import { fileSearchToolDefinition, isFileSearchTool } from '@/lib/server/tools/file-search-tool';
+import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
+import {
+  asksForSchedule,
+  isScheduleTool,
+  scheduleToolDefinition,
+} from '@/lib/server/tools/schedule-tool';
 import {
   supportsOpenAIReasoningEffort,
   SYSTEM_PROMPT_CACHE_BOUNDARY,
@@ -807,6 +813,32 @@ export function applyFileSearchToolCapability(
   request.tools = [
     ...(request.tools ?? []).filter((tool) => !isFileSearchTool(tool.function.name)),
     fileSearchToolDefinition(),
+  ];
+}
+
+export function applyScheduleToolCapability(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    isTemporary: boolean;
+    ambientToolsAllowed: boolean;
+    schedulesAllowed: boolean;
+  },
+): void {
+  if (
+    !params.toolsCapable ||
+    !params.ambientToolsAllowed ||
+    !params.schedulesAllowed ||
+    !request.stream ||
+    params.isTemporary ||
+    !MEMORY_COMMAND_CLIENT_SURFACES.has(params.surface)
+  ) {
+    return;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isScheduleTool(tool.function.name)),
+    scheduleToolDefinition(),
   ];
 }
 
@@ -4222,6 +4254,16 @@ export async function processRequest(
     isTemporary: conversationIsTemporary,
     projectHasKnowledgeFiles: ownership.projectHasKnowledgeFiles,
     ambientToolsAllowed,
+  });
+
+  applyScheduleToolCapability(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    isTemporary: conversationIsTemporary,
+    ambientToolsAllowed,
+    schedulesAllowed:
+      asksForSchedule(lastUserText) &&
+      (await buildWorkspaceFeatureGateResponse(userId, request, 'schedules', chatSurface)) === null,
   });
 
   const lastUserContent = lastUserMsg?.content;
