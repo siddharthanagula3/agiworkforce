@@ -297,7 +297,13 @@ import {
   createThinkingTextDeltaProjector,
   toAgentEventJson,
 } from './agent-event-stream';
-import { executeSkillTool, SKILL_TOOL_NAME } from '@agiworkforce/skills';
+import {
+  executeSkillTool,
+  executeSkillToolWithFiles,
+  SKILL_TOOL_NAME,
+  type SkillToolResult,
+  type SkillWithFileAccess,
+} from '@agiworkforce/skills';
 import {
   isParallelSafeTool,
   PLATFORM_TOOL_METADATA,
@@ -323,11 +329,18 @@ import {
 import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
+  findManagedSkillWithFiles,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { findUserSkillByName } from '@/lib/services/user-skill-service';
-import { findInstalledDirectorySkill } from '@/features/plugins/server/directory/installed-skills';
+import { findInstalledDirectorySkillWithFiles } from '@/features/plugins/server/directory/installed-skills';
+import {
+  stageSkillScripts,
+  writeSandboxSeedFiles,
+  type SandboxSeedFile,
+  type SandboxSeedQueue,
+} from '@/lib/e2b/skill-staging';
 import { functionToolName } from './tool-loop-routing';
 import { invalidToolArgumentsMessage, toolArgumentProblem } from './tool-argument-validation';
 import {
@@ -1842,14 +1855,28 @@ function toolErrorContent(err: unknown): string {
 }
 
 const SKILL_LOAD_ACTION = 'load';
+const SKILL_READ_ACTION = 'read';
 const EMPTY_SKILL_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
 
-function skillLoadRequestedName(args: Record<string, unknown>): string | null {
-  return args['action'] === SKILL_LOAD_ACTION &&
+function skillRequestedName(args: Record<string, unknown>): string | null {
+  return (args['action'] === SKILL_LOAD_ACTION || args['action'] === SKILL_READ_ACTION) &&
     typeof args['name'] === 'string' &&
     args['name'].length > 0
     ? args['name']
     : null;
+}
+
+async function withSkillSandboxNote(
+  result: SkillToolResult,
+  loaded: SkillWithFileAccess | null,
+  availableTools: ReadonlySet<string>,
+  queueSandboxFiles: SandboxSeedQueue | undefined,
+): Promise<ToolLoopToolResult> {
+  const note =
+    loaded && result.code === 'skill_loaded'
+      ? await stageSkillScripts(loaded, availableTools.has(EXECUTE_CODE_TOOL), queueSandboxFiles)
+      : null;
+  return { content: note ? `${result.content}\n${note}` : result.content, isError: result.isError };
 }
 
 function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
@@ -1895,6 +1922,7 @@ async function runMcpTool(
     requestState?: string;
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
     temporaryChat?: boolean;
+    queueSandboxFiles?: SandboxSeedQueue;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -1902,28 +1930,45 @@ async function runMcpTool(
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
     }
     const userId = executionContext?.userId;
-    const installOverrides = userId
-      ? await executionContext?.loadSkillInstallOverrides?.()
-      : undefined;
-    const result = userId
-      ? await executeManagedSkillToolForPlugins(
-          await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId),
-          toolCall.args,
-          { availableTools, installOverrides },
-        )
+    const queueSandboxFiles = executionContext?.queueSandboxFiles;
+    const requestedSkillName = skillRequestedName(toolCall.args);
+    const enabledPluginIds = userId
+      ? await listEnabledPluginIds(callerScopedDb(executionContext, userId), userId)
+      : null;
+    const result = enabledPluginIds
+      ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
+          availableTools,
+          installOverrides: await executionContext?.loadSkillInstallOverrides?.(),
+        })
       : await executeManagedSkillTool(toolCall.args, { availableTools });
-    if (result.code === 'skill_not_found' && userId) {
-      const requestedSkillName = skillLoadRequestedName(toolCall.args);
-      const directorySkill = requestedSkillName
-        ? await findInstalledDirectorySkill(getNeonDb(), userId, requestedSkillName)
-        : null;
+    if (result.code === 'skill_loaded' && requestedSkillName) {
+      return withSkillSandboxNote(
+        result,
+        await findManagedSkillWithFiles(requestedSkillName, enabledPluginIds),
+        availableTools,
+        queueSandboxFiles,
+      );
+    }
+    if (result.code === 'skill_not_found' && userId && requestedSkillName) {
+      const directorySkill = await findInstalledDirectorySkillWithFiles(
+        getNeonDb(),
+        userId,
+        requestedSkillName,
+      );
       if (directorySkill) {
-        const fallback = executeSkillTool([directorySkill], toolCall.args, { availableTools });
-        return { content: fallback.content, isError: fallback.isError };
+        return withSkillSandboxNote(
+          await executeSkillToolWithFiles(
+            [directorySkill.skill],
+            toolCall.args,
+            { availableTools },
+            directorySkill.access,
+          ),
+          directorySkill,
+          availableTools,
+          queueSandboxFiles,
+        );
       }
-      const userSkill = requestedSkillName
-        ? await findUserSkillByName(getNeonDb(), userId, requestedSkillName)
-        : null;
+      const userSkill = await findUserSkillByName(getNeonDb(), userId, requestedSkillName);
       if (userSkill) {
         const fallback = executeSkillTool([toManagedSkillFromUserSkill(userSkill)], toolCall.args, {
           availableTools,
@@ -2986,6 +3031,10 @@ export async function executeOfferedToolCall(
             planTier: input.planTier,
             surface: input.surface,
             loadSkillInstallOverrides: () => readSkillInstallOverrides(userId),
+            queueSandboxFiles: async (files) => {
+              const { executor } = await resolveExecutor();
+              if (executor) await writeSandboxSeedFiles(executor, files, { conversationId });
+            },
             ...(input.signal ? { signal: input.signal } : {}),
           },
         );
@@ -3809,6 +3858,17 @@ export async function* runToolLoop(
       );
     }
   }
+  const pendingSandboxFiles: SandboxSeedFile[] = [];
+  async function flushSandboxSeedFiles(executor: E2BExecutor): Promise<void> {
+    const files = pendingSandboxFiles.splice(0);
+    if (files.length > 0) await writeSandboxSeedFiles(executor, files, { conversationId });
+  }
+  async function queueSandboxFiles(files: readonly SandboxSeedFile[]): Promise<void> {
+    pendingSandboxFiles.push(...files);
+    if (!e2bResolution) return;
+    const { executor } = await e2bResolution;
+    if (executor) await flushSandboxSeedFiles(executor);
+  }
   async function resolveE2BExecutor(): Promise<E2BExecutorResolution> {
     executionToolRan = true;
     if (!e2bResolution) {
@@ -3818,6 +3878,7 @@ export async function* runToolLoop(
         });
         if (e2bExecutor) {
           await stageTurnAttachmentsForSandbox(e2bExecutor);
+          await flushSandboxSeedFiles(e2bExecutor);
           // After staging, never before: the baseline is what tells a generated
           // file from one that was already there, so a baseline taken first
           // would hand the user their own upload back as a new download.
@@ -4392,6 +4453,7 @@ export async function* runToolLoop(
               ...(callSpend ? { freeTrialSpend: callSpend } : {}),
               sourcePositionFor,
               loadSkillInstallOverrides,
+              queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }
                 : {}),
