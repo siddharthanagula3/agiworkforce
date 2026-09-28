@@ -84,6 +84,7 @@ async function handleGet(
         title: plainMcpServerText(tool.title),
         description: plainMcpServerText(tool.description),
         parameters: toolParameters(tool.inputSchema),
+        readOnly: tool.annotations?.['readOnlyHint'] === true,
         visibility: tool.visibility,
         hasApp: Boolean(tool.app),
       })),
