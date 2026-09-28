@@ -182,6 +182,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
+  MAX_DEVICE_STEPS_PER_PAUSE,
   cloudAgentRunSteerProgressId,
 } from '@agiworkforce/cloud-contracts';
 import { getE2BExecutor, pauseE2BSession } from '@/lib/e2b/runtime';
@@ -6333,13 +6334,14 @@ export async function* runToolLoop(
         }> = [];
         for (const tc of deviceCalls) {
           let refusal: string | null = null;
+          let plan: (typeof planned)[number] | null = null;
           try {
             const step = planDeviceStep(tc.qualifiedName, tc.args, deviceHost.roots);
-            planned.push({
+            plan = {
               tc,
               summary: describeDeviceStep(step, deviceHost.roots),
               input: { ...step } as Record<string, unknown>,
-            });
+            };
           } catch (error) {
             refusal =
               error instanceof DeviceStepRefused
@@ -6356,18 +6358,22 @@ export async function* runToolLoop(
           if (!refusal && !options.onDeviceCheckpoint) {
             refusal = 'This turn cannot pause for your device. Ask again in a new message.';
           }
-          if (refusal) {
+          if (!refusal && planned.length >= MAX_DEVICE_STEPS_PER_PAUSE) {
+            refusal = `Only ${MAX_DEVICE_STEPS_PER_PAUSE} device steps can run at once, so this one was not sent. Ask for it again after these finish.`;
+          }
+          if (!refusal && plan) {
+            planned.push(plan);
+          } else {
             await auditToolCall(tc.qualifiedName, 'blocked');
             const content = await applyToolResultSecretPolicy(
               options.userId,
               tc.qualifiedName,
-              refusal,
+              refusal ?? 'That step could not be sent to your device.',
             );
             yield encoder.encode(
               toolResultEvent(tc.id, tc.qualifiedName, content, true, responseModel),
             );
             messages.push({ role: 'tool', content, tool_call_id: tc.id });
-            planned.length = 0;
           }
         }
 

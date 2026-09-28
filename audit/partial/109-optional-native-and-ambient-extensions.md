@@ -99,9 +99,9 @@ Code: `apps/mobile/native/ios/AGIAppIntents/AskAGIIntent.swift:3-19`, `apps/mobi
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Owner: create the product Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET and SLACK_SIGNING_SECRET (docs/runbooks/connector-oauth-apps.md), with Event Subscriptions for app_mention and message.im; apply pending migration 0333 before deploying partials/slack 02eb570e8d. | owner |
+| web | partial | Owner: create the Slack app and set SLACK_APP_CLIENT_ID, SLACK_APP_CLIENT_SECRET, SLACK_SIGNING_SECRET with Event Subscriptions app_mention and message.im (docs/runbooks/connector-oauth-apps.md). | owner |
 
-Code: `apps/web/lib/slack/slack-events.ts:67-67`, `apps/web/lib/slack/slack-events.ts:68-68`, `apps/web/app/api/webhooks/slack/route.ts:84-84`, `apps/web/lib/slack/slack-assistant.ts:313-313`
+Code: `apps/web/app/api/github/webhook/route.ts:253-253`
 
 ## S109.18: Local-model download manager.
 
