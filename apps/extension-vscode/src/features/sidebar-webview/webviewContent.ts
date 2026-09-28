@@ -1110,6 +1110,7 @@ export function getWebviewContent(
       opacity: 0.5;
     }
     .plus-menu-item[disabled]:hover { background: transparent; color: var(--text-secondary); }
+    .plus-menu-item[hidden] { display: none; }
     .plus-menu-item[aria-checked="true"] {
       background: var(--vscode-list-activeSelectionBackground);
       color: var(--vscode-list-activeSelectionForeground);
@@ -2672,6 +2673,20 @@ export function getWebviewContent(
           <span class="plus-menu-description">CLI search · Local privacy mode refuses network</span>
         </span>
       </button>
+      <button
+        type="button"
+        class="plus-menu-item"
+        id="plusMenuSearchSetup"
+        role="menuitem"
+        hidden
+        disabled
+      >
+        <span class="pm-icon codicon codicon-key" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Set up web search</span>
+          <span class="plus-menu-description">Your key and Local sessions need a search key</span>
+        </span>
+      </button>
       <button type="button" class="plus-menu-item" id="plusMenuPlanMode" role="menuitem">
         <span class="pm-icon codicon codicon-lightbulb" aria-hidden="true"></span>
         <span class="plus-menu-copy">
@@ -2928,6 +2943,8 @@ export function getWebviewContent(
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    var webSearchDenial = null;
+    var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
     var activeAccountStatus = 'loading';
     var activeProviderIdentity = '';
@@ -3228,6 +3245,16 @@ export function getWebviewContent(
       if (runtimeBlock !== null && source !== 'runtime-unavailable') return;
       activeRuntimeSource = source;
       renderSessionIdentity();
+      renderSearchSetup();
+    }
+
+    function renderSearchSetup() {
+      var setup = document.getElementById('plusMenuSearchSetup');
+      if (!setup) return;
+      var show = webSearchNeedsKey === true &&
+        (activeRuntimeSource === 'user-api-key' || activeRuntimeSource === 'unbounded');
+      setup.hidden = !show;
+      setup.disabled = !show;
     }
 
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
@@ -3238,11 +3265,30 @@ export function getWebviewContent(
         : trustMode === 'byok'
           ? 'user-api-key'
           : 'managed-plan');
+      renderBrowseAvailability();
     }
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
       renderSessionIdentity();
+      renderBrowseAvailability();
+    }
+
+    function renderBrowseAvailability() {
+      if (!plusMenuBrowse) return;
+      var blocked = webSearchDenial !== null && sessionBoundaryAuthoritative &&
+        activeRuntimeSource === 'managed-plan';
+      var description = plusMenuBrowse.querySelector('.plus-menu-description');
+      if (description && description.dataset.available === undefined) {
+        description.dataset.available = description.textContent;
+      }
+      plusMenuBrowse.disabled = blocked;
+      if (description) {
+        description.textContent = blocked ? webSearchDenial.title : description.dataset.available;
+      }
+      if (blocked) plusMenuBrowse.title = webSearchDenial.message;
+      else plusMenuBrowse.removeAttribute('title');
+      if (blocked && browseWebEnabled) setBrowseWebEnabled(false);
     }
 
     function renderUsageBuckets(payload) {
@@ -3674,7 +3720,8 @@ export function getWebviewContent(
       block.appendChild(headline);
 
       var canRetry = presentation.retryable === true && lastSendPayload !== null;
-      if (canRetry || presentation.detail || presentation.action) {
+      var canContinueElsewhere = Boolean(presentation.alternative) && lastSendPayload !== null;
+      if (canRetry || canContinueElsewhere || presentation.detail || presentation.action) {
         var actions = document.createElement('div');
         actions.className = 'error-actions';
         if (canRetry) {
@@ -3688,6 +3735,23 @@ export function getWebviewContent(
             resendLastTurn(block);
           });
           actions.appendChild(retry);
+        }
+        if (canContinueElsewhere) {
+          var continueWith = document.createElement('button');
+          continueWith.type = 'button';
+          continueWith.className = 'error-retry';
+          continueWith.dataset.action = 'continue-with-model';
+          continueWith.textContent = presentation.alternative.label;
+          continueWith.addEventListener('click', function () {
+            if (continueWith.disabled) return;
+            continueWith.disabled = true;
+            vscode.postMessage({
+              type: 'selectModel',
+              payload: { modelId: presentation.alternative.model },
+            });
+            resendLastTurn(block, presentation.alternative.model);
+          });
+          actions.appendChild(continueWith);
         }
         if (presentation.action) {
           var unlock = document.createElement('button');
@@ -3744,7 +3808,51 @@ export function getWebviewContent(
       return block;
     }
 
-    function resendLastTurn(errorBlock) {
+    function renderMcpAuthCard(server) {
+      var cards = messagesEl.querySelectorAll('.mcp-auth-card');
+      for (var i = 0; i < cards.length; i++) {
+        if (cards[i].dataset.server === server && cards[i].dataset.state !== 'done') return;
+      }
+      var card = addMessage('system', fillText(L10N.mcpAuthRequired, { server: server }));
+      card.classList.add('mcp-auth-card');
+      card.dataset.server = server;
+      card.setAttribute('role', 'status');
+      var actions = document.createElement('div');
+      actions.className = 'error-actions';
+      var reconnect = document.createElement('button');
+      reconnect.type = 'button';
+      reconnect.className = 'error-retry';
+      reconnect.textContent = L10N.mcpReconnect;
+      reconnect.addEventListener('click', function () {
+        if (reconnect.disabled) return;
+        reconnect.disabled = true;
+        reconnect.textContent = L10N.mcpReconnecting;
+        card.dataset.state = 'pending';
+        vscode.postMessage({ type: 'reconnectMcpServer', payload: { server: server } });
+      });
+      actions.appendChild(reconnect);
+      card.appendChild(actions);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function settleMcpAuthCard(server, ok) {
+      var cards = messagesEl.querySelectorAll('.mcp-auth-card');
+      for (var i = 0; i < cards.length; i++) {
+        var card = cards[i];
+        if (card.dataset.server !== server || card.dataset.state === 'done') continue;
+        var reconnect = card.querySelector('button');
+        if (ok) {
+          card.dataset.state = 'done';
+          card.textContent = fillText(L10N.mcpReconnected, { server: server });
+        } else if (reconnect) {
+          delete card.dataset.state;
+          reconnect.disabled = false;
+          reconnect.textContent = L10N.mcpReconnect;
+        }
+      }
+    }
+
+    function resendLastTurn(errorBlock, model) {
       if (lastSendPayload === null || runtimeBlock !== null) return;
       if (errorBlock && errorBlock.parentNode) errorBlock.parentNode.removeChild(errorBlock);
       var retryPayload = {};
@@ -3754,6 +3862,7 @@ export function getWebviewContent(
         }
       }
       delete retryPayload.followUpBehavior;
+      if (model) retryPayload.model = model;
       retryPayload.clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       lastSendPayload = retryPayload;
       showTyping();
@@ -5278,6 +5387,13 @@ export function getWebviewContent(
           userInput.focus();
         });
       }
+      var plusMenuSearchSetup = document.getElementById('plusMenuSearchSetup');
+      if (plusMenuSearchSetup) {
+        plusMenuSearchSetup.addEventListener('click', () => {
+          closePlusMenu();
+          vscode.postMessage({ type: 'setUpWebSearch' });
+        });
+      }
       var contextItems = plusMenu.querySelectorAll('[data-context-kind]');
       for (var ci = 0; ci < contextItems.length; ci++) {
         contextItems[ci].addEventListener('click', function(ev) {
@@ -6178,6 +6294,28 @@ export function getWebviewContent(
 
       else if (msg.type === 'sessionBoundary') {
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+      }
+
+      else if (msg.type === 'mcpAuthRequired') {
+        if (msg.payload && msg.payload.server) renderMcpAuthCard(String(msg.payload.server));
+      }
+
+      else if (msg.type === 'mcpReconnected') {
+        if (msg.payload && msg.payload.server) {
+          settleMcpAuthCard(String(msg.payload.server), msg.payload.ok === true);
+        }
+      }
+
+      else if (msg.type === 'webSearchSetup') {
+        webSearchNeedsKey = Boolean(msg.payload && msg.payload.needsKey);
+        renderSearchSetup();
+      }
+
+      else if (msg.type === 'webSearchGate') {
+        webSearchDenial = msg.payload && msg.payload.denied
+          ? { title: String(msg.payload.title), message: String(msg.payload.message) }
+          : null;
+        renderBrowseAvailability();
       }
 
       else if (msg.type === 'runtimeStatus') {

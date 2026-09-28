@@ -267,6 +267,27 @@ export const PluginInstallationSettingsPatchSchema = z
 
 export type PluginInstallationSettingsPatch = z.infer<typeof PluginInstallationSettingsPatchSchema>;
 
+export const PLUGIN_CUSTOMIZE_PATH = '/api/plugins/customize';
+
+export const PluginCustomizeRequestSchema = z.union([
+  z.object({ entryId: z.string().uuid() }).strict(),
+  z
+    .object({
+      pluginId: z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),
+    })
+    .strict(),
+]);
+
+export type PluginCustomizeRequest = z.infer<typeof PluginCustomizeRequestSchema>;
+
+export interface PluginCustomizeResponse {
+  entryId: string;
+  created: boolean;
+}
+
 export const PLUGIN_DRAFT_TOOL_NAME = 'draft_plugin';
 export const PLUGIN_DRAFT_RESULT_KEY = 'plugin_draft';
 

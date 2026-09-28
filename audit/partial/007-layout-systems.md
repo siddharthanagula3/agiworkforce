@@ -84,32 +84,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1017-1017`, `a
 
 Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:335-336`, `apps/mobile/app/(app)/companion/code/[threadId].tsx:28-28`, `apps/cli/src/tui/widgets/diff_review.rs:1-4`, `apps/cli/src/tui/tui_app.rs:4022-4022`
 
-## S7.08: Multi-session tiled layout.
-
-- Done when: Two or more live sessions are visible side by side in one window, each independently usable.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | partial | Several conversations can each have their own window (New Window, Move Conversation to New Window), but there is no in-app tiled layout; the user arranges the windows with the operating system. | ui |
-
-Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts:1081-1082`
-
-## S7.09: Stacked-session layout.
-
-- Done when: Several live sessions can be stacked one above another in one window, each independently usable.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | partial | Several conversations can each have their own window (New Window, Move Conversation to New Window), but there is no in-app stacked layout; the user arranges the windows with the operating system. | ui |
-
-Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts:1081-1082`
-
 ## S7.13: Dockable panels.
 
 - Done when: Panels can be moved to a different edge or region of the window (docked) and stay there.
@@ -120,18 +94,6 @@ Code: `apps/desktop/electron/appMenu.ts:210-212`, `apps/desktop/electron/main.ts
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
-
-## S7.14: Detachable desktop panels.
-
-- Done when: A panel of the desktop app can be torn off into its own OS window and used there.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| desktop | partial | A whole conversation can be moved to its own window, but the artifacts, research and work panels cannot be torn off; add per-panel detach. | ui |
-
-Code: `apps/desktop/electron/appMenu.ts:212-214`, `apps/desktop/electron/main.ts:1093-1094`
 
 ## S7.16: Full-screen report reader.
 

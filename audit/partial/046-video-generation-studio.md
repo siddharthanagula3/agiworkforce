@@ -53,14 +53,11 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:690-695`, `ap
 
 - Done when: User picks the output resolution of the clip and gets that resolution.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile never sends duration_secs, so a quality that requires a longer clip (e.g. 8s-only 1080p) is rejected by the route at the 4s default. | handler |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:693-700`, `apps/mobile/src/features/chat/actions/runVideoGenerationTurn.ts:103-110`, `apps/web/app/api/media/video/generate/route.ts:421-424`
 
 ## S46.26: Progress display.
 

@@ -33,11 +33,10 @@ function installAccountMemory(options: { signedOut?: boolean; facts?: MemoryFact
     signedOut: vi.fn(async () => options.signedOut === true),
     contains: (text: string) =>
       facts.some((fact) => fact.text.trim().toLowerCase() === text.trim().toLowerCase()),
-    refresh: vi.fn(
-      async (): Promise<AccountMemoryState> =>
-        options.signedOut === true
-          ? { status: 'signed-out', facts: [], detail: 'Sign in to AGI Cloud' }
-          : { status: 'ready', facts },
+    refresh: vi.fn(async (): Promise<AccountMemoryState> =>
+      options.signedOut === true
+        ? { status: 'signed-out', facts: [], detail: 'Sign in to AGI Cloud' }
+        : { status: 'ready', facts },
     ),
     add: vi.fn(async (text: string) => {
       if (options.signedOut === true) return { applied: false, refusals: ['Sign in to AGI Cloud'] };
@@ -105,6 +104,7 @@ function registerMemoryCommands(
       memoryTreeProvider: {
         refresh,
         getChildren: () => memoryRows,
+        surfacePlaceholder: () => 'Your account memory',
       } as unknown as CommandDeps['memoryTreeProvider'],
       diffDecorationProvider: stub,
       diagnosticsProvider: stub,

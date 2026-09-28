@@ -8,6 +8,7 @@ import {
   ConnectConflictResponseSchema,
   ConnectorErrorResponseSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
+  PLUGIN_CUSTOMIZE_PATH,
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
   type CommunityPlugin,
   type ConnectRequest,
@@ -15,6 +16,8 @@ import {
   type ManagedSkillSummary,
   type MemberOrganizationPluginPatch,
   type MemberOrganizationPluginsResponse,
+  type PluginCustomizeRequest,
+  type PluginCustomizeResponse,
   type PluginSubmissionSummary,
 } from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
@@ -109,7 +112,6 @@ import {
   PLUGIN_SUBMIT_FAILED_COPY,
   PLUGIN_SUBMITTED_NOTICE,
   PLUGIN_WITHDRAW_FAILED_COPY,
-  PLUGIN_CUSTOMIZE_PATH,
   PLUGIN_EDIT_FAILED_COPY,
   PLUGIN_EDIT_LOAD_FAILED_COPY,
   EDIT_PLUGIN_DONE_TITLE,
@@ -1548,12 +1550,11 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const customizePlugin = useCallback(
     async (id: string): Promise<string> => {
-      const response = await postJson(
-        PLUGIN_CUSTOMIZE_PATH,
-        findPluginRecord(id) ? { pluginId: id } : { entryId: id },
-      );
-      const body = (await response.json().catch(() => ({}))) as {
-        entryId?: string;
+      const request: PluginCustomizeRequest = findPluginRecord(id)
+        ? { pluginId: id }
+        : { entryId: id };
+      const response = await postJson(PLUGIN_CUSTOMIZE_PATH, request);
+      const body = (await response.json().catch(() => ({}))) as Partial<PluginCustomizeResponse> & {
         error?: { message?: string };
       };
       if (!response.ok || !body.entryId) {

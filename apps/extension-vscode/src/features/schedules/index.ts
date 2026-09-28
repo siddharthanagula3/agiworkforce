@@ -19,5 +19,7 @@ export {
   setScheduleEnabledInteractively,
   showScheduleRuns,
   type ScheduleActionHost,
+  type ScheduleRunsHost,
 } from './scheduleActions';
+export { SCHEDULE_RUN_OUTPUT_SCHEME, ScheduleRunOutputProvider } from './scheduleRunOutput';
 export { resolveSchedulesClient } from './scheduleClient';
