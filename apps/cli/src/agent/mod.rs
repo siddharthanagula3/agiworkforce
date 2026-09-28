@@ -818,6 +818,33 @@ impl AgentSession {
         tool_definitions
     }
 
+    pub(crate) fn callable_tool_definitions(
+        &self,
+        offered: &[ToolDefinition],
+    ) -> Vec<ToolDefinition> {
+        let mcp_tool_definitions = self
+            .mcp_manager
+            .as_ref()
+            .map(|mcp_manager| mcp_manager.tool_definitions(self.privacy_mode));
+        let planning_locked = self.plan_mode && !self.plan_approved;
+        let mut callable = offered.to_vec();
+        callable.extend(
+            crate::runtime::tool_catalog::deferred_executable_tool_definitions(
+                planning_locked,
+                self.allowed_tools.as_deref(),
+                mcp_tool_definitions.as_deref(),
+            )
+            .into_iter()
+            .filter(|definition| !offered.iter().any(|tool| tool.name == definition.name))
+            .filter(|definition| {
+                !self.disallowed_tools.iter().any(|spec| {
+                    crate::tool_filters::spec_blocks_entire_tool_for_schema(spec, &definition.name)
+                })
+            }),
+        );
+        callable
+    }
+
     /// Ask the desktop shell, once per session, whether a browser is paired.
     ///
     /// A tool the model can call and this machine cannot honour costs a turn

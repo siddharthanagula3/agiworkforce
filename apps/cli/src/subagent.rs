@@ -411,12 +411,14 @@ impl SubagentManager {
         let prompt_chars = prompt.chars().count();
         let process_owner = crate::process_tree::current_owner();
 
-        eprintln!(
-            "  {} Spawning subagent {}, {}",
-            ts::accent_header("[task]"),
-            task_id.bold(),
-            task_description.dimmed()
-        );
+        if !crate::tui::tui_active() {
+            eprintln!(
+                "  {} Spawning subagent {}, {}",
+                ts::accent_header("[task]"),
+                task_id.bold(),
+                task_description.dimmed()
+            );
+        }
 
         // Spawn on a dedicated OS thread with its own tokio runtime.
         // This avoids the `Send` requirement of `tokio::spawn`.
@@ -478,11 +480,13 @@ impl SubagentManager {
                             *task_result.write().await = Some(subagent_result);
                             *task_status.write().await = SubagentStatus::Completed;
 
-                            eprintln!(
-                                "  {} Subagent {} completed",
-                                ts::success_header("[task]"),
-                                task_id.bold()
-                            );
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {} Subagent {} completed",
+                                    ts::success_header("[task]"),
+                                    task_id.bold()
+                                );
+                            }
                         }
                         Err(e) => {
                             let err_msg = format!("{:#}", e);
@@ -490,12 +494,14 @@ impl SubagentManager {
                             audit(&failed, None);
                             *task_status.write().await = failed;
 
-                            eprintln!(
-                                "  {} Subagent {} failed: {}",
-                                ts::danger_header("[task]"),
-                                task_id.bold(),
-                                err_msg.dimmed()
-                            );
+                            if !crate::tui::tui_active() {
+                                eprintln!(
+                                    "  {} Subagent {} failed: {}",
+                                    ts::danger_header("[task]"),
+                                    task_id.bold(),
+                                    err_msg.dimmed()
+                                );
+                            }
                         }
                     }
                 };

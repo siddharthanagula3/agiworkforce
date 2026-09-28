@@ -605,6 +605,7 @@ async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<Atomi
     };
     session.skip_permissions = launch.skip_permissions;
     session.permission_mode = launch.permission_mode;
+    session.quiet = true;
     session.subagent_depth = 1;
     session.max_budget_usd = launch.max_budget_usd;
     session.allowed_tools = launch.allowed_tools.clone();
