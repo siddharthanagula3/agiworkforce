@@ -42,6 +42,7 @@ export const GOVERNED_FEATURES: readonly WorkspaceFeature[] = [
   'remote_control',
   'schedules',
   'event_triggers',
+  'artifact_connectors',
 ];
 
 const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
@@ -57,6 +58,8 @@ const FEATURE_HINTS: Readonly<Partial<Record<WorkspaceFeature, string>>> = {
   remote_control: 'Pairing a phone to a desktop, and driving a session from it.',
   schedules: 'Creating schedules, and scheduled runs.',
   event_triggers: 'Triggers that start a task when a connected account fires an event.',
+  artifact_connectors:
+    "Published artifacts reading and changing data in a member's connected apps.",
 };
 
 const cardStyle = {

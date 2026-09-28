@@ -45,7 +45,9 @@ export async function callArtifactRuntime(
     credentials: 'same-origin',
     headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify(
-      request.op === 'complete' ? { prompt: request.prompt } : storageBody(request),
+      request.op === 'complete'
+        ? { prompt: request.prompt, connectors: request.connectors }
+        : storageBody(request),
     ),
   });
   if (response.status === 401) throw new ArtifactRuntimeSignInRequiredError();
