@@ -315,6 +315,10 @@ export interface MessageMetadata {
   sendReplay?: SendReplayMetadata;
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
   attachments?: Attachment[];
+  mcpContext?: {
+    prompt?: { connectorId: string; name: string };
+    resources?: Array<{ connectorId: string; uri: string; name?: string }>;
+  };
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
   /** Tool activity timeline rendered below assistant messages. */

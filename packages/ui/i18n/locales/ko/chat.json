@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "첨부 파일과 도구 추가: {{count}}개 활성",
     "voiceStart": "음성 입력 시작",
     "voiceUnsupportedBrowser": "이 브라우저에서는 음성 입력을 지원하지 않습니다",
-    "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요."
+    "voiceUnsupportedHint": "이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome 또는 Edge를 사용해 보세요.",
+    "expandInput": "메시지 입력란 펼치기",
+    "collapseInput": "메시지 입력란 접기"
   },
   "bubble": {
     "assistantSaid": "AGI의 답변:",
@@ -346,5 +348,22 @@
     "copyFailed": "복사하지 못했습니다. 클립보드를 사용할 수 없습니다",
     "download": "CSV로 다운로드",
     "close": "확대한 표 닫기"
+  },
+  "markdown": {
+    "copy": "복사",
+    "copied": "복사됨",
+    "copyFailed": "복사하지 못했습니다",
+    "copyLabel": "코드 복사",
+    "copiedLabel": "코드를 복사했습니다",
+    "copyFailedLabel": "코드를 복사하지 못했습니다",
+    "download": "{{fileName}} 다운로드",
+    "expand": "코드 확대",
+    "close": "확대한 코드 닫기",
+    "codeTitle": "{{language}} 코드",
+    "codeBlockLabel": "{{language}} 코드 블록"
+  },
+  "streaming": {
+    "reconnecting": "재연결 중…",
+    "stopping": "클라우드 작업을 중지하는 중…"
   }
 }

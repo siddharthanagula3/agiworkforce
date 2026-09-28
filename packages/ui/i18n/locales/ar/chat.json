@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "إضافة مرفقات وأدوات: {{count}} نشطة",
     "voiceStart": "بدء الإدخال الصوتي",
     "voiceUnsupportedBrowser": "الإدخال الصوتي غير مدعوم في هذا المتصفح",
-    "voiceUnsupportedHint": "الإدخال الصوتي غير مدعوم في هذا المتصفح. جرّب Chrome أو Edge."
+    "voiceUnsupportedHint": "الإدخال الصوتي غير مدعوم في هذا المتصفح. جرّب Chrome أو Edge.",
+    "expandInput": "توسيع حقل الرسالة",
+    "collapseInput": "طي حقل الرسالة"
   },
   "bubble": {
     "assistantSaid": "قال AGI:",
@@ -398,5 +400,22 @@
     "copyFailed": "تعذّر النسخ، الحافظة غير متاحة",
     "download": "تنزيل بتنسيق CSV",
     "close": "إغلاق الجدول الموسّع"
+  },
+  "markdown": {
+    "copy": "نسخ",
+    "copied": "تم النسخ",
+    "copyFailed": "تعذّر النسخ",
+    "copyLabel": "نسخ الكود",
+    "copiedLabel": "تم نسخ الكود",
+    "copyFailedLabel": "تعذّر نسخ الكود",
+    "download": "تنزيل {{fileName}}",
+    "expand": "توسيع الكود",
+    "close": "إغلاق الكود الموسّع",
+    "codeTitle": "كود {{language}}",
+    "codeBlockLabel": "كتلة كود {{language}}"
+  },
+  "streaming": {
+    "reconnecting": "جارٍ إعادة الاتصال…",
+    "stopping": "جارٍ إيقاف مهمة السحابة…"
   }
 }

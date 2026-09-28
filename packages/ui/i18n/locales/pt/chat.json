@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "Adicionar anexos e ferramentas: {{count}} ativos",
     "voiceStart": "Iniciar entrada de voz",
     "voiceUnsupportedBrowser": "Entrada de voz não suportada neste navegador",
-    "voiceUnsupportedHint": "A entrada de voz não é suportada neste navegador. Tente o Chrome ou o Edge."
+    "voiceUnsupportedHint": "A entrada de voz não é suportada neste navegador. Tente o Chrome ou o Edge.",
+    "expandInput": "Expandir o campo de mensagem",
+    "collapseInput": "Recolher o campo de mensagem"
   },
   "bubble": {
     "assistantSaid": "AGI disse:",
@@ -346,5 +348,22 @@
     "copyFailed": "Falha ao copiar, área de transferência indisponível",
     "download": "Baixar como CSV",
     "close": "Fechar tabela expandida"
+  },
+  "markdown": {
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyFailed": "Falha ao copiar",
+    "copyLabel": "Copiar código",
+    "copiedLabel": "Código copiado",
+    "copyFailedLabel": "Falha ao copiar o código",
+    "download": "Baixar {{fileName}}",
+    "expand": "Expandir código",
+    "close": "Fechar código expandido",
+    "codeTitle": "Código {{language}}",
+    "codeBlockLabel": "Bloco de código {{language}}"
+  },
+  "streaming": {
+    "reconnecting": "Reconectando…",
+    "stopping": "Parando a tarefa na nuvem…"
   }
 }

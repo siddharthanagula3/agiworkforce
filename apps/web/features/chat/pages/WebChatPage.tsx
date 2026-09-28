@@ -126,6 +126,7 @@ import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
 import { useStreamStallReport } from '../hooks/use-stream-stall-report';
+import { useSearchJumpHighlight } from '../hooks/use-text-match-highlight';
 import {
   Sheet,
   SheetContent,
@@ -170,6 +171,8 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { NewChatStarters } from '../components/NewChat/NewChatStarters';
+import { useNewChatDefaultModel } from '../hooks/use-new-chat-default-model';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
 import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layout/app-nav-items';
 import { CODE_ROUTES } from '@/features/code/code-surface';
@@ -940,6 +943,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
   const urlConversationId = params?.['sessionId'] as string | undefined;
   const highlightMessageId = searchParams?.get('highlightMessage') ?? null;
+  useSearchJumpHighlight(highlightMessageId, searchParams?.get('highlightQuery') ?? null);
   const openSearchParam = searchParams?.get('search') ?? null;
   const openShareParam = searchParams?.get('share') ?? null;
   const starterPromptParam = searchParams?.get('starterPrompt') ?? null;
@@ -1161,6 +1165,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     AttachmentUploadAttempt[]
   >([]);
   const handleRestoredAttachmentsConsumed = useCallback(() => setRestoredAttachments(null), []);
+  const attachmentUploadControllersRef = useRef(new Map<string, AbortController>());
 
   const updateAttachmentUploadStatus = useCallback(
     (attemptId: string, status: ManagedCloudChatAttachmentUploadStatus) => {
@@ -1681,6 +1686,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setSelectedModelId(resolveSelectableModelId(persistedModel));
     setModelSubstitution(describeModelSubstitution(persistedModel));
   }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
+  useNewChatDefaultModel(displayedConversationId ?? null);
 
   const handleConversationModelChange = useCallback(
     async (nextModelId: string): Promise<boolean> => {
@@ -1989,6 +1995,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         options.conversationId || urlConversationId || bareChatSessionId || null;
       let resolvedUserMessageId: string | null = options.userMessageId ?? null;
       let attachmentsUploaded = false;
+      const uploadController = new AbortController();
+      const uploadAttemptId = options.attachmentUploadAttemptId;
+      if (uploadAttemptId) {
+        attachmentUploadControllersRef.current.set(uploadAttemptId, uploadController);
+      }
+      const releaseUploadController = () => {
+        const controllers = attachmentUploadControllersRef.current;
+        if (!uploadAttemptId || controllers.get(uploadAttemptId) !== uploadController) return;
+        controllers.delete(uploadAttemptId);
+      };
       // Nothing reached a model, so the text is the user's again. Parking it on
       // the conversation it was written for is what survives the create →
       // navigate remount that puts a different composer instance on screen.
@@ -2115,6 +2131,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           ? await uploadChatAttachments(options.attachments, {
               ...(existingConvId ? { conversationId: existingConvId } : {}),
               temporary: temporaryIntent,
+              signal: uploadController.signal,
               ...(options.attachmentUploadAttemptId
                 ? {
                     onStatus: (status) =>
@@ -2123,6 +2140,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 : {}),
             })
           : undefined;
+        releaseUploadController();
+        if (uploadController.signal.aborted) {
+          releaseUnresolvedPlaceholder();
+          return abandonSend();
+        }
         attachmentsUploaded = Boolean(options.attachments?.length);
         const memoryCommand = memoryCommandReport ? await memoryCommandReport : null;
         if (options.attachmentUploadAttemptId) {
@@ -2201,6 +2223,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         announceDesktopCompletion();
         return true;
       } catch (error) {
+        if (uploadController.signal.aborted) {
+          releaseUnresolvedPlaceholder();
+          return abandonSend();
+        }
         const message = toUserMessage(error, 'Could not attach the selected files.');
         if (options.attachmentUploadAttemptId && !attachmentsUploaded) {
           failAttachmentUploadAttempt(options.attachmentUploadAttemptId, message);
@@ -2215,6 +2241,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // so the reconciler reads a consistent displayed id and never misfires.
         releaseSendGuard();
         releaseSendWindow();
+        releaseUploadController();
       }
     },
     [
@@ -2263,11 +2290,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRemoveAttachmentUpload = useCallback(
     (index: number) => {
-      if (
-        !attachmentUploadAttempt ||
-        !attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')
-      ) {
-        return;
+      if (!attachmentUploadAttempt) return;
+      if (!attachmentUploadAttempt.statuses.some((status) => status.phase === 'failed')) {
+        const controller = attachmentUploadControllersRef.current.get(attachmentUploadAttempt.id);
+        if (!controller) return;
+        controller.abort();
       }
       const remaining = attachmentUploadAttempt.files.filter((_, fileIndex) => fileIndex !== index);
       setAttachmentUploadAttempts((current) =>
@@ -4135,6 +4162,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         // Remove the query param without adding a history entry.
         const url = new URL(window.location.href);
         url.searchParams.delete('highlightMessage');
+        url.searchParams.delete('highlightQuery');
         router.replace(url.pathname + url.search);
       }, 400);
       return () => clearTimeout(removeParams);
@@ -4733,17 +4761,33 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
-      await sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
-        sendMessage(userMsg.content, {
-          model: targetModelId,
-          conversationId: displayedConversationId,
-          attachments: userMsg.attachments,
-          ...replayOptions,
-          onTurnCommitted,
-        }),
-      );
+      const replaceTurn = () =>
+        sendReplacingMessages(plan.rollbackIds, (onTurnCommitted) =>
+          sendMessage(userMsg.content, {
+            model: targetModelId,
+            conversationId: displayedConversationId,
+            attachments: userMsg.attachments,
+            ...replayOptions,
+            onTurnCommitted,
+          }),
+        );
+      const discarded = userRetryIndex >= 0 ? plan.rollbackIds.length - 1 : 0;
+      if (discarded > 0) {
+        confirmDestructive({
+          title: 'Retry this message?',
+          description:
+            discarded === 1
+              ? 'The reply below it is deleted and cannot be recovered.'
+              : `The ${discarded} messages below it are deleted and cannot be recovered.`,
+          confirmLabel: 'Retry',
+          onConfirm: () => void replaceTurn(),
+        });
+        return;
+      }
+      await replaceTurn();
     },
     [
+      confirmDestructive,
       displayedConversation,
       displayedConversationId,
       displayedMessages,
@@ -4775,10 +4819,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleRegenerateWithModel = useCallback(
     async (id: string, modelId: string) => {
-      if (!(await handleConversationModelChange(modelId))) return;
-      await handleRegenerateMessage(id, modelId);
+      await handleRegenerateMessage(id, resolveSelectableModelId(modelId));
     },
-    [handleConversationModelChange, handleRegenerateMessage],
+    [handleRegenerateMessage],
   );
 
   const lastAssistantMessage = useMemo(
@@ -5189,7 +5232,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       })),
     [chatMessages],
   );
-  const showWorkSession = hasWorkSession(displayedMessages, composerToggles?.workMode);
+  const showWorkSession =
+    hasMessages || hasWorkSession(displayedMessages, composerToggles?.workMode);
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
   }, [showWorkSession, setWorkSessionPanelOpen]);
@@ -5977,7 +6021,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
-                  {!compact && !voiceModeActive && <GreetingBanner />}
+                  {!compact && !voiceModeActive && <GreetingBanner showWorkspace />}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
@@ -6028,6 +6072,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         {...(composerUsageBlockWithAlternative
                           ? { usageBlock: composerUsageBlockWithAlternative }
                           : {})}
+                      />
+                    )}
+                    {!compact && !voiceModeActive && (
+                      <NewChatStarters
+                        workMode={composerToggles.workMode}
+                        onPrompt={setComposerPrefill}
+                        onFocusComposer={handleFocusComposer}
                       />
                     )}
                   </div>

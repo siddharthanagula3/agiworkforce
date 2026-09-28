@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "Add attachments and tools: {{count}} active",
     "voiceStart": "Start voice input",
     "voiceUnsupportedBrowser": "Voice input not supported in this browser",
-    "voiceUnsupportedHint": "Voice input is not supported in this browser. Try Chrome or Edge."
+    "voiceUnsupportedHint": "Voice input is not supported in this browser. Try Chrome or Edge.",
+    "expandInput": "Expand message input",
+    "collapseInput": "Collapse message input"
   },
   "bubble": {
     "assistantSaid": "AGI said:",
@@ -346,5 +348,22 @@
     "copyFailed": "Copy failed, clipboard unavailable",
     "download": "Download as CSV",
     "close": "Close expanded table"
+  },
+  "markdown": {
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "copyLabel": "Copy code",
+    "copiedLabel": "Code copied",
+    "copyFailedLabel": "Copying code failed",
+    "download": "Download {{fileName}}",
+    "expand": "Expand code",
+    "close": "Close expanded code",
+    "codeTitle": "{{language}} code",
+    "codeBlockLabel": "{{language}} code block"
+  },
+  "streaming": {
+    "reconnecting": "Reconnecting…",
+    "stopping": "Stopping the Cloud task…"
   }
 }

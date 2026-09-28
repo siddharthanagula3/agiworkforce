@@ -197,7 +197,9 @@
     "addAttachmentsAndToolsActive": "Ajouter des pièces jointes et des outils : {{count}} actifs",
     "voiceStart": "Démarrer la saisie vocale",
     "voiceUnsupportedBrowser": "La saisie vocale n’est pas prise en charge par ce navigateur",
-    "voiceUnsupportedHint": "La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome ou Edge."
+    "voiceUnsupportedHint": "La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome ou Edge.",
+    "expandInput": "Agrandir le champ de message",
+    "collapseInput": "Réduire le champ de message"
   },
   "bubble": {
     "assistantSaid": "AGI a dit :",
@@ -346,5 +348,22 @@
     "copyFailed": "Échec de la copie, presse-papiers indisponible",
     "download": "Télécharger en CSV",
     "close": "Fermer le tableau agrandi"
+  },
+  "markdown": {
+    "copy": "Copier",
+    "copied": "Copié",
+    "copyFailed": "Échec de la copie",
+    "copyLabel": "Copier le code",
+    "copiedLabel": "Code copié",
+    "copyFailedLabel": "Échec de la copie du code",
+    "download": "Télécharger {{fileName}}",
+    "expand": "Agrandir le code",
+    "close": "Fermer le code agrandi",
+    "codeTitle": "Code {{language}}",
+    "codeBlockLabel": "Bloc de code {{language}}"
+  },
+  "streaming": {
+    "reconnecting": "Reconnexion…",
+    "stopping": "Arrêt de la tâche cloud…"
   }
 }
