@@ -187,6 +187,34 @@ interface ArtifactPreviewProps {
   projectSave?: ArtifactProjectSave;
 }
 
+const ARTIFACT_DRAFT_STORAGE_PREFIX = 'agi.artifact-draft:';
+const ARTIFACT_DRAFT_AUTOSAVE_MS = 800;
+
+function readStoredDraft(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDraft(key: string, value: string): boolean {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function removeStoredDraft(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    return;
+  }
+}
+
 function escapeHtmlAttribute(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -526,6 +554,7 @@ export function ArtifactPreview({
         destructive: draftIsUnsaved,
         onConfirm: () => {
           if (restoreArtifactVersion(artifact.id, index)) {
+            removeStoredDraft(`${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`);
             setSourceDraft(null);
             setViewedVersionIndex(null);
           }
@@ -537,6 +566,33 @@ export function ArtifactPreview({
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
 
+  const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
+  const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
+
+  useEffect(() => {
+    if (!canEditSource) return;
+    const kept = readStoredDraft(draftStorageKey);
+    if (kept === null || kept === activeContent) return;
+    setSourceDraft(kept);
+    setActiveTab('code');
+    setDraftStatus('saved');
+    toast.message('Restored your unsaved edits to this artifact');
+  }, [activeContent, canEditSource, draftStorageKey]);
+
+  useEffect(() => {
+    if (sourceDraft === null) return;
+    const timer = setTimeout(() => {
+      setDraftStatus(writeStoredDraft(draftStorageKey, sourceDraft) ? 'saved' : 'unsaved');
+    }, ARTIFACT_DRAFT_AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [draftStorageKey, sourceDraft]);
+
+  const endSourceEdit = useCallback(() => {
+    removeStoredDraft(draftStorageKey);
+    setDraftStatus(null);
+    setSourceDraft(null);
+  }, [draftStorageKey]);
+
   const saveSourceEdit = useCallback(() => {
     if (sourceDraft === null) return;
     const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
@@ -544,8 +600,8 @@ export function ArtifactPreview({
     if (sourceDraft !== stored.content) {
       upsertArtifact({ ...stored, content: sourceDraft, createdAt: new Date() });
     }
-    setSourceDraft(null);
-  }, [artifact.id, sourceDraft, upsertArtifact]);
+    endSourceEdit();
+  }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
 
   // AUDIT-FIX ART-6 / ART-14: the security banner is DERIVED, never latched,
   // and it now states what actually happened per renderer:
@@ -1434,10 +1490,15 @@ if (__AgiApp) {
                     <Check className="h-3.5 w-3.5" />
                     <span className="ml-1 hidden text-xs @[30rem]:inline">Save</span>
                   </Button>
+                  {draftStatus ? (
+                    <span className="text-xs text-muted-foreground" role="status">
+                      {draftStatus === 'saved' ? 'Draft kept on this device' : 'Draft not kept'}
+                    </span>
+                  ) : null}
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setSourceDraft(null)}
+                    onClick={endSourceEdit}
                     className="h-7 px-2"
                     aria-label="Discard artifact source edit"
                     title="Discard changes"
