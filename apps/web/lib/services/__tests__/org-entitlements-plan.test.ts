@@ -46,7 +46,8 @@ describe('resolveOrganizationEntitlementPlan', () => {
     expect(sql).toMatch(
       /claimed_owner\.id <> o\.id[\s\S]*claimed_owner\.owner_user_id = o\.owner_user_id/i,
     );
-    expect(sql).toMatch(/select s\.user_id, s\.plan_tier, s\.status/i);
+    expect(sql).toMatch(/select s\.user_id\s+from public\.organizations o/i);
+    expect(sql).not.toMatch(/s\.plan_tier/i);
     expect(sql).toMatch(/where o\.id = \$1/i);
     expect(sql).not.toMatch(/o\.billing_plan_tier/i);
     expect(query.mock.calls[0]?.[1]).toEqual([ORG_A]);

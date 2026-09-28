@@ -72,6 +72,7 @@
     "runtimeSignInAction": "Entrar",
     "runtimeConsentLabel": "Permissão de IA",
     "runtimeConsent": "Este app quer usar IA com sua conta. Cada solicitação conta para o uso do seu plano.",
+    "runtimeConsentConnectors": "Este app quer usar IA com sua conta e ler ou alterar dados em {{apps}}. Ele vê o que esses apps retornam, e cada solicitação conta para o uso do seu plano.",
     "runtimeAllow": "Permitir",
     "runtimeDecline": "Não permitir"
   },

@@ -221,7 +221,24 @@ function rowNumber(reference: string): number {
   return digits ? Number(digits[0]) : 0;
 }
 
-async function extractXlsx(data: Buffer, filename: string): Promise<string> {
+interface SheetCell {
+  column: string;
+  value: string;
+  formula: string | null;
+}
+
+interface SheetRow {
+  number: string;
+  cells: SheetCell[];
+}
+
+interface Sheet {
+  name: string;
+  rows: SheetRow[];
+  omitted: boolean;
+}
+
+async function readXlsxSheets(data: Buffer, filename: string): Promise<Sheet[]> {
   const bounded = await readZip(data, filename);
   const workbook = await entryText(bounded, 'xl/workbook.xml');
   if (!workbook) throw new OfficeDocumentUnreadableError(filename);
@@ -239,7 +256,7 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
     xmlTextRuns(match[1] ?? '', 't'),
   );
 
-  const sections: string[] = [];
+  const sheets: Sheet[] = [];
   let sheetIndex = 0;
   for (const sheetMatch of workbook.matchAll(/<sheet\b[^>]*>/g)) {
     sheetIndex += 1;
@@ -253,13 +270,14 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
       (await entryText(bounded, `xl/worksheets/sheet${sheetIndex}.xml`));
     if (!sheetXml) continue;
 
-    const rows: string[] = [];
+    const rows: SheetRow[] = [];
+    let omitted = false;
     for (const rowMatch of sheetXml.matchAll(/<row\b[^>]*>([\s\S]*?)<\/row>/g)) {
       if (rows.length >= MAX_SHEET_ROWS) {
-        rows.push('[Remaining rows omitted.]');
+        omitted = true;
         break;
       }
-      const cells: string[] = [];
+      const cells: SheetCell[] = [];
       for (const cellMatch of (rowMatch[1] ?? '').matchAll(
         /<c\b([^>]*)(?:\/>|>([\s\S]*?)<\/c>)/g,
       )) {
@@ -277,24 +295,95 @@ async function extractXlsx(data: Buffer, filename: string): Promise<string> {
         } else {
           value = decodeXmlEntities(rawValue);
         }
-        if (formula) {
-          const rendered = decodeXmlEntities(formula);
-          cells.push(`${columnLabel(reference)}: =${rendered}${value ? ` (${value})` : ''}`);
-          continue;
+        if (formula || value) {
+          cells.push({
+            column: columnLabel(reference),
+            value,
+            formula: formula ? decodeXmlEntities(formula) : null,
+          });
         }
-        if (value) cells.push(`${columnLabel(reference)}: ${value}`);
       }
       if (cells.length > 0) {
-        const first = /<row\b[^>]*r="(\d+)"/.exec(rowMatch[0])?.[1] ?? String(rows.length + 1);
-        rows.push(`Row ${first}: ${cells.join(' | ')}`);
+        const number = /<row\b[^>]*r="(\d+)"/.exec(rowMatch[0])?.[1] ?? String(rows.length + 1);
+        rows.push({ number, cells });
       }
     }
-
-    sections.push([`## Sheet: ${name}`, ...(rows.length ? rows : ['[empty sheet]'])].join('\n'));
+    sheets.push({ name, rows, omitted });
   }
 
-  if (sections.length === 0) throw new OfficeDocumentUnreadableError(filename);
-  return sections.join('\n\n');
+  if (sheets.length === 0) throw new OfficeDocumentUnreadableError(filename);
+  return sheets;
+}
+
+function sheetCellText(cell: SheetCell): string {
+  if (!cell.formula) return `${cell.column}: ${cell.value}`;
+  return `${cell.column}: =${cell.formula}${cell.value ? ` (${cell.value})` : ''}`;
+}
+
+async function extractXlsx(data: Buffer, filename: string): Promise<string> {
+  const sheets = await readXlsxSheets(data, filename);
+  return sheets
+    .map((sheet) => {
+      const rows = sheet.rows.map(
+        (row) => `Row ${row.number}: ${row.cells.map(sheetCellText).join(' | ')}`,
+      );
+      if (sheet.omitted) rows.push('[Remaining rows omitted.]');
+      return [`## Sheet: ${sheet.name}`, ...(rows.length ? rows : ['[empty sheet]'])].join('\n');
+    })
+    .join('\n\n');
+}
+
+function columnIndex(column: string): number {
+  let index = 0;
+  for (const letter of column) index = index * 26 + (letter.charCodeAt(0) - 64);
+  return index;
+}
+
+function csvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+export interface SpreadsheetTable {
+  csv: string;
+  complete: boolean;
+}
+
+export async function extractSpreadsheetTable(
+  data: Buffer,
+  fileName: string,
+  maxChars: number,
+): Promise<SpreadsheetTable> {
+  try {
+    const filled = (await readXlsxSheets(data, fileName)).filter((sheet) => sheet.rows.length > 0);
+    const [shown] = filled;
+    const columns = [
+      ...new Set(shown?.rows.flatMap((row) => row.cells.map((cell) => cell.column)) ?? []),
+    ].sort((a, b) => columnIndex(a) - columnIndex(b));
+    const lines: string[] = [];
+    let length = 0;
+    let complete = filled.length <= 1 && shown?.omitted !== true;
+    for (const row of shown?.rows ?? []) {
+      const byColumn = new Map(
+        row.cells.map((cell) => [
+          cell.column,
+          cell.value || (cell.formula ? `=${cell.formula}` : ''),
+        ]),
+      );
+      const line = columns.map((column) => csvField(byColumn.get(column) ?? '')).join(',');
+      if (length + line.length + 1 > maxChars) {
+        complete = false;
+        break;
+      }
+      lines.push(line);
+      length += line.length + 1;
+    }
+    return { csv: lines.join('\n'), complete };
+  } catch (error) {
+    if (error instanceof DecompressionLimitError) {
+      throw new OfficeDocumentUnreadableError(fileName, 'archive_bomb');
+    }
+    throw error;
+  }
 }
 
 async function extractPptx(data: Buffer, filename: string): Promise<string> {
