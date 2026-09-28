@@ -206,14 +206,13 @@ Code: `apps/extension/src/features/side-panel/schedulesSection.ts:225-225`, `app
 
 - Done when: Opening a run shows what that run produced (its output text), not just its status.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui |
-| chrome | partial | Local tasks open only their latest result conversation; cloud schedules in the side panel show no results. | ui |
 
-Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`, `apps/extension/src/side_panel.ts:10451-10451`, `apps/extension/src/side_panel.ts:10457-10457`
+Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`
 
 ## S63.26: Edit schedule.
 

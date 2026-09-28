@@ -79,16 +79,13 @@ Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:635-638`, `apps/mobile/src/features
 
 - Done when: The user can pick a file already in their product Library and attach it to a message.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The item is the product Library. The sheet's list is built from this device's conversation messages (collectSearchableMobileFiles), while the app's real Library screen reads /api/library; the picker never reaches it, and images are filtered out. The auditor's note admits the mismatch but still credited done. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:396-418`, `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:214-226`, `apps/mobile/app/(app)/(tabs)/chat.tsx:927-937`
 
 ## S14.11: Repository attachment.
 
@@ -201,15 +198,12 @@ Code: `apps/web/app/api/uploads/chat-attachment/complete/route.ts:221-241`, `app
 
 - Done when: The composer explains whether and how long attached files are kept.
 - Wave: 3
-- Already works on: web, desktop, chrome
+- Already works on: web, desktop, mobile, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Say how long uploaded files are kept; the upload consent only says files leave the device for AGI Cloud. | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1113-1121`
 
 ## S14.35: Selected-model compatibility warning.
 

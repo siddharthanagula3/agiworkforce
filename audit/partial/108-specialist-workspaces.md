@@ -9,44 +9,44 @@ nothing is left.
 ## S108.01: Personal-finance dashboard.
 
 - Done when: A personal-finance dashboard shows the user's accounts, balances and spending in one product view.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
+| web | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
+| desktop | partial | billing/no-yearly f4a1e5e5b3: /chat/finance is a read-only product view of the connected bank accounts: current and available balances per account, spending and income for 30 days, 90 days or 12 months, by category and month, and recent transactions, read from Plaid (/accounts/get, /transactions/get). It is gated on the same owner steps as S56.47 (Plaid agreement, production transactions access, PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV); until then the page says bank accounts are not set up. ChatGPT's personal finance pages refuse fetches (help.openai.com and openai.com 403, 2026-09-28) | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2528-2528`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
+Code: `apps/web/app/chat/finance/page.tsx:17-17`, `apps/web/features/finance/components/FinanceDashboard.tsx:140-140`, `apps/web/app/api/finance/overview/route.ts:34-34`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
 
 ## S108.02: Connected accounts.
 
 - Done when: The user links bank/card/investment accounts so the assistant can read balances and transactions.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
+| web | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
+| desktop | partial | billing/no-yearly f4a1e5e5b3 on top of p-mcp-web's Plaid Link connector (S56.47): the user links bank and card accounts in Settings, Connectors; the finance page offers the link when none is connected and a toast offers the page after linking, and the assistant reads balances and transactions through the connector's read tools. Gated on the S56.47 owner steps | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2528-2528`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
+Code: `apps/web/features/connectors/hooks/use-connectors.ts:449-449`, `apps/web/features/finance/components/FinanceDashboard.tsx:101-101`, `apps/web/lib/connectors/bank-accounts.ts:448-448`
 
 ## S108.03: Spending analysis.
 
 - Done when: The product analyses the user's transactions by category and period and shows where money goes.
-- Wave: 3
+- Wave: 2
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
-| desktop | partial | Generic third-party connector (Era Context) via the chat tool loop; no native workspace. | ui |
+| web | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
+| desktop | partial | billing/no-yearly f4a1e5e5b3: spending is analysed by Plaid personal finance category and by month for the chosen period (posted outflows in the main currency, transfers, loan payments and income left out) and shown on /chat/finance. Gated on the S56.47 owner steps | flag-off |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/lib/connectors/directory/sources/vendor-directory.json:2528-2528`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:764-764`, `apps/web/lib/connectors/directory/connectable.ts:16-26`, `apps/web/app/api/connectors/custom/route.ts:130-150`
+Code: `apps/web/lib/services/finance-overview-service.ts:64-64`, `apps/web/features/finance/components/FinanceDashboard.tsx:177-177`, `apps/web/features/finance/components/FinanceDashboard.tsx:213-213`
 
 ## S108.09: Financial research workspace.
 

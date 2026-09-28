@@ -44,6 +44,7 @@ export const ManagedMediaImageSizeSchema = z.enum(MANAGED_MEDIA_IMAGE_SIZES);
 export const ManagedMediaImageAspectRatioSchema = z.enum(MANAGED_MEDIA_IMAGE_ASPECT_RATIOS);
 export const ManagedMediaVideoResolutionSchema = z.enum(MANAGED_MEDIA_VIDEO_RESOLUTIONS);
 export const ManagedMediaVideoAspectRatioSchema = z.enum(MANAGED_MEDIA_VIDEO_ASPECT_RATIOS);
+export const ManagedMediaVideoDurationSecsSchema = z.number().int().min(2).max(30);
 
 export const MANAGED_MEDIA_IMAGE_OPERATIONS = [
   'generate',
@@ -83,6 +84,7 @@ export const ManagedMediaImageRefSchema = z.union([
 ]);
 
 export const MANAGED_MEDIA_MAX_IMAGE_REFERENCES = 3;
+export const MANAGED_MEDIA_MAX_IMAGES = 4;
 
 export const ManagedMediaImageGenerationRequestSchema = z
   .object({
@@ -93,7 +95,7 @@ export const ManagedMediaImageGenerationRequestSchema = z
     aspect_ratio: ManagedMediaImageAspectRatioSchema.optional(),
     size: ManagedMediaImageSizeSchema.optional().default('1024x1024'),
     style: z.string().trim().min(1).max(200).optional(),
-    n: z.number().int().min(1).max(4).optional().default(1),
+    n: z.number().int().min(1).max(MANAGED_MEDIA_MAX_IMAGES).optional().default(1),
     quality: z.enum(['standard', 'hd']).optional().default('standard'),
     negative_prompt: z.string().max(2000).optional(),
     operation: ManagedMediaImageOperationSchema.optional().default('generate'),
@@ -160,7 +162,7 @@ export const MANAGED_MEDIA_MAX_VIDEO_CANDIDATES = 4;
 export const ManagedMediaVideoGenerationRequestSchema = z
   .object({
     prompt: z.string().min(1).max(2000),
-    duration_secs: z.number().int().min(2).max(30).optional().default(4),
+    duration_secs: ManagedMediaVideoDurationSecsSchema.optional().default(4),
     resolution: ManagedMediaVideoResolutionSchema.optional().default('720p'),
     aspect_ratio: ManagedMediaVideoAspectRatioSchema.optional(),
     generate_audio: z.boolean().optional(),
@@ -183,6 +185,16 @@ export const ManagedMediaModelAdmissionStateSchema = z.enum([
   'adapter_not_supported',
 ]);
 
+export const ManagedMediaVideoOutputSizeSchema = z
+  .object({
+    resolution: ManagedMediaVideoResolutionSchema,
+    aspect_ratio: ManagedMediaVideoAspectRatioSchema,
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    duration_secs: z.array(ManagedMediaVideoDurationSecsSchema).min(1),
+  })
+  .strict();
+
 export const ManagedMediaModelAdmissionSchema = z
   .object({
     model_id: z.string().trim().min(1).max(200),
@@ -196,6 +208,12 @@ export const ManagedMediaModelAdmissionSchema = z
      * recognises. Absent for video.
      */
     supports_edit: z.boolean().optional(),
+    aspect_ratios: z
+      .array(z.union([ManagedMediaImageAspectRatioSchema, ManagedMediaVideoAspectRatioSchema]))
+      .optional(),
+    max_images: z.number().int().min(1).max(MANAGED_MEDIA_MAX_IMAGES).optional(),
+    output_sizes: z.array(ManagedMediaVideoOutputSizeSchema).optional(),
+    supports_audio: z.boolean().optional(),
   })
   .strict();
 
@@ -219,6 +237,7 @@ export type ManagedMediaImageSize = z.infer<typeof ManagedMediaImageSizeSchema>;
 export type ManagedMediaImageAspectRatio = z.infer<typeof ManagedMediaImageAspectRatioSchema>;
 export type ManagedMediaVideoResolution = z.infer<typeof ManagedMediaVideoResolutionSchema>;
 export type ManagedMediaVideoAspectRatio = z.infer<typeof ManagedMediaVideoAspectRatioSchema>;
+export type ManagedMediaVideoOutputSize = z.infer<typeof ManagedMediaVideoOutputSizeSchema>;
 export type ManagedMediaModelAdmissionState = z.infer<typeof ManagedMediaModelAdmissionStateSchema>;
 export type ManagedMediaModelAdmission = z.infer<typeof ManagedMediaModelAdmissionSchema>;
 export type ManagedMediaModelAvailabilityResponse = z.infer<

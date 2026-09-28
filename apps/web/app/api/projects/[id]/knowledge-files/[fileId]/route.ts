@@ -12,6 +12,10 @@ import {
   getProjectKnowledgeObject,
 } from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
+import {
+  findOwnedProjectKnowledgeFile,
+  type OwnedProjectKnowledgeFile,
+} from '@/lib/server/project-knowledge-files';
 import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
 const PG_UNDEFINED_TABLE = '42P01';
@@ -28,40 +32,17 @@ type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 async function ownedKnowledgeFile(
   request: NextRequest,
   context: RouteContext,
-): Promise<{
-  projectId: string;
-  fileId: string;
-  mimeType: string;
-  fileName: string;
-  storageUri: string;
-}> {
+): Promise<OwnedProjectKnowledgeFile> {
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const { id: projectId, fileId } = await context.params;
-  const [file] = await db.query<{
-    mime_type: string | null;
-    file_name: string;
-    storage_uri: string | null;
-  }>(
-    `select f.mime_type, f.file_name, f.storage_uri
-       from project_knowledge_files f
-       join user_projects p on p.id = f.project_id
-      where f.id = $1
-        and f.project_id = $2
-        and f.deleted_at is null
-        and p.user_id = $3
-        and p.organization_id is not distinct from $4::uuid
-        and p.deleted_at is null
-      limit 1`,
-    [fileId, projectId, userId, organizationId],
-  );
-  if (!file?.storage_uri) throw createError.notFound('Knowledge file not found');
-  return {
+  const file = await findOwnedProjectKnowledgeFile(
+    db,
+    { userId, organizationId },
     projectId,
     fileId,
-    mimeType: file.mime_type || 'application/octet-stream',
-    fileName: file.file_name,
-    storageUri: file.storage_uri,
-  };
+  );
+  if (!file) throw createError.notFound('Knowledge file not found');
+  return file;
 }
 
 async function handleGetKnowledgeFile(request: NextRequest, context: RouteContext) {

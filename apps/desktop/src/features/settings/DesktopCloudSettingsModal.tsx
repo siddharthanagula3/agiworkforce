@@ -76,8 +76,6 @@ import {
   customConnectorShortId,
   customConnectorSignInUrl,
   getCustomConnectorOAuthRedirectUri,
-  type CloudConnectorEntry,
-  type CloudConnectorGrantedPermission,
 } from '../../api/cloudConnectors';
 import { completeDesktopCloudConnectorInstall } from '../../services/desktopCloudConnectorInstall';
 import { listCloudSkills } from '../../api/cloudSkills';
@@ -116,7 +114,11 @@ import {
   type ManagedUsageCreditWindow,
   type ManagedUsagePurchasedCredits,
 } from '@agiworkforce/types';
-import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
+import type {
+  ConnectorConnection,
+  ConnectorGrantedPermission,
+  MeFeatureFlagsSchema,
+} from '@agiworkforce/cloud-contracts';
 import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 import { CreditTopUp } from './CreditTopUp';
 
@@ -714,7 +716,7 @@ function toDesktopConnectorId(serverId: string): string {
   return SERVER_TO_DESKTOP_CONNECTOR_ID[serverId] ?? serverId;
 }
 
-function toDisplayConnectorId(connector: CloudConnectorEntry): string {
+function toDisplayConnectorId(connector: ConnectorConnection): string {
   return connector.source === 'custom'
     ? `custom-${connector.id}`
     : toDesktopConnectorId(connector.connectorId);
@@ -727,7 +729,7 @@ const CUSTOM_CONNECTOR_OAUTH_CLIENT_HINT =
   'If the server gave you an OAuth client, add it again with its Client ID and Secret under Advanced settings.';
 
 const GRANTED_PERMISSIONS_HEADING = 'Permissions granted';
-const PERMISSION_ACCESS_LABEL: Record<CloudConnectorGrantedPermission['access'], string> = {
+const PERMISSION_ACCESS_LABEL: Record<ConnectorGrantedPermission['access'], string> = {
   read: 'Read',
   write: 'Write',
 };
@@ -735,7 +737,7 @@ const PERMISSION_ACCESS_LABEL: Record<CloudConnectorGrantedPermission['access'],
 function GrantedPermissions({
   permissions,
 }: {
-  permissions: readonly CloudConnectorGrantedPermission[];
+  permissions: readonly ConnectorGrantedPermission[];
 }) {
   return (
     <section
@@ -757,7 +759,7 @@ function GrantedPermissions({
   );
 }
 
-function customSignInPending(connector: CloudConnectorEntry): boolean {
+function customSignInPending(connector: ConnectorConnection): boolean {
   return (
     connector.source === 'custom' &&
     connector.needsReauthorization === true &&
@@ -804,7 +806,7 @@ export function DesktopCloudSettingsModal({
     if (open) setActiveSection(resolveCloudSettingsSection(initialTab));
   }, [open, initialTab]);
 
-  const [cloudConnectors, setCloudConnectors] = useState<CloudConnectorEntry[] | undefined>(
+  const [cloudConnectors, setCloudConnectors] = useState<ConnectorConnection[] | undefined>(
     undefined,
   );
   const [availableConnectorIds, setAvailableConnectorIds] = useState<ReadonlySet<string>>(
