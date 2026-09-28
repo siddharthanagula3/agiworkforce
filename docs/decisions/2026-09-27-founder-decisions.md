@@ -338,3 +338,14 @@ at claude.ai/code, and offers no share link for a session running on the
 person's own machine (code.claude.com/docs/en/claude-code-on-the-web, section
 Share sessions). The desktop app shares cloud sessions through the hosted Code
 page, and local sessions stay unshareable (S66.40 desktop). Checked 2026-09-28.
+
+## D-2026-09-28-22 A cloud session's result comes local through the CLI and VS Code
+
+Claude brings a cloud session into a local checkout with the CLI's
+`claude --teleport`, which checks out the session's branch and loads its
+history, and with Open in > Terminal on claude.ai/code, which copies that
+command; the desktop app does not pull a cloud result into a repository itself
+(code.claude.com/docs/en/claude-code-on-the-web, section From cloud to
+terminal). The desktop app therefore hands a cloud session to VS Code or the
+terminal and adds no native pull and review of its own (S110.23 desktop).
+Checked 2026-09-28.
