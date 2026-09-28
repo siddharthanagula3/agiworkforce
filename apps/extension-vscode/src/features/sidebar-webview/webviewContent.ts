@@ -2002,7 +2002,19 @@ export function getWebviewContent(
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-title { margin: 0; font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .plan-card__title, .approval-card__title { margin: 0; font: inherit; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
     .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
@@ -2442,7 +2454,7 @@ export function getWebviewContent(
 
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
-      <span class="sessions-sheet-title">Sessions</span>
+      <h2 class="sessions-sheet-title">Sessions</h2>
       <div class="sessions-sheet-actions">
         <button
           class="icon-btn"
@@ -2576,6 +2588,7 @@ export function getWebviewContent(
   </div>
 
   <!-- ── Messages ── -->
+  <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
@@ -5150,7 +5163,8 @@ export function getWebviewContent(
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-shield';
       icon.setAttribute('aria-hidden', 'true');
-      var headText = document.createElement('span');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
       headText.textContent = 'Approval needed';
       head.appendChild(icon);
       head.appendChild(headText);
@@ -6185,7 +6199,7 @@ export function getWebviewContent(
         var icon = document.createElement('span');
         icon.className = 'codicon codicon-checklist';
         icon.setAttribute('aria-hidden', 'true');
-        var title = document.createElement('span');
+        var title = document.createElement('h3');
         title.className = 'plan-card__title';
         title.textContent = 'Plan';
         var count = document.createElement('span');
