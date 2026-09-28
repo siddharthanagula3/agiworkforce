@@ -28,17 +28,6 @@ Code: `apps/web/lib/user-connector-tools.ts:265-269`, `apps/web/lib/connectors/c
 
 Code: `apps/web/lib/connectors/accounts.ts:76-96`, `apps/web/app/api/connectors/oauth/callback/route.ts:153-153`
 
-## S98.13: MCP server host.
-
-- Done when: The product can run as an MCP server that exposes its own tools to other clients.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| platform | partial | `agi mcp-server` answers initialize but advertises an empty tool list and refuses every call; no tool is exposed yet. | handler |
-
-Code: `apps/cli/src/app_server.rs:49-54`, `apps/cli/src/app_server.rs:99-99`
-
 ## S98.19: Plugin dependency resolver.
 
 - Done when: Installing a plugin resolves and installs the plugins it depends on.
