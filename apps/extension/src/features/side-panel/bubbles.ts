@@ -10,6 +10,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   agentTaskStateLabel,
+  explainAutoRouteReason,
   getModelMetadataById,
   interactiveCardRendersBeforeProse,
   resolveInteractiveCardRenderer,
@@ -399,6 +400,17 @@ function answerMetaLabel(msg: ChatMessage): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
+function buildRouteReceipt(msg: ChatMessage): HTMLElement | null {
+  if (msg.role !== 'assistant' || msg.streaming || !msg.model || !msg.movedFromModel) return null;
+  const label = getModelMetadataById(msg.model)?.name ?? msg.model;
+  const why = explainAutoRouteReason(msg.autoRouteReason);
+  return el(
+    'p',
+    { class: 'sp-answer-route' },
+    why ? t('spAnswerMovedBecause', [label, why]) : t('spAnswerMoved', [label]),
+  );
+}
+
 function buildCopyButton(label: string, text: () => string): HTMLElement {
   const copyBtn = el('button', {
     class: 'sp-copy-btn',
@@ -468,7 +480,12 @@ function buildActionRow(
   const actionRow = el('div', { class: 'sp-bubble-actions' });
   actionRow.appendChild(el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp)));
   const meta = answerMetaLabel(msg);
-  if (meta) actionRow.appendChild(el('span', { class: 'sp-answer-meta' }, meta));
+  if (meta) {
+    const metaEl = el('span', { class: 'sp-answer-meta' }, meta);
+    const why = msg.role === 'assistant' ? explainAutoRouteReason(msg.autoRouteReason) : null;
+    if (why) metaEl.title = t('spAnswerAutoChose', [why]);
+    actionRow.appendChild(metaEl);
+  }
   if (msg.role === 'assistant' && msg.streaming) return actionRow;
   if (msg.content.trim()) {
     actionRow.appendChild(
@@ -619,6 +636,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   if (interruptedFooter) bubble.appendChild(interruptedFooter);
 
   appendAnswerExtras(wrapper, msg, options, all);
+  const receipt = buildRouteReceipt(msg);
+  if (receipt) wrapper.appendChild(receipt);
   wrapper.appendChild(buildActionRow(msg, options, () => msg.content));
   return wrapper;
 }
@@ -1153,6 +1172,8 @@ export function buildBubbleWithTools(
   const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);
 
+  const toolsReceipt = buildRouteReceipt(msg);
+  if (toolsReceipt) wrapper.appendChild(toolsReceipt);
   wrapper.appendChild(buildActionRow(msg, options, () => textParts.join('').trim() || msg.content));
   return wrapper;
 }

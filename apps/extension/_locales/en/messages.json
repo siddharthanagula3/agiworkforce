@@ -3952,5 +3952,39 @@
   "spProjectChatNotSaved": {
     "message": "This reply goes without the project's files and instructions, because the chat could not be saved to your account first.",
     "description": "Composer notice when a project chat's first message is sent before the chat exists in the account"
+  },
+  "spAnswerMoved": {
+    "message": "Moved to $MODEL$",
+    "description": "Receipt under an answer when Auto served it with a different model than the chat's previous answer",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Claude Sonnet"
+      }
+    }
+  },
+  "spAnswerMovedBecause": {
+    "message": "Moved to $MODEL$: $REASON$",
+    "description": "Receipt under an answer when Auto moved to another model, with the reason in plain words",
+    "placeholders": {
+      "model": {
+        "content": "$1",
+        "example": "Claude Sonnet"
+      },
+      "reason": {
+        "content": "$2",
+        "example": "the model Auto would normally use was having trouble"
+      }
+    }
+  },
+  "spAnswerAutoChose": {
+    "message": "Auto chose this model: $REASON$",
+    "description": "Tooltip on an answer's model label explaining why Auto picked that model",
+    "placeholders": {
+      "reason": {
+        "content": "$1",
+        "example": "the best fit for this kind of request"
+      }
+    }
   }
 }
