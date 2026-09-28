@@ -27,6 +27,7 @@ import {
   managedUsageBucketLabel,
   modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
+  type AgentEventSource,
   type AgentEventToolCategory,
   type AgentMode,
   type DeveloperReasoningEffort,
@@ -456,7 +457,7 @@ export type ExtToWebviewMessage =
       };
     }
   | { type: 'planUpdate'; payload: PlanVisualization }
-  | { type: 'sourceList'; payload: { sources: Array<{ url: string; title: string }> } }
+  | { type: 'sourceList'; payload: { sources: AgentEventSource[] } }
   | {
       type: 'toolCallStart';
       payload: {
