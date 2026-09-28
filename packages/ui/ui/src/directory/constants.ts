@@ -172,6 +172,8 @@ export const PLUGIN_VERSION_CONFIRM_TITLE_PREFIX = 'Switch to version';
 export const PLUGIN_VERSION_CONFIRM_BODY =
   'The plugin moves to this version for your account and stays on it until you choose another.';
 export const PLUGIN_VERSION_NEW_PERMISSIONS_PREFIX = 'It also asks for:';
+export const PLUGIN_VERSION_ADDED_SKILLS_PREFIX = 'It adds these skills:';
+export const PLUGIN_VERSION_REMOVED_SKILLS_PREFIX = 'It removes these skills:';
 export const PLUGIN_VERSION_CHANGELOG_LABEL = 'What changed';
 export const PLUGIN_REPAIRS_HEADING = 'Needs attention';
 
@@ -400,3 +402,16 @@ export const CUSTOMIZE_CONFIRM_TITLE_PREFIX = 'Customize';
 export const CUSTOMIZE_CONFIRM_BODY =
   'You get your own copy with the same skills and files, which you can edit. The original is turned off so your chats use your copy; you can turn it back on from its page.';
 export const CUSTOMIZE_CONFIRM_LABEL = 'Make my copy';
+export const SUBMIT_PLUGIN_LABEL = 'Submit to the directory';
+export const SUBMIT_PLUGIN_UPDATE_LABEL = 'Submit this version';
+export const SUBMIT_PLUGIN_HINT = 'Once it is approved, anyone can find and install it.';
+export const SUBMIT_PLUGIN_CONFIRM_TITLE_PREFIX = 'Submit';
+export const SUBMIT_PLUGIN_CONFIRM_BODY =
+  'Every submission is reviewed before it is listed. Once it is approved, anyone can find and install it, and you can withdraw it at any time.';
+export const SUBMIT_PLUGIN_CONFIRM_LABEL = 'Submit for review';
+export const WITHDRAW_SUBMISSION_LABEL = 'Withdraw';
+export const WITHDRAW_SUBMISSION_CONFIRM_TITLE_PREFIX = 'Withdraw';
+export const WITHDRAW_SUBMISSION_CONFIRM_BODY =
+  'If it is listed, it leaves the directory and everyone who installed it loses it. You can submit it again later.';
+export const WITHDRAW_SUBMISSION_CONFIRM_LABEL = 'Withdraw it';
+export const SUBMISSION_REVIEW_NOTE_LABEL = 'Reviewer note';

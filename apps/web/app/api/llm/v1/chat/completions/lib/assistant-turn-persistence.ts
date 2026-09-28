@@ -34,6 +34,7 @@ import type {
 } from './assistant-turn-sources';
 import type { PersistedTurnResearch } from './assistant-turn-research';
 import type { ProcessedRequest } from './request-processor';
+import { recordExternalResourceReferences } from '@/lib/server/external-resource-references';
 
 export const TRUNCATED_ASSISTANT_TURN_REASON = 'stream_cancelled';
 
@@ -374,6 +375,28 @@ export async function persistAssistantTurn(params: {
         messageId,
         content: snapshot.content,
         artifactDerivation: EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+      });
+    }
+
+    if (affected > 0 && snapshot.sources?.length) {
+      await recordExternalResourceReferences(
+        db,
+        { userId, organizationId: threadScope.organizationId },
+        snapshot.sources.map((source) => ({
+          kind: 'web_page' as const,
+          provider: 'web',
+          uri: source.url,
+          title: source.title,
+          version: source.contentVersion
+            ? { kind: 'content_hash' as const, value: source.contentVersion }
+            : null,
+          access: 'public' as const,
+        })),
+      ).catch((error: unknown) => {
+        logger.warn(
+          { error, userId, conversationId },
+          '[chat] the answer sources were not recorded',
+        );
       });
     }
   } catch (error) {

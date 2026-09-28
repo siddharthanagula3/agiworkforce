@@ -485,7 +485,11 @@ export async function executeCloudAgentWorkflowInvocation(
     isPauseRequested: () =>
       isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
     takeSteerMessages: () =>
-      takeCloudAgentRunSteers(db, { userId: input.userId, runId: input.runId }),
+      takeCloudAgentRunSteers(db, {
+        userId: input.userId,
+        organizationId: input.processed.organizationId ?? null,
+        runId: input.runId,
+      }),
     onPauseCheckpoint: async (checkpoint) => {
       await saveCloudAgentPauseCheckpoint(db, {
         userId: input.userId,

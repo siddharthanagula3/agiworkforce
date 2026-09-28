@@ -161,15 +161,13 @@ Code: `apps/mobile/src/features/settings/cloud-usage/index.tsx:37-37`, `apps/mob
 
 - Done when: Prices and money amounts show the right currency symbol and the user's number format.
 - Wave: 2
-- Already works on: cli
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Billing honours the invoice currency code but always formats in en-US; format with the user's locale. | ui |
-| desktop | partial | Billing honours the invoice currency code but always formats in en-US; format with the user's locale. | ui |
 | mobile | partial | Store prices come from the store's localized displayPrice, but the billing screen is behind FEATURES.billing=false and its copy hard-codes $ amounts. | flag-off |
 
-Code: `apps/web/features/billing/components/Billing/types.ts:77-77`, `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
+Code: `apps/mobile/src/features/billing/storePricing.ts:66-66`, `apps/mobile/lib/v1FeatureFlags.ts:6-6`
 
 ## S11.24: Pluralization.
 
