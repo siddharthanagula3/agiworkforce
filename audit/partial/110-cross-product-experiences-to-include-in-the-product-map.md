@@ -254,17 +254,17 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1542-1542
 
 - Done when: When the user runs out of usage, the product offers an eligible alternative (named eligible model, reset wait, or purchase) that the user can take in one step and continue.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
 | desktop | partial | At a limit the card shows the reset time and upgrade, but never names a one-click eligible model (S82.26), and upgrade and extra-usage checkout are behind the beta_redemptions waitlist gate (S82.29). | ui, flag-off |
 | mobile | partial | Mobile paywall shows only the server reason: no eligible model, no reset time in the sheet (S82.26/S82.27), and IAP purchase is off (MOBILE_IAP_ENABLED) plus waitlist-gated (S82.29). | ui, flag-off |
-| cli | partial | CLI reports plan limits as provider rate limits with a generic --fallback-model hint; no eligible plan model or reset time is offered (S82.26/S82.27). | ui |
 | chrome | partial | Chrome silently falls back to Auto and prints the period-end reset rather than the rolling-window reset (S82.26, S82.27 fv downgrade); no eligible model is proposed. | ui |
 | api | partial | Limit errors carry a recovery hint but no eligible model id and no reset timestamp (S82.26, S82.27). | ui |
 
-Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/cli/src/errors.rs:530-541`
+Code: `apps/web/features/chat/components/InlinePaywallCard.tsx:430-434`, `packages/contracts/types/src/billing-catalog.ts:515-524`, `apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx:77-88`, `apps/extension/src/features/cloud-bridge/managedModelPicker.ts:94-106`
 
 ## S110.27: Disconnected integration → reconnect and resume.
 
