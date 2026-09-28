@@ -159,8 +159,13 @@ export const PluginSubmissionCreateSchema = z
   .object({
     entryId: z.string().uuid(),
     category: z.string().trim().min(1).max(100).optional(),
+    publisherName: z.string().trim().min(1).max(200).optional(),
   })
   .strict();
+
+export interface PluginSubmissionResponse {
+  submission: PluginSubmissionSummary;
+}
 
 export interface PluginSubmissionFile {
   path: string;
@@ -171,6 +176,8 @@ export interface PluginSubmissionReview extends PluginSubmissionSummary {
   submitterId: string;
   files: PluginSubmissionFile[];
 }
+
+export const PLUGIN_SUBMISSION_REVIEW_STATUS_PARAM = 'status';
 
 export interface PluginSubmissionReviewListResponse {
   submissions: Array<PluginSubmissionSummary & { submitterId: string }>;
@@ -216,3 +223,5 @@ export const CommunityPluginPatchSchema = z
     enabledSkills: EnabledSkillsSchema.optional(),
   })
   .strict();
+
+export type CommunityPluginPatch = z.infer<typeof CommunityPluginPatchSchema>;

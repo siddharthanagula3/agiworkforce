@@ -109,6 +109,23 @@ export function workspaceGroupHeading(workspaceName: string | null): string {
   return workspaceName ? `From ${workspaceName}` : PLUGIN_WORKSPACE_GROUP_HEADING;
 }
 
+export const PLUGIN_COMMUNITY_GROUP_ID = 'community-plugins';
+export const PLUGIN_COMMUNITY_GROUP_HEADING = 'Community';
+export const PLUGIN_COMMUNITY_INSTALL_NOTICE =
+  'Its developer published this plugin to the directory. It was reviewed before it was listed, and it runs with the access you give it.';
+export const PLUGIN_SUBMISSION_STATUS_LABELS: Readonly<Record<string, string>> = {
+  pending: 'Submitted for review',
+  approved: 'Listed in the directory',
+  rejected: 'Not approved',
+  withdrawn: 'Withdrawn',
+  suspended: 'Taken out of the directory',
+};
+export const PLUGIN_SUBMITTED_NOTICE =
+  'Submitted for review. You get a notification when it has been reviewed.';
+export const PLUGIN_SUBMISSION_WITHDRAWN_NOTICE = 'Withdrawn from the directory.';
+export const PLUGIN_SUBMIT_FAILED_COPY = 'This plugin could not be submitted. Try again.';
+export const PLUGIN_WITHDRAW_FAILED_COPY = 'The submission could not be withdrawn. Try again.';
+
 export const PLUGIN_USER_GROUP_ID = 'user-marketplaces';
 export const PLUGIN_USER_GROUP_HEADING = 'Your marketplaces';
 

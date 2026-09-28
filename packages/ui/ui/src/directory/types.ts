@@ -312,8 +312,16 @@ export interface DirectoryPluginDetail {
   removable?: boolean;
   locked?: boolean;
   managedNote?: string;
+  submittable?: boolean;
+  submission?: DirectoryPluginSubmission;
   availabilityNote?: string;
   href?: string;
+}
+
+export interface DirectoryPluginSubmission {
+  statusLabel: string;
+  note: string | null;
+  withdrawable: boolean;
 }
 
 export type DirectoryDetail =
@@ -401,6 +409,8 @@ export interface DirectoryAdapter {
   loadPluginDraft?: (id: string) => Promise<DirectoryPluginDraft>;
   updatePlugin?: (id: string, draft: DirectoryPluginDraft) => Promise<DirectoryUploadResult>;
   customizePlugin?: (id: string) => Promise<string>;
+  submitPlugin?: (id: string) => Promise<string | void>;
+  withdrawPluginSubmission?: (id: string) => Promise<string | void>;
   pluginSettings?: DirectoryPluginSettings;
   setPluginEnabled?: (id: string, enabled: boolean) => Promise<void> | void;
   setPluginVersion?: (

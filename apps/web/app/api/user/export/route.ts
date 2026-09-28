@@ -1069,6 +1069,39 @@ const organizationPluginMemberExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const pluginSubmissionExportSchema = z.object({
+  id: z.string(),
+  plugin_key: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string(),
+  category: z.string().nullable(),
+  skills: z.unknown(),
+  publisher_name: z.string(),
+  status: z.string(),
+  review_note: z.string().nullable(),
+  reviewed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const pluginSubmissionFileExportSchema = z.object({
+  id: z.string(),
+  submission_id: z.string(),
+  path: z.string(),
+  content: z.string(),
+  byte_size: z.number().int().nonnegative(),
+  created_at: timestampSchema,
+});
+
+const pluginSubmissionInstallExportSchema = z.object({
+  submission_id: z.string(),
+  enabled: z.boolean(),
+  enabled_skills: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const agentToolExportSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1618,6 +1651,34 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: organizationPluginMemberExportSchema,
+  },
+  {
+    section: 'plugin_submissions',
+    table: 'plugin_submissions',
+    sql: `select id, plugin_key, name, description, version, category, skills,
+                 publisher_name, status, review_note, reviewed_at, created_at, updated_at
+          from plugin_submissions
+          where user_id = $1
+          order by created_at asc`,
+    schema: pluginSubmissionExportSchema,
+  },
+  {
+    section: 'plugin_submission_files',
+    table: 'plugin_submission_files',
+    sql: `select id, submission_id, path, content, byte_size, created_at
+          from plugin_submission_files
+          where user_id = $1
+          order by submission_id asc, path asc`,
+    schema: pluginSubmissionFileExportSchema,
+  },
+  {
+    section: 'plugin_submission_installs',
+    table: 'plugin_submission_installs',
+    sql: `select submission_id, enabled, enabled_skills, created_at, updated_at
+          from plugin_submission_installs
+          where user_id = $1
+          order by created_at asc`,
+    schema: pluginSubmissionInstallExportSchema,
   },
   {
     section: 'agent_tools',

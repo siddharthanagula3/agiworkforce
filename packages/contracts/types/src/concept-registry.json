@@ -1505,6 +1505,27 @@
       "fix": "Describe an installed plugin in one shared contract type, whichever source it came from, and register it as the plugin concept that owns every install table."
     },
     {
+      "table": "plugin_submission_installs",
+      "disposition": "canonical-gap",
+      "why": "a plugin is a product object an account installs from the catalogue, a marketplace, its workspace or the community directory, and each source keeps its own install row with no one contract type describing it",
+      "becomes": "plugin",
+      "fix": "Describe an installed plugin in one shared contract type, whichever source it came from, and register it as the plugin concept that owns every install table."
+    },
+    {
+      "table": "plugin_submissions",
+      "disposition": "canonical-gap",
+      "why": "a plugin submitted to the community directory is a product object its developer and the reviewing operator both read, and it is described only by the route contract of the directory it is submitted to",
+      "becomes": "plugin",
+      "fix": "Describe an installed plugin in one shared contract type, whichever source it came from, and register it as the plugin concept that owns every install table."
+    },
+    {
+      "table": "plugin_submission_files",
+      "disposition": "canonical-gap",
+      "why": "a plugin submitted to the community directory is a product object its developer and the reviewing operator both read, and it is described only by the route contract of the directory it is submitted to",
+      "becomes": "plugin",
+      "fix": "Describe an installed plugin in one shared contract type, whichever source it came from, and register it as the plugin concept that owns every install table."
+    },
+    {
       "table": "account_lockout_attempts",
       "disposition": "identity",
       "why": "who the account is and how it proves it; the identity provider owns the object, this row is the local record of one attempt or one link"
