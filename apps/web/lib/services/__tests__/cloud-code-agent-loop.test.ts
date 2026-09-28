@@ -192,7 +192,12 @@ describe('runCloudCodeAgentTurn', () => {
       adapter: adapterFor([textTurn('Removed the build directory.')]),
       runner,
       priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
-      preApproved: { toolUseId: 't1', command: 'rm -rf build', approved: true },
+      preApproved: {
+        toolUseId: 't1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        approved: true,
+      },
     });
     expect(runner.runCommand).toHaveBeenCalledWith('rm -rf build', expect.any(Number));
     expect(result.stopReason).toBe('done');
@@ -205,7 +210,12 @@ describe('runCloudCodeAgentTurn', () => {
       adapter: adapterFor([textTurn('Understood.')]),
       runner,
       priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
-      preApproved: { toolUseId: 't1', command: 'rm -rf build', approved: false },
+      preApproved: {
+        toolUseId: 't1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        approved: false,
+      },
     });
     expect(runner.runCommand).not.toHaveBeenCalled();
     const blocks = result.messages.flatMap((m) =>
@@ -312,6 +322,7 @@ describe('runCloudCodeAgentTurn', () => {
     const runner = runnerStub();
     await runCloudCodeAgentTurn({
       ...baseInput,
+      approvalPolicy: 'autonomous',
       adapter: adapterFor([
         toolTurn('t1', 'write_file', { path: 'a.ts', content: 'x' }),
         textTurn('written'),
@@ -465,7 +476,12 @@ describe('HARD-008, the command deadline is clamped to the turn budget', () => {
       adapter: adapterFor([textTurn('Removed the build directory.')]),
       runner,
       priorMessages: [{ role: 'user', content: 'Fix the failing test' }],
-      preApproved: { toolUseId: 't1', command: 'rm -rf build', approved: true },
+      preApproved: {
+        toolUseId: 't1',
+        toolName: 'run_command',
+        args: { command: 'rm -rf build' },
+        approved: true,
+      },
     });
 
     expect(runner.runCommand).toHaveBeenCalledWith('rm -rf build', 5_000);

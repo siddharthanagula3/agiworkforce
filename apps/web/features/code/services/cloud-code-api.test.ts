@@ -136,7 +136,9 @@ describe('cloudCodeApi', () => {
       getCsrfToken: vi.fn(async () => 'csrf-code'),
     });
 
-    await expect(api.commit(session.id, 'wire the settings toggle')).resolves.toMatchObject({
+    await expect(
+      api.commit(session.id, { message: 'wire the settings toggle' }),
+    ).resolves.toMatchObject({
       push: { ok: true, exitCode: 0 },
     });
 
