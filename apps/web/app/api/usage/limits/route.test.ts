@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   units: vi.fn(),
   images: vi.fn(),
   slots: vi.fn(),
+  storage: vi.fn(),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -38,6 +39,10 @@ vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/tier-unit-quota-service')>()),
   readTierUnitUsage: (...args: unknown[]) => mocks.units(...args),
 }));
+vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/file-storage')>()),
+  readFileStorageMeter: (...args: unknown[]) => mocks.storage(...args),
+}));
 vi.mock('@/lib/services/account-usage-history-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/account-usage-history-service')>()),
   readMonthlyImageUsage: (...args: unknown[]) => mocks.images(...args),
@@ -59,6 +64,7 @@ const PERIOD = {
   ],
 };
 const IMAGES = { images: 4, requests: 2, credits: 12 };
+const STORAGE = { usedBytes: 52_428_800, limitBytes: 10_737_418_240 };
 
 function limits(): Promise<Response> {
   return GET(new NextRequest('http://localhost:3000/api/usage/limits'));
@@ -70,6 +76,7 @@ beforeEach(() => {
   mocks.units.mockResolvedValue(PERIOD);
   mocks.images.mockResolvedValue(IMAGES);
   mocks.slots.mockResolvedValue({ limit: 3, active: 1 });
+  mocks.storage.mockResolvedValue(STORAGE);
 });
 
 describe('GET /api/usage/limits', () => {
@@ -85,11 +92,13 @@ describe('GET /api/usage/limits', () => {
       units: PERIOD.units,
       images: IMAGES,
       responses: { limit: 3, active: 1 },
+      storage: STORAGE,
     });
     expect(mocks.plan).toHaveBeenCalledWith(DB, USER);
     expect(mocks.units).toHaveBeenCalledWith(DB, USER, 'pro');
     expect(mocks.images).toHaveBeenCalledWith(DB, USER);
     expect(mocks.slots).toHaveBeenCalledWith({ userId: USER, planTier: 'pro' });
+    expect(mocks.storage).toHaveBeenCalledWith({ db: DB, userId: USER, organizationId: null });
     expect(mocks.userScopedDb).toHaveBeenCalledWith(expect.anything(), {
       apiKeyScope: 'usage:read',
     });
