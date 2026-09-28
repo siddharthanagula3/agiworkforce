@@ -498,6 +498,17 @@ const de = {
   'localServers.unhealthy': '{provider} antwortet nicht: {reason}',
   'localServers.blocked': '{provider} ist blockiert: {reason}',
   'localServers.noReason': 'kein Grund angegeben',
+  'cloudSteer.action': 'Dem Agenten schreiben',
+  'cloudSteer.actionDescription': 'Anweisungen ergänzen oder die Richtung ändern',
+  'cloudSteer.prompt':
+    'Er liest Ihre Nachricht bei seinem nächsten Schritt und behält seinen Fortschritt.',
+  'cloudSteer.sent': 'In der Warteschlange. Der Agent liest sie bei seinem nächsten Schritt.',
+  'cloudSteer.queued': 'In der Warteschlange. Der Agent liest sie bei seinem nächsten Schritt.',
+  'cloudSteer.unread': 'Die Aufgabe wurde beendet, bevor der Agent dies gelesen hat.',
+  'cloudSteer.delivered': 'Ihre Nachricht, vom Agenten gelesen',
+  'cloudSteer.waitingSection': 'Ihre Nachrichten',
+  'cloudSteer.failed': 'Ihre Nachricht konnte nicht gesendet werden',
+  'cloudSteer.tooLong': 'Eine Nachricht darf höchstens {count} Zeichen lang sein.',
 };
 
 export default de;

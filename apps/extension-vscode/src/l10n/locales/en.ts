@@ -449,6 +449,16 @@ const en = {
   'localServers.unhealthy': '{provider} is not responding: {reason}',
   'localServers.blocked': '{provider} is blocked: {reason}',
   'localServers.noReason': 'no reason was given',
+  'cloudSteer.action': 'Message the agent',
+  'cloudSteer.actionDescription': 'Add instructions or change course',
+  'cloudSteer.prompt': 'It reads your message at its next step and keeps its progress.',
+  'cloudSteer.sent': 'Queued. The agent reads it at its next step.',
+  'cloudSteer.queued': 'Queued. The agent reads it at its next step.',
+  'cloudSteer.unread': 'The task stopped before the agent read this.',
+  'cloudSteer.delivered': 'Your message, read by the agent',
+  'cloudSteer.waitingSection': 'Your messages',
+  'cloudSteer.failed': 'your message could not be sent',
+  'cloudSteer.tooLong': 'A message can be at most {count} characters.',
 };
 
 export default en;

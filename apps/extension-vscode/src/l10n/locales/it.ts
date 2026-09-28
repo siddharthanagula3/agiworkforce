@@ -560,6 +560,16 @@ const it = {
   'localServers.unhealthy': '{provider} non risponde: {reason}',
   'localServers.blocked': '{provider} è bloccato: {reason}',
   'localServers.noReason': 'nessun motivo indicato',
+  'cloudSteer.action': "Scrivi all'agente",
+  'cloudSteer.actionDescription': 'Aggiungi istruzioni o cambia direzione',
+  'cloudSteer.prompt': 'Legge il tuo messaggio al passaggio successivo e mantiene i progressi.',
+  'cloudSteer.sent': "In coda. L'agente lo leggerà al passaggio successivo.",
+  'cloudSteer.queued': "In coda. L'agente lo leggerà al passaggio successivo.",
+  'cloudSteer.unread': "L'attività si è fermata prima che l'agente leggesse questo messaggio.",
+  'cloudSteer.delivered': "Il tuo messaggio, letto dall'agente",
+  'cloudSteer.waitingSection': 'I tuoi messaggi',
+  'cloudSteer.failed': 'non è stato possibile inviare il tuo messaggio',
+  'cloudSteer.tooLong': 'Un messaggio può contenere al massimo {count} caratteri.',
 };
 
 export default it;

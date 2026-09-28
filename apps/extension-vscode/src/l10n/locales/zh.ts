@@ -343,6 +343,16 @@ const zh = {
   'localServers.unhealthy': '{provider} 无响应：{reason}',
   'localServers.blocked': '{provider} 已被阻止：{reason}',
   'localServers.noReason': '未提供原因',
+  'cloudSteer.action': '给代理发消息',
+  'cloudSteer.actionDescription': '补充指示或调整方向',
+  'cloudSteer.prompt': '代理会在下一步读取你的消息，并保留已有进度。',
+  'cloudSteer.sent': '已排队。代理会在下一步读取。',
+  'cloudSteer.queued': '已排队。代理会在下一步读取。',
+  'cloudSteer.unread': '代理读取之前任务已停止。',
+  'cloudSteer.delivered': '你的消息，代理已读取',
+  'cloudSteer.waitingSection': '你的消息',
+  'cloudSteer.failed': '无法发送你的消息',
+  'cloudSteer.tooLong': '消息最多 {count} 个字符。',
 };
 
 export default zh;

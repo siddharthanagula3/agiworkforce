@@ -402,6 +402,16 @@ const ja = {
   'localServers.unhealthy': '{provider} が応答しません: {reason}',
   'localServers.blocked': '{provider} はブロックされています: {reason}',
   'localServers.noReason': '理由は示されていません',
+  'cloudSteer.action': 'エージェントにメッセージを送る',
+  'cloudSteer.actionDescription': '指示を追加するか方向を変える',
+  'cloudSteer.prompt': 'エージェントは次のステップでメッセージを読み、進捗はそのまま保ちます。',
+  'cloudSteer.sent': 'キューに追加しました。エージェントは次のステップで読みます。',
+  'cloudSteer.queued': 'キューに追加済み。エージェントは次のステップで読みます。',
+  'cloudSteer.unread': 'エージェントがこれを読む前にタスクが停止しました。',
+  'cloudSteer.delivered': 'エージェントが読んだあなたのメッセージ',
+  'cloudSteer.waitingSection': 'あなたのメッセージ',
+  'cloudSteer.failed': 'メッセージを送信できませんでした',
+  'cloudSteer.tooLong': 'メッセージは最大 {count} 文字です。',
 };
 
 export default ja;

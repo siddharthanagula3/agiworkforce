@@ -457,6 +457,16 @@ const hi = {
   'localServers.unhealthy': '{provider} जवाब नहीं दे रहा: {reason}',
   'localServers.blocked': '{provider} अवरुद्ध है: {reason}',
   'localServers.noReason': 'कोई कारण नहीं बताया गया',
+  'cloudSteer.action': 'एजेंट को संदेश भेजें',
+  'cloudSteer.actionDescription': 'निर्देश जोड़ें या दिशा बदलें',
+  'cloudSteer.prompt': 'यह अपने अगले चरण में आपका संदेश पढ़ता है और अपनी प्रगति बनाए रखता है।',
+  'cloudSteer.sent': 'कतार में है। एजेंट इसे अपने अगले चरण में पढ़ेगा।',
+  'cloudSteer.queued': 'कतार में है। एजेंट इसे अपने अगले चरण में पढ़ेगा।',
+  'cloudSteer.unread': 'एजेंट के इसे पढ़ने से पहले ही काम रुक गया।',
+  'cloudSteer.delivered': 'आपका संदेश, एजेंट ने पढ़ा',
+  'cloudSteer.waitingSection': 'आपके संदेश',
+  'cloudSteer.failed': 'आपका संदेश नहीं भेजा जा सका',
+  'cloudSteer.tooLong': 'एक संदेश में अधिकतम {count} वर्ण हो सकते हैं।',
 };
 
 export default hi;

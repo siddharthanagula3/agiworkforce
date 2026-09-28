@@ -390,6 +390,16 @@ const ko = {
   'localServers.unhealthy': '{provider} 응답 없음: {reason}',
   'localServers.blocked': '{provider} 차단됨: {reason}',
   'localServers.noReason': '이유가 제공되지 않았습니다',
+  'cloudSteer.action': '에이전트에게 메시지 보내기',
+  'cloudSteer.actionDescription': '지시를 추가하거나 방향을 바꾸세요',
+  'cloudSteer.prompt': '에이전트는 다음 단계에서 메시지를 읽고 진행 상황을 유지합니다.',
+  'cloudSteer.sent': '대기열에 추가했습니다. 에이전트가 다음 단계에서 읽습니다.',
+  'cloudSteer.queued': '대기 중. 에이전트가 다음 단계에서 읽습니다.',
+  'cloudSteer.unread': '에이전트가 이 메시지를 읽기 전에 작업이 중지되었습니다.',
+  'cloudSteer.delivered': '에이전트가 읽은 내 메시지',
+  'cloudSteer.waitingSection': '내 메시지',
+  'cloudSteer.failed': '메시지를 보내지 못했습니다',
+  'cloudSteer.tooLong': '메시지는 최대 {count}자까지 쓸 수 있습니다.',
 };
 
 export default ko;
