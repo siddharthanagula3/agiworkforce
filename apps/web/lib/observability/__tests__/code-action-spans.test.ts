@@ -19,6 +19,7 @@ import {
   closeCloudCodeSession,
   commitAndPushCloudCodeSession,
   createCloudCodeSession,
+  discardCloudCodeSessionChanges,
   openCloudCodeSessionPullRequest,
   readCloudCodeSessionChanges,
   runCloudCodeCommand,
@@ -46,6 +47,8 @@ const DRIVERS: Readonly<Record<CodeAction, () => Promise<unknown>>> = {
     ),
   commit_push: () => commitAndPushCloudCodeSession(db, OWNER, UNKNOWN_SESSION, PLAN, 'msg'),
   diff: () => readCloudCodeSessionChanges(db, OWNER, UNKNOWN_SESSION, PLAN),
+  discard_changes: () =>
+    discardCloudCodeSessionChanges(db, OWNER, UNKNOWN_SESSION, PLAN, ['src/a.ts']),
   notebook_execute: () =>
     runCloudCodeNotebookCell(db, OWNER, UNKNOWN_SESSION, { code: 'x', language: 'python' }, PLAN),
   pull_request: () => openCloudCodeSessionPullRequest(db, OWNER, UNKNOWN_SESSION),

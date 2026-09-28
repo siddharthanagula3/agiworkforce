@@ -1275,6 +1275,13 @@ describe('commitAndPushCloudCodeSession', () => {
   it('stages, commits and pushes through the authenticated remote', async () => {
     const db = createFakeDb();
     const executor = gitExecutor();
+    vi.mocked(executor.git.status).mockResolvedValue({
+      ok: true,
+      output: '',
+      stdout: ' M src/app.ts\n',
+      stderr: '',
+      exitCode: 0,
+    });
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
       { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
     ]);

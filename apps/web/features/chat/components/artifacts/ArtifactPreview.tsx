@@ -31,6 +31,7 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  FileDiff,
   FileText,
   FolderOpen,
   FolderPlus,
@@ -66,6 +67,7 @@ import {
 } from '@agiworkforce/unified-chat';
 import { TypeIcon } from './InlineArtifactCards';
 import { ArtifactVersionHistory } from './ArtifactVersionHistory';
+import { ArtifactChangesView } from './ArtifactChangesView';
 import { cn } from '@shared/lib/utils';
 import {
   DropdownMenu,
@@ -402,6 +404,7 @@ export function ArtifactPreview({
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const [viewedVersionIndex, setViewedVersionIndex] = useState<number | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
   // Manual source edit. null = not editing; a string = the unsaved draft.
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
@@ -632,6 +635,20 @@ export function ArtifactPreview({
    * revision has to be restored before it can be edited.
    */
   const isLatestVersion = versionCount === 0 || shownVersionIndex === versionCount - 1;
+  const changesKey = `${artifact.id}:${shownVersionIndex}:${versionCount}`;
+  const previousVersionContent =
+    shownVersionIndex > 0 ? versionHistory?.[shownVersionIndex - 1]?.content : undefined;
+  const canShowChanges =
+    variant === 'panel' &&
+    previousVersionContent !== undefined &&
+    !isPdf &&
+    !isDocx &&
+    !isImage &&
+    sourceDraft === null;
+  if (changesShownFor !== null && (changesShownFor !== changesKey || !canShowChanges)) {
+    setChangesShownFor(null);
+  }
+  const showChanges = canShowChanges && changesShownFor === changesKey;
 
   useEffect(() => {
     setHistoryOpen(false);
@@ -1440,6 +1457,7 @@ if (__AgiApp) {
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
     const showPreview =
+      !showChanges &&
       activeTab === 'preview' &&
       (canPreview || isMermaid || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc);
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
@@ -1485,10 +1503,13 @@ if (__AgiApp) {
               <div className="flex shrink-0 items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('preview')}
+                  onClick={() => {
+                    setActiveTab('preview');
+                    setChangesShownFor(null);
+                  }}
                   className={cn(
                     'flex h-6 w-6 items-center justify-center rounded-compact transition-colors',
-                    activeTab === 'preview'
+                    activeTab === 'preview' && !showChanges
                       ? 'bg-primary/15 text-primary'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
@@ -1499,10 +1520,13 @@ if (__AgiApp) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('code')}
+                  onClick={() => {
+                    setActiveTab('code');
+                    setChangesShownFor(null);
+                  }}
                   className={cn(
                     'flex h-6 w-6 items-center justify-center rounded-compact transition-colors',
-                    activeTab === 'code'
+                    activeTab === 'code' && !showChanges
                       ? 'bg-primary/15 text-primary'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
@@ -1613,6 +1637,7 @@ if (__AgiApp) {
                 text artifact on its latest version (see canEditSource). */}
             {canEditSource &&
               !showPreview &&
+              !showChanges &&
               (sourceDraft === null ? (
                 <Button
                   variant="ghost"
@@ -1662,6 +1687,22 @@ if (__AgiApp) {
                   </Button>
                 </>
               ))}
+
+            {canShowChanges && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setChangesShownFor(showChanges ? null : changesKey)}
+                className={cn('h-7 px-2', showChanges && 'bg-muted text-foreground')}
+                aria-pressed={showChanges}
+                aria-label="Show changes"
+                title="Show changes"
+                data-testid="artifact-show-changes"
+              >
+                <FileDiff className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="ml-1 hidden text-xs @[30rem]:inline">Show changes</span>
+              </Button>
+            )}
 
             {/* Copy, not for binary docs (copying a data URI is useless). */}
             {!isPdf && !isDocx && !isImage && (
@@ -2079,6 +2120,16 @@ if (__AgiApp) {
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
         <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+          {showChanges && previousVersionContent !== undefined && (
+            <ArtifactChangesView
+              previous={previousVersionContent}
+              next={activeContent}
+              unit={isTextDocument || artifact.type === 'email' ? 'word' : 'line'}
+              fromVersion={shownVersionIndex}
+              toVersion={shownVersionIndex + 1}
+            />
+          )}
+
           {/* Preview: HTML / React / SVG, with empty + error states. */}
           {showPreview &&
             canPreview &&
@@ -2176,6 +2227,7 @@ if (__AgiApp) {
 
           {/* Source / Code, shown whenever not previewing (or for pure-code artifacts) */}
           {!showPreview &&
+            !showChanges &&
             (sourceDraft !== null ? (
               <textarea
                 value={sourceDraft}

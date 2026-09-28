@@ -404,7 +404,7 @@ export default function DirectorySyncAdminPage({
             <button
               type="submit"
               disabled={busy}
-              className="rounded-compact bg-success-fill/10 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               Add connection
             </button>
@@ -499,7 +499,7 @@ export default function DirectorySyncAdminPage({
             <button
               type="submit"
               disabled={busy || connections.length === 0}
-              className="rounded-compact bg-success-fill/10 px-3 py-1.5 text-sm font-medium text-zinc-950 disabled:opacity-50"
+              className="rounded-compact bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               Mint token
             </button>
