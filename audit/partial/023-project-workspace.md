@@ -163,17 +163,6 @@ Code: `apps/mobile/src/features/tasks/components/StartWorkSheet.tsx:165-175`, `a
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-## S23.16: Default model/profile.
-
-- Done when: A project can set a default model (or profile) that new chats in it start with.
-- Wave: 3
-- Already works on: vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | VS Code already stores a project default model on the account (S79.03); web and desktop must show and apply it. The earlier decline is withdrawn so all our surfaces agree. | ui |
-| desktop | partial | VS Code already stores a project default model on the account (S79.03); web and desktop must show and apply it. The earlier decline is withdrawn so all our surfaces agree. | ui |
-
 ## S23.17: Default tools and Skills.
 
 - Done when: A project can set which tools and Skills are on by default for chats in it.
@@ -206,17 +195,14 @@ Code: `apps/cli/src/skills.rs:191-204`, `apps/cli/src/app_server/surfaces.rs:132
 
 - Done when: A project shows who can access it (owner and members) and a member can see a project is shared with them.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
-| desktop | partial | The owner (with sharing.manage) sees every member by name with their access in the project's Share dialog; members without that permission still see no member list, because member names are returned only to sharing managers. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/ProjectShareDialog.tsx:120-120`, `apps/web/features/settings/sections/OrganizationSharingSection.tsx:315-318`
 
 ## S23.22: Member roles.
 

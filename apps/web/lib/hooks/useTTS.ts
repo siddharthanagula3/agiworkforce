@@ -22,7 +22,11 @@ function speechChunks(text: string): string[] {
   return chunks;
 }
 
-async function fetchSpeech(text: string, speed: number, signal: AbortSignal): Promise<Blob | null> {
+async function fetchSpeech(
+  text: string,
+  speed: number,
+  signal: AbortSignal,
+): Promise<ArrayBuffer | null> {
   try {
     const response = await fetch(SPEECH_ENDPOINT, {
       method: 'POST',
@@ -35,7 +39,35 @@ async function fetchSpeech(text: string, speed: number, signal: AbortSignal): Pr
       body: JSON.stringify({ text, speed }),
       signal,
     });
-    return response.ok ? await response.blob() : null;
+    return response.ok ? await response.arrayBuffer() : null;
+  } catch {
+    return null;
+  }
+}
+
+let speechContext: AudioContext | null = null;
+
+function speechAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  if (speechContext && speechContext.state !== 'closed') return speechContext;
+  const Context =
+    window.AudioContext ??
+    (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Context) return null;
+  try {
+    speechContext = new Context();
+  } catch {
+    return null;
+  }
+  return speechContext;
+}
+
+async function decodeSpeech(
+  context: AudioContext,
+  bytes: ArrayBuffer,
+): Promise<AudioBuffer | null> {
+  try {
+    return await context.decodeAudioData(bytes);
   } catch {
     return null;
   }
@@ -104,7 +136,7 @@ export function useTTS(): UseTTSReturn {
   const spokenTextRef = useRef<string | null>(null);
   const playbackRef = useRef<{
     controller: AbortController;
-    audio: HTMLAudioElement | null;
+    source: AudioBufferSourceNode | null;
   } | null>(null);
 
   useEffect(() => {
@@ -156,10 +188,7 @@ export function useTTS(): UseTTSReturn {
     playbackRef.current = null;
     if (!playback) return;
     playback.controller.abort();
-    if (playback.audio) {
-      playback.audio.pause();
-      URL.revokeObjectURL(playback.audio.src);
-    }
+    playback.source?.stop();
   }, []);
 
   const stop = useCallback(() => {
@@ -169,7 +198,7 @@ export function useTTS(): UseTTSReturn {
     setIsSpeaking(false);
     utteranceRef.current = null;
     spokenTextRef.current = null;
-  }, [isSupported]);
+  }, [isSupported, stopServerPlayback]);
 
   const unlock = useCallback(() => {
     if (!isSupported || !('speechSynthesis' in window)) return;
@@ -236,15 +265,23 @@ export function useTTS(): UseTTSReturn {
         return;
       }
       stop();
-      if (options?.deviceVoice) {
+      const context = options?.deviceVoice ? null : speechAudioContext();
+      if (!context) {
         speakWithDevice(clean);
         return;
       }
+      const resumed =
+        context.state === 'running'
+          ? Promise.resolve(true)
+          : context.resume().then(
+              () => context.state === 'running',
+              () => false,
+            );
 
       const controller = new AbortController();
-      const playback: { controller: AbortController; audio: HTMLAudioElement | null } = {
+      const playback: { controller: AbortController; source: AudioBufferSourceNode | null } = {
         controller,
-        audio: null,
+        source: null,
       };
       playbackRef.current = playback;
       spokenTextRef.current = clean;
@@ -260,11 +297,18 @@ export function useTTS(): UseTTSReturn {
       };
 
       void (async () => {
+        if (!(await resumed)) {
+          if (playbackRef.current !== playback) return;
+          playbackRef.current = null;
+          speakWithDevice(clean);
+          return;
+        }
         const chunks = speechChunks(clean);
         for (const [index, chunk] of chunks.entries()) {
-          const blob = await fetchSpeech(chunk, speed, controller.signal);
+          const bytes = await fetchSpeech(chunk, speed, controller.signal);
+          const buffer = bytes ? await decodeSpeech(context, bytes) : null;
           if (playbackRef.current !== playback) return;
-          if (!blob) {
+          if (!buffer) {
             if (index === 0) {
               playbackRef.current = null;
               speakWithDevice(clean);
@@ -273,18 +317,17 @@ export function useTTS(): UseTTSReturn {
             }
             return;
           }
-          const audio = new Audio(URL.createObjectURL(blob));
-          playback.audio = audio;
-          const played = await new Promise<boolean>((resolve) => {
-            audio.onended = () => resolve(true);
-            audio.onerror = () => resolve(false);
-            void audio.play().catch(() => resolve(false));
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          source.connect(context.destination);
+          const ended = new Promise<void>((resolve) => {
+            source.onended = () => resolve();
           });
-          URL.revokeObjectURL(audio.src);
-          if (playbackRef.current !== playback || !played) {
-            finish();
-            return;
-          }
+          source.start();
+          playback.source = source;
+          await ended;
+          source.disconnect();
+          if (playbackRef.current !== playback) return;
         }
         finish();
       })();

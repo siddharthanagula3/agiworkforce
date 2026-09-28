@@ -89,9 +89,8 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1022-1032`, `a
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Source prints in the terminal, but a rendered preview exists only by opening the published page in the browser; for an unpublished artifact `agi artifacts open` opens its conversation instead. | surface-only |
-| vscode | partial | VS Code shows source only; a rendered view exists only for a published artifact, via the Open Published Artifact row action in the browser. | surface-only |
 
-Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-103`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
+Code: `apps/cli/src/lib.rs:1914-1920`, `apps/cli/src/cloud/artifacts.rs:450-460`
 
 ## S26.15: Direct-edit mode.
 
@@ -207,7 +206,6 @@ Code: `apps/cli/src/lib.rs:1024-1027`, `apps/cli/src/cloud/artifacts.rs:306-316`
 | --- | --- | --- | --- |
 | mobile | partial | A single Download action exports Markdown or plain text through the share sheet; there is no menu to pick another format (HTML, CSV, SVG). | ui |
 | cli | partial | `agi artifacts show <id> --out <path>` writes only the raw source; there is no choice of export format. | ui |
-| vscode | partial | "Save Artifact into Workspace" writes only the raw source file; there is no choice of export format. | ui |
 
 Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:228-252`, `apps/cli/src/lib.rs:1034-1041`, `apps/cli/src/lib.rs:1944-1948`
 
@@ -215,14 +213,13 @@ Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:421-435`,
 
 - Done when: A copy control puts the artifact's own content on the clipboard and confirms it.
 - Wave: 3
-- Already works on: web, desktop, mobile, cli
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| vscode | partial | No Copy command on an artifact; its content can only be copied by selecting it in the read-only editor it opens in. | ui |
 | chrome | partial | Copy puts the whole assistant message on the clipboard, not just the artifact: readChromeArtifactSource returns the message content without deriving the artifact block (VS Code derives it with deriveArtifacts). | handler |
 
-Code: `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:32-45`, `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
+Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-221`, `apps/extension/src/features/cloud-bridge/artifactsClient.ts:197-203`
 
 ## S26.31: Share controls.
 
@@ -233,22 +230,20 @@ Code: `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Publish, copy link and share link work, but mobile has no way to unpublish an artifact or choose who can open it (workspace vs anyone). | ui |
-| vscode | partial | VS Code can only open an already-published artifact's link; it cannot publish, copy the link, change the audience or unpublish. | ui |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`, `apps/extension-vscode/package.json:597-600`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:151-155`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:405-418`, `apps/mobile/src/features/chat/services/artifactPublishing.ts:13-25`
 
 ## S26.32: Public/private state.
 
 - Done when: Wherever an artifact is shown, the user can see whether it is private, published to anyone, or shared with the workspace.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The public link appears only right after publishing in the open viewer (component state); reopening shows no published state and the audience is never shown. | states |
-| vscode | partial | The tree marks an artifact "published" and says it "has a public link" even when its audience is the workspace only; the published row's visibility is ignored. | states |
 
-Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`, `apps/extension-vscode/src/features/artifacts/artifactPresentation.ts:107-130`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:137-145`
+Code: `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:139-143`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:265-271`
 
 ## S26.35: Runtime error panel.
 
@@ -286,12 +281,11 @@ Code: `apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts:32-35`,
 ## S26.39: Live updates from ongoing work.
 
 - Done when: While a reply or run is still producing an artifact, the artifact view updates live as content arrives.
-- Wave: 2
-- Already works on: web, desktop
+- Wave: 3
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts are derived only when the turn finishes, so the card and viewer appear after completion; while streaming the code only shows as message text. | states |
-| vscode | partial | The Artifacts tree has a 60-second auto-refresh that nothing turns on (setAutoRefreshEnabled is never called with true), and an open artifact document is a static snapshot. | mount |
 
-Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`, `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:84-92`, `apps/extension-vscode/src/core/commandSetup.ts:2286-2288`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1951-1973`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:336-341`

@@ -7,11 +7,7 @@ export type DirectoryBadgeKind = 'first-party' | 'official' | 'verified' | 'comm
 export type DirectorySortKey = 'popular' | 'installs' | 'updated' | 'name';
 
 export type DirectoryConnectableMode =
-  | 'connect'
-  | 'api-key-form'
-  | 'desktop-and-cli'
-  | 'needs-setup'
-  | 'unavailable';
+  'connect' | 'api-key-form' | 'desktop-and-cli' | 'needs-setup' | 'unavailable';
 
 export interface DirectoryToggle {
   id: string;
@@ -156,6 +152,11 @@ export interface DirectorySkillDetail {
   publisher?: string;
   description: string;
   license?: string;
+  provenance?: string;
+  addedAt?: string;
+  version?: string;
+  requiredTools?: readonly string[];
+  requiredConnectors?: readonly DirectoryPluginConnectorSetting[];
   files: readonly DirectoryDetailFile[];
   readFile?: (path: string) => Promise<string>;
   editable?: boolean;
@@ -268,9 +269,7 @@ export interface DirectoryPluginDetail {
 }
 
 export type DirectoryDetail =
-  | DirectorySkillDetail
-  | DirectoryConnectorDetail
-  | DirectoryPluginDetail;
+  DirectorySkillDetail | DirectoryConnectorDetail | DirectoryPluginDetail;
 
 export interface DirectoryMarketplaceInput {
   repositoryUrl: string;

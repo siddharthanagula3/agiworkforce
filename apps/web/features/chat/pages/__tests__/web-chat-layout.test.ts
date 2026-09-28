@@ -62,7 +62,7 @@ describe('web chat responsive layout', () => {
       resolveSecondaryPanel(
         'artifacts',
         { ...CLOSED_SECONDARY_PANELS, artifacts: true },
-        { work: true, research: false, artifacts: true },
+        { work: true, research: false, artifacts: true, sources: false },
       ),
     ).toBe('artifacts');
   });

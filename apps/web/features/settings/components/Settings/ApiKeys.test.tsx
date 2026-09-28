@@ -58,7 +58,7 @@ describe('ApiKeysManager', () => {
 
     await waitFor(() =>
       expect(createMutate).toHaveBeenCalledWith(
-        { name: 'VS Code', scopes: ['inference:write'] },
+        { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never' },
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       ),
     );

@@ -807,7 +807,7 @@ impl AgentSession {
     /// answer is yes. Cheap when no shell is running: there is no file to
     /// read, so nothing is sent.
     pub(crate) async fn refresh_browser_availability(&mut self) {
-        if self.browser_available.is_some() {
+        if self.browser_available == Some(true) {
             return;
         }
         self.browser_available = Some(crate::browser_bridge::browser_state().await.is_paired());

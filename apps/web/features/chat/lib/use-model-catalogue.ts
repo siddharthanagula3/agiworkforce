@@ -19,6 +19,7 @@ export interface ModelCatalogueState {
   entries: readonly ModelCatalogueEntry[];
   developers: readonly ModelCatalogueDeveloper[];
   count: number;
+  planTier: string;
   planLabel: string;
   retry: () => void;
 }
@@ -28,6 +29,7 @@ interface CatalogueData {
   entries: readonly ModelCatalogueEntry[];
   developers: readonly ModelCatalogueDeveloper[];
   count: number;
+  planTier: string;
   planLabel: string;
 }
 
@@ -36,6 +38,7 @@ const EMPTY_DATA: CatalogueData = {
   entries: [],
   developers: [],
   count: 0,
+  planTier: '',
   planLabel: '',
 };
 
@@ -91,6 +94,7 @@ export function useModelCatalogue(enabled: boolean): ModelCatalogueState {
           entries: body.models,
           developers: groupDevelopers(body.models),
           count: body.count,
+          planTier: body.planTier,
           planLabel: body.planLabel,
         });
       })

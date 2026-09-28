@@ -2,6 +2,7 @@ import { readUpstashCredentials } from '@agiworkforce/key-value';
 import { NextRequest, NextResponse } from 'next/server';
 import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
 import { logger } from './logger';
+import { recordAdmittedRateLimit } from './rate-limit-headers';
 import { deployEnvironment } from './server/hosting';
 import { getKeyValueRateLimiter, getKeyValueStore } from './server/key-value';
 import { BLOCK_APPEAL_PATH, logRateLimitExceeded } from './security-audit';
@@ -1169,6 +1170,7 @@ export async function withRateLimit(
     );
   }
 
+  recordAdmittedRateLimit(request, info.headers);
   return null;
 }
 

@@ -3,6 +3,7 @@ import {
   classifyMemoryCategory,
   memoryConflictTopic,
   memoryConsolidationKey,
+  MEMORY_CONFLICT_TOPICS,
 } from '@agiworkforce/agent-core';
 import {
   contextFenceTag,
@@ -822,6 +823,162 @@ export async function sweepExpiredMemories(
     if (count < batchSize) return { expired, remaining: false };
   }
   return { expired, remaining: true };
+}
+
+export interface MemoryConsolidationSweep {
+  merged: number;
+  superseded: number;
+  remaining: boolean;
+}
+
+const MEMORY_CONFLICT_PATTERNS = MEMORY_CONFLICT_TOPICS.flatMap((entry) =>
+  entry.prefixes.map((prefix) => ({ topic: entry.topic, pattern: `${prefix} %` })),
+);
+
+async function mergeDuplicateMemoryBatch(
+  db: ManagedMemoryContextDb,
+  batchSize: number,
+): Promise<number> {
+  const [row] = await db.query<{ count: number }>(
+    `with active as materialized (
+       select user_id, id, project_id, organization_id, expires_at, updated_at,
+              ${memoryRankSql('')} as rank,
+              ${memoryContentKeySql('content')} as content_key
+         from user_memories
+        where ${activeMemoryPredicate()}
+     ), ranked as (
+       select user_id, id, content_key,
+              first_value(id) over ordered as keeper_id,
+              row_number() over ordered as position,
+              bool_or(expires_at is null) over grouped as keeps_forever,
+              max(expires_at) over grouped as latest_expiry
+         from active
+       window grouped as (partition by user_id, project_id, organization_id, content_key),
+              ordered as (grouped order by rank desc, updated_at desc, id)
+     ), duplicates as materialized (
+       select user_id, id, content_key, keeper_id
+         from ranked
+        where position > 1
+        order by user_id, keeper_id, id
+        limit $1
+     ), keepers as materialized (
+       select distinct ranked.user_id, ranked.id,
+              case when ranked.keeps_forever then null else ranked.latest_expiry end as expires_at
+         from ranked
+         join duplicates on duplicates.user_id = ranked.user_id and duplicates.keeper_id = ranked.id
+        where ranked.position = 1
+     ), extended as (
+       update user_memories as memory
+          set expires_at = keepers.expires_at, updated_at = now()
+         from keepers
+        where memory.user_id = keepers.user_id and memory.id = keepers.id
+          and memory.expires_at is distinct from keepers.expires_at
+          and ${activeMemoryPredicate('memory.')}
+       returning memory.id
+     ), merged as (
+       update user_memories as memory
+          set is_deleted = true, content = '', category = null, updated_at = now()
+         from duplicates
+        where memory.user_id = duplicates.user_id and memory.id = duplicates.id
+          and ${activeMemoryPredicate('memory.')}
+          and ${memoryContentKeySql('memory.content')} = duplicates.content_key
+       returning memory.id
+     )
+     select count(*)::int as count from merged`,
+    [batchSize],
+  );
+  return row?.count ?? 0;
+}
+
+async function supersedeStaleMemoryBatch(
+  db: ManagedMemoryContextDb,
+  batchSize: number,
+): Promise<number> {
+  const [row] = await db.query<{ count: number }>(
+    `with topics as (
+       select topic, pattern, position
+         from unnest($2::text[], $3::text[]) with ordinality as entry(topic, pattern, position)
+     ), active as materialized (
+       select user_id, id, project_id, organization_id, updated_at,
+              ${memoryRankSql('')} as rank,
+              ${memoryContentKeySql('content')} as content_key
+         from user_memories
+        where ${activeMemoryPredicate()}
+     ), candidates as materialized (
+       select distinct on (active.user_id, active.id)
+              active.user_id, active.id, active.project_id, active.organization_id,
+              active.updated_at, active.rank, topics.topic
+         from active
+         join topics on active.content_key like topics.pattern
+        order by active.user_id, active.id, topics.position
+     ), ranked as (
+       select user_id, id,
+              first_value(id) over ordered as keeper_id,
+              row_number() over ordered as position
+         from candidates
+       window ordered as (partition by user_id, project_id, organization_id, topic
+                          order by rank desc, updated_at desc, id)
+     ), stale as materialized (
+       select user_id, id, keeper_id
+         from ranked
+        where position > 1
+        order by user_id, keeper_id, id
+        limit $1
+     ), superseded as (
+       update user_memories as memory
+          set superseded_by = stale.keeper_id, superseded_at = now(), updated_at = now()
+         from stale
+        where memory.user_id = stale.user_id and memory.id = stale.id
+          and ${activeMemoryPredicate('memory.')}
+       returning memory.id
+     )
+     select count(*)::int as count from superseded`,
+    [
+      batchSize,
+      MEMORY_CONFLICT_PATTERNS.map((entry) => entry.topic),
+      MEMORY_CONFLICT_PATTERNS.map((entry) => entry.pattern),
+    ],
+  );
+  return row?.count ?? 0;
+}
+
+async function drainMemoryBatches(
+  runBatch: () => Promise<number>,
+  batchSize: number,
+  maxBatches: number,
+  deadlineMs: number,
+): Promise<{ count: number; remaining: boolean }> {
+  let count = 0;
+  for (let batch = 0; batch < maxBatches; batch += 1) {
+    if (Date.now() > deadlineMs) return { count, remaining: true };
+    const done = await runBatch();
+    count += done;
+    if (done < batchSize) return { count, remaining: false };
+  }
+  return { count, remaining: true };
+}
+
+export async function consolidateMemories(
+  db: ManagedMemoryContextDb,
+  options: { batchSize?: number; maxBatches?: number; budgetMs?: number } = {},
+): Promise<MemoryConsolidationSweep> {
+  const batchSize = options.batchSize ?? 500;
+  const maxBatches = options.maxBatches ?? 50;
+  const deadlineMs = Date.now() + (options.budgetMs ?? 40_000);
+  const duplicates = await drainMemoryBatches(
+    () => mergeDuplicateMemoryBatch(db, batchSize),
+    batchSize,
+    maxBatches,
+    deadlineMs,
+  );
+  if (duplicates.remaining) return { merged: duplicates.count, superseded: 0, remaining: true };
+  const stale = await drainMemoryBatches(
+    () => supersedeStaleMemoryBatch(db, batchSize),
+    batchSize,
+    maxBatches,
+    deadlineMs,
+  );
+  return { merged: duplicates.count, superseded: stale.count, remaining: stale.remaining };
 }
 
 function scopePredicate(scope: MemoryScope, projectParamIndex: number): string {

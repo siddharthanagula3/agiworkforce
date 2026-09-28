@@ -15,10 +15,7 @@ nothing is left.
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The Artifacts view marks published rows and opens their page, but cannot unpublish or change audience. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/artifacts/artifactsTree.ts:36-43`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.02: Application name and description.
 
@@ -53,9 +50,8 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | `agi artifacts show` prints or saves the source; an edited file cannot be pushed back to the artifact. | ui |
-| vscode | partial | VS Code opens the source as a read-only document; edits go to a separate workspace copy. | ui |
 
-Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:99-102`, `apps/extension-vscode/src/core/commandSetup.ts:2292-2296`
+Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/lib.rs:1942-1948`
 
 ## S33.07: Preview deployment.
 
@@ -89,18 +85,6 @@ Code: `apps/cli/src/lib.rs:1053-1068`, `apps/cli/src/cloud/artifacts.rs:391-400`
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-## S33.10: Public URL.
-
-- Done when: The published site is reachable at a public URL.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | VS Code opens an existing public page (Open Published Artifact) but cannot publish one. | ui |
-
-Code: `apps/extension-vscode/package.json:597-599`, `apps/extension-vscode/src/core/commandSetup.ts:2302-2306`
 
 ## S33.12: Workspace-only access.
 

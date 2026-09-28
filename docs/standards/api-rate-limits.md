@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-13
+Last updated: 2026-09-27
 
 Every number below is read from `apps/web/lib/rate-limit.ts` (`rateLimitConfigs`)
 and pinned by
@@ -92,8 +92,15 @@ Headers on that response: `Retry-After` (seconds), plus `X-RateLimit-Limit`,
 A response refused because the limiter itself was unavailable carries
 `X-RateLimit-Error: rate-limiter-unavailable` and `Retry-After: 60` instead.
 
-Successful responses carry no `X-RateLimit-*` headers, so a client cannot read
-its remaining budget without hitting the limit. Back off on `Retry-After`.
+## Reading your remaining budget
+
+Every response from the endpoints above, admitted or not, carries
+`X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` for the
+bucket that admitted it, whenever the limiter reached Redis. On
+`/chat/completions` they describe the per-user bucket, the tighter of the two.
+Slow down as `X-RateLimit-Remaining` approaches zero, and back off on
+`Retry-After` once refused. `withAdmittedRateLimitHeaders`
+(`apps/web/lib/rate-limit-headers.ts`) attaches them.
 
 ## Related quotas
 

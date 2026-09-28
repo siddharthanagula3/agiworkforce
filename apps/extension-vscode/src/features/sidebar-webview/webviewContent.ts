@@ -517,7 +517,7 @@ export function getWebviewContent(
     #messages {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 12px 16px;
+      padding: 10px max(12px, calc((100% - 768px) / 2)) 16px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -555,7 +555,27 @@ export function getWebviewContent(
       line-height: var(--type-caption-height);
       text-align: right;
     }
+    .message.user[data-delivery-state='sending']::after { content: 'Sending'; }
     .message.user[data-delivery-state='queued']::after { content: 'Queued'; }
+    .message-attachments {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .message-attachment {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      padding: 1px 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--corner-pill);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow-wrap: anywhere;
+    }
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
@@ -582,6 +602,7 @@ export function getWebviewContent(
       opacity: 0;
       transition: opacity var(--duration-quick) var(--curve-standard);
     }
+    .message.user .message-actions--queued { opacity: 1; justify-content: flex-end; }
     .message.assistant:hover .message-actions,
     .message.assistant.message--latest .message-actions,
     .message-actions:focus-within {
@@ -1210,11 +1231,19 @@ export function getWebviewContent(
     .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
+    ol > li { list-style: decimal; }
     blockquote { border-left: 2px solid var(--accent-teal); padding-left: 8px; color: var(--text-secondary); margin: 6px 0; }
     .code-block-wrapper { position: relative; margin: 8px 0; }
     .code-block-wrapper pre { margin: 0; padding-top: 36px; }
     .code-block-actions { position: absolute; top: 5px; right: 5px; z-index: var(--z-content); display: flex; gap: 4px; }
     .code-lang { position: absolute; top: 4px; left: 8px; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+    .explain-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
+    .code-block-wrapper:hover .explain-btn, .explain-btn:focus-visible { opacity: 1; }
+    .explain-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .diff-add { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground)); }
+    .diff-del { display: inline-block; min-width: 100%; background: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground)); }
+    .diff-hunk { color: var(--vscode-textLink-foreground); }
+    .diff-file { color: var(--text-secondary); font-weight: 600; }
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity var(--duration-quick); }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
@@ -1981,7 +2010,19 @@ export function getWebviewContent(
       border-bottom: 1px solid var(--border);
       background: var(--bg-elevated);
     }
-    .sessions-sheet-title { font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .sessions-sheet-title { margin: 0; font-size: var(--type-body-size); line-height: var(--type-body-height); font-weight: 600; }
+    .plan-card__title, .approval-card__title { margin: 0; font: inherit; }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .sessions-sheet-actions { display: flex; align-items: center; gap: 2px; }
     .sessions-sheet-actions .icon-btn[hidden] { display: none; }
 
@@ -2297,6 +2338,26 @@ export function getWebviewContent(
       text-overflow: ellipsis;
       flex: 1 1 auto;
     }
+    .context-limit-notice {
+      display: block;
+      flex-basis: 100%;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .context-limit-notice[hidden] { display: none; }
+    .attachment-chip__thumb {
+      width: 16px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .attachment-chip__size {
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      white-space: nowrap;
+    }
     .attachment-chip__remove {
       background: none;
       border: 0;
@@ -2401,7 +2462,7 @@ export function getWebviewContent(
 
   <section class="sessions-sheet" id="sessionsSheet" hidden aria-label="Sessions">
     <div class="sessions-sheet-head">
-      <span class="sessions-sheet-title">Sessions</span>
+      <h2 class="sessions-sheet-title">Sessions</h2>
       <div class="sessions-sheet-actions">
         <button
           class="icon-btn"
@@ -2535,6 +2596,7 @@ export function getWebviewContent(
   </div>
 
   <!-- ── Messages ── -->
+  <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
@@ -2609,6 +2671,13 @@ export function getWebviewContent(
           <span class="plus-menu-description"></span>
         </span>
       </button>
+      <button type="button" class="plus-menu-item" data-context-kind="url" role="menuitem">
+        <span class="pm-icon codicon codicon-link" aria-hidden="true"></span>
+        <span class="plus-menu-copy">
+          <span class="plus-menu-title">Web page</span>
+          <span class="plus-menu-description"></span>
+        </span>
+      </button>
     </div>
 
     <!-- Model picker popover -->
@@ -2678,6 +2747,7 @@ export function getWebviewContent(
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
         <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="context-usage" id="contextUsage"></span>
+        <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -2714,6 +2784,7 @@ export function getWebviewContent(
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -3492,6 +3563,25 @@ export function getWebviewContent(
       contextUsageEl.textContent = '';
       contextUsageEl.className = 'context-usage';
       contextUsageEl.removeAttribute('title');
+      announceContextLimit(0);
+    }
+
+    var MOD_KEY_LABEL = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? 'Cmd' : 'Ctrl';
+    var contextLimitAnnounced = false;
+
+    function announceContextLimit(pct) {
+      if (!contextLimitNotice) return;
+      if (pct < 90) {
+        contextLimitAnnounced = false;
+        contextLimitNotice.hidden = true;
+        contextLimitNotice.textContent = '';
+        return;
+      }
+      if (contextLimitAnnounced) return;
+      contextLimitAnnounced = true;
+      contextLimitNotice.hidden = false;
+      contextLimitNotice.textContent =
+        'This chat has used ' + pct + '% of the model\u2019s context. Older messages may be dropped; start a new chat to keep full context.';
     }
 
     function renderContextUsage(usedTokens, contextWindow) {
@@ -3514,6 +3604,7 @@ export function getWebviewContent(
         (pct >= 90 ? ' is-critical' : pct >= 75 ? ' is-high' : '');
       contextUsageEl.title = 'Context after the last turn: ' + usedTokens.toLocaleString() +
         ' of ' + contextWindow.toLocaleString() + ' tokens (' + pct + '%)';
+      announceContextLimit(pct);
     }
 
     function addErrorMessage(presentation) {
@@ -3693,6 +3784,13 @@ export function getWebviewContent(
       messageEl.appendChild(row);
     }
 
+    function prependAuthor(messageEl, label) {
+      var author = document.createElement('span');
+      author.className = 'visually-hidden';
+      author.textContent = label + ' ';
+      messageEl.insertBefore(author, messageEl.firstChild);
+    }
+
     function answerMeta(payload) {
       if (!payload || !payload.modelLabel) return null;
       var tokens = (payload.inputTokens || 0) + (payload.outputTokens || 0);
@@ -3769,6 +3867,11 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
+      if (!value && stopBtn && stopBtn.getAttribute('aria-busy') === 'true') {
+        stopBtn.removeAttribute('aria-busy');
+        stopBtn.setAttribute('aria-label', 'Stop response');
+        showFollowUpStatus('', 'queued', false);
+      }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
       sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
@@ -3778,14 +3881,14 @@ export function getWebviewContent(
       sendBtn.setAttribute(
         'title',
         value
-          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (Cmd/Ctrl+Enter)'
+          ? actionLabel + ' follow-up (Enter) · ' + (followUpBehavior === 'steer' ? 'Queue' : 'Steer') + ' once (' + MOD_KEY_LABEL + '+Enter)'
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
       userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
-          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
+          ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>' + MOD_KEY_LABEL + '+Enter</kbd> to ' +
               (followUpBehavior === 'steer' ? 'queue' : 'steer') + ' once · <kbd>Shift+Enter</kbd> for newline'
           : '<kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline';
       }
@@ -3816,6 +3919,7 @@ export function getWebviewContent(
       { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
       { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
     ];
+    var activeEffortLevels = null;
     var EFFORT_OPTIONS = [
       { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
       { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
@@ -3888,7 +3992,11 @@ export function getWebviewContent(
       appendControlsGroup(
         'Reasoning effort',
         activeSupportsEffort ? '' : 'This model does not take a reasoning effort.',
-        activeSupportsEffort ? EFFORT_OPTIONS : [],
+        activeSupportsEffort
+          ? EFFORT_OPTIONS.filter(function (option) {
+              return !activeEffortLevels || activeEffortLevels.indexOf(option.value) !== -1;
+            })
+          : [],
         activeEffort,
         'setEffort',
         'effort'
@@ -4114,7 +4222,7 @@ export function getWebviewContent(
 
     function bindCodeBlockActions(rootEl) {
       if (!rootEl) return;
-      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn');
+      var btns = rootEl.querySelectorAll('.copy-btn, .apply-btn, .explain-btn');
       for (var i = 0; i < btns.length; i++) {
         var btn = btns[i];
         if (boundCodeActionButtons.has(btn)) continue;
@@ -4124,6 +4232,12 @@ export function getWebviewContent(
           var codeEl = getCodeBlock(b);
           if (!codeEl) return;
           var text = codeEl.textContent || '';
+          if (b.classList.contains('explain-btn')) {
+            var language = getCodeLanguage(codeEl) || '';
+            prefillComposer('Explain this code:\n\n' + '\u0060\u0060\u0060' + language + '\n' + text + '\n' + '\u0060\u0060\u0060');
+            sendMessage();
+            return;
+          }
           if (b.classList.contains('apply-btn')) {
             if (pendingApplyButton && pendingApplyButton !== b) {
               settleApplyButton('Failed', 'A newer diff proposal replaced this request.');
@@ -4157,6 +4271,94 @@ export function getWebviewContent(
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
+    var sendingClientMessageId = null;
+
+    function settleSending(state) {
+      if (!sendingClientMessageId) return;
+      setUserMessageState(sendingClientMessageId, state || '');
+      sendingClientMessageId = null;
+    }
+
+    function sentContextEntries() {
+      var entries = [];
+      var strips = [attachmentStrip, editorContextStrip];
+      for (var s = 0; s < strips.length; s++) {
+        if (!strips[s]) continue;
+        var chips = strips[s].querySelectorAll('.attachment-chip:not(.failed)');
+        for (var c = 0; c < chips.length; c++) {
+          var chipName = chips[c].querySelector('.attachment-chip__name');
+          var chipIcon = chips[c].querySelector('.codicon');
+          if (!chipName || !chipName.textContent) continue;
+          entries.push({
+            label: chipName.textContent,
+            icon: chipIcon ? chipIcon.className : 'codicon codicon-file-media',
+          });
+        }
+      }
+      if (browseWebEnabled) entries.push({ label: 'Browse the web', icon: 'codicon codicon-globe' });
+      return entries;
+    }
+
+    function appendQueuedControls(messageEl, clientMessageId, text) {
+      var row = document.createElement('div');
+      row.className = 'message-actions message-actions--queued';
+      var edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'message-action';
+      edit.title = 'Edit';
+      edit.setAttribute('aria-label', 'Edit this queued message');
+      var editIcon = document.createElement('span');
+      editIcon.className = 'codicon codicon-edit';
+      editIcon.setAttribute('aria-hidden', 'true');
+      edit.appendChild(editIcon);
+      var cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'message-action';
+      cancel.title = 'Cancel';
+      cancel.setAttribute('aria-label', 'Cancel this queued message');
+      var cancelIcon = document.createElement('span');
+      cancelIcon.className = 'codicon codicon-close';
+      cancelIcon.setAttribute('aria-hidden', 'true');
+      cancel.appendChild(cancelIcon);
+      edit.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+        prefillComposer(text);
+      });
+      cancel.addEventListener('click', function () {
+        vscode.postMessage({ type: 'cancelQueuedMessage', payload: { clientMessageId: clientMessageId } });
+      });
+      row.appendChild(edit);
+      row.appendChild(cancel);
+      messageEl.appendChild(row);
+    }
+
+    function removeQueuedControls(clientMessageId) {
+      var message = userMessageById(clientMessageId);
+      var row = message && message.querySelector('.message-actions--queued');
+      if (row) row.remove();
+    }
+
+    function appendSentContext(messageEl) {
+      var entries = sentContextEntries();
+      if (entries.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'message-attachments';
+      row.setAttribute('aria-label', 'Sent with ' + entries.map(function (e) { return e.label; }).join(', '));
+      for (var i = 0; i < entries.length; i++) {
+        var item = document.createElement('span');
+        item.className = 'message-attachment';
+        var icon = document.createElement('span');
+        icon.className = entries[i].icon;
+        icon.setAttribute('aria-hidden', 'true');
+        var label = document.createElement('span');
+        label.textContent = entries[i].label;
+        item.appendChild(icon);
+        item.appendChild(label);
+        row.appendChild(item);
+      }
+      messageEl.appendChild(row);
+    }
+
     function sendMessage(oneTurnBehavior) {
       if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
@@ -4173,7 +4375,15 @@ export function getWebviewContent(
       var clientMessageId = 'msg-' + Date.now() + '-' + (++clientMessageSeq);
       var userMessageEl = addMessage('user', text);
       userMessageEl.setAttribute('data-client-message-id', clientMessageId);
-      if (isFollowUp) userMessageEl.setAttribute('data-delivery-state', 'queued');
+      prependAuthor(userMessageEl, 'You said:');
+      appendSentContext(userMessageEl);
+      if (isFollowUp) {
+        userMessageEl.setAttribute('data-delivery-state', 'queued');
+        appendQueuedControls(userMessageEl, clientMessageId, text);
+      } else {
+        userMessageEl.setAttribute('data-delivery-state', 'sending');
+        sendingClientMessageId = clientMessageId;
+      }
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
@@ -4211,11 +4421,16 @@ export function getWebviewContent(
     sendBtn.addEventListener('click', function() { sendMessage(); });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
+        if (stopBtn.getAttribute('aria-busy') === 'true') return;
+        stopBtn.setAttribute('aria-busy', 'true');
+        stopBtn.setAttribute('aria-label', 'Stopping');
+        showFollowUpStatus('Stopping…', 'queued', true);
         vscode.postMessage({ type: 'cancel' });
       });
     }
 
     userInput.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
       // The slash popup owns Enter while it is open: the highlighted command
       // runs instead of the literal "/name" being sent as a chat message.
       if (slashMenuIsOpen()) {
@@ -4978,7 +5193,8 @@ export function getWebviewContent(
       var icon = document.createElement('span');
       icon.className = 'codicon codicon-shield';
       icon.setAttribute('aria-hidden', 'true');
-      var headText = document.createElement('span');
+      var headText = document.createElement('h3');
+      headText.className = 'approval-card__title';
       headText.textContent = 'Approval needed';
       head.appendChild(icon);
       head.appendChild(headText);
@@ -5220,18 +5436,53 @@ export function getWebviewContent(
       renderAttachmentStrip();
     }
 
-    function makeAttachmentChip(name, state) {
+    var FILE_ICON_BY_EXTENSION = {
+      png: 'file-media', jpg: 'file-media', jpeg: 'file-media', gif: 'file-media', webp: 'file-media', svg: 'file-media',
+      pdf: 'file-pdf',
+      zip: 'file-zip', gz: 'file-zip', tar: 'file-zip',
+      md: 'markdown', txt: 'file-text',
+      json: 'json', yaml: 'file-code', yml: 'file-code', toml: 'file-code', xml: 'file-code',
+      ts: 'file-code', tsx: 'file-code', js: 'file-code', jsx: 'file-code', py: 'file-code', rs: 'file-code',
+      go: 'file-code', java: 'file-code', rb: 'file-code', c: 'file-code', cpp: 'file-code', cs: 'file-code',
+      css: 'file-code', html: 'file-code', sh: 'terminal', csv: 'table',
+    };
+
+    function fileIconFor(name) {
+      var dot = name.lastIndexOf('.');
+      var extension = dot === -1 ? '' : name.slice(dot + 1).toLowerCase();
+      return FILE_ICON_BY_EXTENSION[extension] || 'file';
+    }
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    function makeAttachmentChip(name, state, file) {
       var chip = document.createElement('span');
       chip.className = 'attachment-chip' + (state ? ' ' + state : '');
       chip.setAttribute('role', 'listitem');
+      chip.setAttribute('data-source-name', name);
 
-      var icon = document.createElement('span');
-      icon.className = 'codicon codicon-file';
-      icon.setAttribute('aria-hidden', 'true');
+      var icon;
+      if (file && file.type && file.type.indexOf('image/') === 0 && typeof URL.createObjectURL === 'function') {
+        icon = document.createElement('img');
+        icon.className = 'attachment-chip__thumb';
+        icon.alt = '';
+        icon.src = URL.createObjectURL(file);
+      } else {
+        icon = document.createElement('span');
+        icon.className = 'codicon codicon-' + fileIconFor(name);
+        icon.setAttribute('aria-hidden', 'true');
+      }
 
       var label = document.createElement('span');
       label.className = 'attachment-chip__name';
       label.textContent = name;
+      var size = file ? formatFileSize(file.size) : '';
+      if (size) chip.title = name + ', ' + size;
 
       var removeBtn = document.createElement('button');
       removeBtn.type = 'button';
@@ -5257,6 +5508,12 @@ export function getWebviewContent(
 
       chip.appendChild(icon);
       chip.appendChild(label);
+      if (size) {
+        var sizeEl = document.createElement('span');
+        sizeEl.className = 'attachment-chip__size';
+        sizeEl.textContent = size;
+        chip.appendChild(sizeEl);
+      }
       chip.appendChild(removeBtn);
       return chip;
     }
@@ -5286,7 +5543,7 @@ export function getWebviewContent(
           if (attachmentStrip) attachmentStrip.appendChild(failChip);
           continue;
         }
-        var chip = makeAttachmentChip(f.name, 'uploading');
+        var chip = makeAttachmentChip(f.name, 'uploading', f);
         if (attachmentStrip) attachmentStrip.appendChild(chip);
         pendingAttachmentChips[batchKey].push({ name: f.name, chip: chip });
       }
@@ -5391,6 +5648,7 @@ export function getWebviewContent(
           restoredQueuedUser.setAttribute('data-client-message-id', activeQueuedClientMessageId);
         }
         setUserMessageState(activeQueuedClientMessageId, 'running');
+        removeQueuedControls(activeQueuedClientMessageId);
         showFollowUpStatus(
           msg.payload.queueRemaining > 0
             ? 'Starting queued follow-up · ' + msg.payload.queueRemaining + ' waiting'
@@ -5402,6 +5660,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'token') {
         removeTyping();
+        settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -5417,10 +5676,15 @@ export function getWebviewContent(
 
       else if (msg.type === 'done') {
         removeTyping();
+        settleSending('');
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
           currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          prependAuthor(
+            currentAssistantEl,
+            msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
+          );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
         }
@@ -5458,6 +5722,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'toolCallStart') {
         removeTyping();
+        settleSending('');
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -5493,6 +5758,7 @@ export function getWebviewContent(
           finalizeToolCallStack();
         }
         addErrorMessage(msg.payload);
+        settleSending('failed');
         setStreaming(false);
         if (activeQueuedClientMessageId) {
           setUserMessageState(activeQueuedClientMessageId, 'failed');
@@ -5524,6 +5790,9 @@ export function getWebviewContent(
 
       else if (msg.type === 'followUpStatus') {
         markAttachmentsQueued(msg.payload.attachmentIds || []);
+        if (msg.payload.kind !== 'queued' && msg.payload.kind !== 'queue-fallback') {
+          removeQueuedControls(msg.payload.clientMessageId);
+        }
         if (msg.payload.kind === 'steered') {
           setUserMessageState(msg.payload.clientMessageId, 'steered');
         } else if (msg.payload.kind === 'cancelled') {
@@ -5738,6 +6007,7 @@ export function getWebviewContent(
       else if (msg.type === 'effortChanged') {
         activeEffort = msg.payload.effort;
         activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        activeEffortLevels = Array.isArray(msg.payload.efforts) ? msg.payload.efforts : null;
         renderControlsSummary();
       }
 
@@ -5810,13 +6080,13 @@ export function getWebviewContent(
         for (var a = 0; a < (ack.added || []).length; a++) {
           var addedEntry = ack.added[a] || {};
           if (!addedIdsByName[addedEntry.name]) addedIdsByName[addedEntry.name] = [];
-          addedIdsByName[addedEntry.name].push(addedEntry.id);
+          addedIdsByName[addedEntry.name].push(addedEntry);
         }
         var allChips = attachmentStrip ? attachmentStrip.querySelectorAll('.attachment-chip.uploading') : [];
         for (var c = 0; c < allChips.length; c++) {
           var chipEl = allChips[c];
           var nameEl = chipEl.querySelector('.attachment-chip__name');
-          var attachName = nameEl ? (nameEl.textContent || '') : '';
+          var attachName = chipEl.getAttribute('data-source-name') || (nameEl ? (nameEl.textContent || '') : '');
           if (skippedByName[attachName]) {
             chipEl.classList.remove('uploading');
             chipEl.classList.add('failed');
@@ -5824,7 +6094,15 @@ export function getWebviewContent(
           } else {
             chipEl.classList.remove('uploading');
             var idQueue = addedIdsByName[attachName];
-            var attachId = idQueue && idQueue.length > 0 ? idQueue.shift() : '';
+            var addedAck = idQueue && idQueue.length > 0 ? idQueue.shift() : null;
+            var attachId = addedAck ? addedAck.id : '';
+            if (addedAck && addedAck.truncatedAt && nameEl) {
+              var truncatedNote = document.createElement('span');
+              truncatedNote.className = 'attachment-chip__size';
+              truncatedNote.textContent = 'first ' + addedAck.truncatedAt.toLocaleString() + ' characters';
+              nameEl.parentNode.insertBefore(truncatedNote, nameEl.nextSibling);
+              chipEl.title = attachName + ': only the first ' + addedAck.truncatedAt.toLocaleString() + ' characters are sent';
+            }
             if (attachId && chipEl.getAttribute('data-remove-requested') === '1') {
               // The user dismissed this chip while it was still uploading:
               // honour it now that the host id exists.
@@ -5955,7 +6233,7 @@ export function getWebviewContent(
         var icon = document.createElement('span');
         icon.className = 'codicon codicon-checklist';
         icon.setAttribute('aria-hidden', 'true');
-        var title = document.createElement('span');
+        var title = document.createElement('h3');
         title.className = 'plan-card__title';
         title.textContent = 'Plan';
         var count = document.createElement('span');

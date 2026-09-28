@@ -107,6 +107,26 @@ export const Copy = svg(
 
 export const Square = svg('<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>');
 
+export const RotateCcw = svg(
+  '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+);
+
+export const Download = svg(
+  '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+);
+
+export const ExternalLink = svg(
+  '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+);
+
+export const CircleAlert = svg(
+  '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+);
+
+export const AppWindow = svg(
+  '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>',
+);
+
 const svgParser = typeof DOMParser !== 'undefined' ? new DOMParser() : null;
 
 export function renderIcon(svgString: string, size: number, extraClass?: string): HTMLElement {

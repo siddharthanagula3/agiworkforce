@@ -37,6 +37,7 @@ import {
 import { userSkillAuthoringEnabled } from '@/lib/services/user-skill-authoring';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { listInstalledDirectorySkills } from '@/features/plugins/server/directory/installed-skills';
+import { loadSkillOrigins } from '@/lib/services/skill-origin-service';
 import { refuseUnsafeUpload } from '@/lib/security/upload-scan';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
@@ -49,6 +50,7 @@ const MULTIPART_CONTENT_TYPE = 'multipart/form-data';
 const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04];
 const ZIP_MIME = 'application/zip';
 const MARKDOWN_MIME = 'text/markdown';
+const MAX_LISTED_REQUIREMENTS = 20;
 
 function isZipArchive(bytes: Uint8Array): boolean {
   return ZIP_MAGIC.every((byte, index) => bytes[index] === byte);
@@ -113,11 +115,14 @@ async function handleListSkills(request: NextRequest) {
   const canAuthorSkills = userSkillAuthoringEnabled();
   const userSkills = canAuthorSkills ? await listUserSkills(db, userId) : [];
   const directorySkills = await listInstalledDirectorySkills(db, userId);
+  const listed = dedupeByFirstClaimedName([...skills, ...directorySkills]);
+  const originOf = await loadSkillOrigins(db, userId, listed);
   let body;
   try {
     body = ManagedSkillsResponseSchema.parse({
       skills: dedupeByFirstClaimedName([
-        ...dedupeByFirstClaimedName([...skills, ...directorySkills]).map((s) => ({
+        ...listed.map((s) => ({
+          origin: originOf(s),
           name: s.name,
           description: s.description,
           source: s.source,
@@ -131,6 +136,9 @@ async function handleListSkills(request: NextRequest) {
             : {}),
           ...(s.metadata.requires?.tools?.length
             ? { requiredTools: s.metadata.requires.tools }
+            : {}),
+          ...(s.metadata.requires?.mcp?.length
+            ? { requiredConnectors: s.metadata.requires.mcp.slice(0, MAX_LISTED_REQUIREMENTS) }
             : {}),
         })),
         ...userSkills,
