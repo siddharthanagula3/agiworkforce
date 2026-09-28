@@ -6,6 +6,8 @@ export interface ClamdAddress {
   port: number;
 }
 
+export const LOCAL_CLAMD: ClamdAddress = { host: '127.0.0.1', port: 3310 };
+
 export type ScanVerdict =
   { kind: 'clean' } | { kind: 'infected'; signature: string } | { kind: 'failed'; reason: string };
 
