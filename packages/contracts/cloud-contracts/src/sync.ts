@@ -300,6 +300,8 @@ export const MemorySyncConflictSchema = z.object({
 export const MemorySyncRejectionSchema = z.object({
   id: z.string(),
   term: z.string().nullable().optional(),
+  reason: z.string().optional(),
+  message: z.string().optional(),
 });
 export type MemorySyncRejection = z.infer<typeof MemorySyncRejectionSchema>;
 
