@@ -36,11 +36,11 @@ export const SCHEDULES_SECTION_CSS = `
     gap: 8px;
     padding: 8px 14px 4px;
   }
-  .sp-schedules-title { flex: 1; font-size: 12px; color: var(--agi-ext-text); }
+  .sp-schedules-title { flex: 1; font-size: var(--type-caption-size); color: var(--agi-ext-text); }
   .sp-schedules-status {
     padding: 0 14px 6px;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
     color: var(--agi-ext-text-muted);
     min-width: 0;
     overflow-wrap: anywhere;
@@ -60,9 +60,9 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedules-status-action:disabled { cursor: wait; opacity: 0.55; }
   .sp-schedules-empty {
     padding: 4px 14px 12px;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
-    line-height: 1.5;
+    line-height: var(--type-caption-height);
   }
   .sp-schedules-empty[hidden] { display: none; }
   .sp-schedule-row {
@@ -76,7 +76,7 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedule-name {
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -84,9 +84,9 @@ export const SCHEDULES_SECTION_CSS = `
   }
   .sp-schedule-badge {
     flex-shrink: 0;
-    font-size: 12px;
+    font-size: var(--type-label-size);
     padding: 1px 7px;
-    border-radius: 999px;
+    border-radius: var(--corner-pill);
     border: 1px solid var(--agi-ext-border);
     color: var(--agi-ext-text-muted);
   }
@@ -98,17 +98,17 @@ export const SCHEDULES_SECTION_CSS = `
     color: var(--agi-ext-danger-text);
     border-color: var(--agi-ext-danger-border);
   }
-  .sp-schedule-sub { font-size: 12px; color: var(--agi-ext-text-muted); }
+  .sp-schedule-sub { font-size: var(--type-caption-size); color: var(--agi-ext-text-muted); }
   .sp-schedule-actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .sp-schedule-btn {
     background: none;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 5px;
+    border-radius: var(--corner-control);
     color: var(--agi-ext-text-muted);
-    font-size: 12px;
+    font-size: var(--type-label-size);
     padding: 3px 8px;
     cursor: pointer;
-    transition: color 0.12s, border-color 0.12s;
+    transition: color var(--duration-instant), border-color var(--duration-instant);
   }
   .sp-schedule-btn:hover { color: var(--agi-ext-accent-text); border-color: var(--agi-ext-accent); }
   .sp-schedule-btn:disabled { cursor: wait; opacity: 0.55; }
@@ -118,8 +118,8 @@ export const SCHEDULES_SECTION_CSS = `
     gap: 4px;
     padding: 6px 8px;
     border: 1px solid var(--agi-ext-border);
-    border-radius: 6px;
-    font-size: 12px;
+    border-radius: var(--corner-control);
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
   }
   .sp-schedule-approval-call { overflow-wrap: anywhere; }
@@ -131,7 +131,7 @@ export const SCHEDULES_SECTION_CSS = `
     padding: 10px;
     border: 1px solid var(--agi-ext-border);
     border-radius: var(--corner-control);
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text);
   }
   .sp-schedule-form[hidden] { display: none; }
@@ -147,7 +147,7 @@ export const SCHEDULES_SECTION_CSS = `
     background: none;
     color: var(--agi-ext-text);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     text-align: left;
     cursor: pointer;
   }
@@ -159,14 +159,14 @@ export const SCHEDULES_SECTION_CSS = `
   .sp-schedule-input {
     box-sizing: border-box;
     width: 100%;
-    min-height: 28px;
+    min-height: var(--control-sm);
     padding: 4px 8px;
     border: 1px solid var(--agi-ext-border);
     border-radius: var(--corner-control);
     background: var(--agi-ext-bg);
     color: var(--agi-ext-text);
     font: inherit;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
   }
   textarea.sp-schedule-input { min-height: 64px; resize: vertical; }
   .sp-schedule-days { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; border: 0; }
@@ -184,7 +184,7 @@ export const SCHEDULES_SECTION_CSS = `
     overflow: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    font-size: 12px;
+    font-size: var(--type-caption-size);
     color: var(--agi-ext-text-muted);
   }
 `;
