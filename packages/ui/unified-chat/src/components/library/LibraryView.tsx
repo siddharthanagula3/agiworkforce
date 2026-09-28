@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   Download,
+  FileDown,
   Folder,
   FolderPlus,
   LayoutGrid,
@@ -1033,6 +1034,18 @@ type FileTextPreviewState =
 
 const TEXT_PREVIEW_ROW_CAP = 500;
 
+function downloadText(fileName: string, text: string): void {
+  const base = fileName.replace(/\.[^.]+$/, '') || 'file';
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${base}.txt`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 function useFileTextPreview(
   uri: string | null,
   load: ((uri: string) => Promise<Response>) | undefined,
@@ -1237,6 +1250,17 @@ function FileViewerOverlay({
                 <ZoomIn className="h-4 w-4" aria-hidden />
               </button>
             </div>
+          ) : null}
+          {textPreview.status === 'ready' && !item.mime_type.toLowerCase().startsWith('text/') ? (
+            <button
+              type="button"
+              aria-label={`Download the text of ${item.file_name}`}
+              title="Download as text"
+              onClick={() => downloadText(item.file_name, textPreview.preview.text)}
+              className={MENU_TRIGGER_CLASS}
+            >
+              <FileDown className="h-4 w-4" aria-hidden />
+            </button>
           ) : null}
           <button
             type="button"
