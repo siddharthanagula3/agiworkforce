@@ -74,6 +74,25 @@ pub fn format_task_detail(
     let mut lines = vec![format!("Task {id} [{status}] {description}")];
     match result {
         Some(result) => {
+            let usage = &result.usage;
+            if !usage.model.is_empty() {
+                lines.push(format!(
+                    "Model {} · {} in / {} out tokens · {}",
+                    usage.model,
+                    usage.input_tokens,
+                    usage.output_tokens,
+                    if usage.via_subscription {
+                        "on your subscription".to_string()
+                    } else {
+                        format!(
+                            "{} credits",
+                            crate::cost_ledger::credit_amount(crate::cost_ledger::credits_for_usd(
+                                usage.cost_usd
+                            ))
+                        )
+                    }
+                ));
+            }
             lines.push(String::new());
             lines.push(result.output.trim().to_string());
             if !result.files_modified.is_empty() {

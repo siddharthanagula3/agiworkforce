@@ -3540,6 +3540,7 @@ enum SlashResult {
     RunTasks(String),
     RunWorktree(String),
     RunMcp(String),
+    RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
 }
@@ -3548,6 +3549,7 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
   @path            Inline a file, or list a folder with @dir/
   @agent-<name>    Hand the message to one of your agents
   /attach <image>  Attach an image file (png, jpg, gif, webp)
+  /attach <url>    Fetch a web page and add its text to the conversation
   Ctrl+V           Attach the image on the clipboard
   Paste            Long pastes collapse to [Pasted text #N]; the full text is sent
   /mcp             Run a connected server's prompt as /mcp:<server>:<prompt>
@@ -4120,6 +4122,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             let (action, rest) = arg.split_once(' ').unwrap_or((arg, ""));
             match action {
                 "" => SlashResult::SystemMessage(ADD_CONTEXT_MENU.to_string()),
+                url if url.starts_with("https://") || url.starts_with("http://") => {
+                    SlashResult::RunAttachUrl(url.to_string())
+                }
                 "list" => SlashResult::SystemMessage(if app.staged_images.is_empty() {
                     "No images staged for the next turn.".to_string()
                 } else {
@@ -5239,6 +5244,11 @@ async fn run_event_loop(
                                     out: None,
                                 };
                                 let cwd = app.workspace_root();
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: "Generating the image...".to_string(),
+                                });
+                                render(terminal, app)?;
                                 let text =
                                     match crate::cloud::image::generate(privacy, &options, &cwd)
                                         .await
@@ -5301,6 +5311,21 @@ async fn run_event_loop(
                                 {
                                     Ok(text) | Err(text) => text,
                                 };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
+                            }
+                            SlashResult::RunAttachUrl(url) => {
+                                let text =
+                                    match crate::repl::attach_url_context(&url, &mut app.session)
+                                        .await
+                                    {
+                                        Ok(chars) => format!(
+                                        "Attached {url} ({chars} characters) to the conversation."
+                                    ),
+                                        Err(error) => format!("Could not attach {url}: {error:#}"),
+                                    };
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,
@@ -5567,9 +5592,14 @@ async fn send_message_with_prompt(
     )
     .await;
 
+    let attachments = if app.staged_images.is_empty() {
+        String::new()
+    } else {
+        format!("\n[attached: {}]", app.staged_images.join(", "))
+    };
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
-        text: transcript_text.to_string(),
+        text: format!("{transcript_text}{attachments}"),
     });
 
     // The session drains `pending_image_blocks` into this turn, so the chips
@@ -7453,6 +7483,8 @@ mod tests {
             "task",
             "personalize",
             "tools",
+            "budget",
+            "continue",
             "fast",
             "new",
             "models",

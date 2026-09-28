@@ -36,6 +36,8 @@
 /replay
 /insights
 /context [ctx]
+/continue
+/budget
 /tools
 /personalize
 /tasks [task]
