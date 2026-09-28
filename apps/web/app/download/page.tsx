@@ -25,7 +25,7 @@ const DESKTOP_APP_PATH = '/Applications/AGI Cloud.app';
 const CERTIFICATE_ISSUER = 'https://token.actions.githubusercontent.com';
 const RELEASE_REPOSITORY = 'siddharthanagula3/agiworkforce';
 const CERTIFICATE_IDENTITY = `https://github.com/${RELEASE_REPOSITORY}/.github/workflows/release-cli.yml@refs/tags/v-cli-<version>`;
-const UPDATER_ENDPOINT = '/api/releases/desktop-cloud/latest';
+const UPDATER_ENDPOINT = '/api/releases/desktop-cloud/update';
 
 const COSIGN_COMMAND = `cosign verify-blob --bundle ${CHECKSUM_BUNDLE} \\
     --certificate-oidc-issuer ${CERTIFICATE_ISSUER} \\
@@ -178,7 +178,8 @@ export default function DownloadPage() {
               rows={[
                 {
                   label: 'AGI Desktop · macOS',
-                  value: 'When available, one notarized .dmg per architecture, Apple silicon and Intel',
+                  value:
+                    'When available, one notarized .dmg per architecture, Apple silicon and Intel',
                 },
                 {
                   label: 'agi CLI',
@@ -196,7 +197,7 @@ export default function DownloadPage() {
                 },
                 {
                   label: 'Updates',
-                  value: `The desktop app asks ${UPDATER_ENDPOINT} and offers the signed installer; nothing installs on its own`,
+                  value: `The desktop app checks ${UPDATER_ENDPOINT} every day, downloads a signed update in the background and installs it when you choose Restart to update`,
                 },
                 {
                   label: 'Asset hosts',
