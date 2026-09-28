@@ -6,7 +6,7 @@ import {
   PLUGIN_MARKETPLACE_MAX_PLUGINS,
 } from '@agiworkforce/cloud-contracts';
 import {
-  CLAUDE_CLI_INSTALL_COMMAND,
+  AGI_CLI_PLUGIN_INSTALL_COMMAND,
   CLAUDE_MARKETPLACE_MANIFEST_PATH,
   GITHUB_HOST,
   GITHUB_RAW_BASE_URL,
@@ -196,7 +196,7 @@ export function resolvePluginSource(
 }
 
 export function marketplaceInstallCommand(pluginName: string, marketplaceName: string): string {
-  return `${CLAUDE_CLI_INSTALL_COMMAND} ${pluginName}@${marketplaceName}`;
+  return `${AGI_CLI_PLUGIN_INSTALL_COMMAND} ${pluginName}@${marketplaceName}`;
 }
 
 export function buildMarketplaceManifestUrl(marketplace: ClaudeMarketplaceSource): string | null {

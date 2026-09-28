@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildFileTree,
   countActiveFilters,
-  formatInstallCount,
   matchesDirectoryFilters,
   matchesDirectorySearch,
   matchesDirectorySource,
@@ -11,7 +10,6 @@ import {
   sortDirectoryEntries,
   toggleFilterValue,
 } from '../filtering';
-import { INSTALL_COUNT_FLOOR } from '../constants';
 import type { DirectoryEntry } from '../types';
 
 function entry(patch: Partial<DirectoryEntry> & { id: string; name: string }): DirectoryEntry {
@@ -23,7 +21,6 @@ const alpha = entry({
   name: 'Alpha',
   publisher: 'AGI',
   description: 'Reads spreadsheets',
-  installCount: 500,
   updatedAt: '2026-01-01T00:00:00.000Z',
   sourceId: 'agi',
   facets: { status: ['installed'], category: ['Data'] },
@@ -33,7 +30,7 @@ const beta = entry({
   name: 'beta',
   publisher: 'Community',
   description: 'Writes docs',
-  installCount: 900,
+  popular: true,
   updatedAt: '2026-06-01T00:00:00.000Z',
   sourceId: 'community',
   facets: { status: ['not-installed'], category: ['Productivity'] },
@@ -103,7 +100,7 @@ describe('sortDirectoryEntries', () => {
     ]);
   });
 
-  it('sorts by install count and pushes countless entries last', () => {
+  it('puts popular entries first and the rest by name', () => {
     expect(sortDirectoryEntries(entries, 'popular').map((item) => item.id)).toEqual([
       'beta',
       'alpha',
@@ -149,21 +146,6 @@ describe('toggleFilterValue', () => {
 
   it('counts every selected value across groups', () => {
     expect(countActiveFilters({ status: ['a', 'b'], type: ['c'] })).toBe(3);
-  });
-});
-
-describe('formatInstallCount', () => {
-  it('hides counts below the floor and undefined counts', () => {
-    expect(formatInstallCount(undefined)).toBeNull();
-    expect(formatInstallCount(INSTALL_COUNT_FLOOR - 1)).toBeNull();
-  });
-
-  it('renders exact, thousand and million scales', () => {
-    expect(formatInstallCount(INSTALL_COUNT_FLOOR)).toBe('10');
-    expect(formatInstallCount(1200)).toBe('1.2K');
-    expect(formatInstallCount(12_000)).toBe('12K');
-    expect(formatInstallCount(2_400_000)).toBe('2.4M');
-    expect(formatInstallCount(2_000_000)).toBe('2M');
   });
 });
 

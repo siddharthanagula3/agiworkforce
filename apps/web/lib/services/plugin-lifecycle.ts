@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { PluginVersionsResponse } from '@agiworkforce/cloud-contracts';
 import { z } from 'zod';
 import {
   isPluginPublisherKind,
@@ -136,6 +137,34 @@ export async function listPluginVersions(
     [PluginIdSchema.parse(pluginId)],
   );
   return rows.map(mapVersion);
+}
+
+export async function listPublishedPluginVersions(
+  db: DatabaseAdapter,
+  userId: string,
+  pluginId: string,
+): Promise<PluginVersionsResponse> {
+  const [versions, installed] = await Promise.all([
+    listPluginVersions(db, pluginId),
+    db.query<{ installed_version: string; approved_permissions: unknown }>(
+      `select installed_version, approved_permissions from public.plugin_installations
+        where user_id = $1 and plugin_id = $2`,
+      [userId, pluginId],
+    ),
+  ]);
+  return {
+    versions: versions
+      .filter((version) => version.status === 'published')
+      .map((version) => ({
+        version: version.version,
+        publishedAt: version.publishedAt,
+        changelog: version.changelog,
+        permissions: version.permissions,
+        declaredSkills: version.declaredSkills,
+      })),
+    installedVersion: installed[0]?.installed_version ?? null,
+    approvedPermissions: stringArray(installed[0]?.approved_permissions),
+  };
 }
 
 async function readVersion(

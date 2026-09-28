@@ -17,7 +17,6 @@ export { DirectoryScanCaution, isDirectoryScanCaution } from './scan-caution';
 export {
   buildFileTree,
   countActiveFilters,
-  formatInstallCount,
   matchesDirectoryFilters,
   matchesDirectorySearch,
   matchesDirectorySource,
@@ -30,7 +29,10 @@ export {
   DIRECTORY_SECTION_LABELS,
   DIRECTORY_SOURCE_ALL_ID,
   DIRECTORY_SOURCE_ALL_LABEL,
-  INSTALL_COUNT_FLOOR,
+  DIRECTORY_PUBLISHER_FILTER_ID,
+  DIRECTORY_CATEGORY_FILTER_ID,
+  UPDATE_BADGE,
+  COMMUNITY_BADGE,
   MARKETPLACE_UNAVAILABLE_COPY,
 } from './constants';
 export type {
@@ -59,6 +61,12 @@ export type {
   DirectoryPluginDraft,
   DirectoryPluginDraftSkill,
   DirectoryPluginMcpServer,
+  DirectoryPluginPublisher,
+  DirectoryPluginRepair,
+  DirectoryPluginScan,
+  DirectoryPluginScanVerdict,
+  DirectoryPluginVersionOption,
+  DirectoryPluginVersions,
   DirectoryPluginSettings,
   DirectoryPluginSkillSetting,
   DirectoryQuery,
