@@ -117,6 +117,7 @@
     "renameProject": "إعادة تسمية المشروع",
     "restore": "استعادة",
     "running": "قيد التشغيل",
+    "unread": "غير مقروءة",
     "searchConversations": "البحث في المحادثات",
     "searchConversationsDescription": "ابحث في سجل محادثاتك وافتح المحادثة المطابقة.",
     "share": "مشاركة",
@@ -231,7 +232,8 @@
     "temporaryChatPersonalizationHint": "المخصّصة تستخدم ملفك الشخصي وتعليماتك وأسلوب الردود. غير المخصّصة تتركها جانبًا.",
     "toggleArtifacts": "تبديل لوحة العناصر",
     "toggleArtifactsCount": "تبديل لوحة العناصر ({{count}})",
-    "toggleStats": "الإحصائيات"
+    "toggleStats": "الإحصائيات",
+    "untitledConversation": "محادثة"
   },
   "interface": {
     "closeRewindCheckpoints": "إغلاق نقاط الرجوع",

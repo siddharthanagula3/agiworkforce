@@ -117,6 +117,7 @@
     "renameProject": "Projekt umbenennen",
     "restore": "Wiederherstellen",
     "running": "Wird ausgeführt",
+    "unread": "Ungelesen",
     "searchConversations": "Unterhaltungen durchsuchen",
     "searchConversationsDescription": "Durchsuchen Sie Ihren Unterhaltungsverlauf und öffnen Sie eine passende Unterhaltung.",
     "share": "Teilen",
@@ -231,7 +232,8 @@
     "temporaryChatPersonalizationHint": "Personalisiert nutzt dein Profil, deine Anweisungen und deinen Antwortstil. Nicht personalisiert lässt sie weg.",
     "toggleArtifacts": "Artefakte-Bereich umschalten",
     "toggleArtifactsCount": "Artefakte-Bereich umschalten ({{count}})",
-    "toggleStats": "Statistik"
+    "toggleStats": "Statistik",
+    "untitledConversation": "Unterhaltung"
   },
   "interface": {
     "closeRewindCheckpoints": "Rücksprungpunkte schließen",
