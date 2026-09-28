@@ -219,6 +219,11 @@ const POLICIES: { readonly [K in ContextSourceClass]: ContextSourceClassPolicy }
         module: 'apps/web/lib/services/past-chat-context-service.ts',
         loader: 'loadPastChatExcerpts',
       },
+      {
+        surface: 'web',
+        module: 'apps/web/lib/services/past-chat-context-service.ts',
+        loader: 'recentChatsContextLoader',
+      },
     ],
   },
   project_instruction: {

@@ -238,7 +238,7 @@ interface SendMessageOptions {
     connectors?: string[];
   };
   researchResume?: {
-    sources: Array<{ url: string; title?: string; snippet?: string }>;
+    sources: Array<{ url: string; title?: string; snippet?: string; retrievedAt?: string }>;
     steps: ResearchStep[];
     /** The plan the user pressed Start on after the server paused for approval. */
     approvedSteps?: ResearchStep[];
@@ -3772,7 +3772,15 @@ export function useChatStream(): UseChatStreamReturn {
               research_resume:
                 options.research && options.researchResume
                   ? {
-                      sources: options.researchResume.sources,
+                      sources: options.researchResume.sources.map(({ retrievedAt, ...source }) => {
+                        const retrievedMs = retrievedAt ? Date.parse(retrievedAt) : Number.NaN;
+                        return {
+                          ...source,
+                          ...(Number.isFinite(retrievedMs)
+                            ? { retrieved_at: new Date(retrievedMs).toISOString() }
+                            : {}),
+                        };
+                      }),
                       steps: options.researchResume.steps,
                       ...(options.researchResume.approvedSteps?.length
                         ? { approved_steps: options.researchResume.approvedSteps }
