@@ -659,6 +659,7 @@ describe('CloudCodePage', () => {
           {
             turnId: '33333333-3333-4333-8333-333333333333',
             goal: 'print the node version',
+            mode: 'agent' as const,
             stopReason: 'done' as const,
             stepsUsed: 1,
             inputTokens: 1200,
@@ -1919,6 +1920,7 @@ describe('CloudCodePage', () => {
           {
             turnId: '44444444-4444-4444-8444-444444444444',
             goal: 'run the tests',
+            mode: 'agent' as const,
             stopReason,
             stepsUsed: 1,
             inputTokens: 0,
