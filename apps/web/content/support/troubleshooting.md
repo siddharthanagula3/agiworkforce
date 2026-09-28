@@ -51,9 +51,8 @@ or a workspace restriction. Check the approval prompt, the connector's
 
 ## A model is missing from the picker
 
-The badge says which case it is: **Upgrade** (your plan), **Coming soon, not yet
-available** (not live yet), or **Unavailable right now** (live but not
-answering). A workspace model policy can also remove models entirely, in which
+The badge says which case it is: **Upgrade** (your plan), **Coming soon** (not
+live yet), or **Unavailable right now** (live but not answering). A workspace model policy can also remove models entirely, in which
 case they do not appear at all.
 
 ## A retired model

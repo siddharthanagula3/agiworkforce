@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { ShieldCheck } from 'lucide-react';
 import { ChipInput, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
@@ -17,6 +18,7 @@ import {
   type WorkspaceAdminPolicy,
 } from '../hooks/use-settings-queries';
 import { isValidIpOrCidr } from '../schemas/settings-validation';
+import settingsService from '../services/user-preferences';
 
 type PolicyDraft = Omit<
   WorkspaceAdminPolicy,
@@ -202,6 +204,10 @@ export function WorkspacePolicySection() {
   const query = useWorkspacePolicy();
   const update = useUpdateWorkspacePolicy();
   const overview = query.data ?? null;
+  const twoFactor = useQuery({
+    queryKey: ['settings', 'two-factor-status'],
+    queryFn: async () => (await settingsService.get2FAStatus()).data,
+  });
 
   const [draft, setDraft] = useState<PolicyDraft | null>(null);
 
@@ -586,11 +592,17 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Require multi-factor authentication"
-        description="Members must have multi-factor authentication enabled on their account to sign in to this workspace."
+        description={
+          !draft.requireMfa && twoFactor.data?.enrollmentAvailable !== true
+            ? 'Temporarily unavailable. Members cannot set up an authenticator app yet, so requiring one would lock them out.'
+            : 'Members must have multi-factor authentication enabled on their account to sign in to this workspace.'
+        }
         control={
           <Toggle
             checked={draft.requireMfa}
-            disabled={!canEdit}
+            disabled={
+              !canEdit || (!draft.requireMfa && twoFactor.data?.enrollmentAvailable !== true)
+            }
             label="Require multi-factor authentication"
             onChange={(next) => patch({ requireMfa: next })}
           />
