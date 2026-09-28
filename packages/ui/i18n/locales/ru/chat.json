@@ -582,7 +582,9 @@
     "expand": "Развернуть код",
     "close": "Закрыть развёрнутый код",
     "codeTitle": "Код {{language}}",
-    "codeBlockLabel": "Блок кода {{language}}"
+    "codeBlockLabel": "Блок кода {{language}}",
+    "edit": "Изменить",
+    "editLabel": "Изменить этот код рядом с чатом"
   },
   "streaming": {
     "reconnecting": "Переподключение…",

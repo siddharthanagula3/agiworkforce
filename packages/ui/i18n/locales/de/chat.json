@@ -462,7 +462,9 @@
     "expand": "Code vergrößern",
     "close": "Vergrößerten Code schließen",
     "codeTitle": "{{language}}-Code",
-    "codeBlockLabel": "{{language}}-Codeblock"
+    "codeBlockLabel": "{{language}}-Codeblock",
+    "edit": "Bearbeiten",
+    "editLabel": "Diesen Code neben dem Chat bearbeiten"
   },
   "streaming": {
     "reconnecting": "Verbindung wird wiederhergestellt…",

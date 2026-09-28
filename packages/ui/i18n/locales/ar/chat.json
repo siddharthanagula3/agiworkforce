@@ -702,7 +702,9 @@
     "expand": "توسيع الكود",
     "close": "إغلاق الكود الموسّع",
     "codeTitle": "كود {{language}}",
-    "codeBlockLabel": "كتلة كود {{language}}"
+    "codeBlockLabel": "كتلة كود {{language}}",
+    "edit": "تعديل",
+    "editLabel": "تعديل هذه الشيفرة بجانب المحادثة"
   },
   "streaming": {
     "reconnecting": "جارٍ إعادة الاتصال…",

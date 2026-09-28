@@ -462,7 +462,9 @@
     "expand": "कोड बड़ा करें",
     "close": "बड़ा कोड बंद करें",
     "codeTitle": "{{language}} कोड",
-    "codeBlockLabel": "{{language}} कोड ब्लॉक"
+    "codeBlockLabel": "{{language}} कोड ब्लॉक",
+    "edit": "संपादित करें",
+    "editLabel": "इस कोड को चैट के बगल में संपादित करें"
   },
   "streaming": {
     "reconnecting": "पुनः कनेक्ट हो रहा है…",

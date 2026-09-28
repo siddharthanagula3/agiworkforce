@@ -462,7 +462,9 @@
     "expand": "Agrandir le code",
     "close": "Fermer le code agrandi",
     "codeTitle": "Code {{language}}",
-    "codeBlockLabel": "Bloc de code {{language}}"
+    "codeBlockLabel": "Bloc de code {{language}}",
+    "edit": "Modifier",
+    "editLabel": "Modifier ce code à côté de la conversation"
   },
   "streaming": {
     "reconnecting": "Reconnexion…",

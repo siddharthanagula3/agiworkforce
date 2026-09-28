@@ -100,6 +100,7 @@ import { CitationPastChats } from './CitationPastChats';
 import {
   AgentActivityTimeline,
   BranchNavigator,
+  CodeBlockEditorContext,
   getManagedModelPresentationLabel,
   hasCanonicalToolActivity,
   hasOpenApprovalDecision,
@@ -133,6 +134,7 @@ const StreamingMarkdownContent = dynamic(
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import {
+  codeBlockEditorArtifact,
   extractArtifacts,
   extractCodeBlocks,
   removeArtifactBlocks,
@@ -1202,6 +1204,25 @@ const MessageBubbleComponent = function MessageBubble({
   const explicitDerivedArtifactIds = useMemo(
     () => new Set(extractedArtifacts.map((artifact) => artifact.id)),
     [extractedArtifacts],
+  );
+  const openCodeBlockInEditor = useCallback(
+    (code: string) => {
+      const target = code.trimEnd();
+      const block = messageCodeBlocks.find((candidate) => candidate.content.trimEnd() === target);
+      if (!block) return;
+      const artifact = codeBlockEditorArtifact(
+        message.content,
+        { conversationId: artifactConversationId, messageId: message.id },
+        messageCodeBlocks,
+        block.ordinal,
+      );
+      if (!artifact) return;
+      addArtifactForMessage(message.id, artifact, artifactConversationId);
+      const store = useArtifactsStore.getState();
+      store.selectArtifact(artifact.id);
+      store.setPanelOpen(true);
+    },
+    [addArtifactForMessage, artifactConversationId, message.content, message.id, messageCodeBlocks],
   );
   const visibleExistingArtifacts = useMemo(
     () =>
@@ -2310,12 +2331,14 @@ const MessageBubbleComponent = function MessageBubble({
                       announce={false}
                     />
                   ) : (
-                    <MarkdownContent
-                      content={cleanedContent}
-                      citations={canLinkNumericCitations ? citationsByMarker : searchSources}
-                      linkifyNumericCitations={canLinkNumericCitations}
-                      literalHtml={isUser}
-                    />
+                    <CodeBlockEditorContext.Provider value={isUser ? null : openCodeBlockInEditor}>
+                      <MarkdownContent
+                        content={cleanedContent}
+                        citations={canLinkNumericCitations ? citationsByMarker : searchSources}
+                        linkifyNumericCitations={canLinkNumericCitations}
+                        literalHtml={isUser}
+                      />
+                    </CodeBlockEditorContext.Provider>
                   );
                   return (
                     <StreamAnnouncer text={cleanedContent} isStreaming={proseIsStreaming}>
