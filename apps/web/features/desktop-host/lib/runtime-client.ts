@@ -6,6 +6,8 @@ import {
   assertLocalTurnCarriesNoAttachments,
   getHostBridge,
   type ApplicationOpenResult,
+  type BackgroundActivity,
+  type BackgroundWorkKind,
   type BrowserPairingState,
   type ClipboardSnapshot,
   type ComputerUseStatus,
@@ -313,6 +315,17 @@ export function revokeDesktopPermission(
     capability: decision.capability,
     scope: decision.scope,
   });
+}
+
+export function readBackgroundActivity(): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_activity');
+}
+
+export function stopBackgroundWork(
+  kind: BackgroundWorkKind,
+  id?: string,
+): Promise<BackgroundActivity> {
+  return invoke<BackgroundActivity>('background_stop', { kind, ...(id ? { id } : {}) });
 }
 
 export function readRemoteControl(): Promise<RemoteControlState> {
