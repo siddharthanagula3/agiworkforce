@@ -122,15 +122,11 @@ Code: `apps/cli/src/tui/tui_app.rs:5056-5056`
 
 - Done when: In a right-to-left language the whole layout mirrors correctly (direction set and spacing uses logical start/end).
 - Wave: 3
-- Already works on: mobile
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Arabic sets dir="rtl" on the document, but layouts use physical left/right spacing (ml/mr/pl/pr classes in ~107 files, no ms/me/ps/pe), so mirrored screens misalign; switch to logical properties. | ui |
-| desktop | partial | Arabic sets dir="rtl" on the document, but layouts use physical left/right spacing (ml/mr/pl/pr classes in ~107 files, no ms/me/ps/pe), so mirrored screens misalign; switch to logical properties. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/i18n/index.ts:78-78`, `packages/ui/i18n/src/languages.ts:13-13`
 
 ## S11.20: Mixed-direction text handling.
 

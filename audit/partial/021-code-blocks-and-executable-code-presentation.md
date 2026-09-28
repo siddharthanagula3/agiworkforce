@@ -67,16 +67,12 @@ nothing is left.
 
 - Done when: Changed lines in a code suggestion are visually highlighted (added/removed).
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
-| desktop | partial | added and removed lines are coloured only in diff, patch and udiff blocks; the n/a call was not taken because ChatGPT canvas shows code changes and help.openai.com (403) could not confirm otherwise. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/markdown/CodeBlock.tsx:133-133`, `packages/ui/unified-chat/src/components/markdown/shikiHighlighter.ts:11-11`
 
 ## S21.10: Diff formatting.
 
@@ -238,17 +234,14 @@ Code: `apps/web/features/chat/components/Composer/ChatComposerNew.tsx:2768-2768`
 
 - Done when: A code block can be opened in an editable canvas/editor next to the chat.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
-| desktop | partial | only artifacts open in the editable panel; ChatGPT canvas edits code beside the chat, so an ordinary code block needs a path into the editor. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:668-668`
 
 ## S21.26: Open in coding workspace.
 
