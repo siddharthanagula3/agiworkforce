@@ -27,14 +27,14 @@ export function AccountAccessNotice({
       focusHeading
     >
       {denial.reason === 'suspended' ? (
-        <>
+        <div data-account-denial={denial.reason}>
           <SuspensionAppeal signedIn />
           <div className={AUTH_STEP_LINKS_CLASS}>
             <Link href="/terms#s-11" className={AUTH_LINK_CLASS}>
               When accounts are suspended
             </Link>
           </div>
-        </>
+        </div>
       ) : (
         <Link
           href={denial.recoveryPath ?? signInHref}

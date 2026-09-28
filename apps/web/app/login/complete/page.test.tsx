@@ -13,6 +13,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mocks.auth() }));
+vi.mock('@/features/support/lib/ticket-client', () => ({
+  readSuspensionAppeal: vi.fn(async () => null),
+  submitSuspensionAppeal: vi.fn(async () => null),
+}));
 vi.mock('@/lib/auth/account-lifecycle', () => ({
   accountAccessForSignIn: (userId: string) => mocks.access(userId),
 }));
@@ -159,10 +163,16 @@ describe('/login/complete', () => {
       render(await LoginCompletePage({ searchParams: Promise.resolve({ redirectTo: '/chat' }) }));
 
       expect(screen.getByTestId('account-access-notice')).toHaveTextContent(decision.message);
-      expect(document.querySelector('[data-account-denial]')).toHaveAttribute(
-        'href',
-        decision.recoveryPath ?? '/login?redirectTo=%2Fchat',
-      );
+      if (decision.reason === 'suspended') {
+        expect(
+          await screen.findByLabelText('Why should the suspension be lifted?'),
+        ).toBeInTheDocument();
+      } else {
+        expect(document.querySelector('[data-account-denial]')).toHaveAttribute(
+          'href',
+          decision.recoveryPath ?? '/login?redirectTo=%2Fchat',
+        );
+      }
       expect(mocks.continue).not.toHaveBeenCalled();
       expect(screen.queryByTestId('terms-gate')).toBeNull();
       expect(mocks.accepted).not.toHaveBeenCalled();
