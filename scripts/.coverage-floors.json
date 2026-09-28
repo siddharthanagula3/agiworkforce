@@ -8,6 +8,7 @@
     "apps/extension-vscode": null,
     "apps/web": null,
     "services/signaling-server": null,
+    "services/upload-scanner": 95,
     "packages/ai/provider-runtime": null,
     "packages/ai/routing": 95,
     "packages/ai/search": 95,

@@ -369,3 +369,39 @@ updates:
     ignore:
       - dependency-name: '*'
         update-types: ['version-update:semver-major']
+
+  # ─── npm / pnpm, services/upload-scanner ───────────────────────────────────
+  - package-ecosystem: 'npm'
+    directory: '/services/upload-scanner'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    labels:
+      - 'dependencies'
+      - 'javascript'
+      - 'services'
+    groups:
+      upload-scanner-patch-minor:
+        applies-to: version-updates
+        update-types:
+          - 'minor'
+          - 'patch'
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+  # ─── Docker, services/upload-scanner base image digest ─────────────────────
+  - package-ecosystem: 'docker'
+    directory: '/services/upload-scanner'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 5
+    labels:
+      - 'dependencies'
+      - 'docker'
+      - 'services'
+    ignore:
+      - dependency-name: 'node'
+        update-types: ['version-update:semver-major']

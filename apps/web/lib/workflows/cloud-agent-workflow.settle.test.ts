@@ -469,6 +469,7 @@ describe('durable cloud agent workflow settlement', () => {
           reservedMicrousd: 5_000,
         },
         outcome: 'completed',
+        attempt: { outcome: 'completed' },
         provider: 'anthropic',
         model: 'claude-test',
         cost: { tokenMicrousd: 4_200, toolMicrousd: 10_000 },
