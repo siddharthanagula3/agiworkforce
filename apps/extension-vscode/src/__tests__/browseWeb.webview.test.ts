@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
+import { vscodeApiStub } from './vscodeApiStub';
 
 function renderWebview(): string {
   return getWebviewContent(
@@ -30,7 +31,7 @@ function boot(): ReturnType<typeof vi.fn> {
   const postMessage = vi.fn();
   Object.defineProperty(globalThis, 'acquireVsCodeApi', {
     configurable: true,
-    value: () => ({ postMessage }),
+    value: () => vscodeApiStub({ postMessage }),
   });
   const inline = Array.from(parsed.querySelectorAll('script')).find((script) =>
     script.textContent?.includes('acquireVsCodeApi()'),
@@ -75,8 +76,14 @@ describe('VS Code Browse the web context', () => {
         clientMessageId: expect.stringMatching(/^msg-/),
       },
     });
-    expect(document.querySelector('.message.user')?.textContent).toBe(
-      'What changed in the latest Rust release?',
+    const userMessage = document.querySelector('.message.user');
+    const sentText = userMessage?.cloneNode(true) as HTMLElement | undefined;
+    sentText
+      ?.querySelectorAll('.visually-hidden, .message-attachments')
+      .forEach((node) => node.remove());
+    expect(sentText?.textContent).toBe('What changed in the latest Rust release?');
+    expect(userMessage?.querySelector('.message-attachments')?.textContent).toContain(
+      'Browse the web',
     );
     expect(browseButton.getAttribute('aria-checked')).toBe('false');
     expect(contextStrip.hidden).toBe(true);

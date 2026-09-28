@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-09-27
+Last updated: 2026-09-28
 
 What the owner registers with each vendor so that AGI Workforce connectors sign
 in the way Claude and ChatGPT connectors do. Most connectors need nothing from
@@ -230,6 +230,31 @@ adding `drive.readonly`, which is covered by the same assessment as Gmail.
    ([distribution](https://docs.slack.dev/app-management/distribution)).
 6. Basic Information: copy the client ID and client secret into the `slack`
    Vercel variables.
+
+### The AGI Workforce app in Slack
+
+The same Slack app is also the assistant people message in Slack, the way
+Claude in Slack is one Claude app: installed once per Slack workspace from
+Settings > Slack, each person links their own account, and it answers direct
+messages and mentions in the thread as the app. Add to the app above:
+
+1. App Home: turn on the Messages Tab and allow users to send messages from it,
+   or nobody can direct message the app.
+2. OAuth and Permissions: add the redirect URL
+   `https://agiworkforce.com/api/slack/oauth/callback`, and the bot token
+   scopes `app_mentions:read`, `channels:history`, `chat:write`,
+   `groups:history`, `im:history`, `reactions:write` and `users:read`. Leave
+   organization-wide installation off; the app is installed one workspace at a
+   time.
+3. Event Subscriptions: turn them on with the request URL
+   `https://agiworkforce.com/api/webhooks/slack`, and subscribe to the bot
+   events `app_mention`, `message.im`, `app_uninstalled` and
+   `tokens_revoked`. Routines that fire on other Slack events, such as
+   `message.channels` or `reaction_added`, need those events subscribed too.
+4. Basic Information: copy the signing secret into `SLACK_SIGNING_SECRET` and
+   the client ID and client secret into `SLACK_APP_CLIENT_ID` and
+   `SLACK_APP_CLIENT_SECRET`. Until all three are set, Settings > Slack says the
+   app is not set up and nothing is answered.
 
 ## 4. GitHub
 

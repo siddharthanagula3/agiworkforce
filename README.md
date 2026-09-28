@@ -85,7 +85,10 @@ description of what runs today, not a shipped-feature claim.
 `services/signaling-server` (WebRTC/WebSocket relay for cross-device sync,
 deployed continuously to Fly.io and Railway) and `infrastructure/sandbox`
 (static file for Vercel Sandbox origin checks) are live services outside this
-table because they are not versioned client surfaces.
+table because they are not versioned client surfaces. `services/upload-scanner`,
+the self-hosted ClamAV scanner behind the web's upload scan webhook, sits outside
+it for the same reason; an owner deploys it to Fly.io by hand
+(`docs/security/upload-scanning.md`).
 
 ## Architecture
 
@@ -111,6 +114,7 @@ the hosted web runtime for conversation inference.
 | `packages/ai/providers/`    | 18 per-provider adapter packages (Anthropic, DeepSeek, Factory, Google, Groq, LM Studio, MiniMax, Moonshot, NVIDIA, Ollama, OpenAI, OpenRouter, Perplexity, Qwen, Vercel AI Gateway, Workers AI, xAI, Zhipu) |
 | `crates/`                   | 12 Rust crates (protocol, llm, agent-core, mcp, sandbox-policy, execpolicy, etc.)                                                                                                                            |
 | `services/signaling-server` | Express 5 WebRTC/WebSocket signaling server for cross-device sync                                                                                                                                            |
+| `services/upload-scanner`   | ClamAV malware scanner behind the web's upload scan webhook; user files never reach a third party                                                                                                            |
 | `tools/skill-vetting`       | Skill vetting scanner (NVIDIA SkillSpector fork): developer/CI supply-chain vetting                                                                                                                          |
 
 ## Model routing and caching
@@ -246,12 +250,14 @@ commit `.env`, `.env.local`, signing credentials, or provider secrets.
 | Mobile           | `apps/mobile/.env.example`               | Expo loads `.env.local`; EAS uses EAS envs     |
 | Chrome extension | `apps/extension/.env.example`            | Vite loads `apps/extension/.env.local`         |
 | Signaling        | `services/signaling-server/.env.example` | Loads `services/signaling-server/.env` locally |
+| Upload scanner   | `services/upload-scanner/.env.example`   | Fly secrets; `docker run --env-file` locally   |
 
 ```bash
 # Reads process.env only and prints key names, never values.
 pnpm env:doctor -- --scope web --mode production
 pnpm env:doctor -- --scope gateway --mode production
 pnpm env:doctor -- --scope signaling --mode production
+pnpm env:doctor -- --scope scanner --mode production
 
 pnpm check:env-contract   # verifies templates, git tracking, no-tmp-credentials
 ```
@@ -293,6 +299,9 @@ run checks that production is serving the current `main` commit.
 
 - **Signaling server**: `deploy-signaling-server.yml` deploys to Railway and
   Fly.io behind the same successful-CI, exact-SHA gate.
+- **Upload scanner**: no workflow; an owner runs `fly deploy` from
+  `services/upload-scanner`, and `docs/security/upload-scanning.md` covers the
+  secrets, the EICAR check and token rotation.
 - **Desktop**: `release-desktop-cloud.yml` builds, signs, notarizes, and staples
   the public Electron macOS application from a `v-cloud-desktop-*` tag. No
   public Electron installer has been published yet. The Tauri
