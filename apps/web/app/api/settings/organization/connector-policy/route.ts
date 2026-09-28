@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  UpdateConnectorPolicyRequestSchema,
+  normalizeWebDomain,
+  type ConnectorPolicyResponse,
+} from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -19,7 +23,6 @@ import {
 } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
-  CONNECTOR_POLICY_LIST_LIMIT,
   diffConnectorPolicy,
   readConnectorPolicy,
   upsertConnectorPolicy,
@@ -29,46 +32,12 @@ import { getOperatorMappedConnectorIds } from '@/lib/user-connector-tools';
 
 export const runtime = 'nodejs';
 
-const PLUGIN_KEY_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/i;
-const MCP_HOST_PATTERN =
-  /^(\*\.)?(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/i;
-
-const PutSchema = z
-  .object({
-    allowedConnectors: z.array(z.string().min(1).max(200)).max(CONNECTOR_POLICY_LIST_LIMIT),
-    blockedConnectors: z.array(z.string().min(1).max(200)).max(CONNECTOR_POLICY_LIST_LIMIT),
-    allowCustomConnectors: z.boolean(),
-    allowedPlugins: z
-      .array(z.string().trim().regex(PLUGIN_KEY_PATTERN))
-      .max(CONNECTOR_POLICY_LIST_LIMIT),
-    blockedPlugins: z
-      .array(z.string().trim().regex(PLUGIN_KEY_PATTERN))
-      .max(CONNECTOR_POLICY_LIST_LIMIT),
-    allowedMcpHosts: z
-      .array(z.string().trim().regex(MCP_HOST_PATTERN))
-      .max(CONNECTOR_POLICY_LIST_LIMIT),
-  })
-  .strict();
-
-export interface ConnectorPolicyResponse {
-  organizationId: string;
-  configured: boolean;
-  canManagePolicy: boolean;
-  currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
-  policy: {
-    allowedConnectors: string[];
-    blockedConnectors: string[];
-    allowCustomConnectors: boolean;
-    allowedPlugins: string[];
-    blockedPlugins: string[];
-    allowedMcpHosts: string[];
-    updatedAt: string | null;
-  };
-  catalog: string[];
-}
-
 function dedupe(values: string[]): string[] {
   return [...new Set(values.map((value) => value.trim().toLowerCase()))].filter(Boolean);
+}
+
+function webDomains(values: readonly string[]): string[] {
+  return [...new Set(values.flatMap((value) => normalizeWebDomain(value) ?? []))];
 }
 
 function present(
@@ -89,6 +58,8 @@ function present(
       allowedPlugins: policy?.allowedPlugins ?? [],
       blockedPlugins: policy?.blockedPlugins ?? [],
       allowedMcpHosts: policy?.allowedMcpHosts ?? [],
+      allowedWebDomains: policy?.allowedWebDomains ?? [],
+      blockedWebDomains: policy?.blockedWebDomains ?? [],
       updatedAt: policy?.updatedAt ?? null,
     },
     // Derived from the operator connector map rather than a list written here,
@@ -131,7 +102,11 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     'Your workspace role does not allow changing which connectors this workspace permits.',
   );
 
-  const body = await readValidatedJsonBody(request, PutSchema, 'Invalid connector policy');
+  const body = await readValidatedJsonBody(
+    request,
+    UpdateConnectorPolicyRequestSchema,
+    'Invalid connector policy',
+  );
 
   const input = {
     allowedConnectors: dedupe(body.allowedConnectors),
@@ -140,6 +115,8 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     allowedPlugins: dedupe(body.allowedPlugins),
     blockedPlugins: dedupe(body.blockedPlugins),
     allowedMcpHosts: dedupe(body.allowedMcpHosts),
+    allowedWebDomains: webDomains(body.allowedWebDomains),
+    blockedWebDomains: webDomains(body.blockedWebDomains),
   };
 
   const overlap = input.allowedConnectors.filter((id) => input.blockedConnectors.includes(id));
@@ -152,6 +129,14 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
   if (pluginOverlap.length > 0) {
     throw createError.validation(
       `A plugin cannot be both approved and blocked: ${pluginOverlap.join(', ')}.`,
+    );
+  }
+  const domainOverlap = input.allowedWebDomains.filter((domain) =>
+    input.blockedWebDomains.includes(domain),
+  );
+  if (domainOverlap.length > 0) {
+    throw createError.validation(
+      `A site cannot be both allowed and blocked: ${domainOverlap.join(', ')}.`,
     );
   }
 
