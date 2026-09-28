@@ -64,10 +64,10 @@ Code: `crates/agiworkforce-command-registry/src/lib.rs:393-399`, `crates/agiwork
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The drawer lists up to six projects as one-tap shortcuts, but in Cloud mode they come in sync order, not most-recent first, and the new-chat screen itself has no recent-project row. | ui |
+| mobile | partial | Cloud projects in the drawer are ordered most recently updated first in post-codex/chat-gates-s12.06-mobile-recent-projects.patch (DrawerContent is held), matching the web sidebar's project shortcuts. | ui |
 | cli | partial | Add a way to start a session in a recent project from the terminal; today `agiworkforce projects list` lists account projects and `projects link` binds the current directory, with no recent-project shortcut. | ui |
 
-Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:752-763`, `apps/mobile/src/features/drawer/components/DrawerContent.tsx:328-337`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
+Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:334-334`, `apps/cli/src/lib.rs:984-996`, `apps/cli/src/lib.rs:1866-1884`
 
 ## S12.08: Recommended Skills.
 
@@ -103,12 +103,12 @@ Code: `apps/mobile/src/features/chat/components/AddToChatSheet.tsx:773-781`, `cr
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Make the "Search the web" chip actually request a search; today it only adds a research-style instruction, and whether a search runs depends on the ambient web-search setting and model. | handler |
+| mobile | partial | The Search the web chip now sends search_requested with web_search, the flag the web's /search sends, so the next message requests a search; in post-codex/chat-gates-s12.10-mobile-requested-search.patch (TaskChips and the store are held). | ui |
 | cli | partial | No explicit search entry (for example /search): web_search is only a tool the model may choose, and it works only when the user sets their own SEARCH_API_KEY (or BRAVE_SEARCH_API_KEY) environment variable. | ui |
 | vscode | partial | partials/desktop-cli baeaa70f5a: account/status reports webSearchKey and webSearchLogins; VS Code offers Set up web search from them (p-sessions). | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:36-36`, `apps/mobile/src/features/chat/components/TaskChips.tsx:19-23`, `apps/mobile/stores/chat/chatExecutionStore.ts:1678-1687`, `apps/cli/src/features/exec/tools/web/mod.rs:284-292`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:531-531`, `apps/cli/src/features/exec/tools/web/mod.rs:284-292`, `apps/cli/src/features/exec/tools/mod.rs:565-567`, `apps/cli/src/app_server/developer_host.rs:120-120`
 
 ## S12.11: Research entry.
 
@@ -166,9 +166,9 @@ Code: `apps/cli/src/voice.rs:354-354`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add an AGI Work entry to the new-chat screen; today agentic runs start only from the Tasks screen. | ui |
+| mobile | partial | Codex's held chat.tsx already adds a Chat and Work switch to the new-chat screen (working copy lines 844-876); the cell is done once that file merges. Nothing to add here. | ui |
 
-Code: `apps/mobile/src/features/tasks/startWork.ts:50-62`
+Code: `apps/mobile/src/features/tasks/startWork.ts:58-58`
 
 ## S12.16: Coding entry.
 
@@ -201,11 +201,11 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:129-136`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Show the active workspace on the new-chat screen; today it is visible only under Settings > Workspace. | ui |
+| mobile | partial | The new-chat screen shows 'Workspace: <name>' (or Personal) for accounts in an organization, with the web's shared i18n string, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/settings/index.tsx:450-456`
+Code: `apps/mobile/src/features/team/service.ts:62-62`
 
 ## S12.20: Default-Project selection.
 
@@ -227,10 +227,10 @@ Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:2448
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Add examples; today one line explains Local vs Cloud. | ui |
+| mobile | partial | In AGI Work mode the new-chat screen shows the web's AGI Work intro and four examples (shared i18n) that fill the composer, in post-codex/chat-gates-s12.19-s12.21-s14.15-mobile-new-chat.patch. | ui |
 | cli | partial | Add examples; the welcome names the access modes and the Shift+Tab mode switch only. | ui |
 
-Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-203`, `apps/cli/src/tui/tui_app.rs:1476-1488`
+Code: `apps/mobile/app/(app)/(tabs)/chat.tsx:200-200`, `apps/cli/src/tui/tui_app.rs:1476-1488`
 
 ## S12.23: Resumption of an unsent draft.
 
