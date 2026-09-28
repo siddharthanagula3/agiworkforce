@@ -55,6 +55,7 @@ vi.mock('electron', () => {
       setLoginItemSettings: loginItem,
       on: vi.fn(),
       whenReady: () => Promise.resolve(),
+      isReady: () => true,
       quit: vi.fn(),
       exit: vi.fn(),
     },
