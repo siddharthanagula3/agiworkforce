@@ -3468,5 +3468,23 @@
   "spScheduleRunNoAnswer": {
     "message": "This run finished without an answer to show.",
     "description": "A finished schedule run carried no answer text"
+  },
+  "spArtifactsDownload": {
+    "message": "Download source",
+    "description": "Saves an artifact's own content as a file"
+  },
+  "spArtifactsDownloaded": {
+    "message": "Saved $NAME$.",
+    "description": "Confirms that an artifact's source was saved as a file",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "landing-page.html"
+      }
+    }
+  },
+  "spArtifactsDownloadFailed": {
+    "message": "The artifact could not be saved. Try again.",
+    "description": "Saving an artifact's source failed"
   }
 }

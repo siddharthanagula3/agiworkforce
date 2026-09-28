@@ -1,9 +1,11 @@
+import { spreadsheetSafeExport } from '@agiworkforce/unified-chat/tabular';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   chromeArtifactConversationUrl,
   listChromeArtifacts,
   readChromeArtifactSource,
   type ChromeArtifact,
+  type ChromeArtifactSource,
 } from '../cloud-bridge/artifactsClient';
 import { t } from '../../i18n';
 import { el } from './dom';
@@ -76,6 +78,7 @@ export interface ArtifactsDrawerDependencies {
   signIn: typeof openClerkSignIn;
   openUrl: (url: string) => void;
   writeClipboard: (text: string) => Promise<void>;
+  saveFile: (name: string, blob: Blob) => void;
 }
 
 export interface ArtifactsDrawerAPI {
@@ -91,7 +94,25 @@ const DEFAULT_DEPENDENCIES: ArtifactsDrawerDependencies = {
     void chrome.tabs.create({ url });
   },
   writeClipboard: (text) => navigator.clipboard.writeText(text),
+  saveFile: (name, blob) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = el('a', { href: objectUrl, download: name });
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  },
 };
+
+function sourceDownload(source: ChromeArtifactSource): { name: string; blob: Blob } {
+  const extension = source.language || 'txt';
+  const exported = spreadsheetSafeExport(source.content, extension);
+  return {
+    name: `${source.title || 'artifact'}.${extension}`,
+    blob: new Blob([exported.body], { type: exported.mimeType }),
+  };
+}
 
 function describeArtifact(artifact: ChromeArtifact): string {
   const created = new Date(artifact.createdAt);
@@ -201,7 +222,11 @@ export function buildArtifactsDrawerSection(
       copyBtn.disabled = true;
       copyBtn.textContent = t('spArtifactsCopying');
       void deps
-        .readSource({ conversationId: artifact.conversationId, messageId: artifact.messageId })
+        .readSource({
+          artifactId: artifact.id,
+          conversationId: artifact.conversationId,
+          messageId: artifact.messageId,
+        })
         .then(async (result) => {
           if (result.status === 'error') {
             reportFailure(result);
@@ -217,6 +242,35 @@ export function buildArtifactsDrawerSection(
         });
     });
     actions.appendChild(copyBtn);
+
+    const downloadBtn = el(
+      'button',
+      { type: 'button', class: 'sp-drawer-artifact-btn' },
+      t('spArtifactsDownload'),
+    );
+    downloadBtn.addEventListener('click', () => {
+      downloadBtn.disabled = true;
+      void deps
+        .readSource({
+          artifactId: artifact.id,
+          conversationId: artifact.conversationId,
+          messageId: artifact.messageId,
+        })
+        .then((result) => {
+          if (result.status === 'error') {
+            reportFailure(result);
+            return;
+          }
+          const { name, blob } = sourceDownload(result);
+          deps.saveFile(name, blob);
+          setStatus(t('spArtifactsDownloaded', [name]));
+        })
+        .catch(() => setStatus(t('spArtifactsDownloadFailed')))
+        .finally(() => {
+          downloadBtn.disabled = false;
+        });
+    });
+    actions.appendChild(downloadBtn);
     item.appendChild(actions);
     return item;
   }
