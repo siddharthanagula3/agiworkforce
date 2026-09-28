@@ -1,6 +1,7 @@
 import { MetadataRoute } from 'next';
 
 import { SITE_URL } from '@/lib/seo/site';
+import { RELEASES, releasePath } from '@/lib/changelog-entries';
 import { INSPIRATION, inspirationPath } from './gallery/inspiration';
 
 type ChangeFrequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
@@ -116,7 +117,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.5,
     changeFrequency: 'monthly',
   }));
-  return [...routes, ...templates].map((route) => ({
+  const releases: RouteConfig[] = RELEASES.map((release) => ({
+    path: releasePath(release),
+    priority: 0.5,
+    changeFrequency: 'yearly',
+  }));
+  return [...routes, ...templates, ...releases].map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,

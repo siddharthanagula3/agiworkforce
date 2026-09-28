@@ -1,4 +1,7 @@
+import Link from 'next/link';
+
 import { Header } from '@shared/components/layout/Header';
+import { releasePath } from '@/lib/changelog-entries';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Section, Stack } from '@/features/marketing/components/system';
 import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
@@ -46,7 +49,9 @@ export function ReleaseNotesPage({ titleId }: { titleId: string }) {
                 ),
                 value: (
                   <Stack gap="tight">
-                    <strong>{note.headline}</strong>
+                    <Link href={releasePath(note)} className="agi-ds-link">
+                      <strong>{note.headline}</strong>
+                    </Link>
                     {note.body.map((line) => (
                       <span key={line}>{line}</span>
                     ))}
