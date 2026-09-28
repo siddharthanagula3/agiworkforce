@@ -43,6 +43,7 @@ import {
   type ChatCompletionRequest,
   type ProcessedRequest,
 } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
+import type { ResearchDomainPolicy } from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
@@ -100,12 +101,16 @@ import {
   toGenericUpstreamError,
 } from '@/lib/services/provider-adapter-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
+import { readWorkspaceWebDomainPolicy } from '@/lib/services/connector-policy-service';
 import {
   loadUserConnectorToolCatalog,
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
 import { URL_FETCH_TOOL } from '@/lib/url-fetch/url-fetch-tool';
-import { substituteGatedWebSearchTool } from '@/lib/web-search/required-search';
+import {
+  replaceNativeWebSearchTool,
+  substituteGatedWebSearchTool,
+} from '@/lib/web-search/required-search';
 import {
   WEB_SEARCH_TOOL,
   webSearchBackendConfigured,
@@ -182,6 +187,7 @@ export interface ScheduledToolPlan {
   webFetch: boolean;
   codeExecution: boolean;
   withheldTools: string[];
+  webDomainPolicy?: ResearchDomainPolicy;
 }
 
 const NO_SCHEDULED_TOOLS: ScheduledToolPlan = {
@@ -250,7 +256,9 @@ export async function buildScheduledToolPlan(input: {
   const provider = input.provider.toLowerCase();
   let tools: unknown[] = [];
   let webSearch = false;
+  let webDomainPolicy: ResearchDomainPolicy | null = null;
   if (policy.allowSearch && input.webAllowed) {
+    webDomainPolicy = await readWorkspaceWebDomainPolicy(input.db, input.organizationId ?? null);
     const nativeSearch = appendWebSearchTool(provider, [], capabilities) ?? [];
     const searchTools = shouldOfferGenericWebSearchTool({
       providerLower: provider,
@@ -261,12 +269,17 @@ export async function buildScheduledToolPlan(input: {
     })
       ? [...nativeSearch, webSearchToolDef()]
       : nativeSearch;
+    const governedSearch = webDomainPolicy
+      ? (replaceNativeWebSearchTool(searchTools, webSearchBackendConfigured()) ?? [])
+      : searchTools;
     const offeredSearch =
-      substituteGatedWebSearchTool(searchTools, {
+      substituteGatedWebSearchTool(governedSearch, {
         approvalRequired: asks(WEB_SEARCH_TOOL),
         genericBackendConfigured: webSearchBackendConfigured(),
       }) ?? [];
-    if (offeredSearch.length === 0 && searchTools.length > 0) withheldTools.push(WEB_SEARCH_TOOL);
+    if (offeredSearch.length === 0 && governedSearch.length > 0) {
+      withheldTools.push(WEB_SEARCH_TOOL);
+    }
     webSearch = offeredSearch.length > 0;
     tools = [...tools, ...offeredSearch];
     tools =
@@ -276,7 +289,7 @@ export async function buildScheduledToolPlan(input: {
         tools,
         toolsCapable: true,
         stream: true,
-        nativeFetchPermitted: !asks(URL_FETCH_TOOL),
+        nativeFetchPermitted: !asks(URL_FETCH_TOOL) && !webDomainPolicy,
       }) ?? tools;
   }
 
@@ -303,6 +316,7 @@ export async function buildScheduledToolPlan(input: {
     webFetch: policy.allowSearch && input.webAllowed,
     codeExecution: codeTools.length > 0,
     withheldTools,
+    ...(webDomainPolicy ? { webDomainPolicy } : {}),
   };
   if (policy.allowMCP === false) return { ...base, mcpTools: [] };
 
@@ -526,6 +540,7 @@ function buildScheduledProcessedRequest(input: {
     quotaWarningHeader: null,
     isFlagshipRequest: input.isFlagship,
     indicResult: detectIndicScript(input.prompt),
+    ...(input.plan.webDomainPolicy ? { webSearchDomainPolicy: input.plan.webDomainPolicy } : {}),
     llmRequest: {
       model: input.route.modelKey,
       messages: input.messages,
