@@ -6,17 +6,19 @@ import { createError } from '@/lib/errors';
 
 export const DEVELOPER_PROJECT_LIMIT = 100;
 export const DEVELOPER_PROJECT_NAME_MAX = 100;
+export const DEVELOPER_PROJECT_CREDIT_LIMIT_MAX = 1_000_000_000;
 
 const UNIQUE_VIOLATION = '23505';
 
 interface DeveloperProjectRow {
   id: string;
   name: string;
+  monthly_credit_limit: string | number | null;
   archived_at: string | Date | null;
   created_at: string | Date;
 }
 
-const PROJECT_COLUMNS = 'id, name, archived_at, created_at';
+const PROJECT_COLUMNS = 'id, name, monthly_credit_limit, archived_at, created_at';
 
 function isoOrNull(value: string | Date | null): string | null {
   if (value === null) return null;
@@ -27,6 +29,7 @@ function toProject(row: DeveloperProjectRow): DeveloperProject {
   return {
     id: row.id,
     name: row.name,
+    monthlyCreditLimit: row.monthly_credit_limit === null ? null : Number(row.monthly_credit_limit),
     archivedAt: isoOrNull(row.archived_at),
     createdAt: isoOrNull(row.created_at) ?? '',
   };
@@ -74,7 +77,7 @@ export async function readLiveDeveloperProject(
 export async function createDeveloperProject(
   db: DatabaseAdapter,
   userId: string,
-  input: { name: string },
+  input: { name: string; monthlyCreditLimit: number | null },
 ): Promise<DeveloperProject> {
   const name = input.name.trim();
   const [count] = await db.query<{ live: string | number }>(
@@ -92,10 +95,10 @@ export async function createDeveloperProject(
 
   try {
     const [row] = await db.query<DeveloperProjectRow>(
-      `insert into public.developer_projects (user_id, name)
-       values ($1, $2)
+      `insert into public.developer_projects (user_id, name, monthly_credit_limit)
+       values ($1, $2, $3)
        returning ${PROJECT_COLUMNS}`,
-      [userId, name],
+      [userId, name, input.monthlyCreditLimit],
     );
     if (!row) throw createError.internal('The project could not be created.');
     return toProject(row);
@@ -109,23 +112,30 @@ export async function updateDeveloperProject(
   db: DatabaseAdapter,
   userId: string,
   projectId: string,
-  patch: { name: string },
+  patch: { name?: string; monthlyCreditLimit?: number | null },
 ): Promise<DeveloperProject> {
-  const name = patch.name.trim();
+  const name = patch.name?.trim();
   try {
     const [row] = await db.query<DeveloperProjectRow>(
       `update public.developer_projects
-          set name = $3
+          set name = coalesce($3, name),
+              monthly_credit_limit = case when $4::boolean then $5::bigint else monthly_credit_limit end
         where id = $1
           and user_id = $2
           and archived_at is null
         returning ${PROJECT_COLUMNS}`,
-      [projectId, userId, name],
+      [
+        projectId,
+        userId,
+        name ?? null,
+        patch.monthlyCreditLimit !== undefined,
+        patch.monthlyCreditLimit ?? null,
+      ],
     );
     if (!row) throw createError.notFound('That project does not exist or is archived.');
     return toProject(row);
   } catch (error) {
-    if (isUniqueViolation(error)) throw duplicateNameError(name);
+    if (isUniqueViolation(error) && name) throw duplicateNameError(name);
     throw error;
   }
 }

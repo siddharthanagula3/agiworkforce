@@ -294,6 +294,28 @@ const ja = {
     '最後のターン後のコンテキスト: {count} 個のトークン中 {used} 個を使用 ({percent}%)',
   'webview.answerTokens_other': '{model} · {count} 個のトークン (入力 {input}、出力 {output})',
   'webview.moreLinesHidden_other': 'ほか {count} 行は非表示',
+  'mcp.connected_other':
+    'AGI Workforce: {name} に {ms} ミリ秒で接続しました。{count} 個のツールを利用できます。',
+  'checkpoints.trackedFiles_other': '追跡中のファイル {count} 個',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} 個のファイルを復元できませんでした: {files}',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} 個のファイルをチェックポイントの状態に戻しました。',
+  'webview.sources_other': '{count} 件のソース',
+  'sessionSync.continuedIn':
+    'このセッションは {client} で続けられました。最新のメッセージをここに表示しています。',
+  'sessionSync.continuedElsewhere':
+    'このセッションは別のアプリで続けられました。最新のメッセージをここに表示しています。',
+  'sessionSync.heldBy': '{client} がこのセッションを使用しています。',
+  'sessionSync.takeOverDetail':
+    'ここからメッセージを送信するには、セッションを引き継いでください。{client} がまだ応答中の場合は、先にそちらで停止してください。2 つのアプリが同時に書き込むと、セッションのコピーが 2 つ残ります。',
+  'sessionSync.takeOver': '引き継いで送信',
+  'sessionSync.notSent':
+    '送信されていません: {client} がこのセッションを使用しています。もう一度送信すると、ここに引き継げます。',
+  'sessionSync.takeOverFailed':
+    'このセッションを引き継げませんでした。もう一度送信して再試行してください。',
+  'sessionSync.stopBeforeTerminal':
+    'ターミナルでこのセッションを続ける前に、実行中の応答を停止してください。',
 };
 
 export default ja;

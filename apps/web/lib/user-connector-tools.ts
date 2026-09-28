@@ -64,6 +64,16 @@ import {
   type ReadyConnectorAccess,
 } from '@/lib/connectors/oauth-access';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
+import {
+  isSensitiveDataToolOffered,
+  sensitiveDataConnector,
+} from '@/lib/connectors/sensitive-data-connectors';
+import {
+  bankAccountsToolDefs,
+  executeBankAccountsTool,
+  isBankAccountsTool,
+} from '@/lib/connectors/bank-accounts';
+import { BANK_ACCOUNTS_CONNECTOR_ID, isPlaidConfigured } from '@/lib/connectors/plaid-config';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
 import {
   getMcpStatelessRuntime,
@@ -2342,6 +2352,9 @@ export async function loadUserConnectorToolCatalog(
       resolveConnectorOrganizationId(userId, options.organizationId),
     ]);
     const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
+    if (grantedOAuthIds.has(BANK_ACCOUNTS_CONNECTOR_ID) && isPlaidConfigured()) {
+      defs.push(...bankAccountsToolDefs());
+    }
     const sharedRows = organizationId
       ? await getOrgReachableConnectorRows(userId, organizationId, customConnectorLimit)
       : [];
@@ -2373,13 +2386,16 @@ export async function loadUserConnectorToolCatalog(
           const label = target.displayName ?? connectorId;
           return connectorId === GMAIL_CONNECTOR_ID
             ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
-            : catalogToConnectorToolDefs(catalog, label);
+            : catalogToConnectorToolDefs(catalog, label).filter((def) =>
+                isSensitiveDataToolOffered(connectorId, def.toolName),
+              );
         },
       });
     }
 
     for (const grant of grantSummaries) {
       if (usableOAuthIdSet.has(grant.connectorId) || map.has(grant.connectorId)) continue;
+      if (sensitiveDataConnector(grant.connectorId)) continue;
       dials.push({
         member: true,
         load: async () => {
@@ -2606,6 +2622,13 @@ export function makeUserConnectorExecutor(
       return guarded(async (safeArgs) => ({
         handled: true,
         ...(await executeGmailAction(userId, toolName, safeArgs)),
+      }));
+    }
+
+    if (isBankAccountsTool(serverId, toolName)) {
+      return guarded(async (safeArgs) => ({
+        handled: true,
+        ...(await executeBankAccountsTool(userId, toolName, safeArgs)),
       }));
     }
 

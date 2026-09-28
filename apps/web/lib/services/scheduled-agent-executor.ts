@@ -71,6 +71,12 @@ import {
   loadProjectMemoryScope,
   managedMemoryContextLoader,
 } from '@/lib/services/managed-memory-context-service';
+import {
+  formatRecentChatsContext,
+  RECENT_CHATS_EMPTY_NOTICE,
+  RECENT_CHATS_UNAVAILABLE_NOTICE,
+  recentChatsContextLoader,
+} from '@/lib/services/past-chat-context-service';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { evaluateManagedComputeAccess } from '@/lib/services/managed-compute-access';
@@ -364,7 +370,13 @@ async function resolveScheduledContext(input: {
   scope: Parameters<ScheduledTaskExecutor>[3];
   projectContext: LoadedProjectContext | null;
   includeMemory: boolean;
-}): Promise<{ projectPrompt: string | null; memoryPrompt: string | null }> {
+  includeRecentChats: boolean;
+}): Promise<{
+  projectPrompt: string | null;
+  memoryPrompt: string | null;
+  recentChatsPrompt: string | null;
+  recentChatsIncluded: boolean;
+}> {
   const { scope, task } = input;
   const [contextPolicy, memoryPolicy, memoryScope] = await Promise.all([
     loadOrganizationContextPolicy(scope.db, scope.organizationId),
@@ -380,6 +392,14 @@ async function resolveScheduledContext(input: {
     scope: memoryScope,
     policy: memoryPolicy,
   });
+  const recentChatsLoader =
+    input.includeRecentChats && memoryPolicy.searchPastChats
+      ? recentChatsContextLoader(scope.db, {
+          userId: scope.userId,
+          organizationId: scope.organizationId,
+          scope: memoryScope,
+        })
+      : null;
 
   const resolution = await resolveContext({
     turnId: `schedule-run-${input.runId}`,
@@ -392,6 +412,7 @@ async function resolveScheduledContext(input: {
     loaders: [
       ...(input.projectContext ? projectContextLoaders(input.projectContext) : []),
       ...(input.includeMemory ? [memoryLoader] : []),
+      ...(recentChatsLoader ? [recentChatsLoader] : []),
     ],
     store: createPostgresContextManifestStore(scope.db),
     onLoaderError: (sourceClass, error) => {
@@ -407,8 +428,28 @@ async function resolveScheduledContext(input: {
     return memory ? [memory] : [];
   });
   const projectIncluded = resolution.manifest.entries.some(
-    (entry) => entry.sourceClass !== 'account_memory' && entry.includedCount > 0,
+    (entry) =>
+      entry.sourceClass !== 'account_memory' &&
+      entry.sourceClass !== 'past_chat' &&
+      entry.includedCount > 0,
   );
+  const recentChats = recentChatsLoader
+    ? resolution.itemsOf('past_chat').flatMap((item) => {
+        const excerpt = recentChatsLoader.excerptFor(item.source.id);
+        return excerpt ? [{ ...excerpt, content: item.text }] : [];
+      })
+    : [];
+  const recentChatsEntry = resolution.manifest.entries.find(
+    (entry) => entry.sourceClass === 'past_chat',
+  );
+  const recentChatsWithheld =
+    !recentChatsLoader ||
+    recentChatsLoader.degraded() ||
+    (recentChatsEntry !== undefined && recentChatsEntry.candidateCount > 0);
+  const recentChatsPrompt = !input.includeRecentChats
+    ? null
+    : (formatRecentChatsContext(recentChats) ??
+      (recentChatsWithheld ? RECENT_CHATS_UNAVAILABLE_NOTICE : RECENT_CHATS_EMPTY_NOTICE));
 
   return {
     projectPrompt:
@@ -416,6 +457,8 @@ async function resolveScheduledContext(input: {
         ? formatProjectSystemPrompt(input.projectContext)
         : null,
     memoryPrompt: memories.length > 0 ? formatManagedMemorySystemPrompt(memories) : null,
+    recentChatsPrompt,
+    recentChatsIncluded: recentChats.length > 0,
   };
 }
 
@@ -760,10 +803,12 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
       scope,
       projectContext,
       includeMemory: sources.memory,
+      includeRecentChats: sources.recentChats === true,
     });
     const systemPrompt = [
       resolved.projectPrompt,
       resolved.memoryPrompt,
+      resolved.recentChatsPrompt,
       buildCapabilityPreamble({ tools: plan.tools, timeZone: task.timezone }),
       withheldToolsDirective(plan),
       SCHEDULED_TASK_DIRECTIVE,
@@ -775,7 +820,8 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
       { role: 'user', content: prompt },
     ];
     promptChars = prompt.length + systemPrompt.length;
-    sensitiveContextPresent = projectContext !== null || resolved.memoryPrompt !== null;
+    sensitiveContextPresent =
+      projectContext !== null || resolved.memoryPrompt !== null || resolved.recentChatsIncluded;
   }
 
   const estimatedPromptTokens = Math.ceil(promptChars / 3.5) + 32;

@@ -205,6 +205,11 @@
         "icon": "$(history)"
       },
       {
+        "command": "agi-workforce.showCheckpoints",
+        "title": "AGI Workforce: Checkpoints",
+        "icon": "$(debug-step-back)"
+      },
+      {
         "command": "agi.git.status",
         "title": "AGI: Git Status",
         "icon": "$(source-control)"

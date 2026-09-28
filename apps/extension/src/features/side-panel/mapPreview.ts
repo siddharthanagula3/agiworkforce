@@ -1,4 +1,8 @@
-import type { MapSearchCardBody } from '@agiworkforce/types';
+import {
+  MAP_SEARCH_MIN_ZOOM,
+  type MapSearchCardBody,
+  type MapSearchView,
+} from '@agiworkforce/types';
 import { renderIcon, Loader2 } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
@@ -7,6 +11,9 @@ import { loadImageDataUrl, type AnswerFileAccess } from './generatedFiles';
 const TILE_SIZE = 256;
 const FRAME_WIDTH = 420;
 const FRAME_HEIGHT = 200;
+const FIT_WIDTH = 260;
+const FIT_HEIGHT = 140;
+const FIT_MAX_ZOOM = 15;
 const MAX_LATITUDE = 85.05112878;
 const MAP_CONFIG_PATH = '/api/maps/config';
 
@@ -74,13 +81,48 @@ export function resolvedThemeIsDark(root: HTMLElement = document.documentElement
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches === true;
 }
 
+export interface MapPreviewPoint {
+  latitude: number;
+  longitude: number;
+  label: string;
+  unconfirmed?: boolean;
+}
+
+export interface MapPreviewRequest {
+  label: string;
+  unavailableText: string;
+  view: Pick<MapSearchView, 'latitude' | 'longitude' | 'zoom'>;
+  points: readonly MapPreviewPoint[];
+}
+
+export function fittedMapView(
+  points: readonly MapPreviewPoint[],
+): MapPreviewRequest['view'] | null {
+  if (points.length === 0) return null;
+  const latitudes = points.map((point) => point.latitude);
+  const longitudes = points.map((point) => point.longitude);
+  const latitude = (Math.min(...latitudes) + Math.max(...latitudes)) / 2;
+  const longitude = (Math.min(...longitudes) + Math.max(...longitudes)) / 2;
+  for (let zoom = FIT_MAX_ZOOM; zoom > MAP_SEARCH_MIN_ZOOM; zoom -= 1) {
+    const projected = points.map((point) => project(point.latitude, point.longitude, zoom));
+    const xs = projected.map((point) => point.x);
+    const ys = projected.map((point) => point.y);
+    if (
+      Math.max(...xs) - Math.min(...xs) <= FIT_WIDTH &&
+      Math.max(...ys) - Math.min(...ys) <= FIT_HEIGHT
+    ) {
+      return { latitude, longitude, zoom };
+    }
+  }
+  return { latitude, longitude, zoom: MAP_SEARCH_MIN_ZOOM };
+}
+
 async function drawMap(
-  body: MapSearchCardBody,
+  request: MapPreviewRequest,
   access: AnswerFileAccess,
   dark: boolean,
 ): Promise<{ layers: HTMLElement[]; dimmed: boolean }> {
-  const view = body.view!;
-  const places = body.places ?? [];
+  const { view, points } = request;
   const config = await loadMapTileConfig(access);
   if (!config) throw new Error('map tiles are not configured');
   const zoom = Math.round(Math.min(config.maxZoom, Math.max(config.minZoom, view.zoom)));
@@ -90,7 +132,7 @@ async function drawMap(
   const canvas = el('div', {
     class: 'sp-map-preview__canvas',
     role: 'img',
-    'aria-label': t('spMapPreviewLabel', [body.places?.[0]?.label ?? body.query]),
+    'aria-label': request.label,
   });
   const firstX = Math.max(0, Math.floor((centre.x - FRAME_WIDTH / 2) / TILE_SIZE));
   const lastX = Math.min(lastIndex, Math.floor((centre.x + FRAME_WIDTH / 2) / TILE_SIZE));
@@ -119,20 +161,20 @@ async function drawMap(
   if (!results.some((result) => result.status === 'fulfilled')) {
     throw new Error('no map tile could be loaded');
   }
-  places.forEach((place, index) => {
-    const point = project(place.latitude, place.longitude, zoom);
+  for (const point of points) {
+    const position = project(point.latitude, point.longitude, zoom);
     canvas.appendChild(
       el(
         'span',
         {
-          class: `sp-map-preview__marker${place.confident === false ? ' sp-map-preview__marker--unconfirmed' : ''}`,
+          class: `sp-map-preview__marker${point.unconfirmed ? ' sp-map-preview__marker--unconfirmed' : ''}`,
           'aria-hidden': 'true',
-          style: `left:${point.x - centre.x}px;top:${point.y - centre.y}px`,
+          style: `left:${position.x - centre.x}px;top:${position.y - centre.y}px`,
         },
-        String(index + 1),
+        point.label,
       ),
     );
-  });
+  }
   const attribution = el(
     'span',
     { class: 'sp-map-preview__attribution' },
@@ -141,25 +183,45 @@ async function drawMap(
   return { layers: [canvas, attribution], dimmed: dark && config.dimLightTiles };
 }
 
-export function buildMapPreview(
-  body: MapSearchCardBody,
-  access: AnswerFileAccess | undefined,
-): HTMLElement | null {
-  if (!body.view || !body.places?.length || !access) return null;
+export function buildPointsMapPreview(
+  request: MapPreviewRequest,
+  access: AnswerFileAccess,
+): HTMLElement {
   const dark = resolvedThemeIsDark();
   const frame = el('div', { class: 'sp-map-preview', 'aria-busy': 'true' });
   const status = el('span', { class: 'sp-map-preview__status', role: 'status' });
   status.appendChild(renderIcon(Loader2, 16, 'sp-map-preview__spinner'));
   status.appendChild(document.createTextNode(t('spMapPreviewLoading')));
   frame.appendChild(status);
-  void drawMap(body, access, dark)
+  void drawMap(request, access, dark)
     .then(({ layers, dimmed }) => {
       frame.classList.toggle('sp-map-preview--dimmed', dimmed);
       frame.replaceChildren(...layers);
     })
     .catch(() => {
-      status.replaceChildren(document.createTextNode(t('spMapPreviewUnavailable')));
+      status.replaceChildren(document.createTextNode(request.unavailableText));
     })
     .finally(() => frame.removeAttribute('aria-busy'));
   return frame;
+}
+
+export function buildMapPreview(
+  body: MapSearchCardBody,
+  access: AnswerFileAccess | undefined,
+): HTMLElement | null {
+  if (!body.view || !body.places?.length || !access) return null;
+  return buildPointsMapPreview(
+    {
+      label: t('spMapPreviewLabel', [body.places[0]?.label ?? body.query]),
+      unavailableText: t('spMapPreviewUnavailable'),
+      view: body.view,
+      points: body.places.map((place, index) => ({
+        latitude: place.latitude,
+        longitude: place.longitude,
+        label: String(index + 1),
+        unconfirmed: place.confident === false,
+      })),
+    },
+    access,
+  );
 }

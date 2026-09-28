@@ -379,6 +379,36 @@ const de = {
   'webview.answerTokens_other': '{model} · {count} Token ({input} Eingabe, {output} Ausgabe)',
   'webview.moreLinesHidden_one': '{count} weitere Zeile nicht angezeigt',
   'webview.moreLinesHidden_other': '{count} weitere Zeilen nicht angezeigt',
+  'mcp.connected_one':
+    'AGI Workforce: {name} hat sich in {ms} ms verbunden und bietet {count} Tool.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} hat sich in {ms} ms verbunden und bietet {count} Tools.',
+  'checkpoints.trackedFiles_one': '{count} Datei erfasst',
+  'checkpoints.trackedFiles_other': '{count} Dateien erfasst',
+  'checkpoints.skippedFiles_one':
+    'AGI Workforce: {count} Datei konnte nicht wiederhergestellt werden: {files}',
+  'checkpoints.skippedFiles_other':
+    'AGI Workforce: {count} Dateien konnten nicht wiederhergestellt werden: {files}',
+  'checkpoints.filesRestored_one':
+    'AGI Workforce: {count} Datei wurde auf den Prüfpunkt zurückgesetzt.',
+  'checkpoints.filesRestored_other':
+    'AGI Workforce: {count} Dateien wurden auf den Prüfpunkt zurückgesetzt.',
+  'webview.sources_one': '{count} Quelle',
+  'webview.sources_other': '{count} Quellen',
+  'sessionSync.continuedIn':
+    'Diese Sitzung wurde in {client} fortgesetzt. Die neuesten Nachrichten werden hier angezeigt.',
+  'sessionSync.continuedElsewhere':
+    'Diese Sitzung wurde in einer anderen App fortgesetzt. Die neuesten Nachrichten werden hier angezeigt.',
+  'sessionSync.heldBy': '{client} verwendet diese Sitzung.',
+  'sessionSync.takeOverDetail':
+    'Übernehmen Sie sie, um Ihre Nachricht von hier zu senden. Wenn {client} noch antwortet, beenden Sie es dort zuerst: Schreiben zwei Apps gleichzeitig, entstehen zwei Kopien der Sitzung.',
+  'sessionSync.takeOver': 'Übernehmen und senden',
+  'sessionSync.notSent':
+    'Nicht gesendet: {client} verwendet diese Sitzung. Senden Sie erneut, um sie hierher zu übernehmen.',
+  'sessionSync.takeOverFailed':
+    'Die Sitzung konnte nicht übernommen werden. Senden Sie erneut, um es noch einmal zu versuchen.',
+  'sessionSync.stopBeforeTerminal':
+    'Beenden Sie die laufende Antwort, bevor Sie diese Sitzung im Terminal fortsetzen.',
 };
 
 export default de;

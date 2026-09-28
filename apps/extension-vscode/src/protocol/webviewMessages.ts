@@ -37,6 +37,7 @@ const sendMessage = z.object({
 });
 
 const ready = z.object({ type: z.literal('ready') });
+const viewFocused = z.object({ type: z.literal('viewFocused') });
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
 const openWorkspace = z.object({ type: z.literal('openWorkspace') });
@@ -186,6 +187,11 @@ const runSlashCommand = z.object({
   payload: z.object({ name: z.string().min(1).max(120) }),
 });
 
+const reviewApprovalChange = z.object({
+  type: z.literal('reviewApprovalChange'),
+  payload: z.object({ requestId: z.string().min(1).max(200) }),
+});
+
 const rateAnswer = z.object({
   type: z.literal('rateAnswer'),
   payload: z.object({
@@ -250,6 +256,7 @@ const removePendingAttachment = z.object({
 export const WebviewToExtSchema = z.discriminatedUnion('type', [
   sendMessage,
   ready,
+  viewFocused,
   getModel,
   openSettings,
   openWorkspace,
@@ -300,6 +307,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   cancelQueuedMessage,
   openSuggestedProject,
   rateAnswer,
+  reviewApprovalChange,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

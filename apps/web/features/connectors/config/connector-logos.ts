@@ -16,6 +16,11 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
+  'google-contacts': {
+    url: 'https://www.google.com/s2/favicons?domain=contacts.google.com&sz=64',
+    width: 32,
+    height: 32,
+  },
   notion: {
     url: 'https://upload.wikimedia.org/wikipedia/commons/e/e9/Notion-logo.svg',
     width: 32,
@@ -281,21 +286,6 @@ export const CONNECTOR_LOGOS: Record<
     width: 32,
     height: 32,
   },
-  postgresql: {
-    url: 'https://www.google.com/s2/favicons?domain=postgresql.org&sz=64',
-    width: 32,
-    height: 32,
-  },
-  mongodb: {
-    url: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64',
-    width: 32,
-    height: 32,
-  },
-  redis: {
-    url: 'https://www.google.com/s2/favicons?domain=redis.io&sz=64',
-    width: 32,
-    height: 32,
-  },
   elasticsearch: {
     url: 'https://www.google.com/s2/favicons?domain=elastic.co&sz=64',
     width: 32,
@@ -355,6 +345,11 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   plaid: {
+    url: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  'bank-accounts': {
     url: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
     width: 32,
     height: 32,
@@ -436,6 +431,11 @@ export const CONNECTOR_LOGOS: Record<
   },
   cerner: {
     url: 'https://www.google.com/s2/favicons?domain=cerner.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  healthex: {
+    url: 'https://www.google.com/s2/favicons?domain=healthex.io&sz=64',
     width: 32,
     height: 32,
   },

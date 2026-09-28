@@ -74,6 +74,9 @@ vi.mock('@/lib/github-app', () => ({
   getInstallationAccessToken: async () => 'ghs_token_abc',
   getPrDiff: async () => '+ added line',
   postIssueComment: vi.fn(async () => undefined),
+  getGitHubIssue: vi.fn(async () => null),
+  getGitHubPullRequestForTask: vi.fn(async () => null),
+  listGitHubFailedChecks: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/managed-compute-gate', () => ({
