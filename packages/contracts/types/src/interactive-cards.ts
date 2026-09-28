@@ -32,7 +32,10 @@ export function isKnownInteractiveCardKind(kind: string): kind is KnownInteracti
  * the order the turn happened. Everything else renders after the prose that
  * motivated it.
  */
-export const LEADING_INTERACTIVE_CARD_KINDS: readonly KnownInteractiveCardKind[] = ['places.v1'];
+export const LEADING_INTERACTIVE_CARD_KINDS: readonly KnownInteractiveCardKind[] = [
+  'itinerary.v1',
+  'places.v1',
+];
 
 export function interactiveCardRendersBeforeProse(kind: string): boolean {
   return (LEADING_INTERACTIVE_CARD_KINDS as readonly string[]).includes(kind);
@@ -189,6 +192,8 @@ export interface ItineraryCardBody {
 
 export const ITINERARY_MAX_STOPS = 12;
 export const ITINERARY_NOTE_MAX_LENGTH = 240;
+export const ITINERARY_TOOL_NAME = 'plan_itinerary';
+export const ITINERARY_STOPS_PER_ROUTE_LEG = 5;
 
 export const MAP_SEARCH_QUERY_MAX_LENGTH = 300;
 
@@ -293,6 +298,7 @@ export interface ItineraryToolInputStop {
 export interface ItineraryToolInput {
   title: string;
   summary: string;
+  region: { label: string; timeZone: string };
   stops: ItineraryToolInputStop[];
   travelMode: ItineraryTravelMode;
 }
@@ -396,6 +402,4 @@ export interface PersistedInteractiveCards {
 }
 
 export type InteractiveCardCapability =
-  | 'canRenderInteractiveCards'
-  | 'canAnswerInteractiveCards'
-  | 'canRenderMapCards';
+  'canRenderInteractiveCards' | 'canAnswerInteractiveCards' | 'canRenderMapCards';
