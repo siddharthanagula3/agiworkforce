@@ -5251,7 +5251,7 @@ function injectStyles(): void {
     }
 
     #sp-input-area {
-      padding: 6px 10px 8px;
+      padding: 6px max(10px, calc((100% - var(--sp-reading-column)) / 2)) 8px;
       border-top: 0;
       background: var(--agi-ext-bg);
     }
