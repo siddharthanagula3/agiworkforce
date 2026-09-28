@@ -566,8 +566,19 @@ export interface ManagedChatSourcesDelta {
   results: ManagedChatSourceWire[];
 }
 
+export const CODE_EXECUTION_OUTPUT_MAX_CHARS = 16_000;
+
+export interface ManagedCodeExecution {
+  status: 'running' | 'completed' | 'failed';
+  stdout?: string;
+  stderr?: string;
+  returnCode?: number;
+  errorCode?: string;
+}
+
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
+  | { type: 'code-execution'; execution: ManagedCodeExecution }
   | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
   | { type: 'generated-files'; files: GeneratedFileWire[] }
   | ({ type: 'sources' } & ManagedChatSourcesDelta)
@@ -635,6 +646,7 @@ function normalizeStreamOptions(
 
 interface ParsedSseFrame {
   text?: string;
+  codeExecution?: ManagedCodeExecution;
   agentEvent?: AgentEventEnvelope;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
@@ -647,6 +659,37 @@ interface ParsedSseFrame {
 function readSourceRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseCodeExecutionDelta(result: unknown, status: unknown): ManagedCodeExecution | null {
+  const content = readSourceRecord(readSourceRecord(result)?.['content']);
+  if (content?.['type'] === 'code_execution_tool_result_error') {
+    const errorCode = content['error_code'];
+    return {
+      status: 'failed',
+      errorCode:
+        typeof errorCode === 'string' && errorCode ? errorCode.slice(0, 80) : 'unknown_error',
+    };
+  }
+  if (content) {
+    const returnCode = content['return_code'];
+    return {
+      status: 'completed',
+      stdout:
+        typeof content['stdout'] === 'string'
+          ? content['stdout'].slice(0, CODE_EXECUTION_OUTPUT_MAX_CHARS)
+          : '',
+      stderr:
+        typeof content['stderr'] === 'string'
+          ? content['stderr'].slice(0, CODE_EXECUTION_OUTPUT_MAX_CHARS)
+          : '',
+      returnCode: typeof returnCode === 'number' && Number.isInteger(returnCode) ? returnCode : 0,
+    };
+  }
+  const tool = readSourceRecord(status);
+  return tool?.['type'] === 'server_tool_use' && tool['name'] === 'code_execution'
+    ? { status: 'running' }
     : null;
 }
 
@@ -834,6 +877,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
 
   let recognized = false;
   let deltaContent: unknown;
+  let codeExecution: ManagedCodeExecution | null = null;
   let agentEvent: AgentEventEnvelope | null = null;
   let generatedFiles: GeneratedFileWire[] = [];
   let interactiveCard: InteractiveCard | null = null;
@@ -856,6 +900,10 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         if (!delta || typeof delta !== 'object' || Array.isArray(delta)) return protocolError();
         const deltaRecord = delta as Record<string, unknown>;
         deltaContent = deltaRecord['content'];
+        codeExecution = parseCodeExecutionDelta(
+          deltaRecord['x_code_result'],
+          deltaRecord['x_tool_status'],
+        );
         agentEvent = parseAgentEventDelta(deltaRecord['x_agent_event']);
         generatedFiles = parseGeneratedFilesDelta(deltaRecord['x_generated_files']);
         interactiveCard = parseInteractiveCardDelta(deltaRecord['x_interactive_card']);
@@ -930,6 +978,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         : typeof directContent === 'string'
           ? directContent
           : undefined,
+    ...(codeExecution ? { codeExecution } : {}),
     ...(agentEvent ? { agentEvent } : {}),
     ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     ...(interactiveCard ? { interactiveCard } : {}),
@@ -1130,8 +1179,8 @@ export async function* streamFreeChat(
             messages: cappedMessages,
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
-              supported: ['map-search.v1'],
-              canRespond: false,
+              supported: ['clarify.v1', 'itinerary.v1', 'map-search.v1', 'product-comparison.v1'],
+              canRespond: true,
             },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
@@ -1290,6 +1339,10 @@ export async function* streamFreeChat(
           chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
           const runChunk = publishRunReference({ lastSequence: frame.agentEvent.sequence });
           if (runChunk) chunks.push(runChunk);
+        }
+        if (frame.codeExecution) {
+          sawRichOutput = true;
+          chunks.push({ type: 'code-execution', execution: frame.codeExecution });
         }
         if (frame.generatedFiles) {
           sawRichOutput = true;
@@ -1534,13 +1587,19 @@ export function streamManagedChatApproval(
   runId: string,
   toolApprovals: ToolApprovalDecisionWire[],
   token: string,
-  options: Omit<ManagedChatStreamOptions, 'approvalResume' | 'model' | 'workMode'> = {},
+  {
+    guidance,
+    ...options
+  }: Omit<ManagedChatStreamOptions, 'approvalResume' | 'model' | 'workMode'> & {
+    guidance?: string;
+  } = {},
 ): AsyncGenerator<FreeTrialChunk> {
   return streamFreeChat([], token, {
     ...options,
     approvalResume: {
       run_id: runId,
       tool_approvals: toolApprovals,
+      ...(guidance ? { guidance } : {}),
     },
   });
 }

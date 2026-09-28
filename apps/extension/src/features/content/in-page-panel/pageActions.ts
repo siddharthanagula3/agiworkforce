@@ -16,6 +16,7 @@ export interface PageAction {
   icon: string;
   buildPrompt: (pageTitle: string, pageText: string) => string;
   id: string;
+  readsVideoCaptions?: true;
 }
 
 const GENERIC_ACTIONS: PageAction[] = [
@@ -54,22 +55,25 @@ const YOUTUBE_ACTIONS: PageAction[] = [
     id: 'yt_summarize',
     label: 'Summarize video',
     icon: '▶',
+    readsVideoCaptions: true,
     buildPrompt: (title, _text) =>
-      `Summarize the YouTube video titled "${title}". Focus on the main topics, key arguments, and conclusions presented.`,
+      `Summarize the YouTube video titled "${title}" from its transcript below. Focus on the main topics, key arguments, and conclusions presented.`,
   },
   {
     id: 'yt_timestamps',
     label: 'Key timestamps',
     icon: '⏱',
+    readsVideoCaptions: true,
     buildPrompt: (title, _text) =>
-      `For the YouTube video titled "${title}", identify and describe the key timestamps and what happens at each section of the video.`,
+      `Using the timestamped transcript below of the YouTube video titled "${title}", identify the key timestamps and describe what happens at each section of the video.`,
   },
   {
     id: 'yt_qa',
     label: 'Q&A',
     icon: '?',
+    readsVideoCaptions: true,
     buildPrompt: (title, _text) =>
-      `What are the most important questions and answers from the YouTube video titled "${title}"?`,
+      `From the transcript below of the YouTube video titled "${title}", what are the most important questions and answers?`,
   },
 ];
 

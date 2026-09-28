@@ -66,6 +66,7 @@ export type {
   DirectoryPluginScan,
   DirectoryPluginScanVerdict,
   DirectoryPluginVersionOption,
+  DirectoryPluginSubmission,
   DirectoryPluginVersions,
   DirectoryPluginSettings,
   DirectoryPluginSkillSetting,

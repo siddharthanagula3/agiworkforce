@@ -11,7 +11,7 @@ import {
   type SyncedAppSurface,
 } from '@agiworkforce/types';
 import type { NextRequest } from 'next/server';
-import { createError } from '@/lib/errors';
+import { createError, isAppError } from '@/lib/errors';
 import {
   copyPrivateObjectIfUnchanged,
   deletePrivateObject,
@@ -34,6 +34,7 @@ import {
   type MediaAssetForServing,
 } from '@/lib/server/media-assets';
 import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
+import { assertFileStorageAvailable } from '@/lib/server/file-storage';
 import { isChatImageMimeType, isSupportedChatAttachment } from '@/lib/chat-attachment-policy';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 
@@ -254,6 +255,17 @@ export async function completeChatAttachmentUpload(
       '[uploads] reused an attachment already held for these bytes; the copy was not stored',
     );
     return attachmentFrom(duplicate, fileName, object.data.byteLength);
+  }
+
+  if (!temporaryChat) {
+    try {
+      await assertFileStorageAvailable({ db, userId, organizationId }, object.data.byteLength);
+    } catch (error) {
+      if (isAppError(error) && error.statusCode < 500) {
+        await purgeChatAttachmentUpload(userId, storageKey);
+      }
+      throw error;
+    }
   }
 
   const scan = await scanUploadBytes(object.data, mimeType, {

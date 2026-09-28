@@ -116,7 +116,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     // Optional-called for the same reason `show` is below: a Code-OSS fork can
     // ship a narrower WebviewView, and an attention badge is not worth failing
     // to open the panel over.
-    this._visibilityListener = webviewView.onDidChangeVisibility?.(() => this._refreshBadge());
+    this._visibilityListener = webviewView.onDidChangeVisibility?.(() => {
+      this._refreshBadge();
+      if (webviewView.visible) void this._stateManager.syncStoredTranscript();
+    });
 
     webviewView.onDidDispose(() => {
       this._messageListener?.dispose();
@@ -188,6 +191,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public activeThreadId(): string | undefined {
     return this._stateManager.activeThreadId();
+  }
+
+  public releaseForTerminal(): Promise<void> {
+    return this._stateManager.releaseForTerminal();
   }
 
   public activeThreadReceipt(): ReturnType<ChatStateManager['activeThreadReceipt']> {
@@ -268,6 +275,14 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
   public activeRoute(): ModelRoute | undefined {
     return this._stateManager.activeRoute();
+  }
+
+  public checkpointsAvailable(): Promise<boolean> {
+    return this._stateManager.checkpointsAvailable();
+  }
+
+  public showCheckpoints(): Promise<void> {
+    return this._stateManager.showCheckpoints();
   }
 
   public refreshRuntimeStatus(): void {

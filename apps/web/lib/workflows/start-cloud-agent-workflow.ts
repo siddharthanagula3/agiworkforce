@@ -35,6 +35,7 @@ import {
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   saveCloudAgentPauseCheckpoint,
+  takeCloudAgentRunSteers,
 } from '@/lib/services/cloud-agent-run-service';
 import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
 import type { ToolApprovalPolicy } from '@shared/types/toolApprovalPolicy';
@@ -344,6 +345,12 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
       }),
     isPauseRequested: () =>
       isCloudAgentRunPauseRequested(input.db, { userId: input.userId, runId: input.runId }),
+    takeSteerMessages: () =>
+      takeCloudAgentRunSteers(input.db, {
+        userId: input.userId,
+        organizationId: input.processed.organizationId ?? null,
+        runId: input.runId,
+      }),
     onPauseCheckpoint: async (checkpoint) => {
       await saveCloudAgentPauseCheckpoint(input.db, {
         userId: input.userId,

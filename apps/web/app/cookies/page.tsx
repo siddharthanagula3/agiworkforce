@@ -17,6 +17,7 @@ import { NoteList } from '@/features/marketing/components/pages/company/shared';
 import { CookiePreferencesButton } from './CookiePreferencesButton';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
+import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 
 export const metadata = buildMetadata({
   title: 'Cookie policy',
@@ -318,7 +319,7 @@ export default function CookiesPage() {
               We use the minimum needed to keep you signed in and the site functional. No
               advertising cookies, ever. Analytics is opt-in and the consent check fails closed: if
               we cannot read your choice, analytics stays off. Last updated:{' '}
-              {POLICY_LAST_UPDATED.cookies}.
+              {POLICY_LAST_UPDATED.cookies}. <PolicyVersionsLink policy="cookies" />
             </>
           }
           ctas={[]}

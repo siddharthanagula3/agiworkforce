@@ -626,6 +626,16 @@ export function getWebviewContent(
       color: var(--text-primary);
     }
     .message-action[aria-pressed='true'] { color: var(--text-primary); }
+    .message-sources {
+      margin-top: var(--message-actions-gap);
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .message-sources summary { cursor: pointer; }
+    .message-sources__list { margin: 4px 0 0; padding-left: 20px; }
+    .message-sources__list li { margin: 2px 0; }
+    .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
     .message-meta {
@@ -3429,6 +3439,7 @@ export function getWebviewContent(
     let activePlanCard = null;
     let currentAssistantEl = null;
     let accumulatedContent = '';
+    let turnSources = [];
     let pendingAttachmentCount = 0;
     let browseWebEnabled = false;
     let followUpBehavior = '${followUpBehaviorLiteral}';
@@ -3792,6 +3803,55 @@ export function getWebviewContent(
       paintAnswerRating(row, rating || null);
     }
 
+    function sourceLink(url) {
+      try {
+        var parsed = new URL(url);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function collectSources(sources) {
+      for (var i = 0; i < sources.length; i++) {
+        var source = sources[i];
+        if (!source || !source.url) continue;
+        var known = turnSources.some(function (entry) { return entry.url === source.url; });
+        if (!known) turnSources.push({ url: source.url, title: source.title || '' });
+      }
+    }
+
+    function appendSources(messageEl, sources) {
+      var details = document.createElement('details');
+      details.className = 'message-sources';
+      var summary = document.createElement('summary');
+      summary.textContent = pluralText(L10N.sources, sources.length);
+      details.appendChild(summary);
+      var list = document.createElement('ol');
+      list.className = 'message-sources__list';
+      for (var i = 0; i < sources.length; i++) {
+        var item = document.createElement('li');
+        var parsed = sourceLink(sources[i].url);
+        var label = sources[i].title || sources[i].url;
+        if (parsed) {
+          var link = document.createElement('a');
+          link.href = parsed.href;
+          link.textContent = label;
+          link.title = parsed.href;
+          item.appendChild(link);
+          var host = document.createElement('span');
+          host.className = 'message-sources__host';
+          host.textContent = parsed.hostname;
+          item.appendChild(host);
+        } else {
+          item.textContent = label;
+        }
+        list.appendChild(item);
+      }
+      details.appendChild(list);
+      messageEl.insertBefore(details, messageEl.querySelector('.message-actions'));
+    }
+
     function appendMessageActions(messageEl, sourceText, meta, rating) {
       if (!messageEl || !sourceText) return;
       assistantSources.set(messageEl, sourceText);
@@ -3926,6 +3986,33 @@ export function getWebviewContent(
     function removeTyping() {
       const el = document.getElementById('typingIndicator');
       if (el) el.remove();
+    }
+
+    function renderTranscript(conversation) {
+      messagesEl.innerHTML = '';
+      activePlanCard = null;
+      toolCallStack = null;
+      toolCallList = null;
+      activitySummaryButton = null;
+      activityIcon = null;
+      activityMeta = null;
+      toolCallMap = {};
+      progressMap = {};
+      currentAssistantEl = null;
+      accumulatedContent = '';
+      for (var historyIndex = 0; historyIndex < conversation.messages.length; historyIndex++) {
+        var historyMessage = conversation.messages[historyIndex];
+        if (!historyMessage) continue;
+        if (historyMessage.role === 'assistant') {
+          var assistantHistoryEl = addMessage('assistant', '');
+          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          bindCodeBlockActions(assistantHistoryEl);
+          appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+        } else if (historyMessage.role === 'user') {
+          addMessage('user', historyMessage.text || '');
+        }
+      }
+      if (conversation.plan) upsertPlanCard(conversation.plan);
     }
 
     function setStreaming(value) {
@@ -4297,7 +4384,7 @@ export function getWebviewContent(
           var text = codeEl.textContent || '';
           if (b.classList.contains('explain-btn')) {
             var language = getCodeLanguage(codeEl) || '';
-            prefillComposer('Explain this code:\n\n' + '\u0060\u0060\u0060' + language + '\n' + text + '\n' + '\u0060\u0060\u0060');
+            prefillComposer('Explain this code:\\n\\n' + '\\u0060\\u0060\\u0060' + language + '\\n' + text + '\\n' + '\\u0060\\u0060\\u0060');
             sendMessage();
             return;
           }
@@ -4482,6 +4569,9 @@ export function getWebviewContent(
 
     // ── Event listeners ───────────────────────────────────────────────────────
     sendBtn.addEventListener('click', function() { sendMessage(); });
+    window.addEventListener('focus', function() {
+      vscode.postMessage({ type: 'viewFocused' });
+    });
     if (stopBtn) {
       stopBtn.addEventListener('click', function() {
         if (stopBtn.getAttribute('aria-busy') === 'true') return;
@@ -5311,6 +5401,20 @@ export function getWebviewContent(
 
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      if (payload.reviewable) {
+        var review = document.createElement('button');
+        review.type = 'button';
+        review.className = 'approval-card__action';
+        review.textContent = 'Review change';
+        review.title = 'Open the proposed file in a diff. Edit it or revert parts, then approve to write your version.';
+        review.addEventListener('click', function () {
+          vscode.postMessage({
+            type: 'reviewApprovalChange',
+            payload: { requestId: payload.requestId },
+          });
+        });
+        actions.appendChild(review);
+      }
       for (var i = 0; i < APPROVAL_ACTIONS.length; i++) {
         (function (action) {
           var button = document.createElement('button');
@@ -5750,7 +5854,9 @@ export function getWebviewContent(
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
         }
+        turnSources = [];
         finalizeToolCallStack();
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
@@ -5766,6 +5872,10 @@ export function getWebviewContent(
 
       else if (msg.type === 'contextUsage') {
         renderContextUsage(msg.payload.usedTokens, msg.payload.contextWindow);
+      }
+
+      else if (msg.type === 'sourceList') {
+        collectSources((msg.payload && msg.payload.sources) || []);
       }
 
       else if (msg.type === 'answerRating') {
@@ -5982,36 +6092,14 @@ export function getWebviewContent(
         applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
         approvalCards = {};
-        messagesEl.innerHTML = '';
-        activePlanCard = null;
-        toolCallStack = null;
-        toolCallList = null;
-        activitySummaryButton = null;
-        activityIcon = null;
-        activityMeta = null;
-        toolCallMap = {};
-        progressMap = {};
-        currentAssistantEl = null;
         activeQueuedClientMessageId = null;
-        accumulatedContent = '';
         removeTyping();
         setStreaming(false);
         showFollowUpStatus('', '', false);
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
-        for (var historyIndex = 0; historyIndex < msg.payload.messages.length; historyIndex++) {
-          var historyMessage = msg.payload.messages[historyIndex];
-          if (!historyMessage) continue;
-          if (historyMessage.role === 'assistant') {
-            var assistantHistoryEl = addMessage('assistant', '');
-            assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
-            bindCodeBlockActions(assistantHistoryEl);
-            appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
-          } else if (historyMessage.role === 'user') {
-            addMessage('user', historyMessage.text || '');
-          }
-        }
+        renderTranscript(msg.payload);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -6020,6 +6108,24 @@ export function getWebviewContent(
         } else {
           emptyStateEl = null;
         }
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+
+      else if (msg.type === 'transcriptRefreshed') {
+        var undelivered = Array.prototype.filter.call(
+          messagesEl.querySelectorAll('.message.user[data-client-message-id]'),
+          function(message) {
+            var state = message.getAttribute('data-delivery-state');
+            return state === 'sending' || state === 'queued';
+          }
+        );
+        renderTranscript(msg.payload.conversation);
+        emptyStateEl = null;
+        addMessage('system', msg.payload.notice);
+        for (var undeliveredIndex = 0; undeliveredIndex < undelivered.length; undeliveredIndex++) {
+          messagesEl.appendChild(undelivered[undeliveredIndex]);
+        }
+        if (streaming) showTyping();
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
@@ -6039,6 +6145,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'conversationCleared') {
         lastSendPayload = null;
+        turnSources = [];
         clearContextUsage();
         resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();

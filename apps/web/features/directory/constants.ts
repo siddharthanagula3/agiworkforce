@@ -94,6 +94,38 @@ export const PLUGIN_GROUP_HEADINGS: Readonly<Record<string, string>> = {
   [PLUGIN_SOURCE_PARTNER]: 'Partner plugins',
   [PLUGIN_SOURCE_MARKETPLACE]: 'Marketplace plugins',
 };
+export const PLUGIN_WORKSPACE_GROUP_ID = 'workspace-plugins';
+export const PLUGIN_WORKSPACE_GROUP_HEADING = 'From your workspace';
+export const PLUGIN_WORKSPACE_PUBLISHER = 'Your workspace';
+export const PLUGIN_STATE_REQUIRED = 'Required';
+export const PLUGIN_STATE_TURNED_OFF = 'Turned off';
+export const PLUGIN_WORKSPACE_REQUIRED_NOTE =
+  'Your workspace requires this plugin, so it stays on with all its skills.';
+export const PLUGIN_WORKSPACE_DEFAULT_NOTE =
+  'Your workspace installs this plugin for everyone. You can turn it off.';
+export const PLUGIN_WORKSPACE_AVAILABLE_NOTE = 'Your workspace offers this plugin to its members.';
+
+export function workspaceGroupHeading(workspaceName: string | null): string {
+  return workspaceName ? `From ${workspaceName}` : PLUGIN_WORKSPACE_GROUP_HEADING;
+}
+
+export const PLUGIN_COMMUNITY_GROUP_ID = 'community-plugins';
+export const PLUGIN_COMMUNITY_GROUP_HEADING = 'Community';
+export const PLUGIN_COMMUNITY_INSTALL_NOTICE =
+  'Its developer published this plugin to the directory. It was reviewed before it was listed, and it runs with the access you give it.';
+export const PLUGIN_SUBMISSION_STATUS_LABELS: Readonly<Record<string, string>> = {
+  pending: 'Submitted for review',
+  approved: 'Listed in the directory',
+  rejected: 'Not approved',
+  withdrawn: 'Withdrawn',
+  suspended: 'Taken out of the directory',
+};
+export const PLUGIN_SUBMITTED_NOTICE =
+  'Submitted for review. You get a notification when it has been reviewed.';
+export const PLUGIN_SUBMISSION_WITHDRAWN_NOTICE = 'Withdrawn from the directory.';
+export const PLUGIN_SUBMIT_FAILED_COPY = 'This plugin could not be submitted. Try again.';
+export const PLUGIN_WITHDRAW_FAILED_COPY = 'The submission could not be withdrawn. Try again.';
+
 export const PLUGIN_USER_GROUP_ID = 'user-marketplaces';
 export const PLUGIN_USER_GROUP_HEADING = 'Your marketplaces';
 
@@ -117,6 +149,9 @@ export const PLUGIN_COUNT_SUFFIX = 'plugins';
 export const PLUGIN_CATEGORY_GROUP_LABEL = 'Category';
 export const PLUGIN_PUBLISHER_GROUP_LABEL = 'Publisher';
 export const PLUGIN_PUBLISHER_MORE_HEADING_PREFIX = 'Plugins by';
+export const PLUGIN_PERMISSIONS_NOTICE_PREFIX = 'It says it needs these permissions:';
+export const PLUGIN_PERMISSIONS_NOTICE_SUFFIX =
+  'Installing it accepts them, and you can remove it at any time.';
 export const PLUGIN_PUBLISHER_KIND_LABELS: Readonly<Record<string, string>> = {
   'first-party': 'First-party',
   partner: 'Partner',
@@ -186,6 +221,7 @@ export const CONNECTOR_SETUP_NOTICE_CURATED_SUFFIX =
   'needs credentials this deployment has not been given yet.';
 export const CONNECTOR_SETUP_KIND_NO_REMOTE = 'no-remote';
 export const CONNECTOR_SETUP_KIND_DEVICE_LOCAL = 'device-local';
+export const CONNECTOR_SETUP_KIND_REGION = 'region';
 export const DESKTOP_DOWNLOAD_PATH = '/download';
 export const CONNECTOR_TERMS_PATH = '/terms';
 export const RELATED_CONNECTOR_LIMIT = 6;
@@ -274,6 +310,10 @@ export function uploadSkillCountLine(count: number): string {
 }
 
 const DEPENDENCY_NAMES = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
+
+export function uploadDependenciesInstalledLine(dependencyNames: readonly string[]): string {
+  return `Also installed the ${dependencyNames.length === 1 ? 'plugin' : 'plugins'} it depends on: ${DEPENDENCY_NAMES.format(dependencyNames)}.`;
+}
 
 export function pluginDependenciesInstalledLine(
   pluginName: string,

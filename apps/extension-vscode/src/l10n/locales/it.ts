@@ -437,6 +437,38 @@ const it = {
   'webview.moreLinesHidden_one': '{count} riga in più non mostrata',
   'webview.moreLinesHidden_many': '{count} di righe in più non mostrate',
   'webview.moreLinesHidden_other': '{count} righe in più non mostrate',
+  'mcp.connected_one': 'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumento.',
+  'mcp.connected_many':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} di strumenti.',
+  'mcp.connected_other':
+    'AGI Workforce: {name} si è connesso in {ms} ms e offre {count} strumenti.',
+  'checkpoints.trackedFiles_one': '{count} file tracciato',
+  'checkpoints.trackedFiles_many': '{count} di file tracciati',
+  'checkpoints.trackedFiles_other': '{count} file tracciati',
+  'checkpoints.skippedFiles_one': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.skippedFiles_many':
+    'AGI Workforce: impossibile ripristinare {count} di file: {files}',
+  'checkpoints.skippedFiles_other': 'AGI Workforce: impossibile ripristinare {count} file: {files}',
+  'checkpoints.filesRestored_one': 'AGI Workforce: {count} file è tornato al checkpoint.',
+  'checkpoints.filesRestored_many': 'AGI Workforce: {count} di file sono tornati al checkpoint.',
+  'checkpoints.filesRestored_other': 'AGI Workforce: {count} file sono tornati al checkpoint.',
+  'webview.sources_one': '{count} fonte',
+  'webview.sources_many': '{count} di fonti',
+  'webview.sources_other': '{count} fonti',
+  'sessionSync.continuedIn':
+    'Questa sessione è proseguita in {client}. Qui vedi i suoi messaggi più recenti.',
+  'sessionSync.continuedElsewhere':
+    "Questa sessione è proseguita in un'altra app. Qui vedi i suoi messaggi più recenti.",
+  'sessionSync.heldBy': '{client} sta usando questa sessione.',
+  'sessionSync.takeOverDetail':
+    'Prendine il controllo per inviare il messaggio da qui. Se {client} sta ancora rispondendo, fermalo prima lì: due app che scrivono insieme lasciano due copie della sessione.',
+  'sessionSync.takeOver': 'Prendi il controllo e invia',
+  'sessionSync.notSent':
+    'Non inviato: {client} sta usando questa sessione. Invia di nuovo per prenderne il controllo da qui.',
+  'sessionSync.takeOverFailed':
+    'Impossibile prendere il controllo di questa sessione. Invia di nuovo per riprovare.',
+  'sessionSync.stopBeforeTerminal':
+    'Interrompi la risposta in corso prima di continuare questa sessione nel terminale.',
 };
 
 export default it;

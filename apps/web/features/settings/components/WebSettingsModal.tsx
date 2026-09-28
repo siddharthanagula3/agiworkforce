@@ -184,11 +184,24 @@ export function WebSettingsModal({
   );
 
   const skills = useSkillsSettingsAdapter({ open, activeSection, authedHeaders });
+  const openCustomConnector = useCallback(
+    () => handleCustomConnectorOpenChange(true),
+    [handleCustomConnectorOpenChange],
+  );
   const connectors = useConnectorsSettingsAdapter({
     open,
     authedHeaders,
+    onOpenCustomConnector: openCustomConnector,
     directorySkillActions: skills.directorySkillActions,
   });
+  const { clearCustomConnectorPreset } = connectors;
+  const changeCustomConnectorOpen = useCallback(
+    (next: boolean) => {
+      clearCustomConnectorPreset();
+      handleCustomConnectorOpenChange(next);
+    },
+    [clearCustomConnectorPreset, handleCustomConnectorOpenChange],
+  );
 
   const adapter: SettingsDataAdapter = connectors.adapter;
 
@@ -253,7 +266,7 @@ export function WebSettingsModal({
           directoryAdapter={connectors.directoryAdapter}
           navBadges={connectors.navBadges}
           openCustomConnector={customConnectorOpen}
-          onCustomConnectorOpenChange={handleCustomConnectorOpenChange}
+          onCustomConnectorOpenChange={changeCustomConnectorOpen}
           workRole={workRole}
         />
         <ToolPermissionsPanel

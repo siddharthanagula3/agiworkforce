@@ -78,6 +78,7 @@ export default async function PublishedArtifactPage({ params }: Props) {
         content={artifact.content}
         publishedAt={artifact.updatedAt}
         audience={artifact.visibility}
+        token={token}
       />
       <ReportContentLink publicPath={`/shared-artifact/${token}`} />
     </>

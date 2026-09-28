@@ -8,6 +8,7 @@ export interface ExecutionResult {
   outputs?: NotebookCellOutput[];
   /** The call never ran because the capability was not available for the turn. */
   unavailable?: boolean;
+  overflow?: { kept: string; totalChars: number };
 }
 
 export interface SandboxFileEntry {
@@ -87,3 +88,4 @@ export interface E2BExecutor {
 }
 
 export const MAX_EXECUTION_OUTPUT_BYTES = 100_000;
+export const MAX_KEPT_TOOL_OUTPUT_CHARS = 900_000;

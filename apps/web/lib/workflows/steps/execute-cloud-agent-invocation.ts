@@ -30,6 +30,7 @@ import {
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   saveCloudAgentPauseCheckpoint,
+  takeCloudAgentRunSteers,
 } from '@/lib/services/cloud-agent-run-service';
 import { createCloudAgentEventJournal } from '@/lib/services/cloud-agent-event-journal';
 import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
@@ -483,6 +484,12 @@ export async function executeCloudAgentWorkflowInvocation(
     },
     isPauseRequested: () =>
       isCloudAgentRunPauseRequested(db, { userId: input.userId, runId: input.runId }),
+    takeSteerMessages: () =>
+      takeCloudAgentRunSteers(db, {
+        userId: input.userId,
+        organizationId: input.processed.organizationId ?? null,
+        runId: input.runId,
+      }),
     onPauseCheckpoint: async (checkpoint) => {
       await saveCloudAgentPauseCheckpoint(db, {
         userId: input.userId,

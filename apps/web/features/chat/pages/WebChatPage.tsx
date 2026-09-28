@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
@@ -366,6 +367,7 @@ type SendMeta = {
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
   officeCreationEnabled?: boolean;
+  officeOutputFormat?: ChatOutputFormat;
   /** Deep Research mode: server injects research system prompt and forces web search. */
   researchEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
@@ -587,6 +589,7 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
     routeLane ||
     m.requestedModel ||
     m.secretRedactionCount ||
+    m.truncatedAttachments?.length ||
     m.turnDetachable !== undefined ||
     tokensUsed !== undefined
       ? {
@@ -597,6 +600,9 @@ export function toChatMessage(m: Message, conversationId: string): ChatMessage {
           ...(m.requestedModel ? { requestedModel: m.requestedModel } : {}),
           ...(m.turnDetachable !== undefined ? { turnDetachable: m.turnDetachable } : {}),
           ...(m.secretRedactionCount ? { secretRedactionCount: m.secretRedactionCount } : {}),
+          ...(m.truncatedAttachments?.length
+            ? { truncatedAttachments: m.truncatedAttachments }
+            : {}),
           ...(inputTokens !== undefined ? { inputTokens } : {}),
           ...(outputTokens !== undefined ? { outputTokens } : {}),
           ...(tokensUsed !== undefined ? { tokensUsed } : {}),
@@ -1402,6 +1408,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     resumeInteractiveCardTurn,
     resolveToolApproval,
     resolveToolInput,
+    steerActiveTurn,
   } = useChatStreamRuntime();
   const isStreaming = useChatStore(selectIsConversationStreaming(displayedConversationId));
   const isLoading = useChatStore(selectIsConversationLoading(displayedConversationId));
@@ -1532,7 +1539,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (composerToggles?.webSearchEnabled) names.push('Web search');
     if (composerToggles?.researchEnabled) names.push('Deep Research');
     if (composerToggles?.codeExecutionEnabled) names.push('Run code');
-    if (composerToggles?.officeCreationEnabled) names.push('Office files');
+    if (composerToggles?.officeCreationEnabled) {
+      names.push(
+        composerToggles.officeOutputFormat
+          ? CHAT_OUTPUT_FORMAT_LABEL[composerToggles.officeOutputFormat]
+          : 'Office files',
+      );
+    }
     if (thinkingEnabled) names.push('Extended thinking');
     if (composerToggles?.selectedSkillName)
       names.push(`Skill: ${composerToggles.selectedSkillName}`);
@@ -2228,6 +2241,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             thinkingEnabled: options.meta?.thinkingEnabled,
             codeExecution: options.meta?.codeExecutionEnabled,
             officeCreation: options.meta?.officeCreationEnabled,
+            officeFormat: options.meta?.officeOutputFormat,
             workMode: options.meta?.workMode,
             agiWorkGoal: options.meta?.agiWorkGoal,
             research: options.meta?.researchEnabled,
@@ -3605,6 +3619,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (displayedConversationId && cancelImageGenerations(displayedConversationId)) return;
     stopGeneration(displayedConversationId ?? undefined);
   }, [stopGeneration, displayedConversationId]);
+
+  const handleSteerQueuedMessage = useCallback(
+    async (message: string) =>
+      displayedConversationId ? steerActiveTurn(displayedConversationId, message) : null,
+    [steerActiveTurn, displayedConversationId],
+  );
 
   const handleSend = useCallback(
     (
@@ -5003,21 +5023,37 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [displayedMessages, getToken],
   );
 
-  const pendingResearchGuidanceRef = useRef(new Map<string, string>());
+  const steerResearchRun = useCallback(
+    async (id: string, guidance: string): Promise<boolean> => {
+      const runId = displayedMessages.find((m) => m.id === id)?.metadata?.cloudAgentRun?.runId;
+      if (!runId) {
+        toast.error('This research cannot take guidance now. Pause it and resume with your note.');
+        return false;
+      }
+      try {
+        await createManagedCloudAgentRunClient({
+          getAuthToken: getToken,
+          decorateMutationHeaders: addCsrfHeaders,
+        }).steerRun(runId, guidance);
+        return true;
+      } catch (error) {
+        toast.error(
+          toUserMessage(error, 'Could not send your guidance. The research is still running.'),
+        );
+        return false;
+      }
+    },
+    [displayedMessages, getToken],
+  );
 
   const handleResearchRunAction = useCallback<ResearchRunActionHandler>(
     async (id, action) => {
       if (action.kind === 'pause') return pauseResearchRun(id);
-      if (action.kind === 'steer') {
-        pendingResearchGuidanceRef.current.set(id, action.guidance);
-        if (await pauseResearchRun(id)) return true;
-        pendingResearchGuidanceRef.current.delete(id);
-        return false;
-      }
+      if (action.kind === 'steer') return steerResearchRun(id, action.guidance);
       await handleRetryResearch(id, action.guidance);
       return true;
     },
-    [handleRetryResearch, pauseResearchRun],
+    [handleRetryResearch, pauseResearchRun, steerResearchRun],
   );
 
   const {
@@ -5054,26 +5090,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       researchToolConnectorIds,
     ],
   );
-
-  useEffect(() => {
-    if (isStreaming) return;
-    for (const [id, guidance] of pendingResearchGuidanceRef.current) {
-      const phase = displayedMessages.find((m) => m.id === id)?.metadata?.research?.phase;
-      if (phase === 'paused') {
-        pendingResearchGuidanceRef.current.delete(id);
-        void handleRetryResearch(id, guidance);
-        return;
-      }
-      if (phase !== 'planning' && phase !== 'searching' && phase !== 'synthesizing') {
-        pendingResearchGuidanceRef.current.delete(id);
-        if (phase === 'complete') {
-          toast.info(
-            'The research finished before your guidance could be applied. Ask a follow-up to take it further.',
-          );
-        }
-      }
-    }
-  }, [displayedMessages, handleRetryResearch, isStreaming]);
 
   /**
    * Send a follow-up question about a saved research report as an ordinary
@@ -6235,6 +6251,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
+                        onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholderEmpty')}
@@ -6359,6 +6376,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                         onEnterVoiceMode={enterVoiceSession}
                         conversationId={displayedConversationId}
                         onStop={handleStopGeneration}
+                        onSteerQueuedMessage={handleSteerQueuedMessage}
                         isLoading={isLoading}
                         isGenerating={isStreaming || imageTurnActive}
                         placeholder={t('chat:placeholder')}

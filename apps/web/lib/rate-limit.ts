@@ -1,9 +1,14 @@
 import { readUpstashCredentials } from '@agiworkforce/key-value';
 import { NextRequest, NextResponse } from 'next/server';
-import { BILLING_PLAN_PRODUCT_LIMITS, getPlanMaxConcurrentTurns } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRODUCT_LIMITS,
+  getPlanMaxConcurrentTurns,
+  type ManagedTurnSlotReading,
+} from '@agiworkforce/types';
 import { logger } from './logger';
 import { recordAdmittedRateLimit } from './rate-limit-headers';
 import { deployEnvironment } from './server/hosting';
+import { GUEST_CHAT_CONFIG } from './guest-chat/config';
 import { getKeyValueRateLimiter, getKeyValueStore } from './server/key-value';
 import { BLOCK_APPEAL_PATH, logRateLimitExceeded } from './security-audit';
 
@@ -335,6 +340,16 @@ export const rateLimitConfigs = {
     window: '1 m', // 30 LLM requests per minute per user
     failClosed: true, // Security-sensitive: LLM API calls are expensive
   },
+  'guest-chat-device': {
+    limit: GUEST_CHAT_CONFIG.deviceMessagesPerDay,
+    window: '1 d',
+    failClosed: true,
+  },
+  'guest-chat-ip': {
+    limit: GUEST_CHAT_CONFIG.ipMessagesPerDay,
+    window: '1 d',
+    failClosed: true,
+  },
   'agent-run-follow': {
     // Reading a run's journal costs one indexed read, not a provider call, and
     // it MUST NOT share the chat-send bucket: run-following polls once a second
@@ -398,6 +413,11 @@ export const rateLimitConfigs = {
   'share-view': {
     limit: 60,
     window: '1 m', // 60 share views per minute (public read endpoint)
+    failClosed: false,
+  },
+  'artifact-storage': {
+    limit: 120,
+    window: '1 m',
     failClosed: false,
   },
   'map-tile': {
@@ -1341,11 +1361,6 @@ export async function acquireManagedTurnSlot(input: {
     }
     return unavailableTurnSlot(input.userId, limit, 'redis-error');
   }
-}
-
-export interface ManagedTurnSlotReading {
-  limit: number;
-  active: number;
 }
 
 export async function readManagedTurnSlots(input: {

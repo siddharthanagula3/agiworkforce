@@ -172,31 +172,15 @@ Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.t
 | --- | --- | --- | --- |
 | cli | partial | Not 'missing': the CLI ships a connector-policy evaluator, the /api/settings/organization/connector-policy path, a /connectors slash command that renders the policy, and an install-app gate that consults it; the chain is dead only because fetch_workspace_policy is never called. That is a partial with miss ['handler'] (remaining: call connectors::fetch_workspace_policy at session start so /connectors and the install gate see the workspace policy). The auditor treated the same code as partial for S87.17 cli, so the cell is inconsistent (L7). |  |
 
-## S87.17: Skill and Plugin policy.
-
-- Done when: An administrator controls which skills and plugins members may install or use, per item, and the product enforces it.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Plugins have an allow/block list, but skills can only be switched on or off for everyone; there is no per-skill allow or block list. | ui, handler |
-| desktop | partial | Plugins have an allow/block list, but skills can only be switched on or off for everyone; there is no per-skill allow or block list. | ui, handler |
-| cli | partial | On the CLI an administrator can only require signed plugins through the machine-wide managed-settings.json; there is no per-plugin or per-skill allow list, and the workspace plugin list is never fetched. | ui, handler |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceConnectorPolicy.tsx:155-166`, `apps/web/features/workspace-console/components/WorkspaceFeatureControls.tsx:51-52`, `apps/web/lib/services/connector-policy-gate.ts:123-132`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3740-3744`
-
 ## S87.18: Private marketplace.
 
 - Done when: A workspace curates its own private catalogue of plugins, skills or servers that members browse and install, separate from the public directory.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | There is no workspace-owned plugin or skill marketplace: marketplace sources are registered per user; the workspace can only publish MCP servers to its members and allow-list plugins. | ui, persistence |
-| desktop | partial | There is no workspace-owned plugin or skill marketplace: marketplace sources are registered per user; the workspace can only publish MCP servers to its members and allow-list plugins. | ui, persistence |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/workspace/mcp/page.tsx:12-17`, `apps/web/features/workspace-console/components/WorkspaceMcpServers.tsx:276-282`, `apps/web/app/api/settings/organization/mcp/route.ts:132-152`, `apps/web/lib/services/plugin-marketplace-service.ts:804-811`
 
 ## S87.19: Shared Project administration.
 
@@ -256,9 +240,8 @@ Code: `apps/web/app/workspace/mcp/page.tsx:12-17`, `apps/web/features/workspace-
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
-| desktop | partial | partials/auth 82ade1df1: Enterprise administrators request or cancel a region move from the console and platform admins record the cutover; only the home region is provisioned, so the EU region needs the owner to stand up its database, bucket, log sink and KMS and set the AGI_DATA_REGION_EU_* settings | infra |
-| cli | missing | Not built on this surface. |  |
+| web | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
+| desktop | partial | Owner: the region move is built (partials/auth 82ade1df1); only the home region is provisioned, so the EU region needs its database, bucket, log sink and KMS stood up and the AGI_DATA_REGION_EU_* settings set | infra |
 
 Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace-console/components/WorkspaceDataRegion.tsx:196-196`, `apps/web/app/api/settings/organization/data-region/route.ts:117-117`, `apps/web/app/api/settings/organization/data-region/route.ts:148-148`
 

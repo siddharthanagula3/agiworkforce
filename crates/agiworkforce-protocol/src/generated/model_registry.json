@@ -23590,8 +23590,12 @@
       "provider": "openai",
       "apiFamily": "responses",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
+      "requestParameters": ["top_p", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": { "providerSupport": "native", "implementation": "implemented" },
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" },
         "toolDiscovery": { "providerSupport": "native", "implementation": "unwired" },
@@ -23612,8 +23616,21 @@
       "provider": "openai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": { "maxImagesPerRequest": 1500, "documentMediaTypes": ["application/pdf"] },
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
-      "features": {},
+      "features": {
+        "parallelToolCalls": { "providerSupport": "native", "implementation": "implemented" }
+      },
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
@@ -23630,8 +23647,16 @@
       "provider": "anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "responseFormats": ["json_schema"],
+      "mediaInput": {
+        "maxImagesPerRequest": 600,
+        "documentMediaTypes": ["application/pdf"],
+        "maxDocumentPagesPerRequest": 600
+      },
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": { "providerSupport": "native", "implementation": "implemented" },
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
       },
@@ -23642,8 +23667,16 @@
       "provider": "google",
       "apiFamily": "generate_content",
       "adapter": "@agiworkforce/providers-google",
+      "responseFormats": ["json_object", "json_schema"],
+      "mediaInput": {
+        "maxImagesPerRequest": 3600,
+        "documentMediaTypes": ["application/pdf"],
+        "maxDocumentPagesPerRequest": 1000
+      },
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
+        "parallelToolCalls": { "providerSupport": "native", "implementation": "implemented" },
         "webSearch": { "providerSupport": "native", "implementation": "implemented" },
         "webSearchInjection": { "providerSupport": "native", "implementation": "implemented" }
       },
@@ -23690,8 +23723,19 @@
       "provider": "xai",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-xai",
+      "responseFormats": ["json_object", "json_schema"],
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
-      "features": {},
+      "features": {
+        "parallelToolCalls": { "providerSupport": "native", "implementation": "implemented" }
+      },
       "protocol": "provider_native",
       "hostPolicy": "allowlist_only"
     },
@@ -23699,6 +23743,8 @@
       "provider": "deepseek",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-deepseek",
+      "responseFormats": ["json_object"],
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23708,6 +23754,7 @@
       "provider": "minimax",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-minimax",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23717,6 +23764,7 @@
       "provider": "qwen",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-qwen",
+      "requestParameters": ["top_p", "stop", "seed", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "webSearch": { "providerSupport": "native", "implementation": "unwired" },
@@ -23729,6 +23777,7 @@
       "provider": "moonshot",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-moonshot",
+      "requestParameters": ["stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23738,6 +23787,7 @@
       "provider": "mistral",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-mistral",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23747,6 +23797,7 @@
       "provider": "zhipu",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-zhipu",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23756,6 +23807,7 @@
       "provider": "perplexity",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-perplexity",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud", "byok"],
       "features": { "webSearch": { "providerSupport": "native", "implementation": "implemented" } },
       "protocol": "provider_native",
@@ -23765,6 +23817,7 @@
       "provider": "groq",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-groq",
+      "requestParameters": ["top_p", "stop", "seed", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23774,6 +23827,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23788,6 +23850,15 @@
       "provider": "open_router",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openrouter",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23811,6 +23882,7 @@
       "provider": "vercel_gateway",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-vercel-gateway",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {
         "zeroDataRetentionOnRequest": {
@@ -23825,6 +23897,7 @@
       "provider": "nvidia_nim",
       "apiFamily": "chat_completions",
       "adapter": "desktop-direct-api",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["byok"],
       "features": {},
       "protocol": "provider_native",
@@ -23843,6 +23916,7 @@
       "provider": "cheaperinference",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23853,6 +23927,7 @@
       "provider": "cheaperinference_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23863,6 +23938,7 @@
       "provider": "deepseek_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p", "stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23874,6 +23950,7 @@
       "provider": "moonshot_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["stop", "user"],
       "trustModes": ["managed_cloud", "byok"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -23896,6 +23973,7 @@
       "provider": "deepinfra",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p", "stop", "frequency_penalty", "presence_penalty"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23906,6 +23984,14 @@
       "provider": "together",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23916,6 +24002,14 @@
       "provider": "novita",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias"
+      ],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23926,6 +24020,7 @@
       "provider": "experientiallabs",
       "apiFamily": "chat_completions",
       "adapter": "@agiworkforce/providers-openai",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "openai_chat",
@@ -23936,6 +24031,7 @@
       "provider": "experientiallabs_anthropic",
       "apiFamily": "messages",
       "adapter": "@agiworkforce/providers-anthropic",
+      "requestParameters": ["top_p"],
       "trustModes": ["managed_cloud"],
       "features": {},
       "protocol": "anthropic_messages",
@@ -34194,9 +34290,11 @@
     "qwen": {
       "dataRetentionClass": "unknown",
       "zeroDataRetentionAvailability": "unknown",
-      "trainsOnInputs": "unknown",
+      "trainsOnInputs": "never",
       "residencyRegions": null,
-      "note": "Checked and could not read: https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404), https://qwen.ai/privacy (client-rendered shell, no policy text recoverable). Qwen routes through Alibaba Cloud Model Studio at dashscope.aliyuncs.com; its documentation pages are heavily client-rendered and returned no policy text to automated fetch this session.",
+      "source": "https://www.alibabacloud.com/help/en/model-studio/privacy-notice",
+      "verifiedOn": "2026-09-28",
+      "note": "Training: the Model Studio privacy notice (Security certifications and privacy, last updated 2026-09-28) states \"Alibaba Cloud strictly protects your data privacy and will never use your data for model training.\", and the QwenCloud account FAQ (https://docs.qwencloud.com/resources/faq-account, read 2026-09-28) states \"We strictly protect data privacy and never use your data for model training.\" Retention stays unknown: the notice says \"Alibaba Cloud Model Studio stores data generated from model and application calls.\" with no period and no zero-retention option, and neither page names a processing region. Qwen is served through the Alibaba Cloud Model Studio (DashScope) account behind this provider id. Earlier reads failed at https://www.alibabacloud.com/help/en/model-studio/user-privacy-protection (404), https://www.alibabacloud.com/help/en/model-studio/data-security (404) and https://qwen.ai/privacy (client-rendered).",
       "cacheTokenBillingClass": "unknown"
     },
     "moonshot": {
@@ -39301,6 +39399,34 @@
       "verifiedBy": "official-openai-images-vision-guide",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra accepts the image detail value original. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-27, lists gpt-6-astra with the gpt-5.6 series among the models that take original detail, so its imageInput now records the same detail values as gpt-5.6."
+    },
+    {
+      "id": "verification/2026-09-28/53",
+      "date": "2026-09-28",
+      "verifiedBy": "official-anthropic-messages-api-reference",
+      "status": "CORRECTION",
+      "notes": "Claude Sonnet 5 rejects sampling parameters. platform.claude.com/docs/en/api/messages, retrieved 2026-09-28, says models released after Claude Opus 4.6 accept only a temperature of 1.0 and do not accept top_p or top_k, rejecting other values with a 400. Sonnet 5 was released on 2026-06-30, so its reasoning now records rejectsSamplingParameters as Opus 5 and Fable 5.1 already did."
+    },
+    {
+      "id": "verification/2026-09-28/54",
+      "date": "2026-09-28",
+      "verifiedBy": "official-xai-chat-completions-reference",
+      "status": "CORRECTION",
+      "notes": "Grok 4.6 is a reasoning model and rejects stop, frequency_penalty and presence_penalty. docs.x.ai/developers/rest-api-reference/inference/chat-completions, retrieved 2026-09-28, marks stop and frequency_penalty with 'Reasoning models don't support this parameter' and presence_penalty as unsupported for reasoning models, so its reasoning records them as unsupportedRequestParameters."
+    },
+    {
+      "id": "verification/2026-09-28/55",
+      "date": "2026-09-28",
+      "verifiedBy": "official-anthropic-and-openai-pdf-guides",
+      "status": "CORRECTION",
+      "notes": "Claude and GPT chat models take PDFs natively. platform.claude.com/docs/en/build-with-claude/pdf-support, retrieved 2026-09-28: all active models support PDF processing, up to 600 pages per request, 100 when the request's context window is under 1M tokens, within a 32 MB request. developers.openai.com/api/docs/guides/pdf-files, retrieved 2026-09-28: models with vision capabilities, gpt-4o and later, take PDF file inputs under 50 MB per request. Their inputModalities now record pdf, and Claude Haiku 4.5, whose context window is 200K tokens, records 100 pages and 100 images per request."
+    },
+    {
+      "id": "verification/2026-09-28/56",
+      "date": "2026-09-28",
+      "verifiedBy": "official-provider-image-guides",
+      "status": "ADDITION",
+      "notes": "Harness media input limits. platform.claude.com/docs/en/build-with-claude/vision, retrieved 2026-09-28: 600 images per API request, 100 for models with a 200k-token context window. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-28: up to 1,500 images per request. ai.google.dev/gemini-api/docs/image-understanding, retrieved 2026-09-28: 3,600 image files per request; ai.google.dev/gemini-api/docs/document-processing: PDFs up to 1,000 pages."
     }
   ],
   "retiredModels": {

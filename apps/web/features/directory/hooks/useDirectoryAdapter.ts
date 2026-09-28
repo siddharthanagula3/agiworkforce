@@ -6,7 +6,12 @@ import type { ReactNode } from 'react';
 
 import {
   PLUGIN_UPLOAD_ACKNOWLEDGED_SCAN_FIELD,
+  type CommunityPlugin,
+  type CommunityPluginPatch,
   type ManagedSkillSummary,
+  type MemberOrganizationPluginPatch,
+  type MemberOrganizationPluginsResponse,
+  type PluginSubmissionSummary,
 } from '@agiworkforce/cloud-contracts';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
 import type {
@@ -38,6 +43,10 @@ import {
 
 import { ConnectorApiKeyForm } from '@/features/connectors/components/ConnectorApiKeyForm';
 import {
+  connectBankAccountsWithPlaid,
+  plaidLinkRoutesOf,
+} from '@/features/connectors/lib/plaid-link';
+import {
   currentConnectorReturnPath,
   withConnectorReturnPath,
 } from '@features/connectors/hooks/use-connectors';
@@ -47,7 +56,11 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
-import type { PluginInstallationTarget } from '@/features/plugins/routes';
+import {
+  PLUGIN_TARGET_COMMUNITY,
+  PLUGIN_TARGET_WORKSPACE,
+  type PluginInstallationTarget,
+} from '@/features/plugins/routes';
 
 import {
   buildSettingsBrowseHash,
@@ -68,6 +81,7 @@ import {
   PLUGINS_FAILED_COPY,
   PLUGIN_INSTALL_FAILED_COPY,
   pluginDependenciesInstalledLine,
+  uploadDependenciesInstalledLine,
   PLUGIN_UNINSTALL_FAILED_COPY,
   PLUGIN_ENABLE_FAILED_COPY,
   CREATE_PLUGIN_DONE_TITLE,
@@ -87,6 +101,10 @@ import {
   PLUGIN_REPAIR_RELOAD_LABEL,
   PLUGIN_UPDATE_FAILED_COPY,
   PLUGIN_CUSTOMIZE_FAILED_COPY,
+  PLUGIN_SUBMISSION_WITHDRAWN_NOTICE,
+  PLUGIN_SUBMIT_FAILED_COPY,
+  PLUGIN_SUBMITTED_NOTICE,
+  PLUGIN_WITHDRAW_FAILED_COPY,
   PLUGIN_CUSTOMIZE_PATH,
   PLUGIN_EDIT_FAILED_COPY,
   PLUGIN_EDIT_LOAD_FAILED_COPY,
@@ -135,6 +153,7 @@ import {
   DEFAULT_PLUGIN_QUERY,
   EMPTY_INSTALL_STATE,
   EMPTY_USER_MARKETPLACES,
+  EMPTY_WORKSPACE_PLUGINS,
   applyPluginVersion,
   facetRequest,
   fetchPluginDirectoryEntry,
@@ -142,8 +161,13 @@ import {
   fetchPluginVersions,
   fetchPluginDirectoryPage,
   fetchPluginInstallState,
+  fetchCommunityPlugins,
+  fetchPluginSubmissions,
   fetchUserMarketplaces,
+  fetchWorkspacePlugins,
   initialPluginSection,
+  latestSubmissionFor,
+  submitPluginForReview,
   installPlugin as requestPluginInstall,
   marketplaceRequest,
   pluginDirectoryHref,
@@ -151,8 +175,13 @@ import {
   toPluginManageRows,
   toPluginRequest,
   toPluginSection,
+  toCommunityPluginDetail,
   toUserMarketplaceDetail,
+  toWorkspacePluginDetail,
   uninstallPlugin as requestPluginUninstall,
+  updateCommunityPlugin,
+  updateWorkspacePlugin,
+  withdrawPluginSubmission as requestSubmissionWithdrawal,
   userMarketplaceSourceId,
   withInstallBlock,
   type PluginInstallOutcome,
@@ -229,6 +258,9 @@ interface PluginPageState {
   stats: PluginDirectoryStats | null;
   user: UserMarketplaceState;
   installs: PluginInstallState;
+  workspace: MemberOrganizationPluginsResponse;
+  community: CommunityPlugin[];
+  submissions: PluginSubmissionSummary[];
 }
 
 const EMPTY_PLUGIN_PAGE: PluginPageState = {
@@ -238,6 +270,9 @@ const EMPTY_PLUGIN_PAGE: PluginPageState = {
   stats: null,
   user: EMPTY_USER_MARKETPLACES,
   installs: EMPTY_INSTALL_STATE,
+  workspace: EMPTY_WORKSPACE_PLUGINS,
+  community: [],
+  submissions: [],
 };
 
 function pluginQueryKey(query: DirectoryQuery): string {
@@ -630,6 +665,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         stats: page.stats,
         user: page.user,
         installs: page.installs,
+        workspace: page.workspace,
+        community: page.community,
       });
       const notice = [page.installs.notice, pluginRegistryNotice.current].filter(Boolean).join(' ');
       const next: DirectorySection = {
@@ -647,6 +684,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           details: [...pluginDetails.current.values()],
           user: page.user,
           installs: page.installs,
+          workspace: page.workspace,
+          community: page.community,
         }),
         loading: next.loading === true,
         error: next.error ?? null,
@@ -661,12 +700,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const primePlugins = useCallback((): Promise<void> => {
     if (pluginPrime.current) return pluginPrime.current;
     const promise = (async () => {
-      const [builtin, partner, installs, user] = await Promise.all([
-        fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_BUILTIN)),
-        fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_PARTNER)),
-        fetchPluginInstallState(),
-        fetchUserMarketplaces(),
-      ]);
+      const [builtin, partner, installs, user, workspace, community, submissions] =
+        await Promise.all([
+          fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_BUILTIN)),
+          fetchPluginDirectoryPage(facetRequest(PLUGIN_SOURCE_PARTNER)),
+          fetchPluginInstallState(),
+          fetchUserMarketplaces(),
+          fetchWorkspacePlugins(),
+          fetchCommunityPlugins(),
+          fetchPluginSubmissions(),
+        ]);
       pluginPageRef.current = {
         ...pluginPageRef.current,
         builtin: builtin.entries,
@@ -674,6 +717,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         stats: builtin.stats,
         installs,
         user,
+        workspace,
+        community,
+        submissions,
       };
     })().catch((error: unknown) => {
       pluginPrime.current = null;
@@ -796,6 +842,65 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     publishPlugins({});
   }, [publishPlugins]);
 
+  const refreshWorkspacePlugins = useCallback(async () => {
+    const workspace = await fetchWorkspacePlugins();
+    pluginPageRef.current = { ...pluginPageRef.current, workspace };
+    publishPlugins({});
+  }, [publishPlugins]);
+
+  const refreshCommunity = useCallback(async () => {
+    const [community, submissions] = await Promise.all([
+      fetchCommunityPlugins(),
+      fetchPluginSubmissions(),
+    ]);
+    pluginPageRef.current = { ...pluginPageRef.current, community, submissions };
+    publishPlugins({});
+  }, [publishPlugins]);
+
+  const findCommunityPlugin = useCallback(
+    (id: string) => pluginPageRef.current.community.find((plugin) => plugin.id === id),
+    [],
+  );
+
+  const changeCommunityPlugin = useCallback(
+    async (id: string, patch: CommunityPluginPatch, failureCopy: string) => {
+      try {
+        await updateCommunityPlugin(id, patch, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : failureCopy,
+        );
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshCommunity();
+    },
+    [refreshCommunity],
+  );
+
+  const findWorkspacePlugin = useCallback(
+    (id: string) => pluginPageRef.current.workspace.plugins.find((plugin) => plugin.id === id),
+    [],
+  );
+
+  const changeWorkspacePlugin = useCallback(
+    async (id: string, patch: MemberOrganizationPluginPatch, failureCopy: string) => {
+      try {
+        await updateWorkspacePlugin(id, patch, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : failureCopy,
+        );
+      }
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
+      await refreshWorkspacePlugins();
+    },
+    [refreshWorkspacePlugins],
+  );
+
   const findPluginRecord = useCallback((id: string): PluginDirectoryEntry | undefined => {
     const page = pluginPageRef.current;
     return (
@@ -881,8 +986,29 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             userEntry,
             page.user.sources.find((source) => source.id === userEntry.sourceId),
             page.installs,
+            latestSubmissionFor(page.submissions, userEntry.id),
           ),
         );
+      }
+      const communityPlugin = findCommunityPlugin(id);
+      if (communityPlugin) {
+        setSettingsPluginId(communityPlugin.installed ? id : null);
+        setSettingsTarget(
+          communityPlugin.installed ? { kind: PLUGIN_TARGET_COMMUNITY, pluginId: id } : null,
+        );
+        setSettingsSkills(communityPlugin.skills);
+        setSettingsEnabled(communityPlugin.enabled);
+        return toCommunityPluginDetail(communityPlugin);
+      }
+      const workspacePlugin = findWorkspacePlugin(id);
+      if (workspacePlugin) {
+        setSettingsPluginId(workspacePlugin.installed ? id : null);
+        setSettingsTarget(
+          workspacePlugin.installed ? { kind: PLUGIN_TARGET_WORKSPACE, pluginId: id } : null,
+        );
+        setSettingsSkills(workspacePlugin.skills);
+        setSettingsEnabled(workspacePlugin.enabled);
+        return toWorkspacePluginDetail(workspacePlugin, page.workspace);
       }
       const fetched = await fetchPluginDirectoryEntry(id);
       if (!fetched) return null;
@@ -894,6 +1020,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       primePlugins,
       findPluginRecord,
       findUserEntry,
+      findCommunityPlugin,
+      findWorkspacePlugin,
       selectSettingsTarget,
       ensureSkillCatalog,
       withPluginReview,
@@ -1021,6 +1149,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         setCredentialFormId(id);
         return;
       }
+      const plaidRoutes = response.status === CREDENTIALS_STATUS ? plaidLinkRoutesOf(body) : null;
+      if (plaidRoutes && typeof window !== 'undefined') {
+        try {
+          await connectBankAccountsWithPlaid(plaidRoutes);
+          delete connectorErrors.current[id];
+        } catch (caught) {
+          connectorErrors.current[id] =
+            caught instanceof Error ? caught.message : CONNECT_FAILED_COPY;
+        }
+        await loadConnectors();
+        return;
+      }
       const start = body.oauthStartPath
         ? withConnectorReturnPath(body.oauthStartPath, currentConnectorReturnPath())
         : body.installStartPath;
@@ -1055,6 +1195,25 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const installPlugin = useCallback(
     async (id: string): Promise<string | undefined> => {
+      if (findCommunityPlugin(id)) {
+        await changeCommunityPlugin(
+          id,
+          { installed: true, enabled: true },
+          PLUGIN_INSTALL_FAILED_COPY,
+        );
+        return undefined;
+      }
+      const workspacePlugin = findWorkspacePlugin(id);
+      if (workspacePlugin) {
+        await changeWorkspacePlugin(
+          id,
+          workspacePlugin.installPreference === 'available'
+            ? { installed: true, enabled: true }
+            : { enabled: true },
+          PLUGIN_INSTALL_FAILED_COPY,
+        );
+        return undefined;
+      }
       const record = findPluginRecord(id);
       const userEntry = record ? undefined : findUserEntry(id);
       const target: PluginInstallTarget = record
@@ -1089,7 +1248,16 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         outcome.dependencies.map((dependency) => dependency.name),
       );
     },
-    [findPluginRecord, findUserEntry, patchPluginRecord, refreshPluginInstalls],
+    [
+      findCommunityPlugin,
+      changeCommunityPlugin,
+      findWorkspacePlugin,
+      changeWorkspacePlugin,
+      findPluginRecord,
+      findUserEntry,
+      patchPluginRecord,
+      refreshPluginInstalls,
+    ],
   );
 
   const runSkillInstall = useCallback(
@@ -1122,6 +1290,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const removePlugin = useCallback(
     async (id: string) => {
+      if (findCommunityPlugin(id)) {
+        await changeCommunityPlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
+        return;
+      }
+      if (findWorkspacePlugin(id)) {
+        await changeWorkspacePlugin(id, { installed: false }, PLUGIN_UNINSTALL_FAILED_COPY);
+        return;
+      }
       const installs = pluginPageRef.current.installs;
       const record = findPluginRecord(id);
       const installation = record ? installs.byPluginKey.get(id) : installs.byEntryId.get(id);
@@ -1146,7 +1322,14 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       announceSkillCatalogChanged();
       await refreshPluginInstalls();
     },
-    [findPluginRecord, refreshPluginInstalls],
+    [
+      findCommunityPlugin,
+      changeCommunityPlugin,
+      findWorkspacePlugin,
+      changeWorkspacePlugin,
+      findPluginRecord,
+      refreshPluginInstalls,
+    ],
   );
 
   const runSkillDelete = useCallback(
@@ -1248,6 +1431,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       const body = (await response.json().catch(() => ({}))) as {
         plugins?: ReadonlyArray<{ name: string; skills: readonly string[] }>;
         omittedFiles?: readonly string[];
+        dependencies?: ReadonlyArray<{ name: string }>;
         error?: { message?: string };
       };
       if (!response.ok) {
@@ -1264,6 +1448,9 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
           ...(body.plugins ?? []).map((plugin) => plugin.name),
           uploadSkillCountLine(skillCount),
           ...(body.omittedFiles?.length ? [uploadOmittedFilesLine(body.omittedFiles)] : []),
+          ...(body.dependencies?.length
+            ? [uploadDependenciesInstalledLine(body.dependencies.map((item) => item.name))]
+            : []),
         ],
       };
     },
@@ -1278,6 +1465,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         PLUGIN_UPLOAD_FAILED_COPY,
         UPLOAD_PLUGIN_DONE_TITLE,
       );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
       await refreshUserMarketplaces();
       await refreshPluginInstalls();
       return result;
@@ -1293,6 +1482,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         PLUGIN_CREATE_FAILED_COPY,
         CREATE_PLUGIN_DONE_TITLE,
       );
+      invalidateSkillsCatalog();
+      announceSkillCatalogChanged();
       await refreshUserMarketplaces();
       await refreshPluginInstalls();
       return result;
@@ -1356,6 +1547,40 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       return body.entryId;
     },
     [findPluginRecord, refreshPluginInstalls, refreshUserMarketplaces],
+  );
+
+  const submitPlugin = useCallback(
+    async (id: string): Promise<string> => {
+      try {
+        await submitPluginForReview(id, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : PLUGIN_SUBMIT_FAILED_COPY,
+        );
+      }
+      await refreshCommunity();
+      return PLUGIN_SUBMITTED_NOTICE;
+    },
+    [refreshCommunity],
+  );
+
+  const withdrawPluginSubmission = useCallback(
+    async (id: string): Promise<string> => {
+      const submission = latestSubmissionFor(pluginPageRef.current.submissions, id);
+      if (!submission) throw new Error(PLUGIN_WITHDRAW_FAILED_COPY);
+      try {
+        await requestSubmissionWithdrawal(submission.id, await getCsrfToken());
+      } catch (caught: unknown) {
+        throw describeActionFailure(
+          caught,
+          caught instanceof DirectoryRequestError ? caught.message : PLUGIN_WITHDRAW_FAILED_COPY,
+        );
+      }
+      await refreshCommunity();
+      return PLUGIN_SUBMISSION_WITHDRAWN_NOTICE;
+    },
+    [refreshCommunity],
   );
 
   const uploadSkillFile = useCallback(
@@ -1476,9 +1701,18 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       await pluginSettingsState.setEnabled(enabled);
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
-      await refreshPluginInstalls();
+      if (settingsTarget.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();
+      else if (settingsTarget.kind === PLUGIN_TARGET_COMMUNITY) await refreshCommunity();
+      else await refreshPluginInstalls();
     },
-    [settingsPluginId, settingsTarget, pluginSettingsState, refreshPluginInstalls],
+    [
+      settingsPluginId,
+      settingsTarget,
+      pluginSettingsState,
+      refreshPluginInstalls,
+      refreshWorkspacePlugins,
+      refreshCommunity,
+    ],
   );
 
   const setPluginSkillEnabled = useCallback(
@@ -1606,6 +1840,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             loadPluginDraft,
             updatePlugin,
             customizePlugin,
+            submitPlugin,
+            withdrawPluginSubmission,
           }
         : {}),
       ...(pluginSettings ? { pluginSettings } : {}),
@@ -1648,6 +1884,8 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       loadPluginDraft,
       updatePlugin,
       customizePlugin,
+      submitPlugin,
+      withdrawPluginSubmission,
       pluginSettings,
       setPluginEnabled,
       setPluginVersion,

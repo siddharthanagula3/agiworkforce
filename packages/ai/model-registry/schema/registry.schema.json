@@ -500,6 +500,17 @@
     "harnessHostPolicy": {
       "enum": ["allowlist_only", "registry_declared"]
     },
+    "requestParameter": {
+      "enum": [
+        "top_p",
+        "stop",
+        "seed",
+        "frequency_penalty",
+        "presence_penalty",
+        "logit_bias",
+        "user"
+      ]
+    },
     "harness": {
       "type": "object",
       "additionalProperties": false,
@@ -551,6 +562,42 @@
         },
         "gatewayId": {
           "$ref": "#/definitions/nonEmptyString"
+        },
+        "requestParameters": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/definitions/requestParameter"
+          }
+        },
+        "responseFormats": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": ["json_object", "json_schema"]
+          }
+        },
+        "mediaInput": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxImagesPerRequest": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "documentMediaTypes": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z]+/[a-z0-9.+-]+$"
+              }
+            },
+            "maxDocumentPagesPerRequest": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
         }
       }
     },
