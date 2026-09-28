@@ -95,6 +95,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+  APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvents: (db: unknown, input: unknown) =>
     appendCloudAgentEvents(db, input as { envelopes: readonly { event: { state?: string } }[] }),
   transitionCloudAgentRun: (db: unknown, input: unknown) =>
