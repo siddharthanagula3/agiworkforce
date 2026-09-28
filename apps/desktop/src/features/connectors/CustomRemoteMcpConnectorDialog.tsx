@@ -1,11 +1,4 @@
-import {
-  AlertCircle,
-  AlertTriangle,
-  ChevronDown,
-  Globe2,
-  Loader2,
-  ShieldCheck,
-} from 'lucide-react';
+import { AlertCircle, AlertTriangle, ChevronDown, Globe2, ShieldCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { McpClient } from '@/api/mcp';
 import { Button } from '@/ui/Button';
@@ -20,6 +13,7 @@ import {
 } from '@/ui/Dialog';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
+import { Spinner } from '@/ui/Spinner';
 import { Switch } from '@/ui/Switch';
 import { Textarea } from '@/ui/Textarea';
 import type { DesktopMcpServerConfig } from '@/types/mcp';
@@ -37,6 +31,8 @@ export interface RemoteMcpConnectorDraft {
   headersJson: string;
   timeoutSecs: number;
   verifySsl: boolean;
+  oauthClientId: string;
+  oauthClientSecret: string;
 }
 
 export interface RemoteMcpConnectorEntry {
@@ -51,6 +47,8 @@ const DEFAULT_DRAFT: RemoteMcpConnectorDraft = {
   headersJson: '',
   timeoutSecs: 30,
   verifySsl: true,
+  oauthClientId: '',
+  oauthClientSecret: '',
 };
 
 function slugifyServerName(value: string): string {
@@ -97,7 +95,12 @@ export function buildRemoteMcpConnectorEntry(
   const url = normalizeHttpUrl(draft.url);
   const headers = parseHeadersJson(draft.headersJson);
   const bearerToken = draft.bearerToken.trim();
+  const oauthClientId = draft.oauthClientId.trim();
+  const oauthClientSecret = draft.oauthClientSecret.trim();
   const serverName = slugifyServerName(draft.displayName);
+  if (oauthClientSecret && !oauthClientId) {
+    throw new Error('Add the OAuth Client ID that goes with this client secret');
+  }
 
   return {
     serverName,
@@ -114,6 +117,8 @@ export function buildRemoteMcpConnectorEntry(
         headers,
         timeout_secs: draft.timeoutSecs,
         verify_ssl: draft.verifySsl,
+        ...(oauthClientId ? { oauth_client_id: oauthClientId } : {}),
+        ...(oauthClientSecret ? { oauth_client_secret: oauthClientSecret } : {}),
       },
     },
   };
@@ -253,6 +258,32 @@ export function CustomRemoteMcpConnectorDialog({
             {advancedOpen && (
               <div className="space-y-4 border-t border-border px-3 py-4">
                 <div className="space-y-2">
+                  <Label htmlFor="custom-mcp-client-id">OAuth Client ID</Label>
+                  <Input
+                    id="custom-mcp-client-id"
+                    value={draft.oauthClientId}
+                    onChange={(event) => updateDraft('oauthClientId', event.target.value)}
+                    placeholder="Optional"
+                    autoComplete="off"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="custom-mcp-client-secret">OAuth Client Secret</Label>
+                  <Input
+                    id="custom-mcp-client-secret"
+                    type="password"
+                    value={draft.oauthClientSecret}
+                    onChange={(event) => updateDraft('oauthClientSecret', event.target.value)}
+                    placeholder="Optional"
+                    autoComplete="off"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    For servers that need a client you registered with them. Stored encrypted.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="custom-mcp-token">Bearer token</Label>
                   <Input
                     id="custom-mcp-token"
@@ -318,7 +349,7 @@ export function CustomRemoteMcpConnectorDialog({
             Cancel
           </Button>
           <Button onClick={() => void handleSave()} disabled={saving || !draft.url.trim()}>
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? <Spinner size="sm" aria-label="Saving" /> : null}
             Save connector
           </Button>
         </DialogFooter>

@@ -1244,6 +1244,7 @@ interface ConnectorMcpTarget {
   transport: 'streamable-http' | 'sse';
   displayName?: string | undefined;
   discovered: boolean;
+  optionHeaders?: Readonly<Record<string, string>> | undefined;
 }
 
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
@@ -1256,6 +1257,7 @@ function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | nu
       transport: provider.transport,
       displayName: provider.displayName,
       discovered: false,
+      optionHeaders: provider.mcpHeaders,
     };
   }
   const endpoint = getMcpEndpoint(connectorId);
@@ -1304,7 +1306,10 @@ function oauthConnectorMcpConfig(
   return {
     url: target.mcpUrl,
     transport: target.transport,
-    headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
+    headers: {
+      ...target.optionHeaders,
+      Authorization: `${tokenType || 'Bearer'} ${accessToken}`,
+    },
     connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }

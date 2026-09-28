@@ -263,28 +263,26 @@ Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services
 
 - Done when: The agent reviews a pull request (fetches its diff) and posts or shows review findings.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | Code Review covers only the active file; no command fetches or reviews a pull request. | handler |
 | chrome | partial | On a GitHub PR page the in-page panel sends the visible page text with an explain/review/summary prompt; no diff fetch and nothing is posted back. | handler |
 
-Code: `apps/extension-vscode/src/core/commandSetup.ts:985-997`, `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
+Code: `apps/extension/src/features/content/in-page-panel/pageActions.ts:76-92`
 
 ## S67.22: Scan for security problems.
 
 - Done when: The agent scans the code for security problems and reports them.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The cloud agent (read_file, list_files, run_command in the E2B sandbox) can do this, with no security-review command; Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off |
 | desktop | partial | No security-review command; only by asking the local agent in words. | ui |
 | mobile | partial | Only by steering an existing desktop AGI Code session from the phone; the phone cannot start a coding session or show more than the relayed summary. | ui |
-| vscode | partial | No security-review command (the runtime runs only skills, plugins, mcp, hooks, settings and model slash commands); only by asking in chat. | ui |
 
 Code: `apps/web/features/code/CloudCodePage.tsx:470-474`, `apps/web/lib/services/cloud-code-agent-tools.ts:274-279`, `apps/web/app/api/code/sessions/[sessionId]/agent/route.ts:84-86`, `apps/web/features/code/components/LocalSessionPanel.tsx:160-160`
 
