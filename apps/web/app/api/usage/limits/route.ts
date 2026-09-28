@@ -10,6 +10,7 @@ import {
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getUserScopedDb, type UserScopedDb } from '@/lib/server/rls-db';
+import { readFileStorageMeter, type FileStorageMeter } from '@/lib/server/file-storage';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 import { isMfaRequiredError } from '@/lib/mfa-policy-gate';
@@ -30,6 +31,7 @@ export interface UsageLimitsResponse {
   units: TierUnitUsage[];
   images: MonthlyImageUsage;
   responses: ManagedTurnSlotReading | null;
+  storage: FileStorageMeter;
 }
 
 async function readRunningResponses(
@@ -57,10 +59,15 @@ async function handler(request: NextRequest) {
 
   try {
     const planTier = await resolveEntitledPlanTier(scoped.db, scoped.userId);
-    const [period, images, responses] = await Promise.all([
+    const [period, images, responses, storage] = await Promise.all([
       readTierUnitUsage(scoped.db, scoped.userId, planTier),
       readMonthlyImageUsage(scoped.db, scoped.userId),
       readRunningResponses(scoped.userId, planTier),
+      readFileStorageMeter({
+        db: scoped.db,
+        userId: scoped.userId,
+        organizationId: scoped.organizationId,
+      }),
     ]);
     const body: UsageLimitsResponse = {
       planTier,
@@ -69,6 +76,7 @@ async function handler(request: NextRequest) {
       units: period.units,
       images,
       responses,
+      storage,
     };
     return NextResponse.json(body, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
