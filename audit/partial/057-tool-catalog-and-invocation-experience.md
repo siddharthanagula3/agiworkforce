@@ -157,29 +157,23 @@ Code: `apps/web/lib/e2b/execution-tools.ts:18-18`, `apps/web/app/api/llm/v1/chat
 
 - Done when: The assistant can call a tool that opens a URL in a real browser tab it controls.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only a manual "Use the browser" dialog in the desktop composer drives the paired Chrome; the model in desktop chat cannot call browser tools (browser_* calls are handed back only to callers that declare them, like the CLI). | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:58-58`, `apps/desktop/electron/browser/commandGate.ts:106-112`
 
 ## S57.14: Browser-action tool.
 
 - Done when: The assistant can call tools that click, type or read in a real browser page it controls.
 - Wave: 3
-- Already works on: cli, vscode, chrome
+- Already works on: desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
-| desktop | partial | Only a manual "Use the browser" dialog in the desktop composer drives the paired Chrome; the model in desktop chat cannot call browser tools (browser_* calls are handed back only to callers that declare them, like the CLI). | handler |
 | mobile | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/desktop-host/components/BrowserToolsDialog.tsx:56-56`, `apps/desktop/electron/browser/commandGate.ts:88-94`
 
 ## S57.15: Computer-action tool.
 
