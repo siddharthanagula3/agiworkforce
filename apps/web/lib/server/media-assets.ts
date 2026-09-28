@@ -409,6 +409,7 @@ export interface LibraryAssetRow {
   sourceSurface: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface ListLibraryAssetsOptions {
@@ -427,9 +428,10 @@ const UPLOAD_ORIGINS = ['upload', 'uploaded'] as const;
 const DELETED_ORDER_CLAUSE = 'deleted_at desc';
 
 const ORDER_CLAUSE_BY_SORT: Readonly<Record<LibrarySort, string>> = {
-  modified: 'created_at desc',
+  modified: 'updated_at desc',
   name: "coalesce(metadata->>'filename', kind) asc",
   size: 'byte_size desc nulls last',
+  type: "mime_type asc, coalesce(metadata->>'filename', kind) asc",
 };
 
 function escapeIlike(term: string): string {
@@ -448,6 +450,7 @@ function mapLibraryRow(row: Record<string, unknown>): LibraryAssetRow {
     sourceSurface: (row['source_surface'] as string | null) ?? null,
     metadata: (row['metadata'] as Record<string, unknown> | null) ?? {},
     createdAt: new Date(row['created_at'] as string).toISOString(),
+    updatedAt: new Date((row['updated_at'] ?? row['created_at']) as string).toISOString(),
   };
 }
 
@@ -498,7 +501,7 @@ export async function listLibraryAssets(
 
     params.push(limit, offset);
     const rows = await db.query<Record<string, unknown>>(
-      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, deleted_at
+      `select id, kind, mime_type, byte_size, prompt, provider, model, source_surface, metadata, created_at, updated_at, deleted_at
          from public.media_assets
         where user_id = $1
           and organization_id is not distinct from $2::uuid
