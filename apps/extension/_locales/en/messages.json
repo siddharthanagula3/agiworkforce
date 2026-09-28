@@ -616,8 +616,46 @@
     "description": "Composer attachment status while selected images are being read"
   },
   "spAttachmentHistoryLimitation": {
-    "message": "Images are sent with this message but are not stored in Chrome chat history.",
-    "description": "Composer disclosure for request-only image attachments"
+    "message": "Attachments are sent with this message but are not shown in Chrome chat history.",
+    "description": "Composer disclosure for attachments that are not kept in the side panel history"
+  },
+  "spAttachUploadFromDevice": {
+    "message": "Upload from device",
+    "description": "Attachment menu item that opens the device file chooser for images, PDFs and text files"
+  },
+  "spDocumentUploading": {
+    "message": "Uploading…",
+    "description": "Status under a file attachment while it uploads"
+  },
+  "spDocumentVerifying": {
+    "message": "Checking file…",
+    "description": "Status under a file attachment while the server verifies the upload"
+  },
+  "spDocumentReady": {
+    "message": "Ready to send",
+    "description": "Status under a file attachment once it has uploaded"
+  },
+  "spDocumentUploadFailed": {
+    "message": "$FILE$ could not be uploaded.",
+    "description": "Status under a file attachment when the upload fails without a server reason",
+    "placeholders": { "file": { "content": "$1", "example": "notes.pdf" } }
+  },
+  "spDocumentRetry": {
+    "message": "Retry",
+    "description": "Button that retries a failed file upload"
+  },
+  "spDocumentRemove": {
+    "message": "Remove $FILE$",
+    "description": "Accessible label for the button that removes a file attachment",
+    "placeholders": { "file": { "content": "$1", "example": "notes.pdf" } }
+  },
+  "spDocumentSignInRequired": {
+    "message": "Sign in to AGI Cloud to upload files.",
+    "description": "File attachment error when no account is signed in"
+  },
+  "spDocumentAccountChanged": {
+    "message": "Your AGI account changed. Attach the file again.",
+    "description": "File attachment error when the signed-in account changes during upload"
   },
   "spAttachmentReadFailed": {
     "message": "That image could not be read. Choose another file and try again.",

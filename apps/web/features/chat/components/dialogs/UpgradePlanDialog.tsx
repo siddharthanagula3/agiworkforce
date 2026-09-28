@@ -141,7 +141,7 @@ function PlanCardView({ plan, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) 
       className={cn(
         'relative flex flex-col rounded-2xl border p-5 transition-shadow',
         plan.popular
-          ? 'border-primary/50 bg-primary/[0.04] shadow-sm'
+          ? 'border-primary/50 bg-primary/[0.04] shadow-e1'
           : 'border-border/60 bg-background',
         isCurrent && 'opacity-75',
       )}
@@ -153,7 +153,7 @@ function PlanCardView({ plan, isCurrent, isUpgrade, onUpgrade }: PlanCardProps) 
       )}
 
       <div className="mb-4">
-        <h3 className="text-base font-semibold text-foreground">{plan.name}</h3>
+        <h3 className="text-h4 text-foreground">{plan.name}</h3>
         <div className="mt-1 flex items-baseline gap-1">
           <span className="text-2xl font-bold text-foreground">{displayPrice}</span>
           {plan.monthlyPrice > 0 && (
@@ -296,7 +296,7 @@ export function UpgradePlanDialog({
               heading. Same reservation DialogHeader makes. */}
           <div className="mb-6 flex items-start justify-between pr-10">
             <div>
-              <h2 className="text-xl font-semibold text-foreground">
+              <h2 className="text-h2 text-foreground">
                 {focusedPlanLabel ? `Upgrade to ${focusedPlanLabel}` : 'Upgrade your plan'}
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
