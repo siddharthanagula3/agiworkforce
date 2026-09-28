@@ -7,6 +7,7 @@ import {
   type ProjectKnowledgeFile,
   type SourceSurface,
 } from '@agiworkforce/types';
+import { HEALTH_SPACE_KIND } from '@/lib/health-space';
 
 const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'emerald',
@@ -47,6 +48,7 @@ export interface MappedProject {
   updatedAt: string;
   isOrgShared: boolean;
   sharedAccess: 'read' | 'write' | null;
+  space: 'health' | null;
 }
 
 function asString(value: unknown): string | null {
@@ -144,5 +146,6 @@ export function mapProjectRow(row: Record<string, unknown>): MappedProject {
     isOrgShared: asBool(row['is_org_shared'], false),
     sharedAccess:
       row['shared_access'] === 'write' ? 'write' : row['shared_access'] === 'read' ? 'read' : null,
+    space: row['space_kind'] === HEALTH_SPACE_KIND ? 'health' : null,
   };
 }

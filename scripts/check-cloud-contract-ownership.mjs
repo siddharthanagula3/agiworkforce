@@ -17,6 +17,7 @@ const cloudModules = [
   'artifact-index',
   'artifact-runtime',
   'finance',
+  'health-space',
   'library',
   'managed-media',
   'me',
