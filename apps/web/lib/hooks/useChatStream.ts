@@ -144,7 +144,12 @@ import {
   resolveVisibleThread,
   stampLinearParents,
 } from '@/features/chat/lib/messageThread';
-import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
+import {
+  parseAgiWorkPlanEvent,
+  parseAgiWorkPlanReview,
+  type AgiWorkGoalInput,
+  type AgiWorkPlanReview,
+} from '@/features/chat/utils/agiwork-plan';
 import {
   resolveQuotaPaywallSlot,
   type ServerQuotaRecovery,
@@ -185,6 +190,7 @@ import {
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
 import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-selection';
 import type { MemoryCommandReport } from '@/features/chat/hooks/use-explicit-memory-commands';
+import type { RoutingProfileChoice } from '@agiworkforce/types';
 import { createAgentEventLedger, type AgentEventLedger } from '@/lib/streaming/agent-event-id';
 
 interface SendMessageOptions {
@@ -214,6 +220,7 @@ interface SendMessageOptions {
   /** Per-chat Memory override. False skips injecting and writing account memories for this turn. */
   memoryEnabled?: boolean;
   memoryCommand?: MemoryCommandReport;
+  routingProfile?: RoutingProfileChoice;
   research?: boolean;
   /** §24: what this research run may read, chosen on the plan card. */
   researchSources?: {
@@ -231,6 +238,8 @@ interface SendMessageOptions {
   };
   workMode?: CloudWorkMode;
   agiWorkGoal?: AgiWorkGoalInput;
+  /** Steps the user approved, edited or chose to retry; the server runs them instead of planning. */
+  agiWorkPlan?: string[];
   onTurnCommitted?: () => void;
   /**
    * Edit-as-sibling: the parent the REVISED user message hangs from, which is
@@ -1556,6 +1565,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     ? { ...seedMetadata.research }
     : undefined;
   let currentAgiWorkPlan: MessageMetadata['agiWorkPlan'] = seedMetadata?.agiWorkPlan;
+  let currentAgiWorkPlanReview: AgiWorkPlanReview | undefined = seedMetadata?.agiWorkPlanReview;
   let currentGeneratedFiles: MessageMetadata['generatedFiles'] = seedMetadata?.generatedFiles;
   let currentAgentActivity: AgentActivityState | undefined = liveMessageMetadata?.agentActivity;
   let currentCloudAgentRun: ManagedCloudAgentRunReference | undefined = runHandle
@@ -2159,6 +2169,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (currentAgiWorkPlan) {
       metadata.agiWorkPlan = currentAgiWorkPlan.map((step) => ({ ...step }));
+    }
+    if (currentAgiWorkPlanReview) {
+      metadata.agiWorkPlanReview = { ...currentAgiWorkPlanReview };
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
@@ -2830,6 +2843,11 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             if (planSteps) {
               currentAgiWorkPlan = planSteps;
               setAgiWorkPlan(assistantMessageId, planSteps, conversationId);
+            }
+            const review = parseAgiWorkPlanReview(agiWorkPlan);
+            if (review) {
+              currentAgiWorkPlanReview = review;
+              patchMessageMeta({ agiWorkPlanReview: review });
             }
           }
 
@@ -3735,6 +3753,10 @@ export function useChatStream(): UseChatStreamReturn {
                   ? false
                   : undefined,
               memory_command: options.memoryCommand,
+              routing_profile:
+                options.routingProfile && options.routingProfile !== 'auto'
+                  ? options.routingProfile
+                  : undefined,
               mcp_context: options.mcpContext
                 ? {
                     ...(options.mcpContext.prompt ? { prompt: options.mcpContext.prompt } : {}),
@@ -3750,6 +3772,12 @@ export function useChatStream(): UseChatStreamReturn {
                 : undefined,
               work_mode: options.workMode,
               agi_work_goal: options.workMode === 'agiwork' ? options.agiWorkGoal : undefined,
+              agi_work_plan:
+                options.workMode === 'agiwork' && options.agiWorkPlan?.length
+                  ? { steps: options.agiWorkPlan }
+                  : undefined,
+              agi_work_plan_approval:
+                options.workMode === 'agiwork' && !options.agiWorkPlan?.length ? true : undefined,
               thinking_mode: thinkingEnabled,
               effort:
                 supportsEffort && resolvedEffort && (thinkingEnabled || sendsEffortWithoutThinking)

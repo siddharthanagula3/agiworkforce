@@ -67,6 +67,50 @@ async fn build_runtime_server_config(
     })
 }
 
+async fn pin_oauth_token_endpoint(
+    state: &McpState,
+    server_name: &str,
+) -> Result<McpServersConfig, String> {
+    use crate::core::mcp::transport::TransportConfig;
+    let snapshot = state.config.lock().clone();
+    let url = match snapshot
+        .mcp_servers
+        .get(server_name)
+        .and_then(|server| server.transport.as_ref())
+    {
+        Some(TransportConfig::Http(http))
+            if http.oauth_client_secret.is_some() && http.oauth_token_url.is_none() =>
+        {
+            http.url.clone()
+        }
+        _ => return Ok(snapshot),
+    };
+    let token_url = agiworkforce_mcp::oauth::discover_token_endpoint(&url)
+        .await
+        .map_err(|e| {
+            format!(
+                "Could not find the sign-in server for '{}' to bind its client secret to: {:#}",
+                server_name, e
+            )
+        })?;
+    let updated = {
+        let mut config = state.config.lock();
+        if let Some(TransportConfig::Http(http)) = config
+            .mcp_servers
+            .get_mut(server_name)
+            .and_then(|server| server.transport.as_mut())
+        {
+            http.oauth_token_url = Some(token_url);
+        }
+        config.clone()
+    };
+    state
+        .persist_config_snapshot(&updated)
+        .await
+        .map_err(|e| format!("Failed to save MCP config: {}", e))?;
+    Ok(updated)
+}
+
 fn resolve_config_location() -> Result<McpConfigLocation, String> {
     let project_folder = McpServersConfig::active_project_folder_from_env();
     let config_path = McpServersConfig::default_config_path()
@@ -119,6 +163,9 @@ fn restore_redacted_env_values(
             }
             if incoming_http.bearer_token.as_deref() == Some(redacted_sentinel) {
                 incoming_http.bearer_token = existing_http.bearer_token.clone();
+            }
+            if incoming_http.oauth_client_secret.as_deref() == Some(redacted_sentinel) {
+                incoming_http.oauth_client_secret = existing_http.oauth_client_secret.clone();
             }
             for (header_key, header_value) in incoming_http.headers.iter_mut() {
                 if header_value == redacted_sentinel {
@@ -735,6 +782,7 @@ pub async fn mcp_connect_server(
         return Err("MCP server connection cancelled".to_string());
     }
 
+    let raw_config = pin_oauth_token_endpoint(&state, &name).await?;
     let server_config = build_runtime_server_config(&raw_config, &name).await?;
 
     state
@@ -1106,6 +1154,9 @@ pub async fn mcp_get_config(state: State<'_, McpState>) -> Result<Value, String>
             }
             if http_config.bearer_token.is_some() {
                 http_config.bearer_token = Some("<redacted>".to_string());
+            }
+            if http_config.oauth_client_secret.is_some() {
+                http_config.oauth_client_secret = Some("<redacted>".to_string());
             }
             for header_value in http_config.headers.values_mut() {
                 *header_value = "<redacted>".to_string();

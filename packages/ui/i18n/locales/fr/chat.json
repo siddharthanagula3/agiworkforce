@@ -117,6 +117,8 @@
     "renameProject": "Renommer le projet",
     "restore": "Restaurer",
     "running": "En cours d'exécution",
+    "unread": "Non lu",
+    "needsYou": "Attend votre action",
     "searchConversations": "Rechercher des conversations",
     "searchConversationsDescription": "Recherchez dans votre historique de conversations et ouvrez la conversation correspondante.",
     "share": "Partager",
@@ -199,6 +201,7 @@
     "voiceUnsupportedHint": "La saisie vocale n’est pas prise en charge par ce navigateur. Essayez Chrome ou Edge."
   },
   "bubble": {
+    "assistantSaid": "AGI a dit :",
     "assistantThinking": "L'assistant réfléchit",
     "cancelEdit": "Annuler",
     "copied": "Copié",
@@ -210,7 +213,8 @@
     "messageAttachments": "Pièces jointes du message",
     "retryResponse": "Réessayer cette réponse",
     "saveEdit": "Enregistrer",
-    "toolResult": "Résultat"
+    "toolResult": "Résultat",
+    "userSaid": "Vous avez dit :"
   },
   "goalHandoff": {
     "action": "Exécuter comme tâche",
@@ -231,7 +235,8 @@
     "temporaryChatPersonalizationHint": "Personnalisé utilise votre profil, vos instructions et votre style de réponse. Non personnalisé les laisse de côté.",
     "toggleArtifacts": "Basculer le panneau des artefacts",
     "toggleArtifactsCount": "Basculer le panneau des artefacts ({{count}})",
-    "toggleStats": "Statistiques"
+    "toggleStats": "Statistiques",
+    "untitledConversation": "Conversation"
   },
   "interface": {
     "closeRewindCheckpoints": "Fermer les points de retour en arrière",
@@ -305,5 +310,42 @@
     "morningNamed": "Bonjour, {{name}}",
     "afternoonNamed": "Bon après-midi, {{name}}",
     "eveningNamed": "Bonsoir, {{name}}"
+  },
+  "counts": {
+    "shortcutsOff_one": "{{count}} raccourci désactivé",
+    "shortcutsOff_other": "{{count}} raccourcis désactivés",
+    "searchHistoryCleared_one": "{{count}} recherche effacée de l'historique",
+    "searchHistoryCleared_other": "{{count}} recherches effacées de l'historique",
+    "searches_one": "{{count}} recherche",
+    "searches_other": "{{count}} recherches",
+    "searchesOf_one": "{{count}} recherche sur {{max}}",
+    "searchesOf_other": "{{count}} recherches sur {{max}}",
+    "sources_one": "{{count}} source",
+    "sources_other": "{{count}} sources",
+    "intermediateSteps_one": "{{count}} étape intermédiaire",
+    "intermediateSteps_other": "{{count}} étapes intermédiaires",
+    "conversations_one": "{{count}} conversation",
+    "conversations_other": "{{count}} conversations",
+    "tools_one": "{{count}} outil",
+    "tools_other": "{{count}} outils",
+    "citations_one": "{{count}} citation",
+    "citations_other": "{{count}} citations",
+    "checkpoints_one": "{{count}} point de contrôle",
+    "checkpoints_other": "{{count}} points de contrôle",
+    "usedTools_one": "{{count}} outil utilisé",
+    "usedTools_other": "{{count}} outils utilisés",
+    "runningTools_one": "Exécution de {{count}} outil",
+    "runningTools_other": "Exécution de {{count}} outils",
+    "runningToolsOf_one": "Exécution de {{running}}/{{count}} outil : {{name}}",
+    "runningToolsOf_other": "Exécution de {{running}}/{{count}} outils : {{name}}"
+  },
+  "markdownTable": {
+    "label": "Tableau",
+    "expand": "Agrandir le tableau",
+    "copy": "Copier le tableau",
+    "copied": "Tableau copié",
+    "copyFailed": "Échec de la copie, presse-papiers indisponible",
+    "download": "Télécharger en CSV",
+    "close": "Fermer le tableau agrandi"
   }
 }

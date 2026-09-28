@@ -61,7 +61,7 @@ export default function DesktopPage() {
               <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
                 <li>Cloud · your AGI account</li>
                 <li>Device access · explicit grants</li>
-                <li>Consent · every device step asks</li>
+                <li>Consent · each kind of access asks first</li>
               </ul>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
@@ -145,12 +145,12 @@ export default function DesktopPage() {
             {
               mode: 'Consent',
               glyph: '◇',
-              title: 'Every device step asks.',
-              body: 'Folders, programs, the screen and the pointer are granted one at a time.',
+              title: 'Device access asks first.',
+              body: 'Folders, programs, the screen and the pointer each ask before their first use. You allow one for this session or, for lower-risk access, always; computer use lasts only until you quit.',
               points: [
                 'Approved folders and programs, nothing else',
                 'Computer use needs Screen Recording and Accessibility, granted in System Settings',
-                'A step you did not approve does not run',
+                'Access you deny does not run',
               ],
               cta: { href: '/trust', label: 'How trust works' },
             },

@@ -14,11 +14,11 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Codex holds apps/mobile/app/(app)/schedules/index.tsx; the templates entry point goes in with group 8 as a post-codex patch | states |
+| mobile | partial | Codex holds schedules/index.tsx; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.01.patch adds the gallery under the list | states |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/app/(app)/schedules/index.tsx:420-420`
+Code: `apps/mobile/app/(app)/schedules/index.tsx:286-286`
 
 ## S63.03: Create routine from a completed task.
 
@@ -40,28 +40,26 @@ Code: `apps/cli/src/features/exec/tools/task_registry/mod.rs:136-136`, `apps/cli
 
 - Done when: A routine has a user-set name and an optional description, both editable.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Name only; add a description field (the server already stores one). | ui |
-| cli | partial | Name and description can be set at creation only; there is no command to rename or edit them. | ui |
 | chrome | partial | Local tasks take a name only, with no description and no rename; side-panel cloud schedules are read-only for this. | ui |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`, `apps/cli/src/lib.rs:1121-1121`, `apps/cli/src/lib.rs:2165-2165`
+Code: `apps/mobile/src/features/schedules/components/ScheduleForm.tsx:173-173`, `apps/mobile/app/(app)/schedules/create.tsx:83-83`, `apps/extension/src/side_panel.ts:9214-9214`, `apps/extension/src/features/background/tasks.ts:173-173`
 
 ## S63.05: Prompt editor.
 
 - Done when: A multi-line editor to write and later edit the routine's instructions.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | The prompt is a single --prompt flag at creation; there is no way to edit an existing schedule's prompt. | ui |
 | chrome | partial | A one-line prompt input at creation only; an existing local task's prompt cannot be edited. | ui |
 
-Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/extension/src/side_panel.ts:9224-9224`, `apps/extension/src/side_panel.ts:9307-9307`
+Code: `apps/extension/src/side_panel.ts:9224-9224`, `apps/extension/src/side_panel.ts:9307-9307`, `apps/extension/src/features/background/tasks.ts:173-173`
 
 ## S63.06: Source selection.
 
@@ -94,10 +92,7 @@ Code: `apps/cli/src/lib.rs:1112-1112`, `apps/cli/src/lib.rs:2167-2167`, `apps/ex
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | --model at creation only; no effort flag and no way to change the model later. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1118-1118`, `apps/cli/src/lib.rs:1665-1665`
 
 ## S63.11: One-time schedule.
 
@@ -151,15 +146,12 @@ Code: `apps/cli/src/lib.rs:360-360`, `apps/cli/src/features/hooks/hooks.rs:449-4
 
 - Done when: Event triggers can be narrowed (event types, account, field conditions, repeat suppression) so only matching events start the routine.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Only a glob filter for file-watcher triggers, set by hand in triggers.json; webhook and cron triggers take no filters. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/features/hooks/hooks.rs:484-484`, `apps/cli/src/lib.rs:360-360`
 
 ## S63.17: Webhook trigger.
 
@@ -192,14 +184,13 @@ Code: `apps/mobile/src/features/schedules/service.ts:174-174`
 
 - Done when: Each routine shows when it last ran and whether that run failed.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | The card shows a last-run status badge but not when it ran; add the last-run time. | ui |
 | chrome | partial | The cited lines show only the last-run time. The criterion also needs 'whether that run failed': the row never renders lastError, and the status badge cannot carry it because finalizeScheduleRun sets last_error but leaves an active task's status 'active' (nextStatus is only completed/expired), so badgeTone's 'failed' branch is unreachable for a failed run. miss ui; remaining: show lastError or a failed marker on the cloud schedule row. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:212-212`, `apps/mobile/src/features/schedules/service.ts:81-81`, `apps/extension/src/features/side-panel/schedulesSection.ts:225-225`, `apps/extension/src/side_panel.ts:8589-8589`
+Code: `apps/extension/src/features/side-panel/schedulesSection.ts:225-225`, `apps/extension/src/side_panel.ts:8589-8589`, `apps/extension/src/features/side-panel/schedulesSection.ts:305-305`
 
 ## S63.22: Run-history list.
 
@@ -215,28 +206,14 @@ Code: `apps/mobile/src/features/schedules/components/ScheduleCard.tsx:212-212`, 
 
 - Done when: Opening a run shows what that run produced (its output text), not just its status.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Run rows show status, duration and error but not the output the service already maps; and runs fail until pending migration 0284 ships. | ui |
-| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: ScheduleRun drops the server's result field, so neither text nor --json shows output; runs also fail until pending migration 0284 ships. | ui |
 | vscode | partial | Migration 0284 is now applied in production (2026-09-27). Still open: The runs quick pick shows status, trigger, duration and error, never the output; runs also fail until pending migration 0284 ships. | ui |
 | chrome | partial | Local tasks open only their latest result conversation; cloud schedules in the side panel show no results. | ui |
 
-Code: `apps/mobile/src/features/schedules/service.ts:100-100`, `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:145-145`, `apps/cli/src/schedules.rs:356-356`
-
-## S63.24: Enable/disable.
-
-- Done when: A routine can be paused and resumed without deleting it.
-- Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Only --paused at creation; add pause/resume subcommands. | ui |
-
-Code: `apps/cli/src/lib.rs:1124-1124`, `apps/cli/src/lib.rs:2162-2162`
+Code: `apps/extension-vscode/src/features/schedules/schedulePresentation.ts:126-126`, `apps/extension-vscode/src/core/commandSetup.ts:2235-2235`, `apps/extension/src/side_panel.ts:10451-10451`, `apps/extension/src/side_panel.ts:10457-10457`
 
 ## S63.26: Edit schedule.
 
@@ -298,12 +275,11 @@ Code: `apps/extension/src/side_panel.ts:10628-10628`, `apps/extension/src/featur
 
 - Done when: When a scheduled occurrence is missed or skipped, the run history says so and why.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Migration 0284 is now applied in production (2026-09-27). Still open: Skip reasons show as the run error; late-run notes never appear and runs fail until pending migration 0284 ships. | states |
-| cli | partial | Migration 0284 is now applied in production (2026-09-27). Still open: `agi schedules runs` prints skip reasons as the error; late-run notes are dropped and runs fail until pending migration 0284 ships. | states |
+| mobile | partial | Codex holds schedules service.ts and store.ts; patch /private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/8f9d3a7a-39dd-4667-8b02-4d9e6e44cf4c/scratchpad/post-codex/routines-voice-S63.33-held.patch carries the run timing and renders it | states |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx:108-108`, `apps/cli/src/schedules.rs:371-371`, `apps/cli/src/lib.rs:2209-2209`
+Code: `apps/mobile/src/features/schedules/service.ts:104-104`

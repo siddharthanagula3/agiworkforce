@@ -85,7 +85,8 @@ const SHADOW: ShadowMirror = {
 };
 
 const SERVED_TRACE = {
-  schemaVersion: 2,
+  schemaVersion: 3,
+  policyVersion: 17,
   requestId: 'request-1',
   selection: 'auto',
   taskType: 'coding',

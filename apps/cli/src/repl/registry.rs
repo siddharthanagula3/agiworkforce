@@ -468,6 +468,7 @@ pub async fn tasks_for_display(
 enum ExportFormat {
     Markdown,
     Json,
+    Answer,
 }
 
 fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
@@ -477,6 +478,7 @@ fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
     match keyword {
         "" => (ExportFormat::Markdown, None),
         "json" => (ExportFormat::Json, rest),
+        "answer" | "last" => (ExportFormat::Answer, rest),
         "markdown" | "md" => (ExportFormat::Markdown, rest),
         _ if std::path::Path::new(arg)
             .extension()
@@ -505,6 +507,14 @@ fn render_export(format: ExportFormat, session: &AgentSession) -> Result<String,
             let md = conversations::export_as_markdown(session);
             Ok(sanitize_terminal_text(&md).into_owned())
         }
+        ExportFormat::Answer => session
+            .messages
+            .iter()
+            .rev()
+            .find(|message| message.role == "assistant")
+            .map(|message| sanitize_terminal_text(message.text_content().trim()).into_owned())
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| CommandOutcome::Warn("No answer to export yet.".to_string())),
     }
 }
 
@@ -586,86 +596,70 @@ pub(super) fn handle_providers(config: &CliConfig) {
 /// workspace's trust. A revoke takes effect on the next tool call, not at the
 /// next session start.
 pub fn handle_trust(arg: &str) {
+    trust_for_display(arg).print();
+}
+
+pub fn trust_for_display(arg: &str) -> CommandOutcome {
     let (subcommand, _) = split_first_word(arg.trim());
     let Ok(cwd) = std::env::current_dir() else {
-        output::print_error("Cannot resolve the current directory.");
-        return;
+        return CommandOutcome::Error("Cannot resolve the current directory.".to_string());
     };
     match subcommand {
-        "" | "status" | "show" => {
-            output::print_block(&sanitize_terminal_text(
-                &crate::trust::status_for(&cwd).render(),
-            ));
-        }
+        "" | "status" | "show" => CommandOutcome::Block(
+            sanitize_terminal_text(&crate::trust::status_for(&cwd).render()).into_owned(),
+        ),
         "grant" | "trust" => match crate::trust::grant(&cwd) {
-            Ok(status) => {
-                output::print_info(&format!("Trusted {}", status.root.display()));
-                output::print_block(&sanitize_terminal_text(&status.render()));
-            }
-            Err(error) => output::print_error(&format!("{error:#}")),
+            Ok(status) => CommandOutcome::Block(format!(
+                "Trusted {}\n{}",
+                status.root.display(),
+                sanitize_terminal_text(&status.render())
+            )),
+            Err(error) => CommandOutcome::Error(format!("{error:#}")),
         },
         "revoke" | "untrust" => match crate::trust::revoke(&cwd) {
-            Ok(0) => output::print_info("No trust grant to revoke for this workspace."),
-            Ok(count) => {
-                output::print_info(&format!(
-                    "Revoked {count} grant(s) for this repository. The next tool call is restricted."
-                ));
-                output::print_block(&sanitize_terminal_text(
-                    &crate::trust::status_for(&cwd).render(),
-                ));
-            }
-            Err(error) => output::print_error(&format!("{error:#}")),
+            Ok(0) => CommandOutcome::Info("No trust grant to revoke for this workspace.".to_string()),
+            Ok(count) => CommandOutcome::Block(format!(
+                "Revoked {count} grant(s) for this repository. The next tool call is restricted.\n{}",
+                sanitize_terminal_text(&crate::trust::status_for(&cwd).render())
+            )),
+            Err(error) => CommandOutcome::Error(format!("{error:#}")),
         },
-        other => output::print_warn(&format!(
+        other => CommandOutcome::Warn(format!(
             "Unknown /trust subcommand '{other}'. Use: /trust [status|grant|revoke]"
         )),
     }
 }
 
 pub fn handle_permissions(arg: &str) {
-    let arg = arg.trim();
-    let (subcommand, rest) = split_first_word(arg);
+    permissions_for_display(arg).print();
+}
 
+pub fn permissions_for_display(arg: &str) -> CommandOutcome {
+    let (subcommand, rest) = split_first_word(arg.trim());
     match subcommand {
-        "" => show_permissions_tab("allow"),
-        "help" | "-h" | "--help" => print_permissions_help(),
+        "" => permissions_tab("allow"),
+        "help" | "-h" | "--help" => CommandOutcome::Block(format!(
+            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
+            ts::accent_header("Permissions:")
+        )),
         "reset" => match crate::permissions::PermissionStore::load() {
             Ok(mut store) => {
                 store.reset();
                 match store.save() {
-                    Ok(()) => output::print_info("All permissions reset."),
-                    Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+                    Ok(()) => CommandOutcome::Info("All permissions reset.".to_string()),
+                    Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
                 }
             }
-            Err(e) => output::print_error(&format!("Failed to load: {:#}", e)),
+            Err(e) => CommandOutcome::Error(format!("Failed to load: {:#}", e)),
         },
-        "allow" => {
-            if rest.is_empty() {
-                show_permissions_tab("allow");
-            } else {
-                mutate_permission_rule("allow", rest);
-            }
-        }
-        "deny" => {
-            if rest.is_empty() {
-                show_permissions_tab("deny");
-            } else {
-                mutate_permission_rule("deny", rest);
-            }
-        }
-        "session" => {
-            if rest.is_empty() {
-                show_permissions_tab("session");
-            } else {
-                mutate_permission_rule("session", rest);
-            }
-        }
+        scope @ ("allow" | "deny" | "session") if rest.is_empty() => permissions_tab(scope),
+        scope @ ("allow" | "deny" | "session") => mutate_permission_rule(scope, rest),
         "remove" | "rm" | "delete" => {
             let (scope, rule) = split_first_word(rest);
-            remove_permission_rule(scope, rule);
+            remove_permission_rule(scope, rule)
         }
-        tab if is_permissions_tab(tab) => show_permissions_tab(tab),
-        _ => show_permissions_tab("allow"),
+        tab if is_permissions_tab(tab) => permissions_tab(tab),
+        _ => permissions_tab("allow"),
     }
 }
 
@@ -684,95 +678,68 @@ fn is_permissions_tab(tab: &str) -> bool {
     )
 }
 
-fn show_permissions_tab(tab: &str) {
+fn permissions_tab(tab: &str) -> CommandOutcome {
     match crate::permissions::PermissionStore::load() {
-        Ok(store) => eprintln!("{}", sanitize_terminal_text(&store.display_tab(tab))),
-        Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
+        Ok(store) => {
+            CommandOutcome::Block(sanitize_terminal_text(&store.display_tab(tab)).into_owned())
+        }
+        Err(e) => CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     }
 }
 
-fn mutate_permission_rule(scope: &str, rule: &str) {
-    if rule.trim().is_empty() {
-        output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>");
-        return;
-    }
-
+fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
-        Err(e) => {
-            output::print_error(&format!("Failed to load permissions: {:#}", e));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     };
-
+    let saved = |store: &crate::permissions::PermissionStore, message: String| match store.save() {
+        Ok(()) => CommandOutcome::Info(message),
+        Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
+    };
     match scope {
         "allow" => {
             store.allow_always(rule);
-            match store.save() {
-                Ok(()) => output::print_info(&format!("Always allow: {}", rule.trim())),
-                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
-            }
+            saved(&store, format!("Always allow: {}", rule.trim()))
         }
         "deny" => {
             store.deny_always(rule);
-            match store.save() {
-                Ok(()) => output::print_info(&format!("Always deny: {}", rule.trim())),
-                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
-            }
+            saved(&store, format!("Always deny: {}", rule.trim()))
         }
-        "session" => {
+        _ => {
             store.allow_session_for_process(rule);
-            output::print_info(&format!("Allow this session: {}", rule.trim()));
+            CommandOutcome::Info(format!("Allow this session: {}", rule.trim()))
         }
-        _ => output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>"),
     }
 }
 
-fn remove_permission_rule(scope: &str, rule: &str) {
+fn remove_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
     if rule.trim().is_empty() || !matches!(scope, "allow" | "deny" | "session") {
-        output::print_warn("Usage: /permissions remove <allow|deny|session> <command-prefix>");
-        return;
+        return CommandOutcome::Warn(
+            "Usage: /permissions remove <allow|deny|session> <command-prefix>".to_string(),
+        );
     }
-
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
-        Err(e) => {
-            output::print_error(&format!("Failed to load permissions: {:#}", e));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     };
-
     let removed = match scope {
         "allow" => store.remove_always_allow(rule),
         "deny" => store.remove_always_deny(rule),
-        "session" => store.remove_session(rule),
-        _ => false,
+        _ => store.remove_session(rule),
     };
-
     if !removed {
-        output::print_warn(&format!(
+        return CommandOutcome::Warn(format!(
             "No {scope} permission rule matched: {}",
             rule.trim()
         ));
-        return;
     }
-
     if scope == "session" {
-        output::print_info(&format!("Removed session permission: {}", rule.trim()));
-        return;
+        return CommandOutcome::Info(format!("Removed session permission: {}", rule.trim()));
     }
-
     match store.save() {
-        Ok(()) => output::print_info(&format!("Removed {scope} permission: {}", rule.trim())),
-        Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+        Ok(()) => CommandOutcome::Info(format!("Removed {scope} permission: {}", rule.trim())),
+        Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
     }
-}
-
-fn print_permissions_help() {
-    eprintln!(
-        "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
-        ts::accent_header("Permissions:")
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1254,6 +1221,10 @@ pub(super) fn handle_diff(arg: &str) {
 /// this covers add/remove/enable/disable/list plus restart (reconnect the live
 /// session manager) and reconfigure (replace an existing entry).
 pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
+    mcp_for_display(arg, session).await.print();
+}
+
+pub async fn mcp_for_display(arg: &str, session: &mut AgentSession) -> CommandOutcome {
     use crate::mcp::registry::McpRegistry;
 
     let tokens: Vec<&str> = arg.split_whitespace().collect();
@@ -1265,97 +1236,98 @@ pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
             let reg = match McpRegistry::load() {
                 Ok(reg) => reg,
                 Err(e) => {
-                    output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-                    return;
+                    return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}"))
                 }
             };
             let rows = reg.list();
             if rows.is_empty() {
-                output::print_info(
-                    "No servers in the MCP registry. Add one with `/mcp add <name> <url>`.",
+                return CommandOutcome::Info(
+                    "No servers in the MCP registry. Add one with `/mcp add <name> <url>`."
+                        .to_string(),
                 );
-                return;
             }
-            eprintln!("{}", ts::accent_header("Registered MCP servers:"));
+            let mut lines = vec![ts::accent_header("Registered MCP servers:").to_string()];
             for row in rows {
                 let state = if row.enabled { "enabled" } else { "disabled" };
-                eprintln!(
+                lines.push(format!(
                     "  {:<24} [{}] {:<6} {}",
                     sanitize_terminal_text(&row.name),
                     state,
                     sanitize_terminal_text(&row.kind),
                     sanitize_terminal_text(&row.target)
-                );
+                ));
             }
+            CommandOutcome::Block(lines.join("\n"))
         }
-        "add" => {
-            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    output::print_warn(&format!("{e:#}"));
-                    return;
-                }
+        "tools" => {
+            let Some(tools) = session.mcp_info() else {
+                return CommandOutcome::Info("No MCP servers connected.".to_string());
             };
-            mutate_registry(
+            let wanted = rest.first().copied();
+            let mut lines = Vec::new();
+            for tool in tools
+                .iter()
+                .filter(|tool| wanted.is_none_or(|name| tool.server_name == name))
+            {
+                lines.push(format!(
+                    "  {:<20} {:<28} {}",
+                    sanitize_terminal_text(&tool.server_name),
+                    sanitize_terminal_text(&tool.original_name),
+                    sanitize_terminal_text(&tool.description)
+                ));
+            }
+            if lines.is_empty() {
+                return CommandOutcome::Warn(format!(
+                    "No connected server named '{}'.",
+                    wanted.unwrap_or_default()
+                ));
+            }
+            lines.insert(0, ts::accent_header("MCP tools:").to_string());
+            CommandOutcome::Block(lines.join("\n"))
+        }
+        "add" => match crate::mcp::registry::parse_add_spec(rest) {
+            Ok((name, entry)) => mutate_registry(
                 |reg| reg.add(&name, entry.clone(), false),
                 &format!("Added MCP server '{name}'. Run `/mcp restart` to connect it."),
-            );
-        }
-        "reconfigure" | "edit" => {
-            let (name, entry) = match crate::mcp::registry::parse_add_spec(rest) {
-                Ok(parsed) => parsed,
-                Err(e) => {
-                    output::print_warn(&format!("{e:#}"));
-                    return;
-                }
-            };
-            mutate_registry(
+            ),
+            Err(e) => CommandOutcome::Warn(format!("{e:#}")),
+        },
+        "reconfigure" | "edit" => match crate::mcp::registry::parse_add_spec(rest) {
+            Ok((name, entry)) => mutate_registry(
                 |reg| reg.add(&name, entry.clone(), true),
                 &format!("Reconfigured MCP server '{name}'. Run `/mcp restart` to apply."),
-            );
-        }
+            ),
+            Err(e) => CommandOutcome::Warn(format!("{e:#}")),
+        },
         "remove" | "rm" | "delete" => {
             let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp remove <name>");
-                return;
+                return CommandOutcome::Warn("Usage: /mcp remove <name>".to_string());
             };
-            let name = name.to_string();
+            let owned = name.to_string();
             mutate_registry_bool(
-                move |reg| reg.remove(&name),
-                &format!("Removed MCP server '{}'.", rest[0]),
-                &format!("No MCP server named '{}' in the registry.", rest[0]),
-            );
+                move |reg| reg.remove(&owned),
+                &format!("Removed MCP server '{name}'."),
+                &format!("No MCP server named '{name}' in the registry."),
+            )
         }
-        "enable" => {
+        "enable" | "disable" => {
             let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp enable <name>");
-                return;
+                return CommandOutcome::Warn(format!("Usage: /mcp {sub} <name>"));
             };
-            let name = name.to_string();
-            mutate_registry(
-                move |reg| reg.enable(&name).map(|_| ()),
-                &format!(
-                    "Enabled MCP server '{}'. Run `/mcp restart` to connect it.",
-                    rest[0]
-                ),
-            );
+            let owned = name.to_string();
+            if sub == "enable" {
+                mutate_registry(
+                    move |reg| reg.enable(&owned).map(|_| ()),
+                    &format!("Enabled MCP server '{name}'. Run `/mcp restart` to connect it."),
+                )
+            } else {
+                mutate_registry(
+                    move |reg| reg.disable(&owned).map(|_| ()),
+                    &format!("Disabled MCP server '{name}'. Run `/mcp restart` to disconnect it."),
+                )
+            }
         }
-        "disable" => {
-            let Some(name) = rest.first().copied() else {
-                output::print_warn("Usage: /mcp disable <name>");
-                return;
-            };
-            let name = name.to_string();
-            mutate_registry(
-                move |reg| reg.disable(&name).map(|_| ()),
-                &format!(
-                    "Disabled MCP server '{}'. Run `/mcp restart` to disconnect it.",
-                    rest[0]
-                ),
-            );
-        }
-        "restart" | "reload" => {
-            output::print_info("Reloading MCP servers and reconnecting...");
+        "restart" | "reload" | "test" => {
             match crate::attach_mcp_manager_for_session(
                 session,
                 &crate::mcp::McpConfigLoadOptions::default(),
@@ -1366,59 +1338,49 @@ pub(super) async fn handle_mcp(arg: &str, session: &mut AgentSession) {
             {
                 Ok(()) => {
                     let count = session.mcp_info().map(|t| t.len()).unwrap_or(0);
-                    output::print_info(&format!("MCP reconnected: {count} tool(s) available."));
+                    CommandOutcome::Info(format!("MCP reconnected: {count} tool(s) available."))
                 }
-                Err(e) => output::print_error(&format!("MCP restart failed: {e:#}")),
+                Err(e) => CommandOutcome::Error(format!("MCP restart failed: {e:#}")),
             }
         }
-        other => {
-            output::print_warn(&format!(
-                "Unknown /mcp subcommand '{other}'. Use: list | add <name> <url> | \
-                 remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
-            ));
-        }
+        other => CommandOutcome::Warn(format!(
+            "Unknown /mcp subcommand '{other}'. Use: list | tools [server] | add <name> <url> | \
+             remove <name> | enable <name> | disable <name> | reconfigure <name> <spec> | restart"
+        )),
     }
 }
 
-fn mutate_registry<F>(op: F, success: &str)
+fn mutate_registry<F>(op: F, success: &str) -> CommandOutcome
 where
     F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> anyhow::Result<()>,
 {
     let mut reg = match crate::mcp::registry::McpRegistry::load() {
         Ok(reg) => reg,
-        Err(e) => {
-            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}")),
     };
     if let Err(e) = op(&mut reg) {
-        output::print_warn(&format!("{e:#}"));
-        return;
+        return CommandOutcome::Warn(format!("{e:#}"));
     }
     match reg.save() {
-        Ok(()) => output::print_info(success),
-        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+        Ok(()) => CommandOutcome::Info(success.to_string()),
+        Err(e) => CommandOutcome::Error(format!("Failed to save MCP registry: {e:#}")),
     }
 }
 
-fn mutate_registry_bool<F>(op: F, success: &str, missing: &str)
+fn mutate_registry_bool<F>(op: F, success: &str, missing: &str) -> CommandOutcome
 where
     F: FnOnce(&mut crate::mcp::registry::McpRegistry) -> bool,
 {
     let mut reg = match crate::mcp::registry::McpRegistry::load() {
         Ok(reg) => reg,
-        Err(e) => {
-            output::print_error(&format!("Failed to load MCP registry: {e:#}"));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load MCP registry: {e:#}")),
     };
     if !op(&mut reg) {
-        output::print_warn(missing);
-        return;
+        return CommandOutcome::Warn(missing.to_string());
     }
     match reg.save() {
-        Ok(()) => output::print_info(success),
-        Err(e) => output::print_error(&format!("Failed to save MCP registry: {e:#}")),
+        Ok(()) => CommandOutcome::Info(success.to_string()),
+        Err(e) => CommandOutcome::Error(format!("Failed to save MCP registry: {e:#}")),
     }
 }
 
@@ -1481,7 +1443,7 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
 /// `platform::runtime::worktree`. Read/list is always safe; create and remove
 /// shell out to `git worktree`. Returns the rendered output so it is testable
 /// without a terminal.
-pub(super) async fn handle_worktree(arg: &str) -> String {
+pub async fn handle_worktree(arg: &str) -> String {
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     handle_worktree_in(&repo, arg).await
 }
@@ -1862,45 +1824,42 @@ mod init_tests {
 // ---------------------------------------------------------------------------
 
 pub(super) fn handle_config(arg: &str, config: &mut CliConfig) {
-    let sub_parts: Vec<&str> = arg.splitn(3, ' ').collect();
-    let sub_cmd = sub_parts[0];
+    config_for_display(arg, config).print();
+}
 
-    match sub_cmd {
+pub fn config_for_display(arg: &str, config: &mut CliConfig) -> CommandOutcome {
+    let sub_parts: Vec<&str> = arg.splitn(3, ' ').collect();
+    match sub_parts[0] {
         "" | "show" => {
-            eprintln!("{}", sanitize_terminal_text(&config.display()));
+            CommandOutcome::Block(sanitize_terminal_text(&config.display()).into_owned())
         }
         "get" => {
             let key = sub_parts.get(1).map(|s| s.trim()).unwrap_or_default();
             if key.is_empty() {
-                output::print_warn("Usage: /config get <key>");
-                return;
+                return CommandOutcome::Warn("Usage: /config get <key>".to_string());
             }
             match config.get_value(key) {
-                Some(value) => output::print_info(&format!("{} = {}", key, value)),
-                None => output::print_warn(&format!("Unknown or unset key: '{}'", key)),
+                Some(value) => CommandOutcome::Info(format!("{} = {}", key, value)),
+                None => CommandOutcome::Warn(format!("Unknown or unset key: '{}'", key)),
             }
         }
         "set" => {
             if sub_parts.len() < 3 {
-                output::print_warn("Usage: /config set <key> <value>");
-                return;
+                return CommandOutcome::Warn("Usage: /config set <key> <value>".to_string());
             }
             let key = sub_parts[1].trim();
             let value = sub_parts[2].trim();
             match config.set_value(key, value) {
-                Ok(()) => {
-                    if let Err(e) = config.save() {
-                        output::print_warn(&format!("Set in memory but failed to save: {:#}", e));
-                    } else {
-                        output::print_info(&format!("{} = {} (saved)", key, value));
+                Ok(()) => match config.save() {
+                    Ok(()) => CommandOutcome::Info(format!("{} = {} (saved)", key, value)),
+                    Err(e) => {
+                        CommandOutcome::Warn(format!("Set in memory but failed to save: {:#}", e))
                     }
-                }
-                Err(e) => output::print_error(&format!("{:#}", e)),
+                },
+                Err(e) => CommandOutcome::Error(format!("{:#}", e)),
             }
         }
-        _ => {
-            output::print_warn("Usage: /config [show|get <key>|set <key> <value>]");
-        }
+        _ => CommandOutcome::Warn("Usage: /config [show|get <key>|set <key> <value>]".to_string()),
     }
 }
 

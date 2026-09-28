@@ -13,6 +13,11 @@ import {
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type {
+  SidePanelMessageAttachment,
+  SidePanelPageReference,
+  SidePanelSource,
+} from '../side-panel/chat-state';
 import {
   normalizeManagedCloudOwner,
   managedCloudOwnerKey,
@@ -51,6 +56,13 @@ export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
 
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_STORED_MESSAGE_ATTACHMENTS = 20;
+const MAX_STORED_MESSAGE_PAGES = 8;
+const MAX_STORED_MESSAGE_SOURCES = 40;
+const MAX_STORED_LABEL_CHARS = 300;
+const MAX_STORED_SNIPPET_CHARS = 600;
+const MAX_STORED_URL_CHARS = 2_048;
+const MAX_STORED_DURATION_MS = 24 * 60 * 60 * 1000;
 
 export type ConversationRuntime = 'managed-cloud' | 'local';
 
@@ -70,6 +82,11 @@ export interface HistoryMessage {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  attachments?: SidePanelMessageAttachment[];
+  pages?: SidePanelPageReference[];
+  sources?: SidePanelSource[];
+  citations?: SidePanelSource[];
+  durationMs?: number;
   runtime?: ConversationRuntime;
   error?: boolean;
   cloudMessageId?: string;
@@ -351,6 +368,25 @@ function normalizeHistoryMessage(
       interactiveCards: message['interactiveCards'],
     });
     if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
+    const sources = readStoredSources(message['sources']);
+    if (sources.length > 0) normalized.sources = sources;
+    const citations = readStoredSources(message['citations']);
+    if (citations.length > 0) normalized.citations = citations;
+    const durationMs = message['durationMs'];
+    if (
+      typeof durationMs === 'number' &&
+      Number.isFinite(durationMs) &&
+      durationMs >= 0 &&
+      durationMs <= MAX_STORED_DURATION_MS
+    ) {
+      normalized.durationMs = durationMs;
+    }
+  }
+  if (message['role'] === 'user') {
+    const attachments = readStoredAttachments(message['attachments']);
+    if (attachments.length > 0) normalized.attachments = attachments;
+    const pages = readStoredPages(message['pages']);
+    if (pages.length > 0) normalized.pages = pages;
   }
   if (message['runtime'] === 'managed-cloud' || message['runtime'] === 'local') {
     normalized.runtime = message['runtime'];
@@ -388,6 +424,71 @@ function containsControlCharacter(value: string): boolean {
     if (code <= 0x1f || code === 0x7f) return true;
   }
   return false;
+}
+
+function readStoredLabel(value: unknown, maximum: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const collapsed = value.replace(/\s+/g, ' ').trim();
+  return collapsed ? collapsed.slice(0, maximum) : undefined;
+}
+
+function readStoredWebUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string' || value.length > MAX_STORED_URL_CHARS) return undefined;
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'https:' || protocol === 'http:' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function storedRecords(value: unknown, maximum: number): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .slice(0, maximum)
+    .filter(
+      (entry): entry is Record<string, unknown> =>
+        entry !== null && typeof entry === 'object' && !Array.isArray(entry),
+    );
+}
+
+function readStoredAttachments(value: unknown): SidePanelMessageAttachment[] {
+  return storedRecords(value, MAX_STORED_MESSAGE_ATTACHMENTS).flatMap((entry) => {
+    const kind = entry['kind'];
+    const name = readStoredLabel(entry['name'], MAX_STORED_LABEL_CHARS);
+    const mimeType = readStoredLabel(entry['mimeType'], 128);
+    if ((kind !== 'image' && kind !== 'file') || !name || !mimeType) return [];
+    const assetId =
+      typeof entry['assetId'] === 'string' && UUID_PATTERN.test(entry['assetId'])
+        ? entry['assetId']
+        : undefined;
+    return [{ kind, name, mimeType, ...(assetId ? { assetId } : {}) }];
+  });
+}
+
+function readStoredPages(value: unknown): SidePanelPageReference[] {
+  return storedRecords(value, MAX_STORED_MESSAGE_PAGES).flatMap((entry) => {
+    const url = readStoredWebUrl(entry['url']);
+    if (!url) return [];
+    return [{ url, title: readStoredLabel(entry['title'], MAX_STORED_LABEL_CHARS) ?? url }];
+  });
+}
+
+function readStoredSources(value: unknown): SidePanelSource[] {
+  return storedRecords(value, MAX_STORED_MESSAGE_SOURCES).flatMap((entry) => {
+    const url = readStoredWebUrl(entry['url']);
+    if (!url) return [];
+    const snippet = readStoredLabel(entry['snippet'], MAX_STORED_SNIPPET_CHARS);
+    const publishedDate = readStoredLabel(entry['publishedDate'], 64);
+    return [
+      {
+        url,
+        title: readStoredLabel(entry['title'], MAX_STORED_LABEL_CHARS) ?? url,
+        ...(snippet ? { snippet } : {}),
+        ...(publishedDate ? { publishedDate } : {}),
+      },
+    ];
+  });
 }
 
 function isSafeModelReference(value: unknown): value is string {

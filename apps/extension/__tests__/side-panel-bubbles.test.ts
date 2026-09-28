@@ -1,4 +1,7 @@
-import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import {
   parseInteractiveCardDelta,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -15,6 +18,30 @@ import {
   applyCanonicalAgentEvent,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
+
+const catalog = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '..', '_locales', 'en', 'messages.json'),
+    'utf8',
+  ),
+) as Record<string, { message: string; placeholders?: Record<string, { content: string }> }>;
+
+function getMessage(key: string, substitutions: string[] = []): string {
+  const entry = catalog[key];
+  if (!entry) return '';
+  return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (_match, name: string) =>
+    (entry.placeholders?.[name.toLowerCase()]?.content ?? '').replace(
+      /\$(\d)/g,
+      (_digit, index: string) => substitutions[Number(index) - 1] ?? '',
+    ),
+  );
+}
+
+beforeEach(() => {
+  (globalThis as { chrome?: unknown }).chrome = {
+    i18n: { getMessage, getUILanguage: () => 'en' },
+  };
+});
 
 function msg(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
   return { id: 'm1', role: 'user', content: 'hello world', timestamp: 0, ...overrides };

@@ -15,7 +15,7 @@ import {
   buildOrganizationPolicyGateResponse,
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
+import { resolveAuthenticatedSurface } from '../lib/request-surface';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -155,7 +155,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
       model: 'chat-completions',
       feature: 'llm_v1_chat_completions',
       isFreeTrial: isFreeTierRequest,
-      surface: resolveCloudChatSurface(request),
+      surface: resolveAuthenticatedSurface(request, authResult),
     },
     getSecurityHeaders(),
   );
@@ -406,7 +406,7 @@ async function handleToolApproval(request: NextRequest, authResult: AuthGateSucc
         organizationId: processed.organizationId ?? null,
         eventType: 'tool_approval_decided',
         request,
-        surface: resolveCloudChatSurface(request),
+        surface: resolveAuthenticatedSurface(request, authResult),
         detail: {
           resourceType: 'tool',
           resourceId: claim.checkpoint.runId,

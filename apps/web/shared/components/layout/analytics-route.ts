@@ -5,13 +5,16 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/chat/projects/[id]',
   '/code/[sessionId]',
   '/connect/[deviceType]',
+  '/gallery/[templateId]',
   '/help/[slug]',
   '/open/[target]/[id]',
   '/pair/[code]',
   '/plugins/[id]',
   '/quick-ask/[sessionId]',
+  '/release-notes/[slug]',
   '/settings/[section]',
   '/share/[token]',
+  '/share/schedules/[token]',
   '/shared-artifact/[token]',
   '/upgrade/[plan]',
   '/use-cases/[slug]',
@@ -23,11 +26,13 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'code',
     'customize',
     'from-share',
+    'images',
     'library',
     'projects',
     'schedules',
     'study',
   ],
+  '/share': ['schedules'],
   '/settings': [
     'account',
     'archived',
@@ -50,6 +55,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'usage',
     'voice',
   ],
+  '/share': ['schedules'],
 };
 
 export const UNMATCHED_SEGMENTS = '[unmatched]';

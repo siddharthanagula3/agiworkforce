@@ -99,5 +99,17 @@
     "groupSettings": "Settings",
     "groupCustomize": "Customize",
     "groupDesktop": "Desktop app"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} custom command",
+    "customCommands_other": "{{count}} custom commands",
+    "allArchivedChats_one": "All {{count}} archived chat",
+    "allArchivedChats_other": "All {{count}} archived chats",
+    "followUps_one": "{{count}} follow-up",
+    "followUps_other": "{{count}} follow-ups",
+    "members_one": "{{count}} member",
+    "members_other": "{{count}} members",
+    "models_one": "{{count}} model",
+    "models_other": "{{count}} models"
   }
 }

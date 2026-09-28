@@ -30,6 +30,15 @@ export default function ResetPasswordScreen() {
     );
   }, [params]);
 
+  const handleOpenAccountRecovery = useCallback(async () => {
+    const opened = await openExternalUrl('https://agiworkforce.com/recover');
+    if (opened) return;
+    Alert.alert(
+      'Could not open account recovery',
+      'Visit agiworkforce.com/recover in your browser.',
+    );
+  }, []);
+
   const handleBackToSignIn = useCallback(() => {
     router.replace({ pathname: '/(auth)/login' as const });
   }, [router]);
@@ -51,12 +60,19 @@ export default function ResetPasswordScreen() {
         </Text>
 
         <Text style={{ color: themeColors.textMuted, fontSize: 15, lineHeight: 22 }}>
-          For account security, password recovery opens in your AGI web account. Local Mode data on
-          this device stays separate.
+          For account security, password recovery opens in your AGI web account. If you lost the
+          email address or two-factor device on the account, a person can verify it is yours and
+          restore access. Local Mode data on this device stays separate.
         </Text>
 
         <View style={{ gap: 10 }}>
           <Button title="Open Web Account" size="lg" onPress={handleOpenWebRecovery} />
+          <Button
+            title="Lost Your Email or Two-Factor Device?"
+            size="lg"
+            variant="outline"
+            onPress={handleOpenAccountRecovery}
+          />
           <Button
             title="Back to Sign In"
             size="lg"

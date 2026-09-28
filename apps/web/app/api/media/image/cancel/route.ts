@@ -12,6 +12,7 @@ import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   getImageGenerationJob,
+  getImageGenerationJobByIdempotencyKey,
   isImageJobStoreReady,
   requestImageGenerationCancellation,
 } from '@/lib/server/image-generation-jobs';
@@ -24,7 +25,7 @@ import {
 
 /**
  * Cancel a durable image job.
- * Endpoint: POST /api/media/image/cancel  { "job_id": "..." }
+ * Endpoint: POST /api/media/image/cancel  { "job_id": "..." } or { "idempotency_key": "..." }
  *
  * Cancellation stops the job from taking another attempt and releases the
  * reservation it was holding. An attempt already inside a provider call keeps
@@ -35,7 +36,10 @@ import {
 export const maxDuration = 30;
 export const runtime = 'nodejs';
 
-const ImageCancelRequestSchema = z.object({ job_id: z.string().uuid() }).strict();
+const ImageCancelRequestSchema = z.union([
+  z.object({ job_id: z.string().uuid() }).strict(),
+  z.object({ idempotency_key: z.string().trim().min(8).max(128) }).strict(),
+]);
 
 async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
   const preflightResponse = handleCorsPreflightRequest(request);
@@ -56,7 +60,9 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
     throw createError.validation('Invalid JSON in request body');
   }
   const parsed = ImageCancelRequestSchema.safeParse(body);
-  if (!parsed.success) throw createError.validation('Invalid request: job_id must be a job id');
+  if (!parsed.success) {
+    throw createError.validation('Invalid request: send a job_id or the idempotency_key');
+  }
 
   const scoped = await getUserScopedDb(request);
   if (scoped.userId !== userId) {
@@ -68,8 +74,12 @@ async function handleImageCancel(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const existing = await getImageGenerationJob(scoped.db, parsed.data.job_id, userId);
+  const existing =
+    'job_id' in parsed.data
+      ? await getImageGenerationJob(scoped.db, parsed.data.job_id, userId)
+      : await getImageGenerationJobByIdempotencyKey(scoped.db, userId, parsed.data.idempotency_key);
   if (!existing) {
+    if (!('job_id' in parsed.data)) throw createError.notFound('That image has not started yet.');
     logger.warn(
       { jobId: parsed.data.job_id, requestingUser: userId },
       'Durable image job cancel ownership denied',

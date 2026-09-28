@@ -31,12 +31,15 @@ import {
 import { assertResolvedPublicHostname, EgressPolicyError } from '@/lib/egress-policy';
 import { MCP_EGRESS_POLICY } from '@/lib/mcp-egress-policy';
 import {
+  GitHubWriteOutcomeUnknownError,
   getInstallationAccessToken,
   getPrDiff,
   isGitHubAppConfigured,
   isGitHubInstallationLinkingAvailable,
+  issueCommentPostedSince,
   postIssueComment,
   postPrReview,
+  pullRequestReviewPostedSince,
 } from '@/lib/github-app';
 import { openCustomConnectorCredential } from '@/lib/custom-connector-crypto';
 import {
@@ -73,6 +76,12 @@ import {
   type ConnectorAuthorizationReason,
 } from '@/lib/connectors/connect-required';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import {
+  GMAIL_CONNECTOR_ID,
+  executeGmailAction,
+  gmailActionToolDefs,
+  isGmailActionTool,
+} from '@/lib/connectors/gmail-actions';
 import { resolveToolMetadata } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import { getBillingPlanProductLimits, getPlanMaxConnectorTools } from '@agiworkforce/types';
 
@@ -384,6 +393,51 @@ function asInteger(value: unknown): number | null {
   return null;
 }
 
+async function writeWithReconciledOutcome(input: {
+  userId: string;
+  toolName: string;
+  target: string;
+  write: () => Promise<void>;
+  wasPosted: (since: Date) => Promise<boolean>;
+  success: string;
+}): Promise<ConnectorExecResult> {
+  const startedAt = new Date();
+  try {
+    await input.write();
+    return { handled: true, content: input.success, isError: false };
+  } catch (error) {
+    if (!(error instanceof GitHubWriteOutcomeUnknownError)) throw error;
+  }
+  try {
+    if (await input.wasPosted(startedAt)) {
+      logger.warn(
+        { userId: input.userId, toolName: input.toolName },
+        '[user-connector] github write outcome reconciled: it landed',
+      );
+      return { handled: true, content: input.success, isError: false };
+    }
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName },
+      '[user-connector] github write outcome reconciled: it did not land',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time, and ${input.target} shows nothing was posted. It is safe to try again.`,
+      isError: true,
+    };
+  } catch (error) {
+    logger.warn(
+      { userId: input.userId, toolName: input.toolName, error },
+      '[user-connector] github write outcome could not be reconciled',
+    );
+    return {
+      handled: true,
+      content: `GitHub did not answer in time and it could not be confirmed whether anything was posted on ${input.target}. Check ${input.target} before trying again, so it is not posted twice.`,
+      isError: true,
+    };
+  }
+}
+
 async function executeGithubTool(
   userId: string,
   toolName: string,
@@ -435,12 +489,14 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postIssueComment(token, owner, repo, issueNumber, body);
-      return {
-        handled: true,
-        content: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${issueNumber}`,
+        write: () => postIssueComment(token, owner, repo, issueNumber, body),
+        wasPosted: (since) => issueCommentPostedSince(token, owner, repo, issueNumber, body, since),
+        success: `Posted comment on ${owner}/${repo}#${issueNumber}.`,
+      });
     }
 
     if (toolName === 'post_pull_request_review') {
@@ -453,12 +509,15 @@ async function executeGithubTool(
           isError: true,
         };
       }
-      await postPrReview(token, owner, repo, pullNumber, body, 'COMMENT');
-      return {
-        handled: true,
-        content: `Posted review on ${owner}/${repo}#${pullNumber}.`,
-        isError: false,
-      };
+      return await writeWithReconciledOutcome({
+        userId,
+        toolName,
+        target: `${owner}/${repo}#${pullNumber}`,
+        write: () => postPrReview(token, owner, repo, pullNumber, body, 'COMMENT'),
+        wasPosted: (since) =>
+          pullRequestReviewPostedSince(token, owner, repo, pullNumber, body, since),
+        success: `Posted review on ${owner}/${repo}#${pullNumber}.`,
+      });
     }
 
     return { handled: true, content: `Unknown GitHub tool: ${toolName}`, isError: true };
@@ -1191,6 +1250,7 @@ interface ConnectorMcpTarget {
   transport: 'streamable-http' | 'sse';
   displayName?: string | undefined;
   discovered: boolean;
+  optionHeaders?: Readonly<Record<string, string>> | undefined;
 }
 
 function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
@@ -1203,6 +1263,7 @@ function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | nu
       transport: provider.transport,
       displayName: provider.displayName,
       discovered: false,
+      optionHeaders: provider.mcpHeaders,
     };
   }
   const endpoint = getMcpEndpoint(connectorId);
@@ -1251,7 +1312,10 @@ function oauthConnectorMcpConfig(
   return {
     url: target.mcpUrl,
     transport: target.transport,
-    headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
+    headers: {
+      ...target.optionHeaders,
+      Authorization: `${tokenType || 'Bearer'} ${accessToken}`,
+    },
     connectionTimeoutMs: CONNECTOR_CONNECTION_TIMEOUT_MS,
   };
 }
@@ -2305,9 +2369,11 @@ export async function loadUserConnectorToolCatalog(
           const access = await resolveConnectorAccessToken(userId, connectorId);
           if (access.status !== 'ready') return [];
           const catalog = await buildOAuthConnectorCatalog(userId, target, access);
-          return catalog
-            ? catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId)
-            : [];
+          if (!catalog) return [];
+          const label = target.displayName ?? connectorId;
+          return connectorId === GMAIL_CONNECTOR_ID
+            ? [...catalogToConnectorToolDefs(catalog, label), ...gmailActionToolDefs(label)]
+            : catalogToConnectorToolDefs(catalog, label);
         },
       });
     }
@@ -2534,6 +2600,13 @@ export function makeUserConnectorExecutor(
 
     if (serverId === GITHUB_SERVER_ID) {
       return guarded((safeArgs) => executeGithubTool(userId, toolName, safeArgs));
+    }
+
+    if (isGmailActionTool(serverId, toolName)) {
+      return guarded(async (safeArgs) => ({
+        handled: true,
+        ...(await executeGmailAction(userId, toolName, safeArgs)),
+      }));
     }
 
     const customShortId = customShortIdFromServerId(serverId);

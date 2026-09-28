@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { notificationTargetHref } from '@/features/notifications/lib/notification-target';
+import { logger } from '@/lib/logger';
+import { SITE_URL } from '@/lib/seo/site';
+import { sendSecurityAlertEmail } from './notification-email-service';
 import { recordNotification } from './notification-service';
 import {
   identitySecurityEventSpec,
@@ -25,15 +29,52 @@ export async function notifyIdentitySecurityEvent(
   const spec = identitySecurityEventSpec(input.event);
   const context = input.context?.trim();
   const subjectRef = input.subjectRef?.trim();
-  await recordNotification(db, {
+  const message = context ? `${spec.message} ${context}` : spec.message;
+  const dedupeKey = `identity:${input.event}:${subjectRef || 'account'}`;
+  const { recorded } = await recordNotification(db, {
     userId: input.userId,
     category: spec.category,
     severity: spec.severity,
     title: spec.title,
-    message: context ? `${spec.message} ${context}` : spec.message,
+    message,
     target: { kind: 'settings', id: spec.settingsSection },
-    dedupeKey: `identity:${input.event}:${subjectRef || 'account'}`,
+    dedupeKey,
   });
+  if (!recorded) return;
+
+  const address = await securityAlertEmailAddress(db, input.userId);
+  if (!address) return;
+  const href = notificationTargetHref('settings', spec.settingsSection) ?? '/chat';
+  await sendSecurityAlertEmail({
+    to: address,
+    title: spec.title,
+    message,
+    settingsUrl: `${SITE_URL}${href}`,
+    idempotencyKey: `${input.userId}:${dedupeKey}`,
+  });
+}
+
+export const SECURITY_EMAIL_PREFERENCE_KEY = 'emailSecurityAlerts';
+
+async function securityAlertEmailAddress(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const [row] = await db.query<{ opted_out: boolean; email: string | null }>(
+      `select coalesce((us.settings -> 'notifications' ->> $2) = 'false', false) as opted_out,
+              p.email as email
+         from public.profiles as p
+         left join public.user_settings as us on us.user_id = p.id
+        where p.id = $1
+        limit 1`,
+      [userId, SECURITY_EMAIL_PREFERENCE_KEY],
+    );
+    return row && !row.opted_out && row.email ? row.email : null;
+  } catch (error) {
+    logger.warn({ error, userId }, '[notifications] security alert preference unreadable');
+    return null;
+  }
 }
 
 export async function notifyAccountCompromiseContained(

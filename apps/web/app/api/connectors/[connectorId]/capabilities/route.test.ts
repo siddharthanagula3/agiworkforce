@@ -58,6 +58,7 @@ beforeEach(() => {
               toolName: 'microsoft_docs_search',
               title: fence('title', 'Search Microsoft docs'),
               description: fence('description', 'Search official Microsoft documentation.'),
+              inputSchema: { type: 'object', properties: {} },
               visibility: 'model',
             },
           ],

@@ -100,7 +100,10 @@
     "noArchived": "没有已归档的对话",
     "noConversations": "暂无对话",
     "showActive": "返回活跃对话",
-    "showArchived": "显示已归档对话（{{count}}）"
+    "showArchived": "显示已归档对话（{{count}}）",
+    "archivedToast": "对话已归档",
+    "archivedUndo": "撤销",
+    "archivedView": "查看已归档"
   },
   "emptyChat": {
     "neutralHeadline": "今天我能帮你做什么？",
@@ -163,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} 个文件",
+    "fileCount_other": "{{count}} 个文件",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "目前草图仅保留在本次会话中, 关闭应用后画板会被清空。"
+    "sessionOnlyNotice": "目前草图仅保留在本次会话中, 关闭应用后画板会被清空。",
+    "elementCount_one": "{{count}} 个元素",
+    "elementCount_other": "{{count}} 个元素"
   }
 }

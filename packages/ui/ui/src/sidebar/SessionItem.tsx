@@ -153,6 +153,13 @@ function SessionItemBase({
           <span className="sr-only">{t('sidebar.running', 'Running')}</span>
         </span>
       )}
+      {session.needsYou && (
+        <span
+          data-testid={`session-needs-you-${session.id}`}
+          className="h-2 w-2 shrink-0 rounded-full bg-[var(--chat-warning-fg)]"
+          aria-hidden="true"
+        />
+      )}
       {session.agiWork && (
         <span
           data-testid={`session-agi-work-${session.id}`}
@@ -173,9 +180,14 @@ function SessionItemBase({
 
   // The dot is the only thing separating a task from a chat, so the row's
   // accessible name has to carry the mode rather than leave it to colour.
-  const rowAccessibleName = session.agiWork
-    ? `${rowLabel}, ${t('sidebar.agiWork', 'AGI Work')}`
-    : undefined;
+  const rowNameParts = [
+    rowLabel,
+    session.agiWork ? t('sidebar.agiWork', 'AGI Work') : null,
+    session.needsYou ? t('sidebar.needsYou', 'Needs you') : null,
+    session.runState === 'running' ? t('sidebar.running', 'Running') : null,
+    session.unread ? t('sidebar.unread', 'Unread') : null,
+  ].filter((part): part is string => Boolean(part));
+  const rowAccessibleName = rowNameParts.length > 1 ? rowNameParts.join(', ') : undefined;
 
   const rowClassName = cn(
     'flex h-[34px] min-w-0 flex-1 items-center overflow-hidden px-3 text-left pointer-coarse:h-11',

@@ -40,15 +40,11 @@ nothing is left.
 
 - Done when: An administrator can see workspace groups with their members, create or sync groups, and grant roles or permissions to a group.
 - Wave: 3
-- Already works on: api
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Groups exist only when an identity provider pushes them over SCIM; administrators cannot create a group or edit its members in the console, and groups carry roles only (no sharing, policy or budget scope). | ui |
-| desktop | partial | Groups exist only when an identity provider pushes them over SCIM; administrators cannot create a group or edit its members in the console, and groups carry roles only (no sharing, policy or budget scope). | ui |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:543-560`, `apps/web/features/workspace-console/components/WorkspaceRoles.tsx:477-480`, `apps/web/app/api/settings/organization/groups/[groupId]/roles/route.ts:26-54`, `apps/web/features/workspace-console/components/WorkspaceIdentityPanels.tsx:104-109`
 
 ## S87.05: Roles.
 
@@ -297,9 +293,6 @@ Code: `apps/web/app/workspace/data/page.tsx:24-24`, `apps/web/features/workspace
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The extension contributes no VS Code policy settings; only the local CLI runtime it drives honours the machine-wide managed-settings.json. | surface-only |
-
-Code: `apps/cli/src/features/hooks/managed.rs:137-156`
 
 ## S87.28: Audit-log viewer.
 

@@ -46,7 +46,7 @@ const FeedbackSchema = z.object({
   user_id: z.string().trim().max(200).nullish(),
   metadata: z
     .object({
-      source: z.enum(['desktop', 'web']).optional(),
+      source: z.enum(['desktop', 'web', 'vscode']).optional(),
       platform: z.string().trim().max(100),
       version: z.string().trim().max(100),
       user_agent: z.string().trim().max(500),

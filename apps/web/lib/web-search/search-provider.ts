@@ -90,6 +90,7 @@ export type WebSearchProviderOutcome =
 export interface WebSearchProviderRequest {
   query: string;
   maxResults: number;
+  domainFilter?: readonly string[];
   apiKey?: string;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;

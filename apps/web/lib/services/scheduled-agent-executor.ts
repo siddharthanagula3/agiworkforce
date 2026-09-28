@@ -6,7 +6,17 @@ import {
   type ContextCandidate,
   type ContextSourceLoader,
 } from '@agiworkforce/context-engine';
-import { classifyTaskLocally, detectIndicScript, resolveAutoRoute } from '@agiworkforce/routing';
+import {
+  classifyTaskLocally,
+  detectIndicScript,
+  resolveAutoRoute,
+  type AutoRoutingRequest,
+} from '@agiworkforce/routing';
+import {
+  sideCallRoutingRequest,
+  sideCallTrainingOptOut,
+} from '@/lib/server/side-call-training-policy';
+import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import {
   DomainErrorCode,
@@ -51,6 +61,7 @@ import {
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import { EXECUTE_CODE_TOOL, resolveTurnCodeExecutionTools } from '@/lib/e2b/execution-tools';
 import { e2bProvisioningReady } from '@/lib/e2b/gate';
+import { e2bChatTemplate } from '@/lib/e2b/chat-template';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
   formatProjectSystemPrompt,
@@ -269,6 +280,7 @@ async function buildScheduledToolPlan(input: {
     provider,
     stream: true,
     e2bEnabled: e2bProvisioningReady(),
+    officeRendering: e2bChatTemplate() !== null,
     toolsCapable: true,
     codeExecutionCapable: capabilities.codeExecution === true,
   });
@@ -638,20 +650,31 @@ async function runScheduledCompletion(input: {
   };
 }
 
-function selectScheduledRoute(
+const NO_TRAINING_MODEL_MESSAGE =
+  'No model on your plan keeps your chats out of training right now, so this scheduled run did not start.';
+
+async function selectScheduledRoute(
+  scope: { db: Parameters<typeof sideCallRoutingRequest>[0]; userId: string },
   task: ScheduleTask,
   taskType: ReturnType<typeof classifyTaskLocally>['type'],
   subscriptionTier: string,
-): ScheduledRunRoute {
-  const route = resolveAutoRoute({
+): Promise<ScheduledRunRoute> {
+  const baseRouting: AutoRoutingRequest = {
     selection: task.model ?? 'auto',
     taskType,
     subscriptionTier,
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
-  });
+  };
+  const routing = await sideCallRoutingRequest(scope.db, scope.userId, baseRouting);
+  if (!routing) throw new Error(NO_TRAINING_MODEL_MESSAGE);
+  const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
-    throw new Error('The selected model is not available for scheduled managed execution');
+    throw new Error(
+      routing === baseRouting
+        ? 'The selected model is not available for scheduled managed execution'
+        : NO_TRAINING_MODEL_MESSAGE,
+    );
   }
   if (route.harnessId.endsWith('/media')) {
     throw new Error('Scheduled media generation is unavailable');
@@ -732,7 +755,14 @@ export const executeScheduledAgent: ScheduledTaskExecutor = async function execu
   const taskType = classifyTaskLocally(prompt, []).type;
   const route = resume
     ? resumedRoute(resume.checkpoint.route)
-    : selectScheduledRoute(task, taskType, subscriptionTier);
+    : await selectScheduledRoute(scope, task, taskType, subscriptionTier);
+  if (
+    resume &&
+    !modelKeepsInputsOutOfTraining(route.modelKey) &&
+    (await sideCallTrainingOptOut(scope.db, scope.userId))
+  ) {
+    throw new Error(NO_TRAINING_MODEL_MESSAGE);
+  }
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const isFlagshipRoute = isFlagshipRoutingSlot(getSlotForModel(route.modelKey));
 

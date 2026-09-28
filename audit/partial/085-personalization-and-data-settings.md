@@ -10,29 +10,27 @@ nothing is left.
 
 - Done when: The user can view and edit their account profile (name, photo, email) on the surface, and the change is saved to the account.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | VS Code shows the signed-in name and email read-only in the account picker; changing name or photo requires the web app and there is no link to the profile page. | ui |
 | chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
 | api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension-vscode/src/features/account-auth/accountPresentation.ts:42-57`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`, `apps/web/app/api/me/route.ts:347-347`
 
 ## S85.02: Custom instructions.
 
 - Done when: The user can write custom instructions on the surface and they are applied to that surface's chats until changed or switched off.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Instructions apply to every Managed Cloud chat, but not when a free promotional (free-pool) model is picked: /api/models/free-quota and /experiential-free build no personalization preamble. | handler |
 | desktop | partial | Same as web: instructions are skipped for free promotional (free-pool) models. | handler |
-| cli | partial | Global instructions work only through ~/.agiworkforce/CLAUDE.md; the ~/.agiworkforce/INSTRUCTIONS.md that `agi init` creates and says is loaded globally is only read when the working directory is under $HOME, and never on case-sensitive file systems (the loader looks for instructions.md). No slash command edits them. | ui |
 | chrome | partial | Chrome cannot view or edit custom instructions; ones saved on web or mobile are applied by the server to Chrome Managed Cloud chats. | ui |
 
 Code: `apps/web/features/settings/components/WebSettingsModal.tsx:186-211`, `apps/web/features/settings/sections/GeneralSection.tsx:721-766`, `apps/web/features/settings/sections/GeneralSection.tsx:313-326`, `apps/web/lib/server/user-identity.ts:205-228`
@@ -116,57 +114,41 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:284-293`, `apps/web
 
 - Done when: The user can choose whether their chats are kept in history (and synced to the account) or not saved.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | The "start new chats as temporary" default exists, but temporary chats still leak: /api/search returns their titles and messages, and the first turn of a new temporary chat is saved to history (LQA-01), contradicting the Privacy copy. | handler |
 | desktop | partial | Same as web: temporary chats still appear in global search (LQA-01). | handler |
 | mobile | partial | The Temporary Chat switch works, but the server search (/api/search) still returns temporary chats' titles and messages (LQA-01). | handler |
-| cli | partial | History can be turned off only per run with --no-session-persistence; there is no saved setting to stop keeping sessions. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | F1: the cited toggle is 'Save Managed Cloud chats to my account' (cloud mirroring); with it off, flushConversation skips the account sync but chats are still written to the extension's local history in chrome.storage, and the extension has no temporary/not-saved option. The criterion is 'kept in history ... or not saved'; only the sync half exists: partial. |  |
 
 Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-752`, `apps/web/lib/hooks/useConversations.ts:450-461`, `apps/web/app/api/search/route.ts:256-262`, `apps/mobile/src/features/settings/general/index.tsx:48-54`
 
-## S85.14: Diagnostic-sharing choice.
-
-- Done when: The user can choose whether crash reports and diagnostics are sent, and the choice is honoured.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
-
-Code: `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`, `apps/cli/src/crash_reports.rs:35-50`, `apps/cli/src/lib.rs:3106-3111`
-
 ## S85.16: Temporary-chat preferences.
 
 - Done when: The user can make new chats temporary by default (not saved, not used for memory) and the preference is honoured.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Only a per-run --no-session-persistence flag; no saved default to always start sessions without history. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:428-430`, `apps/cli/src/lib.rs:3001-3006`
 
 ## S85.17: Archived-chat management.
 
 - Done when: The user can list archived chats, restore them, and delete them.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | agi session archive/unarchive work on local sessions, but archived sessions cannot be listed (agi session list shows active only) and account archived chats are not reachable from the CLI. | ui |
 | vscode | partial | Developer sessions can be archived, but the list excludes archived sessions and there is no command to view or restore them. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/cli/src/lib.rs:1255-1258`, `apps/cli/src/lib.rs:2847-2867`, `apps/cli/src/lib.rs:2702-2705`, `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`
+Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1182`, `apps/extension-vscode/src/features/trees/conversationTreeProvider.ts:108-114`
 
 ## S85.18: Delete all chats.
 
@@ -213,15 +195,12 @@ Code: `apps/cli/src/repl/slash_commands.rs:149-151`
 
 - Done when: The user can import memories exported from another assistant and they become saved memories.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | `agi migrate claude` copies Claude Code's ~/.claude/CLAUDE.md into the CLI's global memory file, but the CLI cannot import another assistant's memory export into account memory. | ui, handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:3849-3856`, `apps/cli/src/ecosystem.rs:566-571`
 
 ## S85.23: Clear local storage.
 

@@ -409,12 +409,22 @@ pub async fn run_daemon(config: &CliConfig) -> Result<()> {
     drop(tx);
 
     // Run the execution loop (processes trigger events)
+    let quiet_periods: HashMap<String, std::time::Duration> = triggers_config
+        .triggers
+        .iter()
+        .filter_map(|t| {
+            t.filter
+                .quiet_period_secs
+                .map(|secs| (t.id.clone(), std::time::Duration::from_secs(secs)))
+        })
+        .collect();
     let mut shutdown_rx_exec = shutdown_rx.clone();
     let config_owned = config.clone();
     let hooks_config_exec = hooks_config.clone();
     let exec_handle = tokio::spawn(async move {
         run_execution_loop(
             rx,
+            quiet_periods,
             config_owned,
             hooks_config_exec,
             log_dir,
@@ -718,6 +728,20 @@ async fn webhook_handler(
         }
     };
 
+    let event_type = ["x-github-event", "x-gitlab-event", "x-event-type"]
+        .iter()
+        .find_map(|name| headers.get(*name).and_then(|value| value.to_str().ok()));
+    if !trigger.filter.allows_event(event_type) || !trigger.filter.allows_payload(&body) {
+        return (
+            axum::http::StatusCode::OK,
+            format!(
+                "Trigger '{}' skipped: the event did not match its filter",
+                trigger.id
+            ),
+        )
+            .into_response();
+    }
+
     // Use the request body as prompt context, falling back to configured prompt.
     // Webhook payloads are wrapped in quarantine delimiters to prevent prompt injection.
     let prompt = if body.trim().is_empty() {
@@ -823,13 +847,12 @@ async fn run_file_watcher(
                     None => break,
                 };
 
-                // Only care about create/modify events
-                if !matches!(
-                    event.kind,
-                    notify::EventKind::Create(_) | notify::EventKind::Modify(_)
-                ) {
-                    continue;
-                }
+                let kind = match event.kind {
+                    notify::EventKind::Create(_) => "create",
+                    notify::EventKind::Modify(_) => "modify",
+                    notify::EventKind::Remove(_) => "remove",
+                    _ => continue,
+                };
 
                 for path in &event.paths {
                     let path_str = path.display().to_string();
@@ -846,6 +869,14 @@ async fn run_file_watcher(
                         // prefix) so a watch of `/tmp` does not match a sibling
                         // like `/tmpfoo/x`.
                         if !path.starts_with(Path::new(watch_path)) {
+                            continue;
+                        }
+                        let kind_allowed = if t.filter.events.is_empty() {
+                            kind != "remove"
+                        } else {
+                            t.filter.allows_event(Some(kind))
+                        };
+                        if !kind_allowed {
                             continue;
                         }
 
@@ -908,6 +939,82 @@ async fn run_file_watcher(
     Ok(())
 }
 
+pub fn list_triggers() -> Result<String> {
+    let Some(config) = hooks::load_triggers()? else {
+        return Ok(format!(
+            "No triggers yet. Define them in {}.",
+            hooks::triggers_path()?.display()
+        ));
+    };
+    let mut lines = vec![format!("Triggers ({}):", config.triggers.len())];
+    for t in &config.triggers {
+        let kind = match t.trigger_type {
+            TriggerType::Cron => format!("cron {}", t.cron.as_deref().unwrap_or("?")),
+            TriggerType::Webhook => format!("webhook {}", t.webhook_path.as_deref().unwrap_or("/")),
+            TriggerType::FileWatcher => format!("files {}", t.watch_path.as_deref().unwrap_or("?")),
+        };
+        lines.push(format!(
+            "  {:<20} {:<32} {}",
+            t.id,
+            kind,
+            if t.enabled { "on" } else { "off" }
+        ));
+        let filter = &t.filter;
+        if !filter.events.is_empty() {
+            lines.push(format!("      events: {}", filter.events.join(", ")));
+        }
+        for (pointer, value) in &filter.conditions {
+            lines.push(format!("      when {pointer} = {value}"));
+        }
+        if let Some(secs) = filter.quiet_period_secs {
+            lines.push(format!("      quiet for {secs}s after each run"));
+        }
+    }
+    Ok(lines.join("\n"))
+}
+
+pub fn set_trigger_filter(
+    id: &str,
+    events: &[String],
+    conditions: &[String],
+    quiet_for: Option<u64>,
+    clear: bool,
+) -> Result<String> {
+    let mut config =
+        hooks::load_triggers()?.ok_or_else(|| anyhow::anyhow!("No triggers.json to update."))?;
+    let trigger = config
+        .triggers
+        .iter_mut()
+        .find(|t| t.id == id)
+        .ok_or_else(|| anyhow::anyhow!("No trigger named {id}. `agi triggers list` shows them."))?;
+    if clear {
+        trigger.filter = hooks::TriggerFilter::default();
+    }
+    if !events.is_empty() {
+        trigger.filter.events = events.to_vec();
+    }
+    for condition in conditions {
+        let (pointer, value) = condition
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("--when takes /json/pointer=value, got {condition}"))?;
+        let pointer = pointer.trim();
+        if !pointer.starts_with('/') {
+            bail!("--when needs a JSON pointer starting with '/', such as /sender/login");
+        }
+        let value = serde_json::from_str(value.trim())
+            .unwrap_or_else(|_| serde_json::Value::String(value.trim().to_string()));
+        trigger.filter.conditions.insert(pointer.to_string(), value);
+    }
+    if quiet_for.is_some() {
+        trigger.filter.quiet_period_secs = quiet_for.filter(|secs| *secs > 0);
+    }
+    let path = hooks::save_triggers(&config)?;
+    Ok(format!(
+        "Updated trigger {id} in {}. Restart `agi --daemon` to apply it.",
+        path.display()
+    ))
+}
+
 // ---------------------------------------------------------------------------
 // Execution loop
 // ---------------------------------------------------------------------------
@@ -915,12 +1022,14 @@ async fn run_file_watcher(
 /// Process trigger events: spawn agent sessions for each fired trigger.
 async fn run_execution_loop(
     mut rx: mpsc::UnboundedReceiver<TriggerEvent>,
+    quiet_periods: HashMap<String, std::time::Duration>,
     config: CliConfig,
     hooks_config: HooksConfig,
     log_dir: PathBuf,
     semaphore: Arc<Semaphore>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) {
+    let mut last_started: HashMap<String, std::time::Instant> = HashMap::new();
     loop {
         tokio::select! {
             _ = wait_shutdown(shutdown_rx) => break,
@@ -929,6 +1038,21 @@ async fn run_execution_loop(
                     Some(e) => e,
                     None => break,
                 };
+                if let Some(quiet) = quiet_periods.get(&event.trigger_id) {
+                    let now = std::time::Instant::now();
+                    if last_started
+                        .get(&event.trigger_id)
+                        .is_some_and(|last| now.duration_since(*last) < *quiet)
+                    {
+                        eprintln!(
+                            "{} Trigger '{}' repeated inside its quiet period, skipped",
+                            ts::accent("daemon:"),
+                            event.trigger_id
+                        );
+                        continue;
+                    }
+                    last_started.insert(event.trigger_id.clone(), now);
+                }
 
                 let config = config.clone();
                 let hooks_config = hooks_config.clone();
@@ -1241,6 +1365,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_ok());
@@ -1258,6 +1383,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_err());
@@ -1276,6 +1402,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_err());
@@ -1293,6 +1420,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_ok());
@@ -1310,6 +1438,7 @@ mod tests {
             webhook_path: Some("/deploy".to_string()),
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_ok());
@@ -1327,6 +1456,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_err());
@@ -1344,6 +1474,7 @@ mod tests {
             webhook_path: None,
             watch_path: None,
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_err());
@@ -1362,6 +1493,7 @@ mod tests {
             webhook_path: None,
             watch_path: Some("/nonexistent/path/that/does/not/exist".to_string()),
             watch_glob: None,
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_err());
@@ -1381,6 +1513,7 @@ mod tests {
             webhook_path: None,
             watch_path: Some(workspace.path().to_string_lossy().into_owned()),
             watch_glob: Some("*.rs".to_string()),
+            filter: Default::default(),
         };
         let result = validate_triggers(&[&trigger]);
         assert!(result.is_ok());

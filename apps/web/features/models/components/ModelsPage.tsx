@@ -7,6 +7,7 @@ import { useChatModelStore } from '@agiworkforce/unified-chat';
 import { useModelStore } from '@shared/stores/model-store';
 import { useModelCatalogue } from '@features/chat/lib/use-model-catalogue';
 import { useModelFavourites } from '@features/chat/lib/use-model-favourites';
+import { compareAnswersHref } from '../lib/compare-answers';
 import { ModelCatalogueBrowser } from './ModelCatalogueBrowser';
 
 export function ModelsPage() {
@@ -26,6 +27,11 @@ export function ModelsPage() {
     [recordRecentModel, router, setSelectedModelId],
   );
 
+  const handleCompareAnswers = useCallback(
+    (modelIds: readonly string[]) => router.push(compareAnswersHref(modelIds)),
+    [router],
+  );
+
   return (
     <ModelCatalogueBrowser
       entries={catalogue.entries}
@@ -38,6 +44,7 @@ export function ModelsPage() {
       onRetry={catalogue.retry}
       onToggleFavourite={toggleFavourite}
       onTry={handleTry}
+      onCompareAnswers={handleCompareAnswers}
     />
   );
 }

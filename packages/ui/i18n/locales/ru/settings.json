@@ -99,5 +99,27 @@
     "groupSettings": "Настройки",
     "groupCustomize": "Настроить",
     "groupDesktop": "Настольное приложение"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} пользовательская команда",
+    "customCommands_few": "{{count}} пользовательские команды",
+    "customCommands_many": "{{count}} пользовательских команд",
+    "customCommands_other": "{{count}} пользовательской команды",
+    "allArchivedChats_one": "Все архивные чаты ({{count}})",
+    "allArchivedChats_few": "Все архивные чаты ({{count}})",
+    "allArchivedChats_many": "Все архивные чаты ({{count}})",
+    "allArchivedChats_other": "Все архивные чаты ({{count}})",
+    "followUps_one": "{{count}} уточнение",
+    "followUps_few": "{{count}} уточнения",
+    "followUps_many": "{{count}} уточнений",
+    "followUps_other": "{{count}} уточнения",
+    "members_one": "{{count}} участник",
+    "members_few": "{{count}} участника",
+    "members_many": "{{count}} участников",
+    "members_other": "{{count}} участника",
+    "models_one": "{{count}} модель",
+    "models_few": "{{count}} модели",
+    "models_many": "{{count}} моделей",
+    "models_other": "{{count}} модели"
   }
 }

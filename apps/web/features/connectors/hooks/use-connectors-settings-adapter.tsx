@@ -15,7 +15,10 @@ import { ConnectorCapabilitiesPanel } from '@/features/connectors/components/Con
 import { ConnectorHealthDashboard } from '@/features/connectors/components/ConnectorHealthDashboard';
 import { McpResourceList } from '@/features/chat/components/mcp/McpResourceList';
 import { ConnectorConsentSummary } from '@/features/connectors/components/ConnectorConsentSummary';
-import { ConnectorScopeList } from '@/features/connectors/components/ConnectorScopeList';
+import {
+  ConnectorGrantedScopeList,
+  ConnectorScopeList,
+} from '@/features/connectors/components/ConnectorScopeList';
 import {
   brokerOutcomeMessage,
   currentConnectorReturnPath,
@@ -91,6 +94,7 @@ const ConnectorsResponseSchema = z.object({
       connectedAt: z.string().optional(),
       needsReauthorization: z.boolean().optional(),
       health: z.string().min(1).optional(),
+      scopes: z.array(z.string()).optional(),
     }),
   ),
   available: z.array(z.string().min(1)).optional(),
@@ -128,6 +132,7 @@ type ParsedConnectorRow = {
   connectedAt?: string;
   needsReauthorization?: boolean;
   health?: string;
+  scopes?: string[];
 };
 
 type ParsedCustomConnectorRow = {
@@ -176,6 +181,9 @@ function readConnectorResponse(value: unknown): {
       if (typeof row['health'] === 'string' && row['health'].length > 0) {
         parsed.health = row['health'];
       } else degraded = true;
+    }
+    if (Array.isArray(row['scopes'])) {
+      parsed.scopes = row['scopes'].filter((scope): scope is string => typeof scope === 'string');
     }
     rows.push(parsed);
   }
@@ -340,9 +348,7 @@ export function useConnectorsSettingsAdapter({
   authedHeaders,
   directorySkillActions,
 }: ConnectorsSettingsAdapterParams): ConnectorsSettingsAdapterResult {
-  const [connectedConnectors, setConnectedConnectors] = useState<
-    { connectorId: string; connectedAt?: string; needsReauthorization?: boolean; health?: string }[]
-  >([]);
+  const [connectedConnectors, setConnectedConnectors] = useState<ParsedConnectorRow[]>([]);
   // OAuth grants the server reports as expired or revoked. `/api/connectors`
   // has always returned this per row; nothing outside the Connectors page read
   // it, so a connector could stop working and the only way to find out was to
@@ -925,6 +931,12 @@ export function useConnectorsSettingsAdapter({
                 </ul>
               </div>
             ) : null}
+            <ConnectorGrantedScopeList
+              scopes={
+                connectedConnectors.find((connector) => connector.connectorId === connectorId)
+                  ?.scopes ?? []
+              }
+            />
             <button
               type="button"
               onClick={() =>

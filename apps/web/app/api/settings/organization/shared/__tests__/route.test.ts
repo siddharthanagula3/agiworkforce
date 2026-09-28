@@ -33,6 +33,24 @@ const CONNECTOR = '44444444-4444-4444-8444-444444444444';
 function respondFor(role: 'owner' | 'admin' | 'member' | 'viewer') {
   permissionRole.value = role;
   mockNeonQuery.mockImplementation(async (sql: string) => {
+    if (/from public\.organization_members om/i.test(sql)) {
+      return [
+        {
+          user_id: 'user-owner',
+          role: 'owner',
+          joined_at: '2026-01-01T00:00:00.000Z',
+          display_name: 'Owner Name',
+          email: 'owner@example.com',
+        },
+        {
+          user_id: 'user-member',
+          role: 'member',
+          joined_at: '2026-01-02T00:00:00.000Z',
+          display_name: null,
+          email: 'member@example.com',
+        },
+      ];
+    }
     if (/from public\.organization_shared_projects s/i.test(sql)) {
       return [
         {
@@ -110,7 +128,7 @@ describe('GET /api/settings/organization/shared', () => {
     const body = (await response.json()) as {
       organizationId: string;
       canManageSharing: boolean;
-      members: { userId: string }[];
+      members: { userId: string; displayName: string | null; email: string | null }[];
       sharedProjects: { projectId: string; memberGrants: { userId: string; access: string }[] }[];
       sharedConnectors: { orgShortId: string }[];
     };
@@ -127,7 +145,11 @@ describe('GET /api/settings/organization/shared', () => {
         /from public\.organization_shared_projects s/i.test(String(sql)),
       ),
     ).toBe(false);
-    expect(mockNeonQuery).toHaveBeenCalledTimes(1);
+    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
+    expect(body.members.map((m) => m.displayName ?? m.email)).toEqual([
+      'Owner Name',
+      'member@example.com',
+    ]);
   });
 
   it('never lets a connector credential reach the wire', async () => {

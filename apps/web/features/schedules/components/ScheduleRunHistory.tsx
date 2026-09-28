@@ -72,16 +72,18 @@ function runStatusIcon(run: ScheduleRun) {
   return <XCircle className="h-4 w-4 text-danger" aria-hidden="true" />;
 }
 
-function RunRow({
+export function RunRow({
   run,
   timezone,
   onResolveApproval,
   approvalPending,
+  scheduleName,
 }: {
   run: ScheduleRun;
   timezone: string;
   onResolveApproval: (run: ScheduleRun, decision: ScheduleApprovalDecision) => void;
   approvalPending: boolean;
+  scheduleName?: string;
 }) {
   const resultText = scheduleResultText(run);
   const pendingApproval = run.status === 'awaiting_approval' ? run.pendingApproval : null;
@@ -89,6 +91,9 @@ function RunRow({
   const timing = scheduleRunTiming(run, timezone);
   return (
     <li className="rounded-xl border border-border/70 bg-background/70 p-3">
+      {scheduleName ? (
+        <p className="mb-1.5 break-words text-sm font-medium text-foreground">{scheduleName}</p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {runStatusIcon(run)}
         <Badge

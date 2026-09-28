@@ -69,6 +69,11 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    if cmd == "/upgrade" {
+        eprintln!("{}", crate::claude_parity::open_upgrade_page());
+        return SlashResult::Handled;
+    }
+
     match crate::claude_parity::handle_shared_command(cmd.as_str(), arg, session) {
         crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
             persist_shared_ui_config(cmd.as_str(), arg, session, config);
@@ -178,6 +183,21 @@ pub(super) async fn handle_slash_command(
             output::print_block(&crate::provider::format_model_list());
             eprintln!("Live local discovery: run `agi models scan` or `agi models status`.");
         }
+        "/skills" if arg.starts_with("import") => {
+            let path = arg.trim_start_matches("import").trim();
+            if path.is_empty() {
+                output::print_warn("Usage: /skills import <path to SKILL.md or its folder>");
+            } else {
+                match crate::skills::import_skill(std::path::Path::new(
+                    &crate::path_security::expand_home(path),
+                )) {
+                    Ok(target) => {
+                        output::print_info(&format!("Imported the skill to {}.", target.display()))
+                    }
+                    Err(reason) => output::print_warn(&reason),
+                }
+            }
+        }
         "/skills" => {
             let all = crate::skills::discover_skills();
             output::print_block(&crate::skills::format_skill_list(&all));
@@ -216,6 +236,10 @@ pub(super) async fn handle_slash_command(
             let agents = crate::agents::discover_agents();
             output::print_block(&crate::agents::format_subagents(&agents));
         }
+        "/personalize" => match crate::cloud::personalization::run(arg).await {
+            Ok(text) => output::print_block(&text),
+            Err(reason) => output::print_warn(&reason),
+        },
         "/task" | "/tasks" => {
             registry::tasks_for_display(session.subagent_manager.as_ref(), arg)
                 .await
@@ -575,6 +599,14 @@ pub(super) async fn handle_slash_command(
             if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
                 return SlashResult::Prompt(prompt);
             }
+            match crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg) {
+                Some(Ok(prompt)) => return SlashResult::Prompt(prompt),
+                Some(Err(reason)) => {
+                    output::print_warn(&reason);
+                    return SlashResult::Handled;
+                }
+                None => {}
+            }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::McpPrompt(input.to_string());
             }
@@ -677,7 +709,7 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
 
 fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config: &mut CliConfig) {
     match cmd {
-        "/output-style" if !arg.trim().is_empty() => {
+        "/output-style" if crate::claude_parity::output_style_arg_persists(arg) => {
             if let Err(err) = config.persist_output_style_project(&session.output_style) {
                 output::print_warn(&format!("Failed to persist output style: {err}"));
             }

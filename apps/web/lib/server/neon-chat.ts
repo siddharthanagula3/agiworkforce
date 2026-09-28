@@ -25,6 +25,7 @@ export type ChatConversationRow = {
   is_temporary: boolean;
   active_leaf_message_id?: string | null;
   work_mode?: string | null;
+  needs_you?: boolean;
   draft?: string | null;
   draft_updated_at?: string | null;
   created_at: string;
@@ -58,6 +59,13 @@ export const CONVERSATION_WORK_MODE_SELECT = `(
        order by r.created_at asc
        limit 1
     ) as work_mode`;
+
+export const CONVERSATION_NEEDS_YOU_SELECT = `exists (
+      select 1
+        from cloud_agent_runs r
+       where r.conversation_id = web_conversations.id
+         and r.state in ('awaiting_input', 'awaiting_approval', 'paused')
+    ) as needs_you`;
 
 export async function requireCurrentUserId(request?: NextRequest): Promise<string> {
   if (request) {

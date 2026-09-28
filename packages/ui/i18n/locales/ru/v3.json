@@ -100,7 +100,10 @@
     "noArchived": "Архивных чатов нет",
     "noConversations": "Бесед пока нет",
     "showActive": "Вернуться к активным чатам",
-    "showArchived": "Показать архивные чаты ({{count}})"
+    "showArchived": "Показать архивные чаты ({{count}})",
+    "archivedToast": "Чат перемещён в архив",
+    "archivedUndo": "Отменить",
+    "archivedView": "Открыть архив"
   },
   "emptyChat": {
     "neutralHeadline": "Чем я могу помочь сегодня?",
@@ -163,8 +166,10 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "{{count}} файл",
+    "fileCount_few": "{{count}} файла",
+    "fileCount_many": "{{count}} файлов",
+    "fileCount_other": "{{count}} файла",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +412,10 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "Пока наброски сохраняются только на время сессии, при закрытии приложения доска очищается."
+    "sessionOnlyNotice": "Пока наброски сохраняются только на время сессии, при закрытии приложения доска очищается.",
+    "elementCount_one": "{{count}} элемент",
+    "elementCount_few": "{{count}} элемента",
+    "elementCount_many": "{{count}} элементов",
+    "elementCount_other": "{{count}} элемента"
   }
 }

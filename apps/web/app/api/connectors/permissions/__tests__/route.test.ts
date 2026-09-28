@@ -83,7 +83,7 @@ describe('/api/connectors/permissions', () => {
     expect(res.status).toBe(200);
     expect((await res.json()) as { destructive: boolean }).toMatchObject({ destructive: true });
     const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(params[4]).toBe(true);
+    expect(params[4]).toEqual([true]);
 
     mockQuery.mockClear();
     await PUT(
@@ -95,7 +95,7 @@ describe('/api/connectors/permissions', () => {
       }),
     );
     const [, readParams] = mockQuery.mock.calls[0] as [string, unknown[]];
-    expect(readParams[4]).toBe(false);
+    expect(readParams[4]).toEqual([false]);
   });
 
   it('PUT 400s an invalid level and never touches the DB', async () => {

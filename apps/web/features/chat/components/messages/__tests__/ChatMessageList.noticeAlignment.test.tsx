@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { ChatMessageList } from '../ChatMessageList';
 
-const MESSAGE_COLUMN_CLASSES = ['mx-auto', 'w-full', 'max-w-3xl', 'px-4'];
+const MESSAGE_COLUMN_CLASSES = ['mx-auto', 'w-full', 'max-w-3xl', 'px-gutter-compact'];
 
 function turn(metadata: Record<string, unknown>, content: string): ChatMessage[] {
   return [

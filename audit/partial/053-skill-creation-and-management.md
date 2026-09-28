@@ -35,14 +35,13 @@ Code: `apps/mobile/src/features/drawer/components/DrawerContent.tsx:115-121`, `a
 
 - Done when: A user can own personal skills that only they have and that they created or added.
 - Wave: 2
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
 | desktop | partial | Every install path, including self-authored plugins, now goes through one gate (install-gate.ts:21-45) that enforces AGI_USER_SKILL_AUTHORING, the workspace plugins gate and organization policy. Personal skills stay off until the lead switches AGI_USER_SKILL_AUTHORING on at the end of the run. | flag-off |
 | mobile | partial | Mobile would list personal skills the server returns but cannot create one; web creation is itself flag-off. | ui, flag-off |
-| vscode | partial | VS Code shows the CLI's personal skills read-only; it cannot add one. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/web/lib/services/user-skill-authoring.ts:3-7`, `apps/web/lib/services/user-skill-service.ts:68-72`, `apps/web/features/skills/hooks/use-skills-settings-adapter.tsx:160-163`, `packages/ui/ui/src/directory/CreatePluginDialog.tsx:179-210`
@@ -51,17 +50,14 @@ Code: `apps/web/lib/services/user-skill-authoring.ts:3-7`, `apps/web/lib/service
 
 - Done when: Skills can be scoped to a project so they load only in that project.
 - Wave: 3
-- Already works on: cli
+- Already works on: cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | VS Code lists the CLI's project skills read-only (scope shown by the runtime); it cannot add one or grant consent. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-30`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`, `apps/cli/src/app_server/surfaces.rs:93-106`
 
 ## S53.06: Skill detail page.
 
@@ -90,15 +86,12 @@ Code: `apps/extension-vscode/src/features/surfaces/surfaceMenu.ts:30-30`, `apps/
 
 - Done when: The product tells users how and when a skill is invoked (slash name, button, or automatic matching).
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Skills are listed as /name in help and autocomplete, but typing one only sends the text as a prompt; nothing loads that skill. | handler |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:376-378`, `apps/cli/src/tui/tui_app.rs:4116-4118`
 
 ## S53.09: Instruction editor.
 
@@ -120,13 +113,13 @@ Code: `apps/web/features/skills/components/SkillEditorDialog.tsx:185-200`, `apps
 
 - Done when: A skill can bundle reference files that the model reads when the skill runs.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
 | desktop | partial | Built-in skills carry reference files the model can read; skills users create or upload hold only SKILL.md, and plugin-directory skills run without their extra files. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Skill packages with references/ are integrity-hashed, but the skill tool never tells the model where the package lives, so the files are reachable only if the instructions carry a usable path. | handler |
 | vscode | partial | Runs through the local CLI runtime, which has the same gap: package files are hashed but their location is not given to the model. | handler |
 | chrome | missing | Not built on this surface. |  |
 
@@ -136,13 +129,13 @@ Code: `packages/ui/ui/src/directory/SkillDetailView.tsx:147-190`, `packages/tool
 
 - Done when: A skill can bundle scripts that run when the skill is used.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Bundled scripts can be read by the model but no skill path executes them (code execution is a separate, default-off sandbox). | handler |
 | desktop | partial | Same as web: scripts readable, never executed by the skill path. | handler |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | scripts/ are part of the hashed package, but the load result gives no package path, so the agent can run them only if the instructions carry an absolute path. | handler |
 | vscode | partial | Same CLI-runtime gap as the CLI cell. | handler |
 | chrome | missing | Not built on this surface. |  |
 
@@ -181,16 +174,14 @@ Code: `packages/tools/skills/src/tool.ts:180-200`
 
 - Done when: A user can explicitly pick a skill for a message and the model then uses that skill.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Skill names appear as slash commands, but /name only sends text; $skill mention matching exists but is unwired, so nothing forces the named skill to load. | handler |
-| vscode | partial | The VS Code / menu lists skills but running one calls the runtime's runCommand, which executes only six built-ins; a skill command fails with a warning. | handler |
 | chrome | missing | Not built on this surface. |  |
 | api | partial | skill_name works on POST /api/llm/v1/chat/completions but is undocumented in the API reference. | ui |
 
-Code: `apps/cli/src/tui/tui_app.rs:376-378`, `apps/cli/src/tui/tui_app.rs:4116-4118`, `apps/cli/src/skills.rs:14-19`, `apps/extension-vscode/src/core/commandSetup.ts:2318-2324`
+Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:613-637`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:498-512`
 
 ## S53.18: Automatic relevance-based invocation.
 
@@ -208,27 +199,24 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:639-639
 
 - Done when: A user can turn an installed skill off and back on without deleting it.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | missing | Not built on this surface. |  |
-| vscode | partial | The runtime client has setSkillEnabled but no VS Code command or list row calls it; the list is read-only. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/extension-vscode/src/integrations/localRuntimeClient.ts:1022-1022`, `apps/extension-vscode/src/features/surfaces/index.ts:382-400`
 
 ## S53.21: Upload/import.
 
 - Done when: A user can upload or import a skill file/package and use it.
 - Wave: 2
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | desktop | partial | Upload skill and Import a SKILL.md create a personal skill, which fails unless AGI_USER_SKILL_AUTHORING=1 (default 0) though the Upload button is always shown; uploading a plugin zip works as the unflagged route. | flag-off |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | No import command: skills are added by copying files into a skills folder; only the Claude migration imports skills. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

@@ -48,6 +48,11 @@ function formatDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
+const AUDIENCE_LABELS: Record<PublishedArtifactSummary['visibility'], string> = {
+  public: 'Anyone with the link',
+  organization: 'Everyone in this workspace',
+};
+
 function formatSize(characters: number): string {
   if (characters < 1000) return `${characters} characters`;
   return `${Math.round(characters / 1000).toLocaleString()}k characters`;
@@ -129,8 +134,9 @@ export function PublishedArtifactsSection() {
           Published artifacts
         </h2>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Artifacts you published to a public page. Anyone with the link can open one, and there is
-          no automatic expiry, unpublishing is the only way to take a page down.
+          Artifacts you published. A public page opens for anyone with the link; a workspace page
+          opens only for signed-in members of your workspace. Pages do not expire, so unpublishing
+          is the only way to take one down.
         </p>
       </div>
 
@@ -203,8 +209,8 @@ export function PublishedArtifactsSection() {
                   <div
                     style={{ marginTop: 'var(--space-1)', color: 'var(--text-3)', fontSize: 12 }}
                   >
-                    {artifact.kind} · {formatSize(artifact.contentChars)} · Published{' '}
-                    {formatDate(artifact.createdAt)}
+                    {AUDIENCE_LABELS[artifact.visibility]} · {artifact.kind} ·{' '}
+                    {formatSize(artifact.contentChars)} · Published {formatDate(artifact.createdAt)}
                     {/* State the serving mode, because it is the security
                         property a publisher should be able to verify. */}
                     {artifact.sandboxed ? ' · runs in a sandboxed frame' : ''}

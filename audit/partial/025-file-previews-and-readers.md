@@ -10,16 +10,13 @@ nothing is left.
 
 - Done when: A PDF opens in an in-product reader.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | PDFs render in the artifact panel (generated PDFs) and in the project Sources/Knowledge preview (browser viewer in an iframe sandboxed allow-same-origin only; needs a live check); the Library and chat attachments fall back to "Download to view". | ui |
-| desktop | partial | PDFs render in the artifact panel (generated PDFs) and in the project Sources/Knowledge preview (browser viewer in an iframe sandboxed allow-same-origin only; needs a live check); the Library and chat attachments fall back to "Download to view". | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:600-603`, `apps/web/features/projects/components/FilePreviewModal.tsx:360-366`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1076-1090`, `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1116-1126`
 
 ## S25.02: Text-file reader.
 
@@ -31,7 +28,6 @@ Code: `apps/web/features/projects/components/SourcesPanel.tsx:600-603`, `apps/we
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
-| vscode | partial | Artifacts open in a VS Code editor tab; uploaded or Library files cannot be opened from the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
@@ -46,7 +42,6 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 | --- | --- | --- | --- |
 | mobile | partial | Artifacts in chat open full-screen with markdown/code rendering; uploaded Library files are only handed to the OS share sheet. | ui |
 | cli | partial | `agi artifacts show` prints an artifact's raw content in the terminal; uploaded or Library files cannot be opened. | ui |
-| vscode | partial | Artifacts open in a VS Code editor tab; uploaded or Library files cannot be opened from the extension. | ui |
 | chrome | missing | Not built on this surface. |  |
 
 Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx:786-792`, `apps/cli/src/lib.rs:1914-1938`, `apps/cli/src/lib.rs:1918-1920`
@@ -80,16 +75,15 @@ Code: `apps/mobile/src/features/chat/components/MessageBubble.tsx:1206-1206`, `a
 
 - Done when: Video files play in an in-product player.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Library viewer plays a video only when the row is previewable; /api/library defaults non-image rows without a stored flag to not previewable, so uploaded videos never open (live E099). | handler |
-| desktop | partial | The Library viewer plays a video only when the row is previewable; /api/library defaults non-image rows without a stored flag to not previewable, so uploaded videos never open (live E099). | handler |
 | mobile | partial | Generated videos open in the in-app browser; Library videos go to the OS share sheet; no in-app player. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1104-1114`, `apps/web/app/api/library/route.ts:40-44`, `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/mobile/src/features/library/index.tsx:140-152`
+Code: `apps/mobile/src/features/chat/components/GeneratedVideo.tsx:1-21`, `apps/mobile/src/features/library/index.tsx:140-152`
 
 ## S25.08: Spreadsheet preview.
 
@@ -98,14 +92,14 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1104-1114
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only generated CSV/table artifacts render as a grid; uploaded .xlsx/.csv files have no grid preview (CSV shows as plain text in project preview, the Library falls back to download). | ui |
-| desktop | partial | Only generated CSV/table artifacts render as a grid; uploaded .xlsx/.csv files have no grid preview (CSV shows as plain text in project preview, the Library falls back to download). | ui |
+| web | partial | Library shows uploaded csv/tsv as a table (ecc859282); project Sources preview still shows csv as plain text and .xlsx only as text. | ui |
+| desktop | partial | Library shows uploaded csv/tsv as a table (ecc859282); project Sources preview still shows csv as plain text and .xlsx only as text. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:489-489`
+Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102`, `apps/web/lib/server/file-text-preview.ts:20-20`
 
 ## S25.10: Document preview.
 
@@ -114,14 +108,14 @@ Code: `packages/ui/unified-chat/src/components/ArtifactRenderer.tsx:489-489`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only generated DOCX artifacts render (mammoth to sanitized HTML in the artifact panel); uploaded .docx files in the Library, projects or chats have no preview. | ui |
-| desktop | partial | Only generated DOCX artifacts render (mammoth to sanitized HTML in the artifact panel); uploaded .docx files in the Library, projects or chats have no preview. | ui |
+| web | partial | Library previews uploaded .docx as extracted text (ecc859282); project Sources preview still has no docx preview. | ui |
+| desktop | partial | Library previews uploaded .docx as extracted text (ecc859282); project Sources preview still has no docx preview. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:284-299`, `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:1839-1850`
+Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1102-1102`, `apps/web/app/api/files/[id]/text/route.ts:57-57`
 
 ## S25.13: Page navigation.
 
@@ -130,13 +124,9 @@ Code: `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:284-299`,
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A cited project PDF opens at the cited page (#page=N) and paging is left to the browser's built-in PDF viewer; the product has no page controls. | ui |
-| desktop | partial | A cited project PDF opens at the cited page (#page=N) and paging is left to the browser's built-in PDF viewer; the product has no page controls. | ui |
 | mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/web/features/projects/components/FilePreviewModal.tsx:360-366`
 
 ## S25.14: Zoom controls.
 
@@ -170,13 +160,9 @@ Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/we
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The Library viewer asks about the whole file ("Ask about this file"); there is no way to target a page or range. | ui |
-| desktop | partial | The Library viewer asks about the whole file ("Ask about this file"); there is no way to target a page or range. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1136-1175`, `apps/web/features/library/components/LibraryView.tsx:189-191`
 
 ## S25.22: Citation-linked highlighting.
 
@@ -185,14 +171,10 @@ Code: `packages/ui/unified-chat/src/components/library/LibraryView.tsx:1136-1175
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | A project-file citation opens the file at the cited page, but nothing highlights the cited passage. | ui |
-| desktop | partial | A project-file citation opens the file at the cited page, but nothing highlights the cited passage. | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/web/features/projects/components/SourcesPanel.tsx:600-603`, `apps/web/features/projects/components/FilePreviewModal.tsx:360-366`
 
 ## S25.25: Full-screen mode.
 
@@ -214,26 +196,22 @@ Code: `apps/web/features/projects/components/SourcesPanel.tsx:107-114`, `apps/we
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | `agi artifacts show --out` saves an artifact's content to disk; uploaded or Library files cannot be downloaded. | ui |
-| vscode | partial | "Save Artifact to Workspace" writes an artifact to disk; uploaded or Library files cannot be downloaded. | ui |
 | chrome | partial | Only files generated in a chat can be opened or downloaded from their chat bubble; there is no file store to download originals from. | ui |
 
-Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension-vscode/src/features/artifacts/artifactActions.ts:145-149`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
+Code: `apps/cli/src/lib.rs:1914-1938`, `apps/extension/src/features/side-panel/bubbles.ts:441-454`
 
 ## S25.27: Download converted representation.
 
 - Done when: Users can download a converted representation of a file (e.g. PDF, text).
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only artifacts export to PDF or Word; an uploaded file cannot be downloaded in another form (e.g. extracted text or a converted document). | ui, handler |
-| desktop | partial | Only artifacts export to PDF or Word; an uploaded file cannot be downloaded in another form (e.g. extracted text or a converted document). | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/library/components/LibraryView.tsx:220-229`
 
 ## S25.28: Copy selected content.
 
@@ -251,15 +229,12 @@ Code: `apps/extension/src/features/side-panel/artifactsDrawer.ts:198-212`
 
 - Done when: Users can open a file in its native application.
 - Wave: 3
-- Already works on: mobile, vscode
+- Already works on: mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | desktop | missing | Not built on this surface. |  |
-| cli | partial | `agi artifacts show --out` writes the file but nothing opens it in the OS default app; `agi artifacts open` opens the web page. | ui |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:1914-1938`
 
 ## S25.30: Unsupported-preview fallback.
 

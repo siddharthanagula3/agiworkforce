@@ -99,5 +99,17 @@
     "groupSettings": "सेटिंग्स",
     "groupCustomize": "कस्टमाइज़",
     "groupDesktop": "डेस्कटॉप ऐप"
+  },
+  "counts": {
+    "customCommands_one": "{{count}} कस्टम कमांड",
+    "customCommands_other": "{{count}} कस्टम कमांड",
+    "allArchivedChats_one": "सभी {{count}} संग्रहीत चैट",
+    "allArchivedChats_other": "सभी {{count}} संग्रहीत चैट",
+    "followUps_one": "{{count}} फ़ॉलो-अप",
+    "followUps_other": "{{count}} फ़ॉलो-अप",
+    "members_one": "{{count}} सदस्य",
+    "members_other": "{{count}} सदस्य",
+    "models_one": "{{count}} मॉडल",
+    "models_other": "{{count}} मॉडल"
   }
 }

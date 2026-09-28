@@ -27,6 +27,10 @@ pub const MAX_CANDIDATES: usize = 20_000;
 /// prompt.
 pub const MAX_MENTION_BYTES: u64 = 256 * 1024;
 
+const MAX_DIRECTORY_ENTRIES: usize = 200;
+
+const RECENT_FIRST: usize = 10;
+
 /// Depth limit for the non-git fallback walk.
 const MAX_WALK_DEPTH: usize = 12;
 
@@ -53,9 +57,37 @@ impl MentionCandidate {
 /// first so top-level files lead an unfiltered popup.
 pub fn workspace_file_candidates(root: &Path) -> Vec<MentionCandidate> {
     let mut paths = git_tracked_and_untracked(root).unwrap_or_else(|| bounded_walk(root));
+    let directories: HashSet<String> = paths
+        .iter()
+        .flat_map(|path| {
+            Path::new(path)
+                .ancestors()
+                .skip(1)
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .map(|parent| format!("{}/", parent.to_string_lossy().replace('\\', "/")))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    let mut recent: Vec<(std::time::SystemTime, String)> = paths
+        .iter()
+        .filter_map(|path| {
+            let modified = std::fs::metadata(root.join(path)).ok()?.modified().ok()?;
+            Some((modified, path.clone()))
+        })
+        .collect();
+    recent.sort_by(|a, b| b.0.cmp(&a.0));
+    let recent: Vec<String> = recent
+        .into_iter()
+        .take(RECENT_FIRST)
+        .map(|(_, path)| path)
+        .collect();
+    paths.extend(directories);
+    paths.retain(|path| !recent.contains(path));
     paths.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
-    paths.truncate(MAX_CANDIDATES);
-    paths.into_iter().map(MentionCandidate::new).collect()
+    let mut ordered = recent;
+    ordered.extend(paths);
+    ordered.truncate(MAX_CANDIDATES);
+    ordered.into_iter().map(MentionCandidate::new).collect()
 }
 
 /// `git ls-files` over the cached and untracked-but-not-ignored sets, which is
@@ -260,6 +292,7 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
 
     let mut context = String::new();
     for mention in mentions {
+        let (mention, range) = split_line_range(&mention, root);
         let resolved = match crate::path_security::validate_workspace_path_with_cwd(&mention, root)
         {
             Ok(path) => path,
@@ -268,6 +301,27 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
                 continue;
             }
         };
+        if resolved.is_dir() {
+            if !include_contents {
+                expansion.skipped.push((
+                    mention,
+                    "workspace is not trusted, only the path was sent".to_string(),
+                ));
+                continue;
+            }
+            match directory_listing(&resolved) {
+                Ok(listing) => {
+                    context.push_str(&format!(
+                        "<directory path=\"{}\">\n{}\n</directory>\n\n",
+                        mention.trim_end_matches('/'),
+                        listing
+                    ));
+                    expansion.inlined.push(mention);
+                }
+                Err(error) => expansion.skipped.push((mention, error.to_string())),
+            }
+            continue;
+        }
         if !resolved.is_file() {
             expansion
                 .skipped
@@ -308,10 +362,26 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
         }
         match std::fs::read_to_string(&resolved) {
             Ok(contents) => {
-                context.push_str(&format!(
-                    "<file path=\"{}\">\n{}\n</file>\n\n",
-                    mention, contents
-                ));
+                match range {
+                    Some((start, end)) => {
+                        let selected: Vec<&str> = contents
+                            .lines()
+                            .skip(start.saturating_sub(1))
+                            .take(end.saturating_sub(start) + 1)
+                            .collect();
+                        context.push_str(&format!(
+                            "<file path=\"{}\" lines=\"{}-{}\">\n{}\n</file>\n\n",
+                            mention,
+                            start,
+                            end,
+                            selected.join("\n")
+                        ));
+                    }
+                    None => context.push_str(&format!(
+                        "<file path=\"{}\">\n{}\n</file>\n\n",
+                        mention, contents
+                    )),
+                }
                 expansion.inlined.push(mention);
             }
             Err(error) => expansion.skipped.push((mention, error.to_string())),
@@ -322,6 +392,61 @@ pub fn expand_mentions(text: &str, root: &Path, include_contents: bool) -> Menti
         expansion.prompt = format!("{context}{text}");
     }
     expansion
+}
+
+fn split_line_range(mention: &str, root: &Path) -> (String, Option<(usize, usize)>) {
+    if root.join(mention).exists() {
+        return (mention.to_string(), None);
+    }
+    let split = mention
+        .rsplit_once("#L")
+        .or_else(|| mention.rsplit_once(':'));
+    let Some((path, range)) = split else {
+        return (mention.to_string(), None);
+    };
+    let range = range.trim_start_matches('L');
+    let (start, end) = range.split_once('-').unwrap_or((range, range));
+    match (
+        start.parse::<usize>(),
+        end.trim_start_matches('L').parse::<usize>(),
+    ) {
+        (Ok(start), Ok(end)) if start >= 1 && end >= start => {
+            (path.to_string(), Some((start, end)))
+        }
+        _ => (mention.to_string(), None),
+    }
+}
+
+pub const AGENT_MENTION_PREFIX: &str = "agent-";
+
+pub fn mentioned_agents(text: &str, root: &Path, known: &[String]) -> Vec<String> {
+    parse_mentions(text, root)
+        .into_iter()
+        .filter_map(|token| token.strip_prefix(AGENT_MENTION_PREFIX).map(str::to_string))
+        .filter(|name| known.contains(name))
+        .collect()
+}
+
+fn directory_listing(directory: &Path) -> std::io::Result<String> {
+    let skipped = crate::repo::index_policy::excluded_directory_names();
+    let mut entries: Vec<String> = std::fs::read_dir(directory)?
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with('.') || skipped.contains(&name.as_str()) {
+                return None;
+            }
+            let is_dir = entry.file_type().is_ok_and(|kind| kind.is_dir());
+            Some(if is_dir { format!("{name}/") } else { name })
+        })
+        .collect();
+    entries.sort();
+    let total = entries.len();
+    entries.truncate(MAX_DIRECTORY_ENTRIES);
+    if total > entries.len() {
+        entries.push(format!("… and {} more", total - entries.len()));
+    }
+    Ok(entries.join("\n"))
 }
 
 #[cfg(test)]

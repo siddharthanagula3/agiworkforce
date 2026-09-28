@@ -6,7 +6,8 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
-import { getModelReasoning } from '@agiworkforce/types';
+import { getModelReasoning, resolveMaxOutputTokens } from '@agiworkforce/types';
+import { formatContextWindow } from '@/lib/models';
 import {
   useModelInstallStore,
   type ModelInstallJob,
@@ -167,6 +168,13 @@ export function ModelRow({
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
             {model.detailLabel}
           </Text>
+          {!isLocal && model.contextWindow > 0 ? (
+            <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }}>
+              {`${formatContextWindow(model.contextWindow)} context · ${formatContextWindow(
+                resolveMaxOutputTokens(model.id),
+              )} output`}
+            </Text>
+          ) : null}
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>

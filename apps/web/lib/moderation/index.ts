@@ -19,7 +19,7 @@ export {
 export interface ManagedPromptModerationInput {
   userId: string;
   segments: readonly string[];
-  surface?: 'managed-chat' | 'managed-image' | 'managed-video';
+  surface?: 'managed-chat' | 'managed-image' | 'managed-video' | 'published-artifact';
 }
 
 export type ManagedPromptModeration =

@@ -125,60 +125,53 @@ Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1725-1731`, `apps/mobile/sr
 
 - Done when: The user can cap how much a task may spend, and the run stops at the cap.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | Spend cap exists only for one-shot runs (agi --max-budget-usd with a prompt); the interactive TUI has no spend budget. | ui |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/lib.rs:477-481`, `apps/cli/src/lib.rs:5020-5022`, `apps/cli/src/agent/chat.rs:945-948`
 
 ## S60.13: Reviewable task plan.
 
 - Done when: Before the agent acts, the user sees its plan and can approve, edit or reject it.
 - Wave: 3
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | plan approve/edit/reject before execution needs a plan checkpoint and resume path in the tool loop like Research; not built | ui, handler |
-| desktop | partial | plan approve/edit/reject before execution needs a plan checkpoint and resume path in the tool loop like Research; not built | ui, handler |
 | mobile | partial | Research runs wait for Approve plan before starting; AGI Work plan steps appear only as Activity log lines, with no plan view and no approve, edit or reject. | ui, handler |
-| cli | partial | Plan mode blocks edits until approval, but /plan accept\|reject exist only in the --no-tui REPL; the TUI can only toggle plan mode off. | ui |
 | vscode | partial | VS Code shows a plan card and offers Plan mode, but has no approve/reject control for the plan. | ui |
 | chrome | partial | Chrome run detail lists plan steps as journal lines only; no approve/reject, and Chrome cannot start AGI Work. | ui, handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts:4719-4719`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`
+Code: `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/chat/components/research/ResearchRunCard.tsx:262-270`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:5576-5606`
 
 ## S60.14: Step list.
 
 - Done when: The task view lists its steps with an accurate per-step status.
 - Wave: 3
-- Already works on: web, desktop, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Steps appear only as a chronological Activity log, not a step list with status. | ui |
-| cli | partial | update_plan/todo_write steps are saved to ~/.agiworkforce/plans and narrated in the REPL; the TUI has no step-list panel. | ui |
 | chrome | partial | Run detail is a flat journal of events; no step list with status. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/runPresentation.ts:227-237`, `apps/cli/src/agent/mod.rs:1332-1341`, `apps/cli/src/agent/chat.rs:2197-2212`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`
 
 ## S60.16: Running-step indicator.
 
 - Done when: While a task runs, the view marks which step is currently executing.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, mobile, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the run state ("Running") and a log line appear; no current-step marker. | ui |
 | chrome | partial | Chrome shows the run state badge and a log; no current-step marker. | ui |
 
-Code: `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:313-329`, `apps/mobile/src/features/tasks/components/CloudRunDetailSheet.tsx:164-166`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:471-481`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:832-837`
 
 ## S60.17: Parallel-work indicator.
 
@@ -216,16 +209,15 @@ Code: `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:3007-30
 
 - Done when: The user can redirect a running task with new guidance without starting over.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | The phone can send guidance to a running desktop local code session (Remote Code "Guidance for the next turn", optionally interrupting); AGI Work cloud runs offer only Approve/Deny with no guidance. | surface-only |
-| cli | partial | The TUI parks input during a turn, so the user can only interrupt (Esc) and send a new prompt; the engine steering path is not reachable from the TUI. | ui |
 | vscode | partial | The cited 'guidance' is only the rejection reason collected when the user rejects a pending tool approval (guidance is undefined on approve, and nothing offers it to a running run). That is not redirecting a running task with new guidance. miss: states/ui; remaining: offer a steer/pause-and-resume control with guidance for running cloud tasks. |  |
 | chrome | partial | The cited guidance field lives inside buildApprovalCard, so it exists only while a run is awaiting_input on a tool approval; a run that is simply running offers Stop and nothing else (no pause, no guidance). The criterion is redirecting a running task; chrome can steer only at an approval prompt. miss: states; remaining: add a pause/steer control for running runs (web has Pause -> Resume with guidance). |  |
 
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189`, `apps/mobile/src/features/companion/remote-code/service.ts:41-49`, `apps/cli/src/tui/tui_app.rs:5123-5135`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:117-129`
+Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189`, `apps/mobile/src/features/companion/remote-code/service.ts:41-49`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:117-129`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:146-150`
 
 ## S60.21: Pause.
 
@@ -255,17 +247,14 @@ Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:178-189
 
 - Done when: After a step fails, the user can retry just that step and the task continues.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | per-step retry needs a resume-from-step path in the tool loop; not built | ui, handler |
-| desktop | partial | per-step retry needs a resume-from-step path in the tool loop; not built | ui, handler |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:603-603`
 
 ## S60.25: Restart task.
 
@@ -306,18 +295,6 @@ Code: `packages/ui/unified-chat/src/components/tasks/TaskDetailPanel.tsx:603-603
 
 Code: `apps/cli/src/agent/chat.rs:1047-1057`
 
-## S60.29: Results summary.
-
-- Done when: When a task ends the user sees a summary of the result.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| vscode | partial | Cloud task detail shows steps and outputs but no result text (only "Open on web"); local chat answers show in the chat. | ui |
-
-Code: `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:67-77`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:90-100`
-
 ## S60.30: Generated deliverables.
 
 - Done when: Files the task produced are listed and can be opened or downloaded.
@@ -335,16 +312,14 @@ Code: `apps/mobile/src/features/tasks/runPresentation.ts:248-249`, `apps/mobile/
 
 - Done when: When a task stops short, the user sees what was done and what remains.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, mobile, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only the "Partially completed" state label and log; no done-versus-remaining summary. | ui |
 | cli | missing | Not built on this surface. |  |
-| vscode | partial | Only the run state and last error; no done-versus-remaining summary. | ui |
 | chrome | partial | Only the state label in the journal; no done-versus-remaining summary. | ui |
 
-Code: `apps/mobile/src/features/tasks/runPresentation.ts:252-257`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunDetail.ts:78-81`, `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
+Code: `apps/extension/src/features/side-panel/cloudRunsPanel.ts:479-480`
 
 ## S60.33: Task sharing.
 

@@ -230,6 +230,7 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     message: "We're experiencing technical difficulties.",
     suggestion: 'Our team has been notified. Please try again in a few minutes.',
     icon: 'error',
+    copyKey: 'server',
   },
   [ErrorCode.SERVICE_UNAVAILABLE]: {
     title: 'Service Unavailable',
@@ -260,6 +261,7 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     message: "You're sending requests too quickly.",
     suggestion: 'Please wait a moment before trying again.',
     icon: 'warning',
+    copyKey: 'rateLimit',
   },
   [ErrorCode.STRIPE_ERROR]: {
     title: 'Payment Issue',
@@ -324,6 +326,7 @@ export function getFriendlyErrorByCode(code: ErrorCodeValue): FriendlyError {
       message: "We weren't able to complete your request.",
       suggestion: 'Please try again. If this keeps happening, contact support.',
       icon: 'error',
+      copyKey: 'fallback',
     }
   );
 }
@@ -477,6 +480,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: 'There is a problem with your API key configuration.',
       suggestion: 'Please check your API key in Settings and try again.',
       icon: 'auth',
+      copyKey: 'apiKey',
     };
   }
 
@@ -515,6 +519,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: 'Could not reach the server.',
       suggestion: 'Please check your internet connection and try again.',
       icon: 'network',
+      copyKey: 'network',
     };
   }
 
@@ -524,6 +529,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: 'The request is taking longer than expected.',
       suggestion: 'Please try again in a moment. If the problem continues, contact support.',
       icon: 'warning',
+      copyKey: 'timeout',
     };
   }
 
@@ -555,6 +561,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: 'Your account does not have permission for this. Nothing was changed.',
       suggestion: 'Ask a workspace admin for access. Retrying will not help.',
       icon: 'auth',
+      copyKey: 'accessDenied',
     };
   }
 
@@ -571,6 +578,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: 'Your session has expired. Your saved work is unaffected.',
       suggestion: 'Sign in again to continue.',
       icon: 'auth',
+      copyKey: 'signIn',
     };
   }
 
@@ -583,6 +591,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
         ? `Please wait ${retryAfterHint} before trying again.`
         : 'Please wait a moment before trying again.',
       icon: 'warning',
+      ...(retryAfterHint ? {} : { copyKey: 'rateLimit' }),
     };
   }
 
@@ -610,6 +619,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       message: "We're experiencing technical difficulties.",
       suggestion: 'Our team has been notified. Please try again in a few minutes.',
       icon: 'error',
+      copyKey: 'server',
     };
   }
 
@@ -618,6 +628,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     message: "We weren't able to complete your request.",
     suggestion: 'Please try again. If this keeps happening, contact support.',
     icon: 'error',
+    copyKey: 'fallback',
   };
 }
 

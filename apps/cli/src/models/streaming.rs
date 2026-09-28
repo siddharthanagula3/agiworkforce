@@ -482,6 +482,20 @@ async fn run_spec_observing(
     } else {
         crate::model_catalog::api_wire_id(model)
     };
+    let support = crate::model_catalog::effort_support(model);
+    let (effort, thinking_budget) = match support {
+        crate::model_catalog::EffortSupport::Unsupported => (None, None),
+        _ => (effort, thinking_budget),
+    };
+    let reasoning_effort = match (&support, effort) {
+        (crate::model_catalog::EffortSupport::Levels(levels), Some(effort)) => {
+            crate::model_catalog::nearest_supported_effort(
+                &effort.label().to_ascii_lowercase(),
+                levels,
+            )
+        }
+        (_, effort) => effort.map(|e| e.openai_effort_str()),
+    };
     let req = ChatRequest {
         model: &wire_model,
         messages,
@@ -499,7 +513,7 @@ async fn run_spec_observing(
         // budget and nothing else, so catalog reasoning models silently ran at
         // provider default no matter what the user chose. Each dialect reads
         // only its own field and ignores the others, so all three are passed.
-        reasoning_effort: effort.map(|e| e.openai_effort_str()),
+        reasoning_effort,
         gemini_thinking_budget: effort.map(|e| e.gemini_thinking_budget()),
         num_ctx: None,
         ollama_think: None,

@@ -225,7 +225,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
         aria-live="polite"
         className="rounded-2xl border border-border bg-card p-5 text-sm"
       >
-        <h2 className="mb-4 text-base font-semibold">Order details</h2>
+        <h2 className="mb-4 text-h4">Order details</h2>
 
         {waitingForSession ? (
           <p className="text-muted-foreground">Loading your account…</p>
@@ -381,7 +381,7 @@ export function UpgradeOrderPanel({ plan, returnPath, onUpgraded }: UpgradeOrder
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-sm font-medium">Payment method</h2>
+              <h2 className="text-h5">Payment method</h2>
               {paymentMethodError ? (
                 <p role="alert" className="mt-1 text-sm text-danger">
                   {paymentMethodError}

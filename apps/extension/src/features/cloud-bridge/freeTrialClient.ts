@@ -22,6 +22,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
+  WEB_SEARCH_CITATION_DELTA_KEY,
   type Effort,
   type InteractiveCard,
   type ManagedQuotaBlockPresentation,
@@ -402,7 +403,16 @@ export type FreeTrialContentPart =
   | {
       type: 'image_url';
       image_url: { url: string; detail: 'auto' | 'low' | 'high' };
-    };
+    }
+  | { type: 'file'; file: { asset_id: string } };
+
+export interface ManagedChatFileAttachment {
+  assetId: string;
+  mimeType: string;
+}
+
+export const MANAGED_CHAT_FILE_ASSET_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface FreeTrialMessage {
   role: 'user' | 'assistant' | 'system';
@@ -436,14 +446,24 @@ function assertAttachmentBudget(attachments: readonly string[]): void {
 export function createMultimodalUserContent(
   text: string,
   attachments: string[],
+  files: readonly ManagedChatFileAttachment[] = [],
 ): FreeTrialContentPart[] {
   assertAttachmentBudget(attachments);
+  if (attachments.length + files.length > MANAGED_CHAT_MAX_ATTACHMENTS) {
+    throw new Error(`Too many attachments: maximum is ${MANAGED_CHAT_MAX_ATTACHMENTS}`);
+  }
   const parts: FreeTrialContentPart[] = [{ type: 'text', text }];
   for (const attachment of attachments) {
     parts.push({
       type: 'image_url',
       image_url: { url: attachment, detail: 'auto' },
     });
+  }
+  for (const file of files) {
+    if (!MANAGED_CHAT_FILE_ASSET_ID.test(file.assetId)) {
+      throw new Error('Unsupported attachment: expected an uploaded file reference');
+    }
+    parts.push({ type: 'file', file: { asset_id: file.assetId } });
   }
   return parts;
 }
@@ -466,6 +486,16 @@ function assertMessageShape(message: FreeTrialMessage): void {
     if (!part || typeof part !== 'object') throw new Error('Invalid managed chat content part');
     if (part.type === 'text') {
       if (typeof part.text !== 'string') throw new Error('Invalid managed chat text part');
+      continue;
+    }
+    if (part.type === 'file') {
+      if (
+        !part.file ||
+        typeof part.file.asset_id !== 'string' ||
+        !MANAGED_CHAT_FILE_ASSET_ID.test(part.file.asset_id)
+      ) {
+        throw new Error('Invalid managed chat file part');
+      }
       continue;
     }
     if (
@@ -510,7 +540,7 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
         continue;
       }
       attachmentCount += 1;
-      attachmentBytes += imageDataUrlByteLength(part.image_url.url);
+      if (part.type === 'image_url') attachmentBytes += imageDataUrlByteLength(part.image_url.url);
       if (
         attachmentCount > MANAGED_CHAT_MAX_ATTACHMENTS ||
         attachmentBytes > MANAGED_CHAT_MAX_ATTACHMENT_BYTES
@@ -525,10 +555,22 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
   return reversed.reverse();
 }
 
+export interface ManagedChatSourceWire {
+  url: string;
+  title: string;
+  publishedDate?: string;
+}
+
+export interface ManagedChatSourcesDelta {
+  citations: ManagedChatSourceWire[];
+  results: ManagedChatSourceWire[];
+}
+
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
   | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
   | { type: 'generated-files'; files: GeneratedFileWire[] }
+  | ({ type: 'sources' } & ManagedChatSourcesDelta)
   | { type: 'interactive-card'; card: InteractiveCard }
   | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'quota-warning'; warning: ManagedQuotaWarningSignal }
@@ -594,9 +636,45 @@ interface ParsedSseFrame {
   agentEvent?: AgentEventEnvelope;
   generatedFiles?: GeneratedFileWire[];
   interactiveCard?: InteractiveCard;
+  sources?: ManagedChatSourcesDelta;
   terminal?: boolean;
   recognized?: boolean;
   error?: Extract<FreeTrialChunk, { type: 'error' }>;
+}
+
+function readSourceRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function parseCitationDelta(payload: unknown): ManagedChatSourceWire[] {
+  const record = readSourceRecord(payload);
+  const url = record?.['url'];
+  const title = record?.['title'];
+  return typeof url === 'string' && url && typeof title === 'string' && title
+    ? [{ url, title }]
+    : [];
+}
+
+function parseSearchResultsDelta(payload: unknown): ManagedChatSourceWire[] {
+  const content = readSourceRecord(payload)?.['content'];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((entry) => {
+    const record = readSourceRecord(entry);
+    const url = record?.['url'];
+    if (!record || typeof url !== 'string' || !url) return [];
+    if (record['type'] !== undefined && record['type'] !== 'web_search_result') return [];
+    const title = typeof record['title'] === 'string' && record['title'] ? record['title'] : url;
+    const pageAge = record['page_age'];
+    return [
+      {
+        url,
+        title,
+        ...(typeof pageAge === 'string' && pageAge ? { publishedDate: pageAge } : {}),
+      },
+    ];
+  });
 }
 
 function protocolError(message = 'Malformed response from AGI Cloud.'): ParsedSseFrame {
@@ -757,6 +835,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
   let agentEvent: AgentEventEnvelope | null = null;
   let generatedFiles: GeneratedFileWire[] = [];
   let interactiveCard: InteractiveCard | null = null;
+  let citations: ManagedChatSourceWire[] = [];
+  let searchResults: ManagedChatSourceWire[] = [];
   let finishReason: unknown;
   const choices = event['choices'];
   if (choices !== undefined) {
@@ -777,6 +857,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         agentEvent = parseAgentEventDelta(deltaRecord['x_agent_event']);
         generatedFiles = parseGeneratedFilesDelta(deltaRecord['x_generated_files']);
         interactiveCard = parseInteractiveCardDelta(deltaRecord['x_interactive_card']);
+        citations = parseCitationDelta(deltaRecord[WEB_SEARCH_CITATION_DELTA_KEY]);
+        searchResults = parseSearchResultsDelta(deltaRecord['x_search_results']);
 
         const streamError = deltaRecord['x_stream_error'];
         if (streamError !== undefined && streamError !== null) {
@@ -849,6 +931,9 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
     ...(agentEvent ? { agentEvent } : {}),
     ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     ...(interactiveCard ? { interactiveCard } : {}),
+    ...(citations.length > 0 || searchResults.length > 0
+      ? { sources: { citations, results: searchResults } }
+      : {}),
     terminal: done === true || (typeof finishReason === 'string' && finishReason.length > 0),
     recognized: true,
   };
@@ -1210,6 +1295,7 @@ export async function* streamFreeChat(
           sawRichOutput = true;
           chunks.push({ type: 'interactive-card', card: frame.interactiveCard });
         }
+        if (frame.sources) chunks.push({ type: 'sources', ...frame.sources });
         if (frame.terminal) {
           if (!sawVisibleText && !sawAgentActivity && !sawRichOutput) {
             chunks.push({

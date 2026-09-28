@@ -21,6 +21,10 @@ import {
   type WebSearchProviderRequest,
 } from '@/lib/web-search/search-provider';
 import { sourceDeliveryLabel, type SearchSource } from '@agiworkforce/types';
+import {
+  researchDomainAllowed,
+  type ResearchDomainPolicy,
+} from '@/app/api/llm/v1/chat/completions/lib/research-sources';
 
 export const WEB_SEARCH_TOOL = 'web_search';
 
@@ -127,7 +131,20 @@ export interface WebSearchOverrides {
   apiKey?: string;
   timeoutMs?: number;
   maxResults?: number;
+  domainPolicy?: ResearchDomainPolicy | null;
   signal?: AbortSignal;
+}
+
+const PROVIDER_DOMAIN_FILTER_LIMIT = 20;
+
+function providerDomainFilter(policy: ResearchDomainPolicy | null | undefined): string[] | null {
+  if (!policy) return null;
+  if (policy.allow.length > 0) {
+    return policy.allow.length <= PROVIDER_DOMAIN_FILTER_LIMIT ? [...policy.allow] : null;
+  }
+  return policy.deny.length > 0 && policy.deny.length <= PROVIDER_DOMAIN_FILTER_LIMIT
+    ? policy.deny.map((domain) => `-${domain}`)
+    : null;
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -278,7 +295,11 @@ async function perplexitySearch(
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ query: request.query, max_results: request.maxResults }),
+          body: JSON.stringify({
+            query: request.query,
+            max_results: request.maxResults,
+            ...(request.domainFilter?.length ? { search_domain_filter: request.domainFilter } : {}),
+          }),
         });
       } catch (fetchErr) {
         if (callerSignal?.aborted) return providerErr('cancelled', CANCELLED_MESSAGE);
@@ -403,12 +424,14 @@ export async function executeWebSearch(
     Math.min(overrides.maxResults ?? WEB_SEARCH_MAX_RESULTS, WEB_SEARCH_MAX_RESULTS),
   );
 
+  const domainFilter = providerDomainFilter(overrides.domainPolicy);
   let lastFailure: Extract<WebSearchOutcome, { ok: false }> | null = null;
   let billableCalls = 0;
   for (const provider of providers) {
     const outcome = await provider.search({
       query,
       maxResults,
+      ...(domainFilter ? { domainFilter } : {}),
       ...(overrides.apiKey !== undefined ? { apiKey: overrides.apiKey } : {}),
       ...(overrides.fetchImpl ? { fetchImpl: overrides.fetchImpl } : {}),
       ...(overrides.timeoutMs !== undefined ? { timeoutMs: overrides.timeoutMs } : {}),
@@ -431,12 +454,14 @@ export async function executeWebSearch(
       query,
       providerId: provider.id,
       retrievedAt: new Date().toISOString(),
-      results: outcome.items.map((item) => ({
-        url: item.url,
-        title: item.title,
-        snippet: item.snippet,
-        ...(item.publishedAt ? { date: item.publishedAt } : {}),
-      })),
+      results: outcome.items
+        .filter((item) => researchDomainAllowed(overrides.domainPolicy, item.url))
+        .map((item) => ({
+          url: item.url,
+          title: item.title,
+          snippet: item.snippet,
+          ...(item.publishedAt ? { date: item.publishedAt } : {}),
+        })),
       ...(queryTruncated ? { queryTruncated: true } : {}),
       billableCalls,
     };

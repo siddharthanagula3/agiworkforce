@@ -111,10 +111,9 @@ Code: `apps/cli/src/app_server/developer_host.rs:375-375`, `apps/extension-vscod
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud approvals persist server-side and reappear after reload in the web app, but no other client sees them. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Desktop relays a local session's pending approvals to the paired phone and either side can answer; CLI and VS Code processes keep approvals to themselves. | surface-only |
 | cli | partial | Approvals live in the process running the turn; another client on the same thread does not see them. | handler |
 
-Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/desktop/electron/remote/codeRemoteController.ts:51-51`, `apps/web/features/code/components/LocalSessionPanel.tsx:230-230`
+Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/code/components/CodeTranscript.tsx:388-392`, `apps/cli/src/tui/widgets/approval_overlay.rs:335-335`
 
 ## S68.09: Same tool activity.
 
@@ -125,25 +124,9 @@ Code: `apps/web/features/code/CloudCodePage.tsx:366-369`, `apps/web/features/cod
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | partial | Cloud tool steps show only in the web app. Cloud sessions need AGI_E2B_EXECUTION=1 (apps/web/.env.example ships 0); switch the managed sandbox on in production so sessions can be created. | flag-off, surface-only |
-| desktop | partial | Desktop forwards a local turn's tool activity to the phone; CLI and VS Code turns stream only to their own window. | surface-only |
 | cli | partial | Tool cells stream only in the terminal running the turn. | handler |
 
-Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/desktop/electron/remote/codeRemoteController.ts:52-52`, `apps/web/features/code/components/LocalSessionPanel.tsx:229-229`, `apps/cli/src/tui/tui_app.rs:4865-4870`
-
-## S68.10: Read-only session attachment.
-
-- Done when: A client can attach to a running session read-only, watching without being able to act.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | missing | Not built on this surface. |  |
-
-Code: `apps/mobile/src/features/companion/components/CodeSessionView.tsx:57-60`, `apps/mobile/src/features/companion/remote-code/service.ts:33-35`
+Code: `apps/web/features/code/components/CodeTranscript.tsx:217-225`, `apps/cli/src/tui/tui_app.rs:4865-4870`
 
 ## S68.11: Active-control attachment.
 
@@ -178,10 +161,9 @@ Code: `crates/agiworkforce-protocol/src/developer_session.rs:438-448`
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Takes over steering of a desktop session; cannot hand work back or to other clients. | surface-only |
 | cli | partial | agi resume --cloud <id> explicitly pulls an account conversation from web or mobile into the CLI, but no CLI command hands a running local thread to another client. | ui |
 
-Code: `apps/mobile/src/features/companion/remote-code/service.ts:41-50`, `apps/mobile/src/features/companion/components/CodeSessionView.tsx:230-230`, `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`
+Code: `apps/cli/src/lib.rs:829-835`, `apps/cli/src/app_server/developer_host.rs:1203-1206`, `apps/cli/src/lib.rs:1645-1652`
 
 ## S68.15: Continue cloud execution from desktop.
 
@@ -337,46 +319,14 @@ Code: `apps/cli/src/app_server/developer_host.rs:386-386`, `apps/cli/src/lib.rs:
 
 - Done when: The user exports a coding session (transcript and context) to a file from any client.
 - Wave: 3
+- Already works on: cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | web | missing | Not built on this surface. |  |
 | desktop | missing | Not built on this surface. |  |
 | mobile | missing | Not built on this surface. |  |
-| cli | partial | /export shows the transcript as markdown or json on screen; it never writes a file, and no other client exports a coding session at all. | surface-only |
 | vscode | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:3581-3589`, `apps/cli/src/repl/registry.rs:368-378`
-
-## S68.28: Summary-only transfer as a separate option.
-
-- Done when: When moving a session, the user may choose to carry only a summary instead of the full transcript.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | ui |
-
-Code: `apps/cli/src/claude_parity.rs:405-407`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:214-214`
-
-## S68.29: Transcript branch as a separate option.
-
-- Done when: When moving a session, the user may instead branch the transcript into a new session.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | missing | Not built on this surface. |  |
-| desktop | missing | Not built on this surface. |  |
-| mobile | missing | Not built on this surface. |  |
-| cli | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-| vscode | partial | Neither ChatGPT nor Claude offers this (code.claude.com/docs/en/remote-control, learn.chatgpt.com/codex/remote-connections, read 2026-09-27); the lane recommends declining it, pending the owner's decision. | surface-only |
-
-Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `apps/extension-vscode/src/core/commandSetup.ts:1210-1215`, `apps/extension-vscode/src/integrations/localRuntimeClient.ts:910-912`
 
 ## S68.30: Cross-client activity notifications.
 
@@ -386,7 +336,4 @@ Code: `apps/cli/src/lib.rs:836-837`, `apps/cli/src/tui/tui_app.rs:3562-3566`, `a
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Cloud and desktop-local sessions notify; CLI and VS Code local sessions send no activity yet. | handler |
 | cli | missing | Not built on this surface. |  |
-
-Code: `apps/web/app/api/code/local-sessions/activity/route.ts:32-32`

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
-import { resolveAutoRoute } from '@agiworkforce/routing';
+import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -24,6 +24,7 @@ import { assertNoLeaks } from '@/lib/leak-detector';
 import { logger } from '@/lib/logger';
 import { getOptionalEnv } from '@/shared/utils/env';
 import { buildSupportSystemPrompt } from '../prompt/system-prompt';
+import { sideCallRoutingRequest } from '@/lib/server/side-call-training-policy';
 
 const MAX_OUTPUT_TOKENS = 800;
 
@@ -69,13 +70,18 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     return { status: 'unavailable', reason: 'disabled', route: null };
   }
 
-  const route = resolveAutoRoute({
+  const baseRouting: AutoRoutingRequest = {
     selection: 'auto',
     taskType: 'simple_chat',
     subscriptionTier: input.planTier ?? 'free',
     trustMode: 'managed_cloud',
     runtimeProfileId: 'web/cloud-chat',
-  });
+  };
+  const routing = input.userId
+    ? await sideCallRoutingRequest(null, input.userId, baseRouting)
+    : baseRouting;
+  if (!routing) return { status: 'unavailable', reason: 'no_route', route: null };
+  const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     logger.warn({ code: route.code }, '[support-agent] no managed route available');
     return { status: 'unavailable', reason: 'no_route', route: null };

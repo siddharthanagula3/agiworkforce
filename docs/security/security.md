@@ -95,16 +95,29 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `edit_file`          | asks                   | asks                           | write, not reversible                                                            |
 | `create_office_file` | asks                   | asks                           | write, reversible                                                                |
 | `skill`              | asks                   | runs                           | read, reversible                                                                 |
+| `read_tool_result`   | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `save_memory`        | asks                   | asks                           | write, reversible                                                                |
+| `search_memory`      | asks                   | runs                           | read, reversible                                                                 |
+| `forget_memory`      | asks                   | asks                           | delete, not reversible                                                           |
+| `search_files`       | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
+| `create_schedule`    | asks                   | asks                           | write, reversible                                                                |
 
 A connector or MCP tool forces `approvalMode: 'manual'` on the whole turn. An
 undeclared one resolves to `UNKNOWN_TOOL_METADATA`, an irreversible write with
 egress, which no policy auto-approves, so it asks under every policy. The three
 GitHub built-ins are declared, so `get_pull_request_diff` runs under
 `auto_approve_read_only` while `post_issue_comment` and
-`post_pull_request_review` ask under every policy.
+`post_pull_request_review` ask under every policy. The three Gmail actions AGI adds
+beside Google's Gmail server are declared the same way: `read_attachments`
+reads, `create_draft_with_attachments` writes a draft into the user's own
+mailbox from files the account owns, and `send_draft` is a non-reversible
+external send, so it asks under every policy.
 
 `write_file` / `create_folder` / `create_office_file` / `execute_code` act inside
-the conversation's own E2B sandbox workspace, not on the user's device. Public
+the conversation's own E2B sandbox workspace, not on the user's device. The
+three Memory tools are offered only on the web, desktop and mobile apps, only
+while Memory is on and the chat is not temporary, and they go through the same
+admission and never-remember list as `/remember` and `/forget`. Public
 copy must say so in the same breath as any claim about approval, or the sentence
 reads worse than the reality.
 

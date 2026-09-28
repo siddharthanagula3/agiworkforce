@@ -100,7 +100,10 @@
     "noArchived": "보관된 채팅이 없습니다",
     "noConversations": "아직 대화가 없습니다",
     "showActive": "활성 채팅으로 돌아가기",
-    "showArchived": "보관된 채팅 보기({{count}})"
+    "showArchived": "보관된 채팅 보기({{count}})",
+    "archivedToast": "채팅을 보관했습니다",
+    "archivedUndo": "실행 취소",
+    "archivedView": "보관함 보기"
   },
   "emptyChat": {
     "neutralHeadline": "오늘은 무엇을 도와드릴까요?",
@@ -163,8 +166,8 @@
     "provenance": "Provenance is preserved",
     "provenanceDesc": "Recipients see which model generated this, no spoofing.",
     "htmlPreview": "HTML preview",
-    "fileCount_one": "{{count}} file",
-    "fileCount_other": "{{count}} files",
+    "fileCount_one": "파일 {{count}}개",
+    "fileCount_other": "파일 {{count}}개",
     "mcpManage": "Manage",
     "mcpConnected": "Connected:"
   },
@@ -407,6 +410,8 @@
     "weeksAgo": "{{count}} weeks ago"
   },
   "canvas": {
-    "sessionOnlyNotice": "현재 스케치는 세션 동안에만 유지됩니다. 앱을 닫으면 보드가 지워집니다."
+    "sessionOnlyNotice": "현재 스케치는 세션 동안에만 유지됩니다. 앱을 닫으면 보드가 지워집니다.",
+    "elementCount_one": "요소 {{count}}개",
+    "elementCount_other": "요소 {{count}}개"
   }
 }

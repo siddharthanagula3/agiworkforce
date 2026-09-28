@@ -284,6 +284,7 @@ export type AuditEventType =
   | 'scim_group_updated'
   | 'scim_group_deprovisioned'
   | 'scim_group_role_mapping_changed'
+  | 'workspace_group_changed'
   | 'project_shared'
   | 'project_unshared'
   | 'project_member_access_changed'
@@ -373,6 +374,8 @@ export type AuditEventType =
   | 'passkey_removed'
   | 'new_location_sign_in'
   | 'account_recovery_requested'
+  | 'account_recovery_completed'
+  | 'support_appeal_submitted'
   /**
    * The risk engine fired, the account holder said they were compromised, the
    * guided response finished, and the hold it left was lifted. All four are
@@ -781,6 +784,7 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'scim_group_updated':
     case 'scim_group_deprovisioned':
     case 'scim_group_role_mapping_changed':
+    case 'workspace_group_changed':
       return 'scim_group';
     case 'project_shared':
     case 'project_unshared':

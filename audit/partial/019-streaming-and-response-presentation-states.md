@@ -78,15 +78,12 @@ Code: `apps/cli/src/tui/tui_app.rs:169-180`, `apps/cli/src/tui/tui_app.rs:4865-4
 
 - Done when: While an image/video is generated, the surface shows generation progress.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | /image runs to completion before anything is printed; there is no generating indicator while the TUI waits. | states |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/cli/src/tui/tui_app.rs:4676-4690`
 
 ## S19.14: Saving results.
 
@@ -121,7 +118,7 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`
 
 - Done when: After the user presses stop, the surface shows the stop is in progress until it takes effect.
 - Wave: 3
-- Already works on: api
+- Already works on: vscode, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
@@ -129,7 +126,6 @@ Code: `apps/mobile/src/features/chat/components/AgentActivityTimeline.tsx:82-97`
 | desktop | partial | Same as web (hosted): Stop aborts at once; no 'Stopping…' state while the server winds down. | states |
 | mobile | partial | Only video generation shows 'stopping'; stopping a chat turn has no in-progress state. | states |
 | cli | partial | Esc/Ctrl-C cancels immediately and prints '⊘ Stopped'; there is no stopping-in-progress state. | states |
-| vscode | partial | The stop request is tracked internally (_cancelRequested) until the runtime interrupts, but the sidebar shows no 'Stopping…' state. | states |
 | chrome | partial | Stop cancels the stream immediately; there is no stopping-in-progress state in the chat. | states |
 
 Code: `apps/web/lib/hooks/useChatStream.ts:2381-2388`, `apps/web/features/chat/components/messages/ChatMessageList.tsx:1758-1763`, `apps/mobile/src/features/chat/components/MessageBubble.tsx:894-902`, `apps/mobile/stores/chat/chatExecutionStore.ts:2828-2835`
