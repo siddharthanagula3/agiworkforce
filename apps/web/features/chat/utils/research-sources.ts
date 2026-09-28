@@ -20,6 +20,20 @@ function normalizeUrlKey(url: string | undefined): string | null {
   return normalizeSourceUrlKey(trimmed);
 }
 
+const SOURCE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+export function formatSourceDate(value: string | undefined): string | null {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? null
+    : date.toLocaleDateString(undefined, SOURCE_DATE_FORMAT);
+}
+
 export function sourceDisplayHost(url: string): string {
   try {
     return new URL(url).hostname.replace(WWW_PREFIX_PATTERN, '');
@@ -77,6 +91,9 @@ export function collectMessageResearchSources(
         snippet: result.snippet,
         favicon: result.favicon,
         ...(result.publishedDate ? { publishedDate: result.publishedDate } : {}),
+        ...((result.retrievedAt ?? result.provenance?.retrievedAt)
+          ? { retrievedAt: result.retrievedAt ?? result.provenance?.retrievedAt }
+          : {}),
         citationIndex: index + 1,
       });
     });

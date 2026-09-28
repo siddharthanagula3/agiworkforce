@@ -70,14 +70,13 @@ Code: `apps/extension-vscode/src/core/commandSetup.ts:1168-1181`, `apps/extensio
 
 - Done when: Within a conversation, the user can switch its working mode (e.g. chat vs agent/work/plan) and later turns follow it.
 - Wave: 3
-- Already works on: web, desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode, chrome
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | Task chips (image, write, web search) only set the mode of the next message; there is no conversation-level mode switch such as Chat vs Work. | ui |
-| chrome | partial | The cited control is the Quick toggle in the model dropdown, whose copy is 'Quick' / 'Answer faster on a cheaper route' (messages.json:852-855, 1148-1151) and whose handler sends SET_QUICK_MODE (side_panel.ts:6148-6166): a latency/route preference, not a chat-vs-agent/work/plan working mode. Computer-use is a separate side-panel tab (side_panel.ts:732), not a mode of the conversation, and grep finds no agentMode/workMode switch in side_panel.ts. |  |
 
-Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`, `apps/extension/src/side_panel.ts:6183-6189`, `apps/extension/src/side_panel.ts:6148-6160`
+Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobile/src/features/chat/components/Composer/Composer.tsx:81-81`
 
 ## S18.10: Change privacy mode through an explicit flow.
 
@@ -88,9 +87,9 @@ Code: `apps/mobile/src/features/chat/components/TaskChips.tsx:34-36`, `apps/mobi
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | mobile | partial | TemporaryChatToggle flips the global settingsStore.isTemporaryChat flag (TemporaryChatToggle.tsx:10-15, settingsStore.ts:66) and shows only an EyeOff icon plus the word 'Temporary' when on (36-52); the consequence ('Memory will not be saved from this chat') exists only as an accessibilityHint, so sighted users get no explanation and there is no confirmation or flow. Real effect: chatExecutionStore reads the flag per turn (1368-1402). |  |
-| chrome | partial | Only a global 'account mirroring' toggle on the options page decides whether chats sync; there is no per-conversation private/temporary mode. | ui |
+| chrome | partial | Per-conversation temporary chat is scheduled with section 41 (temporary and private experiences) in the next Chrome batch. | ui |
 
-Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
+Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-14`, `apps/mobile/app/(app)/(tabs)/chat.tsx:805-805`, `apps/extension/src/features/options/data-handling-section.ts:147-147`
 
 ## S18.11: Conversation search.
 
@@ -112,14 +111,10 @@ Code: `apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx:11-31`, 
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Search matches and search-result links (?highlightMessage=) scroll to a message, but there is no way to pick a turn directly (turn list, outline or shortcut). | ui |
-| desktop | partial | Same as web (hosted): Search matches and search-result links (?highlightMessage=) scroll to a message, but there is no way to pick a turn directly (turn list, outline or shortcut). | ui |
 | mobile | missing | Not built on this surface. |  |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1335-1341`, `apps/web/features/chat/pages/WebChatPage.tsx:897-897`
 
 ## S18.15: Jump to latest.
 
@@ -187,31 +182,25 @@ Code: `apps/mobile/app/(app)/chat/[id].tsx:1186-1192`, `apps/mobile/app/(app)/ch
 
 - Done when: A conversation details view shows its metadata (created/updated, model, message count, id, project).
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The 'Chat details' dock appears only for AGI Work or agent turns and lists files, sources and context, not conversation metadata (created, model, message count); add a details view for every chat. | ui |
-| desktop | partial | The 'Chat details' dock appears only for AGI Work or agent turns and lists files, sources and context, not conversation metadata (created, model, message count); add a details view for every chat. | ui |
 | mobile | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:463-467`, `apps/web/features/chat/pages/WebChatPage.tsx:4906-4906`, `apps/web/features/chat/pages/WebChatPage.tsx:5816-5822`
 
 ## S18.22: Context and source inspector.
 
 - Done when: The user can inspect what context and sources the conversation is using (files, instructions, memory, token budget).
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
-| desktop | partial | The 'Chat details' dock shows Sources and Context (and files) only for AGI Work or agent turns; plain chats have no context/source inspector. | ui |
 | mobile | partial | Only a warning chip appears when the thread nears the model's context limit; add a view of what is in context. | ui |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:577-585`, `apps/web/features/chat/components/work-session/WorkSessionPanel.tsx:468-474`, `apps/web/features/chat/pages/WebChatPage.tsx:4906-4906`, `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
+Code: `apps/mobile/app/(app)/chat/[id].tsx:1458-1464`
 
 ## S18.23: Usage summary.
 

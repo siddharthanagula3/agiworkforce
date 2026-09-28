@@ -67,6 +67,7 @@ describe('product routes', () => {
       '/code(.*)',
       '/library(.*)',
       '/models(.*)',
+      '/developers(.*)',
       '/open(.*)',
       '/quick-ask(.*)',
       '/schedules(.*)',

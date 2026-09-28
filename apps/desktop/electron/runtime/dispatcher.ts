@@ -6,6 +6,7 @@ import {
   LocalInferenceRefused,
   ShellCommandRefused,
   assertLocalTurnCarriesNoAttachments,
+  isBackgroundWorkKind,
   isDesktopCapability,
   isSystemPermissionKind,
   isWorkspaceRootKind,
@@ -83,6 +84,7 @@ import {
   takeOverComputerUse,
 } from './computerUseSession';
 import { confirmHandBack, runScreenAction } from './computerUseSteps';
+import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
 import {
   computerUseLoopMessage,
@@ -111,7 +113,9 @@ import { cancelShellRun, runShellCommand, type ShellApprovalRequest } from './sh
 import { detectShellSandbox, type ShellSandbox } from './shellSandbox';
 import { readShellPolicy, writeShellPolicy } from './shellPolicyStore';
 import {
+  TextEditRefused,
   createDirectory,
+  editTextFile,
   globFiles,
   grepFiles,
   listDirectory,
@@ -455,6 +459,10 @@ const CAPABILITY_BY_COMMAND: Record<string, { capability: DesktopCapability; rea
   file_write_text: {
     capability: 'filesystem.write',
     reason: 'The agent wants to create or change files in this folder.',
+  },
+  file_edit_text: {
+    capability: 'filesystem.write',
+    reason: 'The agent wants to change part of a file in this folder.',
   },
   file_create_directory: {
     capability: 'filesystem.write',
@@ -865,6 +873,20 @@ async function execute(
         requireString(args, 'path'),
         optionalString(args, 'text', ''),
       );
+    case 'file_edit_text': {
+      const oldText = args['oldText'];
+      const newText = args['newText'];
+      if (typeof oldText !== 'string' || oldText.length === 0 || typeof newText !== 'string') {
+        throw new InvalidArguments('"oldText" must be a non-empty string and "newText" a string.');
+      }
+      return editTextFile(
+        resolveRoot(args),
+        requireString(args, 'path'),
+        oldText,
+        newText,
+        args['replaceAll'] === true,
+      );
+    }
     case 'file_create_directory':
       return createDirectory(resolveRoot(args), requireString(args, 'path'));
     case 'file_glob':
@@ -1025,6 +1047,17 @@ async function execute(
       return reviewPermissions();
     case 'permission_revoke':
       return revokeReviewedPermission(window, args);
+    case 'background_activity':
+      return readBackgroundActivity();
+    case 'background_stop': {
+      const kind = args['kind'];
+      if (!isBackgroundWorkKind(kind)) {
+        throw new InvalidArguments(
+          '"kind" must be coding-runtime, command, computer-use or remote-control.',
+        );
+      }
+      return stopBackgroundWork(kind, optionalString(args, 'id', '') || null);
+    }
     case 'device_host_declaration':
       return declareDeviceHost();
     case DEVICE_REGISTRY_PROFILE_COMMAND:
@@ -1155,6 +1188,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(REFUSAL_CODES[error.reason] ?? 'io-error', error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof InvalidBrowserArguments) {
     return runtimeFailure('invalid-arguments', error.message);
   }

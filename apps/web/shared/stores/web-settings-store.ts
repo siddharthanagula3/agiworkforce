@@ -59,6 +59,7 @@ interface SettingsState {
   accentColor: AccentColor;
   highContrast: boolean;
   customCommands: CustomCommand[];
+  customCommandsOwner: string | null;
   setChatTextSize: (size: ChatTextSize) => void;
   setMotion: (motion: MotionPreference) => void;
   setChatFont: (font: ChatFont) => void;
@@ -91,6 +92,7 @@ export const useSettingsStore = create<SettingsState>()(
       accentColor: 'default',
       highContrast: false,
       customCommands: [],
+      customCommandsOwner: null,
       setChatTextSize: (size) => set({ chatTextSize: size }),
       setMotion: (motion) => set({ motion }),
       setChatFont: (chatFont) => set({ chatFont }),

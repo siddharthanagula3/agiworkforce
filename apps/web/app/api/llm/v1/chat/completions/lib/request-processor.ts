@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { ManagedCloudMessageMetadataSchema } from '@agiworkforce/cloud-contracts';
@@ -9,7 +10,11 @@ import type {
   ResolvedWorkspaceControls,
   WorkspaceFeature,
 } from '@agiworkforce/types';
-import { normalizeResearchDeliverable, RESEARCH_GUIDANCE_MAX_CHARS } from '@agiworkforce/types';
+import {
+  IMAGE_CARD_KIND,
+  normalizeResearchDeliverable,
+  RESEARCH_GUIDANCE_MAX_CHARS,
+} from '@agiworkforce/types';
 import {
   DATA_REGIONS,
   NON_US_VENDOR_TRANSPORTS,
@@ -85,6 +90,10 @@ import {
   asksForProductComparison,
   productComparisonToolDefinition,
 } from '@/lib/services/product-comparison-tool-service';
+import {
+  imageChatToolDefinitions,
+  imageChatToolOffer,
+} from '@/app/api/media/image/lib/image-chat-tools';
 import { placesSearchMicrousdPerCall } from '@/lib/places/places-config';
 import {
   PLACES_UNAVAILABLE_SYSTEM_NOTICE,
@@ -217,6 +226,7 @@ import {
   planResponseBudget,
   buildRoutingDecisionTrace,
   resolveAutoRoute,
+  speedFirstSlots,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
 import type {
@@ -298,13 +308,16 @@ import {
   type ProjectContextBlock,
 } from '@/lib/services/project-context-service';
 import { JSON_OBJECT_DIRECTIVE, wantsJsonObject } from './json-object-mode';
-import { speedFirstSlots } from './routing-profile-selection';
 import {
   modelKeepsInputsOutOfTraining,
   noTrainingChatModelFor,
   readProviderTrainingOptOut,
 } from '@/lib/server/provider-training-opt-out';
-import { createResearchDomainPolicy, type ResearchDomainPolicy } from './research-sources';
+import {
+  createResearchDomainPolicy,
+  MAX_RESEARCH_CONNECTOR_SOURCES,
+  type ResearchDomainPolicy,
+} from './research-sources';
 import {
   IMAGE_DETAIL_VALUES,
   imageDetailRefusalMessage,
@@ -515,6 +528,10 @@ export const ChatCompletionRequestSchema = z
         files: z.boolean().optional(),
         allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
         deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        connectors: z
+          .array(z.string().trim().min(1).max(200))
+          .max(MAX_RESEARCH_CONNECTOR_SOURCES)
+          .optional(),
       })
       .optional(),
     research_resume: z
@@ -1004,6 +1021,25 @@ export function shouldOfferProductComparison(
   );
 }
 
+export function imageToolsForTurn(
+  request: ChatCompletionRequest,
+  params: {
+    surface: CloudChatSurface;
+    toolsCapable: boolean;
+    planTier: string | null | undefined;
+  },
+): ReturnType<typeof imageChatToolDefinitions> {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(IMAGE_CARD_KIND) !== true
+  ) {
+    return [];
+  }
+  const offer = imageChatToolOffer(params.planTier, params.surface);
+  return offer ? imageChatToolDefinitions(offer) : [];
+}
+
 export function validationRefusalMessage(error: z.ZodError): string {
   const issue = error.issues[0];
   if (issue === undefined) return 'The request did not match the chat completions schema.';
@@ -1208,6 +1244,7 @@ export type ProcessedRequest = {
     files: boolean;
     allowDomains: string[];
     denyDomains: string[];
+    connectors: string[];
   };
   indicResult: ReturnType<typeof detectIndicScript>;
   freeTrial?: FreeTrialReservation;
@@ -2604,7 +2641,11 @@ export async function processRequest(
 
   let requestId: string;
   try {
-    requestId = parseManagedUsageIdempotencyKey(request.headers.get('idempotency-key'));
+    const idempotencyHeader = request.headers.get('idempotency-key');
+    requestId =
+      idempotencyHeader === null && resolveAuthenticatedSurface(request, auth) === 'api'
+        ? `agi.chat.api.${randomUUID()}`
+        : parseManagedUsageIdempotencyKey(idempotencyHeader);
   } catch (error) {
     if (error instanceof ManagedUsageRequestError) {
       return { ok: false, response: managedUsageErrorResponse(error, subscription) };
@@ -4997,6 +5038,15 @@ export async function processRequest(
     resolvedTools = [...(resolvedTools ?? []), productComparisonToolDefinition()];
   }
 
+  const imageTools = imageToolsForTurn(chatRequest, {
+    surface: chatSurface,
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+    planTier: subscription.plan_tier,
+  });
+  if (imageTools.length > 0) {
+    resolvedTools = [...(resolvedTools ?? []), ...imageTools];
+  }
+
   if (deviceHost) {
     const deviceTools = deviceStepToolDefs(deviceHost);
     if (deviceTools.length > 0) {
@@ -5360,6 +5410,7 @@ export async function processRequest(
             files: chatRequest.research_sources.files === true,
             allowDomains: chatRequest.research_sources.allow_domains ?? [],
             denyDomains: chatRequest.research_sources.deny_domains ?? [],
+            connectors: chatRequest.research_sources.connectors ?? [],
           },
         }
       : {}),

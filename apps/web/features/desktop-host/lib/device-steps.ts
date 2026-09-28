@@ -14,8 +14,10 @@ import {
   type DeviceScreenDisplay,
   type DeviceStepTool,
   type FileEntry,
+  type FileSearchMatch,
   type FileStat,
   type FileTextContent,
+  type FileTextEdit,
   type ShellRunResult,
 } from '@agiworkforce/local-runtime-contract';
 import { DesktopHostUnavailable } from './runtime-client';
@@ -90,6 +92,11 @@ function describeEntries(entries: FileEntry[]): string {
   return entries
     .map((entry) => (entry.kind === 'directory' ? `${entry.path}/` : `${entry.path}`))
     .join('\n');
+}
+
+function describeMatches(matches: FileSearchMatch[]): string {
+  if (matches.length === 0) return '(no line matches)';
+  return matches.map((match) => `${match.path}:${match.line}: ${match.preview}`).join('\n');
 }
 
 function describeCommandRun(result: ShellRunResult): string {
@@ -204,6 +211,33 @@ async function runStep(tool: ActionStepTool, input: Record<string, unknown>): Pr
         text: input['text'],
       });
       return `Wrote ${stat.path} (${stat.sizeBytes} bytes).`;
+    }
+    case 'device_edit_file': {
+      const edit = await invokeDeviceCommand<FileTextEdit>(command, {
+        rootId: input['rootId'],
+        path: input['path'],
+        oldText: input['oldText'],
+        newText: input['newText'],
+        replaceAll: input['replaceAll'] === true,
+      });
+      return `Edited ${edit.path}: replaced ${edit.replacements} ${edit.replacements === 1 ? 'passage' : 'passages'}, ${edit.sizeBytes} bytes now.`;
+    }
+    case 'device_find_files': {
+      const found = await invokeDeviceCommand<FileEntry[]>(command, {
+        rootId: input['rootId'],
+        pattern: input['pattern'],
+        ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+      });
+      return found.length === 0 ? '(no file matches)' : describeEntries(found);
+    }
+    case 'device_search_text': {
+      const matches = await invokeDeviceCommand<FileSearchMatch[]>(command, {
+        rootId: input['rootId'],
+        query: input['query'],
+        ignoreCase: input['ignoreCase'] === true,
+        ...(typeof input['path'] === 'string' ? { path: input['path'] } : {}),
+      });
+      return describeMatches(matches);
     }
     case 'device_run_command': {
       const result = await invokeDeviceCommand<ShellRunResult>(command, {

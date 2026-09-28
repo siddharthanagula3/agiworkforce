@@ -25,10 +25,11 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
+pub(crate) use checkpoints::CheckpointLog;
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
+pub(crate) use executor::value_to_legacy_args;
 pub use executor::ToolCall;
 pub(crate) use history::close_orphaned_tool_calls;
-pub(crate) use executor::value_to_legacy_args;
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
 
@@ -191,7 +192,7 @@ pub struct AgentSession {
     pub fast_mode: bool,
     #[allow(dead_code)]
     pub(crate) original_model: Option<String>,
-    pub(crate) checkpoints: Vec<checkpoints::Checkpoint>,
+    pub(crate) checkpoint_log: checkpoints::CheckpointLog,
     pub(crate) checkpoint_captures: std::collections::HashMap<String, Vec<PathBuf>>,
     #[allow(dead_code)]
     pub session_name: Option<String>,
@@ -680,7 +681,7 @@ impl AgentSession {
             quiet: false,
             fast_mode: false,
             original_model: None,
-            checkpoints: Vec::new(),
+            checkpoint_log: checkpoints::CheckpointLog::in_memory(),
             checkpoint_captures: std::collections::HashMap::new(),
             session_name: None,
             runtime_session_id: session_id,
@@ -1385,7 +1386,7 @@ impl AgentSession {
         self.plan_rejection_feedback = None;
         self.plan_approved = false;
         self.context_usage_anchor = None;
-        self.checkpoints.clear();
+        self.checkpoint_log.truncate(0);
         self.checkpoint_captures.clear();
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
@@ -1508,7 +1509,9 @@ impl AgentSession {
         managed_session.workspace_root = std::env::current_dir().ok();
         managed_session.created_by = Some("cli".to_string());
         let path = store.save(&managed_session)?;
-        self.adopt_managed_session(managed_session, path)?;
+        let carried = std::mem::take(&mut self.checkpoint_log);
+        self.adopt_managed_session(managed_session, path.clone())?;
+        self.checkpoint_log = carried.moved_beside(&path);
         self.sync_managed_session_metadata()?;
         Ok(())
     }
@@ -1583,6 +1586,12 @@ impl AgentSession {
         self.session_activity = std::sync::Arc::new(std::sync::Mutex::new(
             crate::runtime::session_activity::SessionActivity::from_session(&managed_session),
         ));
+        self.checkpoint_log = if self.session_persistence {
+            checkpoints::CheckpointLog::beside(&path)
+        } else {
+            checkpoints::CheckpointLog::in_memory()
+        };
+        self.checkpoint_captures.clear();
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
         Ok(())
