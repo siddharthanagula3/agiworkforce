@@ -1248,6 +1248,7 @@ export type ProcessedRequest = {
    * instead of leaving the model to copy an attachment back in with write_file.
    */
   turnAttachments?: readonly TurnAttachment[];
+  truncatedAttachments?: readonly string[];
   /**
    * Whether this turn is a place question, and how the places tool was
    * arranged. The tool loop reads it to release the forced choice after the
@@ -3138,11 +3139,14 @@ export async function processRequest(
         return DISABLED_MANAGED_MEMORY_POLICY;
       });
 
+  const truncatedAttachments: string[] = [];
   const [hydration, managedMemoryPolicy] = await timePhase(
     CHAT_TURN_PHASE.attachmentsAndMemoryPolicy,
     () =>
       Promise.all([
-        hydrateChatAttachments(chatRequest.messages, userId).then(
+        hydrateChatAttachments(chatRequest.messages, userId, (filename) =>
+          truncatedAttachments.push(filename),
+        ).then(
           (attachments) => ({ ok: true as const, attachments: attachments ?? [] }),
           (error: unknown) => ({ ok: false as const, error }),
         ),
@@ -5336,6 +5340,7 @@ export async function processRequest(
     executionRequirement,
     executionEnforcement,
     turnAttachments,
+    truncatedAttachments,
     placesRequirement,
     placesEnforcement,
     classifierConfidence: classifierResult.confidence,

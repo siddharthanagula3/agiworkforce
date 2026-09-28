@@ -20,6 +20,7 @@ import {
   PdfAttachmentUnreadableError,
 } from '@/lib/server/pdf-attachment-content';
 import { untrustedDocumentText } from '@/lib/server/untrusted-document-text';
+import { truncateExtractedText, wasExtractionTruncated } from '@/lib/server/extraction-truncation';
 import { withSpan } from '@/lib/observability/span';
 import type { TurnAttachment } from '@/lib/e2b/attachment-staging';
 import { mapWithConcurrency } from './tool-loop';
@@ -190,8 +191,7 @@ function extractNotebookText(data: Buffer): string | null {
   }
 
   const text = parts.join('\n\n').replace(/\r\n?/g, '\n').trim();
-  if (text.length <= MAX_NOTEBOOK_TEXT_CHARS) return text;
-  return `${text.slice(0, MAX_NOTEBOOK_TEXT_CHARS)}\n\n[Content truncated during extraction.]`;
+  return truncateExtractedText(text, MAX_NOTEBOOK_TEXT_CHARS);
 }
 
 type AttachmentSlot = {
@@ -308,6 +308,7 @@ async function fetchAttachmentPayload(
 export async function hydrateChatAttachments(
   messages: HydratableMessage[],
   userId: string,
+  onTruncated?: (filename: string) => void,
 ): Promise<TurnAttachment[]> {
   const turnAttachments: TurnAttachment[] = [];
   const slots = collectAttachmentSlots(messages);
@@ -460,6 +461,14 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (
+        live &&
+        (content.pagesOmitted ||
+          content.scannedPagesOmitted.length > 0 ||
+          wasExtractionTruncated(content.text))
+      ) {
+        onTruncated?.(filename);
+      }
       const pageImageParts = content.pageImages.flatMap((image) => [
         { type: 'text' as const, text: `[Page ${image.page}]` },
         {
@@ -515,6 +524,7 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (live && wasExtractionTruncated(officeText)) onTruncated?.(filename);
       slot.resolved = officeText
         ? [header, ...textDocumentParts(filename, officeText)]
         : [header, { type: 'text', text: `[${filename} contains no readable text]` }];
@@ -535,6 +545,7 @@ export async function hydrateChatAttachments(
         continue;
       }
       stageForSandbox();
+      if (live && wasExtractionTruncated(notebookText)) onTruncated?.(filename);
       if (!notebookText) {
         slot.resolved = [
           header,
