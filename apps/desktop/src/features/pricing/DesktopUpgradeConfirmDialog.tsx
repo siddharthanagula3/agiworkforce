@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SelfServePaidPlanTier } from '@agiworkforce/types';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, formatBillingMoney } from '@agiworkforce/types';
 import {
   Dialog,
   DialogContent,
@@ -27,13 +27,6 @@ export interface DesktopUpgradeConfirmDialogProps {
   request: DesktopUpgradeRequest | null;
   onCancel: () => void;
   onComplete: () => void;
-}
-
-function formatMoney(cents: number, currency: string): string {
-  return new Intl.NumberFormat(undefined, {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(cents / 100);
 }
 
 export function DesktopUpgradeConfirmDialog({
@@ -143,9 +136,9 @@ export function DesktopUpgradeConfirmDialog({
             {previewing
               ? 'Calculating your exact charge…'
               : preview?.kind === 'prorated'
-                ? `You’ll be charged ${formatMoney(preview.amountDueNowCents, preview.currency)} today. Stripe applies credit for unused time on your current plan. Your new billing cycle then renews at ${formatMoney(preview.recurringAmountCents, preview.currency)}/month.`
+                ? `You’ll be charged ${formatBillingMoney(preview.amountDueNowCents, preview.currency)} today. Stripe applies credit for unused time on your current plan. Your new billing cycle then renews at ${formatBillingMoney(preview.recurringAmountCents, preview.currency)}/month.`
                 : preview?.kind === 'checkout-required'
-                  ? `No paid Stripe subscription is available to credit. Starting ${pricing.label} costs ${formatMoney(preview.amountDueNowCents, preview.currency)} today.`
+                  ? `No paid Stripe subscription is available to credit. Starting ${pricing.label} costs ${formatBillingMoney(preview.amountDueNowCents, preview.currency)} today.`
                   : 'Review the exact amount before any charge is made.'}
           </DialogDescription>
         </DialogHeader>
@@ -154,7 +147,7 @@ export function DesktopUpgradeConfirmDialog({
           <div className="rounded-lg border border-border bg-muted/30 p-4">
             <p className="text-xs text-muted-foreground">Due today</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-              {formatMoney(preview.amountDueNowCents, preview.currency)}
+              {formatBillingMoney(preview.amountDueNowCents, preview.currency)}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
               Includes the unused-time credit from your current plan. After payment succeeds, your
@@ -195,7 +188,7 @@ export function DesktopUpgradeConfirmDialog({
             {confirming
               ? 'Processing…'
               : preview
-                ? `${preview.kind === 'checkout-required' ? 'Continue' : 'Confirm'} · ${formatMoney(preview.amountDueNowCents, preview.currency)}`
+                ? `${preview.kind === 'checkout-required' ? 'Continue' : 'Confirm'} · ${formatBillingMoney(preview.amountDueNowCents, preview.currency)}`
                 : 'Confirm'}
           </button>
         </DialogFooter>
