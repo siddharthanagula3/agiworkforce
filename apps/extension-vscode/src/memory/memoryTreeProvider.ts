@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import type { MemoryCategory } from '@agiworkforce/agent-core';
 import { type MemoryFact } from './memoryStore';
 import type { AccountMemoryStatus, AccountMemoryStore } from './accountMemoryStore';
+import type { MemoryScope } from './accountMemoryClient';
 import { Config } from '../platform/config';
+import { getCloudWebOrigin } from '../utils/api';
 
 const MAX_LABEL_CHARS = 60;
 
@@ -98,6 +100,43 @@ export class MemoryUnreachableItem extends vscode.TreeItem {
   }
 }
 
+const SCOPE_SEPARATION =
+  'A memory written inside a workspace stays inside it. Nothing you record at work is read in a personal chat, and nothing personal is read at work.';
+
+export class MemoryScopeItem extends vscode.TreeItem {
+  constructor(scope: MemoryScope) {
+    const workspace =
+      scope.organizationId === null ? undefined : (scope.workspaceName ?? 'Your workspace');
+    super(
+      workspace === undefined ? 'Personal memory' : `${workspace} memory`,
+      vscode.TreeItemCollapsibleState.None,
+    );
+    this.description =
+      workspace === undefined
+        ? 'Read in your personal chats on every device'
+        : 'Workspace memory, kept apart from your personal memory';
+    this.tooltip =
+      workspace === undefined
+        ? SCOPE_SEPARATION
+        : `${SCOPE_SEPARATION} Switch workspaces in Team settings on the web.`;
+    this.iconPath = new vscode.ThemeIcon(workspace === undefined ? 'account' : 'organization');
+    this.contextValue = 'memoryScope';
+    if (workspace !== undefined) {
+      this.command = {
+        command: 'vscode.open',
+        title: 'Open Team settings',
+        arguments: [vscode.Uri.parse(`${getCloudWebOrigin()}/settings/team?from=vscode-extension`)],
+      };
+    }
+  }
+}
+
+function memorySurfacePlaceholder(scope: MemoryScope | undefined): string {
+  if (scope === undefined) return 'Your account memory, shared with every AGI client…';
+  if (scope.organizationId === null) return 'Your personal memory, kept apart from any workspace…';
+  return `Memory for ${scope.workspaceName ?? 'your workspace'}, kept apart from your personal memory…`;
+}
+
 export class MemoryDisabledItem extends vscode.TreeItem {
   constructor() {
     super('Memory is off', vscode.TreeItemCollapsibleState.None);
@@ -146,6 +185,10 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
     return element;
   }
 
+  surfacePlaceholder(): string {
+    return memorySurfacePlaceholder(this.store.scope());
+  }
+
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     if (element instanceof MemoryCategoryItem) {
       return element.facts.map((fact) => new MemoryFactItem(fact));
@@ -161,6 +204,8 @@ export class MemoryTreeProvider implements vscode.TreeDataProvider<vscode.TreeIt
       .filter((category) => byCategory.has(category))
       .map((category) => new MemoryCategoryItem(category, byCategory.get(category) ?? []));
     const banners: vscode.TreeItem[] = [];
+    const scope = this.store.scope();
+    if (scope !== undefined) banners.push(new MemoryScopeItem(scope));
     if (this._status === 'unreachable') banners.push(new MemoryUnreachableItem(this._detail));
     if (!Config.memoryEnabled()) banners.push(new MemoryDisabledItem());
     return [...banners, ...groups];
