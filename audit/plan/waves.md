@@ -34,7 +34,7 @@ Nothing left in this wave.
 
 ## Wave 2: switch on and wire up what is already built (flag off or not mounted)
 
-176 open items.
+179 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -72,12 +72,12 @@ Nothing left in this wave.
 | 100. Commercial and administrative components | 1 | [partial/100-commercial-and-administrative-components.md](../partial/100-commercial-and-administrative-components.md) |
 | 102. Runtime inventory | 1 | [partial/102-runtime-inventory.md](../partial/102-runtime-inventory.md) |
 | 104. Named technology options-not claims about competitor internals | 2 | [partial/104-named-technology-options-not-claims-about-competitor-interna.md](../partial/104-named-technology-options-not-claims-about-competitor-interna.md) |
-| 108. Specialist workspaces | 1 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
+| 108. Specialist workspaces | 4 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
 | 110. Cross-product experiences to include in the product map | 9 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
 
 ## Wave 3: finish half-built features
 
-1403 open items.
+1400 open items.
 
 | Section | Items | File |
 | --- | ---: | --- |
@@ -173,7 +173,7 @@ Nothing left in this wave.
 | 105. Developer platform and console | 2 | [partial/105-developer-platform-and-console.md](../partial/105-developer-platform-and-console.md) |
 | 106. Office, collaboration-channel, and email surfaces | 15 | [partial/106-office-collaboration-channel-and-email-surfaces.md](../partial/106-office-collaboration-channel-and-email-surfaces.md) |
 | 107. Discovery, social, and public-content products | 7 | [partial/107-discovery-social-and-public-content-products.md](../partial/107-discovery-social-and-public-content-products.md) |
-| 108. Specialist workspaces | 14 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
+| 108. Specialist workspaces | 11 | [partial/108-specialist-workspaces.md](../partial/108-specialist-workspaces.md) |
 | 109. Optional native and ambient extensions | 14 | [partial/109-optional-native-and-ambient-extensions.md](../partial/109-optional-native-and-ambient-extensions.md) |
 | 110. Cross-product experiences to include in the product map | 12 | [partial/110-cross-product-experiences-to-include-in-the-product-map.md](../partial/110-cross-product-experiences-to-include-in-the-product-map.md) |
 
