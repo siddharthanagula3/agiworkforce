@@ -219,7 +219,7 @@ describe('ChatComposerNew attachment sources', () => {
     expect(
       screen.queryByRole('button', { name: `Remove page-${MAX_CHAT_ATTACHMENT_COUNT}.png` }),
     ).toBeNull();
-    expect(await screen.findByText(/max 10/i)).toBeTruthy();
+    expect(await screen.findByText(/"page-11\.png" \(over the 10-file limit\)/i)).toBeTruthy();
   });
 
   it('attaches an image pasted into the message field', async () => {

@@ -7,6 +7,7 @@ import {
   VIDEO_MODELS,
   type ComposerProjectPicker,
 } from './ChatComposerNew';
+import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capability-gate';
 import {
   getModelMetadataById,
@@ -180,6 +181,9 @@ describe('ChatComposerNew', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    __resetComposerDraftStorageForTests();
     chatComposerMocks.skillResult.skills = [
       {
         name: 'backend-engineer',
