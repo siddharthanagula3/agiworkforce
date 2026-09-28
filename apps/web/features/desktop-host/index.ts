@@ -3,6 +3,7 @@ export { PRODUCT_HOME_PATH, conversationDeepLink, deepLinkDestination } from './
 export { notifyJobComplete, type DesktopJobNotification } from './lib/notify';
 export {
   DesktopHostUnavailable,
+  addDeveloperMemory,
   answerDeveloperApproval,
   cancelLocalChat,
   cancelLocalCommand,

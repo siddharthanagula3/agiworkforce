@@ -39,7 +39,11 @@ import {
   type DeveloperAgentMode,
   normalizeDeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
-import { isBrowserCommand } from '@agiworkforce/types';
+import {
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isBrowserCommand,
+  isCloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   BrowserBridgeError,
   installHostForPairedExtension,
@@ -126,6 +130,7 @@ import {
 } from './gitService';
 import {
   DeveloperRuntimeUnavailableError,
+  addDeveloperMemory,
   answerDeveloperApproval,
   interruptDeveloperTurn,
   listDeveloperPlugins,
@@ -278,12 +283,6 @@ function requireRegion(args: Args): DeviceStepRegion {
     throw new InvalidArguments('"region" must be an object with x, y, width and height.');
   }
   return requireRegionFields(value as Args);
-}
-
-function requireBoolean(args: Args, key: string): boolean {
-  const value = args[key];
-  if (typeof value !== 'boolean') throw new InvalidArguments(`"${key}" must be true or false.`);
-  return value;
 }
 
 const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
@@ -1053,13 +1052,27 @@ async function execute(
     case 'developer_turn_start': {
       const model = optionalString(args, 'model', '');
       const agentMode = rendererAgentMode(optionalString(args, 'agentMode', ''));
+      const maxTurns = optionalNumber(args, 'maxTurns');
+      if (maxTurns !== undefined && !isCloudCodeTurnStepBound(maxTurns)) {
+        throw new InvalidArguments(
+          `"maxTurns" must be one of ${CLOUD_CODE_TURN_STEP_BOUNDS.join(', ')}.`,
+        );
+      }
       return startDeveloperTurn({
         rootId: requireString(args, 'rootId'),
         threadId: requireString(args, 'threadId'),
         text: requireString(args, 'text'),
         ...(model === '' ? {} : { model }),
         ...(agentMode ? { agentMode } : {}),
+        ...(maxTurns === undefined ? {} : { maxTurns }),
       });
+    }
+    case 'developer_memory_add': {
+      const scope = requireString(args, 'scope');
+      if (scope !== 'project' && scope !== 'user') {
+        throw new InvalidArguments('"scope" must be project or user.');
+      }
+      return addDeveloperMemory(requireString(args, 'rootId'), requireString(args, 'text'), scope);
     }
     case 'developer_turn_interrupt':
       return interruptDeveloperTurn(

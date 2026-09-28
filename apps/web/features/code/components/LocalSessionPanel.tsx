@@ -18,9 +18,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Spinner,
 } from '@agiworkforce/ui';
+import {
+  CLOUD_CODE_DEFAULT_TURN_STEPS,
+  CLOUD_CODE_TURN_STEP_BOUNDS,
+  isCloudCodeTurnStepBound,
+  type CloudCodeTurnStepBound,
+} from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
   type DeveloperRuntimeModels,
@@ -32,6 +39,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import {
   CODE_COPY,
   CODE_LIMITS,
+  CODE_TURN_STEP_HINTS,
   continueLocalSessionInVsCodeHref,
   localSessionResumeCommand,
 } from '../code-surface';
@@ -60,6 +68,7 @@ import { getModelMetadata } from '@shared/config/llm';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
+import { LocalMemoryControl } from './LocalMemoryControl';
 import { LocalModelChip } from './LocalModelChip';
 import { CodeTranscriptBody } from './CodeTranscript';
 import styles from '../CloudCodePage.module.css';
@@ -82,12 +91,16 @@ export interface LocalSessionPanelProps {
 
 function LocalModeControl({
   mode,
+  turnSteps,
   disabled,
   onChange,
+  onTurnStepsChange,
 }: {
   mode: LocalAgentMode;
+  turnSteps: CloudCodeTurnStepBound | null;
   disabled: boolean;
   onChange: (mode: LocalAgentMode) => void;
+  onTurnStepsChange: (steps: CloudCodeTurnStepBound) => void;
 }) {
   return (
     <DropdownMenu>
@@ -117,6 +130,30 @@ function LocalModeControl({
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>
+        {turnSteps !== null && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{CODE_COPY.turnStepsMenu}</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={String(turnSteps)}
+              onValueChange={(value) => {
+                const bound = Number(value);
+                if (isCloudCodeTurnStepBound(bound)) onTurnStepsChange(bound);
+              }}
+            >
+              {CLOUD_CODE_TURN_STEP_BOUNDS.map((bound) => (
+                <DropdownMenuRadioItem key={bound} value={String(bound)}>
+                  <span className={styles['menuRowLabel']}>
+                    <span className={styles['optionLabel']}>
+                      {bound} {CODE_COPY.turnStepsUnit}
+                    </span>
+                    <span className={styles['optionHint']}>{CODE_TURN_STEP_HINTS[bound]}</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -196,6 +233,9 @@ export function LocalSessionPanel({
   const [focused, setFocused] = useState(false);
   const [model, setModel] = useState(session.model ?? '');
   const [mode, setMode] = useState<LocalAgentMode | null>(null);
+  const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
+  const boundedTurns = runtimeModels?.features?.maxTurns === true;
+  const memoryAvailable = runtimeModels?.features?.memory === true;
   const activeMode = mode ?? localAgentMode(runtimeModels?.defaultAgentMode);
   const endRef = useRef<HTMLDivElement>(null);
   const choices = localModelChoices(runtimeModels, group.sessions);
@@ -231,7 +271,12 @@ export function LocalSessionPanel({
     const text = draft.trim();
     if (text === '' || busy) return;
     setDraft('');
-    void state.send(text, model === '' || model === session.model ? undefined : model, activeMode);
+    void state.send(
+      text,
+      model === '' || model === session.model ? undefined : model,
+      activeMode,
+      boundedTurns ? turnSteps : undefined,
+    );
   };
 
   return (
@@ -254,6 +299,7 @@ export function LocalSessionPanel({
         </span>
         <div className={styles['headerActions']}>
           <LocalExtensionsControl rootId={session.rootId} />
+          {memoryAvailable && <LocalMemoryControl rootId={session.rootId} />}
           <button
             type="button"
             className={`${styles['headerButton']} ${changesOpen ? styles['headerButtonActive'] : ''}`}
@@ -479,7 +525,13 @@ export function LocalSessionPanel({
                 </div>
 
                 <div className={styles['controlRow']}>
-                  <LocalModeControl mode={activeMode} disabled={busy} onChange={setMode} />
+                  <LocalModeControl
+                    mode={activeMode}
+                    turnSteps={boundedTurns ? turnSteps : null}
+                    disabled={busy}
+                    onChange={setMode}
+                    onTurnStepsChange={setTurnSteps}
+                  />
                   <span className={styles['controlSpacer']} />
                   {choices.length > 0 && (
                     <LocalModelChip
