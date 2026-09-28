@@ -13,6 +13,7 @@ import {
   AUTH_LABEL_CLASS,
   AUTH_PRIMARY_BUTTON_CLASS,
 } from './authStyles';
+import { SUPPORT_RECOVERY_PATH } from '@agiworkforce/cloud-contracts/support';
 
 export type RecoveryLoss = 'password' | 'email' | 'factor';
 
@@ -59,7 +60,7 @@ export function AccountRecoveryForm({ initialLoss }: { initialLoss: RecoveryLoss
     setError(null);
     try {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const response = await fetch('/api/support/recovery', {
+      const response = await fetch(SUPPORT_RECOVERY_PATH, {
         method: 'POST',
         headers,
         credentials: 'same-origin',

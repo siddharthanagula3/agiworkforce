@@ -1,4 +1,7 @@
-import { describeDiagnostics, type SupportDiagnostics } from './types';
+import {
+  describeDiagnostics,
+  type SupportDiagnostics,
+} from '@agiworkforce/cloud-contracts/support';
 
 /**
  * Every surface posts its raw bundle here and gets back the redacted one. The

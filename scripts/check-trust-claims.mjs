@@ -15,7 +15,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
 const DIGEST_SHAPE = /^[0-9a-f]{16}$/;
 const LEDGER_DECLARATION = /const ([A-Z][A-Z0-9_]*): \{ label: string; value: string \}\[\] = \[/g;
-const STRING_LITERAL = String.raw`('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")`;
+const TEMPLATE_LITERAL = String.raw`\`(?:[^\`\\$]|\\.|\$(?!\{)|\$\{[A-Za-z_][A-Za-z0-9_.]*\})*\``;
+const STRING_LITERAL = String.raw`('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|${TEMPLATE_LITERAL})`;
 const ROW = new RegExp(
   String.raw`label:\s*${STRING_LITERAL}\s*,\s*value:\s*${STRING_LITERAL}`,
   'g',

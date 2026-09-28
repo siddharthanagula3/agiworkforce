@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { SupportTranscript } from '../components/SupportTranscript';
 import { useSupportSession } from '../hooks/useSupportSession';
 import { buildAttemptedActions, buildHandoffCitations } from '../lib/support-client';
-import type { SupportTurn } from '../lib/contract';
+import type { SupportTurn } from '@agiworkforce/cloud-contracts/support';
 
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: (headers: HeadersInit = {}) => Promise.resolve(headers),

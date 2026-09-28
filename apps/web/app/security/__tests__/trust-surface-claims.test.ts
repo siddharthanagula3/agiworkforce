@@ -131,16 +131,17 @@ describe('trust surface, managed cloud maturity is stated', () => {
 describe('trust surface, the erasure figure is derived, not remembered', () => {
   it('publishes the real USER_SCOPED_TABLES length on /security and /trust', async () => {
     const { USER_SCOPED_TABLES } = await import('@/lib/server/account-erasure');
-    const count = USER_SCOPED_TABLES.length;
+    const { ERASED_TABLE_COUNT } = await import('@/lib/legal/published-counts');
 
-    expect(count).toBeGreaterThan(0);
+    expect(USER_SCOPED_TABLES.length).toBeGreaterThan(0);
+    expect(ERASED_TABLE_COUNT).toBe(USER_SCOPED_TABLES.length);
 
     for (const page of ['security', 'trust'] as PageName[]) {
       const source = read(page);
       expect(
         source,
-        `/${page} must state the real erasure table count (${count}). Update the copy in the same change as the constant.`,
-      ).toContain(`${count} user-scoped tables`);
+        `/${page} must render the erasure count from the erasure list, not type it.`,
+      ).toContain('${ERASED_TABLE_COUNT} user-scoped tables');
     }
   });
 });

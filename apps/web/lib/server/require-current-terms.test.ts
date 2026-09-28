@@ -12,6 +12,9 @@ vi.mock('next/navigation', () => ({
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
 }));
+vi.mock('@/lib/server/account-security/page-gate', () => ({
+  requireAccountSecurityVerification: async () => undefined,
+}));
 
 import { requireCurrentTermsAcceptance } from './require-current-terms';
 
