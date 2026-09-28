@@ -40,6 +40,7 @@ import {
   Spinner,
 } from '@agiworkforce/ui';
 import {
+  CLOUD_CODE_DEFAULT_TURN_MODE,
   CLOUD_CODE_GOAL_COMMANDS,
   CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
@@ -47,6 +48,7 @@ import {
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
+  type CloudCodeTurnMode,
   type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
 import Link from 'next/link';
@@ -110,6 +112,7 @@ const POPOVER_OFFSET = 8;
 const ENTER_KEY = 'Enter';
 const COMMAND_QUERY = /^\/[a-z-]*$/i;
 const FIRST_SHORTCUT = 1;
+const PLAN_TURN_MODE = 'plan' satisfies CloudCodeTurnMode;
 const USAGE_RING_SIZE = 16;
 const USAGE_RING_STROKE = 3;
 const RING_RADIUS = 6;
@@ -1058,12 +1061,17 @@ function RepositoryChips({
 function ApprovalModeControl({
   turnSteps,
   onTurnStepsChange,
+  turnMode,
+  onTurnModeChange,
 }: {
   turnSteps: CloudCodeTurnStepBound | null;
   onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
+  turnMode: CloudCodeTurnMode | null;
+  onTurnModeChange: (mode: CloudCodeTurnMode) => void;
 }) {
   const [policy, setPolicy] = useState<ToolApprovalPolicy | null>(null);
   const [saving, setSaving] = useState(false);
+  const planning = turnMode === PLAN_TURN_MODE;
 
   useEffect(() => {
     let cancelled = false;
@@ -1109,7 +1117,11 @@ function ApprovalModeControl({
           aria-label={CODE_COPY.approvalMode}
           aria-busy={policy === null}
         >
-          {policy && <span>{toolApprovalPolicyOption(policy).shortLabel}</span>}
+          {planning ? (
+            <span>{CODE_COPY.planMode}</span>
+          ) : (
+            policy && <span>{toolApprovalPolicyOption(policy).shortLabel}</span>
+          )}
           {saving || policy === null ? (
             <Spinner size="sm" aria-label={policy === null ? CODE_COPY.approvalMode : undefined} />
           ) : (
@@ -1120,8 +1132,15 @@ function ApprovalModeControl({
       <DropdownMenuContent align="start" side="top" className="w-80">
         <DropdownMenuLabel>{CODE_COPY.modeMenu}</DropdownMenuLabel>
         <DropdownMenuRadioGroup
-          value={policy ?? ''}
-          onValueChange={(value) => void persist(value as ToolApprovalPolicy)}
+          value={planning ? PLAN_TURN_MODE : (policy ?? '')}
+          onValueChange={(value) => {
+            if (value === PLAN_TURN_MODE) {
+              onTurnModeChange(PLAN_TURN_MODE);
+              return;
+            }
+            onTurnModeChange(CLOUD_CODE_DEFAULT_TURN_MODE);
+            if (value !== policy) void persist(value as ToolApprovalPolicy);
+          }}
         >
           {TOOL_APPROVAL_POLICY_OPTIONS.map((option, index) => (
             <DropdownMenuRadioItem key={option.policy} value={option.policy}>
@@ -1132,6 +1151,17 @@ function ApprovalModeControl({
               <DropdownMenuShortcut>{index + FIRST_SHORTCUT}</DropdownMenuShortcut>
             </DropdownMenuRadioItem>
           ))}
+          {turnMode !== null && (
+            <DropdownMenuRadioItem value={PLAN_TURN_MODE}>
+              <span className={styles['menuRowLabel']}>
+                <span className={styles['optionLabel']}>{CODE_COPY.planMode}</span>
+                <span className={styles['optionHint']}>{CODE_COPY.planModeHint}</span>
+              </span>
+              <DropdownMenuShortcut>
+                {TOOL_APPROVAL_POLICY_OPTIONS.length + FIRST_SHORTCUT}
+              </DropdownMenuShortcut>
+            </DropdownMenuRadioItem>
+          )}
         </DropdownMenuRadioGroup>
         {turnSteps !== null && (
           <>
@@ -1328,6 +1358,8 @@ export interface CodeComposerProps {
   turnControls: boolean;
   turnSteps: CloudCodeTurnStepBound;
   onTurnStepsChange: (value: CloudCodeTurnStepBound) => void;
+  turnMode: CloudCodeTurnMode;
+  onTurnModeChange: (mode: CloudCodeTurnMode) => void;
 }
 
 export function CodeComposer({
@@ -1353,6 +1385,8 @@ export function CodeComposer({
   turnControls,
   turnSteps,
   onTurnStepsChange,
+  turnMode,
+  onTurnModeChange,
 }: CodeComposerProps) {
   const [focused, setFocused] = useState(false);
   const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
@@ -1540,6 +1574,8 @@ export function CodeComposer({
                   <ApprovalModeControl
                     turnSteps={cloudTurn ? turnSteps : null}
                     onTurnStepsChange={onTurnStepsChange}
+                    turnMode={cloudTurn ? turnMode : null}
+                    onTurnModeChange={onTurnModeChange}
                   />
                 )}
                 <AttachMenu />

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { request } from 'node:http';
 import { connect, type AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -61,6 +62,42 @@ function rawStatusLine(port: number, request: string): Promise<string> {
   });
 }
 
+function scanInParts(
+  url: string,
+  parts: Buffer[],
+  pauseMs: number,
+): Promise<{ status: number; body: unknown }> {
+  return new Promise((resolve, reject) => {
+    const upload = request(
+      `${url}/scan`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': String(parts.reduce((total, part) => total + part.length, 0)),
+        },
+      },
+      (response) => {
+        let text = '';
+        response.on('data', (chunk: Buffer) => {
+          text += chunk.toString('utf8');
+        });
+        response.on('end', () =>
+          resolve({ status: response.statusCode ?? 0, body: JSON.parse(text) }),
+        );
+      },
+    );
+    upload.on('error', reject);
+    const [first, ...rest] = parts;
+    if (first) upload.write(first);
+    setTimeout(() => {
+      for (const part of rest) upload.write(part);
+      upload.end();
+    }, pauseMs);
+  });
+}
+
 function scan(url: string, body: Uint8Array, token: string | null = TOKEN): Promise<Response> {
   return fetch(`${url}/scan`, {
     method: 'POST',
@@ -97,6 +134,30 @@ describe('POST /scan', () => {
       safe: false,
       detail: `ClamAV detected ${EICAR_SIGNATURE}`,
     });
+  });
+
+  it('tells the web when a file was refused for being password protected', async () => {
+    const clamd = await fakeClamd({ answer: () => 'stream: Heuristics.Encrypted.PDF FOUND' });
+    const url = await listen(clamd.address);
+
+    const response = await scan(url, randomBytes(64));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      safe: false,
+      detail: 'ClamAV detected Heuristics.Encrypted.PDF',
+      reason: 'encrypted',
+    });
+  });
+
+  it('fails closed when clamd answers before the stream ends', async () => {
+    const clamd = await fakeClamd({ refuseStream: 'stream: OK' });
+    const url = await listen(clamd.address);
+
+    const response = await scanInParts(url, [randomBytes(1024), randomBytes(1024)], 200);
+
+    expect(response.status).toBe(503);
+    expect(response.body).toMatchObject({ safe: false });
   });
 
   it('answers not safe for a file clamd could not scan to the end', async () => {
@@ -248,7 +309,10 @@ describe('GET /health', () => {
     const clamd = await fakeClamd();
     const url = await listen(clamd.address, { now: () => SIGNATURES_PUBLISHED_AT + 6 * HOUR_MS });
 
-    const response = await fetch(`${url}/health`);
+    const response = await fetch(`${url}/health`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    const anonymous = await fetch(`${url}/health`);
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -256,6 +320,7 @@ describe('GET /health', () => {
       engine: '1.4.6',
       signatures: { version: 27790, publishedAt: '2026-09-28T04:00:00.000Z', ageHours: 6 },
     });
+    expect(await anonymous.json()).toEqual({ status: 'ok' });
   });
 
   it('keeps serving on stale signatures and reports them as stale', async () => {
@@ -264,7 +329,9 @@ describe('GET /health', () => {
       now: () => SIGNATURES_PUBLISHED_AT + SIGNATURE_MAX_AGE_MS + HOUR_MS,
     });
 
-    const health = await fetch(`${url}/health`);
+    const health = await fetch(`${url}/health`, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
     const scan = await fetch(`${url}/scan`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}` },

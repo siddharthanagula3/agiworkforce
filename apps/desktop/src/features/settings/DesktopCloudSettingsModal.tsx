@@ -32,7 +32,7 @@
  * which is what used to let a section land silently on `/login` while the app
  * showed the user as signed in.
  *
- * Three sections are not inline API renders, for stated reasons rather than
+ * Four sections are not inline API renders, for stated reasons rather than
  * convenience:
  *   plugins → no plugin contract exists on ANY surface (web renders a static
  *             catalogue preview with `plugins: []`), and the old bridged path
@@ -42,6 +42,9 @@
  *   referrals → the invite link, friend progress and bonus credits are a web
  *               account page; the section opens `/settings/referrals` in the
  *               system browser, see `cloud/CloudReferralsSection.tsx`.
+ *   slack    → adding the Slack app is a Slack OAuth flow in the browser;
+ *              the section opens `/settings/slack` in the system browser,
+ *              see `cloud/CloudSlackSection.tsx`.
  *   security → the READ half (2FA status, recent activity) is inline; only
  *              Clerk-owned credential enrollment stays bridged, with the
  *              explicit re-auth affordance.
@@ -275,6 +278,9 @@ const LazyCloudTeam = lazy(() =>
 );
 const LazyCloudReferrals = lazy(() =>
   import('./cloud/CloudReferralsSection').then((m) => ({ default: m.CloudReferralsSection })),
+);
+const LazyCloudSlack = lazy(() =>
+  import('./cloud/CloudSlackSection').then((m) => ({ default: m.CloudSlackSection })),
 );
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
@@ -1233,6 +1239,11 @@ export function DesktopCloudSettingsModal({
       plugins: (
         <Suspense fallback={<SectionSkeleton />}>
           <LazyCloudPlugins onOpenSection={setActiveSection} />
+        </Suspense>
+      ),
+      slack: (
+        <Suspense fallback={<SectionSkeleton />}>
+          <LazyCloudSlack />
         </Suspense>
       ),
       memory: (
