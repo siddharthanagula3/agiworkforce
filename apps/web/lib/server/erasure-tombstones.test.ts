@@ -47,6 +47,7 @@ function bucket(initial: string | null) {
     delete: vi.fn(),
     copyIfMatch: vi.fn(),
     presignPut: vi.fn(),
+    presignGet: vi.fn(),
   };
 
   return {
