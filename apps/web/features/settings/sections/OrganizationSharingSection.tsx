@@ -187,14 +187,20 @@ function ProjectPeopleAccess({
   const [pickedAccess, setPickedAccess] = useState<'write' | 'none'>('write');
   const busy = setAccess.isPending || setManyAccess.isPending;
 
+  const roster = overview.members.map((member) => ({
+    ...member,
+    name: member.displayName?.trim() || member.email || '',
+    email: member.email ?? '',
+    avatarUrl: null,
+  }));
   const grantByUser = new Map(project.memberGrants.map((grant) => [grant.userId, grant.access]));
-  const owner = overview.members.find((member) => member.userId === project.ownerUserId);
-  const specific = overview.members.filter(
+  const owner = roster.find((member) => member.userId === project.ownerUserId);
+  const specific = roster.filter(
     (member) =>
       member.userId !== project.ownerUserId &&
       (grantByUser.get(member.userId) === 'write' || grantByUser.get(member.userId) === 'none'),
   );
-  const candidates = overview.members.filter(
+  const candidates = roster.filter(
     (member) => member.userId !== project.ownerUserId && !specific.includes(member),
   );
   const addId = `add-access-${project.projectId}`;

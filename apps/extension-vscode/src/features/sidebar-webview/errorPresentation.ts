@@ -28,7 +28,13 @@ export type ChatErrorCategory =
 
 /** What the error block should offer besides Retry, when the runtime named one. */
 export interface ChatErrorAction {
-  kind: 'sign-in-provider' | 'sign-in-account' | 'upgrade-plan' | 'open-settings' | 'switch-model';
+  kind:
+    | 'sign-in-provider'
+    | 'sign-in-account'
+    | 'upgrade-plan'
+    | 'open-settings'
+    | 'switch-model'
+    | 'update-extension';
   label: string;
   provider?: string;
 }
@@ -66,6 +72,7 @@ const NETWORK_ERROR = /^Network error \(/u;
 const CONTEXT_OVERFLOW = /^Context overflow for model '([^']+)'/u;
 const CONFIG_ERROR = /^Configuration error\b/u;
 const PAYWALL = /^Cloud chat requires (\S+) plan\b/u;
+const UPDATE_EXTENSION = /\bupdate the extension\b/iu;
 
 const PERMISSION_TEXT = /\b(?:EACCES|EPERM|permission denied|not permitted|Workspace Trust)\b/iu;
 const NETWORK_TEXT =
@@ -122,6 +129,15 @@ function fromApiStatus(providerId: string, status: number): Classification {
 }
 
 function classify(raw: string, activeProvider: string | undefined): Classification | null {
+  if (UPDATE_EXTENSION.test(raw)) {
+    return {
+      category: 'runtime',
+      headline: raw,
+      retryable: false,
+      action: { kind: 'update-extension', label: 'Update the extension' },
+    };
+  }
+
   const api = API_ERROR.exec(raw);
   if (api?.[1] !== undefined && api[2] !== undefined) {
     return fromApiStatus(api[1], Number(api[2]));

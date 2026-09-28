@@ -29,6 +29,29 @@ Registry entries are keyed by their registry name (for example
 its chat tools are offered under a derived `dir-` server id, so tool names
 stay valid for every model provider.
 
+## Custom connectors added by URL
+
+A custom connector carries either a bearer token or nothing. When its server
+answers the add probe with an authorization challenge, or publishes protected
+resource metadata, the row is saved with `sign_in_required` and the browser
+starts `GET /api/connectors/oauth/start?connectorId=custom-<short_id>` at once.
+The start route authorizes it like a directory server (steps below), and the
+grant is stored in `connector_oauth_grants` under `custom-<short_id>`; a row
+without a token sends that grant's access token and refreshes it like any
+discovered grant.
+
+Under Advanced settings the user may give the OAuth Client ID and Client Secret
+of a client they registered at the server, for servers that accept neither a
+client metadata document nor dynamic registration, as Claude's custom
+connectors allow (https://support.claude.com/en/articles/11175166). That client
+is kept on the row (the secret sealed under the `oauth-client-secret` purpose)
+and is used for that row's authorization, callback and refresh instead of the
+deployment's own identity. The form shows the redirect URI to register, which
+is `<origin>/api/connectors/oauth/callback` as below. A client and a bearer
+token cannot be given together. Removing the connector disconnects its grant.
+The columns come from migration 0313, which must be applied before this code
+is deployed, because the connector list reads `sign_in_required`.
+
 ## Variables every OAuth connector shares
 
 | Name                                    | Production                                                     | Local                                                                                       |
@@ -148,10 +171,12 @@ set the named variables in production and locally.
   `https://calendarmcp.googleapis.com/mcp/v1`.
 - Scopes the allowlist permits (each prefixed `https://www.googleapis.com/auth/`
   unless bare): `openid`, `profile`, `email`, `userinfo.email`,
-  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.send`;
+  `userinfo.profile`, then per connector Gmail `gmail.readonly`, `gmail.compose`
+  (drafts), `gmail.send`;
   Drive `drive.file`, `drive.metadata.readonly`; Calendar `calendar.readonly`,
   `calendar.events`. The full-mailbox, full-drive and full-calendar scopes are
-  forbidden and dropped.
+  forbidden and dropped. `gmail.modify`, which Gmail's label tools need, is left
+  out like Microsoft's `Mail.ReadWrite`; admitting it is an owner decision.
 - Variables: `CONNECTOR_OAUTH_GMAIL_CLIENT_ID`,
   `CONNECTOR_OAUTH_GMAIL_CLIENT_SECRET`, `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_ID`,
   `CONNECTOR_OAUTH_GOOGLE_DRIVE_CLIENT_SECRET`,
@@ -300,18 +325,25 @@ and stay "Needs setup" until a descriptor and its pair exist. Take
 `authorizationUrl` and `tokenUrl` from the vendor's current OAuth
 documentation; the console is where the pair is issued.
 
-| Connector id | Console                                           | Scopes permitted by the allowlist                                                                                                                                           | Variables                                                                        |
-| ------------ | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `slack`      | https://api.slack.com/apps                        | `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `team:read`, `files:read`                                               | `CONNECTOR_OAUTH_SLACK_CLIENT_ID`, `CONNECTOR_OAUTH_SLACK_CLIENT_SECRET`         |
-| `asana`      | https://app.asana.com/0/my-apps, an MCP app       | `openid`, `profile`, `email`, `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read` | `CONNECTOR_OAUTH_ASANA_CLIENT_ID`, `CONNECTOR_OAUTH_ASANA_CLIENT_SECRET`         |
-| `box`        | https://app.box.com/developers/console            | `root_readonly`, `item_preview`, `item_download`, `item_upload`                                                                                                             | `CONNECTOR_OAUTH_BOX_CLIENT_ID`, `CONNECTOR_OAUTH_BOX_CLIENT_SECRET`             |
-| `dropbox`    | https://www.dropbox.com/developers/apps           | `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`                                                                                     | `CONNECTOR_OAUTH_DROPBOX_CLIENT_ID`, `CONNECTOR_OAUTH_DROPBOX_CLIENT_SECRET`     |
-| `figma`      | https://www.figma.com/developers/apps             | `current_user:read`, `files:read`, `projects:read`, `file_comments:write`, `file_dev_resources:read`                                                                        | `CONNECTOR_OAUTH_FIGMA_CLIENT_ID`, `CONNECTOR_OAUTH_FIGMA_CLIENT_SECRET`         |
-| `hubspot`    | HubSpot developer account, Apps                   | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                       | `CONNECTOR_OAUTH_HUBSPOT_CLIENT_ID`, `CONNECTOR_OAUTH_HUBSPOT_CLIENT_SECRET`     |
-| `intercom`   | Intercom app, Developer Hub                       | None; Intercom has no scope parameter                                                                                                                                       | `CONNECTOR_OAUTH_INTERCOM_CLIENT_ID`, `CONNECTOR_OAUTH_INTERCOM_CLIENT_SECRET`   |
-| `pagerduty`  | PagerDuty web app, Integrations, App Registration | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_ID`, `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_SECRET` |
-| `square`     | https://developer.squareup.com/apps               | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_SQUARE_CLIENT_ID`, `CONNECTOR_OAUTH_SQUARE_CLIENT_SECRET`       |
-| `vercel`     | https://vercel.com/dashboard/integrations/console | No ceiling recorded; descriptor scopes pass through                                                                                                                         | `CONNECTOR_OAUTH_VERCEL_CLIENT_ID`, `CONNECTOR_OAUTH_VERCEL_CLIENT_SECRET`       |
+| Connector id | Console                                           | Scopes permitted by the allowlist                                                                                                                                                                                | Variables                                                                        |
+| ------------ | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `slack`      | https://api.slack.com/apps                        | `channels:read`, `channels:history`, `groups:read`, `chat:write`, `users:read`, `users:read.email`, `team:read`, `files:read`, `search:read.public`, `search:read.private`, `search:read.im`, `search:read.mpim` | `CONNECTOR_OAUTH_SLACK_CLIENT_ID`, `CONNECTOR_OAUTH_SLACK_CLIENT_SECRET`         |
+| `asana`      | https://app.asana.com/0/my-apps, an MCP app       | `openid`, `profile`, `email`, `tasks:read`, `tasks:write`, `projects:read`, `sections:read`, `stories:read`, `stories:write`, `teams:read`, `users:read`, `workspaces:read`                                      | `CONNECTOR_OAUTH_ASANA_CLIENT_ID`, `CONNECTOR_OAUTH_ASANA_CLIENT_SECRET`         |
+| `box`        | https://app.box.com/developers/console            | `root_readonly`, `item_preview`, `item_download`, `item_upload`                                                                                                                                                  | `CONNECTOR_OAUTH_BOX_CLIENT_ID`, `CONNECTOR_OAUTH_BOX_CLIENT_SECRET`             |
+| `dropbox`    | https://www.dropbox.com/developers/apps           | `account_info.read`, `files.metadata.read`, `files.content.read`, `files.content.write`                                                                                                                          | `CONNECTOR_OAUTH_DROPBOX_CLIENT_ID`, `CONNECTOR_OAUTH_DROPBOX_CLIENT_SECRET`     |
+| `figma`      | https://www.figma.com/developers/apps             | `current_user:read`, `files:read`, `projects:read`, `file_comments:write`, `file_dev_resources:read`                                                                                                             | `CONNECTOR_OAUTH_FIGMA_CLIENT_ID`, `CONNECTOR_OAUTH_FIGMA_CLIENT_SECRET`         |
+| `hubspot`    | HubSpot developer account, Apps                   | `oauth`, `crm.objects.contacts.read`, `crm.objects.contacts.write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.deals.write`                                                            | `CONNECTOR_OAUTH_HUBSPOT_CLIENT_ID`, `CONNECTOR_OAUTH_HUBSPOT_CLIENT_SECRET`     |
+| `intercom`   | Intercom app, Developer Hub                       | None; Intercom has no scope parameter                                                                                                                                                                            | `CONNECTOR_OAUTH_INTERCOM_CLIENT_ID`, `CONNECTOR_OAUTH_INTERCOM_CLIENT_SECRET`   |
+| `pagerduty`  | PagerDuty web app, Integrations, App Registration | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_ID`, `CONNECTOR_OAUTH_PAGERDUTY_CLIENT_SECRET` |
+| `square`     | https://developer.squareup.com/apps               | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_SQUARE_CLIENT_ID`, `CONNECTOR_OAUTH_SQUARE_CLIENT_SECRET`       |
+| `vercel`     | https://vercel.com/dashboard/integrations/console | No ceiling recorded; descriptor scopes pass through                                                                                                                                                              | `CONNECTOR_OAUTH_VERCEL_CLIENT_ID`, `CONNECTOR_OAUTH_VERCEL_CLIENT_SECRET`       |
+
+`slack` admits the user-token message search scopes that Slack lists for
+`assistant.search.context` (https://docs.slack.dev/reference/methods/assistant.search.context).
+`box` admits `root_readonly` and `item_upload` only: its folder and shared-link
+tools need `root_readwrite`, which reads and writes every file in the account
+(https://developer.box.com/guides/api-calls/permissions-and-errors/scopes/), so
+it stays out like the full-Drive scope; admitting it is an owner decision.
 
 `asana` uses `https://mcp.asana.com/v2/mcp`; Asana shut the v1 SSE server down on
 2026-08-05 and its v2 server takes no dynamic registration

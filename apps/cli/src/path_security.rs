@@ -347,7 +347,7 @@ fn is_under_allowed_root(path: &Path, allowed_roots: &[PathBuf]) -> bool {
     allowed_roots.iter().any(|root| path.starts_with(root))
 }
 
-fn expand_home(path: &str) -> String {
+pub(crate) fn expand_home(path: &str) -> String {
     if path == "~" {
         return dirs::home_dir()
             .map(|home| home.to_string_lossy().into_owned())

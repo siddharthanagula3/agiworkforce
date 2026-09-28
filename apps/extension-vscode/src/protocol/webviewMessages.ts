@@ -168,6 +168,8 @@ const openSessionRow = z.object({
 });
 
 const requestSlashCommands = z.object({ type: z.literal('requestSlashCommands') });
+const continueInCloud = z.object({ type: z.literal('continueInCloud') });
+const regenerate = z.object({ type: z.literal('regenerate') });
 
 const runSlashCommand = z.object({
   type: z.literal('runSlashCommand'),
@@ -195,6 +197,7 @@ const resolveTurnFailure = z.object({
       'upgrade-plan',
       'open-settings',
       'switch-model',
+      'update-extension',
     ]),
     provider: z
       .string()
@@ -268,6 +271,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openSessionRow,
   requestSlashCommands,
   runSlashCommand,
+  continueInCloud,
+  regenerate,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

@@ -21,6 +21,7 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   managedUsageBucketLabel,
+  modelDisplayNameById,
   type AgentEventApprovalRiskLevel,
   type AgentEventToolCategory,
   type AgentMode,
@@ -55,8 +56,9 @@ import {
   recordAccountIdentityTier,
   resolveTier,
 } from '../../integrations/tierResolver';
-import { type ChatTurn } from '../chat/retry';
+import { RETRY_LAST_MESSAGE_COMMAND, type ChatTurn } from '../chat/retry';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
+import { EXTENSION_ID } from '../../platform/version';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
 import {
@@ -77,7 +79,12 @@ import {
   type SessionSource,
 } from '../surfaces';
 import { resolveProjectsWorkspace } from '../projects/projectsClient';
-import { OPEN_CLOUD_CODE_SESSION_COMMAND, resolveCloudCodeApi } from '../cloud-tasks';
+import {
+  CONTINUE_IN_CLOUD_COMMAND,
+  OPEN_CLOUD_CODE_SESSION_COMMAND,
+  resolveCloudCodeApi,
+} from '../cloud-tasks';
+import { githubRepositoryName, workspaceGitHubRepositories } from '../context-handoff';
 import { resolveAccountPresence } from '../surfaces/accountAccess';
 import { buildMemoryContextInput } from '../../memory/memoryStore';
 import { getAccountMemoryStore } from '../../memory/accountMemoryStore';
@@ -216,7 +223,8 @@ export type WebviewToExtMessage =
           | 'sign-in-account'
           | 'upgrade-plan'
           | 'open-settings'
-          | 'switch-model';
+          | 'switch-model'
+          | 'update-extension';
         provider?: string;
       };
     }
@@ -238,11 +246,24 @@ export type WebviewToExtMessage =
   | { type: 'requestSessions'; payload: { source: SessionListSource } }
   | { type: 'openSessionRow'; payload: { id: string; source: SessionSource } }
   | { type: 'requestSlashCommands' }
+  | { type: 'continueInCloud' }
+  | { type: 'regenerate' }
   | { type: 'runSlashCommand'; payload: { name: string } };
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
-  | { type: 'done'; payload?: { model?: string; providerLabel?: string; brandColor?: string } }
+  | {
+      type: 'done';
+      payload?: {
+        model?: string;
+        modelLabel?: string;
+        inputTokens?: number;
+        outputTokens?: number;
+        providerLabel?: string;
+        brandColor?: string;
+        stopped?: true;
+      };
+    }
   | { type: 'error'; payload: ChatErrorPresentation }
   | { type: 'sessionNotice'; payload: { message: string } }
   | {
@@ -984,6 +1005,16 @@ export class ChatStateManager {
         break;
       }
 
+      case 'regenerate': {
+        await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
+        break;
+      }
+
+      case 'continueInCloud': {
+        await vscode.commands.executeCommand(CONTINUE_IN_CLOUD_COMMAND);
+        break;
+      }
+
       case 'runSlashCommand': {
         await this._runSlashCommand(msg.payload.name);
         break;
@@ -1025,6 +1056,10 @@ export class ChatStateManager {
         }
         if (msg.payload.kind === 'switch-model') {
           await vscode.commands.executeCommand('agi-workforce.selectModel');
+          break;
+        }
+        if (msg.payload.kind === 'update-extension') {
+          await vscode.commands.executeCommand('extension.open', EXTENSION_ID);
           break;
         }
         await vscode.commands.executeCommand('agi-workforce.openSettings', 'configuration');
@@ -1516,10 +1551,16 @@ export class ChatStateManager {
       return;
     }
     try {
-      const [page, codeSessions] = await Promise.all([
+      const [page, codeSessions, workspaceRepositories] = await Promise.all([
         resolution.workspace.chat.listConversations({ limit: 50 }),
         code.status === 'ready' ? code.api.list('open') : null,
+        workspaceGitHubRepositories(),
       ]);
+      const inWorkspaceRepository = (repositoryUrl: string | null): boolean => {
+        if (workspaceRepositories.length === 0) return true;
+        const name = repositoryUrl ? githubRepositoryName(repositoryUrl) : null;
+        return name !== null && workspaceRepositories.includes(name);
+      };
       const inputs: SessionRowInput[] = [
         ...page.conversations.map((conversation) => ({
           id: conversation.id,
@@ -1527,13 +1568,15 @@ export class ChatStateManager {
           updatedAt: conversation.updatedAt,
           source: 'cloud' as const,
         })),
-        ...(codeSessions?.sessions ?? []).map((session) => ({
-          id: session.id,
-          title: session.title,
-          updatedAt: session.updatedAt,
-          source: 'cloud-code' as const,
-          ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
-        })),
+        ...(codeSessions?.sessions ?? [])
+          .filter((session) => inWorkspaceRepository(session.repositoryUrl))
+          .map((session) => ({
+            id: session.id,
+            title: session.title,
+            updatedAt: session.updatedAt,
+            source: 'cloud-code' as const,
+            ...(session.workingBranch === null ? {} : { branch: session.workingBranch }),
+          })),
       ];
       this._post({ type: 'sessionsList', payload: { source, rows: mergeSessionRows(inputs) } });
     } catch (error) {
@@ -2980,7 +3023,14 @@ export class ChatStateManager {
             };
       this._post({
         type: 'done',
-        payload: { model: resolvedModel, providerLabel, brandColor },
+        payload: {
+          model: resolvedModel,
+          modelLabel: modelDisplayNameById(resolvedModel) ?? resolvedModel,
+          inputTokens: event.inputTokens,
+          outputTokens: event.outputTokens,
+          providerLabel,
+          brandColor,
+        },
       });
       const contextWindow = catalogContextWindow(resolvedModel);
       this._post({
@@ -3000,7 +3050,7 @@ export class ChatStateManager {
     }
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
-      this._post({ type: 'done' });
+      this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }

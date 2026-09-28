@@ -158,21 +158,29 @@ import { routeVisualRequest } from '@features/chat/components/artifacts/structur
 import { useCoworkFolderStore, supportsDirectoryPicker } from '@shared/stores/cowork-folder-store';
 import {
   MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH,
+  MANAGED_MEDIA_MAX_IMAGE_REFERENCES,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@agiworkforce/cloud-contracts';
-import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
+import {
+  buildAgiWorkGoalInput,
+  type AgiWorkExcludableTool,
+  type AgiWorkGoalInput,
+} from '@/features/chat/utils/agiwork-plan';
 import {
   getImageAspectOptionsForModel,
   IMAGE_MODEL_DEFAULT,
   IMAGE_MODELS,
+  IMAGE_STYLE_PRESETS,
   isImageAspectRatioSupported,
   readImageFileAsBase64,
+  readReferenceImageAsBase64,
   type ImageAspectRatio,
   type ImageEditRequest,
 } from '../../lib/imageGenerationOptions';
 import {
   formatUsageResetIn,
   getVideoAspectOptionsForModel,
+  getVideoDurationOptionsForModel,
   getVideoQualityOptionsForModel,
 } from '@agiworkforce/types';
 import {
@@ -431,7 +439,12 @@ interface ChatComposerProps {
    */
   onGenerateImage?: (
     prompt: string,
-    options: { aspectRatio: ImageAspectRatio; modelId: string; edit?: ImageEditRequest },
+    options: {
+      aspectRatio: ImageAspectRatio;
+      modelId: string;
+      edit?: ImageEditRequest;
+      transparentBackground?: boolean;
+    },
   ) => void;
   /**
    * Called when the user submits in video-generation mode. Same contract as
@@ -746,6 +759,7 @@ const ChatComposerNewComponent = ({
   // only in AGI Work mode; the composed message is the objective itself.
   const [agiWorkConstraints, setAgiWorkConstraints] = useState('');
   const [agiWorkDeliverable, setAgiWorkDeliverable] = useState('');
+  const [agiWorkExcludedTools, setAgiWorkExcludedTools] = useState<AgiWorkExcludableTool[]>([]);
   const [agiWorkFieldsOpen, setAgiWorkFieldsOpen] = useState(false);
   const { t: tAgiWork } = useTranslation('v3');
   const { t: tChat } = useTranslation('chat');
@@ -923,6 +937,8 @@ const ChatComposerNewComponent = ({
     imageMode,
     videoMode,
     selectedSkillName,
+    agiWorkScope,
+    pendingImageSettings,
   } = composerToggles;
   const setWorkMode = useCallback(
     (mode: ComposerWorkMode) => setComposerToggles({ workMode: mode }),
@@ -943,6 +959,21 @@ const ChatComposerNewComponent = ({
     (name: string | null) => setComposerToggles({ selectedSkillName: name }),
     [setComposerToggles],
   );
+
+  useEffect(() => {
+    if (!agiWorkScope) return;
+    setAgiWorkConstraints(agiWorkScope.constraints);
+    setAgiWorkDeliverable(agiWorkScope.deliverable);
+    setAgiWorkExcludedTools(agiWorkScope.excludedTools);
+    setAgiWorkFieldsOpen(
+      Boolean(
+        agiWorkScope.constraints ||
+        agiWorkScope.deliverable ||
+        agiWorkScope.excludedTools.length > 0,
+      ),
+    );
+    setComposerToggles({ agiWorkScope: null });
+  }, [agiWorkScope, setComposerToggles]);
 
   // Per-conversation connector opt-out (persisted, unlike the toggles above --
   // see `disabledConnectorIdsByConversation` in the chat store).
@@ -1036,6 +1067,7 @@ const ChatComposerNewComponent = ({
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
+  const [showImageStyleMenu, setShowImageStyleMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
   /**
    * What an attached image means in image mode. The media route already serves
@@ -1149,6 +1181,8 @@ const ChatComposerNewComponent = ({
   const [videoResolution, setVideoResolution] = useState<string>('720p');
   const [showVideoAspectMenu, setShowVideoAspectMenu] = useState(false);
   const [showVideoQualityMenu, setShowVideoQualityMenu] = useState(false);
+  const [videoDurationChoice, setVideoDurationChoice] = useState<number | null>(null);
+  const [showVideoDurationMenu, setShowVideoDurationMenu] = useState(false);
 
   const videoAspectOptions = useMemo(
     () => getVideoAspectOptionsForModel(videoModelId),
@@ -1165,11 +1199,14 @@ const ChatComposerNewComponent = ({
   const effectiveVideoQuality =
     videoQualityOptions.find((option) => option.id === videoResolution) ?? videoQualityOptions[0];
   const effectiveVideoResolution = effectiveVideoQuality?.id ?? '720p';
-  // Some output tuples narrow the model-wide duration list. The composer has
-  // no independent duration picker, so selecting one of those tuples must
-  // carry its required duration; otherwise the route applies its 4s default
-  // and rejects the visible 1080p/4K selection as an impossible combination.
-  const effectiveVideoDurationSecs = effectiveVideoQuality?.durationSecs?.[0];
+  const videoDurationOptions = useMemo(
+    () => getVideoDurationOptionsForModel(videoModelId, effectiveVideoQuality),
+    [videoModelId, effectiveVideoQuality],
+  );
+  const effectiveVideoDurationSecs =
+    videoDurationChoice !== null && videoDurationOptions.includes(videoDurationChoice)
+      ? videoDurationChoice
+      : videoDurationOptions[0];
 
   // Catalog entries are candidates, not proof of this deployment's keys and
   // durable storage. Once the server handshake resolves, keep each selection
@@ -1181,6 +1218,29 @@ const ChatComposerNewComponent = ({
       setImageAspectRatio('auto');
     }
   }, [availableImageModels, imageModelId, mediaModelsSettled]);
+
+  useEffect(() => {
+    if (!mediaModelsSettled || !pendingImageSettings) return;
+    const { modelId, aspectRatio } = pendingImageSettings;
+    const model =
+      modelId && availableImageModels.some((candidate) => candidate.id === modelId)
+        ? modelId
+        : imageModelId;
+    setImageModelId(model);
+    setImageAspectRatio(
+      aspectRatio &&
+        getImageAspectOptionsForModel(model).some((option) => option.id === aspectRatio)
+        ? aspectRatio
+        : 'auto',
+    );
+    setComposerToggles({ pendingImageSettings: null });
+  }, [
+    availableImageModels,
+    imageModelId,
+    mediaModelsSettled,
+    pendingImageSettings,
+    setComposerToggles,
+  ]);
 
   useEffect(() => {
     if (!mediaModelsSettled) return;
@@ -1455,6 +1515,11 @@ const ChatComposerNewComponent = ({
     void hydrateStylesFromServer();
   }, [hydrateStylesFromServer]);
 
+  const bindStyleConversation = useStyleStore((s) => s.bindConversation);
+  useLayoutEffect(() => {
+    bindStyleConversation(toggleBucketKey);
+  }, [bindStyleConversation, toggleBucketKey]);
+
   const responseStyle = useStyleStore((s) => s.style);
   const responseLength = useStyleStore((s) => s.length);
   const activeCustomStyleId = useStyleStore((s) => s.activeCustomStyleId);
@@ -1503,10 +1568,12 @@ const ChatComposerNewComponent = ({
   const projectPickerTriggerRef = useRef<HTMLButtonElement>(null);
   const projectPickerMenuRef = useRef<HTMLDivElement>(null);
   const imageAspectTriggerRef = useRef<HTMLButtonElement>(null);
+  const imageStyleTriggerRef = useRef<HTMLButtonElement>(null);
   const imageModelTriggerRef = useRef<HTMLButtonElement>(null);
   const imageOperationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoAspectTriggerRef = useRef<HTMLButtonElement>(null);
   const videoQualityTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoDurationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoModelTriggerRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1713,6 +1780,7 @@ const ChatComposerNewComponent = ({
     // The AGI Work scope fields belong to a single send, like the skill pick.
     setAgiWorkConstraints('');
     setAgiWorkDeliverable('');
+    setAgiWorkExcludedTools([]);
     setAgiWorkFieldsOpen(false);
     // Aspect ratio and the chosen media model ride with the mode above: a user
     // shooting a sequence at 16:9 on a catalog-selected video model should stay
@@ -2853,6 +2921,9 @@ const ChatComposerNewComponent = ({
         onGenerateImage(prompt, {
           aspectRatio: effectiveImageAspectRatio,
           modelId: imageModelId,
+          ...(imageTransparentBackground && imageModelSupportsEdit
+            ? { transparentBackground: true }
+            : {}),
         });
         clearComposerState();
         return;
@@ -2861,6 +2932,13 @@ const ChatComposerNewComponent = ({
       // valid once the state holding it is gone, and holding the composer open
       // through a multi-megabyte read would make the send feel stuck.
       const maskFile = effectiveImageOperation === 'inpaint' ? attachments[1] : undefined;
+      const referenceFiles = effectiveImageOperation === 'edit' ? attachments.slice(1) : [];
+      if (referenceFiles.length > MANAGED_MEDIA_MAX_IMAGE_REFERENCES) {
+        setLocalNotice(
+          `Attach up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES + 1} images: the first is edited and the others guide it.`,
+        );
+        return;
+      }
       const operation = effectiveImageOperation;
       const transparentBackground = imageTransparentBackground;
       const aspectRatio = effectiveImageAspectRatio;
@@ -2868,9 +2946,10 @@ const ChatComposerNewComponent = ({
       clearComposerState();
       void (async () => {
         try {
-          const [sourceImageBase64, maskImageBase64] = await Promise.all([
+          const [sourceImageBase64, maskImageBase64, referenceImagesBase64] = await Promise.all([
             readImageFileAsBase64(sourceFile),
             maskFile ? readImageFileAsBase64(maskFile) : Promise.resolve(undefined),
+            Promise.all(referenceFiles.map(readReferenceImageAsBase64)),
           ]);
           onGenerateImage(prompt, {
             aspectRatio,
@@ -2879,6 +2958,7 @@ const ChatComposerNewComponent = ({
               operation,
               sourceImageBase64,
               ...(maskImageBase64 ? { maskImageBase64 } : {}),
+              ...(referenceImagesBase64.length > 0 ? { referenceImagesBase64 } : {}),
               ...(transparentBackground ? { transparentBackground: true } : {}),
             },
           });
@@ -2994,6 +3074,7 @@ const ChatComposerNewComponent = ({
             ? buildAgiWorkGoalInput(outgoingContent, {
                 constraints: agiWorkConstraints,
                 deliverable: agiWorkDeliverable,
+                excludedTools: agiWorkExcludedTools,
               })
             : undefined,
       },
@@ -3096,6 +3177,7 @@ const ChatComposerNewComponent = ({
     officeCreationEnabled,
     agiWorkConstraints,
     agiWorkDeliverable,
+    agiWorkExcludedTools,
     onSend,
     clearComposerState,
     writeComposerMessage,
@@ -4682,6 +4764,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowImageAspectMenu((p) => !p);
+                          setShowImageStyleMenu(false);
                           setShowImageModelMenu(false);
                         }}
                         className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
@@ -4723,6 +4806,48 @@ const ChatComposerNewComponent = ({
                       </AnchoredComposerMenu>
                     </div>
                   )}
+
+                  <div className="relative">
+                    <button
+                      ref={imageStyleTriggerRef}
+                      type="button"
+                      onClick={() => {
+                        setShowImageStyleMenu((p) => !p);
+                        setShowImageAspectMenu(false);
+                        setShowImageModelMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Add a style to the prompt"
+                    >
+                      Style
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                    <AnchoredComposerMenu
+                      anchorRef={imageStyleTriggerRef}
+                      open={showImageStyleMenu}
+                      label="Image style"
+                      onRequestClose={() => setShowImageStyleMenu(false)}
+                      className="w-56 p-1"
+                    >
+                      {IMAGE_STYLE_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => {
+                            appendComposerMessage(
+                              `${messageRef.current.trim() ? ', ' : ''}${preset.phrase}`,
+                            );
+                            setShowImageStyleMenu(false);
+                            focusComposer();
+                          }}
+                          className="flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-1.5 text-left text-xs transition-colors hover:bg-muted/60"
+                        >
+                          <span className="font-medium text-foreground">{preset.label}</span>
+                          <span className="text-muted-foreground">{preset.phrase}</span>
+                        </button>
+                      ))}
+                    </AnchoredComposerMenu>
+                  </div>
 
                   {selectedPromotionalImage && (
                     <span className="text-xs text-muted-foreground">
@@ -4785,15 +4910,15 @@ const ChatComposerNewComponent = ({
                         ))}
                         {imageMaskFile === undefined && (
                           <p className="px-3 py-1.5 text-xs text-muted-foreground">
-                            Attach a second image, black where the model should redraw, to mask an
-                            edit.
+                            Attach a second PNG the same size, transparent where the model should
+                            redraw, to mask an edit.
                           </p>
                         )}
                       </AnchoredComposerMenu>
                     </div>
                   )}
 
-                  {imageSourceFile && imageModelSupportsEdit && (
+                  {imageModelSupportsEdit && (
                     <button
                       type="button"
                       aria-pressed={imageTransparentBackground}
@@ -4804,11 +4929,20 @@ const ChatComposerNewComponent = ({
                           ? 'border-primary/30 bg-primary/15 text-primary'
                           : 'border-border/60 bg-muted/40 text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                       )}
-                      title="Return the edit on a transparent background"
+                      title="Return the image on a transparent background"
                     >
                       Transparent
                     </button>
                   )}
+
+                  {imageSourceFile &&
+                    imageModelSupportsEdit &&
+                    effectiveImageOperation === 'edit' &&
+                    attachments.length > 1 && (
+                      <span className="text-xs text-muted-foreground">
+                        {`Editing the first image, guided by the other ${attachments.length - 1}`}
+                      </span>
+                    )}
 
                   {imageSourceFile && !imageModelSupportsEdit && (
                     <span className="text-xs text-muted-foreground">
@@ -4852,6 +4986,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowVideoAspectMenu((p) => !p);
+                          setShowVideoDurationMenu(false);
                           setShowVideoQualityMenu(false);
                           setShowVideoModelMenu(false);
                         }}
@@ -4904,6 +5039,7 @@ const ChatComposerNewComponent = ({
                         type="button"
                         onClick={() => {
                           setShowVideoQualityMenu((p) => !p);
+                          setShowVideoDurationMenu(false);
                           setShowVideoAspectMenu(false);
                           setShowVideoModelMenu(false);
                         }}
@@ -4943,6 +5079,54 @@ const ChatComposerNewComponent = ({
                               </span>
                             )}
                             {effectiveVideoResolution === opt.id && (
+                              <Check className="h-4 w-4 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </AnchoredComposerMenu>
+                    </div>
+                  )}
+                  {!selectedVideoIsPromotional && videoDurationOptions.length > 1 && (
+                    <div className="relative">
+                      <button
+                        ref={videoDurationTriggerRef}
+                        type="button"
+                        onClick={() => {
+                          setShowVideoDurationMenu((p) => !p);
+                          setShowVideoQualityMenu(false);
+                          setShowVideoAspectMenu(false);
+                          setShowVideoModelMenu(false);
+                        }}
+                        className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                        aria-label="Select video length"
+                      >
+                        {effectiveVideoDurationSecs}s
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      <AnchoredComposerMenu
+                        anchorRef={videoDurationTriggerRef}
+                        open={showVideoDurationMenu}
+                        label="Video length"
+                        onRequestClose={() => setShowVideoDurationMenu(false)}
+                        className="w-40 p-1"
+                      >
+                        {videoDurationOptions.map((secs) => (
+                          <button
+                            key={secs}
+                            type="button"
+                            onClick={() => {
+                              setVideoDurationChoice(secs);
+                              setShowVideoDurationMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoDurationSecs === secs
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{secs} seconds</span>
+                            {effectiveVideoDurationSecs === secs && (
                               <Check className="h-4 w-4 shrink-0 text-primary" />
                             )}
                           </button>
@@ -5568,6 +5752,39 @@ const ChatComposerNewComponent = ({
                 className="w-full rounded-lg border border-border/40 bg-background/60 px-3 py-1.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-[var(--chat-accent-primary)]/40"
               />
             </label>
+            <fieldset className="flex flex-col gap-1">
+              <legend className="text-caption font-medium text-muted-foreground">
+                {tAgiWork('agiWork.compose.toolsLabel')}
+              </legend>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {(
+                  [
+                    ['web_search', 'agiWork.compose.toolWebSearch'],
+                    ['code_execution', 'agiWork.compose.toolCodeExecution'],
+                  ] as const
+                ).map(([tool, labelKey]) => (
+                  <label
+                    key={tool}
+                    className="flex min-h-6 items-center gap-2 text-sm text-foreground"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!agiWorkExcludedTools.includes(tool)}
+                      onChange={(event) =>
+                        setAgiWorkExcludedTools((current) =>
+                          event.target.checked
+                            ? current.filter((excluded) => excluded !== tool)
+                            : [...current, tool],
+                        )
+                      }
+                      disabled={isTurnActive || composerDisabled}
+                      className="h-4 w-4 accent-[var(--chat-accent-primary)]"
+                    />
+                    {tAgiWork(labelKey)}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
           </div>
         </div>
       )}

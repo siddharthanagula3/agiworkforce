@@ -14,13 +14,13 @@ nothing is left.
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Mobile shows the account name and email and can change the email, but its "Full Name" field is saved only to the personalization namespace, not to the account profile name the web edits, and there is no photo upload. | handler |
+| mobile | partial | partials/auth 68949fe36: the Full Name field now saves to the account display name through PATCH /api/me; there is still no profile photo upload on mobile | ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | partial | VS Code shows the signed-in name and email read-only in the account picker; changing name or photo requires the web app and there is no link to the profile page. | ui |
 | chrome | partial | The side panel shows the signed-in name, email and initials read-only; name and photo can only be changed on the web, and Chrome has no link to that page. | ui |
 | api | partial | GET /api/me (documented) returns the profile; updating the name or photo (PATCH /api/me) works for signed-in clients but is not part of the documented public API. | api |
 
-Code: `apps/mobile/src/features/settings/personalization/index.tsx:338-348`, `apps/mobile/services/cloudSettingsMapping.ts:111-113`, `apps/mobile/src/features/settings/cloud-account/index.tsx:44-46`, `apps/extension-vscode/src/features/account-auth/accountPresentation.ts:42-57`
+Code: `apps/mobile/src/features/settings/personalization/index.tsx:334-334`, `apps/extension-vscode/src/features/account-auth/accountPresentation.ts:42-57`, `apps/extension/src/side_panel.ts:8320-8325`, `apps/extension/src/features/cloud-bridge/clerkAuth.ts:215-228`
 
 ## S85.02: Custom instructions.
 
@@ -128,18 +128,6 @@ Code: `apps/web/features/settings/sections/MemorySection.tsx:284-293`, `apps/web
 
 Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-752`, `apps/web/lib/hooks/useConversations.ts:450-461`, `apps/web/app/api/search/route.ts:256-262`, `apps/mobile/src/features/settings/general/index.tsx:48-54`
 
-## S85.14: Diagnostic-sharing choice.
-
-- Done when: The user can choose whether crash reports and diagnostics are sent, and the choice is honoured.
-- Wave: 3
-- Already works on: web, desktop, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| cli | partial | Crash reporting is off by default and honoured, but the default TUI cannot change it (its /config only prints); use the --no-tui REPL "/config set crash-reports true", the AGI_CRASH_REPORTS variable, or edit config.toml. | ui |
-
-Code: `apps/cli/src/repl/registry.rs:1770-1785`, `apps/cli/src/tui/tui_app.rs:3486-3488`, `apps/cli/src/crash_reports.rs:35-50`, `apps/cli/src/lib.rs:3106-3111`
-
 ## S85.16: Temporary-chat preferences.
 
 - Done when: The user can make new chats temporary by default (not saved, not used for memory) and the preference is honoured.
@@ -237,22 +225,6 @@ Code: `apps/cli/src/lib.rs:3849-3856`, `apps/cli/src/ecosystem.rs:566-571`
 | chrome | partial | Log out removes the account session and saved keys; there is no control to clear the chat history kept in chrome.storage (only one-by-one delete). | ui |
 
 Code: `apps/extension/src/options.ts:1426-1441`
-
-## S85.25: Reset personalization.
-
-- Done when: One action resets personalization (instructions, style, memory) to defaults after confirmation.
-- Wave: 3
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| web | partial | Only memory has a one-step reset ("Clear all memories"); instructions, response style and profile fields must be cleared by hand. | ui |
-| desktop | partial | Same as web: only memory can be cleared in one step. | ui |
-| mobile | partial | Storage > Delete all local data resets on-device personalization with everything else; there is no reset for Cloud personalization or account memory. | ui |
-| cli | missing | Not built on this surface. |  |
-| vscode | partial | The memory command can delete every account memory fact after confirmation; instructions must be cleared by hand. | ui |
-| chrome | missing | Not built on this surface. |  |
-
-Code: `apps/web/features/settings/sections/MemorySection.tsx:84-93`, `apps/web/features/settings/sections/MemorySection.tsx:246-268`, `apps/mobile/app/(app)/settings/storage.tsx:173-200`, `apps/extension-vscode/src/core/commandSetup.ts:1815-1843`
 
 ## S85.26: Delete account.
 

@@ -60,6 +60,38 @@ pub fn format_task_list(tasks: &[(String, String, SubagentStatus)]) -> String {
     lines.join("\n")
 }
 
+pub fn format_task_detail(
+    id: &str,
+    description: &str,
+    status: &SubagentStatus,
+    result: Option<&SubagentResult>,
+) -> String {
+    let description = if description.trim().is_empty() {
+        "(no description)"
+    } else {
+        description.trim()
+    };
+    let mut lines = vec![format!("Task {id} [{status}] {description}")];
+    match result {
+        Some(result) => {
+            lines.push(String::new());
+            lines.push(result.output.trim().to_string());
+            if !result.files_modified.is_empty() {
+                lines.push(String::new());
+                lines.push(format!(
+                    "Files modified: {}",
+                    result.files_modified.join(", ")
+                ));
+            }
+        }
+        None if matches!(status, SubagentStatus::Running) => {
+            lines.push("Still running. Its output appears here when it finishes.".to_string());
+        }
+        None => lines.push("It left no output.".to_string()),
+    }
+    lines.join("\n")
+}
+
 /// What one subagent turn consumed, attributed to the session that spawned it.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SubagentUsage {
@@ -485,8 +517,6 @@ impl SubagentManager {
     }
 
     /// Cancel a running subagent.
-    /// Will be wired into the /cancel REPL command for subagent management.
-    #[allow(dead_code)]
     pub async fn cancel(&self, id: &str) -> Result<()> {
         let entries = self.entries.read().await;
         if let Some(entry) = entries.get(id) {
@@ -500,11 +530,6 @@ impl SubagentManager {
                     .cancelled
                     .store(true, std::sync::atomic::Ordering::Release);
                 *status = SubagentStatus::Cancelled;
-                eprintln!(
-                    "  {} Subagent {} cancelled",
-                    ts::warning_header("[task]"),
-                    id.bold()
-                );
                 Ok(())
             } else {
                 let status_display = format!("{}", *status);

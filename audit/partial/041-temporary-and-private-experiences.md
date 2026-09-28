@@ -70,17 +70,16 @@ nothing is left.
 
 - Done when: The user can choose whether custom instructions apply in a temporary chat.
 - Wave: 3
+- Already works on: web, desktop
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Custom instructions always apply in temporary chats; the only switch is the global one in Settings. | ui |
-| desktop | partial | Custom instructions always apply in temporary chats; the only switch is the global one in Settings. | ui |
-| mobile | partial | Personalization always applies in temporary mode; there is no per-chat choice. | ui |
+| mobile | partial | Patch parked at scratchpad/post-codex/privacy-s41.06.patch (settingsStore, TemporaryChatBanner switch, streaming.ts, chatExecutionStore held by Codex). | handler, ui |
 | cli | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 
-Code: `apps/web/features/settings/sections/GeneralSection.tsx:728-745`, `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:4460-4476`, `apps/mobile/stores/chat/chatExecutionStore.ts:1380-1388`
+Code: `apps/mobile/stores/chat/chatExecutionStore.ts:1424-1424`
 
 ## S41.07: Plugin availability in temporary mode.
 
@@ -206,17 +205,15 @@ Code: `apps/mobile/src/features/memory/services/ragIndex.ts:118-125`
 
 - Done when: History, model training and data retention each have their own clearly separate control or statement.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Add a retention (auto-delete) control; history (delete all, temporary by default) is controllable and training is stated as never used, but there is no user retention setting. | ui |
-| desktop | partial | Add a retention (auto-delete) control; history (delete all, temporary by default) is controllable and training is stated as never used, but there is no user retention setting. | ui |
-| mobile | partial | Training and retention are statements only (retention copy covers account deletion); there is no retention control. | ui |
 | cli | partial | /privacy-settings lists privacy mode, sync and telemetry, but says nothing about training or retention. | ui |
 | vscode | partial | Settings say local history stays local, but there is no training or retention statement or control. | ui |
 | chrome | partial | Mirroring (history) has a switch, but training and retention are not stated or controllable. | ui |
 
-Code: `apps/web/features/settings/sections/PrivacySection.tsx:736-744`, `apps/web/features/settings/sections/PrivacySection.tsx:438-441`, `apps/web/features/settings/sections/PrivacySection.tsx:670-677`, `apps/web/features/settings/components/WebSettingsModal.tsx:199-199`
+Code: `apps/cli/src/claude_parity.rs:146-146`, `apps/cli/src/claude_parity.rs:325-345`, `apps/extension-vscode/src/features/settings/settingsWebviewContent.ts:1271-1271`, `apps/extension/src/features/options/data-handling-section.ts:147-157`
 
 ## S41.19: Privacy-setting education.
 

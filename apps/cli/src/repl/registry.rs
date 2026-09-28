@@ -369,6 +369,126 @@ pub fn export_conversation_for_display(
     arg: &str,
     session: &AgentSession,
 ) -> Result<String, CommandOutcome> {
+    render_export(parse_export_argument(arg).0, session)
+}
+
+pub fn export_conversation_to_file(arg: &str, session: &AgentSession) -> Option<CommandOutcome> {
+    let (format, path) = parse_export_argument(arg);
+    let path = path?;
+    let body = match render_export(format, session) {
+        Ok(body) => body,
+        Err(outcome) => return Some(outcome),
+    };
+    let target = session
+        .workspace_root()
+        .unwrap_or_default()
+        .join(crate::path_security::expand_home(path));
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .and_then(|mut file| std::io::Write::write_all(&mut file, body.as_bytes()));
+    Some(match written {
+        Ok(()) => CommandOutcome::Info(format!(
+            "Exported the conversation to {}.",
+            target.display()
+        )),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            CommandOutcome::Warn(format!(
+                "{} already exists, so nothing was written. Export to a new file name.",
+                target.display()
+            ))
+        }
+        Err(error) => {
+            CommandOutcome::Error(format!("Could not write {}: {error}", target.display()))
+        }
+    })
+}
+
+pub fn handle_export(arg: &str, session: &AgentSession) {
+    if let Some(outcome) = export_conversation_to_file(arg, session) {
+        outcome.print();
+        return;
+    }
+    match export_conversation_for_display(arg, session) {
+        Ok(text) => println!("{}", text),
+        Err(outcome) => outcome.print(),
+    }
+}
+
+pub async fn tasks_for_display(
+    manager: Option<&crate::subagent::SubagentManager>,
+    arg: &str,
+) -> CommandOutcome {
+    let mut words = arg.split_whitespace();
+    let subcommand = words.next().unwrap_or("list");
+    let id = words.next();
+    let tasks = match manager {
+        Some(manager) => manager.list().await,
+        None => Vec::new(),
+    };
+    match (subcommand, id, manager) {
+        ("list" | "ls", _, _) => CommandOutcome::Block(
+            sanitize_terminal_text(&crate::subagent::format_task_list(&tasks)).into_owned(),
+        ),
+        ("show" | "output" | "stop" | "cancel", None, _) => CommandOutcome::Warn(format!(
+            "Name the task: /tasks {subcommand} <id>. /tasks lists them."
+        )),
+        ("show" | "output" | "stop" | "cancel", Some(id), Some(manager)) => {
+            let Some((_, description, status)) = tasks.iter().find(|(task, _, _)| task == id)
+            else {
+                return CommandOutcome::Warn(format!(
+                    "No task {id} in this session. /tasks lists them."
+                ));
+            };
+            if matches!(subcommand, "stop" | "cancel") {
+                return match manager.cancel(id).await {
+                    Ok(()) => CommandOutcome::Info(format!("Stopped task {id}.")),
+                    Err(error) => CommandOutcome::Warn(format!("{error:#}")),
+                };
+            }
+            let detail = crate::subagent::format_task_detail(
+                id,
+                description,
+                status,
+                manager.get_result(id).await.as_ref(),
+            );
+            CommandOutcome::Block(sanitize_terminal_text(&detail).into_owned())
+        }
+        ("show" | "output" | "stop" | "cancel", Some(id), None) => {
+            CommandOutcome::Warn(format!("No task {id} in this session. /tasks lists them."))
+        }
+        (other, _, _) => CommandOutcome::Warn(format!(
+            "Unknown /tasks subcommand '{other}'. Use: /tasks [list | show <id> | stop <id>]"
+        )),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExportFormat {
+    Markdown,
+    Json,
+}
+
+fn parse_export_argument(arg: &str) -> (ExportFormat, Option<&str>) {
+    let arg = arg.trim();
+    let (keyword, rest) = arg.split_once(char::is_whitespace).unwrap_or((arg, ""));
+    let rest = Some(rest.trim()).filter(|rest| !rest.is_empty());
+    match keyword {
+        "" => (ExportFormat::Markdown, None),
+        "json" => (ExportFormat::Json, rest),
+        "markdown" | "md" => (ExportFormat::Markdown, rest),
+        _ if std::path::Path::new(arg)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("json")) =>
+        {
+            (ExportFormat::Json, Some(arg))
+        }
+        _ => (ExportFormat::Markdown, Some(arg)),
+    }
+}
+
+fn render_export(format: ExportFormat, session: &AgentSession) -> Result<String, CommandOutcome> {
     if !session
         .messages
         .iter()
@@ -378,20 +498,13 @@ pub fn export_conversation_for_display(
             "Nothing to export, no messages in session yet.".to_string(),
         ));
     }
-
-    if arg == "json" {
-        conversations::export_as_json(session)
-            .map_err(|e| CommandOutcome::Error(format!("Export failed: {:#}", e)))
-    } else {
-        let md = conversations::export_as_markdown(session);
-        Ok(sanitize_terminal_text(&md).into_owned())
-    }
-}
-
-pub fn handle_export(arg: &str, session: &AgentSession) {
-    match export_conversation_for_display(arg, session) {
-        Ok(text) => println!("{}", text),
-        Err(outcome) => outcome.print(),
+    match format {
+        ExportFormat::Json => conversations::export_as_json(session)
+            .map_err(|e| CommandOutcome::Error(format!("Export failed: {:#}", e))),
+        ExportFormat::Markdown => {
+            let md = conversations::export_as_markdown(session);
+            Ok(sanitize_terminal_text(&md).into_owned())
+        }
     }
 }
 
@@ -473,86 +586,70 @@ pub(super) fn handle_providers(config: &CliConfig) {
 /// workspace's trust. A revoke takes effect on the next tool call, not at the
 /// next session start.
 pub fn handle_trust(arg: &str) {
+    trust_for_display(arg).print();
+}
+
+pub fn trust_for_display(arg: &str) -> CommandOutcome {
     let (subcommand, _) = split_first_word(arg.trim());
     let Ok(cwd) = std::env::current_dir() else {
-        output::print_error("Cannot resolve the current directory.");
-        return;
+        return CommandOutcome::Error("Cannot resolve the current directory.".to_string());
     };
     match subcommand {
-        "" | "status" | "show" => {
-            output::print_block(&sanitize_terminal_text(
-                &crate::trust::status_for(&cwd).render(),
-            ));
-        }
+        "" | "status" | "show" => CommandOutcome::Block(
+            sanitize_terminal_text(&crate::trust::status_for(&cwd).render()).into_owned(),
+        ),
         "grant" | "trust" => match crate::trust::grant(&cwd) {
-            Ok(status) => {
-                output::print_info(&format!("Trusted {}", status.root.display()));
-                output::print_block(&sanitize_terminal_text(&status.render()));
-            }
-            Err(error) => output::print_error(&format!("{error:#}")),
+            Ok(status) => CommandOutcome::Block(format!(
+                "Trusted {}\n{}",
+                status.root.display(),
+                sanitize_terminal_text(&status.render())
+            )),
+            Err(error) => CommandOutcome::Error(format!("{error:#}")),
         },
         "revoke" | "untrust" => match crate::trust::revoke(&cwd) {
-            Ok(0) => output::print_info("No trust grant to revoke for this workspace."),
-            Ok(count) => {
-                output::print_info(&format!(
-                    "Revoked {count} grant(s) for this repository. The next tool call is restricted."
-                ));
-                output::print_block(&sanitize_terminal_text(
-                    &crate::trust::status_for(&cwd).render(),
-                ));
-            }
-            Err(error) => output::print_error(&format!("{error:#}")),
+            Ok(0) => CommandOutcome::Info("No trust grant to revoke for this workspace.".to_string()),
+            Ok(count) => CommandOutcome::Block(format!(
+                "Revoked {count} grant(s) for this repository. The next tool call is restricted.\n{}",
+                sanitize_terminal_text(&crate::trust::status_for(&cwd).render())
+            )),
+            Err(error) => CommandOutcome::Error(format!("{error:#}")),
         },
-        other => output::print_warn(&format!(
+        other => CommandOutcome::Warn(format!(
             "Unknown /trust subcommand '{other}'. Use: /trust [status|grant|revoke]"
         )),
     }
 }
 
 pub fn handle_permissions(arg: &str) {
-    let arg = arg.trim();
-    let (subcommand, rest) = split_first_word(arg);
+    permissions_for_display(arg).print();
+}
 
+pub fn permissions_for_display(arg: &str) -> CommandOutcome {
+    let (subcommand, rest) = split_first_word(arg.trim());
     match subcommand {
-        "" => show_permissions_tab("allow"),
-        "help" | "-h" | "--help" => print_permissions_help(),
+        "" => permissions_tab("allow"),
+        "help" | "-h" | "--help" => CommandOutcome::Block(format!(
+            "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
+            ts::accent_header("Permissions:")
+        )),
         "reset" => match crate::permissions::PermissionStore::load() {
             Ok(mut store) => {
                 store.reset();
                 match store.save() {
-                    Ok(()) => output::print_info("All permissions reset."),
-                    Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+                    Ok(()) => CommandOutcome::Info("All permissions reset.".to_string()),
+                    Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
                 }
             }
-            Err(e) => output::print_error(&format!("Failed to load: {:#}", e)),
+            Err(e) => CommandOutcome::Error(format!("Failed to load: {:#}", e)),
         },
-        "allow" => {
-            if rest.is_empty() {
-                show_permissions_tab("allow");
-            } else {
-                mutate_permission_rule("allow", rest);
-            }
-        }
-        "deny" => {
-            if rest.is_empty() {
-                show_permissions_tab("deny");
-            } else {
-                mutate_permission_rule("deny", rest);
-            }
-        }
-        "session" => {
-            if rest.is_empty() {
-                show_permissions_tab("session");
-            } else {
-                mutate_permission_rule("session", rest);
-            }
-        }
+        scope @ ("allow" | "deny" | "session") if rest.is_empty() => permissions_tab(scope),
+        scope @ ("allow" | "deny" | "session") => mutate_permission_rule(scope, rest),
         "remove" | "rm" | "delete" => {
             let (scope, rule) = split_first_word(rest);
-            remove_permission_rule(scope, rule);
+            remove_permission_rule(scope, rule)
         }
-        tab if is_permissions_tab(tab) => show_permissions_tab(tab),
-        _ => show_permissions_tab("allow"),
+        tab if is_permissions_tab(tab) => permissions_tab(tab),
+        _ => permissions_tab("allow"),
     }
 }
 
@@ -571,95 +668,68 @@ fn is_permissions_tab(tab: &str) -> bool {
     )
 }
 
-fn show_permissions_tab(tab: &str) {
+fn permissions_tab(tab: &str) -> CommandOutcome {
     match crate::permissions::PermissionStore::load() {
-        Ok(store) => eprintln!("{}", sanitize_terminal_text(&store.display_tab(tab))),
-        Err(e) => output::print_error(&format!("Failed to load permissions: {:#}", e)),
+        Ok(store) => {
+            CommandOutcome::Block(sanitize_terminal_text(&store.display_tab(tab)).into_owned())
+        }
+        Err(e) => CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     }
 }
 
-fn mutate_permission_rule(scope: &str, rule: &str) {
-    if rule.trim().is_empty() {
-        output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>");
-        return;
-    }
-
+fn mutate_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
-        Err(e) => {
-            output::print_error(&format!("Failed to load permissions: {:#}", e));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     };
-
+    let saved = |store: &crate::permissions::PermissionStore, message: String| match store.save() {
+        Ok(()) => CommandOutcome::Info(message),
+        Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
+    };
     match scope {
         "allow" => {
             store.allow_always(rule);
-            match store.save() {
-                Ok(()) => output::print_info(&format!("Always allow: {}", rule.trim())),
-                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
-            }
+            saved(&store, format!("Always allow: {}", rule.trim()))
         }
         "deny" => {
             store.deny_always(rule);
-            match store.save() {
-                Ok(()) => output::print_info(&format!("Always deny: {}", rule.trim())),
-                Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
-            }
+            saved(&store, format!("Always deny: {}", rule.trim()))
         }
-        "session" => {
+        _ => {
             store.allow_session_for_process(rule);
-            output::print_info(&format!("Allow this session: {}", rule.trim()));
+            CommandOutcome::Info(format!("Allow this session: {}", rule.trim()))
         }
-        _ => output::print_warn("Usage: /permissions <allow|deny|session> <command-prefix>"),
     }
 }
 
-fn remove_permission_rule(scope: &str, rule: &str) {
+fn remove_permission_rule(scope: &str, rule: &str) -> CommandOutcome {
     if rule.trim().is_empty() || !matches!(scope, "allow" | "deny" | "session") {
-        output::print_warn("Usage: /permissions remove <allow|deny|session> <command-prefix>");
-        return;
+        return CommandOutcome::Warn(
+            "Usage: /permissions remove <allow|deny|session> <command-prefix>".to_string(),
+        );
     }
-
     let mut store = match crate::permissions::PermissionStore::load() {
         Ok(store) => store,
-        Err(e) => {
-            output::print_error(&format!("Failed to load permissions: {:#}", e));
-            return;
-        }
+        Err(e) => return CommandOutcome::Error(format!("Failed to load permissions: {:#}", e)),
     };
-
     let removed = match scope {
         "allow" => store.remove_always_allow(rule),
         "deny" => store.remove_always_deny(rule),
-        "session" => store.remove_session(rule),
-        _ => false,
+        _ => store.remove_session(rule),
     };
-
     if !removed {
-        output::print_warn(&format!(
+        return CommandOutcome::Warn(format!(
             "No {scope} permission rule matched: {}",
             rule.trim()
         ));
-        return;
     }
-
     if scope == "session" {
-        output::print_info(&format!("Removed session permission: {}", rule.trim()));
-        return;
+        return CommandOutcome::Info(format!("Removed session permission: {}", rule.trim()));
     }
-
     match store.save() {
-        Ok(()) => output::print_info(&format!("Removed {scope} permission: {}", rule.trim())),
-        Err(e) => output::print_error(&format!("Failed to save: {:#}", e)),
+        Ok(()) => CommandOutcome::Info(format!("Removed {scope} permission: {}", rule.trim())),
+        Err(e) => CommandOutcome::Error(format!("Failed to save: {:#}", e)),
     }
-}
-
-fn print_permissions_help() {
-    eprintln!(
-        "{}\n  /permissions\n  /permissions allow <command-prefix>\n  /permissions deny <command-prefix>\n  /permissions session <command-prefix>\n  /permissions remove <allow|deny|session> <command-prefix>\n  /permissions reset",
-        ts::accent_header("Permissions:")
-    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1368,7 +1438,7 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
 /// `platform::runtime::worktree`. Read/list is always safe; create and remove
 /// shell out to `git worktree`. Returns the rendered output so it is testable
 /// without a terminal.
-pub(super) async fn handle_worktree(arg: &str) -> String {
+pub async fn handle_worktree(arg: &str) -> String {
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     handle_worktree_in(&repo, arg).await
 }
@@ -1749,45 +1819,42 @@ mod init_tests {
 // ---------------------------------------------------------------------------
 
 pub(super) fn handle_config(arg: &str, config: &mut CliConfig) {
-    let sub_parts: Vec<&str> = arg.splitn(3, ' ').collect();
-    let sub_cmd = sub_parts[0];
+    config_for_display(arg, config).print();
+}
 
-    match sub_cmd {
+pub fn config_for_display(arg: &str, config: &mut CliConfig) -> CommandOutcome {
+    let sub_parts: Vec<&str> = arg.splitn(3, ' ').collect();
+    match sub_parts[0] {
         "" | "show" => {
-            eprintln!("{}", sanitize_terminal_text(&config.display()));
+            CommandOutcome::Block(sanitize_terminal_text(&config.display()).into_owned())
         }
         "get" => {
             let key = sub_parts.get(1).map(|s| s.trim()).unwrap_or_default();
             if key.is_empty() {
-                output::print_warn("Usage: /config get <key>");
-                return;
+                return CommandOutcome::Warn("Usage: /config get <key>".to_string());
             }
             match config.get_value(key) {
-                Some(value) => output::print_info(&format!("{} = {}", key, value)),
-                None => output::print_warn(&format!("Unknown or unset key: '{}'", key)),
+                Some(value) => CommandOutcome::Info(format!("{} = {}", key, value)),
+                None => CommandOutcome::Warn(format!("Unknown or unset key: '{}'", key)),
             }
         }
         "set" => {
             if sub_parts.len() < 3 {
-                output::print_warn("Usage: /config set <key> <value>");
-                return;
+                return CommandOutcome::Warn("Usage: /config set <key> <value>".to_string());
             }
             let key = sub_parts[1].trim();
             let value = sub_parts[2].trim();
             match config.set_value(key, value) {
-                Ok(()) => {
-                    if let Err(e) = config.save() {
-                        output::print_warn(&format!("Set in memory but failed to save: {:#}", e));
-                    } else {
-                        output::print_info(&format!("{} = {} (saved)", key, value));
+                Ok(()) => match config.save() {
+                    Ok(()) => CommandOutcome::Info(format!("{} = {} (saved)", key, value)),
+                    Err(e) => {
+                        CommandOutcome::Warn(format!("Set in memory but failed to save: {:#}", e))
                     }
-                }
-                Err(e) => output::print_error(&format!("{:#}", e)),
+                },
+                Err(e) => CommandOutcome::Error(format!("{:#}", e)),
             }
         }
-        _ => {
-            output::print_warn("Usage: /config [show|get <key>|set <key> <value>]");
-        }
+        _ => CommandOutcome::Warn("Usage: /config [show|get <key>|set <key> <value>]".to_string()),
     }
 }
 

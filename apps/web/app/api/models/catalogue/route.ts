@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { withErrorHandler } from '@/lib/error-handler';
 import {
   PLAN_LABEL,
+  isAutoModeModelId,
   modelsCatalogJson as modelsData,
   normalizeUIPlanTier,
 } from '@agiworkforce/types';
@@ -18,6 +19,10 @@ import {
   type CatalogueEntry,
   type ModelCatalogueEntry,
 } from '@/lib/server/model-catalogue';
+import {
+  modelKeepsInputsOutOfTraining,
+  readProviderTrainingOptOut,
+} from '@/lib/server/provider-training-opt-out';
 
 export const runtime = 'nodejs';
 
@@ -45,13 +50,23 @@ function toWireEntry(entry: CatalogueEntry): ModelCatalogueEntry {
   return wire;
 }
 
-async function resolvePlanTier(request: NextRequest): Promise<string> {
+async function resolveViewer(
+  request: NextRequest,
+): Promise<{ planTier: string; trainingOptOut: boolean }> {
+  let scope: Awaited<ReturnType<typeof getUserScopedDb>>;
   try {
-    const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
-    return await resolveEntitledPlanTier(db, userId);
+    scope = await getUserScopedDb(request, { resolveOrganization: false });
   } catch {
-    return ANONYMOUS_PLAN_TIER;
+    return { planTier: ANONYMOUS_PLAN_TIER, trainingOptOut: false };
   }
+  const [planTier, trainingOptOut] = await Promise.all([
+    resolveEntitledPlanTier(scope.db, scope.userId).catch(() => ANONYMOUS_PLAN_TIER),
+    readProviderTrainingOptOut(scope.db, scope.userId).catch((error: unknown) => {
+      logger.warn({ error }, 'Training opt-out read failed; listing only no-training models');
+      return true;
+    }),
+  ]);
+  return { planTier, trainingOptOut };
 }
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -63,8 +78,13 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   try {
     const catalog = modelsData as { version: number; lastUpdated: string };
-    const planTier = await resolvePlanTier(request);
-    const models = (await buildCatalogueEntries(planTier)).map(toWireEntry);
+    const { planTier, trainingOptOut } = await resolveViewer(request);
+    const models = (await buildCatalogueEntries(planTier))
+      .filter(
+        (entry) =>
+          !trainingOptOut || isAutoModeModelId(entry.id) || modelKeepsInputsOutOfTraining(entry.id),
+      )
+      .map(toWireEntry);
 
     logger.info({ modelCount: models.length, planTier }, 'Model catalogue projection served');
 

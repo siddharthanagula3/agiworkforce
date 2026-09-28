@@ -848,6 +848,106 @@ export class GitHubAuthorizationRevokedError extends Error {
   }
 }
 
+export class GitHubWriteOutcomeUnknownError extends Error {
+  constructor(cause: unknown) {
+    super('GitHub did not confirm the write before the request ended', { cause });
+    this.name = 'GitHubWriteOutcomeUnknownError';
+  }
+}
+
+async function sendGitHubWrite(url: string, init: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (error) {
+    throw new GitHubWriteOutcomeUnknownError(error);
+  }
+  if (res.status >= 500) throw new GitHubWriteOutcomeUnknownError(res.status);
+  return res;
+}
+
+const githubAuthoredBodySchema = z.array(
+  z.object({
+    body: z.string().nullish(),
+    created_at: z.string().optional(),
+    submitted_at: z.string().nullish(),
+  }),
+);
+
+const OUTCOME_LOOKUP_PAGE_SIZE = 100;
+const OUTCOME_CLOCK_SKEW_MS = 60_000;
+
+async function githubBodyPostedSince(
+  token: string,
+  path: string,
+  body: string,
+  since: Date,
+): Promise<boolean> {
+  const res = await fetch(buildGitHubApiUrl(path), {
+    headers: {
+      Authorization: `token ${token}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': GITHUB_API_VERSION,
+    },
+    signal: AbortSignal.timeout(GITHUB_REQUEST_TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    assertGitHubResponseAuthorized(res.status);
+    throw new Error(`Failed to read back the write: ${res.status}`);
+  }
+  const earliest = since.getTime() - OUTCOME_CLOCK_SKEW_MS;
+  const items = githubAuthoredBodySchema.parse(await res.json());
+  const posted = items.some((item) => {
+    const at = Date.parse(item.submitted_at ?? item.created_at ?? '');
+    return item.body === body && Number.isFinite(at) && at >= earliest;
+  });
+  if (!posted && items.length >= OUTCOME_LOOKUP_PAGE_SIZE) {
+    throw new Error('Too many entries to confirm the write from one page');
+  }
+  return posted;
+}
+
+export function issueCommentPostedSince(
+  token: string,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+  body: string,
+  since: Date,
+): Promise<boolean> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const query = new URLSearchParams({
+    since: new Date(since.getTime() - OUTCOME_CLOCK_SKEW_MS).toISOString(),
+    per_page: String(OUTCOME_LOOKUP_PAGE_SIZE),
+  });
+  return githubBodyPostedSince(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${githubNumberSegment(issueNumber, 'issue number')}/comments?${query.toString()}`,
+    body,
+    since,
+  );
+}
+
+export function pullRequestReviewPostedSince(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+  body: string,
+  since: Date,
+): Promise<boolean> {
+  validateGitHubPathSegment(owner, 'owner');
+  validateGitHubPathSegment(repo, 'repo');
+  const query = new URLSearchParams({ per_page: String(OUTCOME_LOOKUP_PAGE_SIZE) });
+  return githubBodyPostedSince(
+    token,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${githubNumberSegment(prNumber, 'pull request number')}/reviews?${query.toString()}`,
+    body,
+    since,
+  );
+}
+
 function assertGitHubResponseAuthorized(status: number): void {
   if (!GITHUB_UNAUTHORIZED_STATUSES.has(status)) return;
   throw new GitHubAuthorizationRevokedError(status, getGitHubAppInstallUrl());
@@ -1338,7 +1438,7 @@ export async function postPrReview(
 ): Promise<void> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
-  const res = await fetch(
+  const res = await sendGitHubWrite(
     buildGitHubApiUrl(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls/${encodeURIComponent(String(prNumber))}/reviews`,
     ),
@@ -1454,7 +1554,7 @@ export async function postIssueComment(
 ): Promise<void> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
-  const res = await fetch(
+  const res = await sendGitHubWrite(
     buildGitHubApiUrl(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${encodeURIComponent(String(issueNumber))}/comments`,
     ),

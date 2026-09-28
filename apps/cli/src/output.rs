@@ -39,6 +39,11 @@ static PLAIN_OUTPUT: AtomicBool = AtomicBool::new(false);
 /// an argument.
 pub fn set_plain_output(enabled: bool) {
     PLAIN_OUTPUT.store(enabled, Ordering::Relaxed);
+    if enabled {
+        colored::control::set_override(false);
+    } else {
+        colored::control::unset_override();
+    }
 }
 
 /// Whether plain mode was asked for, by `--plain` or by `AGI_PLAIN` in the

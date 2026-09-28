@@ -61,6 +61,199 @@
           }
         }
       },
+      "UpgradePreviewRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["basic", "pro", "max", "max_15x", "team"],
+            "description": "The plan to move the active subscription to. For team, the same plan with a larger seats value adds seats."
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"],
+            "description": "Must match the current subscription's cadence when the target plan sells that cadence; a mismatch answers 400."
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 999999,
+            "description": "Licensed seat count for team. Seats can only increase; added seats keep the renewal date and are charged for the rest of the current period."
+          },
+          "promotionCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9]+$",
+            "description": "Optional customer-facing promotion code, checked with Stripe before it is quoted."
+          }
+        }
+      },
+      "UpgradePreview": {
+        "type": "object",
+        "description": "The exact charge an upgrade would make. A tier upgrade starts a new billing period today: the new plan's price minus a credit for the unused time on the current plan. A seat increase keeps the renewal date and charges only for the rest of the period.",
+        "properties": {
+          "plan": {
+            "type": "string"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "amountDueNowCents": {
+            "type": "integer",
+            "description": "What is charged today, after tax and any balance."
+          },
+          "charge": {
+            "type": "object",
+            "description": "Itemized receipt: lineItems, subtotalCents, discountCents, taxCents, totalCents, appliedBalanceCents, totalDueTodayCents, creditToBalanceCents and renewsAt."
+          },
+          "grandfatheredNotice": {
+            "type": "string",
+            "nullable": true
+          },
+          "recurringAmountCents": {
+            "type": "integer",
+            "description": "What renews each period after the upgrade, before tax."
+          },
+          "seats": {
+            "type": "integer"
+          },
+          "promotion": {
+            "type": "object",
+            "nullable": true,
+            "description": "The applied promotion code and its discount, when one was sent."
+          },
+          "replacesScheduledChange": {
+            "type": "boolean"
+          },
+          "previewToken": {
+            "type": "string",
+            "description": "Signed quote to send to POST /upgrade. It binds the plan, cadence, seats, promotion and proration time."
+          }
+        }
+      },
+      "UpgradeCheckoutRequired": {
+        "type": "object",
+        "description": "The account has no paid subscription to credit, so the plan must be bought through POST /checkout. `checkout` quotes that purchase.",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "code": {
+                "type": "string",
+                "enum": ["checkout_required"]
+              }
+            }
+          },
+          "checkout": {
+            "type": "object",
+            "properties": {
+              "amountDueNowCents": {
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "recurringAmountCents": {
+                "type": "integer"
+              },
+              "seats": {
+                "type": "integer"
+              },
+              "trial": {
+                "type": "object",
+                "nullable": true
+              }
+            }
+          }
+        }
+      },
+      "UpgradeRequest": {
+        "type": "object",
+        "required": ["plan", "billingInterval", "previewToken"],
+        "properties": {
+          "plan": {
+            "type": "string",
+            "enum": ["basic", "pro", "max", "max_15x", "team"]
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "seats": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 999999
+          },
+          "previewToken": {
+            "type": "string",
+            "maxLength": 4096,
+            "description": "The previewToken from POST /upgrade/preview for the same plan, cadence, seats and promotion."
+          },
+          "promotionCode": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9]+$"
+          }
+        }
+      },
+      "UpgradeResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "newPlan": {
+            "type": "string"
+          },
+          "billingInterval": {
+            "type": "string",
+            "enum": ["monthly", "yearly"]
+          },
+          "seats": {
+            "type": "integer"
+          },
+          "activation": {
+            "type": "string",
+            "enum": ["webhook_pending"],
+            "description": "Stripe has charged; the plan is written when its subscription event arrives, usually within seconds."
+          }
+        }
+      },
+      "UpgradePaymentActionRequired": {
+        "type": "object",
+        "description": "The bank asked for authentication. Finish the payment at paymentUrl, or confirm clientSecret with Stripe.js, before the plan activates.",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
+          "paymentActionRequired": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "paymentUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "clientSecret": {
+            "type": "string"
+          }
+        }
+      },
       "DeviceLinkRequest": {
         "type": "object",
         "required": ["device_id", "device_type"],
@@ -351,7 +544,8 @@
           },
           "stream": {
             "type": "boolean",
-            "default": false
+            "default": false,
+            "description": "Streams the answer as server-sent `chat.completion.chunk` events. Besides the OpenAI fields, a chunk's `choices[].delta` may carry these extensions: `x_tool_status` ({`type`, `name`, `status` of `running`, `completed` or `failed`, and on `running` an optional `status_phrase` and the parsed `args`}) for each tool call; `x_agent_event`, a versioned envelope ({`schemaVersion`, `sessionId`, `turnId`, `sequence`, `emittedAtMs`, `event`}) for agent steps, approvals and tool progress; `x_search_results` with the sources a web search returned; and `x_generated_files` ({`files`}) when the turn created a file. A client that does not know an extension can ignore it."
           },
           "temperature": {
             "type": "number",
@@ -423,17 +617,110 @@
           },
           "response_format": {
             "type": "object",
-            "description": "`text` and `json_object` are honoured. `json_schema` is refused rather than ignored.",
+            "description": "`text`, `json_object` and `json_schema` are honoured. `json_object` and `json_schema` need `stream: false`, because the reply is validated before it is returned. With `json_schema` the reply is checked against the schema, and a reply that does not satisfy it answers 502 `json_schema_not_satisfied` rather than returning unvalidated output. It works with image input on any model the registry marks for both vision and structured output; a model without structured output answers 400 `model_no_structured_output`.",
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["text", "json_object"]
+                "enum": ["text", "json_object", "json_schema"]
+              },
+              "json_schema": {
+                "type": "object",
+                "required": ["name", "schema"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "pattern": "^[A-Za-z0-9_-]+$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "description": "A JSON Schema whose root has type `object`. Supported keywords: type, properties, required, additionalProperties, items, enum, const, anyOf, $defs and local $ref, minimum, maximum, minLength, maxLength, minItems, maxItems, pattern, format, description, title and default. Any other keyword is refused with 400."
+                  },
+                  "strict": {
+                    "type": "boolean"
+                  }
+                }
               }
             }
           },
           "memory_enabled": {
             "type": "boolean",
             "description": "Whether this request may read the memories saved in your account. A request made with an API key reads none unless this is `true`, and it never saves new memories or searches past chats. Has no effect while Memory is off in your account settings."
+          },
+          "web_search": {
+            "type": "boolean",
+            "description": "Lets the model search the web while it answers. Each search is billed in credits and shows in your usage as Agentic search."
+          },
+          "research": {
+            "type": "boolean",
+            "description": "Runs Deep Research: the model plans, searches and reads many sources before it writes a cited report. A model that cannot run research answers the request normally instead. Searches are billed as Agentic search."
+          },
+          "research_sources": {
+            "type": "object",
+            "description": "What a Deep Research run may read when `research` is true. `allow_domains` and `deny_domains` also apply to ordinary `web_search`: they are passed to the search backend as its domain filter and every result is checked against them before the model sees it, so a page outside the allowed sites or on a denied one is never returned. `files` applies only to Deep Research.",
+            "properties": {
+              "files": {
+                "type": "boolean",
+                "description": "Also search the documents indexed in your account."
+              },
+              "allow_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string",
+                  "maxLength": 253
+                },
+                "description": "Only read and cite pages on these sites, for example `nature.com`."
+              },
+              "deny_domains": {
+                "type": "array",
+                "maxItems": 32,
+                "items": {
+                  "type": "string",
+                  "maxLength": 253
+                },
+                "description": "Never read or cite pages on these sites."
+              }
+            }
+          },
+          "personalization": {
+            "type": "boolean",
+            "description": "`false` answers without your account's personalization: no custom instructions, profile or response style, and no memory is read or saved for this request. Omitted or `true` keeps the default."
+          },
+          "web_search": {
+            "type": "boolean",
+            "description": "Runs a hosted web search for this turn and cites what it found. When omitted, search turns on if the prompt asks to search or the task is research; `false` keeps it off. Each search is charged as Agentic search."
+          },
+          "web_fetch": {
+            "type": "boolean",
+            "description": "Lets the model open a web page or document named in the conversation and read it. Web pages, plain text, Markdown, JSON, PDFs and Word, Excel or PowerPoint files are read as text; images, audio and video are refused. When omitted on a streamed request, it turns on if the prompt asks to open a link."
+          },
+          "code_execution": {
+            "type": "boolean",
+            "description": "Offers the model code execution for this turn. When omitted on a streamed request, it turns on if the prompt asks to run code or analyse data. The sandbox file tools (`read_file`, `write_file`, `edit_file`) run only where this deployment has sandbox execution enabled; elsewhere the tool answers that they are unavailable."
+          },
+          "office_creation": {
+            "type": "boolean",
+            "description": "Offers the model a tool that creates a downloadable `docx`, `pptx`, `xlsx`, `pdf` or `csv` file. A streamed response announces each file in an `x_generated_files` delta. When omitted on a streamed request, it turns on if the prompt asks to create one of those files."
+          },
+          "connector_tools_enabled": {
+            "type": "boolean",
+            "description": "A request made with an API key can use the connectors connected to the account. The model sees their tools by name and loads a tool's schema on demand with `load_connector_tools`. A connector call that needs approval pauses the run, and `POST /llm/v1/chat/completions/approve` resumes it. `false` offers no connector tools for this turn."
+          },
+          "disabled_connector_ids": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            },
+            "description": "Connector ids whose tools are not offered for this turn."
           }
         }
       },
@@ -1071,7 +1358,7 @@
       },
       "WorkspaceApiError": {
         "type": "object",
-        "description": "Error envelope of the workspace administration endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
+        "description": "Error envelope of the workspace administration and account settings endpoints. `error.code` is stable and `error.message` is safe to show. A browser session whose write fails the CSRF check gets `error` as a string and `code` beside it.",
         "required": ["error"],
         "properties": {
           "error": {
@@ -1405,6 +1692,290 @@
             "description": "Pass as `page`, with the same `from` and `to`, to read the next day buckets."
           }
         }
+      },
+      "ScheduleRun": {
+        "type": "object",
+        "required": ["id", "taskId", "status", "triggerSource", "startedAt", "idempotencyKey"],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["running", "success", "failed", "timeout", "cancelled", "awaiting_approval"]
+          },
+          "triggerSource": {
+            "type": "string",
+            "enum": ["schedule", "manual", "webhook", "api"]
+          },
+          "scheduledFor": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "result": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "The run's output, with `text` for the answer and `usage` for what it cost"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "idempotencyKey": {
+            "type": "string"
+          },
+          "attemptCount": {
+            "type": "integer"
+          },
+          "pendingApproval": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Present while the run waits for the owner's approval: when it was requested, when it expires, and each step it is waiting on"
+          }
+        }
+      },
+      "ScheduleRunList": {
+        "type": "object",
+        "required": ["runs"],
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScheduleRun"
+            }
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ScheduleRunStarted": {
+        "type": "object",
+        "required": ["run", "replay"],
+        "properties": {
+          "run": {
+            "$ref": "#/components/schemas/ScheduleRun"
+          },
+          "replay": {
+            "type": "boolean",
+            "description": "True when this Idempotency-Key had already started the run"
+          }
+        }
+      },
+      "ToolApprovalDecision": {
+        "type": "object",
+        "required": ["tool_call_id", "decision"],
+        "properties": {
+          "tool_call_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "The `toolCallId` of an `approval-requested` event"
+          },
+          "decision": {
+            "type": "string",
+            "enum": ["approved", "rejected"]
+          }
+        }
+      },
+      "ToolApprovalResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "tool_approvals"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The `X-AGI-Agent-Run-Id` header of the stream that paused"
+          },
+          "tool_approvals": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/ToolApprovalDecision"
+            },
+            "description": "One decision per paused call. Every pending call of the run must be answered."
+          },
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Optional text the agent reads before it continues, for example what to do instead of a denied call. Guidance that contains a secret is refused with 400."
+          }
+        }
+      },
+      "PausedRunResumeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Optional text the agent reads before it continues."
+          }
+        }
+      },
+      "ToolInputResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "tool_inputs"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tool_inputs": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "required": ["tool_call_id", "input_responses"],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "input_responses": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "The answers the connector asked for, passed to it verbatim. At most 16,000 characters once serialized."
+                }
+              }
+            }
+          },
+          "guidance": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      },
+      "DeviceStepResumeRequest": {
+        "type": "object",
+        "required": ["run_id", "device_id", "device_results"],
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "device_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Must be the device the step was issued to"
+          },
+          "device_results": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "object",
+              "required": ["tool_call_id", "content", "is_error"],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128
+                },
+                "content": {
+                  "type": "string",
+                  "maxLength": 24000
+                },
+                "is_error": {
+                  "type": "boolean"
+                },
+                "image": {
+                  "type": "object",
+                  "required": ["base64", "mime_type"],
+                  "properties": {
+                    "base64": {
+                      "type": "string",
+                      "maxLength": 2500000
+                    },
+                    "mime_type": {
+                      "type": "string",
+                      "enum": ["image/png", "image/jpeg"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "ConnectorCall": {
+        "type": "object",
+        "required": ["connectorId", "toolName", "outcome", "durationMs", "occurredAt"],
+        "properties": {
+          "connectorId": {
+            "type": "string"
+          },
+          "toolName": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": ["succeeded", "failed", "blocked"]
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ConnectorToolPermission": {
+        "type": "object",
+        "required": ["connectorId", "toolName", "level"],
+        "properties": {
+          "connectorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "toolName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "level": {
+            "type": "string",
+            "enum": ["allow", "ask", "deny"],
+            "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+          }
+        }
       }
     },
     "headers": {
@@ -1485,7 +2056,7 @@
     "/llm/v1/chat/completions": {
       "post": {
         "summary": "Create a chat completion",
-        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.",
+        "description": "OpenAI-compatible chat completions, streaming or buffered.\n\nTakes an AGI API key or a session bearer token. A key is always pinned to the `api` client surface regardless of any `x-agi-surface` header, and that surface is gated on the `managed_api` plan capability, so a key on a plan without it answers 403 `managed_api_plan_required`.\n\nWhen a tool call needs the user's approval, a streamed turn emits a chunk whose `choices[0].delta.x_agent_event.event` has `type: \"approval-requested\"` with `approvalId`, `toolCallId`, `name`, `category`, `summary`, `input` and, on a high-risk call, `riskLevel: \"high\"`, then ends. The `X-AGI-Agent-Run-Id` response header names the paused run. Answer it with `POST /llm/v1/chat/completions/approve` within 24 hours.",
         "tags": ["Inference"],
         "security": [
           {
@@ -2699,6 +3270,174 @@
         }
       }
     },
+    "/upgrade/preview": {
+      "post": {
+        "summary": "Quote an upgrade or a seat increase",
+        "description": "Prices a change to the caller's active Stripe subscription without charging: a tier upgrade, or more seats on Team. Returns an itemized charge and a previewToken for POST /upgrade. An account with no paid subscription to credit answers 409 checkout_required and buys through POST /checkout.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradePreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Quote for the change",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, a cadence the upgrade must keep, fewer seats, or a promotion code that does not apply",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required, with a checkout quote), or a cancellation is pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeCheckoutRequired"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/upgrade": {
+      "post": {
+        "summary": "Apply a quoted upgrade or seat increase",
+        "description": "Charges the saved payment method for the change quoted by POST /upgrade/preview and updates the subscription. The previewToken must match the plan, cadence, seats and promotion, and the charge is the one the quote stated.",
+        "tags": ["Billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpgradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Charged; the plan activates when the subscription event arrives",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradeResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request, an expired or mismatched previewToken, or a change the plan does not allow",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The bank asked for authentication before the charge completes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpgradePaymentActionRequired"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "No paid subscription to credit (checkout_required) or a cancellation is pending",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Billing could not be verified; nothing was charged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/device/link": {
       "post": {
         "summary": "Generate device authorization code",
@@ -3761,6 +4500,1153 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/schedules/{id}/runs": {
+      "get": {
+        "summary": "List a scheduled task's runs",
+        "description": "Returns the task's runs, newest first. A run waiting for the owner's approval carries `pendingApproval` with the steps it is waiting on.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "How many runs to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "How many runs to skip"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task's runs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Start a scheduled task run",
+        "description": "Starts one run of the task now, the same as Run now in the app, and answers when the run finishes, pauses for approval, or reaches the request's time limit. The `Idempotency-Key` header is required: repeating a request with the same key returns the run it started instead of starting another, and answers 409 while that run is still in progress.",
+        "tags": ["Schedules"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The scheduled task id"
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "description": "A unique key for this start request, reused on a retry"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A repeated request: the run this key already started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The run this request started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRunStarted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The Idempotency-Key header is missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The request failed the CSRF check for a browser session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No scheduled task with this id belongs to the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run this key started is still in progress, or the task cannot run now",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/approve": {
+      "post": {
+        "summary": "Answer a run's pending tool approvals",
+        "description": "Resumes a run that paused for approval. Send one decision per paused call; a rejected call is not run and the agent is told it was denied. `guidance` lets the user say what to do instead. The response streams the rest of the turn in the same format as a streamed chat completion, and may pause again. A pending approval expires 24 hours after the run paused.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolApprovalResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, decisions that do not match the pending calls (`tool_approval_invalid`), or guidance that contains a secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending approval for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The approval is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The approval expired and can no longer be resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/runs/{runId}/resume": {
+      "post": {
+        "summary": "Resume a paused run",
+        "description": "Resumes a run the user paused, optionally with guidance, and streams the rest of the turn. If the pause was requested but has not taken effect yet, the request is withdrawn instead and the run is returned as JSON.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "parameters": [
+          {
+            "name": "runId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PausedRunResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream, or `{ \"run\": ... }` when a pending pause was withdrawn",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "run": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, unknown fields, or guidance that contains a secret",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such run for this caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The run is not paused (`run_not_paused`) or is already resuming (`run_already_resuming`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/resume-input": {
+      "post": {
+        "summary": "Answer a connector's request for input",
+        "description": "Resumes a run that paused because a connector tool asked for more input. Each response is passed to the connector verbatim. Streams the rest of the turn. A pending input request expires 24 hours after the run paused.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolInputResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume-input`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, responses that do not match the paused calls (`tool_input_invalid`), or a secret in the responses or guidance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending input request for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The input request is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The input request expired and can no longer be resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/resume-device": {
+      "post": {
+        "summary": "Return a device step's results",
+        "description": "Used by the desktop app. Resumes a run that paused on a step to be carried out on one of the user's devices, with that step's output, and streams the rest of the turn. Only the device the step was issued to can answer it.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceStepResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume-device`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, results that do not match the paused step (`device_step_invalid`), or a secret in the results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No pending device step for this run and caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The step is waiting on a different device, or is already being resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The device step expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime is unavailable (`agent_workflow_unavailable`) or usage could not be recorded; nothing was resumed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/calls": {
+      "get": {
+        "summary": "List recent connector calls",
+        "description": "The caller's most recent connector tool calls, newest first: which tool of which connector ran, whether it succeeded, failed or was blocked before it left, how long it took and when.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only calls to this connector."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent calls",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["calls"],
+                  "properties": {
+                    "calls": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConnectorCall"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/connectors/permissions": {
+      "get": {
+        "summary": "List saved connector tool permissions",
+        "description": "The levels the caller has saved. A tool with no saved level takes its category's level when one is saved (reported with toolName `*read_only` or `*write`), and otherwise follows the account's approval policy.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Saved levels",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["permissions"],
+                  "properties": {
+                    "permissions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ConnectorToolPermission"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Save a connector tool permission",
+        "description": "Saves `allow`, `ask` or `deny` for one connector tool (`toolName`), for up to 200 of them at once (`toolNames`), or for a whole `category`. Send `toolName` or `toolNames` unless `category` is set. Whether a tool is destructive is decided by the server, and a `destructive` field in the body is ignored.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["connectorId", "level"],
+                "properties": {
+                  "connectorId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "toolNames": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": ["allow", "ask", "deny"],
+                    "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["read_only", "write"],
+                    "description": "Saves the level for a whole category of this connector's tools: its read-only tools, or its write and delete tools. A tool with no level of its own takes its category's level, including tools the connector adds later; an undeclared tool counts as write. May be sent with toolNames to set the listed tools in the same call."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "destructive"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "destructive": {
+                      "type": "boolean",
+                      "description": "Whether the server treats any of these tools as destructive"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing connectorId, no tool or category, both toolName and toolNames, or an unknown level or category",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A browser session sent no valid CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Revoke saved connector tool permissions",
+        "description": "Removes the saved level for one tool, or for every tool of the connector when `toolName` is omitted. Those tools then follow the account's approval policy again.",
+        "tags": ["Users"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connectorId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "toolName",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["success", "removed"],
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "removed": {
+                      "type": "integer",
+                      "description": "How many saved levels were removed"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing connectorId, or an empty toolName",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A browser session sent no valid CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
                 }
               }
             }

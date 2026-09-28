@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 
+import { accountLabelFromIdToken } from '@/lib/connectors/accounts';
 import { createDeadline, credentialedFetch } from '@/lib/url-fetch/guarded-fetch';
 import type { ConnectorOAuthProvider } from '@/lib/connectors/oauth-registry';
 
@@ -18,6 +19,7 @@ const tokenResponseSchema = z.object({
     .optional(),
   refresh_token: z.string().min(1).optional(),
   scope: z.string().optional(),
+  id_token: z.string().optional(),
 });
 
 const tokenErrorSchema = z.object({
@@ -54,6 +56,7 @@ export interface OAuthTokenResult {
   tokenType: string;
   accessTokenExpiresAt: Date | null;
   grantedScopes: string[];
+  accountLabel: string | null;
 }
 
 export class ConnectorOAuthTokenError extends Error {
@@ -152,6 +155,7 @@ async function postToTokenEndpoint(
     tokenType: data.token_type ?? 'Bearer',
     accessTokenExpiresAt: data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null,
     grantedScopes: data.scope ? data.scope.split(/\s+/).filter(Boolean) : requestedScopes,
+    accountLabel: accountLabelFromIdToken(data.id_token),
   };
 }
 

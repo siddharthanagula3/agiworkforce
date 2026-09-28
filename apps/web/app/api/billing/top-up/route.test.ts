@@ -327,7 +327,7 @@ describe('POST /api/billing/top-up', () => {
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
 
-  it('rejects accounts that are not actively billed by Stripe', async () => {
+  it('rejects a plan with no Stripe or store billing owner, such as an organization-managed one', async () => {
     ledgerState({
       billing: { ...BILLING_ROW, stripe_customer_id: null, stripe_subscription_id: null },
     });

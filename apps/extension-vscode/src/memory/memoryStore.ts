@@ -17,6 +17,8 @@ export interface MemoryFact {
   category?: MemoryCategory;
   importance?: number;
   lastAccessed?: string;
+  source?: string;
+  sourceConversationTitle?: string;
 }
 
 export interface MemoryContextInput {

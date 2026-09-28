@@ -2,10 +2,13 @@
 
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import type {
+  EffectiveWorkspaceCodeControls,
+  EffectiveWorkspacePolicy,
   OrganizationPermission,
   OrganizationRole,
   WorkspaceControlsLayer,
   WorkspacePolicyOverride,
+  WorkspaceFeature,
   WorkspacePolicyOverrideSubject,
 } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
@@ -44,7 +47,7 @@ export interface WorkspaceDirectoryGroup {
   memberCount: number;
   roleIds: string[];
   managerUserIds: string[];
-  source?: { kind: 'directory'; connectionName: string | null };
+  source?: { kind: 'directory'; connectionName: string | null } | { kind: 'workspace' };
 }
 
 export interface WorkspaceGroupsResult {
@@ -194,6 +197,61 @@ export function useSetGroupRoles() {
   );
 }
 
+export function useCreateWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ name }: { name: string }) =>
+      request<{ groupId: string }>('/api/settings/organization/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY],
+  );
+}
+
+export function useRenameWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ groupId, name }: { groupId: string; name: string }) =>
+      request(`/api/settings/organization/groups/${groupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY],
+  );
+}
+
+export function useDeleteWorkspaceGroup() {
+  return useInvalidatingMutation(
+    ({ groupId }: { groupId: string }) =>
+      request(`/api/settings/organization/groups/${groupId}`, { method: 'DELETE' }),
+    [WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_ROLES_QUERY_KEY, WORKSPACE_OVERRIDES_QUERY_KEY],
+  );
+}
+
+export function useWorkspaceGroupMembers(
+  groupId: string,
+  enabled: boolean,
+): UseQueryResult<{ userIds: string[] }, Error> {
+  return useQuery({
+    queryKey: [...WORKSPACE_GROUPS_QUERY_KEY, groupId, 'members'],
+    queryFn: () =>
+      request<{ userIds: string[] }>(`/api/settings/organization/groups/${groupId}/members`),
+    enabled,
+    staleTime: 60 * 1000,
+    meta: { errorMessage: 'Failed to load group members' },
+  });
+}
+
+export function useSetWorkspaceGroupMembers() {
+  return useInvalidatingMutation(
+    ({ groupId, userIds }: { groupId: string; userIds: string[] }) =>
+      request(`/api/settings/organization/groups/${groupId}/members`, {
+        method: 'PUT',
+        body: JSON.stringify({ userIds }),
+      }),
+    [WORKSPACE_GROUPS_QUERY_KEY, WORKSPACE_ROLES_QUERY_KEY],
+  );
+}
+
 export function useSetGroupManagers() {
   return useInvalidatingMutation(
     ({ groupId, userIds }: { groupId: string; userIds: string[] }) =>
@@ -243,4 +301,43 @@ export function useDeletePolicyOverride() {
       }),
     [WORKSPACE_OVERRIDES_QUERY_KEY],
   );
+}
+
+export type PolicyDiagnosisSurface =
+  'web' | 'desktop' | 'mobile' | 'cli' | 'vscode' | 'chrome' | 'api';
+
+export interface PolicyDiagnosisQuery {
+  memberId: string;
+  feature: WorkspaceFeature | '';
+  surface: PolicyDiagnosisSurface | '';
+  country: string;
+}
+
+export interface PolicyDiagnosis {
+  memberId: string;
+  effective: {
+    organizationId: string;
+    revision: number;
+    controls: EffectiveWorkspacePolicy;
+    code: EffectiveWorkspaceCodeControls;
+  } | null;
+  decision: { allowed: boolean; code: string; reason: string } | null;
+}
+
+export function usePolicyDiagnosis(
+  query: PolicyDiagnosisQuery | null,
+): UseQueryResult<PolicyDiagnosis, Error> {
+  return useQuery({
+    queryKey: ['workspace', 'policy-diagnosis', query],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      for (const [key, value] of Object.entries(query ?? {})) {
+        if (value) params.set(key, value);
+      }
+      return request<PolicyDiagnosis>(`/api/settings/organization/policy/diagnose?${params}`);
+    },
+    enabled: Boolean(query?.memberId),
+    staleTime: 0,
+    meta: { errorMessage: 'Failed to explain the workspace policy' },
+  });
 }

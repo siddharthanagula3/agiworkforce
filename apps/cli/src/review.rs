@@ -12,6 +12,8 @@ pub struct ReviewOptions {
     pub uncommitted: bool,
     pub base_branch: Option<String>,
     pub commit: Option<String>,
+    pub pull_request: Option<String>,
+    pub post: bool,
     pub instructions: Option<String>,
     pub model: Option<String>,
 }
@@ -86,10 +88,101 @@ pub async fn run_review(
     let result = session.send(config, &prompt, Box::new(|_chunk| {})).await?;
     let review = parse_review(&result.response);
     print_review(&review);
+    if let (Some(pull_request), true) = (options.pull_request.as_deref(), options.post) {
+        post_review(pull_request, &review).await?;
+        println!(
+            "{}",
+            ts::success(&format!(
+                "Posted the review to pull request {pull_request}."
+            ))
+        );
+    }
     Ok(review)
 }
 
+async fn run_gh(args: &[&str], stdin: Option<&str>) -> Result<String> {
+    let mut command = tokio::process::Command::new("gh");
+    command
+        .args(args)
+        .stdin(if stdin.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            anyhow::bail!(
+                "Reviewing a pull request needs the GitHub CLI. Install gh, run `gh auth login`, then try again."
+            )
+        }
+        Err(error) => return Err(error.into()),
+    };
+    if let (Some(input), Some(mut pipe)) = (stdin, child.stdin.take()) {
+        tokio::io::AsyncWriteExt::write_all(&mut pipe, input.as_bytes()).await?;
+    }
+    let output = child.wait_with_output().await?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "gh {} failed: {}",
+            args.iter().take(2).copied().collect::<Vec<_>>().join(" "),
+            sanitize_terminal_text(String::from_utf8_lossy(&output.stderr).trim())
+        );
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+async fn post_review(pull_request: &str, review: &ReviewOutput) -> Result<()> {
+    run_gh(
+        &[
+            "pr",
+            "review",
+            pull_request,
+            "--comment",
+            "--body-file",
+            "-",
+        ],
+        Some(&format_review_markdown(review)),
+    )
+    .await
+    .map(|_| ())
+}
+
+fn format_review_markdown(review: &ReviewOutput) -> String {
+    let mut out = format!(
+        "**Code review: {}**\n\n{}\n",
+        clean(&review.severity),
+        clean(&review.overall_explanation)
+    );
+    for issue in &review.issues {
+        let line = issue.line.map(|l| format!(":{l}")).unwrap_or_default();
+        out.push_str(&format!(
+            "\n- **{}** `{}{}`: {}",
+            clean(&issue.severity).to_uppercase(),
+            clean(&issue.file),
+            line,
+            clean(&issue.description)
+        ));
+        if let Some(suggestion) = issue
+            .suggestion
+            .as_deref()
+            .filter(|text| !text.trim().is_empty())
+        {
+            out.push_str(&format!("\n  Suggestion: {}", clean(suggestion)));
+        }
+    }
+    for suggestion in &review.suggestions {
+        out.push_str(&format!("\n- {}", clean(suggestion)));
+    }
+    out
+}
+
 async fn gather_diff(opts: &ReviewOptions) -> Result<String> {
+    if let Some(ref pull_request) = opts.pull_request {
+        return run_gh(&["pr", "diff", pull_request], None).await;
+    }
     if let Some(ref c) = opts.commit {
         let o = tokio::process::Command::new("git")
             .args(["show", "--patch", c])

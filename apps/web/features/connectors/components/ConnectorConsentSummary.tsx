@@ -20,6 +20,10 @@ const POINTS: { title: string; body: string }[] = [
     body: 'A connector receives the conversation content passed to its tools. Only connect services you would hand that content to.',
   },
   {
+    title: 'What it fetches stays with the chat',
+    body: 'Anything a connector returns is kept as part of the chat it was used in and follows that chat’s retention, so deleting the chat deletes it. Disconnecting stops new fetches but does not remove what past chats already hold.',
+  },
+  {
     title: 'You can disconnect at any time',
     body: 'Disconnecting removes the connection and deletes every saved per-tool permission for it, so a past “Always allow” does not survive.',
   },

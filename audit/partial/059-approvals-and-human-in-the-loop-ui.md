@@ -6,71 +6,55 @@ resolved, mark its cells `done` with evidence in `audit/ledger/ecosystem-capabil
 `pnpm audit:worklist`. The item then leaves this file, and the file is deleted when
 nothing is left.
 
-## S59.01: One-action approval.
-
-- Done when: When a single tool call needs approval, the user can approve or deny that one call and the run continues accordingly.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:328-334`
-
 ## S59.02: Batch approval.
 
 - Done when: The user can approve or deny several pending tool calls of a run in one action.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | The overlay offers Deny All and Allow Session, but no single action approves all pending calls of a turn. | ui |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
 
-Code: `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/cli/src/tui/tui_app.rs:861-871`, `apps/web/lib/services/cloud-agent-run-service.ts:1407-1417`
+Code: `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/cli/src/tui/tui_app.rs:861-871`
 
 ## S59.03: Per-session approval.
 
 - Done when: The user can allow a tool for the rest of the current session so it stops asking until the session ends.
 - Wave: 3
-- Already works on: desktop, cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Only a permanent "Always allow" exists for connector tools; there is no allow-for-this-session choice. | ui |
-| mobile | partial | Mobile shows "Approved for this session" when another client chose it, but offers only Allow/Deny itself. | ui |
+| mobile | partial | Allow for this chat is built as post-codex/chat-gates-s59.03-mobile-after-s59.patch (applies after chat-gates-s59.patch); its handler lives in Codex-held MessageBubble.tsx. | ui |
 | chrome | partial | Approved sites persist and "Ask before acting" is a standing toggle; no allow-for-this-session choice on an approval. | ui |
 
-Code: `apps/web/features/chat/components/messages/ToolTimeline.tsx:493-493`, `apps/mobile/src/features/tasks/runPresentation.ts:205-205`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:307-329`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 ## S59.04: Per-application permission.
 
 - Done when: The user can set allow/ask/deny per connected app (and per tool within it), and the runtime enforces it.
 - Wave: 3
-- Already works on: web, desktop, mobile
+- Already works on: web, desktop, mobile, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | MCP tools ask per server/tool and Always Allow can be saved per command prefix, but there is no per-app allow/ask/deny setting screen. | ui |
 | vscode | partial | Session approvals are scoped per MCP server tool, but VS Code has no standing per-app permission setting. | ui |
-| api | partial | PUT/DELETE /api/connectors/permissions set per-tool levels but are not in openapi.json. | api |
 
-Code: `apps/cli/src/features/exec/tools/mod.rs:1010-1016`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`, `apps/web/app/api/connectors/permissions/route.ts:151-152`
+Code: `apps/cli/src/features/exec/tools/mod.rs:1010-1016`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:36-38`
 
 ## S59.05: Per-folder permission.
 
 - Done when: The agent can touch only folders the user granted, and the user grants or revokes each folder.
 - Wave: 3
-- Already works on: desktop
+- Already works on: desktop, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| cli | partial | Grant is real in the TUI (untrusted_shell_refusal raises an approval, mod.rs:930-972; trust::grant), but revoke exists only as the REPL slash command /trust revoke \| /untrust (repl/slash_commands.rs:161, repl/registry.rs:494 → trust::revoke); the TUI handle_slash has no /trust and there is no `agi trust` subcommand (Command enum lib.rs:726+). R-l mode-only → partial. remaining: 'Folder trust can be revoked only in the REPL (`agi --no-tui`, /untrust); add /untrust or an `agi trust revoke` subcommand to the default TUI.' |  |
 | vscode | partial | The criterion needs grant AND revoke. VS Code only relays the runtime's TrustDirectory/untrusted-workspace approval (a grant, approvalScope.ts:18; exec/tools/mod.rs:930-972); no VS Code control lists or revokes trusted folders. trust::revoke is reached only from the REPL /trust revoke\|/untrust (repl/registry.rs:494). remaining: 'Folders can be trusted from the approval prompt but not revoked from VS Code; add a trusted-folders setting with remove.' |  |
 
-Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools/mod.rs:498-507`, `apps/cli/src/features/exec/tools/mod.rs:1028-1029`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`, `apps/extension-vscode/src/features/permissions/approvalScope.ts:18-18`
 
 ## S59.06: Per-domain permission.
 
@@ -88,32 +72,18 @@ Code: `apps/cli/src/tui/tui_app.rs:4865-4883`, `apps/cli/src/features/exec/tools
 
 Code: `apps/web/app/api/llm/v1/chat/completions/lib/research-sources.ts:48-58`, `apps/cli/src/features/exec/tools/mod.rs:706-711`
 
-## S59.07: Persistent permission settings.
-
-- Done when: Permission choices (policy and per-tool rules) persist across sessions and devices until changed.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | Connector permissions persist via /api/connectors/permissions, undocumented in openapi.json. | api |
-
-Code: `apps/web/app/api/connectors/permissions/route.ts:151-152`
-
 ## S59.09: Read-only mode.
 
 - Done when: The user can switch the agent into a read-only mode in which write, send and execute tools are refused.
 - Wave: 3
-- Already works on: cli, vscode
+- Already works on: web, desktop, cli, vscode
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
-| desktop | partial | Lockdown now refuses connector tools, web search, page fetch, sandbox code and Deep Research (request-processor.ts:3733-3750), which makes it a no-tools mode. There is still no mode that lets the agent read and refuses every write. | handler |
 | mobile | partial | Mobile offers only the three approval policies; none refuses writes outright. | handler |
 | chrome | partial | The browser agent can ask before acting, but has no mode that allows reading pages while refusing clicks and typing. | handler |
 
-Code: `apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts:193-196`, `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
+Code: `apps/mobile/app/(app)/settings/auto-approve.tsx:47-55`, `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 ## S59.10: Ask-before-writing mode.
 
@@ -131,139 +101,79 @@ Code: `apps/extension/src/features/side-panel/computerUsePanel.ts:607-610`
 
 - Done when: Before a send is approved, the approval names exactly who will receive it.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
-| desktop | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
-| mobile | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 | cli | partial | MCP tools that send messages (Slack, email servers) ask for approval, but recipients appear only inside the raw argument preview; the approval does not call out who will receive it. | ui |
 | vscode | partial | MCP tools that send messages ask for approval through the local runtime, but recipients appear only inside the raw argument detail; the approval does not call out who will receive it. | ui |
 | chrome | partial | Recipients appear only inside the raw JSON arguments of the call; the approval does not call out who will receive the message. | ui |
 
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:513-514`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`, `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/bubbles.ts:537-537`
 
 ## S59.15: Exact amount or purchase.
 
 - Done when: Before a payment or purchase is approved, the approval shows the exact amount and what is bought.
 - Wave: 3
+- Already works on: web, desktop, mobile
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
-| desktop | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
-| mobile | partial | No tool approval highlights an amount or purchase; money-moving connector calls (Stripe, PayPal, Shopify) show only their raw JSON arguments. | ui |
 | cli | partial | Payment or store MCP servers (Stripe, Shopify) can be added, and their calls ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | vscode | partial | Payment or store MCP servers can run through the local runtime and ask for approval, but the approval shows only the raw arguments, never a highlighted amount or item. | ui |
 | chrome | partial | The browser agent can click a Buy button on a site; its approval card describes the click, not the amount. | ui |
 
-Code: `packages/ui/unified-chat/src/components/ToolCallCard.tsx:513-514`, `apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts:86-90`, `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`, `apps/cli/src/agent/tools.rs:116-139`
-
-## S59.18: Proposed-diff preview.
-
-- Done when: Before a file edit is approved, the user sees the proposed diff.
-- Wave: 3
-- Already works on: web, desktop, cli, vscode
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Mobile shows the edit arguments as text; there is no rendered diff before approving. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ToolCallTimeline.tsx:382-386`
-
-## S59.19: Allow action.
-
-- Done when: The user can allow a pending action and it then runs.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:328-334`
-
-## S59.20: Deny action.
-
-- Done when: The user can deny a pending action; it does not run and the model is told it was denied.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:328-334`
+Code: `apps/cli/src/agent/tools.rs:116-139`, `apps/extension-vscode/src/features/sidebar-webview/ChatStateManager.ts:378-389`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1107-1112`
 
 ## S59.22: Ask for an alternative.
 
 - Done when: Instead of just denying, the user can tell the agent what to do instead, and the agent continues with that guidance.
 - Wave: 3
-- Already works on: web, desktop
+- Already works on: web, desktop, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | partial | Only desktop-companion approvals take a rejection reason; cloud chat approvals are Allow/Deny with no guidance. | ui |
+| mobile | partial | Guidance input and resume wiring are held in post-codex/chat-gates-s59.patch because the handler lives in Codex-held files ([id].tsx, streaming.ts, MessageBubble.tsx, chatExecutionStore.ts, chatStore.ts). | ui |
 | cli | partial | The overlay answers No or Deny All; the user cannot attach guidance to a denial (they must type a new message after the turn). | ui |
 | vscode | partial | Cloud-run approvals accept guidance, but local runtime approvals are once/session/deny/abort only. | ui |
 | chrome | partial | Chrome approvals are Approve/Decline only. | ui |
-| api | partial | The resume route accepts guidance with decisions but is undocumented in openapi.json. | api |
 
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:79-80`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
+Code: `apps/mobile/src/features/chat/components/CloudToolApprovalControls.tsx:114-114`, `apps/cli/src/tui/widgets/approval_overlay.rs:81-87`, `apps/extension-vscode/src/features/cloud-tasks/cloudRunApproval.ts:8-10`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4596-4601`
 
 ## S59.23: Approval expiration.
 
 - Done when: A pending approval expires after a set time, the UI shows it expired, and the action cannot run from it.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | Only the app-server runtime (used by VS Code) times approvals out, after 10 minutes; the terminal prompt waits indefinitely. | handler |
-| api | partial | The approve route answers 410 after the 24-hour TTL, but the behaviour is undocumented in openapi.json. | api |
 
-Code: `apps/cli/src/app_server/developer_host.rs:68-68`, `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:115-116`
+Code: `apps/cli/src/app_server/developer_host.rs:68-68`
 
 ## S59.24: Approval history.
 
 - Done when: The user can review a history of past approval requests and their decisions.
 - Wave: 3
-- Already works on: cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| web | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
-| desktop | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
-| mobile | partial | Past decisions show only inline in each transcript or run; there is no view listing approvals the user gave or refused. | ui |
-| vscode | partial | Decisions show on the approval card in the current session only. | ui |
-| chrome | partial | Decisions show as "decision recorded" on the step only. | ui |
-
-Code: `apps/web/lib/hooks/useChatStream.ts:4081-4083`, `apps/mobile/src/features/tasks/runPresentation.ts:204-205`, `apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts:4602-4605`, `apps/extension/src/features/side-panel/bubbles.ts:483-483`
-
-## S59.25: Revoke saved permission.
-
-- Done when: The user can revoke a saved "always allow" (or folder/site grant) so the action asks again.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | DELETE /api/connectors/permissions revokes a saved level but is undocumented in openapi.json. | api |
-
-Code: `apps/web/app/api/connectors/permissions/route.ts:152-152`
+| vscode | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
+| chrome | partial | Decisions from every surface land in the shared approval history (GET /api/settings/approvals); this surface has no view of it yet. | ui |
 
 ## S59.26: Approval from another device.
 
 - Done when: An approval raised on one device can be answered from another signed-in device, and the first device sees the result.
 - Wave: 3
-- Already works on: web, desktop, mobile, vscode, chrome
+- Already works on: web, desktop, mobile, vscode, chrome, api
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
 | cli | partial | A CLI session's approvals can be answered from the phone companion, but the CLI cannot answer approvals raised by cloud runs on other devices. | ui |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
 
-Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`, `apps/web/lib/services/cloud-agent-run-service.ts:1407-1417`
+Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`
 
 ## S59.27: Approval via notification.
 
@@ -281,18 +191,6 @@ Code: `apps/cli/src/platform/runtime/session_handoff.rs:107-110`, `apps/web/lib/
 
 Code: `apps/web/features/notifications/components/WebPushOptIn.tsx:107-107`, `apps/web/lib/services/cloud-agent-run-service.ts:1389-1393`, `apps/mobile/services/notificationCategories.ts:10-16`, `apps/extension-vscode/src/features/chat-participant/chatParticipant.ts:415-421`
 
-## S59.28: Stronger confirmation for sensitive operations.
-
-- Done when: Sensitive or irreversible actions get a stronger confirmation than routine ones (warning, no permanent allow, re-ask).
-- Wave: 3
-- Already works on: web, desktop, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| mobile | partial | Web now flags a trifecta re-ask as high risk on the approval card; mobile cloud approvals still look the same whatever the risk, and mobile shows a risk badge only on companion approvals. | ui |
-
-Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
-
 ## S59.29: User takeover.
 
 - Done when: While the agent controls a screen or browser, the user can take over control and later hand it back.
@@ -304,15 +202,3 @@ Code: `apps/mobile/src/features/chat/components/ApprovalCard.tsx:57-61`
 | chrome | partial | The user can stop the browser agent and act in the tab, but there is no pause-and-hand-back: stopping ends the run. | ui |
 
 Code: `apps/desktop/electron/appMenu.ts:115-116`, `apps/desktop/electron/runtime/computerUseService.ts:183-193`, `apps/desktop/electron/runtime/computerUseService.ts:190-195`, `apps/extension/src/features/side-panel/computerUsePanel.ts:1067-1073`
-
-## S59.30: Resume after user intervention.
-
-- Done when: After the user intervenes (approves, answers a question, or hands control back), the same run resumes where it stopped.
-- Wave: 3
-- Already works on: web, desktop, mobile, cli, vscode, chrome
-
-| Surface | Status | What is left | Gap |
-| --- | --- | --- | --- |
-| api | partial | POST /api/llm/v1/chat/completions/approve (and runs/{runId}/resume) accept per-call decisions from API callers, but the routes and the approval stream events are not in openapi.json. | api |
-
-Code: `apps/web/app/api/llm/v1/chat/completions/approve/route.ts:328-334`

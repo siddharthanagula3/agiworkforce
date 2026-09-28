@@ -196,6 +196,7 @@ export interface ScheduledRunApproval {
 export interface ScheduledRunResume {
   checkpoint: ScheduledRunApprovalCheckpoint;
   decision: ManagedCloudScheduleRunApproval['decision'];
+  missedExecution: MissedExecution | null;
 }
 
 export interface ScheduledExecutionResult {
@@ -1308,6 +1309,33 @@ export async function claimDueScheduleRuns(
   return rows.map(mapClaim);
 }
 
+export type RecentScheduleRun = ScheduleRun & { taskName: string };
+
+export async function listRecentScheduleRuns(
+  db: DatabaseAdapter,
+  userId: string,
+  page: { limit: number; offset: number },
+): Promise<RecentScheduleRun[]> {
+  const limit = clampInteger(page.limit, 1, MAX_PAGE_SIZE);
+  const offset = clampInteger(page.offset, 0, 10_000);
+  const rows = await db.query<RunRow & { task_name: string }>(
+    `select run.*, task.name as task_name,
+            (select sum(charge.actual_cost_microusd)
+               from public.managed_usage_requests charge
+              where charge.user_id = $1
+                and charge.scheduled_task_id = run.task_id
+                and charge.scheduled_task_run_id = run.id
+                and charge.status = 'completed') as credits_used_microusd
+       from scheduled_task_runs as run
+       join scheduled_tasks as task on task.id = run.task_id
+      where task.user_id = $1
+      order by run.started_at desc, run.id desc
+      limit $2 offset $3`,
+    [userId, limit, offset],
+  );
+  return rows.map((row) => ({ ...mapScheduleRun(row), taskName: row.task_name }));
+}
+
 export async function listScheduleRuns(
   db: DatabaseAdapter,
   userId: string,
@@ -1885,7 +1913,11 @@ export async function claimScheduleRunApproval(
         scope: { userId: taskRow.user_id, organizationId: taskRow.organization_id ?? null },
         task,
       },
-      resume: { checkpoint, decision: input.approval.decision },
+      resume: {
+        checkpoint,
+        decision: input.approval.decision,
+        missedExecution: missedExecutionOf(runRow.result?.['missedExecution']),
+      },
     };
   });
 }
@@ -1926,6 +1958,25 @@ export interface MissedExecution {
   scheduledFor: string;
   detectedAt: string;
   lateByMs: number;
+}
+
+function missedExecutionOf(value: unknown): MissedExecution | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (
+    (record['policy'] !== 'run_once' && record['policy'] !== 'skip') ||
+    typeof record['scheduledFor'] !== 'string' ||
+    typeof record['detectedAt'] !== 'string' ||
+    typeof record['lateByMs'] !== 'number'
+  ) {
+    return null;
+  }
+  return {
+    policy: record['policy'],
+    scheduledFor: record['scheduledFor'],
+    detectedAt: record['detectedAt'],
+    lateByMs: record['lateByMs'],
+  };
 }
 
 export function detectMissedExecution(
@@ -2035,6 +2086,7 @@ async function runClaimedSchedule(
     : [timeoutController.signal];
   const signal = signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
   let removeAbortListener = () => {};
+  let missedExecution: MissedExecution | null = options.resume?.missedExecution ?? null;
 
   try {
     signal.throwIfAborted();
@@ -2070,8 +2122,8 @@ async function runClaimedSchedule(
         });
       }
     }
-    const missedExecution = options.resume ? null : detectMissedExecution(claim, now());
-    if (missedExecution) {
+    if (!options.resume) missedExecution = detectMissedExecution(claim, now());
+    if (missedExecution && !options.resume) {
       await auditMissedExecution(claim, missedExecution);
       if (missedExecution.policy === 'skip') {
         await releaseExecutionSlot(db, claim);
@@ -2109,7 +2161,11 @@ async function runClaimedSchedule(
       return await awaitScheduleRunApproval(
         db,
         claim,
-        { ...executed, approval: executed.approval },
+        {
+          ...executed,
+          ...(missedExecution ? { missedExecution } : {}),
+          approval: executed.approval,
+        },
         now(),
       );
     }
@@ -2138,6 +2194,7 @@ async function runClaimedSchedule(
     }
     const run = await finalizeScheduleRun(db, claim, {
       status,
+      ...(missedExecution ? { result: { missedExecution } } : {}),
       error: errorMessage(error),
       completedAt: now(),
     });

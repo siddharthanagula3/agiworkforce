@@ -10,6 +10,11 @@ import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isDestructiveConnectorTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  CONNECTOR_TOOL_CATEGORIES,
+  connectorCategoryToolName,
+  isConnectorCategoryToolName,
+} from '@shared/types/connectorToolCategories';
 
 export const runtime = 'nodejs';
 
@@ -24,12 +29,27 @@ const DB_TO_WIRE: Record<string, 'allow' | 'ask' | 'deny'> = {
   blocked: 'deny',
 };
 
-const UpsertSchema = z.object({
-  connectorId: z.string().min(1).max(200),
-  toolName: z.string().min(1).max(200),
-  level: z.enum(['allow', 'ask', 'deny']),
-  destructive: z.boolean().optional(),
-});
+const MAX_TOOLS_PER_WRITE = 200;
+
+const UpsertSchema = z
+  .object({
+    connectorId: z.string().min(1).max(200),
+    toolName: z.string().min(1).max(200).optional(),
+    toolNames: z.array(z.string().min(1).max(200)).min(1).max(MAX_TOOLS_PER_WRITE).optional(),
+    category: z.enum(CONNECTOR_TOOL_CATEGORIES).optional(),
+    level: z.enum(['allow', 'ask', 'deny']),
+    destructive: z.boolean().optional(),
+  })
+  .refine((body) =>
+    body.category === undefined
+      ? (body.toolName === undefined) !== (body.toolNames === undefined)
+      : body.toolName === undefined,
+  )
+  .refine((body) =>
+    [body.toolName, ...(body.toolNames ?? [])].every(
+      (name) => name === undefined || !isConnectorCategoryToolName(name),
+    ),
+  );
 
 type PermissionRow = {
   connector_id: string;
@@ -65,23 +85,40 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
 
   const parsed = UpsertSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    throw createError.validation('connectorId, toolName and a valid level are required');
+    throw createError.validation(
+      'connectorId, a category or one of toolName or toolNames, and a valid level are required',
+    );
   }
-  const { connectorId, toolName, level } = parsed.data;
+  const { connectorId, level, category } = parsed.data;
+  const listed = [
+    ...new Set(parsed.data.toolNames ?? (parsed.data.toolName ? [parsed.data.toolName] : [])),
+  ];
+  const toolNames = category ? [...listed, connectorCategoryToolName(category)] : listed;
+  const auditName = category
+    ? connectorCategoryToolName(category)
+    : toolNames.length === 1
+      ? toolNames[0]!
+      : `${toolNames.length} tools`;
 
   // a destructiveness verdict is a safety property, not a caller preference.
-  const destructive = isDestructiveConnectorTool(connectorId, toolName);
+  const destructiveFlags = toolNames.map((name) =>
+    isConnectorCategoryToolName(name)
+      ? category === 'write'
+      : isDestructiveConnectorTool(connectorId, name),
+  );
+  const destructive = destructiveFlags.some(Boolean);
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   await db.query(
     `insert into public.connector_tool_permissions
        (user_id, connector_id, tool_name, level, destructive, updated_at)
-     values ($1, $2, $3, $4, $5, now())
+     select $1, $2, tool.name, $4, tool.destructive, now()
+       from unnest($3::text[], $5::boolean[]) as tool(name, destructive)
      on conflict (user_id, connector_id, tool_name)
        do update set level = excluded.level,
                      destructive = excluded.destructive,
                      updated_at = now()`,
-    [userId, connectorId, toolName, WIRE_TO_DB[level], destructive],
+    [userId, connectorId, toolNames, WIRE_TO_DB[level], destructiveFlags],
   );
   await recordAuditEvent({
     userId,
@@ -92,7 +129,7 @@ async function handleUpsert(request: NextRequest): Promise<NextResponse> {
       resourceType: 'connector',
       resourceId: connectorId,
       connectorId,
-      resourceName: toolName,
+      resourceName: auditName,
       status: level,
     },
   });

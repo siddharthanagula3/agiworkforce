@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { getContextBuilder } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
 import { Config } from '../platform/config';
+import { MAX_TOTAL_REFERENCE_CHARS } from '../features/chat-participant/promptReferences';
 
 export interface ContextMenuItemState {
   kind: ContextAttachmentKind;
@@ -159,6 +160,18 @@ function basename(relativePath: string): string {
   return separator === -1 ? relativePath : relativePath.slice(separator + 1);
 }
 
+function unsavedBuffer(relativePath: string, languageId: string): string | undefined {
+  const document = vscode.window.activeTextEditor?.document;
+  if (document === undefined || (!document.isDirty && !document.isUntitled)) return undefined;
+  const text = document.getText();
+  const clipped =
+    text.length > MAX_TOTAL_REFERENCE_CHARS
+      ? `${text.slice(0, MAX_TOTAL_REFERENCE_CHARS)}\n... (truncated)`
+      : text;
+  const state = document.isUntitled ? 'Unsaved new file' : 'Unsaved edits in';
+  return `${state} ${relativePath} (${languageId}), as it is in the editor now:\n${clipped}`;
+}
+
 export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorContextSnapshot {
   if (!Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const context = getContextBuilder().getActiveFileContext();
@@ -172,7 +185,9 @@ export function resolveEditorContext(dismissed: ReadonlySet<string>): EditorCont
       kind: 'active-file',
       label: basename(context.relativePath),
     });
-    snapshot.contextFiles.push(context.filePath);
+    const buffer = unsavedBuffer(context.relativePath, context.languageId);
+    if (buffer === undefined) snapshot.contextFiles.push(context.filePath);
+    else snapshot.texts.push(buffer);
   }
 
   const selection = activeSelection();

@@ -36,6 +36,7 @@ export interface ToolSearchResult {
   url: string;
   title: string;
   snippet?: string;
+  publishedDate?: string;
 }
 
 export interface ToolCall {
@@ -50,6 +51,7 @@ export interface ToolCall {
   searchResults?: ToolSearchResult[];
   requiresApproval?: boolean;
   approvalDecision?: 'approved' | 'rejected';
+  approvalRiskLevel?: RiskLevel;
   toolCallId?: string;
 }
 

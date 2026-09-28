@@ -622,6 +622,18 @@ async fn sign_in(
         bail!("MCP server '{name}' runs locally over stdio and has nothing to sign in to");
     }
     let hooks = build_client_hooks_with_browser(Arc::new(AutoDeclineHandler), browser);
+    if let TransportConfig::Http {
+        url,
+        oauth: Some(oauth),
+        ..
+    } = to_transport_config(config)
+    {
+        complete_step_up(&url, &oauth, &hooks)
+            .await
+            .with_context(|| {
+                format!("could not finish the extra sign-in MCP server '{name}' asked for")
+            })?;
+    }
     let mut client = McpClient::connect(
         name,
         to_transport_config(config),
@@ -634,12 +646,39 @@ async fn sign_in(
     Ok(())
 }
 
+async fn complete_step_up(url: &str, oauth: &OAuthConfig, hooks: &ClientHooks) -> Result<()> {
+    let store = McpServerOAuthStore::new()?;
+    let Some(scope) = store.load_step_up_scope(url)? else {
+        return Ok(());
+    };
+    let challenge = format!("Bearer error=\"insufficient_scope\", scope=\"{scope}\"");
+    let token =
+        agiworkforce_mcp::oauth::perform_full_oauth(url, oauth, Some(&challenge), hooks).await?;
+    hooks.token_store.set(url, token)?;
+    store.delete_step_up_scope(url)
+}
+
 fn needs_sign_in(error: &anyhow::Error) -> bool {
     error.chain().any(|cause| {
         cause
             .downcast_ref::<agiworkforce_mcp::McpError>()
             .is_some_and(agiworkforce_mcp::McpError::is_authorization_required)
     })
+}
+
+fn remember_step_up(error: &anyhow::Error) {
+    let Some((url, scope)) = error.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<agiworkforce_mcp::McpError>()
+            .and_then(agiworkforce_mcp::McpError::step_up_scope)
+    }) else {
+        return;
+    };
+    if let Err(store_error) =
+        McpServerOAuthStore::new().and_then(|store| store.save_step_up_scope(url, scope))
+    {
+        eprintln!("  could not record the scope {url} asked for: {store_error:#}");
+    }
 }
 
 /// Forget the stored OAuth token for a remote MCP server. Returns whether a
@@ -1479,6 +1518,7 @@ impl McpManager {
             .await
             .map_err(|error| {
                 if needs_sign_in(&error) {
+                    remember_step_up(&error);
                     anyhow::anyhow!(
                         "{error:#}. Run `agi mcp login {}` to sign in again.",
                         tool.server_name

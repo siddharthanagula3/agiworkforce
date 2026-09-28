@@ -18,6 +18,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
+import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
@@ -1415,6 +1416,39 @@ export function useUserActivity(
   });
 }
 
+export interface ApprovalHistoryEntry {
+  id: string;
+  toolName: string;
+  decision: 'approved' | 'rejected';
+  conversationId: string | null;
+  createdAt: string;
+}
+
+export function useApprovalHistory(
+  limit: number,
+  offset: number,
+): UseQueryResult<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error> {
+  return useQuery<{ approvals: ApprovalHistoryEntry[]; hasMore: boolean }, Error>({
+    queryKey: ['settings', 'approvals', limit, offset],
+    queryFn: async () => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+      const params = new URLSearchParams({ limit: String(limit + 1), offset: String(offset) });
+      const res = await fetch(`${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(statusMessage(res.status));
+      const json = (await res.json()) as { approvals?: ApprovalHistoryEntry[] };
+      const approvals = json.approvals ?? [];
+      return { approvals: approvals.slice(0, limit), hasMore: approvals.length > limit };
+    },
+    staleTime: 60 * 1000,
+    meta: {
+      errorMessage: 'Failed to load approval history',
+    },
+  });
+}
+
 // ============================================================================
 // AUDIT LOGS HOOKS
 // ============================================================================
@@ -1608,9 +1642,8 @@ export interface OrgSharingMember {
   userId: string;
   role: OrgSharingRole;
   joinedAt: string;
-  name: string;
-  email: string;
-  avatarUrl: string | null;
+  displayName: string | null;
+  email: string | null;
 }
 
 export interface OrgSharedOverview {

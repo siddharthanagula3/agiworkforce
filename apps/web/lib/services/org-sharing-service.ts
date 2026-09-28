@@ -81,43 +81,6 @@ export function requireOrgMember(membership: OrgMembership | null): OrgMembershi
   return membership;
 }
 
-export interface OrgMemberRosterEntry {
-  userId: string;
-  role: OrgRole;
-  joinedAt: string;
-  name: string;
-  email: string;
-  avatarUrl: string | null;
-}
-
-export async function listOrgMemberRoster(organizationId: string): Promise<OrgMemberRosterEntry[]> {
-  const rows = await getNeonDb().query<{
-    user_id: string;
-    role: OrgRole;
-    joined_at: string;
-    email: string | null;
-    display_name: string | null;
-    avatar_url: string | null;
-  }>(
-    `select om.user_id, om.role, om.joined_at,
-            p.email, p.display_name, p.avatar_url
-       from public.organization_members om
-       left join public.profiles p on p.id = om.user_id
-      where om.organization_id = $1
-        and om.status = 'active'
-      order by om.joined_at asc`,
-    [organizationId],
-  );
-  return rows.map((row) => ({
-    userId: row.user_id,
-    role: row.role,
-    joinedAt: row.joined_at,
-    name: row.display_name?.trim() || row.email || '',
-    email: row.email ?? '',
-    avatarUrl: row.avatar_url ?? null,
-  }));
-}
-
 interface SharedProjectRow {
   organization_id: string;
   project_id: string;

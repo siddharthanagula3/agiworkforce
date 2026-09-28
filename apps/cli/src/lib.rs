@@ -98,6 +98,13 @@ pub mod voice {
              Install a build with the `voice` feature enabled to use /voice."
         )
     }
+
+    pub async fn dictate(_session: &AgentSession, _voice_lang: &str) -> Result<Option<String>> {
+        bail!(
+            "This build was compiled without voice support, so audio capture is unavailable. \
+             Install a build with the `voice` feature enabled to use /dictate."
+        )
+    }
 }
 
 // Extended CLI modules, used by subcommand handlers
@@ -431,8 +438,9 @@ pub struct Cli {
     #[arg(long = "no-session-persistence", default_value_t = true, action = clap::ArgAction::SetFalse)]
     session_persistence: bool,
 
-    /// Plain output for a screen reader: no colour, no spinners, no rules.
-    /// Also enabled by setting AGI_PLAIN in the environment.
+    /// Plain output for a screen reader: the line-based REPL instead of the
+    /// full-screen TUI, with no colour, spinners or rules. Also enabled by
+    /// setting AGI_PLAIN in the environment.
     #[arg(long = "plain", global = true)]
     plain: bool,
 
@@ -747,6 +755,12 @@ enum Command {
         base: Option<String>,
         #[arg(long)]
         commit: Option<String>,
+        /// Review a hosted pull request by number, URL or branch, read with the GitHub CLI.
+        #[arg(long = "pr", conflicts_with_all = ["base", "commit"])]
+        pull_request: Option<String>,
+        /// Post the review to the pull request as a comment.
+        #[arg(long, requires = "pull_request")]
+        post: bool,
         prompt: Option<String>,
         #[arg(short, long)]
         model: Option<String>,
@@ -790,6 +804,11 @@ enum Command {
     Hooks {
         #[command(subcommand)]
         action: Option<HooksSubcommand>,
+    },
+    /// List daemon triggers (~/.agiworkforce/triggers.json) or narrow which events start one.
+    Triggers {
+        #[command(subcommand)]
+        action: Option<TriggersSubcommand>,
     },
     /// Run as MCP server (stdio). Exposes no tools yet, see `agi app-server`.
     ///
@@ -1147,6 +1166,47 @@ enum SchedulesSubcommand {
         #[arg(long)]
         json: bool,
     },
+    /// Change a schedule's name, description, prompt, model, cron expression or time zone.
+    Edit {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        description: Option<String>,
+        #[arg(long)]
+        prompt: Option<String>,
+        #[arg(long)]
+        model: Option<String>,
+        /// New 5-field cron expression.
+        #[arg(long)]
+        schedule: Option<String>,
+        #[arg(long)]
+        timezone: Option<String>,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Stop a schedule from firing until it is resumed.
+    Pause {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Let a paused schedule fire again.
+    Resume {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Run a schedule once now and wait for its result.
+    Run {
+        /// Schedule id, or its exact name.
+        id: String,
+        #[arg(long)]
+        json: bool,
+    },
     /// Show a schedule's run history.
     Runs {
         /// Schedule id, or its exact name.
@@ -1423,6 +1483,30 @@ enum McpSubcommand {
     Remove {
         /// Registry name of the server to remove.
         name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TriggersSubcommand {
+    /// Show every trigger and its filter.
+    List,
+    /// Narrow which events start a trigger.
+    Filter {
+        /// Trigger id from `agi triggers list`.
+        id: String,
+        /// Event that may start it: a webhook's X-GitHub-Event, X-GitLab-Event or
+        /// X-Event-Type value, or create, modify or remove for a file watcher. Repeatable.
+        #[arg(long = "event")]
+        events: Vec<String>,
+        /// Webhook payload condition as /json/pointer=value, e.g. /sender/login=octocat. Repeatable; all must hold.
+        #[arg(long = "when")]
+        conditions: Vec<String>,
+        /// Ignore repeats for this many seconds after a run starts (0 turns it off).
+        #[arg(long)]
+        quiet_for: Option<u64>,
+        /// Remove the existing filter before applying these options.
+        #[arg(long)]
+        clear: bool,
     },
 }
 
@@ -2238,6 +2322,72 @@ async fn handle_schedules_command(
             }
             Err(error) => Err(anyhow::anyhow!("{error}")),
         },
+        SchedulesSubcommand::Edit {
+            id,
+            name,
+            description,
+            prompt,
+            model,
+            schedule,
+            timezone,
+            json,
+        } => {
+            let patch = schedules::schedule_patch(
+                name.as_deref(),
+                description.as_deref(),
+                prompt.as_deref(),
+                model.as_deref(),
+                schedule.as_deref(),
+                timezone.as_deref(),
+            );
+            if patch.as_object().is_some_and(serde_json::Map::is_empty) {
+                return schedules_command_failure(
+                    "Nothing to change: pass --name, --description, --prompt, --model, --schedule or --timezone."
+                        .to_string(),
+                );
+            }
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.update(&resolved, &patch).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Pause { id, json } | SchedulesSubcommand::Resume { id, json } => {
+            let active = matches!(action, SchedulesSubcommand::Resume { .. });
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.set_active(&resolved, active).await {
+                Ok(updated) => render(
+                    serde_json::to_value(&updated)?,
+                    schedules::render_schedules(std::slice::from_ref(&updated)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
+        SchedulesSubcommand::Run { id, json } => {
+            let resolved = match client.resolve_id(id).await {
+                Ok(resolved) => resolved,
+                Err(error) => return schedules_command_failure(error.to_string()),
+            };
+            match client.run_now(&resolved).await {
+                Ok(run) => render(
+                    serde_json::to_value(&run)?,
+                    schedules::render_runs(&resolved, std::slice::from_ref(&run)),
+                    *json,
+                ),
+                Err(error) => Err(anyhow::anyhow!("{error}")),
+            }
+        }
         SchedulesSubcommand::Runs {
             id,
             limit,
@@ -3174,6 +3324,11 @@ fn enter_repo_directory(repo: &str) -> Result<std::path::PathBuf> {
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
 
+    // Plain mode has to be in force before anything prints, including the
+    // banner and any spinner a subcommand starts, so it is published here
+    // rather than resolved per call site.
+    output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
+
     // Before anything reads the working directory.
     if let Some(repo) = cli.repo.as_deref() {
         enter_repo_directory(repo)?;
@@ -3192,11 +3347,6 @@ pub async fn run_main() -> Result<()> {
             terminal_style::warning("note:")
         );
     }
-    // Plain mode has to be in force before anything prints, including the
-    // banner and any spinner a subcommand starts, so it is published here
-    // rather than resolved per call site.
-    output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
-
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
     // `--no-session-persistence` is a privacy opt-out, so it has to be in force
     // before ANY session is constructed, including inside the subcommand arms
@@ -3660,14 +3810,17 @@ pub async fn run_main() -> Result<()> {
             Command::Review {
                 base,
                 commit,
+                pull_request,
+                post,
                 prompt,
                 model,
-                ..
             } => {
                 let opts = review::ReviewOptions {
-                    uncommitted: base.is_none() && commit.is_none(),
+                    uncommitted: base.is_none() && commit.is_none() && pull_request.is_none(),
                     base_branch: base.clone(),
                     commit: commit.clone(),
+                    pull_request: pull_request.clone(),
+                    post: *post,
                     instructions: prompt.clone(),
                     model: model.clone(),
                 };
@@ -3742,6 +3895,20 @@ pub async fn run_main() -> Result<()> {
                 Ok(())
             }
             Command::Hooks { action } => run_hooks_command(action.as_ref()),
+            Command::Triggers { action } => {
+                let text = match action {
+                    None | Some(TriggersSubcommand::List) => daemon::list_triggers()?,
+                    Some(TriggersSubcommand::Filter {
+                        id,
+                        events,
+                        conditions,
+                        quiet_for,
+                        clear,
+                    }) => daemon::set_trigger_filter(id, events, conditions, *quiet_for, *clear)?,
+                };
+                println!("{text}");
+                Ok(())
+            }
             Command::Mcp { action } => run_mcp_registry_command(action).await,
             Command::McpServer => app_server::run_mcp_server().await,
             Command::Completion { shell } => {
@@ -4824,7 +4991,7 @@ pub async fn run_main() -> Result<()> {
             });
 
     // Interactive mode: TUI (default) or classic REPL (--no-tui)
-    if cli.no_tui {
+    if cli.no_tui || output::plain_output() {
         repl::run_repl(
             &mut app_config,
             &model,
@@ -5035,19 +5202,46 @@ pub fn build_final_prompt(
     Some(prompt)
 }
 
-/// Exit with the appropriate status code for the given error.
-///
-/// Paywall errors use EX_CONFIG (78, sysexits.h) so callers can distinguish
-/// "user needs to upgrade" from a generic execution failure.  All other errors
-/// use exit code 1.
 pub fn exit_with_error(e: &anyhow::Error) -> ! {
-    // Walk the error chain looking for a CliError::Paywall.
-    let exit_code = e
+    std::process::exit(exit_code_for(e))
+}
+
+pub fn run_to_exit_code() -> std::process::ExitCode {
+    broken_pipe::install_panic_hook();
+    let result = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .map_err(anyhow::Error::from)
+        .and_then(|runtime| runtime.block_on(run_main()));
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) if broken_pipe::is_broken_pipe_error(&error) => {
+            std::process::ExitCode::from(broken_pipe::BROKEN_PIPE_EXIT_CODE)
+        }
+        Err(error) => {
+            eprintln!("Error: {error:?}");
+            std::process::ExitCode::from(u8::try_from(exit_code_for(&error)).unwrap_or(1))
+        }
+    }
+}
+
+fn exit_code_for(error: &anyhow::Error) -> i32 {
+    error
         .chain()
-        .find_map(|cause| cause.downcast_ref::<errors::CliError>())
-        .map(|cli_err| cli_err.exit_code())
-        .unwrap_or(1);
-    std::process::exit(exit_code)
+        .find_map(|cause| {
+            if let Some(cli_error) = cause.downcast_ref::<errors::CliError>() {
+                return Some(cli_error.exit_code());
+            }
+            let transport = cause.downcast_ref::<reqwest::Error>()?;
+            if transport.is_timeout() {
+                Some(errors::ExitClass::TemporaryFailure.code())
+            } else if transport.is_connect() {
+                Some(errors::ExitClass::Unavailable.code())
+            } else {
+                None
+            }
+        })
+        .unwrap_or(errors::ExitClass::Failure.code())
 }
 
 pub(crate) async fn attach_mcp_manager_for_session(

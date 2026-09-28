@@ -384,6 +384,9 @@
       "constraintsPlaceholder": "सीमाएँ, किनसे बचना है, पसंदीदा स्रोत…",
       "deliverableLabel": "डिलिवरेबल",
       "deliverablePlaceholder": "आपको अपेक्षित ठोस परिणाम (एक फ़ाइल, एक तालिका, एक सारांश…)",
+      "toolsLabel": "इस कार्य के लिए उपलब्ध टूल",
+      "toolWebSearch": "वेब खोज और ब्राउज़िंग",
+      "toolCodeExecution": "कोड चलाना",
       "palette": {
         "label": "AGI Work टूल",
         "searchPlaceholder": "प्लगइन, फ़ोल्डर और स्किल खोजें",

@@ -13,6 +13,14 @@ export const MAX_TICKET_SUBJECT_CHARS = 200;
 export const MAX_TICKET_MESSAGE_CHARS = 8_000;
 export const MAX_TICKETS_LISTED = 50;
 
+export const APPEAL_TICKET_SUBJECT = 'Account suspension appeal';
+export const APPEAL_FOLLOW_PATH = '/login';
+export const TICKET_FOLLOW_PATH = '/settings/help';
+
+export function ticketFollowPath(subject: string): string {
+  return subject === APPEAL_TICKET_SUBJECT ? APPEAL_FOLLOW_PATH : TICKET_FOLLOW_PATH;
+}
+
 export const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'] as const;
 export const TICKET_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const;
 

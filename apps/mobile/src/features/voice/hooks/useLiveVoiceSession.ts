@@ -7,7 +7,10 @@ import type {
 import { useChatStore } from '@/stores/chatStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
 import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
-import { activeAudioRoute } from '@/src/features/voice/services/speechSettings';
+import {
+  activeAudioRoute,
+  activeSpeechLanguage,
+} from '@/src/features/voice/services/speechSettings';
 import {
   LIVE_VOICE_MESSAGE,
   liveVoiceUnavailableReason,
@@ -137,6 +140,7 @@ export function useLiveVoiceSession({
       return module.LiveVoiceSession.start({
         voice: null,
         conversationId: conversationRef.current,
+        language: activeSpeechLanguage().split('-')[0]?.trim().toLowerCase() || null,
         callbacks: {
           onStarted: () => {
             if (!cancelled) setStatus('live');

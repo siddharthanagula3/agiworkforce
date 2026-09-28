@@ -3,14 +3,13 @@
 import Link from 'next/link';
 
 import { CONTACT_SUBJECTS, contactMailto } from '@/lib/legal-constants';
+import { SUSPENSION_APPEAL_PATH } from '@/lib/auth/account-status';
 import type { AuthNoticeKind } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from './authCopy';
 import { AuthLegalFooter } from './AuthLegalFooter';
 import { AuthStepFrame } from './AuthStepFrame';
 import { AUTH_LINK_CLASS, AUTH_PRIMARY_BUTTON_CLASS, AUTH_STEP_LINKS_CLASS } from './authStyles';
 import { useCountdown } from './useCountdown';
-
-const SUPPORT_NOTICES: readonly AuthNoticeKind[] = ['account_suspended', 'account_locked'];
 
 export function AuthNoticeStep({
   notice,
@@ -56,7 +55,14 @@ export function AuthNoticeStep({
         </button>
       )}
 
-      {SUPPORT_NOTICES.includes(notice) ? (
+      {notice === 'account_suspended' ? (
+        <div className={AUTH_STEP_LINKS_CLASS}>
+          <Link href={SUSPENSION_APPEAL_PATH} className={AUTH_LINK_CLASS}>
+            {copy.text('flow.notice.appeal', 'Appeal this suspension')}
+          </Link>
+        </div>
+      ) : null}
+      {notice === 'account_locked' ? (
         <div className={AUTH_STEP_LINKS_CLASS}>
           <Link href={contactMailto(CONTACT_SUBJECTS.appeal)} className={AUTH_LINK_CLASS}>
             {copy.text('flow.notice.contactSupport', 'Contact support')}
