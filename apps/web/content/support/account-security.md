@@ -40,8 +40,9 @@ hardware security key, then save your recovery keys. Turning it on requires a
 code we email to the address on your account and one of the passkeys or security
 keys you added. It cannot be turned on within 7 days of a change to the
 email address on your account. Every other device is signed out when you turn it
-on. We also email a link that turns it off and signs everyone out, without a
-passkey, for 48 hours after it was turned on, in case it was not you.
+on. We also email the address that got the code a link that turns it off, signs
+everyone out and resets your password, without a passkey, for 48 hours after it
+was turned on, in case it was not you.
 
 Email account recovery no longer restores access. A recovery key starts
 recovery, and the account unlocks 48 hours later. Each recovery key works once,

@@ -365,22 +365,31 @@ export async function undoEnrollment(
   input: { userId: string; tokenHash: string },
 ): Promise<boolean> {
   return ownerDb.transaction(async (tx) => {
-    const cleared = await tx.execute(
-      `update public.account_security_enrollments
+    const [cleared] = await tx.query<{ enrolled_at: Timestamp }>(
+      `with enrolled as (
+         select enrolled_at
+           from public.account_security_enrollments
+          where user_id = $1
+            and undo_token_hash = $2
+            and undo_expires_at > now()
+            and enrolled_at is not null
+          for update
+       )
+       update public.account_security_enrollments
           set ${CLEARED_ENROLLMENT}
-        where user_id = $1
-          and undo_token_hash = $2
-          and undo_expires_at > now()
-          and enrolled_at is not null`,
+         from enrolled
+        where public.account_security_enrollments.user_id = $1
+       returning enrolled.enrolled_at`,
       [input.userId, input.tokenHash],
     );
-    if (cleared === 0) return false;
+    if (!cleared) return false;
     await tx.execute(`delete from public.account_security_sessions where user_id = $1`, [
       input.userId,
     ]);
-    await tx.execute(`delete from public.account_security_credentials where user_id = $1`, [
-      input.userId,
-    ]);
+    await tx.execute(
+      `delete from public.account_security_credentials where user_id = $1 and created_at <= $2`,
+      [input.userId, cleared.enrolled_at],
+    );
     await tx.execute(`delete from public.account_security_challenges where user_id = $1`, [
       input.userId,
     ]);

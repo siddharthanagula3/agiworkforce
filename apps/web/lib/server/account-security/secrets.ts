@@ -20,6 +20,7 @@ const UNDO_DOMAIN = 'agi:account-security:undo:v1';
 const ENROLLMENT_CODE_KEY_INFO = 'agi:account-security:enrollment-code:v1';
 const MIN_SECRET_BYTES = 32;
 const TOKEN_BYTES = 32;
+const UNUSABLE_PASSWORD_BYTES = 36;
 
 function sha256Hex(domain: string, value: string): string {
   return createHash('sha256').update(`${domain}:${value}`).digest('hex');
@@ -74,6 +75,10 @@ export function hashHandoffToken(token: string): string {
 
 export function hashHandoffCode(code: string): string {
   return sha256Hex(HANDOFF_CODE_DOMAIN, code);
+}
+
+export function newUnusablePassword(): string {
+  return randomBytes(UNUSABLE_PASSWORD_BYTES).toString('base64url');
 }
 
 export function hashUndoToken(token: string): string {

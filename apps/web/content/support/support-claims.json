@@ -3477,7 +3477,7 @@
       "doc": "account-security",
       "section": "Advanced Account Security",
       "kind": "prose",
-      "sentence": "We also email a link that turns it off and signs everyone out, without a passkey, for 48 hours after it was turned on, in case it was not you.",
+      "sentence": "We also email the address that got the code a link that turns it off, signs everyone out and resets your password, without a passkey, for 48 hours after it was turned on, in case it was not you.",
       "implementation": [
         "apps/web/lib/server/account-security/undo.ts",
         "apps/web/lib/server/account-security/store.ts"
@@ -3491,7 +3491,7 @@
         {
           "kind": "copy",
           "file": "apps/web/lib/server/account-security/undo.ts",
-          "text": "revokeEveryOtherSession(identity, open.userId, null)"
+          "text": "await identity.setPassword(open.userId, newUnusablePassword());"
         }
       ]
     },
